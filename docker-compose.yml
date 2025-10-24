@@ -1,0 +1,268 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres-master:
+    image: postgres:15-alpine
+    container_name: medicore-postgres-master
+    environment:
+      POSTGRES_DB: medicore_master
+      POSTGRES_USER: medicore
+      POSTGRES_PASSWORD: medicore_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_master_data:/var/lib/postgresql/data
+      - ./database/schemas/tenant.sql:/docker-entrypoint-initdb.d/01-tenant.sql
+    networks:
+      - medicore-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: medicore-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - medicore-network
+
+  # Core Services
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: medicore-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  tenant-service:
+    build:
+      context: ./services/tenant-service
+      dockerfile: Dockerfile
+    container_name: medicore-tenant-service
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://medicore:medicore_password@postgres-master:5432/medicore_master
+      - REDIS_URL=redis://redis:6379
+      - DB_HOST=postgres-master
+      - DB_PORT=5432
+      - DB_USERNAME=medicore
+      - DB_PASSWORD=medicore_password
+    depends_on:
+      - postgres-master
+      - redis
+    networks:
+      - medicore-network
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: medicore-auth-service
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://medicore:medicore_password@postgres-master:5432/medicore_master
+      - JWT_SECRET=your-jwt-secret-key
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres-master
+      - redis
+    networks:
+      - medicore-network
+
+  patient-service:
+    build:
+      context: ./services/patient-service
+      dockerfile: Dockerfile
+    container_name: medicore-patient-service
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  appointment-service:
+    build:
+      context: ./services/appointment-service
+      dockerfile: Dockerfile
+    container_name: medicore-appointment-service
+    ports:
+      - "3004:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  medical-records-service:
+    build:
+      context: ./services/medical-records-service
+      dockerfile: Dockerfile
+    container_name: medicore-medical-records-service
+    ports:
+      - "3005:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  billing-service:
+    build:
+      context: ./services/billing-service
+      dockerfile: Dockerfile
+    container_name: medicore-billing-service
+    ports:
+      - "3006:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  claims-service:
+    build:
+      context: ./services/claims-service
+      dockerfile: Dockerfile
+    container_name: medicore-claims-service
+    ports:
+      - "3007:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  cdss-service:
+    build:
+      context: ./services/cdss-service
+      dockerfile: Dockerfile
+    container_name: medicore-cdss-service
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  fhir-service:
+    build:
+      context: ./services/fhir-service
+      dockerfile: Dockerfile
+    container_name: medicore-fhir-service
+    ports:
+      - "3008:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  hl7-service:
+    build:
+      context: ./services/hl7-service
+      dockerfile: Dockerfile
+    container_name: medicore-hl7-service
+    ports:
+      - "3009:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: medicore-notification-service
+    ports:
+      - "3010:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - SMS_PROVIDER=econet # or telecel, netone
+      - EMAIL_PROVIDER=smtp
+    depends_on:
+      - redis
+    networks:
+      - medicore-network
+
+  # Web Application
+  web-app:
+    build:
+      context: ./web-app
+      dockerfile: Dockerfile
+    container_name: medicore-web-app
+    ports:
+      - "3011:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001
+      - REACT_APP_ENVIRONMENT=development
+    depends_on:
+      - tenant-service
+    networks:
+      - medicore-network
+
+  # Monitoring (Optional for development)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: medicore-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - medicore-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: medicore-grafana
+    ports:
+      - "3012:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - medicore-network
+
+volumes:
+  postgres_master_data:
+  redis_data:
+  grafana_data:
+
+networks:
+  medicore-network:
+    driver: bridge

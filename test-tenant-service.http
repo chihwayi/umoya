@@ -1,0 +1,68 @@
+### Test Tenant Service Endpoints
+
+### 1. Create a new tenant
+POST http://localhost:3001/tenants
+Content-Type: application/json
+
+{
+  "clinicName": "Dr. Smith Family Clinic",
+  "subdomain": "dr-smith-clinic",
+  "contactEmail": "admin@drsmithclinic.co.zw",
+  "contactPhone": "+263771234567",
+  "address": "123 Medical Drive, Harare",
+  "city": "Harare",
+  "subscriptionTier": "professional"
+}
+
+### 2. Get all tenants
+GET http://localhost:3001/tenants
+
+### 3. Get tenant by ID (replace with actual ID)
+GET http://localhost:3001/tenants/{{tenant_id}}
+
+### 4. Get tenant by subdomain
+GET http://localhost:3001/tenants/subdomain/dr-smith-clinic
+
+### 5. Update tenant status
+PUT http://localhost:3001/tenants/{{tenant_id}}/status
+Content-Type: application/json
+
+{
+  "status": "active"
+}
+
+### 6. Check tenant health
+GET http://localhost:3001/tenants/{{tenant_id}}/health
+
+### 7. Delete tenant (use with caution)
+DELETE http://localhost:3001/tenants/{{tenant_id}}
+
+### Test with different subscription tiers
+
+### Basic tier tenant
+POST http://localhost:3001/tenants
+Content-Type: application/json
+
+{
+  "clinicName": "Community Health Center",
+  "subdomain": "community-health",
+  "contactEmail": "admin@community-health.co.zw",
+  "contactPhone": "+263772345678",
+  "address": "456 Community Road, Bulawayo",
+  "city": "Bulawayo",
+  "subscriptionTier": "basic"
+}
+
+### Enterprise tier tenant
+POST http://localhost:3001/tenants
+Content-Type: application/json
+
+{
+  "clinicName": "Advanced Medical Center",
+  "subdomain": "advanced-medical",
+  "contactEmail": "admin@advancedmedical.co.zw",
+  "contactPhone": "+263773456789",
+  "address": "789 Hospital Street, Mutare",
+  "city": "Mutare",
+  "subscriptionTier": "enterprise"
+}
