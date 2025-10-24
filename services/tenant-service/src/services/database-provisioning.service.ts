@@ -51,7 +51,7 @@ export class DatabaseProvisioningService {
       await tenantDataSource.initialize();
       
       // Read and execute clinic template schema
-      const schemaPath = path.join(process.cwd(), 'database/schemas/clinic-template.sql');
+      const schemaPath = path.join(__dirname, '../../database/schemas/clinic-template.sql');
       const schema = fs.readFileSync(schemaPath, 'utf8');
       
       // Split by semicolon and execute each statement

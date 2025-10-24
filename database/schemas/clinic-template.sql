@@ -15,6 +15,8 @@ CREATE TABLE users (
     specialization VARCHAR(100),
     phone VARCHAR(50),
     is_active BOOLEAN DEFAULT true,
+    must_change_password BOOLEAN DEFAULT false,
+    password_changed_at TIMESTAMP WITH TIME ZONE,
     last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

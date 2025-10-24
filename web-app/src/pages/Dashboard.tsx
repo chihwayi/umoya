@@ -5,6 +5,9 @@ import { TenantCard } from '../components/TenantCard';
 import { CreateTenantModal } from '../components/CreateTenantModal';
 import { TenantDetailsModal } from '../components/TenantDetailsModal';
 import { SystemOverview } from '../components/SystemOverview';
+import { HealthMonitor } from '../components/HealthMonitor';
+import { AuditLogs } from '../components/AuditLogs';
+import { SecurityPanel } from '../components/SecurityPanel';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -18,7 +21,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [error, setError] = useState('');
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<'overview' | 'tenants'>('overview');
+  const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'health' | 'audit' | 'security'>('overview');
 
   useEffect(() => {
     loadTenants();
@@ -133,6 +136,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             >
               🏥 Tenant Management
             </button>
+            <button
+              onClick={() => setCurrentView('health')}
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                currentView === 'health'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              💚 Health Monitor
+            </button>
+            <button
+              onClick={() => setCurrentView('audit')}
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                currentView === 'audit'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              📋 Audit Logs
+            </button>
+            <button
+              onClick={() => setCurrentView('security')}
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                currentView === 'security'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🔐 Security
+            </button>
           </nav>
         </div>
       </div>
@@ -140,6 +173,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {currentView === 'overview' && <SystemOverview />}
+        {currentView === 'health' && <HealthMonitor />}
+        {currentView === 'audit' && <AuditLogs />}
+        {currentView === 'security' && <SecurityPanel />}
         
         {currentView === 'tenants' && (
           <>

@@ -23,7 +23,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     lastName: '',
     email: '',
     phone: '',
-    role: 'tenant_admin',
+    role: 'admin',
     temporaryPassword: ''
   });
 
@@ -59,7 +59,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
         lastName: '',
         email: '',
         phone: '',
-        role: 'tenant_admin',
+        role: 'admin',
         temporaryPassword: ''
       });
       loadUsers();
@@ -185,13 +185,11 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                 onChange={(e) => setNewUser({...newUser, role: e.target.value})}
                 className="border rounded px-3 py-2"
               >
-                <option value="tenant_admin">Tenant Admin</option>
+                <option value="admin">Admin</option>
                 <option value="doctor">Doctor</option>
                 <option value="nurse">Nurse</option>
                 <option value="receptionist">Receptionist</option>
                 <option value="pharmacist">Pharmacist</option>
-                <option value="lab_technician">Lab Technician</option>
-                <option value="accountant">Accountant</option>
               </select>
               <input
                 type="password"

@@ -92,18 +92,22 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 4. **Access the application**
    - **Web Portal**: http://localhost:3011
    - **Login**: admin@medicore.co.zw / medicore123
+   - **Features**: System Overview, Tenant Management, Health Monitor, Audit Logs, Security Panel
 
 ## 📊 Current Status
 
-### ✅ **Completed Features**
-- **Tenant Management System** - Fully functional
-- **Multi-tenant Database Architecture** - Complete isolation
-- **User Management** - Role-based access control
-- **Analytics Dashboard** - System-wide reporting
-- **Web Portal** - Modern React interface
-- **API Gateway** - RESTful APIs
+### ✅ **PRODUCTION-READY TENANT MANAGEMENT PLATFORM**
+- **🏥 Multi-tenant Architecture** - Complete database isolation per clinic
+- **🔐 Enterprise Security** - JWT auth, account lockout, audit logging
+- **👥 User Management** - Role-based access with temporary passwords
+- **💚 Health Monitoring** - Real-time database health checks & alerts
+- **📋 Audit Logging** - Complete activity tracking & compliance
+- **📧 Email Notifications** - Welcome emails, alerts, password resets
+- **📊 Analytics Dashboard** - System-wide reporting & metrics
+- **🌐 Modern Web Portal** - Professional React interface
+- **🔧 RESTful APIs** - Complete tenant management APIs
 
-### 🚧 **In Development**
+### 🚧 **Next Phase: EHR Development**
 - Patient Management System
 - Appointment Scheduling
 - Medical Records Management
@@ -116,9 +120,11 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 ### vs Health263 Zimbabwe
 - **40% Lower Pricing** - Transparent, all-inclusive packages
 - **Modern Technology** - Cloud-native vs legacy systems
-- **AI-Powered CDSS** - First in Zimbabwe market
+- **Enterprise Security** - JWT auth, audit logs, health monitoring
+- **AI-Powered CDSS** - First in Zimbabwe market (planned)
 - **Better User Experience** - Modern, intuitive interface
 - **Complete Integration** - All-in-one solution
+- **Production-Ready** - Enterprise-grade tenant management
 
 ## 📈 Business Model
 
@@ -164,12 +170,28 @@ docker-compose down
 
 ## 📚 API Documentation
 
+### Authentication
+- `POST /api/auth/login` - JWT authentication
+- `GET /api/auth/profile` - Get current user
+- `POST /api/auth/change-password` - Change password
+
 ### Tenant Management
 - `GET /api/tenants` - List all tenants
 - `POST /api/tenants` - Create new tenant
 - `PUT /api/tenants/:id/status` - Update tenant status
 - `GET /api/tenants/:id/users` - Get tenant users
 - `POST /api/tenants/:id/users` - Create tenant user
+- `PUT /api/tenants/:id/users/:userId/change-password` - Change user password
+
+### Health Monitoring
+- `GET /api/health/system` - System health overview
+- `GET /api/health/tenants` - All tenant health status
+- `GET /api/health/tenant/:id` - Specific tenant health
+
+### Audit Logs
+- `GET /api/audit/logs` - Paginated audit trail
+- `GET /api/audit/logs?userId=:id` - User-specific logs
+- `GET /api/audit/logs?action=:action` - Action-specific logs
 
 ### Analytics
 - `GET /api/analytics/overview` - System overview
@@ -192,11 +214,16 @@ docker-compose down
 
 ## 🔐 Security Features
 
+- **JWT Authentication** - Secure token-based authentication
+- **Account Security** - Password complexity, account lockout (5 attempts)
 - **Data Isolation** - Database-per-tenant architecture
-- **Role-Based Access** - Granular permissions
-- **Audit Logging** - Complete activity tracking
+- **Role-Based Access** - Granular permissions (Super Admin, Admin, Support)
+- **Audit Logging** - Complete activity tracking with IP addresses
+- **Health Monitoring** - Real-time database connectivity checks
+- **Email Notifications** - Security alerts and notifications
+- **Session Management** - Secure token expiration and refresh
 - **Encryption** - Data encrypted at rest and in transit
-- **Compliance** - POPIA and healthcare standards
+- **Compliance** - POPIA and healthcare standards ready
 
 ## 🚀 Deployment
 
@@ -231,10 +258,13 @@ This is a proprietary project. For collaboration opportunities, please contact t
 ## 🎯 Roadmap
 
 ### Phase 1 (Completed) ✅
-- Multi-tenant architecture
-- Tenant management system
-- User management
-- Analytics dashboard
+- **Multi-tenant architecture** - Complete database isolation
+- **Enterprise tenant management** - Full CRUD with health monitoring
+- **Professional user management** - Role-based access with temporary passwords
+- **Security system** - JWT auth, audit logs, account lockout
+- **Health monitoring** - Real-time database connectivity checks
+- **Email notifications** - Welcome emails, alerts, password resets
+- **Analytics dashboard** - System-wide reporting and metrics
 
 ### Phase 2 (Q1 2025) 🚧
 - Patient management system

@@ -39,10 +39,15 @@ export class TenantService {
     const savedTenant = await this.tenantRepository.save(tenant);
     this.logger.log(`Tenant created: ${savedTenant.id}`);
 
-    // Provision database asynchronously
-    this.provisionTenantDatabase(savedTenant).catch(error => {
+    // Provision database synchronously to ensure it completes
+    try {
+      await this.provisionTenantDatabase(savedTenant);
+    } catch (error) {
       this.logger.error(`Database provisioning failed for tenant ${savedTenant.id}:`, error);
-    });
+      // Update tenant status to suspended on failure
+      savedTenant.status = TenantStatus.SUSPENDED;
+      await this.tenantRepository.save(savedTenant);
+    }
 
     return savedTenant;
   }

@@ -13,23 +13,52 @@ const api = axios.create({
 // Auth API
 export const authAPI = {
   login: async (email: string, password: string) => {
-    // For now, hardcoded super admin login
-    if (email === 'admin@medicore.co.zw' && password === 'medicore123') {
-      const token = 'super_admin_token';
-      localStorage.setItem('auth_token', token);
-      return { token, user: { id: '1', email, role: 'super_admin' } };
-    }
-    throw new Error('Invalid credentials');
+    const response = await api.post('/auth/login', { email, password });
+    const { access_token, user } = response.data;
+    
+    localStorage.setItem('auth_token', access_token);
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    // Set default authorization header
+    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    
+    return { token: access_token, user };
   },
 
   logout: () => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    delete api.defaults.headers.common['Authorization'];
   },
 
   isAuthenticated: () => {
-    return !!localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      return true;
+    }
+    return false;
+  },
+
+  getCurrentUser: () => {
+    const user = localStorage.getItem('user');
+    return user ? JSON.parse(user) : null;
+  },
+
+  changePassword: async (oldPassword: string, newPassword: string) => {
+    const response = await api.post('/auth/change-password', {
+      oldPassword,
+      newPassword
+    });
+    return response.data;
   },
 };
+
+// Initialize auth header on app start
+if (authAPI.isAuthenticated()) {
+  const token = localStorage.getItem('auth_token');
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
 
 // Tenant API
 export const tenantAPI = {

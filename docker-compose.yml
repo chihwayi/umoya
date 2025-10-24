@@ -228,7 +228,7 @@ services:
     ports:
       - "3011:80"
     environment:
-      - REACT_APP_API_URL=http://localhost:3001
+      - REACT_APP_API_URL=/api
       - REACT_APP_ENVIRONMENT=development
     depends_on:
       - tenant-service
