@@ -1,13 +1,18 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TenantService } from '../services/tenant.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 
+@ApiTags('tenants')
+@ApiBearerAuth()
 @Controller('tenants')
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create new tenant' })
+  @ApiResponse({ status: 201, description: 'Tenant created successfully' })
   async createTenant(
     @Body(ValidationPipe) createTenantDto: CreateTenantDto
   ): Promise<{ tenant: Tenant; message: string }> {
@@ -19,6 +24,8 @@ export class TenantController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'Get all tenants' })
+  @ApiResponse({ status: 200, description: 'List of all tenants' })
   async getAllTenants(): Promise<Tenant[]> {
     return this.tenantService.getAllTenants();
   }

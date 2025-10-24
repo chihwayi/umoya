@@ -49,9 +49,10 @@ services:
       dockerfile: Dockerfile
     container_name: medicore-tenant-service
     ports:
-      - "3001:3000"
+      - "3001:3001"
     environment:
       - NODE_ENV=development
+      - PORT=3001
       - DATABASE_URL=postgresql://medicore:medicore_password@postgres-master:5432/medicore_master
       - REDIS_URL=redis://redis:6379
       - DB_HOST=postgres-master
@@ -219,6 +220,27 @@ services:
     networks:
       - medicore-network
 
+  # EHR Service
+  ehr-service:
+    build:
+      context: ./services/ehr-service
+      dockerfile: Dockerfile
+    container_name: medicore-ehr-service
+    ports:
+      - "3013:3013"
+    environment:
+      - NODE_ENV=development
+      - PORT=3013
+      - DB_HOST=postgres-master
+      - DB_PORT=5432
+      - DB_USERNAME=medicore
+      - DB_PASSWORD=medicore_password
+      - JWT_SECRET=ehr-super-secret-key
+    depends_on:
+      - postgres-master
+    networks:
+      - medicore-network
+
   # Web Application
   web-app:
     build:
@@ -226,14 +248,15 @@ services:
       dockerfile: Dockerfile.dev
     container_name: medicore-web-app
     ports:
-      - "3011:3000"
+      - "3011:3011"
     environment:
-      - REACT_APP_API_URL=
+      - PORT=3011
+      - REACT_APP_API_URL=/api
       - REACT_APP_ENVIRONMENT=development
       - CHOKIDAR_USEPOLLING=true
-      - WDS_SOCKET_HOST=localhost
+      - FAST_REFRESH=true
+      - WDS_SOCKET_HOST=0.0.0.0
       - WDS_SOCKET_PORT=3011
-      - FAST_REFRESH=false
     volumes:
       - ./web-app/src:/app/src
       - ./web-app/public:/app/public

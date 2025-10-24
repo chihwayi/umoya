@@ -264,10 +264,10 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-bold text-sm">{user.fullName.charAt(0)}</span>
+                          <span className="text-white font-bold text-sm">{user.fullName?.charAt(0) || user.firstName?.charAt(0) || 'U'}</span>
                         </div>
                         <div>
-                          <div className="font-bold text-slate-800">{user.fullName}</div>
+                          <div className="font-bold text-slate-800">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
                           <div className="text-sm text-slate-600">{user.email}</div>
                         </div>
                       </div>

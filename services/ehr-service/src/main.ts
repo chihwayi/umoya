@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { TenantModule } from './tenant.module';
+import { EhrModule } from './ehr.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(TenantModule);
+  const app = await NestFactory.create(EhrModule);
   
   // Enable validation globally
   app.useGlobalPipes(new ValidationPipe({
@@ -13,30 +13,32 @@ async function bootstrap() {
     transform: true,
   }));
 
-  // Enable CORS for all origins in development
+  // Enable CORS
   app.enableCors({
     origin: true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
   });
 
   app.setGlobalPrefix('api');
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('MediCore Tenant Management API')
-    .setDescription('Complete tenant management system for MediCore eHR platform')
+    .setTitle('MediCore EHR API')
+    .setDescription('Complete Electronic Health Records system with FHIR/HL7 support')
     .setVersion('1.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', name: 'X-Tenant-ID', in: 'header' }, 'tenant-key')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
   
-  const port = process.env.PORT || 3001;
+  const port = process.env.PORT || 3013;
   await app.listen(port);
   
-  console.log(`🏥 MediCore Tenant Service running on port ${port}`);
+  console.log(`🏥 MediCore EHR Service running on port ${port}`);
+  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
