@@ -223,13 +223,20 @@ services:
   web-app:
     build:
       context: ./web-app
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: medicore-web-app
     ports:
-      - "3011:80"
+      - "3011:3000"
     environment:
-      - REACT_APP_API_URL=/api
+      - REACT_APP_API_URL=
       - REACT_APP_ENVIRONMENT=development
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=3011
+      - FAST_REFRESH=false
+    volumes:
+      - ./web-app/src:/app/src
+      - ./web-app/public:/app/public
     depends_on:
       - tenant-service
     networks:

@@ -101,9 +101,9 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs("createdAt");
 INSERT INTO admin_users (email, "passwordHash", "firstName", "lastName", role, "mustChangePassword")
 VALUES (
     'admin@medicore.co.zw',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.s5uO8O',
-    'Super',
-    'Admin',
+    '$2b$12$ylEv9v4PCtLxQ6DWSKzPFOvfRAaJiAdnX8JOGOYb6Cd7KCl/RPixG',
+    'System',
+    'Administrator',
     'super_admin',
-    true
-);
+    false
+) ON CONFLICT (email) DO NOTHING;
