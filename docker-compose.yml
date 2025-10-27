@@ -280,13 +280,15 @@ services:
       - REACT_APP_API_URL=http://localhost:3001/api
       - REACT_APP_EHR_API_URL=http://localhost:3013/api
       - CHOKIDAR_USEPOLLING=true
-      - FAST_REFRESH=false
+      - CHOKIDAR_INTERVAL=1000
+      - FAST_REFRESH=true
       - GENERATE_SOURCEMAP=false
       - DISABLE_ESLINT_PLUGIN=true
       - TSC_COMPILE_ON_ERROR=true
       - WATCHPACK_POLLING=true
       - WDS_SOCKET_HOST=localhost
-      - WDS_SOCKET_PORT=0
+      - WDS_SOCKET_PORT=3014
+      - REACT_APP_CHOKIDAR_USEPOLLING=true
     volumes:
       - ./ehr-frontend/src:/app/src
       - ./ehr-frontend/public:/app/public

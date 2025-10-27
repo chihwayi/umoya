@@ -1,191 +1,150 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ehrAPI, tenantAPI } from '../services/api';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Mail, Lock, Eye, EyeOff, Stethoscope, Shield, ArrowLeft } from 'lucide-react';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 
-interface Tenant {
-  id: string;
-  clinicName: string;
-  subdomain: string;
-  status: string;
-}
-
-export const EHRLogin: React.FC = () => {
-  const { subdomain } = useParams<{ subdomain: string }>();
+const EHRLogin: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [credentials, setCredentials] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const location = useLocation();
+  const { showError, showSuccess, showInfo } = useNotification();
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const tenantName = location.state?.tenantName || tenantSlug?.replace('-', ' ');
 
   useEffect(() => {
-    loadTenant();
-  }, [subdomain]);
+    if (tenantName) {
+      showInfo('Clinic Selected', `Accessing ${tenantName} EHR system`);
+    }
+  }, [tenantName, showInfo]);
 
-  const loadTenant = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenantSlug) return;
+
+    setLoading(true);
     try {
-      const tenants = await tenantAPI.getAllTenants();
-      const foundTenant = tenants.find((t: Tenant) => t.subdomain === subdomain);
+      const response = await ehrApi.login(formData.email, formData.password, tenantSlug);
       
-      if (!foundTenant) {
-        setError('Clinic not found');
-        return;
+      if (response.data.mustChangePassword) {
+        localStorage.setItem('ehr_temp_token', response.data.token);
+        localStorage.setItem('ehr_tenant', tenantSlug);
+        showInfo('Password Change Required', 'Please set a new password to continue');
+        navigate(`/ehr/${tenantSlug}/change-password`);
+      } else {
+        localStorage.setItem('ehr_token', response.data.token);
+        localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
+        localStorage.setItem('ehr_tenant', tenantSlug);
+        showSuccess('Login Successful', `Welcome back, ${response.data.user.firstName}!`);
+        navigate(`/ehr/${tenantSlug}/dashboard`);
       }
-      
-      if (foundTenant.status !== 'active') {
-        setError('Clinic is not active');
-        return;
-      }
-      
-      setTenant(foundTenant);
-    } catch (error) {
-      setError('Failed to load clinic information');
+    } catch (error: any) {
+      showError('Login Failed', error.response?.data?.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenant) return;
-
-    setLoginLoading(true);
-    setError('');
-
-    try {
-      const response = await ehrAPI.login(tenant.id, credentials);
-      
-      // Store auth token and tenant info
-      localStorage.setItem('ehrToken', response.token);
-      localStorage.setItem('tenantId', tenant.id);
-      localStorage.setItem('clinicName', tenant.clinicName);
-      localStorage.setItem('userEmail', credentials.email);
-      
-      // Store user info if available in response
-      if (response.user) {
-        localStorage.setItem('userRole', response.user.role || 'user');
-        localStorage.setItem('userName', `${response.user.firstName || ''} ${response.user.lastName || ''}`.trim());
-      }
-      
-      // Check if password change is required
-      if (response.mustChangePassword) {
-        navigate(`/ehr/${subdomain}/change-password`);
-      } else {
-        navigate(`/ehr/${subdomain}/dashboard`);
-      }
-    } catch (error: any) {
-      setError(error.response?.data?.message || 'Login failed');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading clinic...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !tenant) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full mx-4">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">❌</span>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Clinic Not Found</h2>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <button
-              onClick={() => navigate('/')}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-            >
-              Back to Clinic Directory
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full mx-4">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">
-              {tenant?.clinicName.charAt(0)}
-            </span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">{tenant?.clinicName}</h1>
-          <p className="text-gray-600">EHR System Login</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              required
-              value={credentials.email}
-              onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your email"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              value={credentials.password}
-              onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your password"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
+        {/* Login Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl mb-4">
+              <Stethoscope className="w-8 h-8 text-white" />
             </div>
-          )}
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">
+              {tenantName || 'EHR Login'}
+            </h1>
+            <p className="text-slate-600">Access your electronic health records</p>
+          </div>
 
-          <button
-            type="submit"
-            disabled={loginLoading}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-indigo-700 transition-colors disabled:opacity-50"
-          >
-            {loginLoading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                Signing In...
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Email Field */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  placeholder="doctor@clinic.com"
+                />
               </div>
-            ) : (
-              'Sign In to EHR'
-            )}
-          </button>
-        </form>
+            </div>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => navigate('/')}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-          >
-            ← Back to Clinic Directory
-          </button>
+            {/* Password Field */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full pl-10 pr-12 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  <span>Signing in...</span>
+                </div>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+
+          {/* Security Notice */}
+          <div className="mt-6 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+            <div className="flex items-center gap-2 text-blue-700">
+              <Shield className="w-4 h-4" />
+              <span className="text-sm font-medium">Secure Healthcare Login</span>
+            </div>
+            <p className="text-xs text-blue-600 mt-1">
+              Your data is protected with enterprise-grade security
+            </p>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+export default EHRLogin;

@@ -1,116 +1,167 @@
 import React, { useState, useEffect } from 'react';
-import { tenantAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { Building2, MapPin, Users, ArrowRight, Search, Stethoscope } from 'lucide-react';
+import { tenantApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 
 interface Tenant {
   id: string;
   clinicName: string;
   subdomain: string;
-  status: string;
-  subscriptionTier: string;
   contactEmail: string;
+  contactPhone: string;
+  address?: string;
   city?: string;
+  subscriptionTier: string;
 }
 
-export const TenantDirectory: React.FC = () => {
+const TenantDirectory: React.FC = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
+  const { showError, showInfo } = useNotification();
 
   useEffect(() => {
-    loadTenants();
+    fetchTenants();
   }, []);
 
-  const loadTenants = async () => {
+  const fetchTenants = async () => {
     try {
-      const data = await tenantAPI.getAllTenants();
-      setTenants(data.filter((t: Tenant) => t.status === 'active'));
+      const response = await tenantApi.getActiveTenants();
+      setTenants(response.data);
+      showInfo('Clinics Loaded', `Found ${response.data.length} active clinics`);
     } catch (error) {
-      console.error('Failed to load tenants:', error);
+      showError('Connection Error', 'Failed to load clinic directory');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTenantClick = (tenant: Tenant) => {
-    const ehrUrl = `${window.location.origin}/ehr/${tenant.subdomain}`;
-    window.location.href = ehrUrl;
+  const filteredTenants = tenants.filter(tenant =>
+    tenant.clinicName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tenant.city?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleTenantSelect = (tenant: Tenant) => {
+    navigate(`/ehr/${tenant.subdomain}`, { 
+      state: { tenantName: tenant.clinicName } 
+    });
+  };
+
+  const getTierColor = (tier: string) => {
+    switch (tier) {
+      case 'enterprise': return 'bg-gradient-to-r from-purple-500 to-indigo-600';
+      case 'professional': return 'bg-gradient-to-r from-blue-500 to-cyan-600';
+      default: return 'bg-gradient-to-r from-emerald-500 to-teal-600';
+    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading clinics...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-slate-600 font-medium">Loading clinic directory...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">MediCore EHR System</h1>
-          <p className="text-xl text-gray-600">Select your clinic to access the EHR system</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
+              <Stethoscope className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                MediCore EHR
+              </h1>
+              <p className="text-slate-600">Select your healthcare facility</p>
+            </div>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {tenants.map((tenant) => (
+          {/* Search */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search clinics or cities..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white/70 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Clinics Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTenants.map((tenant) => (
             <div
               key={tenant.id}
-              onClick={() => handleTenantClick(tenant)}
-              className="bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-1 p-6"
+              onClick={() => handleTenantSelect(tenant)}
+              className="group bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 cursor-pointer hover:-translate-y-1"
             >
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">
-                    {tenant.clinicName.charAt(0)}
-                  </span>
+              {/* Tier Badge */}
+              <div className="flex justify-between items-start mb-4">
+                <div className={`${getTierColor(tenant.subscriptionTier)} text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide`}>
+                  {tenant.subscriptionTier}
                 </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-semibold text-gray-800">{tenant.clinicName}</h3>
-                  <p className="text-sm text-gray-500">{tenant.city}</p>
-                </div>
+                <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Status:</span>
-                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                    {tenant.status}
-                  </span>
+
+              {/* Clinic Info */}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Building2 className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">
+                      {tenant.clinicName}
+                    </h3>
+                    <p className="text-slate-500 text-sm">@{tenant.subdomain}</p>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Plan:</span>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    {tenant.subscriptionTier}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">URL:</span>
-                  <span className="text-xs text-gray-500">{tenant.subdomain}.medicore.co.zw</span>
+
+                {tenant.address && (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    <p className="text-slate-600 text-sm">
+                      {tenant.address}
+                      {tenant.city && `, ${tenant.city}`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <Users className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <p className="text-slate-600 text-sm">{tenant.contactEmail}</p>
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <button className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-indigo-700 transition-colors">
-                  Access EHR System
-                </button>
+              {/* Hover Effect */}
+              <div className="mt-4 pt-4 border-t border-slate-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="text-blue-600 text-sm font-medium">Click to access EHR system →</p>
               </div>
             </div>
           ))}
         </div>
 
-        {tenants.length === 0 && (
+        {filteredTenants.length === 0 && (
           <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">🏥</span>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">No Active Clinics</h3>
-            <p className="text-gray-500">No clinics are currently available in the system.</p>
+            <Building2 className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-slate-600 mb-2">No clinics found</h3>
+            <p className="text-slate-500">Try adjusting your search terms</p>
           </div>
         )}
       </div>
     </div>
   );
 };
+
+export default TenantDirectory;

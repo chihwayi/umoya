@@ -1,164 +1,215 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ehrAPI, tenantAPI } from '../services/api';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Lock, Eye, EyeOff, Shield, CheckCircle } from 'lucide-react';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 
-interface Tenant {
-  id: string;
-  clinicName: string;
-  subdomain: string;
-}
-
-export const ChangePassword: React.FC = () => {
-  const { subdomain } = useParams<{ subdomain: string }>();
+const ChangePassword: React.FC = () => {
   const navigate = useNavigate();
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [passwords, setPasswords] = useState({
+  const { showError, showSuccess, showWarning } = useNotification();
+  
+  const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  const [error, setError] = useState('');
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadTenant();
-    
-    // Check if user is logged in
-    const token = localStorage.getItem('ehrToken');
-    const tenantId = localStorage.getItem('tenantId');
-    if (!token || !tenantId) {
-      navigate(`/ehr/${subdomain}`);
-    }
-  }, [subdomain, navigate]);
+  const passwordRequirements = [
+    { text: 'At least 8 characters', met: formData.newPassword.length >= 8 },
+    { text: 'Contains uppercase letter', met: /[A-Z]/.test(formData.newPassword) },
+    { text: 'Contains lowercase letter', met: /[a-z]/.test(formData.newPassword) },
+    { text: 'Contains number', met: /\d/.test(formData.newPassword) },
+    { text: 'Contains special character', met: /[!@#$%^&*(),.?":{}|<>]/.test(formData.newPassword) }
+  ];
 
-  const loadTenant = async () => {
-    try {
-      const tenants = await tenantAPI.getAllTenants();
-      const foundTenant = tenants.find((t: Tenant) => t.subdomain === subdomain);
-      setTenant(foundTenant);
-    } catch (error) {
-      console.error('Failed to load tenant:', error);
-    }
-  };
+  const isPasswordValid = passwordRequirements.every(req => req.met);
+  const passwordsMatch = formData.newPassword === formData.confirmPassword;
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (passwords.newPassword !== passwords.confirmPassword) {
-      setError('New passwords do not match');
+    
+    if (!isPasswordValid) {
+      showWarning('Invalid Password', 'Please meet all password requirements');
       return;
     }
 
-    if (passwords.newPassword.length < 8) {
-      setError('Password must be at least 8 characters long');
+    if (!passwordsMatch) {
+      showWarning('Password Mismatch', 'New passwords do not match');
+      return;
+    }
+
+    const token = localStorage.getItem('ehr_temp_token');
+    const tenant = localStorage.getItem('ehr_tenant');
+    
+    if (!token || !tenant) {
+      showError('Session Error', 'Please login again');
+      navigate('/');
       return;
     }
 
     setLoading(true);
-
     try {
-      const tenantId = localStorage.getItem('tenantId');
-      const token = localStorage.getItem('ehrToken');
-      
-      await ehrAPI.changePassword(tenantId!, {
-        currentPassword: passwords.currentPassword,
-        newPassword: passwords.newPassword
-      }, token!);
+      await ehrApi.changePassword(
+        formData.currentPassword,
+        formData.newPassword,
+        token,
+        tenant
+      );
 
-      // Password changed successfully, redirect to dashboard
-      navigate(`/ehr/${subdomain}/dashboard`);
+      localStorage.removeItem('ehr_temp_token');
+      showSuccess('Password Updated', 'Please login with your new password');
+      navigate(`/ehr/${tenant}`);
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to change password');
+      showError('Update Failed', error.response?.data?.message || 'Failed to update password');
     } finally {
       setLoading(false);
     }
   };
 
+  const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm') => {
+    setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full mx-4">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-2xl">🔐</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">Change Password Required</h1>
-          <p className="text-gray-600">{tenant?.clinicName}</p>
-          <p className="text-sm text-amber-600 mt-2">You must change your password before accessing the system</p>
-        </div>
-
-        <form onSubmit={handlePasswordChange} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Password
-            </label>
-            <input
-              type="password"
-              required
-              value={passwords.currentPassword}
-              onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter your current password"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              New Password
-            </label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={passwords.newPassword}
-              onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter new password (min 8 characters)"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm New Password
-            </label>
-            <input
-              type="password"
-              required
-              value={passwords.confirmPassword}
-              onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Confirm new password"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl mb-4">
+              <Shield className="w-8 h-8 text-white" />
             </div>
-          )}
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">
+              Update Password
+            </h1>
+            <p className="text-slate-600">Set a secure password for your account</p>
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-indigo-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                Changing Password...
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Current Password */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Current Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type={showPasswords.current ? 'text' : 'password'}
+                  required
+                  value={formData.currentPassword}
+                  onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
+                  className="w-full pl-10 pr-12 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  placeholder="Enter current password"
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('current')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPasswords.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
-            ) : (
-              'Change Password'
-            )}
-          </button>
-        </form>
+            </div>
 
-        <div className="mt-6 text-center">
-          <p className="text-xs text-gray-500">
-            Password must be at least 8 characters long and contain a mix of letters, numbers, and symbols
-          </p>
+            {/* New Password */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                New Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type={showPasswords.new ? 'text' : 'password'}
+                  required
+                  value={formData.newPassword}
+                  onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                  className="w-full pl-10 pr-12 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  placeholder="Enter new password"
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('new')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPasswords.new ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Password Requirements */}
+            {formData.newPassword && (
+              <div className="bg-slate-50/50 rounded-xl p-4 space-y-2">
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">Password Requirements:</h4>
+                {passwordRequirements.map((req, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CheckCircle className={`w-4 h-4 ${req.met ? 'text-emerald-500' : 'text-slate-300'}`} />
+                    <span className={`text-sm ${req.met ? 'text-emerald-600' : 'text-slate-500'}`}>
+                      {req.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <input
+                  type={showPasswords.confirm ? 'text' : 'password'}
+                  required
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className={`w-full pl-10 pr-12 py-3 bg-slate-50/50 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
+                    formData.confirmPassword && !passwordsMatch
+                      ? 'border-red-300 focus:ring-red-500/20 focus:border-red-500'
+                      : 'border-slate-200 focus:ring-amber-500/20 focus:border-amber-500'
+                  }`}
+                  placeholder="Confirm new password"
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('confirm')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPasswords.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {formData.confirmPassword && !passwordsMatch && (
+                <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading || !isPasswordValid || !passwordsMatch}
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-amber-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  <span>Updating...</span>
+                </div>
+              ) : (
+                'Update Password'
+              )}
+            </button>
+          </form>
         </div>
       </div>
     </div>
   );
 };
+
+export default ChangePassword;

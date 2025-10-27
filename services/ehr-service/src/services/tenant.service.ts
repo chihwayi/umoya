@@ -26,18 +26,26 @@ export class TenantService {
     this.masterDb.initialize().catch(console.error);
   }
 
-  async getTenantDatabase(tenantId: string): Promise<DataSource | null> {
+  async getTenantDatabase(tenantIdentifier: string): Promise<DataSource | null> {
     try {
-      // Get tenant info from master database
-      const tenantQuery = `SELECT "databaseName" FROM tenants WHERE id = $1 AND status = 'active'`;
-      const result = await this.masterDb.query(tenantQuery, [tenantId]);
+      // Check if it's a UUID or subdomain
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantIdentifier);
+      
+      let tenantQuery: string;
+      if (isUUID) {
+        tenantQuery = `SELECT id, "databaseName" FROM tenants WHERE id = $1 AND status = 'active'`;
+      } else {
+        tenantQuery = `SELECT id, "databaseName" FROM tenants WHERE subdomain = $1 AND status = 'active'`;
+      }
+      
+      const result = await this.masterDb.query(tenantQuery, [tenantIdentifier]);
       
       if (!result || result.length === 0) {
-        console.error(`Tenant not found or inactive: ${tenantId}`);
+        console.error(`Tenant not found or inactive: ${tenantIdentifier}`);
         return null;
       }
 
-      const databaseName = result[0].databaseName;
+      const { id: tenantId, databaseName } = result[0];
       
       // Check if connection already exists
       if (this.tenantConnections.has(tenantId)) {
@@ -63,7 +71,7 @@ export class TenantService {
       console.log(`Connected to tenant database: ${databaseName}`);
       return dataSource;
     } catch (error) {
-      console.error(`Failed to connect to tenant database: ${tenantId}`, error);
+      console.error(`Failed to connect to tenant database: ${tenantIdentifier}`, error);
       return null;
     }
   }

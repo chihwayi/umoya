@@ -30,6 +30,7 @@ import { Dhis2Controller } from './controllers/dhis2.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { PaymentsController } from './controllers/payments.controller';
+import { UsersController } from './controllers/users.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -48,6 +49,7 @@ import { Dhis2Service } from './services/dhis2.service';
 import { ReportsService } from './services/reports.service';
 import { NotificationsService } from './services/notifications.service';
 import { PaymentsService } from './services/payments.service';
+import { UsersService } from './services/users.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -80,6 +82,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     ReportsController,
     NotificationsController,
     PaymentsController,
+    UsersController,
   ],
   providers: [
     AuthService,
@@ -98,6 +101,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     ReportsService,
     NotificationsService,
     PaymentsService,
+    UsersService,
     JwtStrategy,
   ],
 })

@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/c
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User, UserStatus } from '../entities/user.entity';
+import { User } from '../entities/user.entity';
 import { LoginDto } from '../dto/auth.dto';
 
 @Injectable()
@@ -20,7 +20,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
+    if (!user.isActive) {
       throw new ForbiddenException('Account is not active');
     }
 
@@ -28,21 +28,10 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.passwordHash);
     
     if (!isPasswordValid) {
-      // Increment failed login attempts
-      user.failedLoginAttempts += 1;
-      
-      if (user.failedLoginAttempts >= 5) {
-        user.status = UserStatus.SUSPENDED;
-        await userRepository.save(user);
-        throw new ForbiddenException('Account locked due to multiple failed login attempts');
-      }
-      
-      await userRepository.save(user);
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Reset failed login attempts on successful login
-    user.failedLoginAttempts = 0;
+    // Update last login
     user.lastLogin = new Date();
     await userRepository.save(user);
 
@@ -83,7 +72,6 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        department: user.department,
         specialization: user.specialization,
         mustChangePassword: user.mustChangePassword
       }
@@ -104,14 +92,13 @@ export class AuthService {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    // Hash new password with same salt rounds as tenant service
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update user
     user.passwordHash = hashedPassword;
     user.mustChangePassword = false;
-    user.lastPasswordChange = new Date();
+    user.passwordChangedAt = new Date();
 
     await userRepository.save(user);
   }
@@ -124,14 +111,13 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    // Hash new password with same salt rounds as tenant service
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update user
     user.passwordHash = hashedPassword;
     user.mustChangePassword = false;
-    user.lastPasswordChange = new Date();
+    user.passwordChangedAt = new Date();
 
     await userRepository.save(user);
   }

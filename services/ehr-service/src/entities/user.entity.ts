@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -10,21 +10,15 @@ export enum UserRole {
   RADIOLOGIST = 'radiologist'
 }
 
-export enum UserStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  SUSPENDED = 'suspended'
-}
-
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ name: 'first_name' })
   firstName: string;
 
-  @Column()
+  @Column({ name: 'last_name' })
   lastName: string;
 
   @Column({ unique: true })
@@ -33,40 +27,34 @@ export class User {
   @Column()
   phone: string;
 
-  @Column()
+  @Column({ name: 'password_hash' })
   passwordHash: string;
 
-  @Column({ default: true })
+  @Column({ name: 'must_change_password', default: false })
   mustChangePassword: boolean;
 
-  @Column({ type: 'enum', enum: UserRole })
-  role: UserRole;
+  @Column()
+  role: string;
 
-  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
-  status: UserStatus;
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: 'license_number', nullable: true })
   licenseNumber: string;
 
   @Column({ nullable: true })
   specialization: string;
 
-  @Column({ nullable: true })
-  department: string;
-
-  @Column({ default: 0 })
-  failedLoginAttempts: number;
-
-  @Column({ nullable: true })
+  @Column({ name: 'last_login', nullable: true })
   lastLogin: Date;
 
-  @Column({ nullable: true })
-  lastPasswordChange: Date;
+  @Column({ name: 'password_changed_at', nullable: true })
+  passwordChangedAt: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   get fullName(): string {
