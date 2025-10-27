@@ -1,0 +1,56 @@
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import { ClaimsService } from '../services/claims.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
+
+@ApiTags('Medical Aid Claims')
+@ApiSecurity('tenant-key')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('claims')
+export class ClaimsController {
+  constructor(private claimsService: ClaimsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create medical aid claim' })
+  @ApiResponse({ status: 201, description: 'Claim created successfully' })
+  async createClaim(@Body() createClaimDto: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.createClaim(createClaimDto, req.tenantDb);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all claims with filtering' })
+  @ApiResponse({ status: 200, description: 'Claims retrieved successfully' })
+  async getClaims(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaims(query, req.tenantDb);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get claim by ID' })
+  @ApiResponse({ status: 200, description: 'Claim retrieved successfully' })
+  async getClaimById(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaimById(id, req.tenantDb);
+  }
+
+  @Put(':id/submit')
+  @ApiOperation({ summary: 'Submit claim to medical aid provider' })
+  @ApiResponse({ status: 200, description: 'Claim submitted successfully' })
+  async submitClaim(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.submitClaim(id, req.tenantDb);
+  }
+
+  @Get(':id/status')
+  @ApiOperation({ summary: 'Check claim status with medical aid' })
+  @ApiResponse({ status: 200, description: 'Claim status retrieved' })
+  async checkClaimStatus(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.checkClaimStatus(id, req.tenantDb);
+  }
+
+  @Post(':id/response')
+  @ApiOperation({ summary: 'Process medical aid response' })
+  @ApiResponse({ status: 200, description: 'Response processed successfully' })
+  async processResponse(@Param('id') id: string, @Body() responseData: any, @Request() req: RequestWithTenant) {
+    return this.claimsService.processResponse(id, responseData, req.tenantDb);
+  }
+}

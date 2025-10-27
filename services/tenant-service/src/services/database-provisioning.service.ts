@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class DatabaseProvisioningService {
@@ -41,7 +39,6 @@ export class DatabaseProvisioningService {
   }
 
   private async runSchemaMigration(connectionString: string): Promise<void> {
-    // Create new connection for tenant database
     const tenantDataSource = new DataSource({
       type: 'postgres',
       url: connectionString,
@@ -50,12 +47,8 @@ export class DatabaseProvisioningService {
     try {
       await tenantDataSource.initialize();
       
-      // Read and execute clinic template schema
-      const schemaPath = path.join(__dirname, '../../database/schemas/clinic-template.sql');
-      const schema = fs.readFileSync(schemaPath, 'utf8');
-      
-      // Split by semicolon and execute each statement
-      const statements = schema.split(';').filter(stmt => stmt.trim());
+      // Execute clinic template schema
+      const statements = this.getClinicSchema();
       
       for (const statement of statements) {
         if (statement.trim()) {
@@ -68,6 +61,71 @@ export class DatabaseProvisioningService {
     } finally {
       await tenantDataSource.destroy();
     }
+  }
+
+  private getClinicSchema(): string[] {
+    const schema = `
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+      
+      CREATE TABLE users (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist')),
+          license_number VARCHAR(100),
+          specialization VARCHAR(100),
+          phone VARCHAR(50),
+          is_active BOOLEAN DEFAULT true,
+          must_change_password BOOLEAN DEFAULT false,
+          password_changed_at TIMESTAMP WITH TIME ZONE,
+          last_login TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE patients (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_number VARCHAR(50) UNIQUE NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          date_of_birth DATE NOT NULL,
+          gender VARCHAR(10) CHECK (gender IN ('male', 'female', 'other')),
+          id_number VARCHAR(50) UNIQUE,
+          phone VARCHAR(50),
+          email VARCHAR(255),
+          address TEXT,
+          city VARCHAR(100),
+          emergency_contact_name VARCHAR(200),
+          emergency_contact_phone VARCHAR(50),
+          medical_aid_name VARCHAR(100),
+          medical_aid_number VARCHAR(100),
+          medical_aid_plan VARCHAR(100),
+          blood_type VARCHAR(5),
+          allergies TEXT,
+          chronic_conditions TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+      
+      CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    `;
+    
+    return schema.split(';').filter(stmt => stmt.trim());
   }
 
   async deleteDatabase(databaseName: string): Promise<void> {

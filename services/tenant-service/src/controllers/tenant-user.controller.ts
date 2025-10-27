@@ -45,6 +45,18 @@ export class TenantUserController {
     };
   }
 
+  @Put(':userId/reset-password')
+  async resetPassword(
+    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string
+  ): Promise<{ user: TenantUser; message: string }> {
+    const user = await this.tenantDatabaseService.resetPassword(tenantId, userId);
+    return {
+      user,
+      message: 'Password reset successfully. User must change password on first login.'
+    };
+  }
+
   @Delete(':userId')
   async deleteUser(
     @Param('tenantId') tenantId: string,

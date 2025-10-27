@@ -254,9 +254,11 @@ services:
       - REACT_APP_API_URL=/api
       - REACT_APP_ENVIRONMENT=development
       - CHOKIDAR_USEPOLLING=true
-      - FAST_REFRESH=true
-      - WDS_SOCKET_HOST=0.0.0.0
-      - WDS_SOCKET_PORT=3011
+      - FAST_REFRESH=false
+      - GENERATE_SOURCEMAP=false
+      - DISABLE_ESLINT_PLUGIN=true
+      - TSC_COMPILE_ON_ERROR=true
+      - WATCHPACK_POLLING=true
     volumes:
       - ./web-app/src:/app/src
       - ./web-app/public:/app/public
