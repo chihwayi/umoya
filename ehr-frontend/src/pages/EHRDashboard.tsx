@@ -44,7 +44,7 @@ const EHRDashboard: React.FC = () => {
 
   const getRoleActions = (role: string) => {
     const baseActions = [
-      { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500' },
+      { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500', route: 'patients' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-emerald-500 to-teal-500' },
     ];
 
@@ -146,6 +146,14 @@ const EHRDashboard: React.FC = () => {
             >
               <Heart className="w-5 h-5" />
               <span>Dashboard</span>
+            </button>
+            
+            <button 
+              onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
+              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <Users className="w-5 h-5" />
+              <span>Patients</span>
             </button>
             
             {user?.role === 'admin' && (

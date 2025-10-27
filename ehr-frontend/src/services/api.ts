@@ -92,5 +92,59 @@ export const ehrApi = {
       }
     });
     return { data: response.data };
+  },
+
+  // Patient Management
+  getPatients: async (token: string, tenantSlug: string, page?: number, limit?: number) => {
+    const params = { page, limit };
+    const response = await axios.get(`${EHR_API_URL}/patients`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  getPatientStats: async (token: string, tenantSlug: string) => {
+    const response = await axios.get(`${EHR_API_URL}/patients/stats`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  searchPatients: async (query: string, token: string, tenantSlug: string) => {
+    const response = await axios.get(`${EHR_API_URL}/patients/search`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { q: query }
+    });
+    return { data: response.data };
+  },
+
+  createPatient: async (patientData: any, token: string, tenantSlug: string) => {
+    const response = await axios.post(`${EHR_API_URL}/patients`, patientData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getPatientById: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await axios.get(`${EHR_API_URL}/patients/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
   }
 };

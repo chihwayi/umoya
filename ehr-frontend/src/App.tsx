@@ -7,6 +7,7 @@ import ChangePassword from './pages/ChangePassword';
 import EHRDashboard from './pages/EHRDashboard';
 import UserManagement from './pages/UserManagement';
 import ProfileSettings from './pages/ProfileSettings';
+import PatientManagement from './pages/PatientManagement';
 import './index.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
           <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
           <Route path="/ehr/:tenantSlug/users" element={<UserManagement />} />
+          <Route path="/ehr/:tenantSlug/patients" element={<PatientManagement />} />
           <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
         </Routes>
       </Router>

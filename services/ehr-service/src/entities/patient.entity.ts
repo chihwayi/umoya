@@ -1,125 +1,81 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-
-export enum Gender {
-  MALE = 'male',
-  FEMALE = 'female',
-  OTHER = 'other'
-}
-
-export enum BloodType {
-  A_POSITIVE = 'A+',
-  A_NEGATIVE = 'A-',
-  B_POSITIVE = 'B+',
-  B_NEGATIVE = 'B-',
-  AB_POSITIVE = 'AB+',
-  AB_NEGATIVE = 'AB-',
-  O_POSITIVE = 'O+',
-  O_NEGATIVE = 'O-'
-}
-
-export enum MaritalStatus {
-  SINGLE = 'single',
-  MARRIED = 'married',
-  DIVORCED = 'divorced',
-  WIDOWED = 'widowed'
-}
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert } from 'typeorm';
 
 @Entity('patients')
 export class Patient {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column({ name: 'patient_number', unique: true })
   patientNumber: string;
 
-  @Column()
+  @Column({ name: 'first_name' })
   firstName: string;
 
-  @Column()
+  @Column({ name: 'last_name' })
   lastName: string;
 
-  @Column({ nullable: true })
-  middleName: string;
-
-  @Column({ type: 'date' })
+  @Column({ name: 'date_of_birth', type: 'date' })
   dateOfBirth: Date;
 
-  @Column({ type: 'enum', enum: Gender })
-  gender: Gender;
+  @Column()
+  gender: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'id_number', unique: true, nullable: true })
   nationalId: string;
 
   @Column({ nullable: true })
-  passportNumber: string;
-
-  @Column()
   phone: string;
 
   @Column({ nullable: true })
   email: string;
 
-  @Column({ type: 'text' })
+  @Column({ nullable: true })
   address: string;
 
   @Column({ nullable: true })
   city: string;
 
-  @Column({ nullable: true })
-  province: string;
-
-  @Column({ nullable: true })
-  postalCode: string;
-
-  @Column({ type: 'enum', enum: MaritalStatus, nullable: true })
-  maritalStatus: MaritalStatus;
-
-  @Column({ nullable: true })
-  occupation: string;
-
-  @Column({ nullable: true })
-  employer: string;
-
-  @Column({ type: 'enum', enum: BloodType, nullable: true })
-  bloodType: BloodType;
-
-  @Column({ nullable: true })
+  @Column({ name: 'emergency_contact_name', nullable: true })
   emergencyContactName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'emergency_contact_phone', nullable: true })
   emergencyContactPhone: string;
 
-  @Column({ nullable: true })
-  emergencyContactRelation: string;
+  @Column({ name: 'medical_aid_name', nullable: true })
+  medicalAidProvider: string;
+
+  @Column({ name: 'medical_aid_number', nullable: true })
+  medicalAidNumber: string;
+
+  @Column({ name: 'blood_type', nullable: true })
+  bloodType: string;
 
   @Column({ type: 'text', nullable: true })
   allergies: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'chronic_conditions', type: 'text', nullable: true })
   medicalHistory: string;
 
-  @Column({ type: 'text', nullable: true })
-  currentMedications: string;
-
-  @Column({ nullable: true })
-  insuranceProvider: string;
-
-  @Column({ nullable: true })
-  insuranceNumber: string;
-
-  @Column({ default: true })
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @BeforeInsert()
+  generatePatientNumber() {
+    if (!this.patientNumber) {
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      this.patientNumber = `MED${timestamp}${random}`;
+    }
+  }
+
   get fullName(): string {
-    return this.middleName 
-      ? `${this.firstName} ${this.middleName} ${this.lastName}`
-      : `${this.firstName} ${this.lastName}`;
+    return `${this.firstName} ${this.lastName}`;
   }
 
   get age(): number {
@@ -133,5 +89,9 @@ export class Patient {
     }
     
     return age;
+  }
+
+  get mrn(): string {
+    return this.patientNumber;
   }
 }

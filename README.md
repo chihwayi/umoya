@@ -11,17 +11,25 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 ### ✅ **Complete Tenant Management System**
 - **Multi-tenant Architecture** - Complete data isolation per clinic
 - **Automated Database Provisioning** - Each tenant gets dedicated database
-- **Role-Based Access Control** - 7 different EHR roles
+- **Role-Based Access Control** - 5 healthcare roles (Admin, Doctor, Nurse, Receptionist, Pharmacist)
 - **Manual Tenant Activation** - Control over clinic activation/suspension
 - **Comprehensive Analytics** - System-wide reporting and insights
 
-### 🏥 **Core eHR Functionality** (Planned)
-- Patient Management & Demographics
-- Medical Records & Documentation
-- Appointment Scheduling
-- Prescription Management
-- Laboratory & Imaging Integration
-- Billing & Invoicing
+### ✅ **User Management System** (NEW)
+- **Complete CRUD Operations** - Create, read, update, delete clinic staff
+- **Secure Password Management** - Auto-generated temporary passwords with copy functionality
+- **Role-Based Permissions** - Admin-only access to user management
+- **Account Status Control** - Activate/deactivate users as needed
+- **Profile Management** - User settings and password change functionality
+
+### 🏥 **Core eHR Functionality** 
+- **User Management** ✅ - Complete staff management system
+- **Patient Management** 🚧 - Patient registration and demographics (Next)
+- **Medical Records** 🚧 - Clinical documentation and history
+- **Appointment Scheduling** 🚧 - Booking and calendar management
+- **Prescription Management** 🚧 - Medication orders and tracking
+- **Laboratory & Imaging** 🚧 - Test orders and results
+- **Billing & Invoicing** 🚧 - Financial management
 
 ### 💰 **Medical Aid Claims Processing** (Planned)
 - Automated claim generation and submission
@@ -90,41 +98,46 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
    ```
 
 4. **Access the application**
-   - **Web Portal**: http://localhost:3011
-   - **Login**: admin@medicore.co.zw / medicore123
-   - **Features**: System Overview, Tenant Management, Health Monitor, Audit Logs, Security Panel
+   - **Super Admin Portal**: http://localhost:3011 (admin@medicore.co.zw / medicore123)
+   - **EHR System**: http://localhost:3014/ehr/bulawayo-general (admin@bulawayo-general.co.zw / ildc3m37)
+   - **Features**: Complete tenant management, user management, modern medical UI
 
 ## 📊 Current Status
 
-### ✅ **PRODUCTION-READY TENANT MANAGEMENT PLATFORM**
+### ✅ **PRODUCTION-READY MULTI-TENANT EHR PLATFORM**
 - **🏥 Multi-tenant Architecture** - Complete database isolation per clinic
-- **🔐 Enterprise Security** - JWT auth, account lockout, audit logging
-- **👥 User Management** - Role-based access with temporary passwords
+- **🔐 Enterprise Security** - JWT auth, tenant isolation, audit logging
+- **👥 Complete User Management** - Staff CRUD, password management, role-based access
+- **🎨 Modern Medical UI** - Glassmorphism design with healthcare theme
+- **📱 Mobile Responsive** - Works perfectly on all devices
+- **🔔 Smart Notifications** - No browser popups, beautiful toast messages
 - **💚 Health Monitoring** - Real-time database health checks & alerts
 - **📋 Audit Logging** - Complete activity tracking & compliance
 - **📧 Email Notifications** - Welcome emails, alerts, password resets
 - **📊 Analytics Dashboard** - System-wide reporting & metrics
-- **🌐 Modern Web Portal** - Professional React interface
-- **🔧 RESTful APIs** - Complete tenant management APIs
+- **🌐 Professional Web Portal** - React TypeScript interface
+- **🔧 RESTful APIs** - 69+ EHR APIs ready for development
 
-### 🚧 **Next Phase: EHR Development**
-- Patient Management System
-- Appointment Scheduling
-- Medical Records Management
-- Billing System
-- Medical Aid Claims Processing
-- CDSS Integration
+### 🚧 **Next Phase: Core EHR Modules**
+- **Patient Management** - Registration, demographics, medical history
+- **Appointment Scheduling** - Calendar, booking, reminders
+- **Medical Records** - Clinical notes, diagnoses, treatment plans
+- **Prescription Management** - Medication orders, drug interactions
+- **Laboratory Integration** - Test orders, results management
+- **Billing & Claims** - Medical aid integration, invoicing
 
 ## 🎯 Competitive Advantages
 
 ### vs Health263 Zimbabwe
 - **40% Lower Pricing** - Transparent, all-inclusive packages
-- **Modern Technology** - Cloud-native vs legacy systems
-- **Enterprise Security** - JWT auth, audit logs, health monitoring
+- **Modern Technology** - Cloud-native React/Node.js vs legacy systems
+- **Superior User Experience** - Modern glassmorphism UI, mobile-responsive
+- **Enterprise Security** - Multi-tenant isolation, JWT auth, audit logs
+- **Complete Staff Management** - Built-in user management with role-based access
+- **Smart Notifications** - No browser popups, beautiful toast messages
 - **AI-Powered CDSS** - First in Zimbabwe market (planned)
-- **Better User Experience** - Modern, intuitive interface
-- **Complete Integration** - All-in-one solution
-- **Production-Ready** - Enterprise-grade tenant management
+- **Production-Ready** - Enterprise-grade multi-tenant architecture
+- **Developer-Friendly** - 69+ APIs, comprehensive documentation
 
 ## 📈 Business Model
 
@@ -170,33 +183,36 @@ docker-compose down
 
 ## 📚 API Documentation
 
-### Authentication
-- `POST /api/auth/login` - JWT authentication
-- `GET /api/auth/profile` - Get current user
-- `POST /api/auth/change-password` - Change password
+### EHR Authentication (Port 3013)
+- `POST /api/auth/login` - EHR user login with tenant isolation
+- `GET /api/auth/profile` - Get current EHR user profile
+- `PUT /api/auth/change-password` - Change EHR user password
 
-### Tenant Management
+### User Management (EHR)
+- `GET /api/users` - List all clinic staff (with role filtering)
+- `GET /api/users/:id` - Get specific user details
+- `POST /api/users` - Create new clinic staff member
+- `PUT /api/users/:id` - Update user information
+- `DELETE /api/users/:id` - Deactivate user
+- `PUT /api/users/:id/reset-password` - Reset user password
+- `PUT /api/users/:id/activate` - Activate deactivated user
+
+### Tenant Management (Port 3001)
 - `GET /api/tenants` - List all tenants
 - `POST /api/tenants` - Create new tenant
 - `PUT /api/tenants/:id/status` - Update tenant status
 - `GET /api/tenants/:id/users` - Get tenant users
 - `POST /api/tenants/:id/users` - Create tenant user
-- `PUT /api/tenants/:id/users/:userId/change-password` - Change user password
 
 ### Health Monitoring
 - `GET /api/health/system` - System health overview
 - `GET /api/health/tenants` - All tenant health status
-- `GET /api/health/tenant/:id` - Specific tenant health
 
-### Audit Logs
-- `GET /api/audit/logs` - Paginated audit trail
-- `GET /api/audit/logs?userId=:id` - User-specific logs
-- `GET /api/audit/logs?action=:action` - Action-specific logs
-
-### Analytics
-- `GET /api/analytics/overview` - System overview
-- `GET /api/analytics/tenants` - All tenants overview
-- `GET /api/analytics/tenants/:id/report` - Tenant report
+### 69+ Additional EHR APIs Ready
+- Patient Management, Appointments, Medical Records
+- Prescriptions, Lab Orders, Billing, Claims
+- FHIR, HL7, CDSS, DHIS2, Reports, Notifications
+- SMS, Mobile Money, and more...
 
 ## 🗄️ Database Structure
 
@@ -214,13 +230,15 @@ docker-compose down
 
 ## 🔐 Security Features
 
-- **JWT Authentication** - Secure token-based authentication
-- **Account Security** - Password complexity, account lockout (5 attempts)
-- **Data Isolation** - Database-per-tenant architecture
-- **Role-Based Access** - Granular permissions (Super Admin, Admin, Support)
+- **Multi-Tenant Isolation** - Complete database separation per clinic
+- **JWT Authentication** - Secure token-based authentication with tenant validation
+- **Role-Based Access Control** - 5 healthcare roles with granular permissions
+- **Secure Password Management** - Auto-generated temporary passwords, mandatory changes
+- **Account Security** - Password complexity enforcement, account lockout protection
+- **Tenant URL Enforcement** - Strict tenant slug validation in all routes
+- **Data Isolation** - No cross-tenant data access possible
 - **Audit Logging** - Complete activity tracking with IP addresses
 - **Health Monitoring** - Real-time database connectivity checks
-- **Email Notifications** - Security alerts and notifications
 - **Session Management** - Secure token expiration and refresh
 - **Encryption** - Data encrypted at rest and in transit
 - **Compliance** - POPIA and healthcare standards ready
@@ -258,10 +276,13 @@ This is a proprietary project. For collaboration opportunities, please contact t
 ## 🎯 Roadmap
 
 ### Phase 1 (Completed) ✅
-- **Multi-tenant architecture** - Complete database isolation
+- **Multi-tenant architecture** - Complete database isolation per clinic
 - **Enterprise tenant management** - Full CRUD with health monitoring
-- **Professional user management** - Role-based access with temporary passwords
-- **Security system** - JWT auth, audit logs, account lockout
+- **Complete user management** - Staff CRUD, password management, role-based access
+- **Modern medical UI** - Glassmorphism design with healthcare theme
+- **Security system** - JWT auth, tenant isolation, audit logs
+- **Smart notifications** - Toast messages, no browser popups
+- **Mobile responsive** - Works on all devices
 - **Health monitoring** - Real-time database connectivity checks
 - **Email notifications** - Welcome emails, alerts, password resets
 - **Analytics dashboard** - System-wide reporting and metrics
