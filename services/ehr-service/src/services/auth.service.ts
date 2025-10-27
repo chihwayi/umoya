@@ -49,11 +49,18 @@ export class AuthService {
     // Check if password change is required
     if (user.mustChangePassword) {
       return {
-        mustChangePassword: true,
-        temporaryToken: this.jwtService.sign(
+        token: this.jwtService.sign(
           { sub: user.id, email: user.email, role: user.role, temporary: true },
           { expiresIn: '15m' }
         ),
+        mustChangePassword: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role
+        },
         message: 'Password change required'
       };
     }
@@ -68,7 +75,8 @@ export class AuthService {
     };
 
     return {
-      access_token: this.jwtService.sign(payload),
+      token: this.jwtService.sign(payload),
+      mustChangePassword: false,
       user: {
         id: user.id,
         email: user.email,

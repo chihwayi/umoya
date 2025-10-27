@@ -241,7 +241,7 @@ services:
     networks:
       - medicore-network
 
-  # Web Application
+  # Web Application (Tenant Management)
   web-app:
     build:
       context: ./web-app
@@ -264,6 +264,35 @@ services:
       - ./web-app/public:/app/public
     depends_on:
       - tenant-service
+    networks:
+      - medicore-network
+
+  # EHR Frontend Application
+  ehr-frontend:
+    build:
+      context: ./ehr-frontend
+      dockerfile: Dockerfile.dev
+    container_name: medicore-ehr-frontend
+    ports:
+      - "3014:3000"
+    environment:
+      - PORT=3000
+      - REACT_APP_API_URL=http://localhost:3001/api
+      - REACT_APP_EHR_API_URL=http://localhost:3013/api
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=false
+      - GENERATE_SOURCEMAP=false
+      - DISABLE_ESLINT_PLUGIN=true
+      - TSC_COMPILE_ON_ERROR=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=0
+    volumes:
+      - ./ehr-frontend/src:/app/src
+      - ./ehr-frontend/public:/app/public
+    depends_on:
+      - tenant-service
+      - ehr-service
     networks:
       - medicore-network
 
