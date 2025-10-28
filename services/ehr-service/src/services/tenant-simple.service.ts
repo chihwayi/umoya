@@ -3,13 +3,9 @@ import { DataSource } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
-import { MedicalRecord } from '../entities/medical-record.entity';
-import { Prescription } from '../entities/prescription.entity';
-import { LabOrder } from '../entities/lab-order.entity';
-import { Bill } from '../entities/billing.entity';
 
 @Injectable()
-export class TenantService {
+export class TenantSimpleService {
   private masterDb: DataSource;
   private tenantConnections = new Map<string, DataSource>();
 
@@ -17,7 +13,7 @@ export class TenantService {
     // Initialize master database connection
     this.masterDb = new DataSource({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
+      host: process.env.DB_HOST || 'postgres-master',
       port: parseInt(process.env.DB_PORT) || 5432,
       username: process.env.DB_USERNAME || 'medicore',
       password: process.env.DB_PASSWORD || 'medicore_password',
@@ -55,12 +51,12 @@ export class TenantService {
       // Create new connection for tenant
       const dataSource = new DataSource({
         type: 'postgres',
-        host: process.env.DB_HOST || 'localhost',
+        host: process.env.DB_HOST || 'postgres-master',
         port: parseInt(process.env.DB_PORT) || 5432,
         username: process.env.DB_USERNAME || 'medicore',
         password: process.env.DB_PASSWORD || 'medicore_password',
         database: databaseName,
-        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill],
+        entities: [User, Patient, AppointmentSimple],
         synchronize: false, // Schema already exists
         logging: false,
       });

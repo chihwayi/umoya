@@ -1,18 +1,7 @@
 import { Module, MiddlewareConsumer } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-
-// Entities
-import { User } from './entities/user.entity';
-import { Patient } from './entities/patient.entity';
-import { Appointment } from './entities/appointment.entity';
-import { MedicalRecord } from './entities/medical-record.entity';
-import { Prescription } from './entities/prescription.entity';
-import { LabOrder } from './entities/lab-order.entity';
-import { Bill } from './entities/billing.entity';
-import { MedicalAidClaim } from './entities/medical-aid-claim.entity';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -63,8 +52,6 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
       secret: process.env.JWT_SECRET || 'ehr-super-secret-key',
       signOptions: { expiresIn: '8h' },
     }),
-    // No default database connection - using dynamic tenant connections
-    // Dynamic tenant database connections handled by TenantService
   ],
   controllers: [
     AuthController,

@@ -4,13 +4,13 @@ import {
   Users, Plus, Search, Filter, ArrowLeft, Eye, Edit, UserX,
   Calendar, Phone, Mail, MapPin, Heart, AlertTriangle, Shield
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification';
-import { ehrApi } from '../services/api';
-import CreatePatientModal from '../components/CreatePatientModal';
+import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api.ts';
+import CreatePatientModal from '../components/CreatePatientModal.tsx';
 
 interface Patient {
   id: string;
-  mrn: string;
+  patientNumber: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -22,7 +22,7 @@ interface Patient {
   city: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
-  emergencyContactRelationship: string;
+  emergencyContactRelationship?: string;
   medicalAidProvider?: string;
   medicalAidNumber?: string;
   bloodType?: string;
@@ -216,7 +216,7 @@ const PatientManagement: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-800">{patient.firstName} {patient.lastName}</h3>
-                  <p className="text-sm text-slate-600">MRN: {patient.mrn}</p>
+                  <p className="text-sm text-slate-600">MRN: {patient.patientNumber}</p>
                 </div>
               </div>
               
@@ -227,7 +227,9 @@ const PatientManagement: React.FC = () => {
                   </span>
                 )}
                 {patient.allergies && (
-                  <AlertTriangle className="w-4 h-4 text-amber-500" title="Has allergies" />
+                  <div title="Has allergies">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  </div>
                 )}
               </div>
             </div>
@@ -273,7 +275,10 @@ const PatientManagement: React.FC = () => {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
+              <button 
+                onClick={() => navigate(`/ehr/${tenantSlug}/patients/${patient.id}`)}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+              >
                 <Eye className="w-3 h-3" />
                 View
               </button>

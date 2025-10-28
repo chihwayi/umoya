@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
-import { Appointment } from './appointment.entity';
+import { AppointmentSimple } from './appointment-simple.entity';
 
 export enum RecordType {
   CONSULTATION = 'consultation',
@@ -33,9 +33,9 @@ export class MedicalRecord {
   @Column({ nullable: true })
   appointmentId: string;
 
-  @ManyToOne(() => Appointment)
+  @ManyToOne(() => AppointmentSimple)
   @JoinColumn({ name: 'appointmentId' })
-  appointment: Appointment;
+  appointment: AppointmentSimple;
 
   @Column()
   providerId: string;

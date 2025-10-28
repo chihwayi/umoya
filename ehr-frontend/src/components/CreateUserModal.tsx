@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, User, Mail, Phone, Briefcase, Award, FileText } from 'lucide-react';
-import { useNotification } from './GlobalNotification';
-import { ehrApi } from '../services/api';
-import PasswordDisplayModal from './PasswordDisplayModal';
+import { useNotification } from './GlobalNotification.tsx';
+import { ehrApi } from '../services/api.ts';
+import PasswordDisplayModal from './PasswordDisplayModal.tsx';
 
 interface CreateUserModalProps {
   isOpen: boolean;

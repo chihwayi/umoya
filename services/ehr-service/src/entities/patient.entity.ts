@@ -65,14 +65,7 @@ export class Patient {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @BeforeInsert()
-  generatePatientNumber() {
-    if (!this.patientNumber) {
-      const timestamp = Date.now().toString().slice(-6);
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      this.patientNumber = `MED${timestamp}${random}`;
-    }
-  }
+  // MRN generation moved to service layer for tenant-specific generation
 
   get fullName(): string {
     return `${this.firstName} ${this.lastName}`;

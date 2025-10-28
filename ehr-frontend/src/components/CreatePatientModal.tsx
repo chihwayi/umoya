@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, User, Calendar, Phone, Mail, MapPin, Heart, Shield, AlertTriangle } from 'lucide-react';
-import { useNotification } from './GlobalNotification';
-import { ehrApi } from '../services/api';
+import { useNotification } from './GlobalNotification.tsx';
+import { ehrApi } from '../services/api.ts';
 
 interface CreatePatientModalProps {
   isOpen: boolean;

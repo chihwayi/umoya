@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Stethoscope, Shield, ArrowLeft } from 'lucide-react';
-import { ehrApi } from '../services/api';
-import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification.tsx';
 
 const EHRLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

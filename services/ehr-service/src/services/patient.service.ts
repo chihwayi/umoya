@@ -47,7 +47,7 @@ export class PatientService {
     return patient;
   }
 
-  async createPatient(createPatientDto: CreatePatientDto, tenantDb: DataSource): Promise<Patient> {
+  async createPatient(createPatientDto: CreatePatientDto, tenantDb: DataSource, tenantSlug: string): Promise<Patient> {
     const patientRepository = tenantDb.getRepository(Patient);
     
     // Check for existing national ID
@@ -60,6 +60,15 @@ export class PatientService {
     }
     
     const patient = patientRepository.create(createPatientDto);
+    
+    // Generate tenant-specific MRN
+    if (!patient.patientNumber) {
+      const tenantCode = tenantSlug.toUpperCase().replace(/-/g, '').substring(0, 3);
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      patient.patientNumber = `${tenantCode}${timestamp}${random}`;
+    }
+    
     return patientRepository.save(patient);
   }
 

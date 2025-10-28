@@ -1,10 +1,11 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { SimpleEhrModule } from './simple-ehr.module';
+import { MockEhrModule } from './mock-ehr.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(SimpleEhrModule);
+  const app = await NestFactory.create(MockEhrModule);
   
   // Enable validation globally
   app.useGlobalPipes(new ValidationPipe({
@@ -25,8 +26,8 @@ async function bootstrap() {
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('MediCore EHR API')
-    .setDescription('Complete Electronic Health Records system with FHIR/HL7 support')
+    .setTitle('MediCore EHR API (Mock)')
+    .setDescription('Mock EHR service for testing')
     .setVersion('1.0')
     .addBearerAuth()
     .addApiKey({ type: 'apiKey', name: 'X-Tenant-ID', in: 'header' }, 'tenant-key')
@@ -37,8 +38,10 @@ async function bootstrap() {
   const port = process.env.PORT || 3013;
   await app.listen(port);
   
-  console.log(`🏥 MediCore EHR Service running on port ${port}`);
+  console.log(`🏥 MediCore EHR Service (Mock) running on port ${port}`);
   console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
+
+

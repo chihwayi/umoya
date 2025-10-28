@@ -12,12 +12,30 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.1",
     "react-scripts": "5.0.1",
-    "tailwindcss": "^3.2.7",
     "typescript": "^4.9.5"
   },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+  "devDependencies": {
+    "tailwindcss": "^3.1.6",
+    "@tailwindcss/forms": "^0.5.2",
+    "autoprefixer": "^10.4.7",
+    "postcss": "^8.4.14",
+    "@craco/craco": "^7.1.0"
   },
-  "proxy": "http://localhost:3001"
+  "scripts": {
+    "start": "craco start",
+    "build": "craco build"
+  },
+  "proxy": "http://localhost:3013",
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
 }

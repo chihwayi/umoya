@@ -2,11 +2,25 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
+# Copy source code
 COPY . .
 
-EXPOSE 3014
+# Expose the port the app runs on
+EXPOSE 3000
 
+# Set environment variables for hot reloading
+ENV CHOKIDAR_USEPOLLING=true
+ENV CHOKIDAR_INTERVAL=1000
+ENV FAST_REFRESH=true
+ENV WATCHPACK_POLLING=true
+ENV WDS_SOCKET_HOST=0.0.0.0
+ENV WDS_SOCKET_PORT=3000
+
+# Start the development server with hot reloading
 CMD ["npm", "start"]

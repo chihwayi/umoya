@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Shield, CheckCircle } from 'lucide-react';
-import { ehrApi } from '../services/api';
-import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification.tsx';
 
 const ChangePassword: React.FC = () => {
   const navigate = useNavigate();

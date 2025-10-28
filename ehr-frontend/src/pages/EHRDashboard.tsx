@@ -5,7 +5,7 @@ import {
   BarChart3, Settings, LogOut, Bell, Search, Plus,
   Stethoscope, Heart, Activity, Clock, User, Menu, X
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification';
+import { useNotification } from '../components/GlobalNotification.tsx';
 
 interface User {
   id: string;
@@ -45,7 +45,7 @@ const EHRDashboard: React.FC = () => {
   const getRoleActions = (role: string) => {
     const baseActions = [
       { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500', route: 'patients' },
-      { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-emerald-500 to-teal-500' },
+      { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-emerald-500 to-teal-500', route: 'appointments' },
     ];
 
     switch (role) {
@@ -154,6 +154,14 @@ const EHRDashboard: React.FC = () => {
             >
               <Users className="w-5 h-5" />
               <span>Patients</span>
+            </button>
+            
+            <button 
+              onClick={() => navigate(`/ehr/${tenantSlug}/appointments`)}
+              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <Calendar className="w-5 h-5" />
+              <span>Appointments</span>
             </button>
             
             {user?.role === 'admin' && (

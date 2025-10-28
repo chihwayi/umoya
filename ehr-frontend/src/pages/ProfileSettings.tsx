@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Key, ArrowLeft, Save } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification';
-import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api.ts';
 
 const ProfileSettings: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

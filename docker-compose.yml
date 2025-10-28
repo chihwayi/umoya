@@ -286,12 +286,18 @@ services:
       - DISABLE_ESLINT_PLUGIN=true
       - TSC_COMPILE_ON_ERROR=true
       - WATCHPACK_POLLING=true
-      - WDS_SOCKET_HOST=localhost
-      - WDS_SOCKET_PORT=3014
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=3000
       - REACT_APP_CHOKIDAR_USEPOLLING=true
+      - BROWSER=none
     volumes:
       - ./ehr-frontend/src:/app/src
       - ./ehr-frontend/public:/app/public
+      - ./ehr-frontend/package.json:/app/package.json
+      - ./ehr-frontend/package-lock.json:/app/package-lock.json
+      - ./ehr-frontend/tsconfig.json:/app/tsconfig.json
+      - ./ehr-frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./ehr-frontend/postcss.config.js:/app/postcss.config.js
     depends_on:
       - tenant-service
       - ehr-service

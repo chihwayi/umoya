@@ -1,46 +1,71 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req, Put } from '@nestjs/common';
 import { AppointmentService } from '../services/appointment.service';
+import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
-@ApiTags('Appointment Management')
-@ApiSecurity('tenant-key')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('appointments')
+@UseGuards(JwtAuthGuard)
 export class AppointmentController {
-  constructor(private appointmentService: AppointmentService) {}
+  constructor(private readonly appointmentService: AppointmentService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create new appointment' })
-  @ApiResponse({ status: 201, description: 'Appointment created successfully' })
-  async createAppointment(@Body() createAppointmentDto: any, @Request() req: RequestWithTenant) {
-    return this.appointmentService.create(createAppointmentDto, req.tenantDb, (req.user as any).id);
+  create(@Body() createAppointmentDto: CreateAppointmentDto, @Req() req: RequestWithTenant) {
+    return this.appointmentService.create(createAppointmentDto, req.user.userId, req.tenantId);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get appointments with filters' })
-  @ApiResponse({ status: 200, description: 'Appointments retrieved successfully' })
-  async getAppointments(@Query() query: any, @Request() req: RequestWithTenant) {
-    return this.appointmentService.findAll(query, req.tenantDb);
+  async findAll(@Query() query: AppointmentQueryDto, @Req() req: RequestWithTenant) {
+    return this.appointmentService.findAll(query, req.tenantId);
+  }
+
+  @Get('doctor/:doctorId/schedule')
+  getDoctorSchedule(@Param('doctorId') doctorId: string, @Query('date') date: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.getDoctorSchedule(doctorId, date, req.tenantId);
+  }
+
+  @Get('doctor/:doctorId/available-slots')
+  getAvailableSlots(@Param('doctorId') doctorId: string, @Query('date') date: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.getAvailableSlots(doctorId, date, req.tenantId);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get appointment by ID' })
-  @ApiResponse({ status: 200, description: 'Appointment retrieved successfully' })
-  async getAppointment(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.appointmentService.findById(id, req.tenantDb);
+  findOne(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.findOne(id, req.tenantId);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateAppointmentDto: UpdateAppointmentDto, @Req() req: RequestWithTenant) {
+    return this.appointmentService.update(id, updateAppointmentDto, req.tenantId);
   }
 
   @Put(':id/status')
-  @ApiOperation({ summary: 'Update appointment status' })
-  @ApiResponse({ status: 200, description: 'Appointment status updated successfully' })
-  async updateAppointmentStatus(
-    @Param('id') id: string,
-    @Body() body: { status: string },
-    @Request() req: RequestWithTenant
-  ) {
-    return this.appointmentService.updateStatus(id, body.status as any, req.tenantDb);
+  updateStatus(@Param('id') id: string, @Body() body: { status: string }, @Req() req: RequestWithTenant) {
+    return this.appointmentService.updateStatus(id, body.status, req.tenantId);
+  }
+
+  @Put(':id/check-in')
+  checkIn(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.checkInPatient(id, req.tenantId);
+  }
+
+  @Put(':id/start')
+  startAppointment(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.startAppointment(id, req.tenantId);
+  }
+
+  @Put(':id/complete')
+  completeAppointment(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.completeAppointment(id, req.tenantId);
+  }
+
+  @Get('doctor/:doctorId/wait-times')
+  getWaitTimes(@Param('doctorId') doctorId: string, @Query('date') date: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.getWaitTimes(doctorId, date, req.tenantId);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.remove(id, req.tenantId);
   }
 }

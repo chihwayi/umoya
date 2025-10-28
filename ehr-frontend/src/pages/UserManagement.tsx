@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Users, Plus, Edit, Trash2, Key, UserCheck, UserX, Search, Filter, ArrowLeft } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification';
-import { ehrApi } from '../services/api';
-import CreateUserModal from '../components/CreateUserModal';
-import PasswordDisplayModal from '../components/PasswordDisplayModal';
+import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api.ts';
+import CreateUserModal from '../components/CreateUserModal.tsx';
+import PasswordDisplayModal from '../components/PasswordDisplayModal.tsx';
 
 interface User {
   id: string;
