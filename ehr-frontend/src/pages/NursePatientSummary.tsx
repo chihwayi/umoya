@@ -116,7 +116,19 @@ const NursePatientSummary: React.FC = () => {
       if (!token) return;
 
       const response = await ehrApi.getPatientById(patientId!, token, tenantSlug!);
-      setPatient(response.data);
+      const patientData = response.data;
+      
+      // Calculate age
+      const today = new Date();
+      const birthDate = new Date(patientData.dateOfBirth);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      setPatient({ ...patientData, age });
     } catch (error) {
       console.error('Error fetching patient details:', error);
       showError('Error', 'Failed to fetch patient details');
@@ -153,7 +165,9 @@ const NursePatientSummary: React.FC = () => {
       let nursingNotes: any[] = [];
       try {
         const notesResponse = await ehrApi.getNursingNotes(patientId!, token, tenantSlug!);
-        nursingNotes = notesResponse.data.nursingNotes || [];
+        console.log('🔍 NursePatientSummary - Nursing notes response:', notesResponse);
+        nursingNotes = notesResponse.data.notes || [];
+        console.log('🔍 NursePatientSummary - Nursing notes extracted:', nursingNotes);
       } catch (error) {
         console.log('No nursing notes found for patient:', error);
         nursingNotes = [];
@@ -163,7 +177,9 @@ const NursePatientSummary: React.FC = () => {
       let triageAssessments: any[] = [];
       try {
         const triageResponse = await ehrApi.getTriageAssessments(patientId!, token, tenantSlug!);
+        console.log('🔍 NursePatientSummary - Triage response:', triageResponse);
         triageAssessments = triageResponse.data.triageAssessments || [];
+        console.log('🔍 NursePatientSummary - Triage extracted:', triageAssessments);
       } catch (error) {
         console.log('No triage assessments found for patient:', error);
         triageAssessments = [];
@@ -656,11 +672,161 @@ const NursePatientSummary: React.FC = () => {
                   <Heart className="w-6 h-6 text-pink-600" />
                   Vital Signs History
                 </h3>
-                <div className="text-center py-12">
-                  <Heart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                  <h4 className="text-lg font-semibold text-slate-600 mb-2">Vital Signs Coming Soon</h4>
-                  <p className="text-slate-500">Detailed vital signs history will be available here.</p>
-                </div>
+                {visitSummaries.filter(v => v.vitals).length === 0 ? (
+                  <div className="text-center py-12">
+                    <Heart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <h4 className="text-lg font-semibold text-slate-600 mb-2">No Vital Signs Recorded</h4>
+                    <p className="text-slate-500">No vital signs have been recorded for this patient yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {visitSummaries
+                      .filter(visit => visit.vitals)
+                      .map((visit, index) => (
+                        <div key={index} className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-md transition-all duration-200">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white font-bold">
+                                {new Date(visit.date).getDate()}
+                              </div>
+                              <div>
+                                <h4 className="text-lg font-semibold text-slate-900">
+                                  {formatDateToDDMMYYYY(visit.date)}
+                                </h4>
+                                <p className="text-slate-600">
+                                  {formatDateTimeToDDMMYYYYHHMM(visit.vitals!.recordedAt)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-slate-600">Recorded by</p>
+                              <p className="font-semibold text-slate-900">{visit.vitals!.recordedBy}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Blood Pressure */}
+                            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Droplets className="w-5 h-5 text-red-600" />
+                                <h5 className="font-semibold text-red-800">Blood Pressure</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-red-900">{visit.vitals!.bloodPressure}</p>
+                              <p className="text-sm text-red-700">mmHg</p>
+                            </div>
+
+                            {/* Heart Rate */}
+                            <div className="bg-pink-50 rounded-lg p-4 border border-pink-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Activity className="w-5 h-5 text-pink-600" />
+                                <h5 className="font-semibold text-pink-800">Heart Rate</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-pink-900">{visit.vitals!.heartRate}</p>
+                              <p className="text-sm text-pink-700">bpm</p>
+                            </div>
+
+                            {/* Temperature */}
+                            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Thermometer className="w-5 h-5 text-orange-600" />
+                                <h5 className="font-semibold text-orange-800">Temperature</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-orange-900">{visit.vitals!.temperature}°C</p>
+                              <p className="text-sm text-orange-700">Celsius</p>
+                            </div>
+
+                            {/* Oxygen Saturation */}
+                            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Eye className="w-5 h-5 text-blue-600" />
+                                <h5 className="font-semibold text-blue-800">Oxygen Sat</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-blue-900">{visit.vitals!.oxygenSaturation}%</p>
+                              <p className="text-sm text-blue-700">SpO2</p>
+                            </div>
+
+                            {/* Respiratory Rate */}
+                            <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <ActivityIcon className="w-5 h-5 text-cyan-600" />
+                                <h5 className="font-semibold text-cyan-800">Respiratory Rate</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-cyan-900">{visit.vitals!.respiratoryRate}</p>
+                              <p className="text-sm text-cyan-700">breaths/min</p>
+                            </div>
+
+                            {/* Weight */}
+                            <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Activity className="w-5 h-5 text-purple-600" />
+                                <h5 className="font-semibold text-purple-800">Weight</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-purple-900">{visit.vitals!.weight}</p>
+                              <p className="text-sm text-purple-700">kg</p>
+                            </div>
+
+                            {/* Height */}
+                            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Activity className="w-5 h-5 text-indigo-600" />
+                                <h5 className="font-semibold text-indigo-800">Height</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-indigo-900">{visit.vitals!.height}</p>
+                              <p className="text-sm text-indigo-700">cm</p>
+                            </div>
+
+                            {/* BMI */}
+                            <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Activity className="w-5 h-5 text-emerald-600" />
+                                <h5 className="font-semibold text-emerald-800">BMI</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-emerald-900">{visit.vitals!.bmi}</p>
+                              <p className="text-sm text-emerald-700">kg/m²</p>
+                            </div>
+                          </div>
+
+                          {/* Additional Vitals */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            {/* Pain Level */}
+                            <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                                <h5 className="font-semibold text-amber-800">Pain Level</h5>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-amber-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-amber-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${(visit.vitals!.painLevel / 10) * 100}%` }}
+                                  ></div>
+                                </div>
+                                <span className="text-xl font-bold text-amber-900">{visit.vitals!.painLevel}/10</span>
+                              </div>
+                            </div>
+
+                            {/* Blood Glucose */}
+                            <div className="bg-rose-50 rounded-lg p-4 border border-rose-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Droplets className="w-5 h-5 text-rose-600" />
+                                <h5 className="font-semibold text-rose-800">Blood Glucose</h5>
+                              </div>
+                              <p className="text-2xl font-bold text-rose-900">{visit.vitals!.bloodGlucose}</p>
+                              <p className="text-sm text-rose-700">mg/dL</p>
+                            </div>
+                          </div>
+
+                          {/* Notes */}
+                          {visit.vitals!.notes && (
+                            <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                              <h5 className="font-semibold text-slate-800 mb-2">Notes</h5>
+                              <p className="text-slate-700">{visit.vitals!.notes}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
