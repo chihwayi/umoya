@@ -56,7 +56,8 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
     medications: '',
     observations: '',
     interventions: '',
-    outcomes: ''
+    outcomes: '',
+    patientId: ''
   });
 
   // Apply preset behaviors
@@ -137,7 +138,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   };
 
   const handleSaveNote = async () => {
-    if (!selectedPatient) {
+    const patientId = selectedPatient?.id || newNote.patientId;
+    
+    if (!patientId) {
       showError('Error', 'No patient selected');
       return;
     }
@@ -153,7 +156,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
       }
 
       const noteData = {
-        patientId: selectedPatient.id,
+        patientId: patientId,
         noteType: newNote.noteType,
         content: newNote.content,
         vitalSigns: newNote.vitalSigns,
@@ -175,9 +178,16 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
         medications: '',
         observations: '',
         interventions: '',
-        outcomes: ''
+        outcomes: '',
+        patientId: ''
       });
-      fetchNursingNotes();
+      
+      // Refresh notes based on current view
+      if (selectedPatient) {
+        fetchNursingNotes();
+      } else {
+        fetchAllNotes();
+      }
       onSave?.();
     } catch (error) {
       console.error('Error saving nursing note:', error);
@@ -215,22 +225,31 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   });
 
   const renderContent = () => {
-    if (patient) {
+    if (selectedPatient) {
       // Single patient nursing notes
       return (
         <div className="space-y-6">
           {/* Patient Header */}
           <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-200/50">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">
-                {patient.firstName.charAt(0)}{patient.lastName.charAt(0)}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                  {selectedPatient.firstName.charAt(0)}{selectedPatient.lastName.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {selectedPatient.firstName} {selectedPatient.lastName}
+                  </h3>
+                  <p className="text-slate-600">ID: {selectedPatient.patientNumber}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">
-                  {patient.firstName} {patient.lastName}
-                </h3>
-                <p className="text-slate-600">ID: {patient.patientNumber}</p>
-              </div>
+              <button
+                onClick={() => setSelectedPatient(null)}
+                className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+              >
+                <X className="w-4 h-4" />
+                Back to All Patients
+              </button>
             </div>
           </div>
 
@@ -552,6 +571,85 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   </button>
                 </div>
               </div>
+
+              {/* New Note Form for General Notes */}
+              {showNewNote && !selectedPatient && (
+                <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
+                        <Plus className="w-5 h-5 text-white" />
+                      </div>
+                      <h4 className="text-lg font-bold text-slate-900">New Nursing Note</h4>
+                    </div>
+                    <button
+                      onClick={() => setShowNewNote(false)}
+                      className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Note Type</label>
+                        <select
+                          value={newNote.noteType}
+                          onChange={(e) => setNewNote(prev => ({ ...prev, noteType: e.target.value }))}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
+                        >
+                          <option value="general">General</option>
+                          <option value="assessment">Assessment</option>
+                          <option value="intervention">Intervention</option>
+                          <option value="evaluation">Evaluation</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Patient</label>
+                        <select
+                          value={newNote.patientId || ''}
+                          onChange={(e) => setNewNote(prev => ({ ...prev, patientId: e.target.value }))}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
+                        >
+                          <option value="">Select a patient</option>
+                          {appointments.map((apt) => (
+                            <option key={apt.id} value={apt.patient.id}>
+                              {apt.patient.firstName} {apt.patient.lastName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Note Content</label>
+                      <textarea
+                        value={newNote.content}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
+                        placeholder="Enter your nursing note here..."
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors resize-none h-32"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-4">
+                      <button
+                        onClick={() => setShowNewNote(false)}
+                        className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveNote}
+                        disabled={!newNote.patientId || !newNote.content}
+                        className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Save Note
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
