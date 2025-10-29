@@ -17,24 +17,40 @@ export class OrderController {
 
   @Get('patient/:patientId')
   async getOrdersForPatient(@Param('patientId') patientId: string, @Req() req: any) {
-    const tenantId = req.tenantId;
-    const orders = await this.orderService.getOrdersForPatient(patientId, tenantId);
-    return { orders, total: orders.length };
+    try {
+      const tenantId = req.tenantId;
+      const orders = await this.orderService.getOrdersForPatient(patientId, tenantId);
+      return { orders, total: orders.length };
+    } catch (error) {
+      console.error('Error fetching orders for patient:', error);
+      return { orders: [], total: 0 };
+    }
   }
 
   @Get('authorized')
   async getAuthorizedOrders(@Req() req: any) {
-    const tenantId = req.tenantId;
-    const orders = await this.orderService.getAuthorizedOrdersForNurse(tenantId);
-    return { orders, total: orders.length };
+    try {
+      const tenantId = req.tenantId;
+      const orders = await this.orderService.getAuthorizedOrdersForNurse(tenantId);
+      return { orders, total: orders.length };
+    } catch (error) {
+      console.error('Error fetching authorized orders:', error);
+      // Return empty array instead of throwing error
+      return { orders: [], total: 0 };
+    }
   }
 
   @Get('doctor')
   async getOrdersByDoctor(@Req() req: any) {
-    const tenantId = req.tenantId;
-    const doctorId = req.user.id;
-    const orders = await this.orderService.getOrdersByDoctor(doctorId, tenantId);
-    return { orders, total: orders.length };
+    try {
+      const tenantId = req.tenantId;
+      const doctorId = req.user.id;
+      const orders = await this.orderService.getOrdersByDoctor(doctorId, tenantId);
+      return { orders, total: orders.length };
+    } catch (error) {
+      console.error('Error fetching orders by doctor:', error);
+      return { orders: [], total: 0 };
+    }
   }
 
   @Put(':id/authorize')
