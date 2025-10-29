@@ -883,33 +883,6 @@ const DoctorDashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Critical Vitals Alerts */}
-              {criticalAlerts.length > 0 && (
-                <div className="bg-red-50/80 backdrop-blur-sm rounded-2xl border border-red-200/50">
-                  <div className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <AlertCircle className="w-6 h-6 text-red-600" />
-                      <h2 className="text-xl font-bold text-red-900">Critical Vitals Alerts</h2>
-                      <span className="bg-red-100 text-red-800 text-sm font-semibold px-2 py-1 rounded-full">
-                        {criticalAlerts.length}
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {criticalAlerts.map((alert, index) => (
-                        <div key={index} className="bg-white rounded-lg p-4 border border-red-200 flex items-start gap-3">
-                          <div className="text-red-600 mt-0.5">
-                            {alert.icon}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-red-900 font-medium">{alert.message}</p>
-                            <p className="text-red-700 text-sm mt-1">Immediate attention required</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Today's Schedule - Now on Top */}
               <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50">
