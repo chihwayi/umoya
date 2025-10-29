@@ -47,6 +47,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   const [filterType, setFilterType] = useState('all');
   const [showNewNote, setShowNewNote] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
+  const [allNotes, setAllNotes] = useState<NursingNote[]>([]);
 
   const [newNote, setNewNote] = useState({
     noteType: 'general',
@@ -74,8 +75,46 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   useEffect(() => {
     if (selectedPatient) {
       fetchNursingNotes();
+    } else {
+      // If no specific patient, fetch all recent notes
+      fetchAllNotes();
     }
   }, [selectedPatient]);
+
+  const fetchAllNotes = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      
+      if (!token || !tenantSlug) return;
+
+      // Fetch notes for all patients with appointments today
+      const allNotesPromises = appointments.map(async (apt) => {
+        try {
+          const response = await ehrApi.getNursingNotes(apt.patient.id, token, tenantSlug);
+          return response.data.nursingNotes || [];
+        } catch (error) {
+          console.log(`No notes found for patient ${apt.patient.id}:`, error);
+          return [];
+        }
+      });
+
+      const allNotesResults = await Promise.all(allNotesPromises);
+      const flattenedNotes = allNotesResults.flat();
+      
+      // Sort by most recent first
+      const sortedNotes = flattenedNotes.sort((a, b) => 
+        new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+      );
+      
+      setAllNotes(sortedNotes);
+    } catch (error) {
+      console.error('Error fetching all notes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchNursingNotes = async () => {
     if (!selectedPatient) return;
@@ -408,10 +447,111 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
               <h3 className="text-xl font-bold text-slate-900">Nursing Notes</h3>
             </div>
             
-            <div className="text-center py-10">
-              <FileText className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <h4 className="text-lg font-semibold text-slate-900 mb-2">Select a Patient</h4>
-              <p className="text-slate-600">Choose a patient to view and manage their nursing notes</p>
+            <div className="space-y-6">
+              {/* Today's Patients */}
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900 mb-4">Today's Patients</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {appointments.map((apt) => (
+                    <div 
+                      key={apt.id}
+                      onClick={() => setSelectedPatient(apt.patient)}
+                      className="bg-white rounded-xl p-4 border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm group-hover:scale-105 transition-transform">
+                          {apt.patient.firstName.charAt(0)}{apt.patient.lastName.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <h5 className="font-semibold text-slate-900 group-hover:text-pink-600 transition-colors">
+                            {apt.patient.firstName} {apt.patient.lastName}
+                          </h5>
+                          <p className="text-sm text-slate-600">
+                            {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Notes */}
+              {allNotes.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900 mb-4">Recent Nursing Notes</h4>
+                  <div className="space-y-3">
+                    {allNotes.slice(0, 5).map((note) => (
+                      <div key={note.id} className="bg-white rounded-lg p-4 border border-slate-200">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-slate-100 rounded-lg">
+                            {getNoteTypeIcon(note.noteType)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-slate-900">
+                                {note.patient?.firstName} {note.patient?.lastName}
+                              </span>
+                              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                                {note.noteType}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-600 line-clamp-2">{note.content}</p>
+                            <p className="text-xs text-slate-500 mt-2">
+                              {formatDateTimeToDDMMYYYYHHMM(note.recordedAt)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-200/50">
+                <h4 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    onClick={() => setShowNewNote(true)}
+                    className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="p-2 bg-pink-100 rounded-lg">
+                      <Plus className="w-5 h-5 text-pink-600" />
+                    </div>
+                    <div className="text-left">
+                      <h5 className="font-semibold text-slate-900">New Note</h5>
+                      <p className="text-sm text-slate-600">Create a general note</p>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => { setShowNewNote(true); setNewNote(prev => ({ ...prev, noteType: 'assessment' })); }}
+                    className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Stethoscope className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="text-left">
+                      <h5 className="font-semibold text-slate-900">Assessment</h5>
+                      <p className="text-sm text-slate-600">Record patient assessment</p>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => { setShowNewNote(true); setNewNote(prev => ({ ...prev, noteType: 'intervention' })); }}
+                    className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Activity className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div className="text-left">
+                      <h5 className="font-semibold text-slate-900">Intervention</h5>
+                      <p className="text-sm text-slate-600">Record care provided</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
