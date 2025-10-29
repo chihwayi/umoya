@@ -92,7 +92,103 @@ const NurseDashboard: React.FC = () => {
   const [taskCounts, setTaskCounts] = useState({ pending: 0, inProgress: 0, overdue: 0 });
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
 
-  // Calculate task counts
+  // Calculate task counts from appointments directly
+  const calculateTaskCountsFromAppointments = useCallback((appointments: any[]) => {
+    if (!Array.isArray(appointments)) {
+      setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
+      return;
+    }
+
+    const now = new Date();
+    let pending = 0;
+    let inProgress = 0;
+    let overdue = 0;
+
+    appointments.forEach((apt) => {
+      const appointmentTime = new Date(apt.appointmentDate);
+      
+      // Only create tasks for appointments that need nursing care
+      if (apt.status === 'scheduled' || apt.status === 'confirmed') {
+        // Only create vital signs task if vitals haven't been recorded yet
+        if (!apt.vitals) {
+          pending++;
+        }
+      }
+
+      if (apt.status === 'in-progress' || apt.status === 'in_progress') {
+        inProgress++;
+      }
+    });
+
+    setTaskCounts({ pending, inProgress, overdue });
+  }, []);
+
+  // Calculate alert counts from appointments directly
+  const calculateAlertCountsFromAppointments = useCallback((appointments: any[]) => {
+    if (!Array.isArray(appointments)) {
+      setAlertCounts({ active: 0, critical: 0, high: 0 });
+      return;
+    }
+
+    let active = 0;
+    let critical = 0;
+    let high = 0;
+
+    appointments.forEach((apt) => {
+      // Only create alerts based on actual patient data
+      if (apt.patient.allergies && apt.patient.allergies.length > 0) {
+        active++;
+        high++;
+      }
+
+      // Fall risk alerts based on actual age
+      if (apt.patient.age && apt.patient.age > 65) {
+        active++;
+        high++;
+      }
+
+      // Critical vitals alerts based on actual vitals data
+      if (apt.vitals) {
+        const vitals = apt.vitals;
+        
+        // Check for critical blood pressure
+        if (vitals.bloodPressure) {
+          const bpValues = vitals.bloodPressure.split('/');
+          if (bpValues.length === 2) {
+            const systolic = parseInt(bpValues[0]);
+            const diastolic = parseInt(bpValues[1]);
+            
+            if (systolic >= 180 || diastolic >= 110) {
+              active++;
+              critical++;
+            }
+          }
+        }
+
+        // Check for abnormal heart rate
+        if (vitals.heartRate && (vitals.heartRate > 120 || vitals.heartRate < 50)) {
+          active++;
+          high++;
+        }
+
+        // Check for abnormal temperature
+        if (vitals.temperature && (vitals.temperature > 38.5 || vitals.temperature < 35)) {
+          active++;
+          high++;
+        }
+
+        // Check for low oxygen saturation
+        if (vitals.oxygenSaturation && vitals.oxygenSaturation < 90) {
+          active++;
+          critical++;
+        }
+      }
+    });
+
+    setAlertCounts({ active, critical, high });
+  }, []);
+
+  // Calculate task counts (for component callbacks)
   const calculateTaskCounts = useCallback((tasks: any[]) => {
     if (!Array.isArray(tasks)) {
       console.warn('calculateTaskCounts received non-array:', tasks);
@@ -106,7 +202,7 @@ const NurseDashboard: React.FC = () => {
     setTaskCounts({ pending, inProgress, overdue });
   }, []);
 
-  // Calculate alert counts
+  // Calculate alert counts (for component callbacks)
   const calculateAlertCounts = useCallback((alerts: any[]) => {
     if (!Array.isArray(alerts)) {
       console.warn('calculateAlertCounts received non-array:', alerts);
@@ -124,6 +220,17 @@ const NurseDashboard: React.FC = () => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
     setCurrentUser(user);
   }, []);
+
+  // Calculate counts immediately when appointments are loaded
+  useEffect(() => {
+    if (appointments.length > 0) {
+      calculateTaskCountsFromAppointments(appointments);
+      calculateAlertCountsFromAppointments(appointments);
+    } else {
+      setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
+      setAlertCounts({ active: 0, critical: 0, high: 0 });
+    }
+  }, [appointments, calculateTaskCountsFromAppointments, calculateAlertCountsFromAppointments]);
 
   useEffect(() => {
     if (currentUser) {
