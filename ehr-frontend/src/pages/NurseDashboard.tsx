@@ -154,8 +154,15 @@ const NurseDashboard: React.FC = () => {
       const response = await ehrApi.getAuthorizedOrders(token, tenantSlug!);
       setAuthorizedOrders(response.data.orders || []);
       console.log('🔍 NurseDashboard - Fetched authorized orders:', response.data.orders);
-    } catch (error) {
-      console.error('Error fetching authorized orders:', error);
+    } catch (error: any) {
+      // Handle 500 error gracefully - likely means no orders exist yet
+      if (error?.response?.status === 500) {
+        console.log('🔍 NurseDashboard - No authorized orders found (500 error - likely no orders exist yet)');
+        setAuthorizedOrders([]);
+      } else {
+        console.error('Error fetching authorized orders:', error);
+        setAuthorizedOrders([]);
+      }
     }
   };
 

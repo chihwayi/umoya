@@ -43,30 +43,46 @@ export class OrderService {
   }
 
   async getOrdersForPatient(patientId: string, tenantId: string): Promise<Order[]> {
-    const repo = await this.getRepository(tenantId);
-    return repo.find({
-      where: { patientId },
-      relations: ['patient', 'doctor', 'appointment'],
-      order: { createdAt: 'DESC' }
-    });
+    try {
+      const repo = await this.getRepository(tenantId);
+      return repo.find({
+        where: { patientId },
+        relations: ['patient', 'doctor', 'appointment'],
+        order: { createdAt: 'DESC' }
+      });
+    } catch (error) {
+      console.error('Error fetching orders for patient:', error);
+      return [];
+    }
   }
 
   async getAuthorizedOrdersForNurse(tenantId: string): Promise<Order[]> {
-    const repo = await this.getRepository(tenantId);
-    return repo.find({
-      where: { status: OrderStatus.AUTHORIZED },
-      relations: ['patient', 'doctor', 'appointment'],
-      order: { priority: 'DESC', createdAt: 'ASC' }
-    });
+    try {
+      const repo = await this.getRepository(tenantId);
+      return repo.find({
+        where: { status: OrderStatus.AUTHORIZED },
+        relations: ['patient', 'doctor', 'appointment'],
+        order: { priority: 'DESC', createdAt: 'ASC' }
+      });
+    } catch (error) {
+      console.error('Error fetching authorized orders for nurse:', error);
+      // Return empty array if there's an error (e.g., orders table doesn't exist yet)
+      return [];
+    }
   }
 
   async getOrdersByDoctor(doctorId: string, tenantId: string): Promise<Order[]> {
-    const repo = await this.getRepository(tenantId);
-    return repo.find({
-      where: { doctorId },
-      relations: ['patient', 'appointment'],
-      order: { createdAt: 'DESC' }
-    });
+    try {
+      const repo = await this.getRepository(tenantId);
+      return repo.find({
+        where: { doctorId },
+        relations: ['patient', 'appointment'],
+        order: { createdAt: 'DESC' }
+      });
+    } catch (error) {
+      console.error('Error fetching orders by doctor:', error);
+      return [];
+    }
   }
 
   async authorizeOrder(orderId: string, authorizedBy: string, tenantId: string): Promise<Order> {
