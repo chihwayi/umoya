@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   FileText, Save, X, Plus, Search, Filter, Clock, User,
-  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope
+  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye
 } from 'lucide-react';
 import { ehrApi } from '../services/api.ts';
 import { useNotification } from '../components/GlobalNotification.tsx';
@@ -41,6 +42,8 @@ interface NursingNotesProps {
 
 const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [], onClose, onSave, preset }) => {
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [notes, setNotes] = useState<NursingNote[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -275,13 +278,22 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   <p className="text-slate-600">ID: {selectedPatient.patientNumber}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedPatient(null)}
-                className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
-              >
-                <X className="w-4 h-4" />
-                Back to All Patients
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/nurse/patients/${selectedPatient.id}`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
+                >
+                  <Eye className="w-4 h-4" />
+                  View Patient Summary
+                </button>
+                <button
+                  onClick={() => setSelectedPatient(null)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+                >
+                  <X className="w-4 h-4" />
+                  Back to All Patients
+                </button>
+              </div>
             </div>
           </div>
 
@@ -552,36 +564,45 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       </div>
                       
                       {/* Action Buttons */}
-                      <div className="flex gap-2">
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedPatient(apt.patient);
+                              setShowNewNote(true);
+                              setNewNote(prev => ({ 
+                                ...prev, 
+                                patientId: apt.patient.id,
+                                noteType: 'general'
+                              }));
+                            }}
+                            className="flex-1 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:from-pink-600 hover:to-rose-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
+                          >
+                            <FileText className="w-4 h-4" />
+                            Quick Note
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedPatient(apt.patient);
+                              setShowNewNote(true);
+                              setNewNote(prev => ({ 
+                                ...prev, 
+                                patientId: apt.patient.id,
+                                noteType: 'assessment'
+                              }));
+                            }}
+                            className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
+                          >
+                            <Stethoscope className="w-4 h-4" />
+                            Comprehensive
+                          </button>
+                        </div>
                         <button
-                          onClick={() => {
-                            setSelectedPatient(apt.patient);
-                            setShowNewNote(true);
-                            setNewNote(prev => ({ 
-                              ...prev, 
-                              patientId: apt.patient.id,
-                              noteType: 'general'
-                            }));
-                          }}
-                          className="flex-1 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:from-pink-600 hover:to-rose-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
+                          onClick={() => navigate(`/ehr/${tenantSlug}/nurse/patients/${apt.patient.id}`)}
+                          className="w-full px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
                         >
-                          <FileText className="w-4 h-4" />
-                          Quick Note
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedPatient(apt.patient);
-                            setShowNewNote(true);
-                            setNewNote(prev => ({ 
-                              ...prev, 
-                              patientId: apt.patient.id,
-                              noteType: 'assessment'
-                            }));
-                          }}
-                          className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
-                        >
-                          <Stethoscope className="w-4 h-4" />
-                          Comprehensive
+                          <Eye className="w-4 h-4" />
+                          View Patient Summary
                         </button>
                       </div>
                     </div>

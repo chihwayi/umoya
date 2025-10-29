@@ -16,6 +16,7 @@ import DoctorPatientDetail from './pages/DoctorPatientDetail.tsx';
 import DoctorAppointmentManagement from './pages/DoctorAppointmentManagement.tsx';
 import DoctorPatientsList from './pages/DoctorPatientsList.tsx';
 import NurseDashboard from './pages/NurseDashboard.tsx';
+import NursePatientSummary from './pages/NursePatientSummary.tsx';
 
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
             <Route path="/ehr/:tenantSlug/nurse/notes" element={<NurseDashboard />} />
             <Route path="/ehr/:tenantSlug/nurse/care-plans" element={<NurseDashboard />} />
             <Route path="/ehr/:tenantSlug/nurse/medications" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/patients/:patientId" element={<NursePatientSummary />} />
             <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
           </Routes>
         </Router>
