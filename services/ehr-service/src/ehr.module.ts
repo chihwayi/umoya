@@ -23,6 +23,7 @@ import { UsersController } from './controllers/users.controller';
 import { VitalsController } from './controllers/vitals.controller';
 import { TriageController } from './controllers/triage.controller';
 import { NursingNotesController } from './controllers/nursing-notes.controller';
+import { OrderController } from './controllers/order.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -45,6 +46,7 @@ import { UsersService } from './services/users.service';
 import { VitalsService } from './services/vitals.service';
 import { TriageService } from './services/triage.service';
 import { NursingNotesService } from './services/nursing-notes.service';
+import { OrderService } from './services/order.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -79,6 +81,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     VitalsController,
     TriageController,
     NursingNotesController,
+    OrderController,
   ],
   providers: [
     AuthService,
@@ -101,6 +104,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     VitalsService,
     TriageService,
     NursingNotesService,
+    OrderService,
     JwtStrategy,
   ],
 })

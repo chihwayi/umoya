@@ -307,5 +307,28 @@ export const ehrApi = {
       }
     });
     return { data: response.data };
+  },
+
+  // Orders API
+  getAuthorizedOrders: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/orders/authorized', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  executeOrder: async (orderId: string, executionNotes: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/orders/${orderId}/execute`, {
+      executionNotes
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
   }
 };

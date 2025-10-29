@@ -86,6 +86,7 @@ const NurseDashboard: React.FC = () => {
   const [calendarView, setCalendarView] = useState<'day' | 'week' | 'month'>('day');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<string | null>(null);
+  const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
@@ -96,6 +97,7 @@ const NurseDashboard: React.FC = () => {
     if (currentUser) {
       fetchTodayAppointments();
       fetchPatients();
+      fetchAuthorizedOrders();
     }
   }, [currentUser, tenantSlug]);
 
@@ -143,6 +145,19 @@ const NurseDashboard: React.FC = () => {
     else if (path.includes('/nurse/medications')) { setActiveTab('notes'); setNotesPreset('medications'); }
     else setActiveTab('calendar');
   }, [location.pathname]);
+
+  const fetchAuthorizedOrders = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.getAuthorizedOrders(token, tenantSlug!);
+      setAuthorizedOrders(response.data.orders || []);
+      console.log('🔍 NurseDashboard - Fetched authorized orders:', response.data.orders);
+    } catch (error) {
+      console.error('Error fetching authorized orders:', error);
+    }
+  };
 
   const fetchVitalsForAppointments = async (appointments: Appointment[]) => {
     try {
@@ -283,6 +298,23 @@ const NurseDashboard: React.FC = () => {
     { label: 'Urgent Cases', value: getQueueStats().urgent.toString(), icon: AlertTriangle, color: 'text-red-600' },
     { label: 'Completed Today', value: getQueueStats().completed.toString(), icon: CheckCircle, color: 'text-green-600' },
   ];
+
+  const handleExecuteOrder = async (orderId: string) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const executionNotes = prompt('Enter execution notes:');
+      if (!executionNotes) return;
+
+      await ehrApi.executeOrder(orderId, executionNotes, token, tenantSlug!);
+      showSuccess('Success', 'Order executed successfully');
+      fetchAuthorizedOrders(); // Refresh the orders list
+    } catch (error) {
+      console.error('Error executing order:', error);
+      showError('Error', 'Failed to execute order');
+    }
+  };
 
   const handleLogout = () => {
     try {
@@ -1026,35 +1058,83 @@ const NurseDashboard: React.FC = () => {
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl">
-                  <ClipboardList className="w-5 h-5 text-white" />
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl">
+                    <ClipboardList className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900">Authorized Orders & Procedures</h3>
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Orders & Procedures (Today)</h3>
+                <button
+                  onClick={fetchAuthorizedOrders}
+                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                  title="Refresh Orders"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                </button>
               </div>
-              {appointments.length === 0 ? (
-                <div className="text-slate-600">No appointments today.</div>
+              
+              {authorizedOrders.length === 0 ? (
+                <div className="text-center py-12">
+                  <ClipboardList className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                  <h4 className="text-lg font-semibold text-slate-600 mb-2">No Authorized Orders</h4>
+                  <p className="text-slate-500">Orders will appear here once doctors authorize medications or procedures for patients.</p>
+                </div>
               ) : (
                 <div className="space-y-4">
-                  {appointments.map((apt) => (
-                    <div key={apt.id} className="bg-white/60 rounded-xl p-4 border border-slate-200/60">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-slate-900">{apt.patient.firstName} {apt.patient.lastName}</div>
-                          <div className="text-sm text-slate-600">Dr. {apt.doctor.firstName} {apt.doctor.lastName} • {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  {authorizedOrders.map((order) => (
+                    <div key={order.id} className="bg-white/60 rounded-xl p-6 border border-slate-200/60 hover:shadow-md transition-all duration-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              order.orderType === 'medication' 
+                                ? 'bg-fuchsia-100 text-fuchsia-800' 
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {order.orderType === 'medication' ? 'Medication' : 'Procedure'}
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              order.priority === 'urgent' 
+                                ? 'bg-red-100 text-red-800' 
+                                : order.priority === 'high'
+                                ? 'bg-orange-100 text-orange-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {order.priority.toUpperCase()}
+                            </div>
+                          </div>
+                          
+                          <h4 className="text-lg font-semibold text-slate-900 mb-2">{order.orderName}</h4>
+                          <p className="text-slate-600 mb-3">{order.description}</p>
+                          
+                          <div className="bg-slate-50 rounded-lg p-4 mb-4">
+                            <h5 className="font-semibold text-slate-800 mb-2">Instructions:</h5>
+                            <p className="text-slate-700">{order.instructions}</p>
+                            {order.dosage && (
+                              <p className="text-sm text-slate-600 mt-2"><strong>Dosage:</strong> {order.dosage}</p>
+                            )}
+                            {order.frequency && (
+                              <p className="text-sm text-slate-600"><strong>Frequency:</strong> {order.frequency}</p>
+                            )}
+                            {order.duration && (
+                              <p className="text-sm text-slate-600"><strong>Duration:</strong> {order.duration}</p>
+                            )}
+                          </div>
+                          
+                          <div className="text-sm text-slate-500">
+                            <p><strong>Patient:</strong> {order.patient?.firstName} {order.patient?.lastName}</p>
+                            <p><strong>Ordered by:</strong> Dr. {order.doctor?.firstName} {order.doctor?.lastName}</p>
+                            <p><strong>Authorized:</strong> {new Date(order.authorizedAt).toLocaleString()}</p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        
+                        <div className="ml-4">
                           <button
-                            onClick={() => { setSelectedPatient(apt.patient); setNotesPreset('medications'); setActiveTab('notes'); }}
-                            className="px-3 py-2 bg-gradient-to-r from-fuchsia-500 to-pink-600 text-white rounded-lg text-sm hover:from-fuchsia-600 hover:to-pink-700 transition-all duration-200"
+                            onClick={() => handleExecuteOrder(order.id)}
+                            className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold"
                           >
-                            Administer Medication
-                          </button>
-                          <button
-                            onClick={() => { setSelectedPatient(apt.patient); setNotesPreset(undefined); setActiveTab('notes'); }}
-                            className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-sm hover:from-emerald-600 hover:to-teal-700 transition-all duration-200"
-                          >
-                            Start Procedure
+                            Execute Order
                           </button>
                         </div>
                       </div>

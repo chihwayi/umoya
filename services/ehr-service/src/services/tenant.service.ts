@@ -10,6 +10,7 @@ import { Bill } from '../entities/billing.entity';
 import { Vitals } from '../entities/vitals.entity';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
 import { NursingNote } from '../entities/nursing-note.entity';
+import { Order } from '../entities/order.entity';
 
 @Injectable()
 export class TenantService {
@@ -63,7 +64,7 @@ export class TenantService {
         username: process.env.DB_USERNAME || 'medicore',
         password: process.env.DB_PASSWORD || 'medicore_password',
         database: databaseName,
-        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill, Vitals, TriageAssessment, NursingNote],
+        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill, Vitals, TriageAssessment, NursingNote, Order],
         synchronize: false, // Schema already exists
         logging: false,
       });
