@@ -16,6 +16,8 @@ import VitalsPanel from '../components/VitalsPanel';
 import TriageQueue from '../components/TriageQueue';
 import PatientAssessment from '../components/PatientAssessment';
 import NursingNotes from '../components/NursingNotes';
+import TaskManagement from '../components/TaskManagement';
+import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 
 interface Patient {
   id: string;
@@ -67,7 +69,7 @@ const NurseDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeTab, setActiveTab] = useState('tasks');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
@@ -287,10 +289,11 @@ const NurseDashboard: React.FC = () => {
 
   const getNurseActions = () => {
     return [
+      { icon: Activity, label: 'My Tasks', desc: 'Epic-style task management', color: 'from-indigo-500 to-purple-600', action: () => setActiveTab('tasks') },
       { icon: Calendar, label: 'Today\'s Schedule', desc: 'View today\'s appointments', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('calendar') },
       { icon: Users, label: 'Patients', desc: 'Browse & schedule', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('patients') },
       { icon: Users, label: 'Patient Queue', desc: 'Manage patient flow', color: 'from-indigo-500 to-purple-500', action: () => setActiveTab('queue') },
-      { icon: Activity, label: 'Vitals Recording', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', action: () => setActiveTab('vitals') },
+      { icon: Heart, label: 'Vitals Recording', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', action: () => setActiveTab('vitals') },
       { icon: ClipboardList, label: 'Triage Assessment', desc: 'Patient assessment', color: 'from-orange-500 to-yellow-500', action: () => setActiveTab('triage') },
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
       { icon: FileText, label: 'Care Plans', desc: 'Plan nursing care', color: 'from-emerald-500 to-teal-500', action: () => { setActiveTab('notes'); setNotesPreset('care_plans'); } },
@@ -863,6 +866,28 @@ const NurseDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
             <button
+              onClick={() => setActiveTab('tasks')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'tasks'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Activity className="w-4 h-4 inline mr-2" />
+              My Tasks
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'alerts'
+                  ? 'border-red-500 text-red-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <Bell className="w-4 h-4 inline mr-2" />
+              Safety Alerts
+            </button>
+            <button
               onClick={() => setActiveTab('calendar')}
               className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
                 activeTab === 'calendar'
@@ -923,6 +948,36 @@ const NurseDashboard: React.FC = () => {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'tasks' && (
+          <TaskManagement 
+            currentUser={currentUser}
+            appointments={appointments}
+            onTaskComplete={(taskId) => {
+              console.log('Task completed:', taskId);
+              // Could trigger refresh of other data
+            }}
+            onTaskUpdate={(task) => {
+              console.log('Task updated:', task);
+              // Could update task in real-time
+            }}
+          />
+        )}
+
+        {activeTab === 'alerts' && (
+          <PatientSafetyAlerts 
+            currentUser={currentUser}
+            appointments={appointments}
+            onAlertAcknowledge={(alertId) => {
+              console.log('Alert acknowledged:', alertId);
+              // Could trigger refresh of other data
+            }}
+            onAlertDismiss={(alertId) => {
+              console.log('Alert dismissed:', alertId);
+              // Could update alert status
+            }}
+          />
+        )}
+
         {activeTab === 'calendar' && renderCalendar()}
         {activeTab === 'patients' && (
           <div className="space-y-6">
