@@ -92,6 +92,7 @@ const DoctorDashboard: React.FC = () => {
   const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
   const [showVitalsAlert, setShowVitalsAlert] = useState(false);
   const [criticalAlerts, setCriticalAlerts] = useState<VitalsAlert[]>([]);
+  const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
 
   // Get current user info
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -137,6 +138,37 @@ const DoctorDashboard: React.FC = () => {
     enabled: false // Disabled to prevent modal closing
   });
 
+  const fetchVitalsForAppointments = async (appointments: Appointment[]) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const vitalsPromises = appointments.map(async (appointment) => {
+        try {
+          const vitals = await ehrApi.getVitals(appointment.patient.id, token, tenantSlug!);
+          return { patientId: appointment.patient.id, vitals: vitals.data.vitals || [] };
+        } catch (error) {
+          console.log(`No vitals found for patient ${appointment.patient.id}:`, error);
+          return { patientId: appointment.patient.id, vitals: [] };
+        }
+      });
+
+      const vitalsResults = await Promise.all(vitalsPromises);
+      const vitalsMap: Record<string, PatientVitals[]> = {};
+      
+      vitalsResults.forEach(({ patientId, vitals }) => {
+        vitalsMap[patientId] = vitals.sort((a: PatientVitals, b: PatientVitals) => 
+          new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        );
+      });
+
+      setVitalsData(vitalsMap);
+      console.log('🔍 DoctorDashboard - Fetched vitals data:', vitalsMap);
+    } catch (error) {
+      console.error('Error fetching vitals data:', error);
+    }
+  };
+
   const fetchTodayAppointments = async () => {
     try {
       setLoading(true);
@@ -173,6 +205,9 @@ const DoctorDashboard: React.FC = () => {
       
       console.log('🔍 DoctorDashboard - Filtered doctor appointments:', doctorAppointments);
       setAppointments(doctorAppointments);
+      
+      // Fetch vitals data for all patients with appointments today
+      await fetchVitalsForAppointments(doctorAppointments);
       
       // Check for critical vitals after fetching appointments
       await checkForCriticalVitals();
@@ -399,38 +434,59 @@ const DoctorDashboard: React.FC = () => {
   };
 
   const checkVitalsStatus = (appointment: Appointment) => {
-    // This would typically fetch vitals for the appointment's patient
-    // For now, we'll simulate based on appointment data
+    // Check if we have vitals data for this patient
+    const patientVitals = vitalsData[appointment.patient.id];
+    
+    if (!patientVitals || patientVitals.length === 0) {
+      return {
+        hasVitals: false,
+        isRecent: false,
+        alerts: [] as VitalsAlert[]
+      };
+    }
+
+    // Get the most recent vitals
+    const latestVitals = patientVitals[0];
+    const vitalsAge = Date.now() - new Date(latestVitals.recordedAt).getTime();
+    const isRecent = vitalsAge < 4 * 60 * 60 * 1000; // 4 hours
+
+    // Validate vitals and generate alerts
+    const alerts = validateVitals(latestVitals);
+
     return {
-      hasVitals: Math.random() > 0.3, // 70% chance of having vitals
-      isRecent: Math.random() > 0.5, // 50% chance of recent vitals
-      alerts: [] as VitalsAlert[]
+      hasVitals: true,
+      isRecent,
+      alerts
     };
   };
 
   const checkForCriticalVitals = async () => {
     try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token) return;
+      const criticalAlerts: VitalsAlert[] = [];
 
-      // This would typically fetch vitals for all patients with appointments today
-      // For now, we'll simulate some critical alerts
-      const mockCriticalAlerts: VitalsAlert[] = [
-        {
-          type: 'critical',
-          message: 'Patient John Doe: Critical Blood Pressure 190/110 mmHg',
-          icon: <AlertCircle className="w-4 h-4" />,
-          color: 'text-red-600'
-        },
-        {
-          type: 'critical',
-          message: 'Patient Jane Smith: Low Oxygen Saturation 88%',
-          icon: <Droplets className="w-4 h-4" />,
-          color: 'text-red-600'
+      // Check all vitals data for critical values
+      Object.entries(vitalsData).forEach(([patientId, vitalsList]) => {
+        if (vitalsList.length > 0) {
+          const latestVitals = vitalsList[0];
+          const alerts = validateVitals(latestVitals);
+          
+          // Add patient name to critical alerts
+          const appointment = appointments.find(apt => apt.patient.id === patientId);
+          const patientName = appointment ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Unknown Patient';
+          
+          alerts.forEach(alert => {
+            if (alert.type === 'critical') {
+              criticalAlerts.push({
+                ...alert,
+                message: `${patientName}: ${alert.message}`
+              });
+            }
+          });
         }
-      ];
+      });
 
-      setCriticalAlerts(mockCriticalAlerts);
+      setCriticalAlerts(criticalAlerts);
+      console.log('🔍 DoctorDashboard - Critical vitals alerts:', criticalAlerts);
     } catch (error) {
       console.error('Error checking critical vitals:', error);
     }
