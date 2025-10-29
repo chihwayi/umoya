@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle, Clock, AlertTriangle, Heart, Pill, Stethoscope,
   FileText, Activity, Users, Calendar, Plus, Filter, Search,
@@ -140,14 +140,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   }, [appointments, currentUser]);
 
   // Notify parent of task count changes
-  useEffect(() => {
+  const notifyParent = useCallback(() => {
     if (onTaskCountsChange) {
-      const pending = tasks.filter(task => task.status === 'pending').length;
-      const inProgress = tasks.filter(task => task.status === 'in_progress').length;
-      const overdue = tasks.filter(task => task.status === 'overdue').length;
-      onTaskCountsChange(tasks); // Pass the tasks array, not the counts object
+      onTaskCountsChange(tasks);
     }
   }, [tasks, onTaskCountsChange]);
+
+  useEffect(() => {
+    notifyParent();
+  }, [notifyParent]);
 
   // Filter and sort tasks
   useEffect(() => {

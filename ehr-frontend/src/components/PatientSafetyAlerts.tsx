@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, Heart, Shield, Droplets, Activity, Eye,
   Bell, X, CheckCircle, Clock, User, MapPin, Pill
@@ -191,14 +191,15 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   }, [appointments]);
 
   // Notify parent of alert count changes
-  useEffect(() => {
+  const notifyParent = useCallback(() => {
     if (onAlertCountsChange) {
-      const active = alerts.filter(alert => alert.isActive).length;
-      const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
-      const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
-      onAlertCountsChange(alerts); // Pass the alerts array, not the counts object
+      onAlertCountsChange(alerts);
     }
   }, [alerts, onAlertCountsChange]);
+
+  useEffect(() => {
+    notifyParent();
+  }, [notifyParent]);
 
   // Filter alerts
   useEffect(() => {

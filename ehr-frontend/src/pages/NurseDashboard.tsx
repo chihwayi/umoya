@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Users, Calendar, Activity, Heart, Thermometer, Droplets, 
@@ -93,7 +93,7 @@ const NurseDashboard: React.FC = () => {
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
 
   // Calculate task counts
-  const calculateTaskCounts = (tasks: any[]) => {
+  const calculateTaskCounts = useCallback((tasks: any[]) => {
     if (!Array.isArray(tasks)) {
       console.warn('calculateTaskCounts received non-array:', tasks);
       setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
@@ -104,10 +104,10 @@ const NurseDashboard: React.FC = () => {
     const inProgress = tasks.filter(task => task.status === 'in_progress').length;
     const overdue = tasks.filter(task => task.status === 'overdue').length;
     setTaskCounts({ pending, inProgress, overdue });
-  };
+  }, []);
 
   // Calculate alert counts
-  const calculateAlertCounts = (alerts: any[]) => {
+  const calculateAlertCounts = useCallback((alerts: any[]) => {
     if (!Array.isArray(alerts)) {
       console.warn('calculateAlertCounts received non-array:', alerts);
       setAlertCounts({ active: 0, critical: 0, high: 0 });
@@ -118,7 +118,7 @@ const NurseDashboard: React.FC = () => {
     const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
     const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
     setAlertCounts({ active, critical, high });
-  };
+  }, []);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
