@@ -48,6 +48,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   const [showNewNote, setShowNewNote] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [allNotes, setAllNotes] = useState<NursingNote[]>([]);
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
 
   const [newNote, setNewNote] = useState({
     noteType: 'general',
@@ -81,6 +84,35 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
       fetchAllNotes();
     }
   }, [selectedPatient]);
+
+  // Filter patients based on search term
+  useEffect(() => {
+    if (patientSearchTerm.trim() === '') {
+      setFilteredPatients(appointments.map(apt => apt.patient));
+    } else {
+      const filtered = appointments
+        .map(apt => apt.patient)
+        .filter(patient =>
+          `${patient.firstName} ${patient.lastName}`.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
+          patient.patientNumber.toLowerCase().includes(patientSearchTerm.toLowerCase())
+        );
+      setFilteredPatients(filtered);
+    }
+  }, [patientSearchTerm, appointments]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showPatientDropdown) {
+        setShowPatientDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPatientDropdown]);
 
   const fetchAllNotes = async () => {
     try {
@@ -260,7 +292,10 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                 <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
                   <Plus className="w-5 h-5 text-white" />
                 </div>
-                <h4 className="text-lg font-bold text-slate-900">New Nursing Note</h4>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900">Comprehensive Clinical Note</h4>
+                  <p className="text-sm text-slate-600">Detailed documentation for {selectedPatient?.firstName} {selectedPatient?.lastName}</p>
+                </div>
               </div>
 
             <div className="space-y-6">
@@ -272,7 +307,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       onChange={(e) => setNewNote(prev => ({ ...prev, noteType: e.target.value }))}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                     >
-                      <option value="general">General Note</option>
+                      <option value="general">General</option>
                       <option value="assessment">Assessment</option>
                       <option value="intervention">Intervention</option>
                       <option value="evaluation">Evaluation</option>
@@ -580,7 +615,10 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
                         <Plus className="w-5 h-5 text-white" />
                       </div>
-                      <h4 className="text-lg font-bold text-slate-900">New Nursing Note</h4>
+                      <div>
+                        <h4 className="text-lg font-bold text-slate-900">Quick Note</h4>
+                        <p className="text-sm text-slate-600">Simple note for quick observations</p>
+                      </div>
                     </div>
                     <button
                       onClick={() => setShowNewNote(false)}
@@ -607,18 +645,46 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">Patient</label>
-                        <select
-                          value={newNote.patientId || ''}
-                          onChange={(e) => setNewNote(prev => ({ ...prev, patientId: e.target.value }))}
-                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
-                        >
-                          <option value="">Select a patient</option>
-                          {appointments.map((apt) => (
-                            <option key={apt.id} value={apt.patient.id}>
-                              {apt.patient.firstName} {apt.patient.lastName}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Search for a patient..."
+                            value={patientSearchTerm}
+                            onChange={(e) => {
+                              setPatientSearchTerm(e.target.value);
+                              setShowPatientDropdown(true);
+                            }}
+                            onFocus={() => setShowPatientDropdown(true)}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
+                          />
+                          {showPatientDropdown && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                              {filteredPatients.map((patient) => (
+                                <div
+                                  key={patient.id}
+                                  onClick={() => {
+                                    setNewNote(prev => ({ ...prev, patientId: patient.id }));
+                                    setPatientSearchTerm(`${patient.firstName} ${patient.lastName} (${patient.patientNumber})`);
+                                    setShowPatientDropdown(false);
+                                  }}
+                                  className="px-4 py-3 hover:bg-pink-50 cursor-pointer border-b border-slate-100 last:border-b-0"
+                                >
+                                  <div className="font-semibold text-slate-900">
+                                    {patient.firstName} {patient.lastName}
+                                  </div>
+                                  <div className="text-sm text-slate-600">
+                                    ID: {patient.patientNumber}
+                                  </div>
+                                </div>
+                              ))}
+                              {filteredPatients.length === 0 && (
+                                <div className="px-4 py-3 text-slate-500 text-center">
+                                  No patients found
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
