@@ -145,7 +145,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
       const pending = tasks.filter(task => task.status === 'pending').length;
       const inProgress = tasks.filter(task => task.status === 'in_progress').length;
       const overdue = tasks.filter(task => task.status === 'overdue').length;
-      onTaskCountsChange({ pending, inProgress, overdue });
+      onTaskCountsChange(tasks); // Pass the tasks array, not the counts object
     }
   }, [tasks, onTaskCountsChange]);
 

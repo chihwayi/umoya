@@ -196,7 +196,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
       const active = alerts.filter(alert => alert.isActive).length;
       const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
       const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
-      onAlertCountsChange({ active, critical, high });
+      onAlertCountsChange(alerts); // Pass the alerts array, not the counts object
     }
   }, [alerts, onAlertCountsChange]);
 
