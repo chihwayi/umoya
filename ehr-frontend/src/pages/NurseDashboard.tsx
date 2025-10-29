@@ -144,6 +144,41 @@ const NurseDashboard: React.FC = () => {
     else setActiveTab('calendar');
   }, [location.pathname]);
 
+  const fetchVitalsForAppointments = async (appointments: Appointment[]) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return appointments;
+
+      const appointmentsWithVitals = await Promise.all(
+        appointments.map(async (appointment) => {
+          try {
+            const vitalsResponse = await ehrApi.getVitals(appointment.patient.id, token, tenantSlug!);
+            const vitals = vitalsResponse.data.vitals || [];
+            
+            // Get the most recent vitals
+            const latestVitals = vitals.length > 0 ? vitals[0] : null;
+            
+            return {
+              ...appointment,
+              vitals: latestVitals
+            };
+          } catch (error) {
+            console.log(`No vitals found for patient ${appointment.patient.id}:`, error);
+            return {
+              ...appointment,
+              vitals: null
+            };
+          }
+        })
+      );
+
+      return appointmentsWithVitals;
+    } catch (error) {
+      console.error('Error fetching vitals for appointments:', error);
+      return appointments;
+    }
+  };
+
   const fetchTodayAppointments = async () => {
     try {
       setLoading(true);
@@ -165,7 +200,7 @@ const NurseDashboard: React.FC = () => {
       console.log('📊 Total appointments:', response.data.appointments?.length || 0);
 
       // Show ALL appointments for today - nurses need to see everything
-      const allAppointments = response.data.appointments || [];
+      let allAppointments = response.data.appointments || [];
       console.log('👩‍⚕️ Setting appointments for nurse:', allAppointments);
       
       // If no appointments for today, let's also check yesterday and day before
@@ -195,13 +230,20 @@ const NurseDashboard: React.FC = () => {
           ];
           
           console.log('📅 Recent appointments found:', recentAppointments.length);
-          setAppointments(recentAppointments);
+          
+          // Fetch vitals for recent appointments
+          const appointmentsWithVitals = await fetchVitalsForAppointments(recentAppointments);
+          setAppointments(appointmentsWithVitals);
         } catch (error) {
           console.error('Error fetching recent appointments:', error);
-          setAppointments(allAppointments);
+          // Fetch vitals for today's appointments as fallback
+          const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
+          setAppointments(appointmentsWithVitals);
         }
       } else {
-        setAppointments(allAppointments);
+        // Fetch vitals for today's appointments
+        const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
+        setAppointments(appointmentsWithVitals);
       }
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -216,8 +258,9 @@ const NurseDashboard: React.FC = () => {
     const inProgress = appointments.filter(apt => apt.status === 'in-progress').length;
     const completed = appointments.filter(apt => apt.status === 'completed').length;
     const urgent = appointments.filter(apt => apt.priorityLevel === 'urgent' || apt.priorityLevel === 'high').length;
+    const vitalsRecorded = appointments.filter(apt => apt.vitals !== null && apt.vitals !== undefined).length;
 
-    return { waiting, inProgress, completed, urgent };
+    return { waiting, inProgress, completed, urgent, vitalsRecorded };
   };
 
   const getNurseActions = () => {
@@ -236,6 +279,7 @@ const NurseDashboard: React.FC = () => {
   const quickStats = [
     { label: 'Patients Waiting', value: getQueueStats().waiting.toString(), icon: Clock, color: 'text-blue-600' },
     { label: 'In Progress', value: getQueueStats().inProgress.toString(), icon: Activity, color: 'text-yellow-600' },
+    { label: 'Vitals Recorded', value: getQueueStats().vitalsRecorded.toString(), icon: Heart, color: 'text-purple-600' },
     { label: 'Urgent Cases', value: getQueueStats().urgent.toString(), icon: AlertTriangle, color: 'text-red-600' },
     { label: 'Completed Today', value: getQueueStats().completed.toString(), icon: CheckCircle, color: 'text-green-600' },
   ];
