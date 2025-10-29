@@ -56,6 +56,25 @@ export class DatabaseProvisioningService {
         }
       }
       
+      // Create the update function separately to avoid splitting issues
+      await tenantDataSource.query(`
+        CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql';
+      `);
+      
+      // Create all triggers
+      const triggerStatements = this.getTriggerStatements();
+      for (const statement of triggerStatements) {
+        if (statement.trim()) {
+          await tenantDataSource.query(statement);
+        }
+      }
+      
       this.logger.log('Schema migration completed');
       
     } finally {
@@ -376,52 +395,40 @@ export class DatabaseProvisioningService {
       CREATE INDEX idx_audit_logs_table_name ON audit_logs(table_name);
       CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
       
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          NEW.updated_at = NOW();
-          RETURN NEW;
-      END;
-      $$ language 'plpgsql';
-      
-      CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_vitals_updated_at BEFORE UPDATE ON vitals
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_triage_updated_at BEFORE UPDATE ON triage_assessments
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_medical_records_updated_at BEFORE UPDATE ON medical_records
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON prescriptions
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_lab_results_updated_at BEFORE UPDATE ON lab_results
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-      
-      CREATE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     `;
     
-    return schema.split(';').filter(stmt => stmt.trim());
+    // Split by semicolon but handle function definitions properly
+    const statements = schema.split(';').filter(stmt => stmt.trim());
+    return statements;
+  }
+
+  private getTriggerStatements(): string[] {
+    return [
+      `CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_vitals_updated_at BEFORE UPDATE ON vitals
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_triage_updated_at BEFORE UPDATE ON triage_assessments
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_medical_records_updated_at BEFORE UPDATE ON medical_records
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON prescriptions
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_lab_results_updated_at BEFORE UPDATE ON lab_results
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
+    ];
   }
 
   async deleteDatabase(databaseName: string): Promise<void> {
