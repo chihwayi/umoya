@@ -663,6 +663,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                                 <div
                                   key={patient.id}
                                   onClick={() => {
+                                    setSelectedPatient(patient);
                                     setNewNote(prev => ({ ...prev, patientId: patient.id }));
                                     setPatientSearchTerm(`${patient.firstName} ${patient.lastName} (${patient.patientNumber})`);
                                     setShowPatientDropdown(false);
