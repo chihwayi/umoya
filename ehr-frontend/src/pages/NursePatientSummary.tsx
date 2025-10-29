@@ -130,28 +130,44 @@ const NursePatientSummary: React.FC = () => {
       if (!token) return;
 
       // Fetch appointments
-      const appointmentsResponse = await ehrApi.getAppointments({}, token, tenantSlug!);
-      const patientAppointments = appointmentsResponse.data.appointments?.filter(
+      const appointmentsResponse = await ehrApi.getAppointments(token, tenantSlug!);
+      const allAppointments = appointmentsResponse.data.appointments || [];
+      const patientAppointments = allAppointments.filter(
         (apt: any) => apt.patient.id === patientId
-      ) || [];
+      );
+      
+      console.log('🔍 NursePatientSummary - All appointments:', allAppointments.length);
+      console.log('🔍 NursePatientSummary - Patient appointments:', patientAppointments.length);
 
-      // Fetch vitals for each appointment
-      const vitalsPromises = patientAppointments.map(async (apt: any) => {
-        try {
-          const vitalsResponse = await ehrApi.getVitals(patientId!, token, tenantSlug!);
-          return vitalsResponse.data.vitals || [];
-        } catch (error) {
-          return [];
-        }
-      });
+      // Fetch vitals for the patient
+      let allVitals: any[] = [];
+      try {
+        const vitalsResponse = await ehrApi.getVitals(patientId!, token, tenantSlug!);
+        allVitals = vitalsResponse.data.vitals || [];
+      } catch (error) {
+        console.log('No vitals found for patient:', error);
+        allVitals = [];
+      }
 
       // Fetch nursing notes
-      const notesResponse = await ehrApi.getNursingNotes(patientId!, token, tenantSlug!);
-      const nursingNotes = notesResponse.data.nursingNotes || [];
+      let nursingNotes: any[] = [];
+      try {
+        const notesResponse = await ehrApi.getNursingNotes(patientId!, token, tenantSlug!);
+        nursingNotes = notesResponse.data.nursingNotes || [];
+      } catch (error) {
+        console.log('No nursing notes found for patient:', error);
+        nursingNotes = [];
+      }
 
       // Fetch triage assessments
-      const triageResponse = await ehrApi.getTriageAssessments(patientId!, token, tenantSlug!);
-      const triageAssessments = triageResponse.data.triageAssessments || [];
+      let triageAssessments: any[] = [];
+      try {
+        const triageResponse = await ehrApi.getTriageAssessments(patientId!, token, tenantSlug!);
+        triageAssessments = triageResponse.data.triageAssessments || [];
+      } catch (error) {
+        console.log('No triage assessments found for patient:', error);
+        triageAssessments = [];
+      }
 
       // Group data by visit date
       const visitMap = new Map<string, VisitSummary>();
@@ -185,10 +201,23 @@ const NursePatientSummary: React.FC = () => {
         }
       });
 
+      // Add vitals to visits (match by date)
+      allVitals.forEach((vital: any) => {
+        const vitalDate = new Date(vital.recordedAt).toDateString();
+        if (visitMap.has(vitalDate)) {
+          visitMap.get(vitalDate)!.vitals = vital;
+        }
+      });
+
       // Sort visits by date (most recent first)
       const sortedVisits = Array.from(visitMap.values()).sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
+
+      console.log('🔍 NursePatientSummary - Vitals found:', allVitals.length);
+      console.log('🔍 NursePatientSummary - Nursing notes found:', nursingNotes.length);
+      console.log('🔍 NursePatientSummary - Triage assessments found:', triageAssessments.length);
+      console.log('🔍 NursePatientSummary - Visit summaries created:', sortedVisits.length);
 
       setVisitSummaries(sortedVisits);
     } catch (error) {
