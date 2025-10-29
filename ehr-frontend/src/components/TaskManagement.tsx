@@ -53,49 +53,31 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
-  // Generate sample tasks based on appointments
+  // Load tasks from real data - create tasks based on actual appointments
   useEffect(() => {
-    const generateTasks = () => {
-      const sampleTasks: Task[] = [];
+    const generateTasksFromAppointments = () => {
+      const realTasks: Task[] = [];
       const now = new Date();
       
+      // Only create tasks from real appointments with actual data
       appointments.forEach((apt, index) => {
         const patientName = `${apt.patient.firstName} ${apt.patient.lastName}`;
         const appointmentTime = new Date(apt.appointmentDate);
         
-        // Generate tasks based on appointment type and status
+        // Only create tasks for appointments that need nursing care
         if (apt.status === 'scheduled' || apt.status === 'confirmed') {
-          // Pre-appointment tasks
-          sampleTasks.push({
-            id: `pre-${apt.id}-1`,
+          // Pre-appointment vital signs task
+          realTasks.push({
+            id: `vitals-${apt.id}`,
             patientId: apt.patient.id,
             patientName,
-            patientRoom: `Room ${100 + index}`,
             taskType: 'vitals',
             title: 'Record Vital Signs',
-            description: 'Take and record patient vital signs before doctor visit',
+            description: `Record vital signs for ${patientName}`,
             priority: 'normal',
             status: 'pending',
-            dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(), // 15 min before
+            dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
             estimatedDuration: 10,
-            assignedTo: currentUser?.id || '',
-            createdBy: currentUser?.id || '',
-            createdAt: now.toISOString(),
-            relatedAppointmentId: apt.id
-          });
-
-          sampleTasks.push({
-            id: `pre-${apt.id}-2`,
-            patientId: apt.patient.id,
-            patientName,
-            patientRoom: `Room ${100 + index}`,
-            taskType: 'assessment',
-            title: 'Initial Assessment',
-            description: 'Complete initial nursing assessment and triage',
-            priority: 'normal',
-            status: 'pending',
-            dueTime: new Date(appointmentTime.getTime() - 10 * 60000).toISOString(), // 10 min before
-            estimatedDuration: 15,
             assignedTo: currentUser?.id || '',
             createdBy: currentUser?.id || '',
             createdAt: now.toISOString(),
@@ -104,93 +86,34 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         }
 
         if (apt.status === 'in-progress' || apt.status === 'in_progress') {
-          // In-progress tasks
-          sampleTasks.push({
-            id: `active-${apt.id}-1`,
+          // Documentation task for in-progress appointments
+          realTasks.push({
+            id: `doc-${apt.id}`,
             patientId: apt.patient.id,
             patientName,
-            patientRoom: `Room ${100 + index}`,
             taskType: 'documentation',
             title: 'Update Progress Notes',
-            description: 'Document patient progress and observations',
+            description: `Document progress for ${patientName}`,
             priority: 'normal',
-            status: 'in_progress',
-            dueTime: new Date(appointmentTime.getTime() + 30 * 60000).toISOString(), // 30 min after start
+            status: 'pending',
+            dueTime: new Date(appointmentTime.getTime() + 30 * 60000).toISOString(),
             estimatedDuration: 10,
             assignedTo: currentUser?.id || '',
             createdBy: currentUser?.id || '',
             createdAt: now.toISOString(),
             relatedAppointmentId: apt.id
           });
-
-          // Medication tasks if patient has medications
-          if (Math.random() > 0.5) {
-            sampleTasks.push({
-              id: `med-${apt.id}-1`,
-              patientId: apt.patient.id,
-              patientName,
-              patientRoom: `Room ${100 + index}`,
-              taskType: 'medication',
-              title: 'Administer Medication',
-              description: 'Give prescribed medication as ordered',
-              priority: 'high',
-              status: 'pending',
-              dueTime: new Date(appointmentTime.getTime() + 45 * 60000).toISOString(),
-              estimatedDuration: 5,
-              assignedTo: currentUser?.id || '',
-              createdBy: currentUser?.id || '',
-              createdAt: now.toISOString(),
-              relatedAppointmentId: apt.id
-            });
-          }
-        }
-
-        if (apt.status === 'completed') {
-          // Post-appointment tasks
-          sampleTasks.push({
-            id: `post-${apt.id}-1`,
-            patientId: apt.patient.id,
-            patientName,
-            patientRoom: `Room ${100 + index}`,
-            taskType: 'follow_up',
-            title: 'Discharge Instructions',
-            description: 'Provide discharge instructions and follow-up care',
-            priority: 'normal',
-            status: 'completed',
-            dueTime: new Date(appointmentTime.getTime() + 60 * 60000).toISOString(),
-            estimatedDuration: 15,
-            assignedTo: currentUser?.id || '',
-            createdBy: currentUser?.id || '',
-            createdAt: now.toISOString(),
-            completedAt: new Date(appointmentTime.getTime() + 65 * 60000).toISOString(),
-            relatedAppointmentId: apt.id
-          });
         }
       });
 
-      // Add some overdue tasks for demonstration
-      const overdueTime = new Date(now.getTime() - 2 * 60 * 60000); // 2 hours ago
-      sampleTasks.push({
-        id: 'overdue-1',
-        patientId: 'sample-1',
-        patientName: 'John Smith',
-        patientRoom: 'Room 101',
-        taskType: 'vitals',
-        title: 'Overdue Vital Signs',
-        description: 'Patient vitals not recorded - needs immediate attention',
-        priority: 'urgent',
-        status: 'overdue',
-        dueTime: overdueTime.toISOString(),
-        estimatedDuration: 10,
-        assignedTo: currentUser?.id || '',
-        createdBy: currentUser?.id || '',
-        createdAt: new Date(now.getTime() - 3 * 60 * 60000).toISOString()
-      });
-
-      setTasks(sampleTasks);
+      setTasks(realTasks);
     };
 
-    generateTasks();
+    if (appointments.length > 0) {
+      generateTasksFromAppointments();
+    } else {
+      setTasks([]);
+    }
   }, [appointments, currentUser]);
 
   // Filter and sort tasks

@@ -42,29 +42,27 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   const [filterType, setFilterType] = useState<'all' | 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general'>('all');
   const [showAcknowledged, setShowAcknowledged] = useState(false);
 
-  // Generate sample safety alerts based on appointments
+  // Generate real safety alerts based on actual patient data
   useEffect(() => {
-    const generateAlerts = () => {
-      const sampleAlerts: SafetyAlert[] = [];
+    const generateRealAlerts = () => {
+      const realAlerts: SafetyAlert[] = [];
       const now = new Date();
 
       appointments.forEach((apt, index) => {
         const patientName = `${apt.patient.firstName} ${apt.patient.lastName}`;
-        const roomNumber = `Room ${100 + index}`;
 
-        // Generate different types of alerts based on patient data
+        // Only create alerts based on actual patient data
         if (apt.patient.allergies && apt.patient.allergies.length > 0) {
-          sampleAlerts.push({
+          realAlerts.push({
             id: `allergy-${apt.id}`,
             patientId: apt.patient.id,
             patientName,
-            patientRoom: roomNumber,
             alertType: 'allergy',
             severity: 'high',
             title: 'Known Allergies',
             description: `Patient has known allergies: ${apt.patient.allergies}`,
             details: 'Verify all medications and treatments for allergen exposure',
-            createdAt: new Date(now.getTime() - Math.random() * 60 * 60 * 1000).toISOString(),
+            createdAt: now.toISOString(),
             isActive: true,
             requiresAction: true,
             actionRequired: 'Verify medication compatibility',
@@ -72,59 +70,67 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
           });
         }
 
-        // Fall risk alerts (simulate based on age or conditions)
-        if (apt.patient.age > 65 || Math.random() > 0.7) {
-          sampleAlerts.push({
+        // Fall risk alerts based on actual age
+        if (apt.patient.age && apt.patient.age > 65) {
+          realAlerts.push({
             id: `fall-${apt.id}`,
             patientId: apt.patient.id,
             patientName,
-            patientRoom: roomNumber,
             alertType: 'fall_risk',
             severity: 'medium',
             title: 'Fall Risk Patient',
-            description: 'Patient identified as high fall risk',
+            description: `Patient age ${apt.patient.age} - high fall risk`,
             details: 'Implement fall prevention measures: bed alarm, non-slip socks, frequent checks',
-            createdAt: new Date(now.getTime() - Math.random() * 30 * 60 * 1000).toISOString(),
+            createdAt: now.toISOString(),
             isActive: true,
             requiresAction: true,
             actionRequired: 'Implement fall prevention protocol'
           });
         }
 
-        // Critical vitals alerts
+        // Critical vitals alerts based on actual vitals data
         if (apt.vitals) {
           const vitals = apt.vitals;
-          if (vitals.bloodPressure && (vitals.bloodPressure.includes('180') || vitals.bloodPressure.includes('90'))) {
-            sampleAlerts.push({
-              id: `vitals-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              patientRoom: roomNumber,
-              alertType: 'critical_vitals',
-              severity: 'critical',
-              title: 'Critical Blood Pressure',
-              description: `Blood pressure reading: ${vitals.bloodPressure}`,
-              details: 'Immediate medical attention required. Notify physician immediately.',
-              createdAt: new Date(now.getTime() - Math.random() * 15 * 60 * 1000).toISOString(),
-              isActive: true,
-              requiresAction: true,
-              actionRequired: 'Notify physician immediately',
-              relatedData: { vitals }
-            });
+          
+          // Check for critical blood pressure
+          if (vitals.bloodPressure) {
+            const bpValues = vitals.bloodPressure.split('/');
+            if (bpValues.length === 2) {
+              const systolic = parseInt(bpValues[0]);
+              const diastolic = parseInt(bpValues[1]);
+              
+              if (systolic >= 180 || diastolic >= 110) {
+                realAlerts.push({
+                  id: `bp-${apt.id}`,
+                  patientId: apt.patient.id,
+                  patientName,
+                  alertType: 'critical_vitals',
+                  severity: 'critical',
+                  title: 'Critical Blood Pressure',
+                  description: `Blood pressure: ${vitals.bloodPressure} mmHg`,
+                  details: 'Immediate medical attention required. Notify physician immediately.',
+                  createdAt: now.toISOString(),
+                  isActive: true,
+                  requiresAction: true,
+                  actionRequired: 'Notify physician immediately',
+                  relatedData: { vitals }
+                });
+              }
+            }
           }
 
-          if (vitals.heartRate > 120 || vitals.heartRate < 50) {
-            sampleAlerts.push({
+          // Check for abnormal heart rate
+          if (vitals.heartRate && (vitals.heartRate > 120 || vitals.heartRate < 50)) {
+            realAlerts.push({
               id: `hr-${apt.id}`,
               patientId: apt.patient.id,
               patientName,
-              patientRoom: roomNumber,
               alertType: 'critical_vitals',
               severity: 'high',
               title: 'Abnormal Heart Rate',
               description: `Heart rate: ${vitals.heartRate} bpm`,
               details: 'Heart rate outside normal range. Monitor closely.',
-              createdAt: new Date(now.getTime() - Math.random() * 20 * 60 * 1000).toISOString(),
+              createdAt: now.toISOString(),
               isActive: true,
               requiresAction: true,
               actionRequired: 'Monitor closely and reassess',
@@ -132,85 +138,54 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
             });
           }
 
-          if (vitals.temperature > 38.5 || vitals.temperature < 35) {
-            sampleAlerts.push({
+          // Check for abnormal temperature
+          if (vitals.temperature && (vitals.temperature > 38.5 || vitals.temperature < 35)) {
+            realAlerts.push({
               id: `temp-${apt.id}`,
               patientId: apt.patient.id,
               patientName,
-              patientRoom: roomNumber,
               alertType: 'critical_vitals',
               severity: 'high',
               title: 'Abnormal Temperature',
               description: `Temperature: ${vitals.temperature}°C`,
               details: 'Temperature outside normal range. Consider infection or hypothermia.',
-              createdAt: new Date(now.getTime() - Math.random() * 25 * 60 * 1000).toISOString(),
+              createdAt: now.toISOString(),
               isActive: true,
               requiresAction: true,
               actionRequired: 'Assess for infection or other causes',
               relatedData: { vitals }
             });
           }
-        }
 
-        // Medication alerts
-        if (Math.random() > 0.8) {
-          sampleAlerts.push({
-            id: `med-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            patientRoom: roomNumber,
-            alertType: 'medication',
-            severity: 'medium',
-            title: 'Medication Due',
-            description: 'Patient has medication due for administration',
-            details: 'Check medication schedule and administer as prescribed',
-            createdAt: new Date(now.getTime() - Math.random() * 45 * 60 * 1000).toISOString(),
-            isActive: true,
-            requiresAction: true,
-            actionRequired: 'Administer medication as prescribed'
-          });
-        }
-
-        // Lab results alerts
-        if (Math.random() > 0.9) {
-          sampleAlerts.push({
-            id: `lab-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            patientRoom: roomNumber,
-            alertType: 'lab',
-            severity: 'high',
-            title: 'Critical Lab Results',
-            description: 'Critical lab values require immediate attention',
-            details: 'Review lab results and notify physician if necessary',
-            createdAt: new Date(now.getTime() - Math.random() * 10 * 60 * 1000).toISOString(),
-            isActive: true,
-            requiresAction: true,
-            actionRequired: 'Review and notify physician',
-            relatedData: { labType: 'Complete Blood Count' }
-          });
+          // Check for low oxygen saturation
+          if (vitals.oxygenSaturation && vitals.oxygenSaturation < 90) {
+            realAlerts.push({
+              id: `o2-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              alertType: 'critical_vitals',
+              severity: 'critical',
+              title: 'Low Oxygen Saturation',
+              description: `Oxygen saturation: ${vitals.oxygenSaturation}%`,
+              details: 'Oxygen saturation below 90%. Immediate attention required.',
+              createdAt: now.toISOString(),
+              isActive: true,
+              requiresAction: true,
+              actionRequired: 'Administer oxygen and notify physician',
+              relatedData: { vitals }
+            });
+          }
         }
       });
 
-      // Add some general alerts
-      sampleAlerts.push({
-        id: 'general-1',
-        patientId: 'system',
-        patientName: 'System Alert',
-        alertType: 'general',
-        severity: 'low',
-        title: 'Maintenance Window',
-        description: 'System maintenance scheduled for tonight 2:00 AM',
-        details: 'EHR system will be unavailable for 30 minutes',
-        createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-        isActive: true,
-        requiresAction: false
-      });
-
-      setAlerts(sampleAlerts);
+      setAlerts(realAlerts);
     };
 
-    generateAlerts();
+    if (appointments.length > 0) {
+      generateRealAlerts();
+    } else {
+      setAlerts([]);
+    }
   }, [appointments]);
 
   // Filter alerts
