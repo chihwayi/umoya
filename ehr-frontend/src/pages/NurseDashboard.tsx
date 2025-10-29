@@ -94,6 +94,12 @@ const NurseDashboard: React.FC = () => {
 
   // Calculate task counts
   const calculateTaskCounts = (tasks: any[]) => {
+    if (!Array.isArray(tasks)) {
+      console.warn('calculateTaskCounts received non-array:', tasks);
+      setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
+      return;
+    }
+    
     const pending = tasks.filter(task => task.status === 'pending').length;
     const inProgress = tasks.filter(task => task.status === 'in_progress').length;
     const overdue = tasks.filter(task => task.status === 'overdue').length;
@@ -102,6 +108,12 @@ const NurseDashboard: React.FC = () => {
 
   // Calculate alert counts
   const calculateAlertCounts = (alerts: any[]) => {
+    if (!Array.isArray(alerts)) {
+      console.warn('calculateAlertCounts received non-array:', alerts);
+      setAlertCounts({ active: 0, critical: 0, high: 0 });
+      return;
+    }
+    
     const active = alerts.filter(alert => alert.isActive).length;
     const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
     const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
@@ -816,7 +828,17 @@ const NurseDashboard: React.FC = () => {
               {/* Notifications */}
               <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative">
                 <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs"></span>
+                {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active) > 0 && (
+                  <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
+                    alertCounts.critical > 0 
+                      ? 'bg-gradient-to-r from-red-600 to-red-700' 
+                      : alertCounts.high > 0 
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600'
+                  }`}>
+                    {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active}
+                  </span>
+                )}
               </button>
 
               {/* User Profile Dropdown */}
