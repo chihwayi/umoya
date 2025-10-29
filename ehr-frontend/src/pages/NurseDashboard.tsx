@@ -89,6 +89,24 @@ const NurseDashboard: React.FC = () => {
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<string | null>(null);
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
+  const [taskCounts, setTaskCounts] = useState({ pending: 0, inProgress: 0, overdue: 0 });
+  const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
+
+  // Calculate task counts
+  const calculateTaskCounts = (tasks: any[]) => {
+    const pending = tasks.filter(task => task.status === 'pending').length;
+    const inProgress = tasks.filter(task => task.status === 'in_progress').length;
+    const overdue = tasks.filter(task => task.status === 'overdue').length;
+    setTaskCounts({ pending, inProgress, overdue });
+  };
+
+  // Calculate alert counts
+  const calculateAlertCounts = (alerts: any[]) => {
+    const active = alerts.filter(alert => alert.isActive).length;
+    const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
+    const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
+    setAlertCounts({ active, critical, high });
+  };
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
@@ -867,7 +885,7 @@ const NurseDashboard: React.FC = () => {
           <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab('tasks')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
                 activeTab === 'tasks'
                   ? 'border-indigo-500 text-indigo-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -875,10 +893,15 @@ const NurseDashboard: React.FC = () => {
             >
               <Activity className="w-4 h-4 inline mr-2" />
               My Tasks
+              {(taskCounts.pending > 0 || taskCounts.inProgress > 0 || taskCounts.overdue > 0) && (
+                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse">
+                  {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('alerts')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
                 activeTab === 'alerts'
                   ? 'border-red-500 text-red-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -886,6 +909,17 @@ const NurseDashboard: React.FC = () => {
             >
               <Bell className="w-4 h-4 inline mr-2" />
               Safety Alerts
+              {alertCounts.active > 0 && (
+                <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
+                  alertCounts.critical > 0 
+                    ? 'bg-gradient-to-r from-red-600 to-red-700' 
+                    : alertCounts.high > 0 
+                    ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                    : 'bg-gradient-to-r from-yellow-500 to-orange-500'
+                }`}>
+                  {alertCounts.active}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab('calendar')}
@@ -960,6 +994,7 @@ const NurseDashboard: React.FC = () => {
               console.log('Task updated:', task);
               // Could update task in real-time
             }}
+            onTaskCountsChange={calculateTaskCounts}
           />
         )}
 
@@ -975,6 +1010,7 @@ const NurseDashboard: React.FC = () => {
               console.log('Alert dismissed:', alertId);
               // Could update alert status
             }}
+            onAlertCountsChange={calculateAlertCounts}
           />
         )}
 

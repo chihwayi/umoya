@@ -34,13 +34,15 @@ interface TaskManagementProps {
   appointments: any[];
   onTaskComplete?: (taskId: string) => void;
   onTaskUpdate?: (task: Task) => void;
+  onTaskCountsChange?: (counts: { pending: number; inProgress: number; overdue: number }) => void;
 }
 
 const TaskManagement: React.FC<TaskManagementProps> = ({ 
   currentUser, 
   appointments, 
   onTaskComplete, 
-  onTaskUpdate 
+  onTaskUpdate,
+  onTaskCountsChange
 }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
@@ -66,23 +68,44 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         
         // Only create tasks for appointments that need nursing care
         if (apt.status === 'scheduled' || apt.status === 'confirmed') {
-          // Pre-appointment vital signs task
-          realTasks.push({
-            id: `vitals-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            taskType: 'vitals',
-            title: 'Record Vital Signs',
-            description: `Record vital signs for ${patientName}`,
-            priority: 'normal',
-            status: 'pending',
-            dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
-            estimatedDuration: 10,
-            assignedTo: currentUser?.id || '',
-            createdBy: currentUser?.id || '',
-            createdAt: now.toISOString(),
-            relatedAppointmentId: apt.id
-          });
+          // Only create vital signs task if vitals haven't been recorded yet
+          if (!apt.vitals) {
+            realTasks.push({
+              id: `vitals-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              taskType: 'vitals',
+              title: 'Record Vital Signs',
+              description: `Record vital signs for ${patientName}`,
+              priority: 'normal',
+              status: 'pending',
+              dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
+              estimatedDuration: 10,
+              assignedTo: currentUser?.id || '',
+              createdBy: currentUser?.id || '',
+              createdAt: now.toISOString(),
+              relatedAppointmentId: apt.id
+            });
+          } else {
+            // Vitals already recorded - mark as completed
+            realTasks.push({
+              id: `vitals-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              taskType: 'vitals',
+              title: 'Record Vital Signs',
+              description: `Record vital signs for ${patientName}`,
+              priority: 'normal',
+              status: 'completed',
+              dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
+              estimatedDuration: 10,
+              assignedTo: currentUser?.id || '',
+              createdBy: currentUser?.id || '',
+              createdAt: now.toISOString(),
+              completedAt: apt.vitals.recordedAt || now.toISOString(),
+              relatedAppointmentId: apt.id
+            });
+          }
         }
 
         if (apt.status === 'in-progress' || apt.status === 'in_progress') {
@@ -115,6 +138,16 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
       setTasks([]);
     }
   }, [appointments, currentUser]);
+
+  // Notify parent of task count changes
+  useEffect(() => {
+    if (onTaskCountsChange) {
+      const pending = tasks.filter(task => task.status === 'pending').length;
+      const inProgress = tasks.filter(task => task.status === 'in_progress').length;
+      const overdue = tasks.filter(task => task.status === 'overdue').length;
+      onTaskCountsChange({ pending, inProgress, overdue });
+    }
+  }, [tasks, onTaskCountsChange]);
 
   // Filter and sort tasks
   useEffect(() => {

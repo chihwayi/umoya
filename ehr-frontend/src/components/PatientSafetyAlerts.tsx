@@ -28,13 +28,15 @@ interface PatientSafetyAlertsProps {
   appointments: any[];
   onAlertAcknowledge?: (alertId: string) => void;
   onAlertDismiss?: (alertId: string) => void;
+  onAlertCountsChange?: (counts: { active: number; critical: number; high: number }) => void;
 }
 
 const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   currentUser,
   appointments,
   onAlertAcknowledge,
-  onAlertDismiss
+  onAlertDismiss,
+  onAlertCountsChange
 }) => {
   const [alerts, setAlerts] = useState<SafetyAlert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<SafetyAlert[]>([]);
@@ -187,6 +189,16 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
       setAlerts([]);
     }
   }, [appointments]);
+
+  // Notify parent of alert count changes
+  useEffect(() => {
+    if (onAlertCountsChange) {
+      const active = alerts.filter(alert => alert.isActive).length;
+      const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
+      const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
+      onAlertCountsChange({ active, critical, high });
+    }
+  }, [alerts, onAlertCountsChange]);
 
   // Filter alerts
   useEffect(() => {
