@@ -77,11 +77,11 @@ export const parseDDMMYYYYToDate = (dateString: string): Date | null => {
     return null;
   }
   
-  // Create date object (month is 0-indexed in JavaScript)
-  const date = new Date(yearNum, monthNum - 1, dayNum);
+  // Create date object in UTC to avoid timezone issues (month is 0-indexed in JavaScript)
+  const date = new Date(Date.UTC(yearNum, monthNum - 1, dayNum));
   
   // Verify the date is valid (handles cases like 31/02/2024)
-  if (date.getDate() !== dayNum || date.getMonth() !== monthNum - 1 || date.getFullYear() !== yearNum) {
+  if (date.getUTCDate() !== dayNum || date.getUTCMonth() !== monthNum - 1 || date.getUTCFullYear() !== yearNum) {
     console.warn('Invalid date provided to parseDDMMYYYYToDate:', dateString);
     return null;
   }
@@ -123,12 +123,12 @@ export const parseDDMMYYYYHHMMToDate = (dateTimeString: string): Date | null => 
     return null;
   }
   
-  // Create date object (month is 0-indexed in JavaScript)
-  const date = new Date(yearNum, monthNum - 1, dayNum, hoursNum, minutesNum);
+  // Create date object in UTC to avoid timezone issues (month is 0-indexed in JavaScript)
+  const date = new Date(Date.UTC(yearNum, monthNum - 1, dayNum, hoursNum, minutesNum));
   
   // Verify the date is valid
-  if (date.getDate() !== dayNum || date.getMonth() !== monthNum - 1 || date.getFullYear() !== yearNum ||
-      date.getHours() !== hoursNum || date.getMinutes() !== minutesNum) {
+  if (date.getUTCDate() !== dayNum || date.getUTCMonth() !== monthNum - 1 || date.getUTCFullYear() !== yearNum ||
+      date.getUTCHours() !== hoursNum || date.getUTCMinutes() !== minutesNum) {
     console.warn('Invalid date-time provided to parseDDMMYYYYHHMMToDate:', dateTimeString);
     return null;
   }
