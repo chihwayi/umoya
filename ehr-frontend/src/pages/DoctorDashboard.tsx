@@ -532,8 +532,23 @@ const DoctorDashboard: React.FC = () => {
       await ehrApi.updateAppointment(currentReferralAppointment.id, {
         notes: `REFERRED TO NURSE\nReason: ${referralReason}\nInstructions: ${referralInstructions}`
       }, token, tenantSlug!);
+
+      // Create specific order based on referral reason
+      const orderData = {
+        patientId: currentReferralAppointment.patient.id,
+        appointmentId: currentReferralAppointment.id,
+        doctorId: currentUser?.id,
+        orderType: getOrderTypeFromReason(referralReason),
+        orderName: getOrderNameFromReason(referralReason),
+        description: `Doctor referral: ${referralReason}`,
+        instructions: referralInstructions || `Please perform ${referralReason.toLowerCase()} as requested by doctor`,
+        priority: 'normal',
+        status: 'authorized' // Auto-authorize doctor referrals
+      };
+
+      await ehrApi.createOrder(orderData, token, tenantSlug!);
       
-      showSuccess('Success', 'Patient referred to nurse for treatment');
+      showSuccess('Success', 'Patient referred to nurse with specific orders created');
       setShowReferralModal(false);
       setReferralReason('');
       setReferralInstructions('');
@@ -541,6 +556,30 @@ const DoctorDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error referring patient:', error);
       showError('Error', 'Failed to refer patient to nurse');
+    }
+  };
+
+  const getOrderTypeFromReason = (reason: string): string => {
+    switch (reason) {
+      case 'Injection': return 'procedure';
+      case 'IV Drip': return 'procedure';
+      case 'Wound Dressing': return 'procedure';
+      case 'Vital Signs': return 'procedure';
+      case 'Medication Administration': return 'medication';
+      case 'Blood Draw': return 'lab_test';
+      default: return 'procedure';
+    }
+  };
+
+  const getOrderNameFromReason = (reason: string): string => {
+    switch (reason) {
+      case 'Injection': return 'Administer Injection';
+      case 'IV Drip': return 'Set up IV Drip';
+      case 'Wound Dressing': return 'Apply Wound Dressing';
+      case 'Vital Signs': return 'Monitor Vital Signs';
+      case 'Medication Administration': return 'Administer Medication';
+      case 'Blood Draw': return 'Collect Blood Sample';
+      default: return reason;
     }
   };
 

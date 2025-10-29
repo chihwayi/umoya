@@ -330,5 +330,15 @@ export const ehrApi = {
       }
     });
     return { data: response.data };
+  },
+
+  createOrder: async (orderData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/orders', orderData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
   }
 };
