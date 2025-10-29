@@ -181,6 +181,7 @@ const DoctorDashboard: React.FC = () => {
       console.log('🔍 DoctorDashboard - Fetching appointments for date:', selectedDate);
       console.log('🔍 DoctorDashboard - Current user:', currentUser);
       console.log('🔍 DoctorDashboard - Tenant slug:', tenantSlug);
+      console.log('🔍 DoctorDashboard - Formatted date for API:', formatDateForAPI(selectedDate));
 
       const response = await ehrApi.getAppointments(token, tenantSlug!, {
         date: formatDateForAPI(selectedDate)
@@ -195,6 +196,7 @@ const DoctorDashboard: React.FC = () => {
           console.log('🔍 DoctorDashboard - Checking appointment:', {
             appointmentId: apt.id,
             patientName: `${apt.patient.firstName} ${apt.patient.lastName}`,
+            appointmentDate: apt.appointmentDate,
             doctorId: apt.doctor.id,
             currentUserId: currentUser?.id,
             matches: apt.doctor.id === currentUser?.id
