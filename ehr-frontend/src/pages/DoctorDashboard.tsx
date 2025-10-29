@@ -95,7 +95,6 @@ const DoctorDashboard: React.FC = () => {
   });
   const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
   const [showVitalsAlert, setShowVitalsAlert] = useState(false);
-  const [criticalAlerts, setCriticalAlerts] = useState<VitalsAlert[]>([]);
   const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
 
   // Get current user info
@@ -216,7 +215,6 @@ const DoctorDashboard: React.FC = () => {
       await fetchVitalsForAppointments(doctorAppointments);
       
       // Check for critical vitals after fetching appointments
-      await checkForCriticalVitals();
     } catch (error) {
       console.error('Error fetching appointments:', error);
       showError('Error', 'Failed to fetch appointments');
@@ -466,37 +464,6 @@ const DoctorDashboard: React.FC = () => {
     };
   };
 
-  const checkForCriticalVitals = async () => {
-    try {
-      const criticalAlerts: VitalsAlert[] = [];
-
-      // Check all vitals data for critical values
-      Object.entries(vitalsData).forEach(([patientId, vitalsList]) => {
-        if (vitalsList.length > 0) {
-          const latestVitals = vitalsList[0];
-          const alerts = validateVitals(latestVitals);
-          
-          // Add patient name to critical alerts
-          const appointment = appointments.find(apt => apt.patient.id === patientId);
-          const patientName = appointment ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Unknown Patient';
-          
-          alerts.forEach(alert => {
-            if (alert.type === 'critical') {
-              criticalAlerts.push({
-                ...alert,
-                message: `${patientName}: ${alert.message}`
-              });
-            }
-          });
-        }
-      });
-
-      setCriticalAlerts(criticalAlerts);
-      console.log('🔍 DoctorDashboard - Critical vitals alerts:', criticalAlerts);
-    } catch (error) {
-      console.error('Error checking critical vitals:', error);
-    }
-  };
 
   const getVitalsStatusBadge = (appointment: Appointment) => {
     const vitalsStatus = checkVitalsStatus(appointment);
@@ -713,39 +680,6 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="lg:pl-64">
-        {/* Critical Vitals Alerts */}
-        {criticalAlerts.length > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
-                  Critical Vitals Alert
-                </h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <ul className="list-disc pl-5 space-y-1">
-                    {criticalAlerts.map((alert, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        {alert.icon}
-                        {alert.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="mt-4">
-                  <button
-                    onClick={() => setCriticalAlerts([])}
-                    className="bg-red-100 text-red-800 px-3 py-1 rounded-md text-sm font-medium hover:bg-red-200 transition-colors"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Top Header */}
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
