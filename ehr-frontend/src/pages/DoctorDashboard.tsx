@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, 
+  Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
   Play, Pause, Square, FileText, Pill, TestTube, Bell, 
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
@@ -503,9 +503,21 @@ const DoctorDashboard: React.FC = () => {
         color: 'bg-red-100 text-red-800 border-red-200',
         icon: <AlertCircle className="w-3 h-3" />
       };
+    } else if (vitalsStatus.alerts.some(alert => alert.type === 'critical')) {
+      return {
+        text: 'Critical Vitals',
+        color: 'bg-red-100 text-red-800 border-red-200',
+        icon: <AlertCircle className="w-3 h-3" />
+      };
+    } else if (vitalsStatus.alerts.some(alert => alert.type === 'warning')) {
+      return {
+        text: 'Vitals Warning',
+        color: 'bg-orange-100 text-orange-800 border-orange-200',
+        icon: <AlertTriangle className="w-3 h-3" />
+      };
     } else if (!vitalsStatus.isRecent) {
       return {
-        text: 'Old Vitals',
+        text: 'Vitals History',
         color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         icon: <Clock className="w-3 h-3" />
       };
@@ -865,6 +877,34 @@ const DoctorDashboard: React.FC = () => {
                         <CheckCircle className="w-4 h-4" />
                         Complete Appointment
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Critical Vitals Alerts */}
+              {criticalAlerts.length > 0 && (
+                <div className="bg-red-50/80 backdrop-blur-sm rounded-2xl border border-red-200/50">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <AlertCircle className="w-6 h-6 text-red-600" />
+                      <h2 className="text-xl font-bold text-red-900">Critical Vitals Alerts</h2>
+                      <span className="bg-red-100 text-red-800 text-sm font-semibold px-2 py-1 rounded-full">
+                        {criticalAlerts.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {criticalAlerts.map((alert, index) => (
+                        <div key={index} className="bg-white rounded-lg p-4 border border-red-200 flex items-start gap-3">
+                          <div className="text-red-600 mt-0.5">
+                            {alert.icon}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-red-900 font-medium">{alert.message}</p>
+                            <p className="text-red-700 text-sm mt-1">Immediate attention required</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
