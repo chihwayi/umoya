@@ -293,94 +293,120 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   <Plus className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-bold text-slate-900">Comprehensive Clinical Note</h4>
-                  <p className="text-sm text-slate-600">Detailed documentation for {selectedPatient?.firstName} {selectedPatient?.lastName}</p>
+                  <h4 className="text-lg font-bold text-slate-900">
+                    {newNote.noteType === 'general' ? 'Quick Note' : 'Comprehensive Clinical Note'}
+                  </h4>
+                  <p className="text-sm text-slate-600">
+                    {newNote.noteType === 'general' 
+                      ? `Simple note for ${selectedPatient?.firstName} ${selectedPatient?.lastName}` 
+                      : `Detailed documentation for ${selectedPatient?.firstName} ${selectedPatient?.lastName}`
+                    }
+                  </p>
                 </div>
               </div>
 
             <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Note Type</label>
-                    <select
-                      value={newNote.noteType}
-                      onChange={(e) => setNewNote(prev => ({ ...prev, noteType: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    >
-                      <option value="general">General</option>
-                      <option value="assessment">Assessment</option>
-                      <option value="intervention">Intervention</option>
-                      <option value="evaluation">Evaluation</option>
-                    </select>
-                  </div>
-                </div>
+                {newNote.noteType === 'general' ? (
+                  // Simple form for quick notes
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Quick Note</label>
+                      <textarea
+                        value={newNote.content}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        rows={6}
+                        placeholder="Enter your quick observation note here..."
+                      />
+                    </div>
+                  </>
+                ) : (
+                  // Comprehensive form for detailed notes
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Note Type</label>
+                        <select
+                          value={newNote.noteType}
+                          onChange={(e) => setNewNote(prev => ({ ...prev, noteType: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                        >
+                          <option value="general">General</option>
+                          <option value="assessment">Assessment</option>
+                          <option value="intervention">Intervention</option>
+                          <option value="evaluation">Evaluation</option>
+                        </select>
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Note Content</label>
-                  <textarea
-                    value={newNote.content}
-                    onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                    rows={4}
-                    placeholder="Enter nursing note content..."
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Note Content</label>
+                      <textarea
+                        value={newNote.content}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        rows={4}
+                        placeholder="Enter nursing note content..."
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Vital Signs</label>
-                    <textarea
-                      value={newNote.vitalSigns}
-                      onChange={(e) => setNewNote(prev => ({ ...prev, vitalSigns: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                      rows={2}
-                      placeholder="Record vital signs..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Medications</label>
-                    <textarea
-                      value={newNote.medications}
-                      onChange={(e) => setNewNote(prev => ({ ...prev, medications: e.target.value }))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                      rows={2}
-                      placeholder={preset === 'medications' ? 'e.g., Paracetamol 1g PO q8h x5 days' : 'Record medications...'}
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Vital Signs</label>
+                        <textarea
+                          value={newNote.vitalSigns}
+                          onChange={(e) => setNewNote(prev => ({ ...prev, vitalSigns: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                          rows={2}
+                          placeholder="Record vital signs..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Medications</label>
+                        <textarea
+                          value={newNote.medications}
+                          onChange={(e) => setNewNote(prev => ({ ...prev, medications: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                          rows={2}
+                          placeholder={preset === 'medications' ? 'e.g., Paracetamol 1g PO q8h x5 days' : 'Record medications...'}
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Observations</label>
-                  <textarea
-                    value={newNote.observations}
-                    onChange={(e) => setNewNote(prev => ({ ...prev, observations: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                    rows={3}
-                    placeholder="Record patient observations..."
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Observations</label>
+                      <textarea
+                        value={newNote.observations}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, observations: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        rows={3}
+                        placeholder="Record patient observations..."
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Interventions</label>
-                  <textarea
-                    value={newNote.interventions}
-                    onChange={(e) => setNewNote(prev => ({ ...prev, interventions: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                    rows={3}
-                    placeholder="Record nursing interventions..."
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Interventions</label>
+                      <textarea
+                        value={newNote.interventions}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, interventions: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        rows={3}
+                        placeholder="Record nursing interventions..."
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Outcomes</label>
-                  <textarea
-                    value={newNote.outcomes}
-                    onChange={(e) => setNewNote(prev => ({ ...prev, outcomes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                    rows={3}
-                    placeholder="Record patient outcomes..."
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Outcomes</label>
+                      <textarea
+                        value={newNote.outcomes}
+                        onChange={(e) => setNewNote(prev => ({ ...prev, outcomes: e.target.value }))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        rows={3}
+                        placeholder="Record patient outcomes..."
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-4 pt-6 border-t border-slate-200 mt-6">
@@ -509,10 +535,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   {appointments.map((apt) => (
                     <div 
                       key={apt.id}
-                      onClick={() => setSelectedPatient(apt.patient)}
-                      className="bg-white rounded-xl p-4 border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                      className="bg-white rounded-xl p-4 border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200 group"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm group-hover:scale-105 transition-transform">
                           {apt.patient.firstName.charAt(0)}{apt.patient.lastName.charAt(0)}
                         </div>
@@ -524,6 +549,40 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                             {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedPatient(apt.patient);
+                            setShowNewNote(true);
+                            setNewNote(prev => ({ 
+                              ...prev, 
+                              patientId: apt.patient.id,
+                              noteType: 'general'
+                            }));
+                          }}
+                          className="flex-1 px-3 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:from-pink-600 hover:to-rose-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Quick Note
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedPatient(apt.patient);
+                            setShowNewNote(true);
+                            setNewNote(prev => ({ 
+                              ...prev, 
+                              patientId: apt.patient.id,
+                              noteType: 'assessment'
+                            }));
+                          }}
+                          className="flex-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 text-sm font-semibold flex items-center justify-center gap-1"
+                        >
+                          <Stethoscope className="w-4 h-4" />
+                          Comprehensive
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -574,8 +633,8 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       <Plus className="w-5 h-5 text-pink-600" />
                     </div>
                     <div className="text-left">
-                      <h5 className="font-semibold text-slate-900">New Note</h5>
-                      <p className="text-sm text-slate-600">Create a general note</p>
+                      <h5 className="font-semibold text-slate-900">General Note</h5>
+                      <p className="text-sm text-slate-600">Create a general note (select patient first)</p>
                     </div>
                   </button>
                   
@@ -588,7 +647,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                     </div>
                     <div className="text-left">
                       <h5 className="font-semibold text-slate-900">Assessment</h5>
-                      <p className="text-sm text-slate-600">Record patient assessment</p>
+                      <p className="text-sm text-slate-600">Record patient assessment (select patient first)</p>
                     </div>
                   </button>
                   
@@ -601,7 +660,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                     </div>
                     <div className="text-left">
                       <h5 className="font-semibold text-slate-900">Intervention</h5>
-                      <p className="text-sm text-slate-600">Record care provided</p>
+                      <p className="text-sm text-slate-600">Record care provided (select patient first)</p>
                     </div>
                   </button>
                 </div>
@@ -628,90 +687,18 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                     </button>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Note Type</label>
-                        <select
-                          value={newNote.noteType}
-                          onChange={(e) => setNewNote(prev => ({ ...prev, noteType: e.target.value }))}
-                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
-                        >
-                          <option value="general">General</option>
-                          <option value="assessment">Assessment</option>
-                          <option value="intervention">Intervention</option>
-                          <option value="evaluation">Evaluation</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Patient</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="Search for a patient..."
-                            value={patientSearchTerm}
-                            onChange={(e) => {
-                              setPatientSearchTerm(e.target.value);
-                              setShowPatientDropdown(true);
-                            }}
-                            onFocus={() => setShowPatientDropdown(true)}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors"
-                          />
-                          {showPatientDropdown && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                              {filteredPatients.map((patient) => (
-                                <div
-                                  key={patient.id}
-                                  onClick={() => {
-                                    setSelectedPatient(patient);
-                                    setNewNote(prev => ({ ...prev, patientId: patient.id }));
-                                    setPatientSearchTerm(`${patient.firstName} ${patient.lastName} (${patient.patientNumber})`);
-                                    setShowPatientDropdown(false);
-                                  }}
-                                  className="px-4 py-3 hover:bg-pink-50 cursor-pointer border-b border-slate-100 last:border-b-0"
-                                >
-                                  <div className="font-semibold text-slate-900">
-                                    {patient.firstName} {patient.lastName}
-                                  </div>
-                                  <div className="text-sm text-slate-600">
-                                    ID: {patient.patientNumber}
-                                  </div>
-                                </div>
-                              ))}
-                              {filteredPatients.length === 0 && (
-                                <div className="px-4 py-3 text-slate-500 text-center">
-                                  No patients found
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-gradient-to-r from-pink-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <User className="w-8 h-8 text-pink-600" />
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Note Content</label>
-                      <textarea
-                        value={newNote.content}
-                        onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
-                        placeholder="Enter your nursing note here..."
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-colors resize-none h-32"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Select a Patient First</h3>
+                    <p className="text-slate-600 mb-6">Choose a patient from "Today's Patients" above to create a note</p>
+                    <div className="flex justify-center gap-4">
                       <button
                         onClick={() => setShowNewNote(false)}
                         className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 font-semibold"
                       >
                         Cancel
-                      </button>
-                      <button
-                        onClick={handleSaveNote}
-                        disabled={!newNote.patientId || !newNote.content}
-                        className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Save Note
                       </button>
                     </div>
                   </div>
