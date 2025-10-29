@@ -102,6 +102,18 @@ const NursePatientSummary: React.FC = () => {
   const [visitSummaries, setVisitSummaries] = useState<VisitSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'notes' | 'vitals'>('overview');
+  
+  // Pagination and filtering states
+  const [vitalsPage, setVitalsPage] = useState(1);
+  const [notesPage, setNotesPage] = useState(1);
+  const [vitalsPerPage] = useState(5);
+  const [notesPerPage] = useState(10);
+  const [vitalsSearchTerm, setVitalsSearchTerm] = useState('');
+  const [notesSearchTerm, setNotesSearchTerm] = useState('');
+  const [vitalsSortBy, setVitalsSortBy] = useState<'date' | 'type'>('date');
+  const [notesSortBy, setNotesSortBy] = useState<'date' | 'type'>('date');
+  const [vitalsSortOrder, setVitalsSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [notesSortOrder, setNotesSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     if (patientId) {
@@ -282,6 +294,81 @@ const NursePatientSummary: React.FC = () => {
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
+
+  // Helper functions for filtering and pagination
+  const getFilteredAndSortedVitals = () => {
+    let vitals = visitSummaries.filter(visit => visit.vitals);
+    
+    // Sort vitals
+    vitals.sort((a, b) => {
+      let comparison = 0;
+      if (vitalsSortBy === 'date') {
+        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+      return vitalsSortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return vitals;
+  };
+
+  const getFilteredAndSortedNotes = () => {
+    let allNotes = visitSummaries.flatMap(visit => 
+      visit.nursingNotes.map(note => ({ ...note, visitDate: visit.date }))
+    );
+    
+    // Filter by search term
+    if (notesSearchTerm) {
+      allNotes = allNotes.filter(note => 
+        note.content.toLowerCase().includes(notesSearchTerm.toLowerCase()) ||
+        note.noteType.toLowerCase().includes(notesSearchTerm.toLowerCase()) ||
+        (note.observations && note.observations.toLowerCase().includes(notesSearchTerm.toLowerCase())) ||
+        (note.interventions && note.interventions.toLowerCase().includes(notesSearchTerm.toLowerCase()))
+      );
+    }
+    
+    // Sort notes
+    allNotes.sort((a, b) => {
+      let comparison = 0;
+      if (notesSortBy === 'date') {
+        comparison = new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime();
+      } else if (notesSortBy === 'type') {
+        comparison = a.noteType.localeCompare(b.noteType);
+      }
+      return notesSortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return allNotes;
+  };
+
+  const getPaginatedVitals = () => {
+    const filteredVitals = getFilteredAndSortedVitals();
+    const startIndex = (vitalsPage - 1) * vitalsPerPage;
+    const endIndex = startIndex + vitalsPerPage;
+    return {
+      data: filteredVitals.slice(startIndex, endIndex),
+      total: filteredVitals.length,
+      totalPages: Math.ceil(filteredVitals.length / vitalsPerPage)
+    };
+  };
+
+  const getPaginatedNotes = () => {
+    const filteredNotes = getFilteredAndSortedNotes();
+    const startIndex = (notesPage - 1) * notesPerPage;
+    const endIndex = startIndex + notesPerPage;
+    return {
+      data: filteredNotes.slice(startIndex, endIndex),
+      total: filteredNotes.length,
+      totalPages: Math.ceil(filteredNotes.length / notesPerPage)
+    };
+  };
+
+  // Reset pagination when switching tabs
+  useEffect(() => {
+    setVitalsPage(1);
+    setNotesPage(1);
+    setVitalsSearchTerm('');
+    setNotesSearchTerm('');
+  }, [activeTab]);
 
   if (loading) {
     return (
@@ -600,11 +687,46 @@ const NursePatientSummary: React.FC = () => {
           {activeTab === 'notes' && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
-                <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-3">
-                  <FileText className="w-6 h-6 text-pink-600" />
-                  All Nursing Notes
-                </h3>
-                {visitSummaries.flatMap(v => v.nursingNotes).length === 0 ? (
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-pink-600" />
+                    All Nursing Notes
+                  </h3>
+                  <div className="text-sm text-slate-600">
+                    {getPaginatedNotes().total} notes found
+                  </div>
+                </div>
+
+                {/* Controls */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="Search notes..."
+                      value={notesSearchTerm}
+                      onChange={(e) => setNotesSearchTerm(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={notesSortBy}
+                      onChange={(e) => setNotesSortBy(e.target.value as 'date' | 'type')}
+                      className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    >
+                      <option value="date">Sort by Date</option>
+                      <option value="type">Sort by Type</option>
+                    </select>
+                    <button
+                      onClick={() => setNotesSortOrder(notesSortOrder === 'asc' ? 'desc' : 'asc')}
+                      className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    >
+                      {notesSortOrder === 'asc' ? '↑' : '↓'}
+                    </button>
+                  </div>
+                </div>
+
+                {getPaginatedNotes().total === 0 ? (
                   <div className="text-center py-12">
                     <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                     <h4 className="text-lg font-semibold text-slate-600 mb-2">No Nursing Notes</h4>
@@ -612,7 +734,7 @@ const NursePatientSummary: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {visitSummaries.flatMap(v => v.nursingNotes).map((note) => (
+                    {getPaginatedNotes().data.map((note) => (
                       <div key={note.id} className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-md transition-all duration-200">
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-3">
@@ -624,6 +746,11 @@ const NursePatientSummary: React.FC = () => {
                               <p className="text-sm text-slate-600">
                                 {formatDateTimeToDDMMYYYYHHMM(note.recordedAt)}
                               </p>
+                              {note.visitDate && (
+                                <p className="text-xs text-slate-500">
+                                  Visit: {formatDateToDDMMYYYY(note.visitDate)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -661,6 +788,44 @@ const NursePatientSummary: React.FC = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Pagination */}
+                {getPaginatedNotes().totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
+                    <div className="text-sm text-slate-600">
+                      Showing {((notesPage - 1) * notesPerPage) + 1} to {Math.min(notesPage * notesPerPage, getPaginatedNotes().total)} of {getPaginatedNotes().total} notes
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setNotesPage(Math.max(1, notesPage - 1))}
+                        disabled={notesPage === 1}
+                        className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: getPaginatedNotes().totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setNotesPage(page)}
+                          className={`px-3 py-2 border rounded-lg ${
+                            page === notesPage
+                              ? 'bg-pink-500 text-white border-pink-500'
+                              : 'border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setNotesPage(Math.min(getPaginatedNotes().totalPages, notesPage + 1))}
+                        disabled={notesPage === getPaginatedNotes().totalPages}
+                        className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -668,11 +833,45 @@ const NursePatientSummary: React.FC = () => {
           {activeTab === 'vitals' && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
-                <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-3">
-                  <Heart className="w-6 h-6 text-pink-600" />
-                  Vital Signs History
-                </h3>
-                {visitSummaries.filter(v => v.vitals).length === 0 ? (
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-3">
+                    <Heart className="w-6 h-6 text-pink-600" />
+                    Vital Signs History
+                  </h3>
+                  <div className="text-sm text-slate-600">
+                    {getPaginatedVitals().total} records found
+                  </div>
+                </div>
+
+                {/* Controls */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="Search vitals..."
+                      value={vitalsSearchTerm}
+                      onChange={(e) => setVitalsSearchTerm(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={vitalsSortBy}
+                      onChange={(e) => setVitalsSortBy(e.target.value as 'date' | 'type')}
+                      className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    >
+                      <option value="date">Sort by Date</option>
+                    </select>
+                    <button
+                      onClick={() => setVitalsSortOrder(vitalsSortOrder === 'asc' ? 'desc' : 'asc')}
+                      className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                    >
+                      {vitalsSortOrder === 'asc' ? '↑' : '↓'}
+                    </button>
+                  </div>
+                </div>
+
+                {getPaginatedVitals().total === 0 ? (
                   <div className="text-center py-12">
                     <Heart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                     <h4 className="text-lg font-semibold text-slate-600 mb-2">No Vital Signs Recorded</h4>
@@ -680,9 +879,7 @@ const NursePatientSummary: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {visitSummaries
-                      .filter(visit => visit.vitals)
-                      .map((visit, index) => (
+                    {getPaginatedVitals().data.map((visit, index) => (
                         <div key={index} className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-md transition-all duration-200">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-4">
@@ -825,6 +1022,44 @@ const NursePatientSummary: React.FC = () => {
                           )}
                         </div>
                       ))}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {getPaginatedVitals().totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
+                    <div className="text-sm text-slate-600">
+                      Showing {((vitalsPage - 1) * vitalsPerPage) + 1} to {Math.min(vitalsPage * vitalsPerPage, getPaginatedVitals().total)} of {getPaginatedVitals().total} records
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setVitalsPage(Math.max(1, vitalsPage - 1))}
+                        disabled={vitalsPage === 1}
+                        className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: getPaginatedVitals().totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setVitalsPage(page)}
+                          className={`px-3 py-2 border rounded-lg ${
+                            page === vitalsPage
+                              ? 'bg-pink-500 text-white border-pink-500'
+                              : 'border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setVitalsPage(Math.min(getPaginatedVitals().totalPages, vitalsPage + 1))}
+                        disabled={vitalsPage === getPaginatedVitals().totalPages}
+                        className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
