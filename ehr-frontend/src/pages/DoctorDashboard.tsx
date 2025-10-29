@@ -81,6 +81,10 @@ const DoctorDashboard: React.FC = () => {
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [referralReason, setReferralReason] = useState('');
+  const [referralInstructions, setReferralInstructions] = useState('');
+  const [currentReferralAppointment, setCurrentReferralAppointment] = useState<Appointment | null>(null);
   const [vitalsForm, setVitalsForm] = useState({
     bloodPressure: '',
     heartRate: '',
@@ -315,7 +319,7 @@ const DoctorDashboard: React.FC = () => {
           icon: <AlertCircle className="w-4 h-4" />,
           color: 'text-red-600'
         });
-      } else if (systolic > 140 || diastolic > 90) {
+      } else if (systolic > 160 || diastolic > 100) {
         alerts.push({
           type: 'warning',
           message: `Elevated Blood Pressure: ${vitals.bloodPressure} mmHg`,
@@ -334,7 +338,7 @@ const DoctorDashboard: React.FC = () => {
           icon: <Heart className="w-4 h-4" />,
           color: 'text-red-600'
         });
-      } else if (vitals.heartRate > 100 || vitals.heartRate < 60) {
+      } else if (vitals.heartRate > 110 || vitals.heartRate < 55) {
         alerts.push({
           type: 'warning',
           message: `Elevated Heart Rate: ${vitals.heartRate} bpm`,
@@ -353,7 +357,7 @@ const DoctorDashboard: React.FC = () => {
           icon: <Thermometer className="w-4 h-4" />,
           color: 'text-red-600'
         });
-      } else if (vitals.temperature > 38.0 || vitals.temperature < 36.0) {
+      } else if (vitals.temperature > 38.5 || vitals.temperature < 35.5) {
         alerts.push({
           type: 'warning',
           message: `Elevated Temperature: ${vitals.temperature}°C`,
@@ -546,6 +550,30 @@ const DoctorDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error saving notes:', error);
       showError('Error', 'Failed to save notes');
+    }
+  };
+
+  const handleReferralSubmit = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !currentReferralAppointment) return;
+
+      // Update appointment status to 'referred_to_nurse'
+      await ehrApi.updateAppointmentStatus(currentReferralAppointment.id, 'referred_to_nurse', token, tenantSlug!);
+      
+      // Add referral notes
+      await ehrApi.updateAppointment(currentReferralAppointment.id, {
+        notes: `REFERRED TO NURSE\nReason: ${referralReason}\nInstructions: ${referralInstructions}`
+      }, token, tenantSlug!);
+      
+      showSuccess('Success', 'Patient referred to nurse for treatment');
+      setShowReferralModal(false);
+      setReferralReason('');
+      setReferralInstructions('');
+      fetchTodayAppointments();
+    } catch (error) {
+      console.error('Error referring patient:', error);
+      showError('Error', 'Failed to refer patient to nurse');
     }
   };
 
@@ -1000,6 +1028,16 @@ const DoctorDashboard: React.FC = () => {
                               <User className="w-4 h-4" />
                               View Patient
                             </button>
+                            <button
+                              onClick={() => {
+                                setCurrentReferralAppointment(appointment);
+                                setShowReferralModal(true);
+                              }}
+                              className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm flex items-center gap-1"
+                            >
+                              <Stethoscope className="w-4 h-4" />
+                              Refer to Nurse
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -1332,6 +1370,101 @@ const DoctorDashboard: React.FC = () => {
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all font-medium shadow-lg"
                 >
                   Save Notes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Referral Modal */}
+      {showReferralModal && currentReferralAppointment && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-orange-50 to-red-50 border-b border-orange-200/50 px-6 py-5 rounded-t-3xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                    <Stethoscope className="w-7 h-7 text-orange-600" />
+                    Refer Patient to Nurse
+                  </h2>
+                  <p className="text-slate-600 mt-1">
+                    {currentReferralAppointment.patient.firstName} {currentReferralAppointment.patient.lastName} • {currentReferralAppointment.patient.patientNumber}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowReferralModal(false)}
+                  className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Reason for Referral *
+                </label>
+                <select
+                  value={referralReason}
+                  onChange={(e) => setReferralReason(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                  required
+                >
+                  <option value="">Select reason...</option>
+                  <option value="Injection">Injection</option>
+                  <option value="IV Drip">IV Drip</option>
+                  <option value="Wound Dressing">Wound Dressing</option>
+                  <option value="Vital Signs">Vital Signs Monitoring</option>
+                  <option value="Medication Administration">Medication Administration</option>
+                  <option value="Blood Draw">Blood Draw</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Specific Instructions
+                </label>
+                <textarea
+                  value={referralInstructions}
+                  onChange={(e) => setReferralInstructions(e.target.value)}
+                  placeholder="Enter specific instructions for the nurse..."
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors h-32 resize-none"
+                />
+              </div>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-orange-900 mb-1">Important</h4>
+                    <p className="text-orange-800 text-sm">
+                      This will change the appointment status to "Referred to Nurse" and the patient will appear in the nurse's queue for treatment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowReferralModal(false)}
+                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReferralSubmit}
+                  disabled={!referralReason}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl hover:from-orange-700 hover:to-red-700 transition-all font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Refer to Nurse
                 </button>
               </div>
             </div>

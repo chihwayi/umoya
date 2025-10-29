@@ -342,7 +342,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                           <p><span className="font-medium">Duration:</span> {appointment.durationMinutes} min</p>
                         </div>
                         <div>
-                          <p><span className="font-medium">Phone:</span> {appointment.patient.phone}</p>
+                          <p><span className="font-medium">Phone:</span> {appointment.patient.phone || 'Not provided'}</p>
                           {getWaitTime(appointment) && (
                             <p className="text-orange-600 font-medium">
                               <Clock className="w-3 h-3 inline mr-1" />
