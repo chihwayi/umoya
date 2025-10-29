@@ -76,6 +76,18 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     }
   };
 
+  const getStatusOrder = (status: string) => {
+    switch (status) {
+      case 'in-progress': return 1;
+      case 'confirmed': return 2;
+      case 'scheduled': return 3;
+      case 'completed': return 4;
+      case 'cancelled': return 5;
+      case 'no-show': return 6;
+      default: return 7;
+    }
+  };
+
   const filteredAppointments = appointments
     .filter(appointment => {
       const matchesSearch = 
@@ -101,6 +113,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
           break;
         case 'name':
           comparison = `${a.patient.firstName} ${a.patient.lastName}`.localeCompare(`${b.patient.firstName} ${b.patient.lastName}`);
+          break;
+        case 'status':
+          comparison = getStatusOrder(a.status) - getStatusOrder(b.status);
           break;
         default:
           comparison = 0;
@@ -135,6 +150,28 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
       case 'in-progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const handleStatusChange = async (appointmentId: string, newStatus: string) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      
+      if (!token || !tenantSlug) {
+        console.error('Authentication required');
+        return;
+      }
+
+      // Import the API function
+      const { ehrApi } = await import('../services/api');
+      
+      await ehrApi.updateAppointmentStatus(appointmentId, newStatus, token, tenantSlug);
+      
+      // Refresh the page to show updated status
+      window.location.reload();
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
     }
   };
 
@@ -248,6 +285,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
               <option value="priority">Priority</option>
               <option value="time">Time</option>
               <option value="name">Name</option>
+              <option value="status">Status</option>
             </select>
           </div>
           
@@ -352,6 +390,37 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     <ClipboardList className="w-4 h-4" />
                     Triage
                   </button>
+                  
+                  {/* Status Change Buttons */}
+                  {appointment.status === 'scheduled' && (
+                    <button
+                      onClick={() => handleStatusChange(appointment.id, 'confirmed')}
+                      className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Confirm
+                    </button>
+                  )}
+                  
+                  {appointment.status === 'confirmed' && (
+                    <button
+                      onClick={() => handleStatusChange(appointment.id, 'in-progress')}
+                      className="px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
+                    >
+                      <Activity className="w-4 h-4" />
+                      Start
+                    </button>
+                  )}
+                  
+                  {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
+                    <button
+                      onClick={() => handleStatusChange(appointment.id, 'completed')}
+                      className="px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Complete
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

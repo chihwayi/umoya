@@ -35,6 +35,8 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
     durationMinutes: 30,
     reason: '',
     notes: '',
+    priorityLevel: 'normal',
+    status: 'scheduled',
   });
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -200,6 +202,8 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         appointmentType: formData.appointmentType,
         reason: formData.reason || undefined,
         notes: formData.notes || undefined,
+        priorityLevel: formData.priorityLevel,
+        status: formData.status,
       };
 
       await ehrApi.createAppointment(payload, token, tenantSlug);
@@ -409,6 +413,45 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
                 <option value={60}>1 hour</option>
                 <option value={90}>1.5 hours</option>
                 <option value={120}>2 hours</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Priority and Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Priority Level
+              </label>
+              <select
+                name="priorityLevel"
+                value={formData.priorityLevel}
+                onChange={handleInputChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="scheduled">Scheduled</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="in-progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="no-show">No Show</option>
               </select>
             </div>
           </div>
