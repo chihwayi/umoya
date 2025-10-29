@@ -1,6 +1,6 @@
 import { Injectable, NestMiddleware, BadRequestException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { TenantSimpleService } from '../services/tenant-simple.service';
+import { TenantService } from '../services/tenant.service';
 
 export interface RequestWithTenant extends Request {
   tenantId?: string;
@@ -10,7 +10,7 @@ export interface RequestWithTenant extends Request {
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
-  constructor(private tenantService: TenantSimpleService) {}
+  constructor(private tenantService: TenantService) {}
 
   async use(req: RequestWithTenant, res: Response, next: NextFunction) {
     const tenantId = (req as any).headers['x-tenant-id'] as string;

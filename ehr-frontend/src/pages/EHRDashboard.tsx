@@ -3,7 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Users, Calendar, FileText, Pill, TestTube, CreditCard, 
   BarChart3, Settings, LogOut, Bell, Search, Plus,
-  Stethoscope, Heart, Activity, Clock, User, Menu, X
+  Stethoscope, Heart, Activity, Clock, User, Menu, X,
+  Shield, Database, Server, Key, Eye, AlertTriangle, 
+  Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
+  Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
+  Phone, MapPin, Building, Zap, TrendingUp, Users2
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification.tsx';
 
@@ -28,11 +32,23 @@ const EHRDashboard: React.FC = () => {
     if (userData) {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
+      
+      // Redirect doctors directly to their dashboard
+      if (parsedUser.role === 'doctor') {
+        navigate(`/ehr/${tenantSlug}/doctor`);
+        return;
+      }
+      // Redirect nurses directly to nurse dashboard
+      if (parsedUser.role === 'nurse') {
+        navigate(`/ehr/${tenantSlug}/nurse`);
+        return;
+      }
+      
       showSuccess('Welcome Back!', `Hello ${parsedUser.firstName}, ready to help patients today?`);
     } else {
       navigate(`/ehr/${tenantSlug}`);
     }
-  }, [navigate, showSuccess]);
+  }, [navigate, showSuccess, tenantSlug]);
 
   const handleLogout = () => {
     localStorage.removeItem('ehr_token');
@@ -51,6 +67,8 @@ const EHRDashboard: React.FC = () => {
     switch (role) {
       case 'doctor':
         return [
+          { icon: Stethoscope, label: 'Doctor Dashboard', desc: 'Today\'s schedule & patients', color: 'from-blue-500 to-cyan-500', route: 'doctor' },
+          { icon: Settings, label: 'Admin Dashboard', desc: 'System administration', color: 'from-gray-500 to-slate-500', route: 'dashboard' },
           ...baseActions,
           { icon: FileText, label: 'Medical Records', desc: 'Patient history & notes', color: 'from-purple-500 to-indigo-500' },
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
@@ -59,10 +77,11 @@ const EHRDashboard: React.FC = () => {
         ];
       case 'nurse':
         return [
-          ...baseActions,
-          { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500' },
-          { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500' },
-          { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500' },
+          { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500', route: 'patients' },
+          { icon: Calendar, label: 'Nurse Dashboard', desc: 'Today\'s schedule', color: 'from-emerald-500 to-teal-500', route: 'nurse' },
+          { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
+          { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
+          { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
         ];
       case 'receptionist':
         return [
@@ -78,22 +97,36 @@ const EHRDashboard: React.FC = () => {
         ];
       case 'admin':
         return [
-          ...baseActions,
-          { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff', color: 'from-slate-500 to-gray-500', route: 'users' },
-          { icon: Settings, label: 'System Settings', desc: 'Configure system', color: 'from-purple-500 to-violet-500' },
-          { icon: BarChart3, label: 'Reports', desc: 'Clinic analytics', color: 'from-emerald-500 to-green-500' },
+          { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff & roles', color: 'from-slate-500 to-gray-500', route: 'users' },
+          { icon: Shield, label: 'Security & Access', desc: 'User permissions & security', color: 'from-red-500 to-rose-500', route: 'security' },
+          { icon: Eye, label: 'Audit Logs', desc: 'System activity & compliance', color: 'from-indigo-500 to-blue-500', route: 'audit' },
+          { icon: Database, label: 'Data Management', desc: 'Backup, restore & migration', color: 'from-purple-500 to-violet-500', route: 'data' },
+          { icon: Building, label: 'Tenant Settings', desc: 'Clinic configuration', color: 'from-emerald-500 to-teal-500', route: 'tenant-settings' },
+          { icon: Server, label: 'System Health', desc: 'Performance & monitoring', color: 'from-orange-500 to-amber-500', route: 'health' },
+          { icon: BarChart3, label: 'Analytics & Reports', desc: 'Business intelligence', color: 'from-cyan-500 to-blue-500', route: 'reports' },
+          { icon: Settings, label: 'System Settings', desc: 'Global configuration', color: 'from-gray-500 to-slate-500', route: 'settings' },
         ];
       default:
         return baseActions;
     }
   };
 
-  const quickStats = [
-    { label: 'Today\'s Appointments', value: '12', icon: Calendar, color: 'text-blue-600' },
-    { label: 'Active Patients', value: '248', icon: Users, color: 'text-emerald-600' },
-    { label: 'Pending Results', value: '5', icon: TestTube, color: 'text-orange-600' },
-    { label: 'Messages', value: '3', icon: Bell, color: 'text-purple-600' },
-  ];
+  const getQuickStats = (role: string) => {
+    if (role === 'admin') {
+      return [
+        { label: 'Active Users', value: '24', icon: Users2, color: 'text-blue-600' },
+        { label: 'System Uptime', value: '99.9%', icon: Server, color: 'text-emerald-600' },
+        { label: 'Storage Used', value: '2.4GB', icon: HardDrive, color: 'text-orange-600' },
+        { label: 'Security Alerts', value: '0', icon: Shield, color: 'text-red-600' },
+      ];
+    }
+    return [
+      { label: 'Today\'s Appointments', value: '12', icon: Calendar, color: 'text-blue-600' },
+      { label: 'Active Patients', value: '248', icon: Users, color: 'text-emerald-600' },
+      { label: 'Pending Results', value: '5', icon: TestTube, color: 'text-orange-600' },
+      { label: 'Messages', value: '3', icon: Bell, color: 'text-purple-600' },
+    ];
+  };
 
   if (!user) return null;
 
@@ -148,21 +181,25 @@ const EHRDashboard: React.FC = () => {
               <span>Dashboard</span>
             </button>
             
-            <button 
-              onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
-              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <Users className="w-5 h-5" />
-              <span>Patients</span>
-            </button>
+            {user?.role !== 'admin' && (
+              <button 
+                onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <Users className="w-5 h-5" />
+                <span>Patients</span>
+              </button>
+            )}
             
-            <button 
-              onClick={() => navigate(`/ehr/${tenantSlug}/appointments`)}
-              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <Calendar className="w-5 h-5" />
-              <span>Appointments</span>
-            </button>
+            {user?.role !== 'admin' && (
+              <button 
+                onClick={() => navigate(`/ehr/${tenantSlug}/appointments`)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <Calendar className="w-5 h-5" />
+                <span>Appointments</span>
+              </button>
+            )}
             
             {user?.role === 'admin' && (
               <button 
@@ -208,7 +245,7 @@ const EHRDashboard: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white">
                   Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user.firstName}
                 </h1>
-                <p className="text-blue-100">Ready to provide excellent patient care?</p>
+                <p className="text-blue-100">{user.role === 'admin' ? 'System operations and configuration' : 'Ready to provide excellent patient care?'}</p>
               </div>
             </div>
             
@@ -233,7 +270,7 @@ const EHRDashboard: React.FC = () => {
         <main className="p-6">
           {/* Quick Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {quickStats.map((stat, index) => (
+            {getQuickStats(user.role).map((stat, index) => (
               <div key={index} className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50">
                 <div className="flex items-center justify-between">
                   <div>
@@ -250,7 +287,7 @@ const EHRDashboard: React.FC = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-slate-800">Quick Actions</h2>
-              <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all">
+              <button onClick={() => navigate(`/ehr/${tenantSlug}/patients`)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all">
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Patient</span>
               </button>
@@ -273,20 +310,65 @@ const EHRDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* System Status - Admin Only */}
+          {user.role === 'admin' && (
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 mb-8">
+              <h3 className="text-lg font-bold text-slate-800 mb-4">System Status</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200">
+                  <div className="p-2 bg-green-500 rounded-lg">
+                    <Server className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-green-800">Database</p>
+                    <p className="text-sm text-green-600">Online & Healthy</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200">
+                  <div className="p-2 bg-green-500 rounded-lg">
+                    <Wifi className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-green-800">API Services</p>
+                    <p className="text-sm text-green-600">All Systems Operational</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                  <div className="p-2 bg-yellow-500 rounded-lg">
+                    <HardDrive className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-yellow-800">Storage</p>
+                    <p className="text-sm text-yellow-600">75% Used (2.4GB/3.2GB)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Recent Activity */}
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activity</h3>
             <div className="space-y-4">
-              {[
-                { time: '10 minutes ago', action: 'Patient consultation completed', patient: 'John Doe' },
-                { time: '25 minutes ago', action: 'Lab results reviewed', patient: 'Sarah Smith' },
-                { time: '1 hour ago', action: 'Prescription issued', patient: 'Mike Johnson' },
-              ].map((activity, index) => (
+              {user.role === 'admin' ? [
+                { time: '5 minutes ago', action: 'User Dr. Smith logged in', user: 'System', icon: Users, color: 'bg-green-500' },
+                { time: '15 minutes ago', action: 'Database backup completed', user: 'System', icon: Database, color: 'bg-blue-500' },
+                { time: '1 hour ago', action: 'Security scan completed', user: 'System', icon: Shield, color: 'bg-emerald-500' },
+                { time: '2 hours ago', action: 'New user account created', user: 'Admin', icon: User, color: 'bg-purple-500' },
+                { time: '3 hours ago', action: 'System settings updated', user: 'Admin', icon: Settings, color: 'bg-orange-500' },
+              ] : [
+                { time: '10 minutes ago', action: 'Patient consultation completed', user: 'John Doe', icon: Stethoscope, color: 'bg-blue-500' },
+                { time: '25 minutes ago', action: 'Lab results reviewed', user: 'Sarah Smith', icon: TestTube, color: 'bg-orange-500' },
+                { time: '1 hour ago', action: 'Prescription issued', user: 'Mike Johnson', icon: Pill, color: 'bg-green-500' },
+              ]}.map((activity, index) => (
                 <div key={index} className="flex items-center gap-4 p-3 hover:bg-slate-50 rounded-lg transition-colors">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-slate-800 font-medium">{activity.action}</p>
-                    <p className="text-slate-600 text-sm">Patient: {activity.patient}</p>
+                  <div className={`w-2 h-2 ${activity.color} rounded-full`}></div>
+                  <div className="flex items-center gap-3">
+                    <activity.icon className="w-4 h-4 text-slate-500" />
+                    <div className="flex-1">
+                      <p className="text-slate-800 font-medium">{activity.action}</p>
+                      <p className="text-slate-600 text-sm">{user.role === 'admin' ? `By: ${activity.user}` : `Patient: ${activity.user}`}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 text-slate-500 text-sm">
                     <Clock className="w-4 h-4" />

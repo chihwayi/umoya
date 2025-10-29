@@ -110,6 +110,240 @@ export class DatabaseProvisioningService {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
       
+      CREATE TABLE appointments (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          appointment_date TIMESTAMP WITH TIME ZONE NOT NULL,
+          duration_minutes INTEGER DEFAULT 30,
+          appointment_type VARCHAR(100) NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show')),
+          reason TEXT,
+          notes TEXT,
+          patient_instructions TEXT,
+          priority_level VARCHAR(50) DEFAULT 'normal' CHECK (priority_level IN ('low', 'normal', 'high', 'urgent')),
+          virtual_meeting_url VARCHAR(500),
+          is_telehealth BOOLEAN DEFAULT false,
+          check_in_time TIMESTAMP WITH TIME ZONE,
+          actual_start_time TIMESTAMP WITH TIME ZONE,
+          actual_end_time TIMESTAMP WITH TIME ZONE,
+          wait_time_minutes INTEGER,
+          recurring_pattern VARCHAR(100),
+          parent_appointment_id UUID REFERENCES appointments(id),
+          cancellation_reason TEXT,
+          preparation_notes TEXT,
+          estimated_cost DECIMAL(10,2),
+          insurance_verified BOOLEAN DEFAULT false,
+          reminder_sent_count INTEGER DEFAULT 0,
+          last_reminder_sent TIMESTAMP WITH TIME ZONE,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE vitals (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          blood_pressure VARCHAR(20),
+          heart_rate INTEGER,
+          temperature DECIMAL(4,2),
+          oxygen_saturation INTEGER,
+          respiratory_rate INTEGER,
+          weight DECIMAL(5,2),
+          height DECIMAL(5,2),
+          bmi DECIMAL(4,2),
+          pain_level INTEGER CHECK (pain_level >= 0 AND pain_level <= 10),
+          blood_glucose DECIMAL(5,2),
+          notes TEXT,
+          recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          recorded_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE triage_assessments (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          chief_complaint TEXT NOT NULL,
+          onset TEXT,
+          pain_score INTEGER CHECK (pain_score >= 0 AND pain_score <= 10),
+          allergies TEXT,
+          medications TEXT,
+          history TEXT,
+          observations TEXT,
+          priority VARCHAR(20) NOT NULL CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+          severity_score INTEGER CHECK (severity_score >= 0 AND severity_score <= 10),
+          recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          recorded_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE nursing_notes (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          note_type VARCHAR(50) NOT NULL CHECK (note_type IN ('general', 'assessment', 'intervention', 'evaluation')),
+          content TEXT NOT NULL,
+          vital_signs TEXT,
+          medications TEXT,
+          observations TEXT,
+          interventions TEXT,
+          outcomes TEXT,
+          recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          recorded_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE medical_records (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          record_type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          file_path VARCHAR(500),
+          file_type VARCHAR(100),
+          file_size INTEGER,
+          created_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE prescriptions (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          medication_name VARCHAR(255) NOT NULL,
+          dosage VARCHAR(100) NOT NULL,
+          frequency VARCHAR(100) NOT NULL,
+          duration VARCHAR(100) NOT NULL,
+          instructions TEXT,
+          quantity INTEGER,
+          refills INTEGER DEFAULT 0,
+          is_active BOOLEAN DEFAULT true,
+          prescribed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE lab_results (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          test_name VARCHAR(255) NOT NULL,
+          test_type VARCHAR(100) NOT NULL,
+          result_value VARCHAR(255),
+          result_unit VARCHAR(50),
+          reference_range VARCHAR(100),
+          status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'abnormal', 'critical')),
+          notes TEXT,
+          ordered_by UUID NOT NULL REFERENCES users(id),
+          reviewed_by UUID REFERENCES users(id),
+          ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          completed_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE billing (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          appointment_id UUID REFERENCES appointments(id),
+          billing_date DATE NOT NULL,
+          total_amount DECIMAL(10,2) NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'partial', 'overdue', 'cancelled')),
+          payment_method VARCHAR(50),
+          payment_reference VARCHAR(255),
+          notes TEXT,
+          created_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE billing_items (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          billing_id UUID NOT NULL REFERENCES billing(id) ON DELETE CASCADE,
+          item_name VARCHAR(255) NOT NULL,
+          item_type VARCHAR(100) NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          unit_price DECIMAL(10,2) NOT NULL,
+          total_price DECIMAL(10,2) NOT NULL,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE medical_aid_claims (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          appointment_id UUID REFERENCES appointments(id),
+          claim_number VARCHAR(100) UNIQUE NOT NULL,
+          medical_aid_name VARCHAR(100) NOT NULL,
+          medical_aid_number VARCHAR(100) NOT NULL,
+          claim_amount DECIMAL(10,2) NOT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'approved', 'rejected', 'pending')),
+          submission_date DATE NOT NULL,
+          response_date DATE,
+          response_notes TEXT,
+          created_by UUID NOT NULL REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      CREATE TABLE audit_logs (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID REFERENCES users(id),
+          action VARCHAR(100) NOT NULL,
+          table_name VARCHAR(100) NOT NULL,
+          record_id UUID,
+          old_values JSONB,
+          new_values JSONB,
+          ip_address INET,
+          user_agent TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      -- Create indexes for performance
+      CREATE INDEX idx_appointments_patient_id ON appointments(patient_id);
+      CREATE INDEX idx_appointments_doctor_id ON appointments(doctor_id);
+      CREATE INDEX idx_appointments_date ON appointments(appointment_date);
+      CREATE INDEX idx_appointments_status ON appointments(status);
+      CREATE INDEX idx_appointments_parent_id ON appointments(parent_appointment_id);
+      CREATE INDEX idx_appointments_priority ON appointments(priority_level);
+      CREATE INDEX idx_appointments_telehealth ON appointments(is_telehealth);
+      CREATE INDEX idx_appointments_created_by ON appointments(created_by);
+      
+      CREATE INDEX idx_vitals_patient_id ON vitals(patient_id);
+      CREATE INDEX idx_vitals_recorded_at ON vitals(recorded_at);
+      CREATE INDEX idx_vitals_recorded_by ON vitals(recorded_by);
+      
+      CREATE INDEX idx_triage_patient_id ON triage_assessments(patient_id);
+      CREATE INDEX idx_triage_priority ON triage_assessments(priority);
+      CREATE INDEX idx_triage_recorded_at ON triage_assessments(recorded_at);
+      CREATE INDEX idx_triage_recorded_by ON triage_assessments(recorded_by);
+      
+      CREATE INDEX idx_nursing_notes_patient_id ON nursing_notes(patient_id);
+      CREATE INDEX idx_nursing_notes_note_type ON nursing_notes(note_type);
+      CREATE INDEX idx_nursing_notes_recorded_at ON nursing_notes(recorded_at);
+      CREATE INDEX idx_nursing_notes_recorded_by ON nursing_notes(recorded_by);
+      
+      CREATE INDEX idx_medical_records_patient_id ON medical_records(patient_id);
+      CREATE INDEX idx_medical_records_type ON medical_records(record_type);
+      
+      CREATE INDEX idx_prescriptions_patient_id ON prescriptions(patient_id);
+      CREATE INDEX idx_prescriptions_doctor_id ON prescriptions(doctor_id);
+      
+      CREATE INDEX idx_lab_results_patient_id ON lab_results(patient_id);
+      CREATE INDEX idx_lab_results_status ON lab_results(status);
+      
+      CREATE INDEX idx_billing_patient_id ON billing(patient_id);
+      CREATE INDEX idx_billing_status ON billing(status);
+      
+      CREATE INDEX idx_claims_patient_id ON medical_aid_claims(patient_id);
+      CREATE INDEX idx_claims_status ON medical_aid_claims(status);
+      
+      CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+      CREATE INDEX idx_audit_logs_table_name ON audit_logs(table_name);
+      CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+      
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
       BEGIN
@@ -122,6 +356,33 @@ export class DatabaseProvisioningService {
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
       
       CREATE TRIGGER update_patients_updated_at BEFORE UPDATE ON patients
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_appointments_updated_at BEFORE UPDATE ON appointments
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_vitals_updated_at BEFORE UPDATE ON vitals
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_triage_updated_at BEFORE UPDATE ON triage_assessments
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_medical_records_updated_at BEFORE UPDATE ON medical_records
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON prescriptions
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_lab_results_updated_at BEFORE UPDATE ON lab_results
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      
+      CREATE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     `;
     

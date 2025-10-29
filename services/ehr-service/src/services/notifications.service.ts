@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
-import { Appointment } from '../entities/appointment.entity';
+import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
 import { Bill } from '../entities/billing.entity';
@@ -39,7 +39,7 @@ export class NotificationsService {
   }
 
   async sendAppointmentReminder(appointmentId: string, tenantDb: DataSource) {
-    const appointmentRepo = tenantDb.getRepository(Appointment);
+    const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     const appointment = await appointmentRepo.findOne({
       where: { id: appointmentId },
       relations: ['patient']

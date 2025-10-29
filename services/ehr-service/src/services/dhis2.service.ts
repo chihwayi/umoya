@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
-import { Appointment } from '../entities/appointment.entity';
+import { AppointmentSimple } from '../entities/appointment-simple.entity';
 
 @Injectable()
 export class Dhis2Service {
@@ -137,7 +137,7 @@ export class Dhis2Service {
 
   async sendAggregateReport(reportData: any, tenantDb: DataSource) {
     // Generate aggregate data from EHR
-    const appointmentRepository = tenantDb.getRepository(Appointment);
+    const appointmentRepository = tenantDb.getRepository(AppointmentSimple);
     
     const totalAppointments = await appointmentRepository.count();
     const completedAppointments = await appointmentRepository.count({

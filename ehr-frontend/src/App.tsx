@@ -11,6 +11,11 @@ import ProfileSettings from './pages/ProfileSettings.tsx';
 import PatientManagement from './pages/PatientManagement.tsx';
 import PatientDetail from './pages/PatientDetail.tsx';
 import AppointmentManagement from './pages/AppointmentManagement.tsx';
+import DoctorDashboard from './pages/DoctorDashboard.tsx';
+import DoctorPatientDetail from './pages/DoctorPatientDetail.tsx';
+import DoctorAppointmentManagement from './pages/DoctorAppointmentManagement.tsx';
+import DoctorPatientsList from './pages/DoctorPatientsList.tsx';
+import NurseDashboard from './pages/NurseDashboard.tsx';
 
 
 function App() {
@@ -27,6 +32,18 @@ function App() {
             <Route path="/ehr/:tenantSlug/patients" element={<PatientManagement />} />
             <Route path="/ehr/:tenantSlug/patients/:patientId" element={<PatientDetail />} />
             <Route path="/ehr/:tenantSlug/appointments" element={<AppointmentManagement />} />
+            <Route path="/ehr/:tenantSlug/doctor" element={<DoctorDashboard />} />
+            <Route path="/ehr/:tenantSlug/doctor/patients" element={<DoctorPatientsList />} />
+            <Route path="/ehr/:tenantSlug/doctor/patients/:patientId" element={<DoctorPatientDetail />} />
+            <Route path="/ehr/:tenantSlug/doctor/appointments" element={<DoctorAppointmentManagement />} />
+            {/* Nurse routes */}
+            <Route path="/ehr/:tenantSlug/nurse" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/queue" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/vitals" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/triage" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/notes" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/care-plans" element={<NurseDashboard />} />
+            <Route path="/ehr/:tenantSlug/nurse/medications" element={<NurseDashboard />} />
             <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
           </Routes>
         </Router>

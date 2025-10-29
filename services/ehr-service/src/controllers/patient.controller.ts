@@ -8,6 +8,7 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @ApiTags('Patient Management')
 @ApiBearerAuth()
 @Controller('patients')
+@UseGuards(JwtAuthGuard)
 export class PatientController {
   constructor(private patientService: PatientService) {}
 

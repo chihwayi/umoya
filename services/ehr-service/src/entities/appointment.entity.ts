@@ -39,6 +39,9 @@ export class Appointment {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ name: 'patient_instructions', type: 'text', nullable: true })
+  patientInstructions: string;
+
   @Column({ name: 'priority_level', default: 'normal' })
   priorityLevel: string;
 

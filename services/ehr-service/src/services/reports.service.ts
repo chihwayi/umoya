@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
-import { Appointment } from '../entities/appointment.entity';
+import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
@@ -12,7 +12,7 @@ export class ReportsService {
   
   async getPatientSummary(patientId: string, tenantDb: DataSource) {
     const patientRepo = tenantDb.getRepository(Patient);
-    const appointmentRepo = tenantDb.getRepository(Appointment);
+    const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     const recordRepo = tenantDb.getRepository(MedicalRecord);
     const prescriptionRepo = tenantDb.getRepository(Prescription);
     const labRepo = tenantDb.getRepository(LabOrder);
@@ -80,7 +80,7 @@ export class ReportsService {
   }
 
   async getClinicalReport(query: any, tenantDb: DataSource) {
-    const appointmentRepo = tenantDb.getRepository(Appointment);
+    const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     const recordRepo = tenantDb.getRepository(MedicalRecord);
     const prescriptionRepo = tenantDb.getRepository(Prescription);
     
@@ -118,7 +118,7 @@ export class ReportsService {
 
   async getDashboardData(tenantDb: DataSource) {
     const patientRepo = tenantDb.getRepository(Patient);
-    const appointmentRepo = tenantDb.getRepository(Appointment);
+    const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     const billRepo = tenantDb.getRepository(Bill);
     const prescriptionRepo = tenantDb.getRepository(Prescription);
 
@@ -165,7 +165,7 @@ export class ReportsService {
   }
 
   async getAppointmentsReport(query: any, tenantDb: DataSource) {
-    const appointmentRepo = tenantDb.getRepository(Appointment);
+    const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     
     const appointments = await appointmentRepo.find({
       relations: ['patient'],

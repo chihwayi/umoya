@@ -27,32 +27,6 @@ export class CreateAppointmentDto {
   @IsString()
   @IsOptional()
   notes?: string;
-
-  @IsString()
-  @IsOptional()
-  priorityLevel?: string;
-
-  @IsOptional()
-  isTelehealth?: boolean;
-
-  @IsString()
-  @IsOptional()
-  virtualMeetingUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  recurringPattern?: string;
-
-  @IsString()
-  @IsOptional()
-  patientInstructions?: string;
-
-  @IsString()
-  @IsOptional()
-  preparationNotes?: string;
-
-  @IsOptional()
-  estimatedCost?: number;
 }
 
 export class UpdateAppointmentDto {
@@ -82,24 +56,6 @@ export class UpdateAppointmentDto {
   @IsString()
   @IsOptional()
   notes?: string;
-
-  @IsString()
-  @IsOptional()
-  priorityLevel?: string;
-
-  @IsOptional()
-  isTelehealth?: boolean;
-
-  @IsString()
-  @IsOptional()
-  virtualMeetingUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  cancellationReason?: string;
-
-  @IsOptional()
-  insuranceVerified?: boolean;
 }
 
 export class AppointmentQueryDto {

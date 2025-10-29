@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, Plus, Search, Filter, ArrowLeft } from 'lucide-react';
+import { Calendar, Clock, User, Plus, Search, Filter, ArrowLeft, BarChart3, Settings, Bell, RefreshCw, Eye, Edit, Trash2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import CreateAppointmentModal from '../components/CreateAppointmentModal.tsx';
 import { useNotification } from '../components/GlobalNotification.tsx';
 import { ehrApi } from '../services/api.ts';
+import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
+import DatePicker from '../components/DatePicker';
 
 interface Appointment {
   id: string;
@@ -24,6 +26,17 @@ interface Appointment {
   status: string;
   reason: string;
   notes: string;
+  priorityLevel?: string;
+  isTelehealth?: boolean;
+  virtualMeetingUrl?: string;
+  checkInTime?: string;
+  actualStartTime?: string;
+  actualEndTime?: string;
+  waitTimeMinutes?: number;
+  estimatedCost?: number;
+  insuranceVerified?: boolean;
+  reminderSentCount?: number;
+  lastReminderSent?: string;
 }
 
 const AppointmentManagement: React.FC = () => {
@@ -34,12 +47,41 @@ const AppointmentManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [appointmentStats, setAppointmentStats] = useState<any>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('ehr_user');
+    if (userData) {
+      setCurrentUser(JSON.parse(userData));
+    }
+  }, []);
 
   useEffect(() => {
     fetchAppointments();
-  }, [selectedDate, statusFilter]);
+    fetchAppointmentStats();
+  }, [selectedDate, statusFilter, currentUser]);
+
+  // Calculate stats for doctors when appointments change
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'doctor' && appointments.length >= 0) {
+      const stats = {
+        total: appointments.length,
+        scheduled: appointments.filter(apt => apt.status === 'scheduled').length,
+        confirmed: appointments.filter(apt => apt.status === 'confirmed').length,
+        inProgress: appointments.filter(apt => apt.status === 'in-progress').length,
+        completed: appointments.filter(apt => apt.status === 'completed').length,
+        cancelled: appointments.filter(apt => apt.status === 'cancelled').length,
+      };
+      setAppointmentStats(stats);
+    }
+  }, [appointments, currentUser]);
 
   const fetchAppointments = async () => {
     try {
@@ -54,8 +96,10 @@ const AppointmentManagement: React.FC = () => {
       }
       
       const params: any = {};
-      // Temporarily remove date filter
-      // if (selectedDate) params.date = selectedDate;
+      if (selectedDate) {
+        // Convert dd/mm/yyyy to yyyy-mm-dd for API
+        params.date = formatDateForAPI(selectedDate);
+      }
       if (statusFilter !== 'all') params.status = statusFilter;
       
       console.log('📋 Request params:', params);
@@ -66,7 +110,15 @@ const AppointmentManagement: React.FC = () => {
       console.log('📊 Response data:', response.data);
       console.log('📊 Appointments in response:', response.data.appointments || response.data || []);
       
-      setAppointments(response.data.appointments || response.data || []);
+      let allAppointments = response.data.appointments || response.data || [];
+      
+      // Filter appointments by current doctor if user is a doctor
+      if (currentUser && currentUser.role === 'doctor') {
+        allAppointments = allAppointments.filter((apt: Appointment) => apt.doctor.id === currentUser.id);
+        console.log('🔍 Filtered appointments for doctor:', allAppointments.length);
+      }
+      
+      setAppointments(allAppointments);
     } catch (error: any) {
       console.error('❌ Error fetching appointments:', error);
       console.error('❌ Error response:', error.response);
@@ -80,9 +132,38 @@ const AppointmentManagement: React.FC = () => {
     }
   };
 
+  const fetchAppointmentStats = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      // For doctors, we'll calculate stats from the filtered appointments
+      if (currentUser && currentUser.role === 'doctor') {
+        // We'll calculate stats after appointments are loaded
+        return;
+      }
+
+      // For admins, fetch all stats
+      const response = await fetch(`http://localhost:3013/api/appointments/stats/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantSlug,
+        },
+      });
+
+      if (response.ok) {
+        const stats = await response.json();
+        setAppointmentStats(stats);
+      }
+    } catch (error) {
+      console.error('Error fetching appointment stats:', error);
+    }
+  };
+
   const handleCreateAppointment = () => {
     setShowCreateModal(false);
     fetchAppointments();
+    fetchAppointmentStats();
     showSuccess('Success', 'Appointment created successfully');
   };
 
@@ -94,13 +175,14 @@ const AppointmentManagement: React.FC = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'X-Tenant-ID': 'bulawayo-general',
+          'X-Tenant-ID': tenantSlug,
         },
         body: JSON.stringify({ status: newStatus }),
       });
 
       if (response.ok) {
         fetchAppointments();
+        fetchAppointmentStats();
         showSuccess('Success', 'Appointment status updated');
       }
     } catch (error) {
@@ -112,28 +194,52 @@ const AppointmentManagement: React.FC = () => {
   const handleQuickAction = async (appointmentId: string, action: string) => {
     try {
       const token = localStorage.getItem('ehr_token');
-      const response = await fetch(`http://localhost:3013/api/appointments/${appointmentId}/${action}`, {
-        method: 'PUT',
+      let endpoint = '';
+      let method = 'PUT';
+
+      switch (action) {
+        case 'check-in':
+          endpoint = `/appointments/${appointmentId}/check-in`;
+          break;
+        case 'start':
+          endpoint = `/appointments/${appointmentId}/start`;
+          break;
+        case 'complete':
+          endpoint = `/appointments/${appointmentId}/complete`;
+          break;
+        case 'no-show':
+          endpoint = `/appointments/${appointmentId}/no-show`;
+          break;
+        case 'reminder':
+          endpoint = `/appointments/${appointmentId}/reminder`;
+          method = 'POST';
+          break;
+        default:
+          return;
+      }
+
+      const response = await fetch(`http://localhost:3013/api${endpoint}`, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Tenant-ID': 'bulawayo-general',
+          'X-Tenant-ID': tenantSlug,
         },
       });
 
       if (response.ok) {
         fetchAppointments();
-        const actionMessages = {
-          'check-in': 'Patient checked in successfully',
-          'start': 'Appointment started',
-          'complete': 'Appointment completed'
-        };
-        showSuccess('Success', actionMessages[action as keyof typeof actionMessages] || 'Action completed');
+        fetchAppointmentStats();
+        showSuccess('Success', `Appointment ${action.replace('-', ' ')} successful`);
       }
     } catch (error) {
-      console.error('Error performing action:', error);
-      showError('Action Failed', 'Failed to perform action');
+      console.error(`Error ${action} appointment:`, error);
+      showError('Action Failed', `Failed to ${action.replace('-', ' ')} appointment`);
     }
+  };
+
+  const handleViewAppointment = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setShowAppointmentDetails(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -205,7 +311,12 @@ const AppointmentManagement: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Appointment Management</h1>
-              <p className="text-slate-600">Schedule and manage patient appointments</p>
+              <p className="text-slate-600">
+                {currentUser?.role === 'doctor' 
+                  ? 'Your scheduled appointments' 
+                  : 'Schedule and manage patient appointments'
+                }
+              </p>
             </div>
           </div>
           
@@ -223,12 +334,12 @@ const AppointmentManagement: React.FC = () => {
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div className="min-w-[200px]">
+              <DatePicker
+                value={selectedDate}
+                onChange={setSelectedDate}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

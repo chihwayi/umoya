@@ -172,14 +172,139 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  // Appointment Management
-  getAppointments: async (token: string, tenantSlug: string, params?: any) => {
-    const response = await ehrAxios.get('/appointments', {
+      // Appointment Management
+      getAppointments: async (token: string, tenantSlug: string, params?: any) => {
+        const response = await ehrAxios.get('/appointments', {
+          headers: { 
+            'X-Tenant-ID': tenantSlug,
+            'Authorization': `Bearer ${token}`
+          },
+          params
+        });
+        return { data: response.data };
+      },
+
+      getAvailableSlots: async (doctorId: string, date: string, token: string, tenantSlug: string) => {
+        const response = await ehrAxios.get(`/appointments/doctor/${doctorId}/available-slots`, {
+          headers: { 
+            'X-Tenant-ID': tenantSlug,
+            'Authorization': `Bearer ${token}`
+          },
+          params: { date }
+        });
+        // The API returns an array directly, not wrapped in a data object
+        return { data: response.data };
+      },
+
+  createAppointment: async (appointmentData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/appointments', appointmentData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateAppointmentStatus: async (appointmentId: string, status: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/appointments/${appointmentId}/status`, { status }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  startAppointment: async (appointmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/appointments/${appointmentId}/start`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  completeAppointment: async (appointmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/appointments/${appointmentId}/complete`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateAppointment: async (appointmentId: string, appointmentData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/appointments/${appointmentId}`, appointmentData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Vitals API
+  recordVitals: async (vitalsData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/vitals', vitalsData, {
       headers: { 
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
-      },
-      params
+      }
+    });
+    return { data: response.data };
+  },
+
+  getVitals: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/vitals/patient/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Triage API
+  recordTriageAssessment: async (triageData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/triage', triageData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getTriageAssessments: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/triage/patient/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Nursing Notes API
+  recordNursingNote: async (noteData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/nursing-notes', noteData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getNursingNotes: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/nursing-notes/patient/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
     });
     return { data: response.data };
   }

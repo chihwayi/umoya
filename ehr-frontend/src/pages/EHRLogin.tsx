@@ -36,14 +36,22 @@ const EHRLogin: React.FC = () => {
       if (response.data.mustChangePassword) {
         localStorage.setItem('ehr_temp_token', response.data.token);
         localStorage.setItem('ehr_tenant', tenantSlug);
+        localStorage.setItem('ehr_tenant_slug', tenantSlug);
         showInfo('Password Change Required', 'Please set a new password to continue');
         navigate(`/ehr/${tenantSlug}/change-password`);
       } else {
         localStorage.setItem('ehr_token', response.data.token);
         localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
         localStorage.setItem('ehr_tenant', tenantSlug);
+        localStorage.setItem('ehr_tenant_slug', tenantSlug);
         showSuccess('Login Successful', `Welcome back, ${response.data.user.firstName}!`);
-        navigate(`/ehr/${tenantSlug}/dashboard`);
+        
+        // Redirect based on user role
+        if (response.data.user.role === 'doctor') {
+          navigate(`/ehr/${tenantSlug}/doctor`);
+        } else {
+          navigate(`/ehr/${tenantSlug}/dashboard`);
+        }
       }
     } catch (error: any) {
       showError('Login Failed', error.response?.data?.message || 'Invalid credentials');

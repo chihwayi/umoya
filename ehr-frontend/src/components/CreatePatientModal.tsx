@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, User, Calendar, Phone, Mail, MapPin, Heart, Shield, AlertTriangle } from 'lucide-react';
 import { useNotification } from './GlobalNotification.tsx';
 import { ehrApi } from '../services/api.ts';
+import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
+import DatePicker from './DatePicker';
 
 interface CreatePatientModalProps {
   isOpen: boolean;
@@ -44,7 +46,20 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
 
-      await ehrApi.createPatient(formData, token, tenantSlug);
+      // Validate date format
+      if (!isValidDate(formData.dateOfBirth)) {
+        showError('Invalid Date', 'Please enter date in dd/mm/yyyy format');
+        setLoading(false);
+        return;
+      }
+
+      // Convert date format for API
+      const patientData = {
+        ...formData,
+        dateOfBirth: formatDateForAPI(formData.dateOfBirth)
+      };
+
+      await ehrApi.createPatient(patientData, token, tenantSlug);
       showSuccess('Patient Created', 'Patient registered successfully');
       onPatientCreated();
       onClose();
@@ -119,13 +134,10 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth *</label>
-                  <input
-                    type="date"
-                    required
+                  <DatePicker
+                    label="Date of Birth (dd/mm/yyyy) *"
                     value={formData.dateOfBirth}
-                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    onChange={(val) => setFormData({ ...formData, dateOfBirth: val })}
                   />
                 </div>
                 
