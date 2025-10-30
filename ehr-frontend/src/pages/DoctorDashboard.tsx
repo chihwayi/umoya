@@ -525,9 +525,6 @@ const DoctorDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       if (!token || !currentReferralAppointment) return;
 
-      // Update appointment status to 'referred_to_nurse'
-      await ehrApi.updateAppointmentStatus(currentReferralAppointment.id, 'referred_to_nurse', token, tenantSlug!);
-      
       // Add referral notes
       await ehrApi.updateAppointment(currentReferralAppointment.id, {
         notes: `REFERRED TO NURSE\nReason: ${referralReason}\nInstructions: ${referralInstructions}`
@@ -548,14 +545,16 @@ const DoctorDashboard: React.FC = () => {
 
       await ehrApi.createOrder(orderData, token, tenantSlug!);
       
-      showSuccess('Success', 'Patient referred to nurse with specific orders created');
+      showSuccess('Success', 'Referral created and orders sent to nurse');
       setShowReferralModal(false);
       setReferralReason('');
       setReferralInstructions('');
       fetchTodayAppointments();
     } catch (error) {
       console.error('Error referring patient:', error);
-      showError('Error', 'Failed to refer patient to nurse');
+      const anyErr: any = error as any;
+      const msg = anyErr?.response?.data?.message || anyErr?.response?.data || 'Failed to refer patient to nurse';
+      showError('Error', Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
@@ -1389,7 +1388,7 @@ const DoctorDashboard: React.FC = () => {
                   <div>
                     <h4 className="font-semibold text-orange-900 mb-1">Important</h4>
                     <p className="text-orange-800 text-sm">
-                      This will change the appointment status to "Referred to Nurse" and the patient will appear in the nurse's queue for treatment.
+                      A referral note and an authorized order will be created. The patient will appear in the nurse's queue with actionable orders.
                     </p>
                   </div>
                 </div>
