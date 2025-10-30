@@ -539,11 +539,14 @@ const DoctorDashboard: React.FC = () => {
         orderName: getOrderNameFromReason(referralReason),
         description: `Doctor referral: ${referralReason}`,
         instructions: referralInstructions || `Please perform ${referralReason.toLowerCase()} as requested by doctor`,
-        priority: 'normal',
-        status: 'authorized' // Auto-authorize doctor referrals
+        priority: 'normal'
       };
 
-      await ehrApi.createOrder(orderData, token, tenantSlug!);
+      const created = await ehrApi.createOrder(orderData, token, tenantSlug!);
+      const orderId = created?.data?.order?.id;
+      if (orderId) {
+        await ehrApi.authorizeOrder(orderId, token, tenantSlug!);
+      }
       
       showSuccess('Success', 'Referral created and orders sent to nurse');
       setShowReferralModal(false);

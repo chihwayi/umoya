@@ -1,16 +1,25 @@
-import { Controller, Post, Get, Put, Body, Param, Req, Query } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, Req, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { OrderService, CreateOrderDto, UpdateOrderDto } from '../services/order.service';
 import { OrderType, OrderStatus } from '../entities/order.entity';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('orders')
+@UseGuards(JwtAuthGuard)
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
-  async createOrder(@Body() body: CreateOrderDto, @Req() req: any) {
+  async createOrder(@Body() body: CreateOrderDto, @Req() req: RequestWithTenant) {
     const tenantId = req.tenantId;
-    const doctorId = req.user.id;
-    
+    const doctorId = (req.user && (req.user.userId || req.user.id)) || (body as any).doctorId;
+    if (!tenantId) {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    if (!doctorId) {
+      throw new BadRequestException('Doctor ID is required');
+    }
+
     const order = await this.orderService.createOrder(body, doctorId, tenantId);
     return { success: true, order };
   }

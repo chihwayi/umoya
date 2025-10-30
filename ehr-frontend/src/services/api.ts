@@ -341,4 +341,15 @@ export const ehrApi = {
     });
     return { data: response.data };
   }
+  ,
+
+  authorizeOrder: async (orderId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/orders/${orderId}/authorize`, {}, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  }
 };
