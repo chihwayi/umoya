@@ -163,12 +163,22 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const uuidRegex = /^[0-9a-fA-F-]{36}$/;
+    
     if (!formData.patientId) {
       showError('Validation Error', 'Please select a patient');
       return;
     }
+    if (!uuidRegex.test(formData.patientId)) {
+      showError('Validation Error', 'Invalid patient selection');
+      return;
+    }
     if (!formData.doctorId) {
       showError('Validation Error', 'Please select a doctor');
+      return;
+    }
+    if (!uuidRegex.test(formData.doctorId)) {
+      showError('Validation Error', 'Invalid doctor selection');
       return;
     }
     if (!formData.appointmentDate) {
@@ -216,12 +226,14 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         notes: formData.notes || undefined,
       };
 
+      console.log('📤 Create appointment payload:', payload);
+
       await ehrApi.createAppointment(payload, token, tenantSlug);
 
       onSuccess();
     } catch (error: any) {
-      console.error('Error creating appointment:', error);
-      const msg = error?.response?.data?.message || 'Failed to create appointment';
+      console.error('Error creating appointment:', error?.response?.data || error);
+      const msg = error?.response?.data?.message || error?.response?.data || 'Failed to create appointment';
       showError('Creation Failed', Array.isArray(msg) ? msg.join(', ') : msg);
     } finally {
       setLoading(false);
