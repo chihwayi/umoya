@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Order, OrderType, OrderStatus, OrderPriority } from '../entities/order.entity';
 import { TenantService } from './tenant.service';
@@ -31,15 +31,24 @@ export class OrderService {
   }
 
   async createOrder(data: CreateOrderDto, doctorId: string, tenantId: string): Promise<Order> {
-    const repo = await this.getRepository(tenantId);
-    
-    const order = repo.create({
-      ...data,
-      doctorId,
-      status: OrderStatus.PENDING
-    });
-    
-    return repo.save(order);
+    try {
+      const repo = await this.getRepository(tenantId);
+
+      const order = repo.create({
+        ...data,
+        doctorId,
+        status: OrderStatus.PENDING
+      });
+
+      return await repo.save(order);
+    } catch (error: any) {
+      const msg = String(error?.message || '')
+        .toLowerCase();
+      if (msg.includes('relation') && msg.includes('orders') && msg.includes('does not exist')) {
+        throw new BadRequestException('Orders table not provisioned for this tenant. Please run tenant schema migration.');
+      }
+      throw error;
+    }
   }
 
   async getOrdersForPatient(patientId: string, tenantId: string): Promise<Order[]> {

@@ -20,8 +20,14 @@ export class OrderController {
       throw new BadRequestException('Doctor ID is required');
     }
 
-    const order = await this.orderService.createOrder(body, doctorId, tenantId);
-    return { success: true, order };
+    try {
+      const order = await this.orderService.createOrder(body, doctorId, tenantId);
+      return { success: true, order };
+    } catch (error: any) {
+      // Surface readable error to client
+      const message = error?.message || 'Failed to create order';
+      throw new BadRequestException(message);
+    }
   }
 
   @Get('patient/:patientId')
