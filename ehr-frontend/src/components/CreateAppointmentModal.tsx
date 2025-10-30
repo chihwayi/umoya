@@ -163,6 +163,18 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!formData.patientId) {
+      showError('Validation Error', 'Please select a patient');
+      return;
+    }
+    if (!formData.doctorId) {
+      showError('Validation Error', 'Please select a doctor');
+      return;
+    }
+    if (!formData.appointmentDate) {
+      showError('Validation Error', 'Please select a date');
+      return;
+    }
     if (!selectedTime) {
       showError('Validation Error', 'Please select an appointment time');
       return;
@@ -202,8 +214,6 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         appointmentType: formData.appointmentType,
         reason: formData.reason || undefined,
         notes: formData.notes || undefined,
-        priorityLevel: formData.priorityLevel,
-        status: formData.status,
       };
 
       await ehrApi.createAppointment(payload, token, tenantSlug);
