@@ -5,6 +5,8 @@ export declare class DatabaseProvisioningService {
     constructor(dataSource: DataSource);
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;
-    private runSchemaMigration;
+    applyClinicSchema(connectionString: string): Promise<void>;
+    private getClinicSchema;
+    private getTriggerStatements;
     deleteDatabase(databaseName: string): Promise<void>;
 }

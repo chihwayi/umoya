@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Eye, EyeOff } from 'lucide-react';
-import { useNotification } from './GlobalNotification.tsx';
+import { useNotification } from './GlobalNotification';
 
 interface PasswordDisplayModalProps {
   isOpen: boolean;

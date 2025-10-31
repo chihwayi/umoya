@@ -168,10 +168,14 @@ services:
     environment:
       - ENVIRONMENT=development
       - REDIS_URL=redis://redis:6379
+      - PYTHONUNBUFFERED=1
     depends_on:
       - redis
+      - postgres-master
     networks:
       - medicore-network
+    volumes:
+      - ./services/cdss-service:/app
 
   fhir-service:
     build:

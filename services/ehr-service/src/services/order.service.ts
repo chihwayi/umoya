@@ -14,6 +14,7 @@ export interface CreateOrderDto {
   frequency?: string;
   duration?: string;
   priority?: OrderPriority;
+  drugId?: string; // Optional link to drug database
 }
 
 export interface UpdateOrderDto {
@@ -103,10 +104,64 @@ export class OrderService {
       authorizedAt: new Date()
     });
     
-    return repo.findOne({
+    const order = await repo.findOne({
       where: { id: orderId },
       relations: ['patient', 'doctor', 'appointment']
     });
+
+    // Auto-create prescription record when a medication order is authorized
+    try {
+      if (order && order.orderType === OrderType.MEDICATION) {
+        const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+        if (tenantDb) {
+          // Prefer schema compatible with clinic-template.sql
+          // Columns: medical_record_id, patient_id, doctor_id, medication_name, dosage, frequency, duration, quantity, instructions, status, prescribed_date
+          const medicationName = order.orderName;
+          const dosage = order.dosage || '';
+          const frequency = order.frequency || '';
+          const duration = order.duration || '';
+          const instructions = order.instructions || '';
+          const status = 'active';
+          const quantity = 1;
+          const prescribedDate = new Date();
+          const appointmentId = order.appointmentId || null;
+
+          await tenantDb.query(
+            `INSERT INTO prescriptions (
+              medical_record_id,
+              patient_id,
+              doctor_id,
+              medication_name,
+              dosage,
+              frequency,
+              duration,
+              quantity,
+              instructions,
+              status,
+              prescribed_date
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              appointmentId, // medical_record_id (nullable linkage)
+              order.patientId,
+              order.doctorId,
+              medicationName,
+              dosage,
+              frequency,
+              duration,
+              quantity,
+              instructions,
+              status,
+              prescribedDate
+            ]
+          );
+        }
+      }
+    } catch (e) {
+      // Do not block order authorization if prescription insertion fails
+      console.error('Failed to auto-create prescription for medication order', e);
+    }
+
+    return order;
   }
 
   async executeOrder(orderId: string, executedBy: string, executionNotes: string, tenantId: string): Promise<Order> {

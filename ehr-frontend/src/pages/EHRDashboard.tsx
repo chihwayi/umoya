@@ -7,9 +7,10 @@ import {
   Shield, Database, Server, Key, Eye, AlertTriangle, 
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
-  Phone, MapPin, Building, Zap, TrendingUp, Users2
+  Phone, MapPin, Building, Zap, TrendingUp, Users2,
+  CheckCircle
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { useNotification } from '../components/GlobalNotification';
 
 interface User {
   id: string;
@@ -41,6 +42,11 @@ const EHRDashboard: React.FC = () => {
       // Redirect nurses directly to nurse dashboard
       if (parsedUser.role === 'nurse') {
         navigate(`/ehr/${tenantSlug}/nurse`);
+        return;
+      }
+      // Redirect lab technicians directly to lab dashboard
+      if (parsedUser.role === 'lab_tech' || parsedUser.role === 'lab_technician') {
+        navigate(`/ehr/${tenantSlug}/lab`);
         return;
       }
       
@@ -94,6 +100,14 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Prescriptions', desc: 'Dispense medications', color: 'from-green-500 to-teal-500' },
           { icon: TestTube, label: 'Drug Interactions', desc: 'Safety checks', color: 'from-red-500 to-orange-500' },
           { icon: BarChart3, label: 'Inventory', desc: 'Stock management', color: 'from-blue-500 to-indigo-500' },
+        ];
+      case 'lab_tech':
+      case 'lab_technician':
+        return [
+          { icon: TestTube, label: 'Lab Dashboard', desc: 'Manage lab orders & results', color: 'from-cyan-500 to-blue-500', route: 'lab' },
+          { icon: Clock, label: 'Pending Orders', desc: 'New lab orders', color: 'from-orange-500 to-amber-500' },
+          { icon: Activity, label: 'In Progress', desc: 'Orders being processed', color: 'from-purple-500 to-indigo-500' },
+          { icon: CheckCircle, label: 'Completed', desc: 'Finished orders', color: 'from-green-500 to-emerald-500' },
         ];
       case 'admin':
         return [
@@ -350,29 +364,29 @@ const EHRDashboard: React.FC = () => {
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activity</h3>
             <div className="space-y-4">
-              {user.role === 'admin' ? [
-                { time: '5 minutes ago', action: 'User Dr. Smith logged in', user: 'System', icon: Users, color: 'bg-green-500' },
-                { time: '15 minutes ago', action: 'Database backup completed', user: 'System', icon: Database, color: 'bg-blue-500' },
-                { time: '1 hour ago', action: 'Security scan completed', user: 'System', icon: Shield, color: 'bg-emerald-500' },
-                { time: '2 hours ago', action: 'New user account created', user: 'Admin', icon: User, color: 'bg-purple-500' },
-                { time: '3 hours ago', action: 'System settings updated', user: 'Admin', icon: Settings, color: 'bg-orange-500' },
+              {(user.role === 'admin' ? [
+                { time: '5 minutes ago', action: 'User Dr. Smith logged in', user: 'System', Icon: Users, color: 'bg-green-500' },
+                { time: '15 minutes ago', action: 'Database backup completed', user: 'System', Icon: Database, color: 'bg-blue-500' },
+                { time: '1 hour ago', action: 'Security scan completed', user: 'System', Icon: Shield, color: 'bg-emerald-500' },
+                { time: '2 hours ago', action: 'New user account created', user: 'Admin', Icon: User, color: 'bg-purple-500' },
+                { time: '3 hours ago', action: 'System settings updated', user: 'Admin', Icon: Settings, color: 'bg-orange-500' },
               ] : [
-                { time: '10 minutes ago', action: 'Patient consultation completed', user: 'John Doe', icon: Stethoscope, color: 'bg-blue-500' },
-                { time: '25 minutes ago', action: 'Lab results reviewed', user: 'Sarah Smith', icon: TestTube, color: 'bg-orange-500' },
-                { time: '1 hour ago', action: 'Prescription issued', user: 'Mike Johnson', icon: Pill, color: 'bg-green-500' },
-              ]}.map((activity, index) => (
+                { time: '10 minutes ago', action: 'Patient consultation completed', user: 'John Doe', Icon: Stethoscope, color: 'bg-blue-500' },
+                { time: '25 minutes ago', action: 'Lab results reviewed', user: 'Sarah Smith', Icon: TestTube, color: 'bg-orange-500' },
+                { time: '1 hour ago', action: 'Prescription issued', user: 'Mike Johnson', Icon: Pill, color: 'bg-green-500' },
+              ]).map((item, index) => (
                 <div key={index} className="flex items-center gap-4 p-3 hover:bg-slate-50 rounded-lg transition-colors">
-                  <div className={`w-2 h-2 ${activity.color} rounded-full`}></div>
+                  <div className={`w-2 h-2 ${item.color} rounded-full`}></div>
                   <div className="flex items-center gap-3">
-                    <activity.icon className="w-4 h-4 text-slate-500" />
+                    <item.Icon className="w-4 h-4 text-slate-500" />
                     <div className="flex-1">
-                      <p className="text-slate-800 font-medium">{activity.action}</p>
-                      <p className="text-slate-600 text-sm">{user.role === 'admin' ? `By: ${activity.user}` : `Patient: ${activity.user}`}</p>
+                      <p className="text-slate-800 font-medium">{item.action}</p>
+                      <p className="text-slate-600 text-sm">{user.role === 'admin' ? `By: ${item.user}` : `Patient: ${item.user}`}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-slate-500 text-sm">
                     <Clock className="w-4 h-4" />
-                    <span>{activity.time}</span>
+                    <span>{item.time}</span>
                   </div>
                 </div>
               ))}

@@ -335,6 +335,36 @@ CREATE INDEX idx_orders_authorized_by ON orders(authorized_by);
 CREATE INDEX idx_orders_executed_by ON orders(executed_by);
 CREATE INDEX idx_orders_created_at ON orders(created_at);
 
+-- Problems list (structured diagnoses)
+CREATE TABLE IF NOT EXISTS problems (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    code VARCHAR(50), -- ICD-10 or SNOMED
+    description TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved')),
+    onset_date DATE,
+    resolved_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Allergies and adverse reactions
+CREATE TABLE IF NOT EXISTS allergies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    allergen VARCHAR(255) NOT NULL,
+    reaction TEXT,
+    severity VARCHAR(20) CHECK (severity IN ('mild','moderate','severe')),
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    recorded_by UUID REFERENCES users(id)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_problems_patient_id ON problems(patient_id);
+CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status);
+CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id);
+
 -- Trigger to update updated_at timestamp
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -365,4 +395,7 @@ CREATE TRIGGER update_nursing_notes_updated_at BEFORE UPDATE ON nursing_notes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_problems_updated_at BEFORE UPDATE ON problems
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

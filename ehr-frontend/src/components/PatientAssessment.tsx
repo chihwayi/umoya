@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { useNotification } from '../components/GlobalNotification';
+import * as Api from '../services/api';
+import AllergiesModal from './AllergiesModal';
+import ModalPortal from './ModalPortal';
 
 interface Patient {
   id: string;
@@ -43,6 +46,43 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [observations, setObservations] = useState('');
   const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [loading, setLoading] = useState(false);
+  const [showAllergiesModal, setShowAllergiesModal] = useState(false);
+  const [structuredAllergies, setStructuredAllergies] = useState<any[]>([]);
+
+  // Load existing allergies from structured table when patient is selected
+  useEffect(() => {
+    if (!patient?.id) return;
+    
+    const loadAllergies = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (!token || !tenantSlug) return;
+
+        const response = await Api.chartApi.getAllergies(patient.id, token, tenantSlug);
+        const existingAllergies = response.data || [];
+        setStructuredAllergies(existingAllergies);
+
+        // Format allergies for display in text field
+        if (existingAllergies.length > 0) {
+          const formatted = existingAllergies.map((a: any) => {
+            let str = a.allergen;
+            if (a.reaction) str += ` (${a.reaction})`;
+            if (a.severity) str += ` - ${a.severity}`;
+            return str;
+          }).join(', ');
+          setAllergies(formatted);
+        } else {
+          setAllergies('');
+        }
+      } catch (e) {
+        console.error('Failed to load allergies:', e);
+        // Don't set error - just leave allergies field empty
+      }
+    };
+
+    loadAllergies();
+  }, [patient?.id]);
 
   const severityScore = useMemo(() => {
     let score = 0;
@@ -84,7 +124,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id,
       };
 
-      await ehrApi.recordTriageAssessment(triagePayload, token, tenantSlug);
+      await Api.ehrApi.recordTriageAssessment(triagePayload, token, tenantSlug);
       showSuccess('Saved', 'Triage assessment recorded');
       onSave?.();
     } catch (e) {
@@ -180,14 +220,47 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Allergies</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-slate-700">Allergies</label>
+                <button
+                  onClick={() => setShowAllergiesModal(true)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors"
+                  title="Manage structured allergies"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  Manage
+                </button>
+              </div>
+              {structuredAllergies.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  {structuredAllergies.slice(0, 3).map((a: any, idx: number) => (
+                    <div key={idx} className="text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                      <span className="font-medium text-slate-700">{a.allergen}</span>
+                      {a.severity && (
+                        <span className={`px-1.5 py-0.5 rounded text-xs ${
+                          a.severity === 'severe' ? 'bg-red-100 text-red-700' :
+                          a.severity === 'moderate' ? 'bg-orange-100 text-orange-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {a.severity}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {structuredAllergies.length > 3 && (
+                    <div className="text-xs text-slate-500">+{structuredAllergies.length - 3} more</div>
+                  )}
+                </div>
+              )}
               <textarea
                 value={allergies}
                 onChange={(e) => setAllergies(e.target.value)}
                 className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
                 rows={3}
-                placeholder="List known allergies"
+                placeholder="Quick note: Allergies are managed via 'Manage' button. Type here for temporary notes during triage."
               />
+              <p className="text-xs text-slate-500 mt-1">Note: Use "Manage" button to add/edit structured allergies</p>
             </div>
             <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
               <label className="block text-sm font-semibold text-slate-700 mb-2">Current Medications</label>
@@ -309,6 +382,47 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
             )}
           </button>
         </div>
+      )}
+
+      {/* Allergies Modal */}
+      {showAllergiesModal && patient && (
+        <AllergiesModal
+          open={showAllergiesModal}
+          onClose={() => setShowAllergiesModal(false)}
+          onSaved={() => {
+            // Reload allergies after save
+            const loadAllergies = async () => {
+              try {
+                const token = localStorage.getItem('ehr_token');
+                const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+                if (!token || !tenantSlug) return;
+
+                const response = await Api.chartApi.getAllergies(patient.id, token, tenantSlug);
+                const existingAllergies = response.data || [];
+                setStructuredAllergies(existingAllergies);
+
+                // Format allergies for display in text field
+                if (existingAllergies.length > 0) {
+                  const formatted = existingAllergies.map((a: any) => {
+                    let str = a.allergen;
+                    if (a.reaction) str += ` (${a.reaction})`;
+                    if (a.severity) str += ` - ${a.severity}`;
+                    return str;
+                  }).join(', ');
+                  setAllergies(formatted);
+                } else {
+                  setAllergies('');
+                }
+              } catch (e) {
+                console.error('Failed to reload allergies:', e);
+              }
+            };
+            loadAllergies();
+          }}
+          patientId={patient.id}
+          tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
       )}
     </div>
   );

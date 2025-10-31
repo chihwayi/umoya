@@ -5,8 +5,8 @@ import {
   Heart, Activity, AlertCircle, FileText, Clock,
   ChevronLeft, ChevronRight, Stethoscope, Pill, TestTube
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 
 interface Patient {

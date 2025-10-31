@@ -7,10 +7,10 @@ import {
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
+import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import VitalsPanel from '../components/VitalsPanel';
 import TriageQueue from '../components/TriageQueue';
@@ -91,6 +91,9 @@ const NurseDashboard: React.FC = () => {
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
   const [taskCounts, setTaskCounts] = useState({ pending: 0, inProgress: 0, overdue: 0 });
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
+  const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
+  const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
+  const [executionNotes, setExecutionNotes] = useState<string>('');
 
   // Calculate task counts from appointments directly
   const calculateTaskCountsFromAppointments = useCallback((appointments: any[]) => {
@@ -265,8 +268,7 @@ const NurseDashboard: React.FC = () => {
       const filtered = patients.filter(patient =>
         `${patient.firstName} ${patient.lastName}`.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
         patient.patientNumber.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
-        patient.email?.toLowerCase().includes(patientSearchTerm.toLowerCase()) ||
-        patient.phoneNumber?.toLowerCase().includes(patientSearchTerm.toLowerCase())
+        patient.email?.toLowerCase().includes(patientSearchTerm.toLowerCase())
       );
       setFilteredPatients(filtered);
     }
@@ -446,17 +448,23 @@ const NurseDashboard: React.FC = () => {
     { label: 'Completed Today', value: getQueueStats().completed.toString(), icon: CheckCircle, color: 'text-green-600' },
   ];
 
-  const handleExecuteOrder = async (orderId: string) => {
+  const handleExecuteOrder = (orderId: string) => {
+    setExecutingOrderId(orderId);
+    setExecutionNotes('');
+    setShowExecuteOrderModal(true);
+  };
+
+  const confirmExecuteOrder = async () => {
+    if (!executingOrderId) return;
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
-
-      const executionNotes = prompt('Enter execution notes:');
-      if (!executionNotes) return;
-
-      await ehrApi.executeOrder(orderId, executionNotes, token, tenantSlug!);
+      await ehrApi.executeOrder(executingOrderId, executionNotes || '', token, tenantSlug!);
+      setShowExecuteOrderModal(false);
+      setExecutingOrderId(null);
+      setExecutionNotes('');
       showSuccess('Success', 'Order executed successfully');
-      fetchAuthorizedOrders(); // Refresh the orders list
+      fetchAuthorizedOrders();
     } catch (error) {
       console.error('Error executing order:', error);
       showError('Error', 'Failed to execute order');
@@ -1123,7 +1131,9 @@ const NurseDashboard: React.FC = () => {
               console.log('Task updated:', task);
               // Could update task in real-time
             }}
-            onTaskCountsChange={calculateTaskCounts}
+            onTaskCountsChange={(counts) => {
+              calculateTaskCounts([counts.pending, counts.inProgress, counts.overdue]);
+            }}
           />
         )}
 
@@ -1139,7 +1149,9 @@ const NurseDashboard: React.FC = () => {
               console.log('Alert dismissed:', alertId);
               // Could update alert status
             }}
-            onAlertCountsChange={calculateAlertCounts}
+            onAlertCountsChange={(counts) => {
+              calculateTaskCounts([counts.active, counts.critical, counts.high]);
+            }}
           />
         )}
 
@@ -1432,6 +1444,48 @@ const NurseDashboard: React.FC = () => {
                   showSuccess('Success', 'Assessment completed successfully');
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execute Order Modal */}
+      {showExecuteOrderModal && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200/50 px-6 py-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl">
+                  <ClipboardList className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">Execute Order</h3>
+              </div>
+              <button onClick={() => setShowExecuteOrderModal(false)} className="p-2 rounded-lg hover:bg-white/60">
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
+            </div>
+            <div className="px-6 py-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Execution Notes (optional)</label>
+              <textarea
+                value={executionNotes}
+                onChange={(e) => setExecutionNotes(e.target.value)}
+                placeholder="Add any observations or details about how the order was executed..."
+                className="w-full min-h-[120px] p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+              />
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowExecuteOrderModal(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmExecuteOrder}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 font-semibold"
+                >
+                  Execute Order
+                </button>
+              </div>
             </div>
           </div>
         </div>

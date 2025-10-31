@@ -41,9 +41,14 @@ let TenantService = TenantService_1 = class TenantService {
         });
         const savedTenant = await this.tenantRepository.save(tenant);
         this.logger.log(`Tenant created: ${savedTenant.id}`);
-        this.provisionTenantDatabase(savedTenant).catch(error => {
+        try {
+            await this.provisionTenantDatabase(savedTenant);
+        }
+        catch (error) {
             this.logger.error(`Database provisioning failed for tenant ${savedTenant.id}:`, error);
-        });
+            savedTenant.status = tenant_entity_1.TenantStatus.SUSPENDED;
+            await this.tenantRepository.save(savedTenant);
+        }
         return savedTenant;
     }
     async findBySubdomain(subdomain) {
@@ -63,6 +68,9 @@ let TenantService = TenantService_1 = class TenantService {
             throw new common_1.NotFoundException('Tenant not found');
         }
         return tenant;
+    }
+    async findAll() {
+        return this.tenantRepository.find();
     }
     async getAllTenants() {
         return this.tenantRepository.find({

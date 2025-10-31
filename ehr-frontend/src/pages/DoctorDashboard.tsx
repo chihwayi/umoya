@@ -7,8 +7,8 @@ import {
   Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 import AppointmentActions from '../components/AppointmentActions';
@@ -16,6 +16,18 @@ import PatientQueue from '../components/PatientQueue';
 import DoctorScheduleView from '../components/DoctorScheduleView';
 import RealtimeStatusIndicator from '../components/RealtimeStatusIndicator';
 import useRealtimeUpdates from '../hooks/useRealtimeUpdates';
+import ModalPortal from '../components/ModalPortal';
+import AppointmentNotes from '../components/AppointmentNotes';
+import ProblemListModal from '../components/ProblemListModal';
+import AllergiesModal from '../components/AllergiesModal';
+import ChartSidebar from '../components/ChartSidebar';
+import ClinicalNotesModal from '../components/ClinicalNotesModal';
+import PrescriptionsModal from '../components/PrescriptionsModal';
+import LabOrdersModal from '../components/LabOrdersModal';
+import LabResultsViewer from '../components/LabResultsViewer';
+import { chartApi } from '../services/api';
+import ClinicalAlerts from '../components/ClinicalAlerts';
+import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
 
 interface Appointment {
   id: string;
@@ -79,8 +91,7 @@ const DoctorDashboard: React.FC = () => {
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
   const [patientVitals, setPatientVitals] = useState<PatientVitals | null>(null);
   const [showVitalsModal, setShowVitalsModal] = useState(false);
-  const [showNotesModal, setShowNotesModal] = useState(false);
-  const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [showComprehensiveNotes, setShowComprehensiveNotes] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralReason, setReferralReason] = useState('');
   const [referralInstructions, setReferralInstructions] = useState('');
@@ -96,6 +107,23 @@ const DoctorDashboard: React.FC = () => {
   const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
   const [showVitalsAlert, setShowVitalsAlert] = useState(false);
   const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
+  const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
+  const [problems, setProblems] = useState<any[]>([]);
+  const [allergies, setAllergies] = useState<any[]>([]);
+  const [showSoapModal, setShowSoapModal] = useState(false);
+  const [soapData, setSoapData] = useState({ subjective: '', objective: '', assessment: '', plan: '' });
+  const [showRxTemplateModal, setShowRxTemplateModal] = useState(false);
+  const [rxData, setRxData] = useState({ medication: '', dosage: '', frequency: '', duration: '' });
+  const [showCarePlanModal, setShowCarePlanModal] = useState(false);
+  const [carePlan, setCarePlan] = useState({ goals: '', tasks: '', dueDate: '' });
+  const [showProblemsModal, setShowProblemsModal] = useState(false);
+  const [showAllergiesModal, setShowAllergiesModal] = useState(false);
+  const [showClinicalNotesModal, setShowClinicalNotesModal] = useState(false);
+  const [showPrescriptionsModal, setShowPrescriptionsModal] = useState(false);
+  const [showLabOrdersModal, setShowLabOrdersModal] = useState(false);
+  const [showLabResultsModal, setShowLabResultsModal] = useState(false);
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  const [showAllMedications, setShowAllMedications] = useState(false);
 
   // Get current user info
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -104,7 +132,7 @@ const DoctorDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -117,8 +145,31 @@ const DoctorDashboard: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       fetchTodayAppointments();
+      fetchAuthorizedOrders();
     }
   }, [selectedDate, currentUser]);
+
+  useEffect(() => {
+    const loadChartData = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token') || '';
+        if (currentAppointment && token) {
+          const pid = currentAppointment.patient.id;
+          const [p, a] = await Promise.all([
+            chartApi.getProblems(pid, token, tenantSlug!),
+            chartApi.getAllergies(pid, token, tenantSlug!)
+          ]);
+          setProblems(p.data || []);
+          setAllergies(a.data || []);
+        } else {
+          setProblems([]); setAllergies([]);
+        }
+      } catch {
+        setProblems([]); setAllergies([]);
+      }
+    };
+    loadChartData();
+  }, [currentAppointment, tenantSlug]);
 
   // Real-time updates
   const handleRealtimeUpdate = async () => {
@@ -210,6 +261,22 @@ const DoctorDashboard: React.FC = () => {
       
       console.log('🔍 DoctorDashboard - Filtered doctor appointments:', doctorAppointments);
       setAppointments(doctorAppointments);
+      // Select current in-progress appointment for this doctor
+      const inProgress = doctorAppointments.filter((a: any) => {
+        const s = (a.status || '').replace('_','-');
+        return s === 'in-progress';
+      });
+      if (inProgress.length > 0) {
+        // pick the one with latest actualStartTime or nearest appointmentDate
+        const picked = [...inProgress].sort((a: any, b: any) => {
+          const atA = new Date(a.actualStartTime || a.appointmentDate).getTime();
+          const atB = new Date(b.actualStartTime || b.appointmentDate).getTime();
+          return atB - atA;
+        })[0];
+        setCurrentAppointment(picked);
+      } else {
+        setCurrentAppointment(null);
+      }
       
       // Fetch vitals data for all patients with appointments today
       await fetchVitalsForAppointments(doctorAppointments);
@@ -223,6 +290,18 @@ const DoctorDashboard: React.FC = () => {
     }
   };
 
+  const fetchAuthorizedOrders = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      const response = await ehrApi.getAuthorizedOrders(token, tenantSlug!);
+      setAuthorizedOrders(response.data.orders || []);
+    } catch (error) {
+      console.error('Error fetching authorized orders:', error);
+      setAuthorizedOrders([]);
+    }
+  };
+
   const getAppointmentStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800';
@@ -233,6 +312,13 @@ const DoctorDashboard: React.FC = () => {
       case 'no-show': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const normalizeStatus = (status: string) => {
+    if (!status) return '';
+    const s = status.toLowerCase().replace('_', '-');
+    if (s === 'in-progress' || s === 'inprogress') return 'in-progress';
+    return s;
   };
 
   const getAppointmentStatusIcon = (status: string) => {
@@ -508,11 +594,11 @@ const DoctorDashboard: React.FC = () => {
 
       // Update appointment notes
       await ehrApi.updateAppointment(currentAppointment.id, {
-        notes: appointmentNotes
+        notes: currentAppointment.notes || ''
       }, token, tenantSlug!);
       
       showSuccess('Success', 'Appointment notes saved');
-      setShowNotesModal(false);
+      fetchTodayAppointments();
       fetchTodayAppointments();
     } catch (error) {
       console.error('Error saving notes:', error);
@@ -602,33 +688,36 @@ const DoctorDashboard: React.FC = () => {
   };
 
   const getCurrentAppointments = () => {
-    return appointments.filter(apt => apt.status === 'in-progress');
+    return appointments.filter(apt => normalizeStatus(apt.status) === 'in-progress');
   };
 
   const getCompletedToday = () => {
-    return appointments.filter(apt => apt.status === 'completed');
+    return appointments.filter(apt => normalizeStatus(apt.status) === 'completed');
   };
 
   const getDoctorActions = () => {
     return [
-      { icon: Stethoscope, label: 'Dashboard', desc: 'Today\'s overview', color: 'from-blue-500 to-cyan-500', route: 'doctor' },
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
-      { icon: FileText, label: 'Medical Records', desc: 'Patient history & notes', color: 'from-orange-500 to-red-500' },
-      { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-pink-500 to-rose-500' },
-      { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-violet-500 to-purple-500' },
+      { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
     ];
   };
 
+  const inProgressCount = getCurrentAppointments().length;
+  const waitingCount = appointments.filter(a => normalizeStatus(a.status) === 'confirmed').length;
+  const authorizedCount = authorizedOrders.length;
+
   const quickStats = [
     { label: 'Today\'s Appointments', value: appointments.length.toString(), icon: Calendar, color: 'text-blue-600' },
-    { label: 'In Progress', value: getCurrentAppointments().length.toString(), icon: Play, color: 'text-yellow-600' },
+    { label: 'In Progress', value: inProgressCount.toString(), icon: Play, color: 'text-yellow-600' },
     { label: 'Completed', value: getCompletedToday().length.toString(), icon: CheckCircle, color: 'text-green-600' },
-    { label: 'Waiting', value: appointments.filter(apt => apt.status === 'confirmed').length.toString(), icon: Clock, color: 'text-purple-600' },
+    { label: 'Waiting', value: waitingCount.toString(), icon: Clock, color: 'text-purple-600' },
   ];
 
   if (!currentUser) return null;
+
+  const modalOpen = showVitalsModal || showComprehensiveNotes || showReferralModal || showSoapModal || showRxTemplateModal || showCarePlanModal;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -748,7 +837,6 @@ const DoctorDashboard: React.FC = () => {
                 <DatePicker
                   value={selectedDate}
                   onChange={setSelectedDate}
-                  className="w-40"
                 />
                 <button
                   onClick={fetchTodayAppointments}
@@ -762,7 +850,8 @@ const DoctorDashboard: React.FC = () => {
         </div>
 
         {/* Main Content Area */}
-        <div className="p-6">
+        <div className={`p-6 ${modalOpen ? 'pointer-events-none' : ''}`} aria-hidden={modalOpen}
+        >
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {quickStats.map((stat, index) => {
@@ -785,38 +874,52 @@ const DoctorDashboard: React.FC = () => {
 
           {/* Tab Navigation */}
           <div className="mb-8">
-            <div className="border-b border-slate-200">
-              <nav className="-mb-px flex space-x-8">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-2 shadow-sm sticky top-16 z-20">
+              <nav className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                     activeTab === 'dashboard'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-indigo-200 hover:text-indigo-700'
                   }`}
                 >
-                  Dashboard
+                  <BarChart3 className={`w-4 h-4 ${activeTab === 'dashboard' ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'}`} />
+                  <span>Dashboard</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('queue')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                     activeTab === 'queue'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-emerald-200 hover:text-emerald-700'
                   }`}
                 >
-                  Patient Queue
+                  <Users className={`w-4 h-4 ${activeTab === 'queue' ? 'text-white' : 'text-slate-500 group-hover:text-emerald-600'}`} />
+                  <span>Patient Queue</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('schedule')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                     activeTab === 'schedule'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-purple-200 hover:text-purple-700'
                   }`}
                 >
-                  Schedule View
+                  <Calendar className={`w-4 h-4 ${activeTab === 'schedule' ? 'text-white' : 'text-slate-500 group-hover:text-purple-600'}`} />
+                  <span>Schedule View</span>
                 </button>
+                <button
+                  onClick={() => setActiveTab('current-appointment')}
+                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                    activeTab === 'current-appointment'
+                      ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-sky-200 hover:text-sky-700'
+                }`}
+              >
+                <FileText className={`w-4 h-4 ${activeTab === 'current-appointment' ? 'text-white' : 'text-slate-500 group-hover:text-sky-600'}`} />
+                <span>Current Appointment</span>
+              </button>
               </nav>
             </div>
           </div>
@@ -824,241 +927,161 @@ const DoctorDashboard: React.FC = () => {
           {/* Tab Content */}
           {activeTab === 'dashboard' && (
             <div className="space-y-8">
-              {/* Current Appointment */}
-              {currentAppointment && (
+              {/* Smart Task Hub */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-slate-900">Today</h2>
+                    <button onClick={() => { fetchTodayAppointments(); fetchAuthorizedOrders(); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                      <RefreshCw className="w-4 h-4 text-slate-600" />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {/* Tasks: results to review, notes to finalize, messages could be wired later */}
+                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
+                      <div className="text-sm text-slate-700">Authorized orders awaiting nursing execution</div>
+                      <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">{authorizedOrders.length}</span>
+                    </div>
+                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
+                      <div className="text-sm text-slate-700">Appointments in progress</div>
+                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800">{getCurrentAppointments().length}</span>
+                    </div>
+                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
+                      <div className="text-sm text-slate-700">Patients checked-in and waiting</div>
+                      <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">{appointments.filter(a => a.status === 'confirmed').length}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vitals snapshot */}
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-slate-900">Current Appointment</h2>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowVitalsModal(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                      >
-                        <Activity className="w-4 h-4" />
-                        Record Vitals
-                      </button>
-                      <button
-                        onClick={() => setShowNotesModal(true)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                      >
-                        <FileText className="w-4 h-4" />
-                        Add Notes
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-900">
-                          {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}
-                        </h3>
-                        <p className="text-slate-600">Patient ID: {currentAppointment.patient.patientNumber}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-slate-600">Appointment Time</p>
-                        <p className="font-semibold">{formatTime(currentAppointment.appointmentDate)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-slate-600">Reason for Visit</p>
-                        <p className="font-medium">{currentAppointment.reason}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-600">Type</p>
-                        <p className="font-medium">{currentAppointment.appointmentType}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-slate-200">
-                      <button
-                        onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')}
-                        className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Complete Appointment
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-
-              {/* Today's Schedule - Now on Top */}
-              <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50">
-                <div className="p-6 border-b border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-slate-900">Today's Schedule</h2>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-600">
-                        {appointments.length} appointment{appointments.length !== 1 ? 's' : ''} scheduled
-                      </span>
-                      <button
-                        onClick={fetchTodayAppointments}
-                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                      >
-                        <RefreshCw className="w-4 h-4 text-slate-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-6">
-                  {loading ? (
-                    <div className="text-center py-8">
-                      <RefreshCw className="w-8 h-8 text-slate-400 animate-spin mx-auto mb-4" />
-                      <p className="text-slate-500">Loading appointments...</p>
-                    </div>
-                  ) : appointments.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                      <p className="text-slate-500">No appointments scheduled for today</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {appointments.map((appointment) => (
-                        <div key={appointment.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className="text-center">
-                              <p className="text-sm text-slate-600">Time</p>
-                              <p className="font-semibold">{formatTime(appointment.appointmentDate)}</p>
-                            </div>
-                            <div className="w-px h-12 bg-slate-200"></div>
-                            <div>
-                              <h3 className="font-semibold text-slate-900">
-                                {appointment.patient.firstName} {appointment.patient.lastName}
-                              </h3>
-                              <p className="text-slate-600">{appointment.reason}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <p className="text-sm text-slate-500">{appointment.appointmentType}</p>
-                                {(() => {
-                                  const vitalsBadge = getVitalsStatusBadge(appointment);
-                                  return (
-                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${vitalsBadge.color}`}>
-                                      {vitalsBadge.icon}
-                                      {vitalsBadge.text}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3">
-                            {(() => {
-                              const vitalsBadge = getVitalsStatusBadge(appointment);
-                              if (vitalsBadge.text === 'No Vitals') {
-                                return (
-                                  <button
-                                    onClick={() => {
-                                      showError('Action Required', 'Please request vitals recording from nursing staff before consultation');
-                                    }}
-                                    className="px-3 py-1 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm flex items-center gap-1"
-                                  >
-                                    <Activity className="w-4 h-4" />
-                                    Request Vitals
-                                  </button>
-                                );
-                              }
-                              return null;
-                            })()}
-                            <AppointmentActions
-                              appointment={appointment}
-                              onUpdate={fetchTodayAppointments}
-                              tenantSlug={tenantSlug!}
-                              token={localStorage.getItem('ehr_token') || ''}
-                            />
-                            <button
-                              onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients/${appointment.patient.id}`)}
-                              className="px-3 py-1 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm flex items-center gap-1"
-                            >
-                              <User className="w-4 h-4" />
-                              View Patient
-                            </button>
-                            <button
-                              onClick={() => {
-                                setCurrentReferralAppointment(appointment);
-                                setShowReferralModal(true);
-                              }}
-                              className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm flex items-center gap-1"
-                            >
-                              <Stethoscope className="w-4 h-4" />
-                              Refer to Nurse
-                            </button>
-                          </div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Latest Vitals</h3>
+                  {appointments.slice(0, 5).map((apt) => {
+                    const list = vitalsData[apt.patient.id] || [];
+                    const latest = list[0];
+                    return (
+                      <div key={apt.id} className="mb-3 p-3 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-medium text-slate-900 truncate">{apt.patient.firstName} {apt.patient.lastName}</div>
+                          <div className="text-xs text-slate-500">{latest ? new Date(latest.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No vitals'}</div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">BP: {latest?.bloodPressure || '-'}</span>
+                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">HR: {latest?.heartRate ?? '-'}</span>
+                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">Temp: {latest?.temperature ?? '-'}</span>
+                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">SpO2: {latest?.oxygenSaturation ?? '-'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {appointments.length === 0 && (
+                    <p className="text-sm text-slate-500">No patients today.</p>
                   )}
                 </div>
               </div>
+              {/* Current Appointment moved to its own tab */}
 
-              {/* Quick Actions and Upcoming Appointments - Hidden for now */}
-              {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+              
+
+              {/* Orders & Medication - side by side */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Orders Lifecycle */}
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
-                  <div className="space-y-3">
-                    {getDoctorActions().slice(1, 5).map((action, index) => {
-                      const Icon = action.icon;
-                      return (
-                        <button
-                          key={index}
-                          onClick={() => action.route && navigate(`/ehr/${tenantSlug}/${action.route}`)}
-                          className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-3"
-                        >
-                          <div className={`p-2 rounded-lg bg-gradient-to-r ${action.color}`}>
-                            <Icon className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900">{action.label}</p>
-                            <p className="text-sm text-slate-600">{action.desc}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-slate-900">Orders Lifecycle</h2>
+                    <button onClick={fetchAuthorizedOrders} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                      <RefreshCw className="w-4 h-4 text-slate-600" />
+                    </button>
                   </div>
-                </div>
-
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Upcoming Appointments</h3>
-                  <div className="space-y-3">
-                    {getUpcomingAppointments().map((appointment) => (
-                      <div key={appointment.id} className="p-3 bg-slate-50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {appointment.patient.firstName} {appointment.patient.lastName}
-                            </p>
-                            <p className="text-sm text-slate-600">{appointment.reason}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              {(() => {
-                                const vitalsBadge = getVitalsStatusBadge(appointment);
-                                return (
-                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${vitalsBadge.color}`}>
-                                    {vitalsBadge.icon}
-                                    {vitalsBadge.text}
-                                  </span>
-                                );
-                              })()}
+                  {authorizedOrders.length === 0 ? (
+                    <p className="text-slate-500">No authorized orders awaiting execution.</p>
+                  ) : (
+                    <>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {(showAllOrders ? authorizedOrders : authorizedOrders.slice(0, 5)).map((o) => (
+                          <div key={o.id} className="p-4 border border-slate-200 rounded-lg flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold text-slate-900">{o.orderName}</div>
+                              <div className="text-xs text-slate-600">{o.orderType} • Priority: {o.priority}</div>
                             </div>
+                            <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">Authorized</span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium">{formatTime(appointment.appointmentDate)}</p>
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getAppointmentStatusColor(appointment.status)}`}>
-                              {getAppointmentStatusIcon(appointment.status)}
-                              {appointment.status}
-                            </span>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                    {getUpcomingAppointments().length === 0 && (
-                      <p className="text-slate-500 text-center py-4">No upcoming appointments</p>
-                    )}
-                  </div>
+                      {authorizedOrders.length > 5 && (
+                        <button
+                          onClick={() => setShowAllOrders(!showAllOrders)}
+                          className="mt-3 w-full text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-2 py-2 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          {showAllOrders ? (
+                            <>
+                              <span>Show Less</span>
+                              <ArrowLeft className="w-4 h-4 rotate-90" />
+                            </>
+                          ) : (
+                            <>
+                              <span>Show {authorizedOrders.length - 5} More</span>
+                              <ArrowLeft className="w-4 h-4 -rotate-90" />
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
-              </div> */}
+
+                {/* Medication Safety (basic) */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-slate-900">Medication Safety</h2>
+                    <button onClick={() => { fetchAuthorizedOrders(); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                      <RefreshCw className="w-4 h-4 text-slate-600" />
+                    </button>
+                  </div>
+                  <div className="text-sm text-slate-700 mb-3">Active medication orders today</div>
+                  {(() => {
+                    const medications = authorizedOrders.filter(o => o.orderType === 'medication');
+                    return medications.length === 0 ? (
+                      <p className="text-slate-500">No medication orders found.</p>
+                    ) : (
+                      <>
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                          {(showAllMedications ? medications : medications.slice(0, 5)).map((m) => (
+                            <div key={m.id} className="p-4 border border-slate-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-semibold text-slate-900">{m.orderName}</div>
+                                  <div className="text-xs text-slate-600">Dosage: {m.dosage || '-'} • Freq: {m.frequency || '-'}</div>
+                                </div>
+                                <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800">OK</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {medications.length > 5 && (
+                          <button
+                            onClick={() => setShowAllMedications(!showAllMedications)}
+                            className="mt-3 w-full text-sm text-emerald-600 hover:text-emerald-800 font-medium flex items-center justify-center gap-2 py-2 hover:bg-emerald-50 rounded-lg transition-colors"
+                          >
+                            {showAllMedications ? (
+                              <>
+                                <span>Show Less</span>
+                                <ArrowLeft className="w-4 h-4 rotate-90" />
+                              </>
+                            ) : (
+                              <>
+                                <span>Show {medications.length - 5} More</span>
+                                <ArrowLeft className="w-4 h-4 -rotate-90" />
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1079,12 +1102,204 @@ const DoctorDashboard: React.FC = () => {
               appointments={appointments}
             />
           )}
+
+          {activeTab === 'current-appointment' && (
+            <div className="space-y-8">
+              {currentAppointment ? (
+                <>
+                  <div className="grid grid-cols-1 xl:grid-cols-[1fr_20rem] gap-6 items-start">
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-bold text-slate-900">Current Appointment</h2>
+                        <div className="flex gap-2 flex-wrap">
+                          <button onClick={() => setShowClinicalNotesModal(true)} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm">
+                            <FileText className="w-4 h-4" />
+                            Clinical Notes
+                          </button>
+                          <button onClick={() => setShowPrescriptionsModal(true)} className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center gap-2 text-sm">
+                            <Pill className="w-4 h-4" />
+                            Prescriptions
+                          </button>
+                          <button onClick={() => setShowLabOrdersModal(true)} className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 text-sm">
+                            <TestTube className="w-4 h-4" />
+                            Lab Orders
+                          </button>
+                          <button onClick={() => { setCurrentReferralAppointment(currentAppointment); setShowReferralModal(true); }} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 text-sm">
+                            <Stethoscope className="w-4 h-4" />
+                            Refer to Nurse
+                          </button>
+                          <button onClick={() => setShowVitalsModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm">
+                            <Activity className="w-4 h-4" />
+                            View Vitals
+                          </button>
+                          <button onClick={() => setShowLabResultsModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
+                            <TestTube className="w-4 h-4" />
+                            Lab Results
+                          </button>
+                          <button onClick={()=>setShowProblemsModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">Problems</button>
+                          <button onClick={()=>setShowAllergiesModal(true)} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors text-sm">Allergies</button>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-semibold text-slate-900">{currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</h3>
+                            <p className="text-slate-600">Patient ID: {currentAppointment.patient.patientNumber}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-slate-600">Appointment Time</p>
+                            <p className="font-semibold">{formatTime(currentAppointment.appointmentDate)}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-slate-600">Reason for Visit</p>
+                            <p className="font-medium">{currentAppointment.reason}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-600">Type</p>
+                            <p className="font-medium">{currentAppointment.appointmentType}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <button onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+                            <CheckCircle className="w-4 h-4" />
+                            Complete Appointment
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <ChartSidebar
+                      appointment={{ ...currentAppointment, notes: JSON.stringify({ problems, allergies }) }}
+                      vitals={vitalsData[currentAppointment.patient.id] || []}
+                      labOrders={authorizedOrders.filter(o => o.patientId === currentAppointment.patient.id)}
+                    />
+                  </div>
+
+                  {/* Clinical Alerts - Prominently displayed at top */}
+                  {(() => {
+                    const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
+                    const vitalsForAlert: VitalsData | undefined = latestVitals ? {
+                      bloodPressure: latestVitals.bloodPressure || undefined,
+                      heartRate: latestVitals.heartRate || undefined,
+                      temperature: latestVitals.temperature || undefined,
+                      oxygenSaturation: latestVitals.oxygenSaturation || undefined,
+                      respiratoryRate: latestVitals.respiratoryRate || undefined,
+                      bloodGlucose: latestVitals.bloodGlucose || undefined
+                    } : undefined;
+
+                    return (
+                      <ClinicalAlerts
+                        vitals={vitalsForAlert}
+                        allergies={allergies}
+                        className="mb-6"
+                      />
+                    );
+                  })()}
+
+                  {/* Allergies and Recent Orders - Side by Side */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Allergies Section */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-rose-600" />
+                          <h3 className="text-lg font-bold text-slate-900">Allergies</h3>
+                        </div>
+                        <button onClick={()=>setShowAllergiesModal(true)} className="text-sm text-rose-600 hover:text-rose-800 font-medium">Manage</button>
+                      </div>
+                      {allergies.length === 0 ? (
+                        <p className="text-sm text-slate-500">No known allergies</p>
+                      ) : (
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                          {allergies.map((a: any) => (
+                            <div key={a.id} className="p-4 border border-slate-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-semibold text-slate-900">{a.allergen}</div>
+                                  {a.reaction && (
+                                    <div className="text-xs text-slate-600 mt-1">{a.reaction}</div>
+                                  )}
+                                </div>
+                                {a.severity && (
+                                  <span className={`text-xs px-2 py-1 rounded-full border ${
+                                    a.severity === 'severe' ? 'bg-red-50 text-red-700 border-red-200' : 
+                                    a.severity === 'moderate' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                  }`}>
+                                    {a.severity}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Recent Orders Section */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <TestTube className="w-5 h-5 text-violet-600" />
+                          <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
+                        </div>
+                        <button onClick={() => fetchAuthorizedOrders()} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                          <RefreshCw className="w-4 h-4 text-slate-600" />
+                        </button>
+                      </div>
+                      {(() => {
+                        const patientOrders = authorizedOrders.filter(o => o.patientId === currentAppointment.patient.id);
+                        return patientOrders.length === 0 ? (
+                          <p className="text-sm text-slate-500">No recent orders</p>
+                        ) : (
+                          <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {patientOrders.slice(0, 10).map((o: any) => (
+                              <div key={o.id} className="p-4 border border-slate-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="font-semibold text-slate-900">{o.orderName}</div>
+                                    <div className="text-xs text-slate-600 mt-1">
+                                      {o.orderType === 'lab_test' ? 'Lab Test' : o.orderType === 'medication' ? 'Medication' : o.orderType} • {o.priority}
+                                    </div>
+                                    {o.authorizedAt && (
+                                      <div className="text-xs text-slate-500 mt-1">
+                                        {new Date(o.authorizedAt).toLocaleDateString()} {new Date(o.authorizedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className={`text-xs px-2 py-1 rounded-full border ${
+                                    o.status === 'authorized' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    o.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    o.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                  }`}>
+                                    {o.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-8 text-center text-slate-600">
+                  No in-progress appointment found for you today.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Vitals Modal */}
       {showVitalsModal && currentAppointment && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-300">
           <div className="bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200/50 px-6 py-5 rounded-t-3xl">
@@ -1094,7 +1309,7 @@ const DoctorDashboard: React.FC = () => {
                     <Activity className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">Record Patient Vitals</h3>
+                    <h3 className="text-xl font-bold text-slate-900">View Patient Vitals</h3>
                     <p className="text-sm text-slate-600">
                       {currentAppointment.patient.firstName} {currentAppointment.patient.lastName} • {currentAppointment.patient.patientNumber}
                     </p>
@@ -1111,6 +1326,58 @@ const DoctorDashboard: React.FC = () => {
 
             {/* Content */}
             <div className="p-6">
+              {/* Display existing vitals */}
+              {(vitalsData[currentAppointment.patient.id] || []).length > 0 && (
+                <div className="mb-6 space-y-4">
+                  <h4 className="text-lg font-semibold text-slate-900">Recent Vitals</h4>
+                  {(vitalsData[currentAppointment.patient.id] || []).slice(0, 3).map((v: PatientVitals) => (
+                    <div key={v.id} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/50 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-slate-700">
+                          {new Date(v.recordedAt).toLocaleString()}
+                        </span>
+                        <span className="text-xs bg-white/70 text-slate-600 px-2 py-1 rounded">Recorded by: {v.recordedBy}</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Droplets className="w-4 h-4 text-blue-600" />
+                          <span className="text-slate-700">BP:</span>
+                          <span className="font-medium text-slate-900">{v.bloodPressure || '—'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Heart className="w-4 h-4 text-red-600" />
+                          <span className="text-slate-700">HR:</span>
+                          <span className="font-medium text-slate-900">{v.heartRate ?? '—'} bpm</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Thermometer className="w-4 h-4 text-orange-600" />
+                          <span className="text-slate-700">Temp:</span>
+                          <span className="font-medium text-slate-900">{v.temperature ?? '—'} °C</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-green-600" />
+                          <span className="text-slate-700">SpO2:</span>
+                          <span className="font-medium text-slate-900">{v.oxygenSaturation ?? '—'} %</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Weight className="w-4 h-4 text-purple-600" />
+                          <span className="text-slate-700">Weight:</span>
+                          <span className="font-medium text-slate-900">{v.weight ?? '—'} kg</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-indigo-600" />
+                          <span className="text-slate-700">Height:</span>
+                          <span className="font-medium text-slate-900">{v.height ?? '—'} cm</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="border-t border-slate-200 pt-6">
+                <h4 className="text-lg font-semibold text-slate-900 mb-4">Record New Vitals</h4>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Blood Pressure */}
                 <div className="space-y-2">
@@ -1237,97 +1504,121 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
-      {/* Notes Modal */}
-      {showNotesModal && currentAppointment && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
-            {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200/50 px-6 py-5 rounded-t-3xl">
-              <div className="flex items-center justify-between">
+      {/* Comprehensive Notes Modal */}
+      {showComprehensiveNotes && currentAppointment && (
+        <AppointmentNotes
+          appointment={currentAppointment}
+          onClose={() => setShowComprehensiveNotes(false)}
+          onSave={() => { setShowComprehensiveNotes(false); fetchTodayAppointments(); }}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Problems Modal */}
+      {showProblemsModal && currentAppointment && (
+        <ProblemListModal
+          open={showProblemsModal}
+          onClose={() => setShowProblemsModal(false)}
+          onSaved={() => { setShowProblemsModal(false); fetchTodayAppointments(); }}
+          appointment={currentAppointment}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Allergies Modal */}
+      {showAllergiesModal && currentAppointment && (
+        <AllergiesModal
+          open={showAllergiesModal}
+          onClose={() => setShowAllergiesModal(false)}
+          onSaved={() => { setShowAllergiesModal(false); fetchTodayAppointments(); }}
+          appointment={currentAppointment}
+          patientId={currentAppointment.patient.id}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Clinical Notes Modal */}
+      {showClinicalNotesModal && currentAppointment && (
+        <ClinicalNotesModal
+          open={showClinicalNotesModal}
+          onClose={() => setShowClinicalNotesModal(false)}
+          onSaved={() => { setShowClinicalNotesModal(false); fetchTodayAppointments(); }}
+          appointment={currentAppointment}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Prescriptions Modal */}
+      {showPrescriptionsModal && currentAppointment && (
+        <PrescriptionsModal
+          open={showPrescriptionsModal}
+          onClose={() => setShowPrescriptionsModal(false)}
+          onSaved={() => { setShowPrescriptionsModal(false); fetchTodayAppointments(); fetchAuthorizedOrders(); }}
+          appointment={currentAppointment}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Lab Orders Modal */}
+      {showLabOrdersModal && currentAppointment && (
+        <LabOrdersModal
+          open={showLabOrdersModal}
+          onClose={() => setShowLabOrdersModal(false)}
+          onSaved={() => { setShowLabOrdersModal(false); fetchTodayAppointments(); fetchAuthorizedOrders(); }}
+          appointment={currentAppointment}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+        />
+      )}
+
+      {/* Lab Results Modal */}
+      {showLabResultsModal && currentAppointment && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl">
-                    <FileText className="w-6 h-6 text-white" />
+                  <div className="p-2 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl">
+                    <TestTube className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">Add Appointment Notes</h3>
+                    <h3 className="text-lg font-bold text-slate-900">Lab Results</h3>
                     <p className="text-sm text-slate-600">
-                      {currentAppointment.patient.firstName} {currentAppointment.patient.lastName} • {currentAppointment.patient.patientNumber}
+                      {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowNotesModal(false)}
-                  className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+                  onClick={() => setShowLabResultsModal(false)}
+                  className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                 >
-                  <X className="w-5 h-5 text-slate-500" />
+                  <X className="w-5 h-5 text-slate-600" />
                 </button>
               </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Appointment Notes</label>
-                  <textarea
-                    value={appointmentNotes}
-                    onChange={(e) => setAppointmentNotes(e.target.value)}
-                    rows={8}
-                    placeholder="Enter your clinical notes, observations, and recommendations for this appointment..."
-                    className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
-                  />
-                </div>
-                
-                <div className="bg-slate-50 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Appointment Details</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-slate-600">Reason:</span>
-                      <p className="font-medium text-slate-900">{currentAppointment.reason}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-600">Type:</span>
-                      <p className="font-medium text-slate-900">{currentAppointment.appointmentType}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-600">Time:</span>
-                      <p className="font-medium text-slate-900">{formatTime(currentAppointment.appointmentDate)}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-600">Duration:</span>
-                      <p className="font-medium text-slate-900">{currentAppointment.durationMinutes} minutes</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowNotesModal(false)}
-                  className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleNotesSubmit}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all font-medium shadow-lg"
-                >
-                  Save Notes
-                </button>
+              <div className="flex-1 overflow-y-auto p-6">
+                <LabResultsViewer
+                  patientId={currentAppointment.patient.id}
+                  tenantSlug={tenantSlug!}
+                  token={localStorage.getItem('ehr_token') || ''}
+                />
               </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Referral Modal */}
       {showReferralModal && currentReferralAppointment && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-300">
           <div className="bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-orange-50 to-red-50 border-b border-orange-200/50 px-6 py-5 rounded-t-3xl">
@@ -1418,6 +1709,138 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
+      )}
+
+      {/* SOAP Template Modal */}
+      {showSoapModal && currentAppointment && (
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-3xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">SOAP Note</h3>
+              <button onClick={() => setShowSoapModal(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700">Subjective</label>
+                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-28" value={soapData.subjective} onChange={(e) => setSoapData({ ...soapData, subjective: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Objective</label>
+                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-28" value={soapData.objective} onChange={(e) => setSoapData({ ...soapData, objective: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Assessment</label>
+                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-24" value={soapData.assessment} onChange={(e) => setSoapData({ ...soapData, assessment: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Plan</label>
+                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-24" value={soapData.plan} onChange={(e) => setSoapData({ ...soapData, plan: e.target.value })} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button onClick={() => setShowSoapModal(false)} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
+              <button onClick={async () => {
+                try {
+                  const token = localStorage.getItem('ehr_token');
+                  if (!token) return;
+                  await ehrApi.updateAppointment(currentAppointment.id, {
+                    notes: `SOAP NOTE\nS: ${soapData.subjective}\nO: ${soapData.objective}\nA: ${soapData.assessment}\nP: ${soapData.plan}`
+                  }, token, tenantSlug!);
+                  setShowSoapModal(false);
+                  showSuccess('Saved', 'SOAP note saved');
+                  fetchTodayAppointments();
+                } catch (e) { showError('Error', 'Failed to save SOAP note'); }
+              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white">Save SOAP</button>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
+      )}
+
+      {/* Prescribing Template Modal */}
+      {showRxTemplateModal && currentAppointment && (
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Prescribe Medication</h3>
+              <button onClick={() => setShowRxTemplateModal(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <input className="w-full border border-slate-300 rounded-xl p-3" placeholder="Medication" value={rxData.medication} onChange={(e) => setRxData({ ...rxData, medication: e.target.value })} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input className="border border-slate-300 rounded-xl p-3" placeholder="Dosage" value={rxData.dosage} onChange={(e) => setRxData({ ...rxData, dosage: e.target.value })} />
+                <input className="border border-slate-300 rounded-xl p-3" placeholder="Frequency" value={rxData.frequency} onChange={(e) => setRxData({ ...rxData, frequency: e.target.value })} />
+                <input className="border border-slate-300 rounded-xl p-3" placeholder="Duration" value={rxData.duration} onChange={(e) => setRxData({ ...rxData, duration: e.target.value })} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button onClick={() => setShowRxTemplateModal(false)} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
+              <button onClick={async () => {
+                try {
+                  const token = localStorage.getItem('ehr_token');
+                  if (!token || !currentUser) return;
+                  const created = await ehrApi.createOrder({
+                    patientId: currentAppointment.patient.id,
+                    appointmentId: currentAppointment.id,
+                    doctorId: currentUser.id,
+                    orderType: 'medication',
+                    orderName: rxData.medication,
+                    description: `Prescription for ${rxData.medication}`,
+                    instructions: `Dosage: ${rxData.dosage}, Frequency: ${rxData.frequency}, Duration: ${rxData.duration}`,
+                    priority: 'normal',
+                    dosage: rxData.dosage,
+                    frequency: rxData.frequency,
+                    duration: rxData.duration
+                  }, token, tenantSlug!);
+                  const orderId = created?.data?.order?.id;
+                  if (orderId) { await ehrApi.authorizeOrder(orderId, token, tenantSlug!); }
+                  setShowRxTemplateModal(false);
+                  showSuccess('Prescribed', 'Medication order created and authorized');
+                  fetchTodayAppointments();
+                  fetchAuthorizedOrders();
+                } catch (e) { showError('Error', 'Failed to create prescription'); }
+              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white">Create Prescription</button>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
+      )}
+
+      {/* Care Plan Modal */}
+      {showCarePlanModal && currentAppointment && (
+        <ModalPortal>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Care Plan</h3>
+              <button onClick={() => setShowCarePlanModal(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <textarea className="w-full border border-slate-300 rounded-xl p-3 h-20" placeholder="Goals" value={carePlan.goals} onChange={(e) => setCarePlan({ ...carePlan, goals: e.target.value })} />
+              <textarea className="w-full border border-slate-300 rounded-xl p-3 h-20" placeholder="Tasks" value={carePlan.tasks} onChange={(e) => setCarePlan({ ...carePlan, tasks: e.target.value })} />
+              <input className="w-full border border-slate-300 rounded-xl p-3" placeholder="Due date (optional)" value={carePlan.dueDate} onChange={(e) => setCarePlan({ ...carePlan, dueDate: e.target.value })} />
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button onClick={() => setShowCarePlanModal(false)} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
+              <button onClick={async () => {
+                try {
+                  const token = localStorage.getItem('ehr_token');
+                  if (!token) return;
+                  await ehrApi.updateAppointment(currentAppointment.id, {
+                    notes: `CARE PLAN\nGoals: ${carePlan.goals}\nTasks: ${carePlan.tasks}\nDue: ${carePlan.dueDate || '—'}`
+                  }, token, tenantSlug!);
+                  setShowCarePlanModal(false);
+                  showSuccess('Saved', 'Care plan saved to notes');
+                  fetchTodayAppointments();
+                } catch (e) { showError('Error', 'Failed to save care plan'); }
+              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white">Save Care Plan</button>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
       )}
     </div>
   );

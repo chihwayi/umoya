@@ -4,8 +4,8 @@ import {
   Plus, Search, Filter, RefreshCw, Eye, Edit, Trash2,
   CheckCircle, AlertCircle, Play, Square, XCircle
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 import { formatDateForAPI, formatDateForInput } from '../utils/dateUtils';
 import DatePicker from './DatePicker';
 import AppointmentActions from './AppointmentActions';

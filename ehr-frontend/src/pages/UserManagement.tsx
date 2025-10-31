@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Users, Plus, Edit, Trash2, Key, UserCheck, UserX, Search, Filter, ArrowLeft } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
-import CreateUserModal from '../components/CreateUserModal.tsx';
-import PasswordDisplayModal from '../components/PasswordDisplayModal.tsx';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
+import CreateUserModal from '../components/CreateUserModal';
+import PasswordDisplayModal from '../components/PasswordDisplayModal';
 
 interface User {
   id: string;
@@ -32,7 +32,7 @@ const UserManagement: React.FC = () => {
   const [resetUser, setResetUser] = useState<any>(null);
   const { showSuccess, showError, showInfo } = useNotification();
 
-  const roles = ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist'];
+  const roles = ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_tech'];
 
   useEffect(() => {
     fetchUsers();
@@ -106,6 +106,8 @@ const UserManagement: React.FC = () => {
       case 'nurse': return 'bg-green-100 text-green-800';
       case 'receptionist': return 'bg-orange-100 text-orange-800';
       case 'pharmacist': return 'bg-teal-100 text-teal-800';
+      case 'lab_tech': return 'bg-cyan-100 text-cyan-800';
+      case 'lab_technician': return 'bg-cyan-100 text-cyan-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Clock, User, FileText, Search, ChevronDown } from 'lucide-react';
-import { useNotification } from './GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from './GlobalNotification';
+import { ehrApi } from '../services/api';
 import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
 import DatePicker from './DatePicker';
 

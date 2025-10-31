@@ -24,6 +24,12 @@ import { VitalsController } from './controllers/vitals.controller';
 import { TriageController } from './controllers/triage.controller';
 import { NursingNotesController } from './controllers/nursing-notes.controller';
 import { OrderController } from './controllers/order.controller';
+import { ProblemController } from './controllers/problem.controller';
+import { AllergyController } from './controllers/allergy.controller';
+import { LabTestController } from './controllers/lab-test.controller';
+import { LabOrderSetController } from './controllers/lab-order-set.controller';
+import { CriticalAlertController } from './controllers/critical-alert.controller';
+import { DrugController } from './controllers/drug.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -47,6 +53,12 @@ import { VitalsService } from './services/vitals.service';
 import { TriageService } from './services/triage.service';
 import { NursingNotesService } from './services/nursing-notes.service';
 import { OrderService } from './services/order.service';
+import { ProblemService } from './services/problem.service';
+import { AllergyService } from './services/allergy.service';
+import { LabTestService } from './services/lab-test.service';
+import { LabOrderSetService } from './services/lab-order-set.service';
+import { CriticalAlertService } from './services/critical-alert.service';
+import { DrugService } from './services/drug.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -82,6 +94,12 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     TriageController,
     NursingNotesController,
     OrderController,
+    ProblemController,
+    AllergyController,
+    LabTestController,
+    LabOrderSetController,
+    CriticalAlertController,
+    DrugController,
   ],
   providers: [
     AuthService,
@@ -105,6 +123,12 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     TriageService,
     NursingNotesService,
     OrderService,
+    ProblemService,
+    AllergyService,
+    LabTestService,
+    LabOrderSetService,
+    CriticalAlertService,
+    DrugService,
     JwtStrategy,
   ],
 })

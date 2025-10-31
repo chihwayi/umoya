@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TenantController } from './controllers/tenant.controller';
+import { AdminMaintenanceController } from './controllers/admin-maintenance.controller';
 import { TenantUserController } from './controllers/tenant-user.controller';
 import { TenantAnalyticsController } from './controllers/tenant-analytics.controller';
 import { TenantService } from './services/tenant.service';
@@ -34,11 +35,11 @@ import { AuditLog } from './entities/audit-log.entity';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       entities: [Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog],
-      synchronize: true, // Only for development
+      synchronize: false,
     }),
     TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog]),
   ],
-  controllers: [TenantController, TenantUserController, TenantAnalyticsController, AuthController],
+  controllers: [TenantController, TenantUserController, TenantAnalyticsController, AuthController, AdminMaintenanceController],
   providers: [
     TenantService, 
     TenantAnalyticsService, 

@@ -76,6 +76,10 @@ export class TenantService {
     return tenant;
   }
 
+  async findAll(): Promise<Tenant[]> {
+    return this.tenantRepository.find();
+  }
+
   async getAllTenants(): Promise<Tenant[]> {
     return this.tenantRepository.find({
       order: { createdAt: 'DESC' }

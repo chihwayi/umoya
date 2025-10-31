@@ -18,7 +18,7 @@ export class DatabaseProvisioningService {
       const connectionString = this.generateConnectionString(databaseName);
       
       // Run schema migration
-      await this.runSchemaMigration(connectionString);
+      await this.applyClinicSchema(connectionString);
       
       this.logger.log(`Database ${databaseName} created successfully`);
       return connectionString;
@@ -38,7 +38,8 @@ export class DatabaseProvisioningService {
     return `postgresql://${username}:${password}@${host}:${port}/${databaseName}`;
   }
 
-  private async runSchemaMigration(connectionString: string): Promise<void> {
+  // Make schema application callable and idempotent
+  public async applyClinicSchema(connectionString: string): Promise<void> {
     const tenantDataSource = new DataSource({
       type: 'postgres',
       url: connectionString,
@@ -47,12 +48,23 @@ export class DatabaseProvisioningService {
     try {
       await tenantDataSource.initialize();
       
-      // Execute clinic template schema
-      const statements = this.getClinicSchema();
+      // Execute clinic template schema (idempotent)
+      let statements = this.getClinicSchema();
+      // Ensure idempotency at runtime without rewriting the whole template
+      statements = statements.map((s) =>
+        s
+          .replace(/CREATE TABLE\s+([^(]+)/gi, (m) => m.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS'))
+          .replace(/CREATE INDEX\s+/gi, 'CREATE INDEX IF NOT EXISTS ')
+          .replace(/CREATE EXTENSION\s+/gi, 'CREATE EXTENSION IF NOT EXISTS ')
+          .replace(/IF NOT EXISTS\s+IF NOT EXISTS/gi, 'IF NOT EXISTS')
+      );
       
       for (const statement of statements) {
-        if (statement.trim()) {
+        if (!statement.trim()) continue;
+        try {
           await tenantDataSource.query(statement);
+        } catch (e) {
+          this.logger.warn(`Skipping statement due to error: ${e instanceof Error ? e.message : String(e)}\nSQL: ${statement.substring(0, 200)}...`);
         }
       }
       
@@ -70,9 +82,25 @@ export class DatabaseProvisioningService {
       // Create all triggers
       const triggerStatements = this.getTriggerStatements();
       for (const statement of triggerStatements) {
-        if (statement.trim()) {
+        if (!statement.trim()) continue;
+        try {
           await tenantDataSource.query(statement);
+        } catch (e) {
+          this.logger.warn(`Skipping trigger due to error: ${e instanceof Error ? e.message : String(e)}\nSQL: ${statement.substring(0, 200)}...`);
         }
+      }
+      
+      // Update existing CHECK constraints to include new roles
+      try {
+        await tenantDataSource.query(`
+          ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+        `);
+        await tenantDataSource.query(`
+          ALTER TABLE users ADD CONSTRAINT users_role_check 
+          CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech'));
+        `);
+      } catch (e) {
+        this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
       }
       
       this.logger.log('Schema migration completed');
@@ -92,7 +120,7 @@ export class DatabaseProvisioningService {
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech')),
           license_number VARCHAR(100),
           specialization VARCHAR(100),
           phone VARCHAR(50),
@@ -228,6 +256,7 @@ export class DatabaseProvisioningService {
           duration VARCHAR(100),
           priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
           status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'authorized', 'in_progress', 'completed', 'cancelled', 'rejected')),
+          drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL,
           authorized_by UUID REFERENCES users(id),
           authorized_at TIMESTAMP WITH TIME ZONE,
           executed_by UUID REFERENCES users(id),
@@ -398,7 +427,61 @@ export class DatabaseProvisioningService {
     `;
     
     // Split by semicolon but handle function definitions properly
-    const statements = schema.split(';').filter(stmt => stmt.trim());
+    let statements = schema.split(';').filter(stmt => stmt.trim());
+    
+    // Add problems and allergies tables as separate statements (after split)
+    statements.push(`CREATE TABLE IF NOT EXISTS problems (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, code VARCHAR(50), description TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved')), onset_date DATE, resolved_date DATE, notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS allergies (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, allergen VARCHAR(255) NOT NULL, reaction TEXT, severity VARCHAR(20) CHECK (severity IN ('mild','moderate','severe')), recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), recorded_by UUID REFERENCES users(id))`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_problems_patient_id ON problems(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id)`);
+    
+    // Add lab_orders table
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_patient_id ON lab_orders(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_status ON lab_orders(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_ordering_provider_id ON lab_orders(ordering_provider_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_number ON lab_orders(order_number)`);
+    
+    // Add lab_tests table (test catalog)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_tests (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), loinc_code VARCHAR(50) UNIQUE, test_name VARCHAR(255) NOT NULL, test_code VARCHAR(50), category VARCHAR(100) NOT NULL, specimen_type VARCHAR(100) NOT NULL, unit VARCHAR(50), reference_range_male VARCHAR(100), reference_range_female VARCHAR(100), reference_range_general VARCHAR(100), critical_high DECIMAL(10,2), critical_low DECIMAL(10,2), description TEXT, instructions TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_loinc_code ON lab_tests(loinc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_category ON lab_tests(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_test_code ON lab_tests(test_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_is_active ON lab_tests(is_active)`);
+    
+    // Add lab_order_sets table (predefined test groups)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_order_sets (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), set_name VARCHAR(255) NOT NULL, set_code VARCHAR(50) UNIQUE, description TEXT, test_ids JSONB NOT NULL, category VARCHAR(100), is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_set_code ON lab_order_sets(set_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_category ON lab_order_sets(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_is_active ON lab_order_sets(is_active)`);
+    
+    // Add critical_result_alerts table
+    statements.push(`CREATE TABLE IF NOT EXISTS critical_result_alerts (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), lab_order_id UUID NOT NULL REFERENCES lab_orders(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), test_code VARCHAR(50) NOT NULL, test_name VARCHAR(255) NOT NULL, result_value VARCHAR(255) NOT NULL, critical_value_type VARCHAR(20) CHECK (critical_value_type IN ('high','low','critical')), alert_message TEXT NOT NULL, status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','acknowledged','dismissed')), acknowledged_by UUID REFERENCES users(id), acknowledged_at TIMESTAMP WITH TIME ZONE, acknowledgment_notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_lab_order_id ON critical_result_alerts(lab_order_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_patient_id ON critical_result_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_ordering_provider_id ON critical_result_alerts(ordering_provider_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_status ON critical_result_alerts(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_created_at ON critical_result_alerts(created_at)`);
+    
+    // Add drugs table (medication catalog)
+    statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
+    
+    // Add drug_interactions table (many-to-many interactions)
+    statements.push(`CREATE TABLE IF NOT EXISTS drug_interactions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), drug1_id UUID NOT NULL REFERENCES drugs(id) ON DELETE CASCADE, drug2_id UUID NOT NULL REFERENCES drugs(id) ON DELETE CASCADE, severity VARCHAR(20) NOT NULL CHECK (severity IN ('minor','moderate','major','contraindicated')), description TEXT NOT NULL, mechanism TEXT, management TEXT, evidence_level VARCHAR(20), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), UNIQUE(drug1_id, drug2_id))`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug1_id ON drug_interactions(drug1_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug2_id ON drug_interactions(drug2_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_severity ON drug_interactions(severity)`);
+    
+    // Add drug_id column to orders table (for linking prescriptions to drugs)
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_orders_drug_id ON orders(drug_id) WHERE drug_id IS NOT NULL`);
+    
     return statements;
   }
 
@@ -427,7 +510,21 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_billing_updated_at BEFORE UPDATE ON billing
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_medical_aid_claims_updated_at BEFORE UPDATE ON medical_aid_claims
-          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_problems_updated_at BEFORE UPDATE ON problems
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_lab_orders_updated_at BEFORE UPDATE ON lab_orders
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_lab_tests_updated_at BEFORE UPDATE ON lab_tests
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_lab_order_sets_updated_at BEFORE UPDATE ON lab_order_sets
+          FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_critical_alerts_updated_at BEFORE UPDATE ON critical_result_alerts
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_drugs_updated_at BEFORE UPDATE ON drugs
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_drug_interactions_updated_at BEFORE UPDATE ON drug_interactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }
 

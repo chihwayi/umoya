@@ -10,6 +10,7 @@ export declare class TenantService {
     createTenant(createTenantDto: CreateTenantDto): Promise<Tenant>;
     findBySubdomain(subdomain: string): Promise<Tenant>;
     findById(id: string): Promise<Tenant>;
+    findAll(): Promise<Tenant[]>;
     getAllTenants(): Promise<Tenant[]>;
     updateTenantStatus(id: string, status: TenantStatus): Promise<Tenant>;
     deleteTenant(id: string): Promise<void>;

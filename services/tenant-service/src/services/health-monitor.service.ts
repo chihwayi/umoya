@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { DatabaseProvisioningService } from './database-provisioning.service';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 import { EmailService } from './email.service';
 
@@ -23,6 +24,7 @@ export class HealthMonitorService {
     @InjectRepository(Tenant)
     private tenantRepository: Repository<Tenant>,
     private emailService: EmailService,
+    private provisioning: DatabaseProvisioningService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -83,6 +85,15 @@ export class HealthMonitorService {
 
       await dataSource.initialize();
       
+      // Ensure core tables exist
+      const exists = await dataSource.query(
+        `SELECT to_regclass('public.vitals') as v, to_regclass('public.orders') as o`
+      );
+      if (!exists[0]?.v || !exists[0]?.o) {
+        const conn = tenant.connectionString!;
+        await this.provisioning.applyClinicSchema(conn);
+      }
+
       // Test query
       await dataSource.query('SELECT 1');
       await dataSource.destroy();

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Stethoscope, Shield, ArrowLeft } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 
 const EHRLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -49,6 +49,8 @@ const EHRLogin: React.FC = () => {
         // Redirect based on user role
         if (response.data.user.role === 'doctor') {
           navigate(`/ehr/${tenantSlug}/doctor`);
+        } else if (response.data.user.role === 'lab_tech' || response.data.user.role === 'lab_technician') {
+          navigate(`/ehr/${tenantSlug}/lab`);
         } else {
           navigate(`/ehr/${tenantSlug}/dashboard`);
         }

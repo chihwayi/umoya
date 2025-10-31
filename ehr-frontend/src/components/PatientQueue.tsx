@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Clock, User, Phone, Mail, Calendar, Stethoscope, 
-  CheckCircle, AlertCircle, Play, Pause, Square,
-  RefreshCw, Search, Filter, Bell, Activity
+  Clock, User, Phone, Mail, Calendar,
+  CheckCircle, AlertCircle, AlertTriangle, Play, Pause, Square, XCircle,
+  RefreshCw, Search, Filter, Bell, Activity, Heart, Thermometer, Droplets, Eye, Weight, Ruler
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 
 interface Patient {
@@ -37,6 +38,29 @@ interface Appointment {
   actualEndTime?: string;
 }
 
+interface PatientVitals {
+  id: string;
+  patientId: string;
+  bloodPressure: string;
+  heartRate: number;
+  temperature: number;
+  weight: number;
+  height: number;
+  oxygenSaturation: number;
+  respiratoryRate?: number;
+  painLevel?: number;
+  bloodGlucose?: number;
+  recordedAt: string;
+  recordedBy: string;
+}
+
+interface VitalsAlert {
+  type: 'critical' | 'warning' | 'normal' | 'missing';
+  message: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
 interface PatientQueueProps {
   tenantSlug: string;
   token: string;
@@ -50,12 +74,14 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
   onAppointmentUpdate,
   appointments: propAppointments = []
 }) => {
+  const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
+  const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
 
   // Use appointments from props if available, otherwise use local state
   const displayAppointments = propAppointments.length > 0 ? propAppointments : appointments;
@@ -65,6 +91,13 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
       fetchAppointments();
     }
   }, [selectedDate, propAppointments.length]);
+
+  useEffect(() => {
+    // Whenever appointments to display change, fetch vitals for those patients
+    if (displayAppointments.length > 0) {
+      fetchVitalsForAppointments(displayAppointments);
+    }
+  }, [displayAppointments]);
 
   const fetchAppointments = async () => {
     try {
@@ -87,12 +120,89 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
       
       console.log('🔍 PatientQueue - Filtered appointments:', filteredAppointments);
       setAppointments(filteredAppointments);
+      // Trigger vitals fetch for fetched list
+      fetchVitalsForAppointments(filteredAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       showError('Error', 'Failed to fetch appointments');
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchVitalsForAppointments = async (apts: Appointment[]) => {
+    try {
+      const vitalsPromises = apts.map(async (appointment) => {
+        try {
+          const vitals = await ehrApi.getVitals(appointment.patient.id, token, tenantSlug);
+          return { patientId: appointment.patient.id, vitals: vitals.data.vitals || [] };
+        } catch (error) {
+          return { patientId: appointment.patient.id, vitals: [] };
+        }
+      });
+      const results = await Promise.all(vitalsPromises);
+      const map: Record<string, PatientVitals[]> = {};
+      results.forEach(({ patientId, vitals }) => {
+        map[patientId] = vitals.sort((a: PatientVitals, b: PatientVitals) =>
+          new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        );
+      });
+      setVitalsData(map);
+    } catch (e) {
+      // Swallow vitals errors; queue should still render
+    }
+  };
+
+  const validateVitals = (vitals: PatientVitals): VitalsAlert[] => {
+    const alerts: VitalsAlert[] = [];
+    if (vitals.bloodPressure) {
+      const [systolicStr, diastolicStr] = vitals.bloodPressure.split('/');
+      const systolic = Number(systolicStr);
+      const diastolic = Number(diastolicStr);
+      if (systolic > 180 || diastolic > 110) {
+        alerts.push({ type: 'critical', message: `BP ${vitals.bloodPressure}`, icon: <AlertCircle className="w-3 h-3" />, color: 'text-red-600' });
+      } else if (systolic > 160 || diastolic > 100) {
+        alerts.push({ type: 'warning', message: `BP ${vitals.bloodPressure}`, icon: <AlertTriangle className="w-3 h-3" />, color: 'text-orange-600' });
+      }
+    }
+    if (vitals.heartRate > 0) {
+      if (vitals.heartRate > 120 || vitals.heartRate < 50) {
+        alerts.push({ type: 'critical', message: `HR ${vitals.heartRate}`, icon: <Heart className="w-3 h-3" />, color: 'text-red-600' });
+      } else if (vitals.heartRate > 110 || vitals.heartRate < 55) {
+        alerts.push({ type: 'warning', message: `HR ${vitals.heartRate}`, icon: <Heart className="w-3 h-3" />, color: 'text-orange-600' });
+      }
+    }
+    if (vitals.temperature > 0) {
+      if (vitals.temperature > 39.5 || vitals.temperature < 35.0) {
+        alerts.push({ type: 'critical', message: `Temp ${vitals.temperature}°C`, icon: <Thermometer className="w-3 h-3" />, color: 'text-red-600' });
+      } else if (vitals.temperature > 38.5 || vitals.temperature < 35.5) {
+        alerts.push({ type: 'warning', message: `Temp ${vitals.temperature}°C`, icon: <Thermometer className="w-3 h-3" />, color: 'text-orange-600' });
+      }
+    }
+    if (vitals.oxygenSaturation > 0) {
+      if (vitals.oxygenSaturation < 90) {
+        alerts.push({ type: 'critical', message: `SpO2 ${vitals.oxygenSaturation}%`, icon: <Droplets className="w-3 h-3" />, color: 'text-red-600' });
+      } else if (vitals.oxygenSaturation < 95) {
+        alerts.push({ type: 'warning', message: `SpO2 ${vitals.oxygenSaturation}%`, icon: <Droplets className="w-3 h-3" />, color: 'text-orange-600' });
+      }
+    }
+    return alerts;
+  };
+
+  const getVitalsStatusBadge = (appointment: Appointment) => {
+    const list = vitalsData[appointment.patient.id] || [];
+    if (list.length === 0) {
+      return { text: 'No Vitals', color: 'bg-red-100 text-red-800 border-red-200', icon: <AlertCircle className="w-3 h-3" /> };
+    }
+    const latest = list[0];
+    const alerts = validateVitals(latest);
+    if (alerts.some(a => a.type === 'critical')) {
+      return { text: 'Critical Vitals', color: 'bg-red-100 text-red-800 border-red-200', icon: <AlertCircle className="w-3 h-3" /> };
+    }
+    if (alerts.some(a => a.type === 'warning')) {
+      return { text: 'Vitals Warning', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: <AlertTriangle className="w-3 h-3" /> };
+    }
+    return { text: 'Vitals OK', color: 'bg-green-100 text-green-800 border-green-200', icon: <CheckCircle className="w-3 h-3" /> };
   };
 
   const handleAppointmentAction = async (appointmentId: string, action: string) => {
@@ -331,6 +441,12 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                           {getStatusIcon(appointment.status)}
                           {appointment.status}
                         </span>
+                        {(appointment.status === 'completed' || appointment.status === 'Completed') && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200">
+                            <CheckCircle className="w-3 h-3" />
+                            Completed
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                         <div>
@@ -351,46 +467,64 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                           )}
                         </div>
                       </div>
+                      <div className="mt-2">
+                        {(() => {
+                          const vitalsBadge = getVitalsStatusBadge(appointment);
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${vitalsBadge.color}`}>
+                              {vitalsBadge.icon}
+                              {vitalsBadge.text}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                   
                   <div className="flex gap-2">
-                    {appointment.status === 'scheduled' && (
-                      <button
-                        onClick={() => handleAppointmentAction(appointment.id, 'check-in')}
-                        className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Check In
-                      </button>
-                    )}
-                    {appointment.status === 'confirmed' && (
-                      <button
-                        onClick={() => handleAppointmentAction(appointment.id, 'start')}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
-                      >
-                        <Play className="w-4 h-4" />
-                        Start
-                      </button>
-                    )}
-                    {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
-                      <button
-                        onClick={() => handleAppointmentAction(appointment.id, 'complete')}
-                        className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
-                      >
-                        <Square className="w-4 h-4" />
-                        Complete
-                      </button>
-                    )}
-                    {['scheduled', 'confirmed'].includes(appointment.status) && (
-                      <button
-                        onClick={() => handleAppointmentAction(appointment.id, 'no-show')}
-                        className="px-3 py-1 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm flex items-center gap-1"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        No Show
-                      </button>
-                    )}
+                    {/* Primary status control first (Check In / Start / Complete) */}
+                    {(() => {
+                      const normalizedStatus = appointment.status.replace('_', '-');
+                      if (normalizedStatus === 'scheduled') {
+                        return (
+                          <button
+                            onClick={() => handleAppointmentAction(appointment.id, 'check-in')}
+                            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Check In
+                          </button>
+                        );
+                      } else if (normalizedStatus === 'confirmed') {
+                        return (
+                          <button
+                            onClick={() => handleAppointmentAction(appointment.id, 'start')}
+                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <Play className="w-4 h-4" />
+                            Start
+                          </button>
+                        );
+                      } else if (normalizedStatus === 'in-progress' || normalizedStatus === 'in_progress') {
+                        return (
+                          <button
+                            onClick={() => handleAppointmentAction(appointment.id, 'complete')}
+                            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+                          >
+                            <Square className="w-4 h-4" />
+                            Complete
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <button
+                      onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients/${appointment.patient.id}`)}
+                      className="px-3 py-1 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm flex items-center gap-1"
+                    >
+                      <User className="w-4 h-4" />
+                      View Patient
+                    </button>
                   </div>
                 </div>
               </div>

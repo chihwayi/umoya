@@ -118,6 +118,9 @@ export class Order {
   @Column({ name: 'execution_notes', type: 'text', nullable: true })
   executionNotes?: string;
 
+  @Column({ name: 'drug_id', nullable: true })
+  drugId?: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

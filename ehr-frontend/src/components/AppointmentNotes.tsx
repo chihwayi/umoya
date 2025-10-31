@@ -4,8 +4,9 @@ import {
   Pill, TestTube, Heart, Activity, AlertCircle,
   Calendar, Clock, User, Stethoscope
 } from 'lucide-react';
-import { useNotification } from './GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from './GlobalNotification';
+import { ehrApi } from '../services/api';
+import DatePicker from './DatePicker';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM, parseDDMMYYYYToDate, parseDDMMYYYYHHMMToDate } from '../utils/dateFormatting';
 
 interface Appointment {
@@ -94,7 +95,8 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
   const [treatmentPlan, setTreatmentPlan] = useState<TreatmentPlan | null>(null);
   const [diagnosis, setDiagnosis] = useState('');
   const [followUpInstructions, setFollowUpInstructions] = useState('');
-  const [nextAppointment, setNextAppointment] = useState('');
+  const [nextDate, setNextDate] = useState(''); // DD/MM/YYYY
+  const [nextTime, setNextTime] = useState(''); // HH:mm
   
   // Prescriptions state
   const [medications, setMedications] = useState<Medication[]>([]);
@@ -154,12 +156,6 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
       } else {
         setNotes('');
       }
-      
-      // Load patient instructions
-      if (appointment.patientInstructions) {
-        setFollowUpInstructions(appointment.patientInstructions);
-      }
-      
     } catch (error) {
       console.error('Error loading appointment data:', error);
     }
@@ -197,28 +193,51 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
       
       // Update the appointment with comprehensive notes
       await ehrApi.updateAppointment(appointment.id, {
-        notes: JSON.stringify(comprehensiveNotes),
-        patientInstructions: followUpInstructions
+        notes: JSON.stringify(comprehensiveNotes)
       }, token, tenantSlug);
       
       // Create follow-up appointment if next appointment date is set
-      if (nextAppointment) {
-        await createFollowUpAppointment();
+      if (nextDate && nextTime) {
+        const createdISO = buildNextAppointmentISO(nextDate, nextTime);
+        if (createdISO) {
+          await createFollowUpAppointment(createdISO);
+        } else {
+          console.warn('Invalid next appointment date/time, skipping follow-up creation');
+        }
       }
       
       showSuccess('Success', 'Appointment notes and follow-up saved successfully');
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving notes:', error);
-      showError('Error', 'Failed to save appointment notes');
+      if (error?.response) {
+        console.error('Save notes response data:', error.response.data);
+      }
+      const raw = error?.response?.data;
+      const msg = (raw && (raw.message || raw.error || raw.errors)) ? (raw.message || raw.error || raw.errors) : raw;
+      const text = typeof msg === 'string' ? msg : JSON.stringify(msg || 'Failed to save appointment notes');
+      showError('Error', text);
     } finally {
       setLoading(false);
     }
   };
 
-  const createFollowUpAppointment = async () => {
+  const buildNextAppointmentISO = (dateDDMMYYYY: string, timeHHmm: string): string | null => {
     try {
-      if (!nextAppointment) return;
+      const date = parseDDMMYYYYToDate(dateDDMMYYYY);
+      if (!date) return null;
+      const [hours, minutes] = timeHHmm.split(':');
+      if (!hours || !minutes) return null;
+      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      return date.toISOString();
+    } catch {
+      return null;
+    }
+  };
+
+  const createFollowUpAppointment = async (nextISO: string) => {
+    try {
+      if (!nextISO) return;
       
       // Get current user for the follow-up appointment
       const userData = localStorage.getItem('ehr_user');
@@ -233,18 +252,16 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
       const followUpData = {
         patientId: appointment.patient.id,
         doctorId: currentUser.id,
-        appointmentDate: nextAppointment,
+        appointmentDate: nextISO,
         durationMinutes: appointment.durationMinutes || 30,
         appointmentType: 'Follow-up',
         status: 'scheduled',
         reason: `Follow-up for ${appointment.appointmentType} - ${new Date(appointment.appointmentDate).toLocaleDateString()}`,
         notes: `Follow-up appointment scheduled from appointment on ${new Date(appointment.appointmentDate).toLocaleDateString()}`,
         priorityLevel: 'normal',
-        isTelehealth: appointment.isTelehealth || false,
         parentAppointmentId: appointment.id, // Link to original appointment
         createdBy: currentUser.id
       };
-      
       console.log('🔍 Creating follow-up appointment:', followUpData);
       
       // Create the follow-up appointment
@@ -531,39 +548,21 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
                 </label>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-2">
-                      Next Appointment Date & Time
-                    </label>
+                    <label className="block text-sm font-medium text-slate-600 mb-2">Next Appointment Date & Time</label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Date (DD/MM/YYYY)</label>
-                        <input
-                          type="text"
-                          placeholder="DD/MM/YYYY"
-                          value={nextAppointment ? formatDateToDDMMYYYY(nextAppointment) : ''}
-                          onChange={(e) => {
-                            const dateStr = e.target.value;
-                            const date = parseDDMMYYYYToDate(dateStr);
-                            if (date) {
-                              setNextAppointment(date.toISOString());
-                            }
-                          }}
-                          className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                        <DatePicker
+                          value={nextDate}
+                          onChange={setNextDate}
                         />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Time</label>
                         <input
                           type="time"
-                          value={nextAppointment ? new Date(nextAppointment).toTimeString().slice(0, 5) : ''}
-                          onChange={(e) => {
-                            if (nextAppointment) {
-                              const [hours, minutes] = e.target.value.split(':');
-                              const date = new Date(nextAppointment);
-                              date.setHours(parseInt(hours), parseInt(minutes));
-                              setNextAppointment(date.toISOString());
-                            }
-                          }}
+                          value={nextTime}
+                          onChange={(e) => setNextTime(e.target.value)}
                           className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
                         />
                       </div>

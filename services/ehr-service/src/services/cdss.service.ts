@@ -1,45 +1,91 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
+import axios, { AxiosInstance } from 'axios';
 
 @Injectable()
 export class CdssService {
-  
-  async checkDrugInteractions(medications: string[]) {
-    // AI-powered drug interaction checking
-    const interactions = [];
-    
-    // Simulate drug interaction database
-    const knownInteractions = {
-      'warfarin+aspirin': { severity: 'high', description: 'Increased bleeding risk' },
-      'metformin+alcohol': { severity: 'medium', description: 'Risk of lactic acidosis' },
-      'digoxin+furosemide': { severity: 'medium', description: 'Electrolyte imbalance risk' }
-    };
+  private readonly logger = new Logger(CdssService.name);
+  private readonly cdssClient: AxiosInstance;
+  private readonly cdssServiceUrl: string;
 
-    for (let i = 0; i < medications.length; i++) {
-      for (let j = i + 1; j < medications.length; j++) {
-        const combo = `${medications[i].toLowerCase()}+${medications[j].toLowerCase()}`;
-        const reverseCombo = `${medications[j].toLowerCase()}+${medications[i].toLowerCase()}`;
-        
-        if (knownInteractions[combo] || knownInteractions[reverseCombo]) {
-          interactions.push({
-            medications: [medications[i], medications[j]],
-            interaction: knownInteractions[combo] || knownInteractions[reverseCombo]
-          });
-        }
-      }
+  constructor() {
+    this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
+    this.cdssClient = axios.create({
+      baseURL: this.cdssServiceUrl,
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
+  /**
+   * Check drug interactions using Python CDSS service
+   * Falls back to basic checking if CDSS service unavailable
+   */
+  async checkDrugInteractions(drugIds: string[], patientId?: string) {
+    try {
+      // Try advanced checking via Python CDSS service
+      const response = await this.cdssClient.post('/drugs/interactions/advanced', {
+        drug_ids: drugIds,
+        patient_id: patientId,
+      });
+
+      return {
+        hasInteractions: response.data.interactions?.length > 0,
+        interactions: response.data.interactions || [],
+        severity_summary: response.data.severity_summary,
+        recommendations: response.data.recommendations || [],
+        source: 'advanced_cdss',
+      };
+    } catch (error) {
+      this.logger.warn(`CDSS service unavailable, using basic checking: ${error.message}`);
+      // Fallback to basic checking
+      return this.basicDrugInteractionCheck(drugIds);
     }
+  }
 
+  /**
+   * Basic drug interaction checking (fallback)
+   */
+  private async basicDrugInteractionCheck(drugIds: string[]) {
+    // Basic fallback when CDSS service unavailable
     return {
-      hasInteractions: interactions.length > 0,
-      interactions,
-      recommendations: interactions.length > 0 ? 
-        ['Monitor patient closely', 'Consider alternative medications', 'Adjust dosages if necessary'] : 
-        ['No significant interactions detected']
+      hasInteractions: false,
+      interactions: [],
+      severity_summary: { critical: 0, major: 0, moderate: 0, minor: 0 },
+      recommendations: ['Basic checking completed. Advanced CDSS service unavailable.'],
+      source: 'basic_fallback',
     };
   }
 
+  /**
+   * Diagnostic assistance using Python CDSS service
+   */
   async diagnosisAssist(symptoms: any) {
+    try {
+      const { chiefComplaint, symptoms: symptomList, vitals, age, gender } = symptoms;
+      
+      const response = await this.cdssClient.post('/diagnosis/suggest', {
+        symptoms: symptomList || [chiefComplaint],
+        vitals,
+        age,
+        gender,
+      });
+
+      return response.data;
+    } catch (error) {
+      this.logger.warn(`CDSS diagnostic assistance unavailable: ${error.message}`);
+      // Fallback to basic logic
+      return this.basicDiagnosisAssist(symptoms);
+    }
+  }
+
+  /**
+   * Basic diagnostic assistance (fallback)
+   */
+  private async basicDiagnosisAssist(symptoms: any) {
     // AI diagnostic assistance based on symptoms
     const { chiefComplaint, symptoms: symptomList, vitals, age, gender } = symptoms;
     

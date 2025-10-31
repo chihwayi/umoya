@@ -3,8 +3,8 @@ import {
   X, Save, Activity, Heart, Thermometer, Droplets, Eye, 
   Weight, Ruler, Calculator, AlertTriangle, CheckCircle
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 
 interface Patient {
   id: string;

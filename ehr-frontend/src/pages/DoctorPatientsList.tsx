@@ -4,8 +4,8 @@ import {
   ArrowLeft, Users, Search, Filter, Plus, Eye, Phone, Mail, Calendar,
   User, Heart, Activity, AlertCircle, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface Patient {

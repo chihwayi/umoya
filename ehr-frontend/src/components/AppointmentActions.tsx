@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { 
   CheckCircle, Play, Square, XCircle, Calendar, Clock, 
-  Edit, Trash2, AlertCircle, User, Phone, Video, FileText, X 
+  Edit, Trash2, AlertCircle, User, Phone, Video, FileText, X, Pill, TestTube 
 } from 'lucide-react';
-import { useNotification } from './GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from './GlobalNotification';
+import { ehrApi } from '../services/api';
 import DatePicker from './DatePicker';
 import { formatDateForAPI, formatDateForInput } from '../utils/dateUtils';
 import AppointmentNotes from './AppointmentNotes';
+import ClinicalNotesModal from './ClinicalNotesModal';
+import PrescriptionsModal from './PrescriptionsModal';
+import LabOrdersModal from './LabOrdersModal';
 
 interface Appointment {
   id: string;
@@ -50,6 +53,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showComprehensiveNotes, setShowComprehensiveNotes] = useState(false);
+  const [showClinicalNotes, setShowClinicalNotes] = useState(false);
+  const [showPrescriptions, setShowPrescriptions] = useState(false);
+  const [showLabOrders, setShowLabOrders] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     appointmentDate: formatDateForInput(new Date(appointment.appointmentDate)),
     selectedTime: new Date(appointment.appointmentDate).toLocaleTimeString('en-US', {
@@ -60,6 +66,7 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
     reason: ''
   });
   const [appointmentNotes, setAppointmentNotes] = useState(appointment.notes || '');
+  const [cancelNotes, setCancelNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
   const getStatusColor = (status: string) => {
@@ -152,9 +159,14 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   const handleCancel = async () => {
     try {
       setLoading(true);
-      await ehrApi.updateAppointmentStatus(appointment.id, 'cancelled', token, tenantSlug);
+      const cancellationNote = cancelNotes ? `\n\nCancellation Reason: ${cancelNotes}` : '';
+      await ehrApi.updateAppointment(appointment.id, {
+        status: 'cancelled',
+        notes: `${appointment.notes || ''}${cancellationNote}`
+      }, token, tenantSlug);
       showSuccess('Success', 'Appointment cancelled');
       setShowCancelModal(false);
+      setCancelNotes('');
       onUpdate();
     } catch (error) {
       console.error('Error cancelling appointment:', error);
@@ -191,9 +203,10 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   };
 
   const getAvailableActions = () => {
-    const actions = [];
+    const actions: React.ReactNode[] = [];
+    const normalizedStatus = appointment.status.replace('_', '-');
     
-    switch (appointment.status) {
+    switch (normalizedStatus) {
       case 'scheduled':
         actions.push(
           <button
@@ -223,7 +236,7 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
         break;
         
       case 'in-progress':
-        actions.push(
+        actions.unshift(
           <button
             key="complete"
             onClick={handleCompleteAppointment}
@@ -237,46 +250,33 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
         break;
     }
     
-    // Common actions for all statuses except completed and cancelled
-    if (!['completed', 'cancelled'].includes(appointment.status)) {
-      actions.push(
-        <button
-          key="reschedule"
-          onClick={() => setShowRescheduleModal(true)}
-          className="px-3 py-1 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm flex items-center gap-1"
-        >
-          <Calendar className="w-4 h-4" />
-          Reschedule
-        </button>,
-        <button
-          key="cancel"
-          onClick={() => setShowCancelModal(true)}
-          className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm flex items-center gap-1"
-        >
-          <XCircle className="w-4 h-4" />
-          Cancel
-        </button>
-      );
-    }
-    
-    // Notes action for all statuses
+    // Doctor-facing minimal actions: remove reschedule/cancel and Quick Notes
     actions.push(
       <button
-        key="notes"
-        onClick={() => setShowNotesModal(true)}
-        className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm flex items-center gap-1"
-      >
-        <FileText className="w-4 h-4" />
-        Quick Notes
-      </button>,
-      <button
-        key="comprehensive-notes"
-        onClick={() => setShowComprehensiveNotes(true)}
+        key="clinical-notes"
+        onClick={() => setShowClinicalNotes(true)}
         className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
       >
         <FileText className="w-4 h-4" />
-        Full Notes
-      </button>
+        Clinical Notes
+      </button>,
+      <button
+        key="prescriptions"
+        onClick={() => setShowPrescriptions(true)}
+        className="px-3 py-1 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm flex items-center gap-1"
+      >
+        <Pill className="w-4 h-4" />
+        Prescriptions
+      </button>,
+      <button
+        key="lab-orders"
+        onClick={() => setShowLabOrders(true)}
+        className="px-3 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm flex items-center gap-1"
+      >
+        <TestTube className="w-4 h-4" />
+        Lab Orders
+      </button>,
+      null
     );
     
     return actions;
@@ -285,10 +285,6 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(appointment.status)}`}>
-          {getStatusIcon(appointment.status)}
-          {appointment.status}
-        </span>
         {getAvailableActions()}
       </div>
 
@@ -329,7 +325,6 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
                     <DatePicker
                       value={rescheduleData.appointmentDate}
                       onChange={(date) => setRescheduleData(prev => ({ ...prev, appointmentDate: date }))}
-                      required
                     />
                   </div>
                   
@@ -378,6 +373,27 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           </div>
         </div>
       )}
+      {/* Prescriptions Modal */}
+      {showPrescriptions && (
+        <PrescriptionsModal
+          open={showPrescriptions}
+          onClose={() => setShowPrescriptions(false)}
+          onSaved={() => { setShowPrescriptions(false); onUpdate(); }}
+          appointment={appointment}
+          tenantSlug={tenantSlug}
+          token={token}
+        />
+      )}
+      {showLabOrders && (
+        <LabOrdersModal
+          open={showLabOrders}
+          onClose={() => setShowLabOrders(false)}
+          onSaved={() => { setShowLabOrders(false); onUpdate(); }}
+          appointment={appointment}
+          tenantSlug={tenantSlug}
+          token={token}
+        />
+      )}
 
       {/* Cancel Modal */}
       {showCancelModal && (
@@ -412,8 +428,8 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Cancellation</label>
                   <textarea
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
+                    value={cancelNotes}
+                    onChange={(e) => setCancelNotes(e.target.value)}
                     rows={4}
                     placeholder="Please provide a reason for cancelling this appointment..."
                     className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
@@ -509,15 +525,14 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
         </div>
       )}
 
-      {/* Comprehensive Notes Modal */}
-      {showComprehensiveNotes && (
-        <AppointmentNotes
+      {/* Comprehensive Notes Modal removed in favor of separate modals */}
+      {/* Clinical Notes Modal */}
+      {showClinicalNotes && (
+        <ClinicalNotesModal
+          open={showClinicalNotes}
+          onClose={() => setShowClinicalNotes(false)}
+          onSaved={() => { setShowClinicalNotes(false); onUpdate(); }}
           appointment={appointment}
-          onClose={() => setShowComprehensiveNotes(false)}
-          onSave={() => {
-            setShowComprehensiveNotes(false);
-            onUpdate();
-          }}
           tenantSlug={tenantSlug}
           token={token}
         />

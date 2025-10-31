@@ -4,8 +4,8 @@ import {
   FileText, Save, X, Plus, Search, Filter, Clock, User,
   AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 
 interface Patient {
@@ -624,7 +624,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="font-semibold text-slate-900">
-                                {note.patient?.firstName} {note.patient?.lastName}
+                                Patient ID: {note.patientId}
                               </span>
                               <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
                                 {note.noteType}

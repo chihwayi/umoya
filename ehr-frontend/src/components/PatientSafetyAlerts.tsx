@@ -193,7 +193,10 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   // Notify parent of alert count changes
   const notifyParent = useCallback(() => {
     if (onAlertCountsChange) {
-      onAlertCountsChange(alerts);
+      const active = alerts.filter(a => a.isActive && !a.acknowledgedAt).length;
+      const critical = alerts.filter(a => a.severity === 'critical' && !a.acknowledgedAt).length;
+      const high = alerts.filter(a => a.severity === 'high' && !a.acknowledgedAt).length;
+      onAlertCountsChange({ active, critical, high });
     }
   }, [alerts, onAlertCountsChange]);
 

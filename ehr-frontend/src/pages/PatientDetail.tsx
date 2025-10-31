@@ -4,8 +4,8 @@ import {
   ArrowLeft, User, Calendar, Phone, Mail, MapPin, Heart, Shield, 
   AlertTriangle, Edit, FileText, Clock, Activity
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 
 interface Patient {
   id: string;

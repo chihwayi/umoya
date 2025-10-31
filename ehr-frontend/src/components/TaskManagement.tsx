@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle, Clock, AlertTriangle, Heart, Pill, Stethoscope,
   FileText, Activity, Users, Calendar, Plus, Filter, Search,
-  ChevronDown, ChevronRight, Star, Flag, Bell, Eye
+  ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 
@@ -84,7 +84,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
               assignedTo: currentUser?.id || '',
               createdBy: currentUser?.id || '',
               createdAt: now.toISOString(),
-              relatedAppointmentId: apt.id
+              relatedAppointmentId: apt.id,
+              isRecurring: false
             });
           } else {
             // Vitals already recorded - mark as completed
@@ -103,7 +104,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
               createdBy: currentUser?.id || '',
               createdAt: now.toISOString(),
               completedAt: apt.vitals.recordedAt || now.toISOString(),
-              relatedAppointmentId: apt.id
+              relatedAppointmentId: apt.id,
+              isRecurring: false
             });
           }
         }
@@ -124,7 +126,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
             assignedTo: currentUser?.id || '',
             createdBy: currentUser?.id || '',
             createdAt: now.toISOString(),
-            relatedAppointmentId: apt.id
+            relatedAppointmentId: apt.id,
+            isRecurring: false
           });
         }
       });
@@ -142,7 +145,16 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   // Notify parent of task count changes
   const notifyParent = useCallback(() => {
     if (onTaskCountsChange) {
-      onTaskCountsChange(tasks);
+      const counts = {
+        pending: tasks.filter(t => t.status === 'pending').length,
+        inProgress: tasks.filter(t => t.status === 'in_progress').length,
+        overdue: tasks.filter(t => {
+          const now = new Date();
+          const dueTime = new Date(t.dueTime);
+          return t.status !== 'completed' && dueTime < now;
+        }).length
+      };
+      onTaskCountsChange(counts);
     }
   }, [tasks, onTaskCountsChange]);
 

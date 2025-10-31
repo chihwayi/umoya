@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, Plus, Search, Filter, ArrowLeft, BarChart3, Settings, Bell, RefreshCw, Eye, Edit, Trash2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import CreateAppointmentModal from '../components/CreateAppointmentModal.tsx';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import CreateAppointmentModal from '../components/CreateAppointmentModal';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 
@@ -175,7 +175,7 @@ const AppointmentManagement: React.FC = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'X-Tenant-ID': tenantSlug,
+          'X-Tenant-ID': tenantSlug || '',
         },
         body: JSON.stringify({ status: newStatus }),
       });
@@ -222,7 +222,7 @@ const AppointmentManagement: React.FC = () => {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': tenantSlug,
+          'X-Tenant-ID': tenantSlug || '',
         },
       });
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Key, ArrowLeft, Save } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 
 const ProfileSettings: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -84,7 +84,9 @@ const ProfileSettings: React.FC = () => {
                   user.role === 'doctor' ? 'bg-blue-100 text-blue-800' :
                   user.role === 'nurse' ? 'bg-green-100 text-green-800' :
                   user.role === 'receptionist' ? 'bg-orange-100 text-orange-800' :
-                  'bg-teal-100 text-teal-800'
+                  user.role === 'pharmacist' ? 'bg-teal-100 text-teal-800' :
+                  user.role === 'lab_tech' || user.role === 'lab_technician' ? 'bg-cyan-100 text-cyan-800' :
+                  'bg-gray-100 text-gray-800'
                 }`}>
                   {user.role}
                 </span>

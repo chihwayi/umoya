@@ -32,31 +32,31 @@ export class LabOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ name: 'order_number' })
   orderNumber: string;
 
-  @Column()
+  @Column({ name: 'patient_id' })
   patientId: string;
 
   @ManyToOne(() => Patient)
-  @JoinColumn({ name: 'patientId' })
+  @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column()
+  @Column({ name: 'ordering_provider_id' })
   orderingProviderId: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'orderingProviderId' })
+  @JoinColumn({ name: 'ordering_provider_id' })
   orderingProvider: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'medical_record_id', nullable: true })
   medicalRecordId: string;
 
   @ManyToOne(() => MedicalRecord)
-  @JoinColumn({ name: 'medicalRecordId' })
+  @JoinColumn({ name: 'medical_record_id' })
   medicalRecord: MedicalRecord;
 
-  @Column({ type: 'json' })
+  @Column({ type: 'jsonb', name: 'tests' })
   tests: Array<{
     testCode: string;
     testName: string;
@@ -65,32 +65,32 @@ export class LabOrder {
     instructions?: string;
   }>;
 
-  @Column({ type: 'enum', enum: Priority, default: Priority.ROUTINE })
+  @Column({ type: 'varchar', name: 'priority', default: Priority.ROUTINE })
   priority: Priority;
 
-  @Column({ type: 'enum', enum: LabOrderStatus, default: LabOrderStatus.ORDERED })
+  @Column({ type: 'varchar', name: 'status', default: LabOrderStatus.ORDERED })
   status: LabOrderStatus;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'clinical_info', nullable: true })
   clinicalInfo: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'special_instructions', nullable: true })
   specialInstructions: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'scheduled_date_time', nullable: true })
   scheduledDateTime: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'collected_at', nullable: true })
   collectedAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'collected_by_id', nullable: true })
   collectedById: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'collectedById' })
+  @JoinColumn({ name: 'collected_by_id' })
   collectedBy: User;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', name: 'results', nullable: true })
   results: Array<{
     testCode: string;
     testName: string;
@@ -102,20 +102,20 @@ export class LabOrder {
     performedBy: string;
   }>;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'interpretation', nullable: true })
   interpretation: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'reviewed_by_id', nullable: true })
   reviewedById: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'reviewedById' })
+  @JoinColumn({ name: 'reviewed_by_id' })
   reviewedBy: User;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'reviewed_at', nullable: true })
   reviewedAt: Date;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', name: 'attachments', nullable: true })
   attachments: Array<{
     filename: string;
     url: string;
@@ -123,9 +123,9 @@ export class LabOrder {
     uploadedAt: Date;
   }>;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

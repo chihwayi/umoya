@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
   Heart, Thermometer, Droplets, Plus, Search, Filter,
   ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import { ehrApi } from '../services/api';
 
 interface Patient {
   id: string;
@@ -65,6 +66,30 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy] = useState('priority');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [vitalsData, setVitalsData] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    if (appointments && appointments.length > 0) {
+      (async () => {
+        try {
+          const token = localStorage.getItem('ehr_token') || '';
+          const tenantSlug = localStorage.getItem('ehr_tenant_slug') || '';
+          const promises = appointments.map(async (apt: any) => {
+            try {
+              const res = await ehrApi.getVitals(apt.patient.id, token, tenantSlug);
+              return { patientId: apt.patient.id, vitals: res.data.vitals || [] };
+            } catch {
+              return { patientId: apt.patient.id, vitals: [] };
+            }
+          });
+          const results = await Promise.all(promises);
+          const map: Record<string, any[]> = {};
+          results.forEach(r => { map[r.patientId] = r.vitals; });
+          setVitalsData(map);
+        } catch {}
+      })();
+    }
+  }, [appointments]);
 
   const getPriorityOrder = (priority: string) => {
     switch (priority) {
@@ -128,7 +153,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     const waiting = appointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length;
     const inProgress = appointments.filter(apt => apt.status === 'in-progress').length;
     const urgent = appointments.filter(apt => apt.priorityLevel === 'urgent' || apt.priorityLevel === 'high').length;
-    const vitalsRecorded = appointments.filter(apt => apt.vitals).length;
+    const vitalsRecorded = appointments.filter(apt => vitalsData[apt.patient.id] && vitalsData[apt.patient.id].length > 0).length;
 
     return { waiting, inProgress, urgent, vitalsRecorded };
   };
@@ -343,7 +368,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     
                     {/* Vitals Status */}
                     <div className="flex items-center gap-4">
-                      {appointment.vitals ? (
+                      {vitalsData[appointment.patient.id] && vitalsData[appointment.patient.id].length > 0 ? (
                         <div className="flex items-center gap-2 text-green-600">
                           <CheckCircle className="w-4 h-4" />
                           <span className="text-sm font-semibold">Vitals Recorded</span>
@@ -355,19 +380,19 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         </div>
                       )}
                       
-                      {appointment.vitals && (
+                      {vitalsData[appointment.patient.id] && vitalsData[appointment.patient.id].length > 0 && (
                         <div className="flex items-center gap-4 text-sm text-slate-600">
                           <div className="flex items-center gap-1">
                             <Heart className="w-3 h-3" />
-                            <span>{appointment.vitals.heartRate} bpm</span>
+                            <span>{vitalsData[appointment.patient.id][0].heartRate} bpm</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Thermometer className="w-3 h-3" />
-                            <span>{appointment.vitals.temperature}°C</span>
+                            <span>{vitalsData[appointment.patient.id][0].temperature}°C</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Droplets className="w-3 h-3" />
-                            <span>{appointment.vitals.oxygenSaturation}%</span>
+                            <span>{vitalsData[appointment.patient.id][0].oxygenSaturation}%</span>
                           </div>
                         </div>
                       )}
@@ -376,13 +401,17 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onRecordVitals(appointment.patient)}
-                    className="px-4 py-2 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
-                  >
-                    <Activity className="w-4 h-4" />
-                    Record Vitals
-                  </button>
+                  {((vitalsData[appointment.patient.id] || []).length === 0) ? (
+                    <button
+                      onClick={() => onRecordVitals(appointment.patient)}
+                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
+                    >
+                      <Activity className="w-4 h-4" />
+                      Record Vitals
+                    </button>
+                  ) : (
+                    <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
+                  )}
                   <button
                     onClick={() => onTriageAssessment(appointment.patient)}
                     className="px-4 py-2 bg-gradient-to-r from-orange-500 to-yellow-600 text-white rounded-xl hover:from-orange-600 hover:to-yellow-700 transition-all duration-200 font-semibold text-sm flex items-center gap-2"

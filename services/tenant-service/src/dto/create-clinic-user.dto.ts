@@ -5,7 +5,8 @@ export enum ClinicUserRole {
   DOCTOR = 'doctor',
   NURSE = 'nurse',
   RECEPTIONIST = 'receptionist',
-  PHARMACIST = 'pharmacist'
+  PHARMACIST = 'pharmacist',
+  LAB_TECH = 'lab_tech'
 }
 
 export class CreateClinicUserDto {

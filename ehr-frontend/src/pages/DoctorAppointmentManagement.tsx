@@ -5,8 +5,8 @@ import {
   Plus, Eye, Edit, Trash2, CheckCircle, XCircle,
   AlertCircle, Play, Square, RefreshCw
 } from 'lucide-react';
-import { ehrApi } from '../services/api.ts';
-import { useNotification } from '../components/GlobalNotification.tsx';
+import { ehrApi } from '../services/api';
+import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { formatDateForAPI } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
@@ -273,8 +273,8 @@ const DoctorAppointmentManagement: React.FC = () => {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-3">Date Filter</label>
               <DatePicker
-                selectedDate={selectedDate}
-                onChange={setSelectedDate}
+                value={selectedDate.toISOString().split('T')[0]}
+                onChange={(newValue: string) => setSelectedDate(new Date(newValue))}
                 placeholder="Select date"
               />
             </div>

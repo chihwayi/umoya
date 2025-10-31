@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantController = void 0;
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const tenant_service_1 = require("../services/tenant.service");
 const create_tenant_dto_1 = require("../dto/create-tenant.dto");
 const tenant_entity_1 = require("../entities/tenant.entity");
@@ -55,6 +56,8 @@ let TenantController = class TenantController {
 exports.TenantController = TenantController;
 __decorate([
     (0, common_1.Post)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Create new tenant' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'Tenant created successfully' }),
     __param(0, (0, common_1.Body)(common_1.ValidationPipe)),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_tenant_dto_1.CreateTenantDto]),
@@ -62,6 +65,8 @@ __decorate([
 ], TenantController.prototype, "createTenant", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get all tenants' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'List of all tenants' }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -103,6 +108,8 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "checkTenantHealth", null);
 exports.TenantController = TenantController = __decorate([
+    (0, swagger_1.ApiTags)('tenants'),
+    (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.Controller)('tenants'),
     __metadata("design:paramtypes", [tenant_service_1.TenantService])
 ], TenantController);

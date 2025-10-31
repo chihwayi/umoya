@@ -5,8 +5,8 @@ import {
   Stethoscope, Pill, AlertTriangle, ChevronRight, Calendar as CalendarIcon,
   Thermometer, Droplets, Eye, Activity as ActivityIcon
 } from 'lucide-react';
-import { useNotification } from '../components/GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
+import { useNotification } from '../components/GlobalNotification';
+import { ehrApi, chartApi } from '../services/api';
 import { formatDateTimeToDDMMYYYYHHMM, formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface Patient {
@@ -102,6 +102,8 @@ const NursePatientSummary: React.FC = () => {
   const [visitSummaries, setVisitSummaries] = useState<VisitSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'notes' | 'vitals'>('overview');
+  const [problems, setProblems] = useState<any[]>([]);
+  const [allergies, setAllergies] = useState<any[]>([]);
   
   // Pagination and filtering states
   const [vitalsPage, setVitalsPage] = useState(1);
@@ -183,6 +185,28 @@ const NursePatientSummary: React.FC = () => {
       } catch (error) {
         console.log('No nursing notes found for patient:', error);
         nursingNotes = [];
+      }
+
+      // Fetch problems (read-only for nurses)
+      let fetchedProblems: any[] = [];
+      try {
+        const problemsResponse = await chartApi.getProblems(patientId!, token, tenantSlug!);
+        fetchedProblems = problemsResponse.data || [];
+        setProblems(fetchedProblems);
+      } catch (error) {
+        console.log('No problems found for patient:', error);
+        setProblems([]);
+      }
+
+      // Fetch allergies
+      let fetchedAllergies: any[] = [];
+      try {
+        const allergiesResponse = await chartApi.getAllergies(patientId!, token, tenantSlug!);
+        fetchedAllergies = allergiesResponse.data || [];
+        setAllergies(fetchedAllergies);
+      } catch (error) {
+        console.log('No allergies found for patient:', error);
+        setAllergies([]);
       }
 
       // Fetch triage assessments
@@ -496,17 +520,68 @@ const NursePatientSummary: React.FC = () => {
                     Medical Information
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {patient.allergies && (
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-500" />
-                          Allergies
-                        </label>
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                          <p className="text-slate-800">{patient.allergies}</p>
+                    {/* Structured Allergies */}
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-500" />
+                        Allergies {allergies.length > 0 && `(${allergies.length})`}
+                      </label>
+                      {allergies.length > 0 ? (
+                        <div className="space-y-2">
+                          {allergies.map((a, idx) => (
+                            <div key={idx} className="p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-slate-800">{a.allergen}</span>
+                                {a.severity && (
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    a.severity === 'severe' ? 'bg-red-100 text-red-700' :
+                                    a.severity === 'moderate' ? 'bg-orange-100 text-orange-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                    {a.severity}
+                                  </span>
+                                )}
+                              </div>
+                              {a.reaction && (
+                                <p className="text-xs text-slate-600 mt-1">Reaction: {a.reaction}</p>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                          <p className="text-slate-600 text-sm">No known allergies</p>
+                        </div>
+                      )}
+                    </div>
+                    {/* Problems (Read-only for nurses) */}
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                        <Stethoscope className="w-4 h-4 text-indigo-500" />
+                        Problems {problems.length > 0 && `(${problems.length})`}
+                      </label>
+                      {problems.length > 0 ? (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {problems.filter(p => p.status === 'active').map((p, idx) => (
+                            <div key={idx} className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-slate-800">{p.description}</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                  {p.status}
+                                </span>
+                              </div>
+                              {p.code && (
+                                <p className="text-xs text-slate-600 mt-1">Code: {p.code}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                          <p className="text-slate-600 text-sm">No active problems</p>
+                        </div>
+                      )}
+                    </div>
                     {patient.chronicConditions && (
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">Chronic Conditions</label>

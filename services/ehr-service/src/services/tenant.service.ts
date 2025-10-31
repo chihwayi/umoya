@@ -6,11 +6,18 @@ import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
+import { LabTest } from '../entities/lab-test.entity';
+import { LabOrderSet } from '../entities/lab-order-set.entity';
+import { CriticalResultAlert } from '../entities/critical-result-alert.entity';
 import { Bill } from '../entities/billing.entity';
 import { Vitals } from '../entities/vitals.entity';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
 import { NursingNote } from '../entities/nursing-note.entity';
 import { Order } from '../entities/order.entity';
+import { Problem } from '../entities/problem.entity';
+import { Allergy } from '../entities/allergy.entity';
+import { Drug } from '../entities/drug.entity';
+import { DrugInteraction } from '../entities/drug-interaction.entity';
 
 @Injectable()
 export class TenantService {
@@ -64,7 +71,7 @@ export class TenantService {
         username: process.env.DB_USERNAME || 'medicore',
         password: process.env.DB_PASSWORD || 'medicore_password',
         database: databaseName,
-        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill, Vitals, TriageAssessment, NursingNote, Order],
+        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill, Vitals, TriageAssessment, NursingNote, Order, Problem, Allergy, LabTest, LabOrderSet, CriticalResultAlert, Drug, DrugInteraction],
         synchronize: false, // Schema already exists
         logging: false,
       });

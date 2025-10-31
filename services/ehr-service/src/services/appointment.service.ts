@@ -89,7 +89,9 @@ export class AppointmentService {
           id: apt.patient?.id,
           firstName: apt.patient?.firstName,
           lastName: apt.patient?.lastName,
-          patientNumber: apt.patient?.patientNumber
+          patientNumber: apt.patient?.patientNumber,
+          phone: apt.patient?.phone || null,
+          email: apt.patient?.email || null
         },
         doctor: {
           id: apt.doctor?.id,
