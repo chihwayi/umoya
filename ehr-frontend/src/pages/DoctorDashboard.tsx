@@ -5,7 +5,7 @@ import {
   Play, Pause, Square, FileText, Pill, TestTube, Bell, 
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
-  LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon
+  LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -116,8 +116,18 @@ const DoctorDashboard: React.FC = () => {
   const [rxData, setRxData] = useState({ medication: '', dosage: '', frequency: '', duration: '' });
   const [showCarePlanModal, setShowCarePlanModal] = useState(false);
   const [carePlan, setCarePlan] = useState({ goals: '', tasks: '', dueDate: '' });
+  const [patientRiskAssessment, setPatientRiskAssessment] = useState<any>(null);
+  const [loadingRiskAssessment, setLoadingRiskAssessment] = useState(false);
+  const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
+  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [showProblemsModal, setShowProblemsModal] = useState(false);
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    riskDetails: false,
+    trends: false,
+    patterns: false,
+    recommendations: false
+  });
   const [showClinicalNotesModal, setShowClinicalNotesModal] = useState(false);
   const [showPrescriptionsModal, setShowPrescriptionsModal] = useState(false);
   const [showLabOrdersModal, setShowLabOrdersModal] = useState(false);
@@ -163,6 +173,7 @@ const DoctorDashboard: React.FC = () => {
           setAllergies(a.data || []);
         } else {
           setProblems([]); setAllergies([]);
+          setPatientRiskAssessment(null);
         }
       } catch {
         setProblems([]); setAllergies([]);
@@ -170,6 +181,56 @@ const DoctorDashboard: React.FC = () => {
     };
     loadChartData();
   }, [currentAppointment, tenantSlug]);
+
+  // Auto-calculate risk assessment when patient and data are ready
+  useEffect(() => {
+    if (currentAppointment && Object.keys(vitalsData).length > 0 && authorizedOrders.length >= 0) {
+      calculatePatientRisk();
+    }
+  }, [currentAppointment, vitalsData, authorizedOrders, problems]);
+
+  // Calculate patient risk assessment
+  const calculatePatientRisk = async () => {
+    if (!currentAppointment) return;
+    
+    try {
+      setLoadingRiskAssessment(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
+      const patientAge = currentAppointment.patient.dateOfBirth 
+        ? Math.floor((new Date().getTime() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+        : undefined;
+
+      const patientMedications = authorizedOrders
+        .filter((o: any) => o.patientId === currentAppointment.patient.id && o.orderType === 'medication')
+        .map((o: any) => o.orderName);
+
+      const patientData = {
+        patientId: currentAppointment.patient.id,
+        age: patientAge,
+        gender: currentAppointment.patient.gender,
+        vitals: latestVitals ? {
+          bloodPressure: latestVitals.bloodPressure,
+          heartRate: latestVitals.heartRate,
+          temperature: latestVitals.temperature,
+          oxygenSaturation: latestVitals.oxygenSaturation,
+          weight: latestVitals.weight,
+        } : {},
+        medications: patientMedications,
+        diagnoses: problems.map((p: any) => p.problemName || p.name || '').filter(Boolean),
+      };
+
+      const riskResult = await ehrApi.getRiskAssessment(patientData, token, tenantSlug!);
+      setPatientRiskAssessment(riskResult.data);
+    } catch (error) {
+      console.error('Failed to calculate risk assessment:', error);
+      setPatientRiskAssessment(null);
+    } finally {
+      setLoadingRiskAssessment(false);
+    }
+  };
 
   // Real-time updates
   const handleRealtimeUpdate = async () => {
@@ -1104,126 +1165,340 @@ const DoctorDashboard: React.FC = () => {
           )}
 
           {activeTab === 'current-appointment' && (
-            <div className="space-y-8">
+            <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               {currentAppointment ? (
                 <>
-                  <div className="grid grid-cols-1 xl:grid-cols-[1fr_20rem] gap-6 items-start">
-                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                      <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-xl font-bold text-slate-900">Current Appointment</h2>
-                        <div className="flex gap-2 flex-wrap">
-                          <button onClick={() => setShowClinicalNotesModal(true)} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm">
-                            <FileText className="w-4 h-4" />
-                            Clinical Notes
-                          </button>
-                          <button onClick={() => setShowPrescriptionsModal(true)} className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors flex items-center gap-2 text-sm">
-                            <Pill className="w-4 h-4" />
-                            Prescriptions
-                          </button>
-                          <button onClick={() => setShowLabOrdersModal(true)} className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 text-sm">
-                            <TestTube className="w-4 h-4" />
-                            Lab Orders
-                          </button>
-                          <button onClick={() => { setCurrentReferralAppointment(currentAppointment); setShowReferralModal(true); }} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 text-sm">
-                            <Stethoscope className="w-4 h-4" />
-                            Refer to Nurse
-                          </button>
-                          <button onClick={() => setShowVitalsModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm">
-                            <Activity className="w-4 h-4" />
-                            View Vitals
-                          </button>
-                          <button onClick={() => setShowLabResultsModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
-                            <TestTube className="w-4 h-4" />
-                            Lab Results
-                          </button>
-                          <button onClick={()=>setShowProblemsModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">Problems</button>
-                          <button onClick={()=>setShowAllergiesModal(true)} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors text-sm">Allergies</button>
+                  {/* Compact Header with Quick Actions */}
+                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-5 text-white shadow-lg">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex-1 min-w-[200px]">
+                        <h2 className="text-2xl font-bold mb-1">{currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</h2>
+                        <div className="flex items-center gap-4 text-sm opacity-90">
+                          <span>ID: {currentAppointment.patient.patientNumber}</span>
+                          <span>•</span>
+                          <span>{formatTime(currentAppointment.appointmentDate)}</span>
+                          <span>•</span>
+                          <span className="capitalize">{currentAppointment.appointmentType}</span>
                         </div>
                       </div>
-
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h3 className="text-lg font-semibold text-slate-900">{currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</h3>
-                            <p className="text-slate-600">Patient ID: {currentAppointment.patient.patientNumber}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-slate-600">Appointment Time</p>
-                            <p className="font-semibold">{formatTime(currentAppointment.appointmentDate)}</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <p className="text-slate-600">Reason for Visit</p>
-                            <p className="font-medium">{currentAppointment.reason}</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-600">Type</p>
-                            <p className="font-medium">{currentAppointment.appointmentType}</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-slate-200">
-                          <button onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
-                            <CheckCircle className="w-4 h-4" />
-                            Complete Appointment
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => setShowClinicalNotesModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <FileText className="w-4 h-4" />
+                          Notes
+                        </button>
+                        <button onClick={() => setShowPrescriptionsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <Pill className="w-4 h-4" />
+                          Rx
+                        </button>
+                        <button onClick={() => setShowLabOrdersModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <TestTube className="w-4 h-4" />
+                          Lab Orders
+                        </button>
+                        <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <TestTube className="w-4 h-4" />
+                          Lab Results
+                        </button>
+                        <button onClick={() => setShowVitalsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <Activity className="w-4 h-4" />
+                          Vitals
+                        </button>
+                        <button onClick={() => setShowProblemsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <Stethoscope className="w-4 h-4" />
+                          Problems
+                        </button>
+                        <button onClick={() => setShowAllergiesModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          Allergies
+                        </button>
+                        <button onClick={() => { setCurrentReferralAppointment(currentAppointment); setShowReferralModal(true); }} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                          <Stethoscope className="w-4 h-4" />
+                          Refer
+                        </button>
+                        <button onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')} className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          Complete
+                        </button>
                       </div>
                     </div>
-                    <ChartSidebar
-                      appointment={{ ...currentAppointment, notes: JSON.stringify({ problems, allergies }) }}
-                      vitals={vitalsData[currentAppointment.patient.id] || []}
-                      labOrders={authorizedOrders.filter(o => o.patientId === currentAppointment.patient.id)}
-                    />
                   </div>
 
-                  {/* Clinical Alerts - Prominently displayed at top */}
-                  {(() => {
-                    const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
-                    const vitalsForAlert: VitalsData | undefined = latestVitals ? {
-                      bloodPressure: latestVitals.bloodPressure || undefined,
-                      heartRate: latestVitals.heartRate || undefined,
-                      temperature: latestVitals.temperature || undefined,
-                      oxygenSaturation: latestVitals.oxygenSaturation || undefined,
-                      respiratoryRate: latestVitals.respiratoryRate || undefined,
-                      bloodGlucose: latestVitals.bloodGlucose || undefined
-                    } : undefined;
-
-                    return (
-                      <ClinicalAlerts
-                        vitals={vitalsForAlert}
-                        allergies={allergies}
-                        className="mb-6"
-                      />
-                    );
-                  })()}
-
-                  {/* Allergies and Recent Orders - Side by Side */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Allergies Section */}
-                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-rose-600" />
-                          <h3 className="text-lg font-bold text-slate-900">Allergies</h3>
+                  {/* Compact Grid Layout - 3 Columns */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Risk Assessment Panel - Compact with Collapsible Sections */}
+                    {patientRiskAssessment ? (
+                      <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl border border-orange-200/50 p-5">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-gradient-to-r from-orange-500 to-amber-600 rounded-lg">
+                              <AlertTriangle className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-base font-bold text-slate-900">Risk Assessment</h3>
+                            </div>
+                          </div>
+                          <button
+                            onClick={calculatePatientRisk}
+                            disabled={loadingRiskAssessment}
+                            className="px-2 py-1 bg-white/70 hover:bg-white rounded text-xs font-medium text-orange-700 border border-orange-200 disabled:opacity-50"
+                            title="Refresh Risk Assessment"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${loadingRiskAssessment ? 'animate-spin' : ''}`} />
+                          </button>
                         </div>
-                        <button onClick={()=>setShowAllergiesModal(true)} className="text-sm text-rose-600 hover:text-rose-800 font-medium">Manage</button>
-                      </div>
-                      {allergies.length === 0 ? (
-                        <p className="text-sm text-slate-500">No known allergies</p>
-                      ) : (
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          {allergies.map((a: any) => (
-                            <div key={a.id} className="p-4 border border-slate-200 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="font-semibold text-slate-900">{a.allergen}</div>
-                                  {a.reaction && (
-                                    <div className="text-xs text-slate-600 mt-1">{a.reaction}</div>
+                        
+                        {/* Risk Score - Prominent Display */}
+                        <div className="bg-white/90 rounded-xl p-4 border-2 border-orange-300/50 mb-3">
+                          <p className="text-xs text-slate-600 mb-1">Overall Risk Score</p>
+                          {(() => {
+                            // Calculate actual risk score from factors if overall_score is 0
+                            const riskFactors = patientRiskAssessment.factors || [];
+                            const calculatedScore = riskFactors.length > 0 
+                              ? riskFactors.reduce((sum: number, f: any) => sum + (f.score || 0), 0) / riskFactors.length
+                              : patientRiskAssessment.overall_score;
+                            const displayScore = calculatedScore > 0 ? calculatedScore : (riskFactors.length > 0 ? 5 : 0);
+                            
+                            return (
+                              <>
+                                <div className="flex items-baseline gap-2">
+                                  <p className={`text-3xl font-bold ${
+                                    patientRiskAssessment.risk_level === 'critical' ? 'text-red-600' :
+                                    patientRiskAssessment.risk_level === 'high' ? 'text-orange-600' :
+                                    patientRiskAssessment.risk_level === 'moderate' ? 'text-yellow-600' :
+                                    'text-green-600'
+                                  }`}>
+                                    {displayScore.toFixed(1)}%
+                                  </p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full mt-2 inline-block ${
+                                  patientRiskAssessment.risk_level === 'critical' ? 'bg-red-100 text-red-700' :
+                                  patientRiskAssessment.risk_level === 'high' ? 'bg-orange-100 text-orange-700' :
+                                  patientRiskAssessment.risk_level === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-green-100 text-green-700'
+                                }`}>
+                                  {patientRiskAssessment.risk_level.toUpperCase()} RISK
+                                </span>
+                                {riskFactors.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-orange-200">
+                                    <div className="grid grid-cols-2 gap-1 text-xs">
+                                      {riskFactors.slice(0, 4).map((factor: any, idx: number) => (
+                                        <div key={idx} className="flex items-center justify-between">
+                                          <span className="text-slate-600 capitalize">{factor.category || factor.model?.split(' ')[0] || 'Risk'}:</span>
+                                          <span className={`font-semibold ${
+                                            factor.level === 'high' || factor.level === 'critical' ? 'text-orange-600' :
+                                            factor.level === 'moderate' ? 'text-yellow-600' :
+                                            'text-green-600'
+                                          }`}>
+                                            {factor.score?.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Collapsible Sections */}
+                        <div className="space-y-2">
+                          {/* Historical Context - Collapsible */}
+                          {patientRiskAssessment.historical_context && (
+                            <div className="bg-white/70 rounded-lg border border-orange-200/50 overflow-hidden">
+                              <button
+                                onClick={() => setExpandedSections({...expandedSections, riskDetails: !expandedSections.riskDetails})}
+                                className="w-full flex items-center justify-between p-2 text-xs font-semibold text-slate-700 hover:bg-white/50 transition-colors"
+                              >
+                                <span>History & Context</span>
+                                {expandedSections.riskDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                              {expandedSections.riskDetails && (
+                                <div className="p-2 pt-0 border-t border-orange-200/50">
+                                  <div className="grid grid-cols-2 gap-1 text-xs">
+                                    <div><span className="text-slate-500">Visits:</span> <span className="font-semibold">{patientRiskAssessment.historical_context.total_visits}</span></div>
+                                    {patientRiskAssessment.historical_context.days_since_last_visit !== null && (
+                                      <div><span className="text-slate-500">Days Since:</span> <span className="font-semibold">{patientRiskAssessment.historical_context.days_since_last_visit}</span></div>
+                                    )}
+                                    {patientRiskAssessment.historical_context.previous_admissions > 0 && (
+                                      <div><span className="text-slate-500">Admissions:</span> <span className="font-semibold">{patientRiskAssessment.historical_context.previous_admissions}</span></div>
+                                    )}
+                                    {patientRiskAssessment.historical_context.ed_visits > 0 && (
+                                      <div><span className="text-slate-500">ED Visits:</span> <span className="font-semibold">{patientRiskAssessment.historical_context.ed_visits}</span></div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Vital Trends - Collapsible */}
+                          {patientRiskAssessment.trends && patientRiskAssessment.trends.trends && Object.keys(patientRiskAssessment.trends.trends).length > 0 && (
+                            <div className="bg-white/70 rounded-lg border border-orange-200/50 overflow-hidden">
+                              <button
+                                onClick={() => setExpandedSections({...expandedSections, trends: !expandedSections.trends})}
+                                className="w-full flex items-center justify-between p-2 text-xs font-semibold text-slate-700 hover:bg-white/50 transition-colors"
+                              >
+                                <span>Vital Trends</span>
+                                {expandedSections.trends ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                              {expandedSections.trends && (
+                                <div className="p-2 pt-0 border-t border-orange-200/50 space-y-1">
+                                  {Object.entries(patientRiskAssessment.trends.trends).slice(0, 5).map(([key, trend]: [string, any]) => (
+                                    <div key={key} className="flex items-center justify-between text-xs">
+                                      <span className="text-slate-700 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                                      <span className={`font-semibold ${
+                                        trend.trend === 'worsening' || trend.trend === 'increasing' ? 'text-red-600' :
+                                        trend.trend === 'improving' || trend.trend === 'decreasing' ? 'text-green-600' :
+                                        'text-yellow-600'
+                                      }`}>
+                                        {trend.trend}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {patientRiskAssessment.trends.alerts && patientRiskAssessment.trends.alerts.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-orange-200">
+                                      {patientRiskAssessment.trends.alerts.slice(0, 1).map((alert: string, idx: number) => (
+                                        <p key={idx} className="text-xs text-red-700 flex items-start gap-1">
+                                          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                          <span>{alert}</span>
+                                        </p>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Visit Patterns - Collapsible */}
+                          {patientRiskAssessment.visit_patterns && patientRiskAssessment.visit_patterns.patterns && (
+                            <div className="bg-white/70 rounded-lg border border-orange-200/50 overflow-hidden">
+                              <button
+                                onClick={() => setExpandedSections({...expandedSections, patterns: !expandedSections.patterns})}
+                                className="w-full flex items-center justify-between p-2 text-xs font-semibold text-slate-700 hover:bg-white/50 transition-colors"
+                              >
+                                <span>Visit Patterns</span>
+                                {expandedSections.patterns ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                              {expandedSections.patterns && (
+                                <div className="p-2 pt-0 border-t border-orange-200/50 text-xs space-y-1">
+                                  {patientRiskAssessment.visit_patterns.patterns.visit_frequency && (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-600">Frequency:</span>
+                                        <span className="font-semibold capitalize">{patientRiskAssessment.visit_patterns.patterns.visit_frequency.frequency_category}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-600">Interval:</span>
+                                        <span className="font-semibold">{patientRiskAssessment.visit_patterns.patterns.visit_frequency.average_interval_days} days</span>
+                                      </div>
+                                    </>
+                                  )}
+                                  {patientRiskAssessment.visit_patterns.patterns.recurring_diagnoses && patientRiskAssessment.visit_patterns.patterns.recurring_diagnoses.length > 0 && (
+                                    <div className="pt-2 border-t border-orange-200">
+                                      <p className="text-slate-600 mb-1 font-semibold">Recurring:</p>
+                                      {patientRiskAssessment.visit_patterns.patterns.recurring_diagnoses.slice(0, 3).map((diag: any, idx: number) => (
+                                        <div key={idx} className="flex justify-between">
+                                          <span className="text-slate-700">{diag.diagnosis}</span>
+                                          <span className="text-slate-500">({diag.count}x)</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Recommendations - Collapsible */}
+                          {patientRiskAssessment.recommendations && patientRiskAssessment.recommendations.length > 0 && (
+                            <div className="bg-white/70 rounded-lg border border-orange-200/50 overflow-hidden">
+                              <button
+                                onClick={() => setExpandedSections({...expandedSections, recommendations: !expandedSections.recommendations})}
+                                className="w-full flex items-center justify-between p-2 text-xs font-semibold text-slate-700 hover:bg-white/50 transition-colors"
+                              >
+                                <span>Recommendations ({patientRiskAssessment.recommendations.length})</span>
+                                {expandedSections.recommendations ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                              {expandedSections.recommendations && (
+                                <div className="p-2 pt-0 border-t border-orange-200/50">
+                                  <ul className="space-y-1 text-xs text-slate-700">
+                                    {patientRiskAssessment.recommendations.slice(0, 5).map((rec: string, idx: number) => (
+                                      <li key={idx} className="flex items-start gap-2">
+                                        <span className="text-orange-600 mt-0.5">•</span>
+                                        <span>{rec}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-5 flex items-center justify-center min-h-[150px]">
+                        <p className="text-slate-500 text-xs text-center">Click "Refresh" to calculate risk assessment</p>
+                      </div>
+                    )}
+
+                    {/* Clinical Alerts - Compact */}
+                    {(() => {
+                      const latestVitals = vitalsData[currentAppointment.patient.id]?.[0];
+                      const vitalsForAlert: VitalsData | undefined = latestVitals ? {
+                        bloodPressure: latestVitals.bloodPressure || undefined,
+                        heartRate: latestVitals.heartRate || undefined,
+                        temperature: latestVitals.temperature || undefined,
+                        oxygenSaturation: latestVitals.oxygenSaturation || undefined,
+                        respiratoryRate: latestVitals.respiratoryRate || undefined,
+                        bloodGlucose: latestVitals.bloodGlucose || undefined
+                      } : undefined;
+
+                      return (
+                        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-5">
+                          <h3 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-red-600" />
+                            Clinical Alerts
+                          </h3>
+                          <ClinicalAlerts
+                            vitals={vitalsForAlert}
+                            allergies={allergies}
+                          />
+                        </div>
+                      );
+                    })()}
+
+                    {/* Chart Sidebar - Compact */}
+                    <div className="lg:col-span-1">
+                      <ChartSidebar
+                        appointment={{ ...currentAppointment, notes: JSON.stringify({ problems, allergies }) }}
+                        vitals={vitalsData[currentAppointment.patient.id] || []}
+                        labOrders={authorizedOrders.filter(o => o.patientId === currentAppointment.patient.id)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Allergies & Orders - Compact Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Allergies Section - Compact */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-600" />
+                          <h3 className="text-base font-bold text-slate-900">Allergies</h3>
+                        </div>
+                        <button onClick={()=>setShowAllergiesModal(true)} className="text-xs text-rose-600 hover:text-rose-800 font-medium">Manage</button>
+                      </div>
+                      {allergies.length === 0 ? (
+                        <p className="text-xs text-slate-500">No known allergies</p>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {allergies.slice(0, 5).map((a: any) => (
+                            <div key={a.id} className="p-2 border border-slate-200 rounded-lg text-xs">
+                              <div className="flex items-center justify-between">
+                                <div className="font-semibold text-slate-900">{a.allergen}</div>
                                 {a.severity && (
-                                  <span className={`text-xs px-2 py-1 rounded-full border ${
+                                  <span className={`px-2 py-0.5 rounded-full border text-xs ${
                                     a.severity === 'severe' ? 'bg-red-50 text-red-700 border-red-200' : 
                                     a.severity === 'moderate' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
                                     'bg-yellow-50 text-yellow-700 border-yellow-200'
@@ -1232,44 +1507,42 @@ const DoctorDashboard: React.FC = () => {
                                   </span>
                                 )}
                               </div>
+                              {a.reaction && (
+                                <div className="text-xs text-slate-600 mt-1">{a.reaction}</div>
+                              )}
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Recent Orders Section */}
-                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                      <div className="flex items-center justify-between mb-4">
+                    {/* Recent Orders Section - Compact */}
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-5">
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <TestTube className="w-5 h-5 text-violet-600" />
-                          <h3 className="text-lg font-bold text-slate-900">Recent Orders</h3>
+                          <TestTube className="w-4 h-4 text-violet-600" />
+                          <h3 className="text-base font-bold text-slate-900">Recent Orders</h3>
                         </div>
-                        <button onClick={() => fetchAuthorizedOrders()} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                          <RefreshCw className="w-4 h-4 text-slate-600" />
+                        <button onClick={() => fetchAuthorizedOrders()} className="p-1 hover:bg-slate-100 rounded transition-colors" title="Refresh">
+                          <RefreshCw className="w-3 h-3 text-slate-600" />
                         </button>
                       </div>
                       {(() => {
                         const patientOrders = authorizedOrders.filter(o => o.patientId === currentAppointment.patient.id);
                         return patientOrders.length === 0 ? (
-                          <p className="text-sm text-slate-500">No recent orders</p>
+                          <p className="text-xs text-slate-500">No recent orders</p>
                         ) : (
-                          <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {patientOrders.slice(0, 10).map((o: any) => (
-                              <div key={o.id} className="p-4 border border-slate-200 rounded-lg">
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {patientOrders.slice(0, 6).map((o: any) => (
+                              <div key={o.id} className="p-2 border border-slate-200 rounded-lg text-xs">
                                 <div className="flex items-center justify-between">
-                                  <div>
-                                    <div className="font-semibold text-slate-900">{o.orderName}</div>
-                                    <div className="text-xs text-slate-600 mt-1">
-                                      {o.orderType === 'lab_test' ? 'Lab Test' : o.orderType === 'medication' ? 'Medication' : o.orderType} • {o.priority}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-semibold text-slate-900 truncate">{o.orderName}</div>
+                                    <div className="text-xs text-slate-600 mt-0.5">
+                                      {o.orderType === 'lab_test' ? 'Lab' : o.orderType === 'medication' ? 'Rx' : o.orderType} • {o.priority}
                                     </div>
-                                    {o.authorizedAt && (
-                                      <div className="text-xs text-slate-500 mt-1">
-                                        {new Date(o.authorizedAt).toLocaleDateString()} {new Date(o.authorizedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                      </div>
-                                    )}
                                   </div>
-                                  <span className={`text-xs px-2 py-1 rounded-full border ${
+                                  <span className={`px-2 py-0.5 rounded-full border text-xs ml-2 flex-shrink-0 ${
                                     o.status === 'authorized' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                     o.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
                                     o.status === 'in_progress' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :

@@ -5,7 +5,7 @@ import {
   Calendar, Clock, User, Stethoscope
 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
-import { ehrApi } from '../services/api';
+import { ehrApi, chartApi } from '../services/api';
 import DatePicker from './DatePicker';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM, parseDDMMYYYYToDate, parseDDMMYYYYHHMMToDate } from '../utils/dateFormatting';
 
@@ -80,6 +80,25 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
   token
 }) => {
   const { showSuccess, showError } = useNotification();
+  const [problems, setProblems] = useState<any[]>([]);
+  const [vitals, setVitals] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [p, v] = await Promise.all([
+          chartApi.getProblems(appointment.patient.id, token, tenantSlug).catch(() => ({ data: [] })),
+          ehrApi.getVitals(appointment.patient.id, token, tenantSlug).catch(() => ({ data: { vitals: [] } }))
+        ]);
+        setProblems(p.data || []);
+        setVitals(v.data?.vitals || []);
+      } catch (error) {
+        console.error('Failed to load patient data:', error);
+      }
+    };
+    loadData();
+  }, [appointment.patient.id, token, tenantSlug]);
+  
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'notes' | 'treatment' | 'prescriptions' | 'lab'>('notes');
   
@@ -118,6 +137,12 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
     priority: 'routine' as 'routine' | 'urgent' | 'stat'
   });
   const [showAddLabOrder, setShowAddLabOrder] = useState(false);
+
+  // CDSS state
+  const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
+  const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
 
   useEffect(() => {
     loadAppointmentData();
@@ -435,16 +460,110 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
           {activeTab === 'notes' && (
             <div className="space-y-6">
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/50">
-                <label className="block text-sm font-semibold text-slate-700 mb-3">
-                  Chief Complaint
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Chief Complaint
+                  </label>
+                  {chiefComplaint && chiefComplaint.length > 10 && (
+                    <button
+                      onClick={async () => {
+                        setLoadingDiagnosis(true);
+                        try {
+                          const patientAge = appointment.patient.dateOfBirth
+                            ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                            : undefined;
+                          const latestVitals = vitals?.length > 0 ? vitals[0] : undefined;
+                          const result = await ehrApi.getDiagnosisSuggestions({
+                            symptoms: [chiefComplaint, ...(historyOfPresentIllness ? historyOfPresentIllness.split(/\s+/).slice(0, 5) : [])],
+                            vitals: latestVitals ? {
+                              temperature: latestVitals.temperature,
+                              bloodPressure: latestVitals.bloodPressure,
+                              heartRate: latestVitals.heartRate,
+                              oxygenSaturation: latestVitals.oxygenSaturation,
+                            } : undefined,
+                            age: patientAge,
+                            gender: appointment.patient.gender,
+                          }, token, tenantSlug);
+                          setDiagnosisSuggestions(result.data);
+                        } catch (error) {
+                          console.error('Failed to get diagnosis suggestions:', error);
+                        } finally {
+                          setLoadingDiagnosis(false);
+                        }
+                      }}
+                      disabled={loadingDiagnosis}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <Stethoscope className="w-3 h-3" />
+                      {loadingDiagnosis ? 'Analyzing...' : 'Diagnostic Assistant'}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={chiefComplaint}
-                  onChange={(e) => setChiefComplaint(e.target.value)}
+                  onChange={(e) => {
+                    setChiefComplaint(e.target.value);
+                    setDiagnosisSuggestions(null);
+                  }}
                   rows={2}
                   placeholder="Patient's main concern or reason for visit..."
                   className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none"
                 />
+                {diagnosisSuggestions && (
+                  <div className="mt-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                      <Stethoscope className="w-4 h-4" />
+                      Differential Diagnosis Suggestions
+                    </h4>
+                    <div className="space-y-3">
+                      {diagnosisSuggestions.suggested_diagnoses?.slice(0, 5).map((diag: any, idx: number) => (
+                        <div key={idx} className="bg-white rounded-lg p-3 border border-blue-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-slate-900">{diag.diagnosis}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              diag.confidence === 'high' ? 'bg-green-100 text-green-700' :
+                              diag.confidence === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {(diag.probability * 100).toFixed(0)}% confidence
+                            </span>
+                          </div>
+                          {diag.matching_symptoms?.length > 0 && (
+                            <p className="text-xs text-slate-600">
+                              Matches: {diag.matching_symptoms.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {diagnosisSuggestions.recommended_tests?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-blue-200">
+                        <p className="text-sm font-medium text-blue-900 mb-2">Recommended Tests:</p>
+                        <ul className="space-y-1 text-sm text-blue-700">
+                          {diagnosisSuggestions.recommended_tests.map((test: string, idx: number) => (
+                            <li key={idx} className="flex items-center gap-2">
+                              <span>•</span>
+                              <span>{test}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {diagnosisSuggestions.red_flags?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-red-200 bg-red-50 rounded-lg p-3">
+                        <p className="text-sm font-semibold text-red-900 mb-2">⚠️ Clinical Red Flags:</p>
+                        <ul className="space-y-1 text-sm text-red-700">
+                          {diagnosisSuggestions.red_flags.map((flag: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span>•</span>
+                              <span>{flag}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/50">
@@ -504,16 +623,89 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
           {activeTab === 'treatment' && (
             <div className="space-y-6">
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/50">
-                <label className="block text-sm font-semibold text-slate-700 mb-3">
-                  Primary Diagnosis
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Primary Diagnosis
+                  </label>
+                  {diagnosis && (
+                    <button
+                      onClick={async () => {
+                        setLoadingGuidelines(true);
+                        try {
+                          const patientAge = appointment.patient.dateOfBirth
+                            ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                            : undefined;
+                          const result = await ehrApi.getClinicalGuidelines(
+                            diagnosis,
+                            {
+                              age: patientAge,
+                              gender: appointment.patient.gender,
+                              comorbidities: problems.map((p: any) => p.problemName || '').filter(Boolean),
+                            },
+                            token,
+                            tenantSlug
+                          );
+                          setClinicalGuidelines(result.data);
+                        } catch (error) {
+                          console.error('Failed to fetch guidelines:', error);
+                        } finally {
+                          setLoadingGuidelines(false);
+                        }
+                      }}
+                      disabled={loadingGuidelines}
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium disabled:opacity-50"
+                    >
+                      {loadingGuidelines ? 'Loading...' : 'Get Guidelines'}
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={diagnosis}
-                  onChange={(e) => setDiagnosis(e.target.value)}
+                  onChange={(e) => {
+                    setDiagnosis(e.target.value);
+                    setClinicalGuidelines(null);
+                  }}
                   placeholder="Enter primary diagnosis (ICD-10 code if applicable)..."
                   className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
                 />
+                {clinicalGuidelines && (
+                  <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
+                    <h4 className="font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Clinical Guidelines ({clinicalGuidelines.evidence_level} evidence)
+                    </h4>
+                    {clinicalGuidelines.guidelines?.[0] && (
+                      <p className="text-xs text-indigo-700 mb-3">
+                        {clinicalGuidelines.guidelines[0].title} - {clinicalGuidelines.guidelines[0].source}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-slate-900">Recommendations:</p>
+                      <ul className="space-y-1 text-sm text-slate-700">
+                        {clinicalGuidelines.recommendations?.slice(0, 5).map((rec: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-indigo-600 mt-1">•</span>
+                            <span>{rec}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {clinicalGuidelines.contraindications?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-indigo-200">
+                        <p className="text-sm font-medium text-red-900 mb-2">⚠️ Contraindications:</p>
+                        <ul className="space-y-1 text-sm text-red-700">
+                          {clinicalGuidelines.contraindications.map((contra: any, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="mt-1">•</span>
+                              <span><strong>{contra.condition}</strong>: {contra.reason}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/50">

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar, Edit2
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from '../components/GlobalNotification';
@@ -48,6 +48,8 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [loading, setLoading] = useState(false);
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
   const [structuredAllergies, setStructuredAllergies] = useState<any[]>([]);
+  const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
+  const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
 
   // Load existing allergies from structured table when patient is selected
   useEffect(() => {
@@ -184,14 +186,143 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Chief Complaint</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-semibold text-slate-700">Chief Complaint</label>
+              {chiefComplaint && chiefComplaint.length > 10 && (
+                <button
+                  onClick={async () => {
+                    setLoadingDiagnosis(true);
+                    try {
+                      const token = localStorage.getItem('ehr_token');
+                      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+                      if (!token || !tenantSlug || !patient) return;
+                      
+                      const patientAge = patient.dateOfBirth
+                        ? Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                        : undefined;
+                      
+                      const symptomsArray = [chiefComplaint, onset].filter(Boolean);
+                      console.log('🔍 Sending symptoms to API:', symptomsArray);
+                      
+                      const result = await Api.ehrApi.getDiagnosisSuggestions({
+                        symptoms: symptomsArray,
+                        age: patientAge,
+                        gender: patient.gender,
+                      }, token, tenantSlug);
+                      
+                      console.log('🔍 Diagnosis suggestions full response:', result);
+                      console.log('🔍 Diagnosis suggestions data:', result.data);
+                      
+                      // Handle response - it might be nested
+                      const suggestionsData = result.data || result;
+                      
+                      console.log('🔍 Processed suggestionsData:', suggestionsData);
+                      
+                      // Ensure proper structure
+                      if (suggestionsData.suggested_diagnoses && suggestionsData.suggested_diagnoses.length > 0) {
+                        console.log('✅ Using suggested_diagnoses format');
+                        setDiagnosisSuggestions(suggestionsData);
+                      } else if (suggestionsData.differentialDiagnoses && Array.isArray(suggestionsData.differentialDiagnoses)) {
+                        console.log('⚠️ Using fallback differentialDiagnoses format, count:', suggestionsData.differentialDiagnoses.length);
+                        // Handle fallback format - even if empty, create structure
+                        const convertedDiagnoses = suggestionsData.differentialDiagnoses.map((d: any) => ({
+                          diagnosis: d.condition || d.diagnosis || 'Unknown',
+                          probability: d.probability || 0.5,
+                          confidence: d.confidence || 'moderate',
+                          matching_symptoms: d.matching_symptoms || []
+                        }));
+                        setDiagnosisSuggestions({
+                          suggested_diagnoses: convertedDiagnoses,
+                          recommended_tests: suggestionsData.recommendedTests || suggestionsData.recommended_tests || [],
+                          red_flags: []
+                        });
+                      } else {
+                        console.warn('⚠️ Unexpected response format:', suggestionsData);
+                        // Still show the structure even if empty
+                        setDiagnosisSuggestions({
+                          suggested_diagnoses: [],
+                          recommended_tests: suggestionsData.recommendedTests || suggestionsData.recommended_tests || [],
+                          red_flags: [],
+                          error: 'No diagnoses found. The symptom matching might need adjustment.'
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Failed to get diagnosis suggestions:', error);
+                    } finally {
+                      setLoadingDiagnosis(false);
+                    }
+                  }}
+                  disabled={loadingDiagnosis}
+                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Brain className="w-3 h-3" />
+                  {loadingDiagnosis ? 'Analyzing...' : 'AI Assist'}
+                </button>
+              )}
+            </div>
             <textarea
               value={chiefComplaint}
-              onChange={(e) => setChiefComplaint(e.target.value)}
+              onChange={(e) => {
+                setChiefComplaint(e.target.value);
+                setDiagnosisSuggestions(null);
+              }}
               className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
               rows={3}
               placeholder="Patient's primary concern in their own words"
             />
+            {diagnosisSuggestions && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <h5 className="text-xs font-semibold text-blue-900 mb-2 flex items-center gap-1">
+                  <Brain className="w-3 h-3" />
+                  Suggested Diagnoses
+                </h5>
+                {diagnosisSuggestions.suggested_diagnoses && diagnosisSuggestions.suggested_diagnoses.length > 0 ? (
+                  <>
+                    <div className="space-y-2">
+                      {diagnosisSuggestions.suggested_diagnoses.slice(0, 5).map((diag: any, idx: number) => (
+                        <div key={idx} className="text-xs bg-white rounded p-2 border border-blue-200">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-900">{diag.diagnosis || diag.condition || 'Unknown'}</span>
+                            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                              (diag.confidence === 'high') ? 'bg-green-100 text-green-700' :
+                              (diag.confidence === 'moderate') ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {((diag.probability || diag.percentage || 0) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          {diag.matching_symptoms && diag.matching_symptoms.length > 0 && (
+                            <p className="text-xs text-slate-600 mt-1">Matches: {diag.matching_symptoms.join(', ')}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {diagnosisSuggestions.recommended_tests && diagnosisSuggestions.recommended_tests.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-blue-200">
+                        <p className="text-xs font-medium text-blue-900 mb-1">Recommended Tests:</p>
+                        <ul className="text-xs text-blue-700 space-y-0.5">
+                          {diagnosisSuggestions.recommended_tests.slice(0, 5).map((test: string, idx: number) => (
+                            <li key={idx}>• {test}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {diagnosisSuggestions.red_flags && diagnosisSuggestions.red_flags.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-red-200 bg-red-50 rounded p-2">
+                        <p className="text-xs font-semibold text-red-900 mb-1">⚠️ Red Flags:</p>
+                        <ul className="text-xs text-red-700 space-y-0.5">
+                          {diagnosisSuggestions.red_flags.slice(0, 3).map((flag: string, idx: number) => (
+                            <li key={idx}>• {flag}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-600">No diagnoses found. Try providing more detailed symptoms.</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -424,6 +555,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           token={localStorage.getItem('ehr_token') || ''}
         />
       )}
+
     </div>
   );
 };

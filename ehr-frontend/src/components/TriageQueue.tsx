@@ -419,7 +419,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     <ClipboardList className="w-4 h-4" />
                     Triage
                   </button>
-                  
                   {/* Status Change Buttons */}
                   {appointment.status === 'scheduled' && (
                     <button
@@ -456,6 +455,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
           ))}
         </div>
       </div>
+
     </div>
   );
 };

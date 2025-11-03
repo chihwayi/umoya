@@ -191,18 +191,22 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   }, [appointments]);
 
   // Notify parent of alert count changes
-  const notifyParent = useCallback(() => {
-    if (onAlertCountsChange) {
-      const active = alerts.filter(a => a.isActive && !a.acknowledgedAt).length;
-      const critical = alerts.filter(a => a.severity === 'critical' && !a.acknowledgedAt).length;
-      const high = alerts.filter(a => a.severity === 'high' && !a.acknowledgedAt).length;
-      onAlertCountsChange({ active, critical, high });
-    }
-  }, [alerts, onAlertCountsChange]);
+  // Use useRef to store the callback to avoid recreating it on every render
+  const onAlertCountsChangeRef = React.useRef(onAlertCountsChange);
+  
+  useEffect(() => {
+    onAlertCountsChangeRef.current = onAlertCountsChange;
+  }, [onAlertCountsChange]);
 
   useEffect(() => {
-    notifyParent();
-  }, [notifyParent]);
+    const active = alerts.filter(a => a.isActive && !a.acknowledgedAt).length;
+    const critical = alerts.filter(a => a.severity === 'critical' && !a.acknowledgedAt).length;
+    const high = alerts.filter(a => a.severity === 'high' && !a.acknowledgedAt).length;
+    
+    if (onAlertCountsChangeRef.current) {
+      onAlertCountsChangeRef.current({ active, critical, high });
+    }
+  }, [alerts]);
 
   // Filter alerts
   useEffect(() => {

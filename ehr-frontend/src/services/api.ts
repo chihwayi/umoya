@@ -380,6 +380,130 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // CDSS API
+  checkDrugInteractions: async (drugIds: string[], patientId: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/drug-interactions', {
+      drugIds,
+      patientId
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getClinicalGuidelines: async (condition: string, patientData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/guidelines', {
+      condition,
+      patientData
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getDiagnosisSuggestions: async (symptoms: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/diagnosis-assist', symptoms, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getDosingRecommendation: async (dosingRequest: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/dosing-recommendation', dosingRequest, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  interpretLabResults: async (labResults: any, historicalLabs: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/labs/interpret', {
+      labResults,
+      historicalLabs
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  detectDuplicateTherapy: async (medications: any[], prescriptions: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/medications/duplicates', {
+      medications,
+      prescriptions
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  checkHighRiskMedications: async (medications: any[], patientAge: number, patientGender: string, diagnoses: string[], renalFunction: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/medications/high-risk', {
+      medications,
+      patientAge,
+      patientGender,
+      diagnoses,
+      renalFunction
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  detectCareGaps: async (patientAge: number, patientGender: string, visitHistory: any[], diagnoses: string[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/care-gaps/detect', {
+      patientAge,
+      patientGender,
+      visitHistory,
+      diagnoses
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  authorizeOrder: async (orderId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/orders/${orderId}/authorize`, {}, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // Prescriptions API
   createPrescription: async (createDto: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/prescriptions', createDto, {
@@ -645,6 +769,18 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  checkFoodInteractions: async (medications: any[], token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/medications/food-interactions', {
+      medications
+    }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   seedDrugs: async (token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/drugs/seed', {}, {
       headers: {
@@ -653,5 +789,80 @@ export const ehrApi = {
       }
     });
     return { data: response.data };
-  }
+  },
+
+  // HIV/AIDS/TB APIs
+  createHivTest: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/tests', body, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getPatientHivTests: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/tests/patient/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  processHivAlgorithm: async (testId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/hiv/tests/${testId}/process-algorithm`, {}, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  enrollInHivCare: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/enrollments', body, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getHivEnrollments: async (status: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/enrollments', {
+      params: { status },
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getPatientHivEnrollment: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/enrollments/patient/${patientId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  createTbScreening: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/tb-screenings', body, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  createCervicalCancerScreening: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/cervical-cancer-screenings', body, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
 };

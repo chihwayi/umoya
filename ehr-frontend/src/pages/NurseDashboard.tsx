@@ -18,6 +18,11 @@ import PatientAssessment from '../components/PatientAssessment';
 import NursingNotes from '../components/NursingNotes';
 import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
+import HIVNursePanel from '../components/HIVNursePanel';
+import HIVTestingComponent from '../components/HIVTestingComponent';
+import HIVPatientManagement from '../components/HIVPatientManagement';
+import TBScreeningComponent from '../components/TBScreeningComponent';
+import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
 
 interface Patient {
   id: string;
@@ -70,6 +75,7 @@ const NurseDashboard: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('tasks');
+  const [activeSection, setActiveSection] = useState<'main' | 'hiv'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
@@ -94,6 +100,9 @@ const NurseDashboard: React.FC = () => {
   const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
+  const [showHivModal, setShowHivModal] = useState(false);
+  const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
+  const [showHivTestingModal, setShowHivTestingModal] = useState(false);
 
   // Calculate task counts from appointments directly
   const calculateTaskCountsFromAppointments = useCallback((appointments: any[]) => {
@@ -437,6 +446,7 @@ const NurseDashboard: React.FC = () => {
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
       { icon: FileText, label: 'Care Plans', desc: 'Plan nursing care', color: 'from-emerald-500 to-teal-500', action: () => { setActiveTab('notes'); setNotesPreset('care_plans'); } },
       { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-fuchsia-500 to-pink-600', action: () => { setActiveTab('notes'); setNotesPreset('medications'); } },
+      { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
     ];
   };
 
@@ -529,9 +539,22 @@ const NurseDashboard: React.FC = () => {
     return Math.ceil(filteredPatients.length / patientsPerPage);
   };
 
-  // Check if patient has scheduled appointments
+  // Check if patient has scheduled appointments (today or future only)
   const hasScheduledAppointments = (patientId: string) => {
-    return appointments.some(apt => apt.patient.id === patientId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return appointments.some(apt => {
+      if (apt.patient.id !== patientId) return false;
+      
+      // Only count appointments that are today or in the future
+      const appointmentDate = new Date(apt.appointmentDate);
+      appointmentDate.setHours(0, 0, 0, 0);
+      
+      // Check if appointment is today or future, and status is scheduled/confirmed
+      return appointmentDate >= today && 
+             (apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'in-progress');
+    });
   };
 
   const handleVitalsForScheduledPatient = (patient: Patient) => {
@@ -1016,104 +1039,189 @@ const NurseDashboard: React.FC = () => {
         </div>
       </header>
 
+      {/* Section Navigation Bar */}
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 border-b-2 border-emerald-800 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-6">
+            <button
+              onClick={() => {
+                setActiveSection('main');
+                setActiveTab('tasks');
+              }}
+              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
+                activeSection === 'main'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-emerald-100 hover:text-white'
+              }`}
+            >
+              <Stethoscope className="w-4 h-4" />
+              Main Dashboard
+            </button>
+            <button
+              onClick={() => {
+                setActiveSection('hiv');
+                setActiveTab('testing');
+              }}
+              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
+                activeSection === 'hiv'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-emerald-100 hover:text-white'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              HIV/AIDS/TB Program
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Page Tabs (in-content) */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
-                activeTab === 'tasks'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Activity className="w-4 h-4 inline mr-2" />
-              My Tasks
-              {(taskCounts.pending > 0 || taskCounts.inProgress > 0 || taskCounts.overdue > 0) && (
-                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse">
-                  {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('alerts')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
-                activeTab === 'alerts'
-                  ? 'border-red-500 text-red-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Bell className="w-4 h-4 inline mr-2" />
-              Safety Alerts
-              {alertCounts.active > 0 && (
-                <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
-                  alertCounts.critical > 0 
-                    ? 'bg-gradient-to-r from-red-600 to-red-700' 
-                    : alertCounts.high > 0 
-                    ? 'bg-gradient-to-r from-orange-500 to-red-500'
-                    : 'bg-gradient-to-r from-yellow-500 to-orange-500'
-                }`}>
-                  {alertCounts.active}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('calendar')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'calendar'
-                  ? 'border-pink-500 text-pink-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Calendar className="w-4 h-4 inline mr-2" />
-              Today's Schedule
-            </button>
-            <button
-              onClick={() => setActiveTab('patients')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'patients'
-                  ? 'border-pink-500 text-pink-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Users className="w-4 h-4 inline mr-2" />
-              Patients
-            </button>
-            <button
-              onClick={() => setActiveTab('queue')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'queue'
-                  ? 'border-pink-500 text-pink-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Activity className="w-4 h-4 inline mr-2" />
-              Patient Queue
-            </button>
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'orders'
-                  ? 'border-pink-500 text-pink-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <ClipboardList className="w-4 h-4 inline mr-2" />
-              Orders & Procedures
-            </button>
-            <button
-              onClick={() => setActiveTab('notes')}
-              className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'notes'
-                  ? 'border-pink-500 text-pink-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <FileText className="w-4 h-4 inline mr-2" />
-              Nursing Notes
-            </button>
-          </nav>
+          {activeSection === 'main' ? (
+            <nav className="flex space-x-8">
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
+                  activeTab === 'tasks'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                My Tasks
+                {(taskCounts.pending > 0 || taskCounts.inProgress > 0 || taskCounts.overdue > 0) && (
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse">
+                    {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('alerts')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
+                  activeTab === 'alerts'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Bell className="w-4 h-4 inline mr-2" />
+                Safety Alerts
+                {alertCounts.active > 0 && (
+                  <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
+                    alertCounts.critical > 0 
+                      ? 'bg-gradient-to-r from-red-600 to-red-700' 
+                      : alertCounts.high > 0 
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                      : 'bg-gradient-to-r from-yellow-500 to-orange-500'
+                  }`}>
+                    {alertCounts.active}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('calendar')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'calendar'
+                    ? 'border-pink-500 text-pink-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Calendar className="w-4 h-4 inline mr-2" />
+                Today's Schedule
+              </button>
+              <button
+                onClick={() => setActiveTab('patients')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'patients'
+                    ? 'border-pink-500 text-pink-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Users className="w-4 h-4 inline mr-2" />
+                Patients
+              </button>
+              <button
+                onClick={() => setActiveTab('queue')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'queue'
+                    ? 'border-pink-500 text-pink-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                Patient Queue
+              </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'orders'
+                    ? 'border-pink-500 text-pink-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <ClipboardList className="w-4 h-4 inline mr-2" />
+                Orders & Procedures
+              </button>
+              <button
+                onClick={() => setActiveTab('notes')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'notes'
+                    ? 'border-pink-500 text-pink-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <FileText className="w-4 h-4 inline mr-2" />
+                Nursing Notes
+              </button>
+            </nav>
+          ) : (
+            <nav className="flex space-x-8 overflow-x-auto" aria-label="HIV Tabs">
+              <button
+                onClick={() => setActiveTab('testing')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'testing'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <TestTube className="w-4 h-4 inline mr-2" />
+                HIV Testing
+              </button>
+              <button
+                onClick={() => setActiveTab('hiv-patients')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'hiv-patients'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Users className="w-4 h-4 inline mr-2" />
+                Patients on Care
+              </button>
+              <button
+                onClick={() => setActiveTab('tb-screening')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'tb-screening'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Stethoscope className="w-4 h-4 inline mr-2" />
+                TB Screening
+              </button>
+              <button
+                onClick={() => setActiveTab('cervical-cancer')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'cervical-cancer'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                Cervical Cancer Screening
+              </button>
+            </nav>
+          )}
         </div>
       </div>
 
@@ -1387,6 +1495,20 @@ const NurseDashboard: React.FC = () => {
         {activeTab === 'vitals' && <VitalsPanel appointments={appointments} />}
         {activeTab === 'triage' && <PatientAssessment appointments={appointments} />}
         {activeTab === 'notes' && <NursingNotes appointments={appointments} preset={notesPreset} />}
+        
+        {/* HIV Section Tabs */}
+        {activeSection === 'hiv' && activeTab === 'testing' && (
+          <HIVTestingComponent tenantSlug={tenantSlug || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'hiv-patients' && (
+          <HIVPatientManagement tenantSlug={tenantSlug || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'tb-screening' && (
+          <TBScreeningComponent tenantSlug={tenantSlug || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'cervical-cancer' && (
+          <CervicalCancerScreeningComponent tenantSlug={tenantSlug || ''} />
+        )}
       </div>
 
       {/* Vitals Recording Modal */}
@@ -1515,6 +1637,43 @@ const NurseDashboard: React.FC = () => {
           }}
           preselectedPatient={selectedPatient || undefined}
         />
+      )}
+
+      {/* HIV Nurse Panel Modal */}
+      {showHivModal && currentAppointment && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+          <HIVNursePanel
+            appointmentId={currentAppointment.id}
+            patientId={currentAppointment.patient.id}
+            tenantSlug={tenantSlug!}
+            token={localStorage.getItem('ehr_token') || ''}
+            onClose={() => setShowHivModal(false)}
+            onSaved={() => {
+              setShowHivModal(false);
+              // Optionally refresh appointments
+            }}
+          />
+        </div>
+      )}
+
+      {/* HIV Testing Modal - Available from Main Dashboard */}
+      {showHivTestingModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 className="text-xl font-bold text-white">HIV Testing</h2>
+              <button
+                onClick={() => setShowHivTestingModal(false)}
+                className="text-white hover:text-emerald-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <HIVTestingComponent tenantSlug={tenantSlug || ''} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

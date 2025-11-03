@@ -482,6 +482,37 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_orders_drug_id ON orders(drug_id) WHERE drug_id IS NOT NULL`);
     
+    // HIV/AIDS/TB/Cervical Cancer Tables
+    // HIV Test Results Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tests (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, test_number VARCHAR(100) UNIQUE NOT NULL, test_date TIMESTAMP WITH TIME ZONE NOT NULL, test_type VARCHAR(50) NOT NULL CHECK (test_type IN ('rapid_antibody', 'elisa', 'pcr', 'viral_load', 'cd4')), test_kit_name VARCHAR(100), test_kit_lot VARCHAR(100), test_kit_expiry DATE, test_result VARCHAR(50) NOT NULL CHECK (test_result IN ('reactive', 'non_reactive', 'invalid', 'indeterminate', 'positive', 'negative', 'pending')), result_value VARCHAR(255), result_unit VARCHAR(50), is_confirmatory BOOLEAN DEFAULT false, confirmatory_test_id UUID REFERENCES hiv_tests(id), testing_algorithm_step INTEGER DEFAULT 1, algorithm_result VARCHAR(50) CHECK (algorithm_result IN ('positive', 'negative', 'indeterminate', 'incomplete')), tested_by UUID NOT NULL REFERENCES users(id), reviewed_by UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, notes TEXT, enrolled_in_care BOOLEAN DEFAULT false, enrollment_declined BOOLEAN DEFAULT false, enrollment_declined_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_patient_id ON hiv_tests(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_date ON hiv_tests(test_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_result ON hiv_tests(test_result)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_enrolled_in_care ON hiv_tests(enrolled_in_care)`);
+    
+    // HIV Care Enrollment Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_care_enrollments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, enrollment_date DATE NOT NULL, enrollment_number VARCHAR(100) UNIQUE NOT NULL, enrollment_status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (enrollment_status IN ('active', 'transferred_out', 'lost_to_followup', 'deceased', 'discontinued')), enrollment_facility VARCHAR(255), previous_care_facility VARCHAR(255), previous_care_number VARCHAR(100), date_confirmed_positive DATE, art_start_date DATE, baseline_cd4 INTEGER, baseline_viral_load DECIMAL(10,2), baseline_viral_load_unit VARCHAR(10) DEFAULT 'copies/mL', baseline_clinical_stage VARCHAR(20) CHECK (baseline_clinical_stage IN ('stage1', 'stage2', 'stage3', 'stage4')), baseline_who_stage VARCHAR(20), current_regimen VARCHAR(255), transfer_out_date DATE, transfer_out_facility VARCHAR(255), loss_to_followup_date DATE, loss_to_followup_reason TEXT, deceased_date DATE, cause_of_death TEXT, discontinued_date DATE, discontinued_reason TEXT, enrollment_notes TEXT, created_by UUID NOT NULL REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_patient_id ON hiv_care_enrollments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_enrollment_status ON hiv_care_enrollments(enrollment_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_enrollment_number ON hiv_care_enrollments(enrollment_number)`);
+    
+    // HIV Clinical Visits Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_clinical_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE, visit_date DATE NOT NULL, visit_type VARCHAR(50) NOT NULL CHECK (visit_type IN ('routine', 'followup', 'adherence', 'side_effect', 'opportunistic_infection', 'emergency')), provider_id UUID NOT NULL REFERENCES users(id), cd4_count INTEGER, viral_load DECIMAL(10,2), viral_load_unit VARCHAR(10) DEFAULT 'copies/mL', viral_load_suppressed BOOLEAN, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(4,2), blood_pressure VARCHAR(20), adherence_percentage INTEGER CHECK (adherence_percentage >= 0 AND adherence_percentage <= 100), side_effects TEXT[], opportunistic_infections TEXT[], tb_symptoms VARCHAR(50) CHECK (tb_symptoms IN ('none', 'cough', 'night_sweats', 'weight_loss', 'fever', 'other')), tb_screened BOOLEAN DEFAULT false, tb_screened_result VARCHAR(50), pregnancy_status VARCHAR(50) CHECK (pregnancy_status IN ('not_pregnant', 'pregnant', 'breastfeeding', 'unknown')), gestational_age_weeks INTEGER, oi_prophylaxis TEXT, current_regimen VARCHAR(255), regimen_changed BOOLEAN DEFAULT false, regimen_change_reason TEXT, next_appointment_date DATE, visit_notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_enrollment_id ON hiv_clinical_visits(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_visit_date ON hiv_clinical_visits(visit_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_provider_id ON hiv_clinical_visits(provider_id)`);
+    
+    // TB Screening Table
+    statements.push(`CREATE TABLE IF NOT EXISTS tb_screenings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, screening_date DATE NOT NULL, screening_type VARCHAR(50) NOT NULL CHECK (screening_type IN ('symptom_screen', 'chest_xray', 'sputum_afb', 'gene_xpert', 'culture', 'lpa')), screening_result VARCHAR(50) CHECK (screening_result IN ('negative', 'positive', 'indeterminate', 'pending')), symptom_cough BOOLEAN DEFAULT false, symptom_fever BOOLEAN DEFAULT false, symptom_night_sweats BOOLEAN DEFAULT false, symptom_weight_loss BOOLEAN DEFAULT false, symptom_duration_weeks INTEGER, chest_xray_result VARCHAR(50), sputum_afb_result VARCHAR(50), gene_xpert_result VARCHAR(50), culture_result VARCHAR(50), tb_diagnosed BOOLEAN DEFAULT false, tb_diagnosis_date DATE, tb_treatment_started BOOLEAN DEFAULT false, tb_treatment_start_date DATE, screened_by UUID NOT NULL REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tb_screenings_patient_id ON tb_screenings(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tb_screenings_screening_date ON tb_screenings(screening_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tb_screenings_tb_diagnosed ON tb_screenings(tb_diagnosed)`);
+    
+    // Cervical Cancer Screening Table
+    statements.push(`CREATE TABLE IF NOT EXISTS cervical_cancer_screenings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, screening_date DATE NOT NULL, screening_method VARCHAR(50) NOT NULL CHECK (screening_method IN ('via', 'pap_smear', 'hpv_test', 'colposcopy')), screening_result VARCHAR(50) CHECK (screening_result IN ('normal', 'abnormal', 'positive', 'negative', 'suspicious', 'pending')), via_result VARCHAR(50), pap_result VARCHAR(50), hpv_result VARCHAR(50), hpv_types TEXT[], colposcopy_result VARCHAR(50), biopsy_required BOOLEAN DEFAULT false, biopsy_result VARCHAR(50), treatment_provided TEXT, treatment_date DATE, next_screening_date DATE, screened_by UUID NOT NULL REFERENCES users(id), reviewed_by UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cervical_screenings_patient_id ON cervical_cancer_screenings(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cervical_screenings_screening_date ON cervical_cancer_screenings(screening_date)`);
+    
     return statements;
   }
 
@@ -524,6 +555,16 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_drugs_updated_at BEFORE UPDATE ON drugs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_drug_interactions_updated_at BEFORE UPDATE ON drug_interactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_tests_updated_at BEFORE UPDATE ON hiv_tests
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_care_enrollments_updated_at BEFORE UPDATE ON hiv_care_enrollments
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_clinical_visits_updated_at BEFORE UPDATE ON hiv_clinical_visits
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_tb_screenings_updated_at BEFORE UPDATE ON tb_screenings
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_cervical_cancer_screenings_updated_at BEFORE UPDATE ON cervical_cancer_screenings
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }

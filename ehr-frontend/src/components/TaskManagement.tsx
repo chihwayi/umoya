@@ -143,8 +143,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   }, [appointments, currentUser]);
 
   // Notify parent of task count changes
-  const notifyParent = useCallback(() => {
-    if (onTaskCountsChange) {
+  // Use useRef to store the callback to avoid recreating it on every render
+  const onTaskCountsChangeRef = React.useRef(onTaskCountsChange);
+  
+  useEffect(() => {
+    onTaskCountsChangeRef.current = onTaskCountsChange;
+  }, [onTaskCountsChange]);
+
+  useEffect(() => {
+    if (onTaskCountsChangeRef.current) {
       const counts = {
         pending: tasks.filter(t => t.status === 'pending').length,
         inProgress: tasks.filter(t => t.status === 'in_progress').length,
@@ -154,13 +161,9 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           return t.status !== 'completed' && dueTime < now;
         }).length
       };
-      onTaskCountsChange(counts);
+      onTaskCountsChangeRef.current(counts);
     }
-  }, [tasks, onTaskCountsChange]);
-
-  useEffect(() => {
-    notifyParent();
-  }, [notifyParent]);
+  }, [tasks]);
 
   // Filter and sort tasks
   useEffect(() => {

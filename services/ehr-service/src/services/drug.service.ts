@@ -1,10 +1,30 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Drug } from '../entities/drug.entity';
 import { DrugInteraction, InteractionSeverity } from '../entities/drug-interaction.entity';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class DrugService {
+  constructor(
+    @Inject(forwardRef(() => CdssService))
+    private readonly cdssService: CdssService
+  ) {}
+
+  /**
+   * Map CDSS severity string to InteractionSeverity enum
+   */
+  private mapSeverity(severity: string): InteractionSeverity {
+    const severityMap: Record<string, InteractionSeverity> = {
+      'critical': InteractionSeverity.MAJOR,
+      'major': InteractionSeverity.MAJOR,
+      'moderate': InteractionSeverity.MODERATE,
+      'minor': InteractionSeverity.MINOR,
+      'contraindicated': InteractionSeverity.MAJOR
+    };
+    return severityMap[severity.toLowerCase()] || InteractionSeverity.MINOR;
+  }
+
   async findAll(tenantDb: DataSource, search?: string, drugClass?: string): Promise<Drug[]> {
     const drugRepository = tenantDb.getRepository(Drug);
     const query = drugRepository.createQueryBuilder('drug')
@@ -68,6 +88,66 @@ export class DrugService {
   async checkInteractions(drugIds: string[], tenantDb: DataSource): Promise<DrugInteraction[]> {
     if (drugIds.length < 2) return [];
 
+    // First, try advanced CDSS service (Python-based)
+    try {
+      const cdssResult = await this.cdssService.checkDrugInteractions(drugIds, undefined, tenantDb);
+      
+      if (cdssResult.source === 'advanced_cdss' && cdssResult.interactions.length > 0) {
+        // Transform CDSS interactions to DrugInteraction format
+        const drugRepo = tenantDb.getRepository(Drug);
+        const transformedInteractions: DrugInteraction[] = [];
+        
+        // Get all drugs first for matching
+        const allDrugs = drugIds.length > 0 
+          ? await drugRepo.find({ where: drugIds.map(id => ({ id })) as any })
+          : [];
+        const drugMap = new Map(allDrugs.map(d => [d.id, d]));
+        
+        for (const cdssInteraction of cdssResult.interactions) {
+          // Try to match drugs by ID or name
+          let drug1: Drug | undefined;
+          let drug2: Drug | undefined;
+          
+          // Try to find by ID first, then by name matching
+          for (const drugId of drugIds) {
+            const drug = drugMap.get(drugId);
+            if (drug && (drug.genericName.toLowerCase() === (cdssInteraction.drug1 || '').toLowerCase() ||
+                         drug.genericName.toLowerCase().includes((cdssInteraction.drug1 || '').toLowerCase()))) {
+              drug1 = drug;
+            }
+            if (drug && (drug.genericName.toLowerCase() === (cdssInteraction.drug2 || '').toLowerCase() ||
+                         drug.genericName.toLowerCase().includes((cdssInteraction.drug2 || '').toLowerCase()))) {
+              drug2 = drug;
+            }
+          }
+          
+          // If not found by name, use first two drugs as fallback
+          if (!drug1 && drugIds.length >= 1) drug1 = drugMap.get(drugIds[0]);
+          if (!drug2 && drugIds.length >= 2) drug2 = drugMap.get(drugIds[1]);
+          
+          if (drug1 && drug2 && drug1.id !== drug2.id) {
+            const interaction = new DrugInteraction();
+            interaction.drug1Id = drug1.id;
+            interaction.drug2Id = drug2.id;
+            interaction.severity = this.mapSeverity(cdssInteraction.severity || 'minor');
+            interaction.description = cdssInteraction.mechanism || cdssInteraction.description || '';
+            interaction.mechanism = cdssInteraction.mechanism;
+            interaction.management = cdssInteraction.management;
+            interaction.drug1 = drug1;
+            interaction.drug2 = drug2;
+            transformedInteractions.push(interaction);
+          }
+        }
+        
+        if (transformedInteractions.length > 0) {
+          return transformedInteractions;
+        }
+      }
+    } catch (error) {
+      console.warn('CDSS service check failed, falling back to database:', error);
+    }
+
+    // Fallback to database interaction checking
     const interactionRepository = tenantDb.getRepository(DrugInteraction);
     const interactions: DrugInteraction[] = [];
 

@@ -30,6 +30,7 @@ import { LabTestController } from './controllers/lab-test.controller';
 import { LabOrderSetController } from './controllers/lab-order-set.controller';
 import { CriticalAlertController } from './controllers/critical-alert.controller';
 import { DrugController } from './controllers/drug.controller';
+import { HivController } from './controllers/hiv.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -59,6 +60,7 @@ import { LabTestService } from './services/lab-test.service';
 import { LabOrderSetService } from './services/lab-order-set.service';
 import { CriticalAlertService } from './services/critical-alert.service';
 import { DrugService } from './services/drug.service';
+import { HivService } from './services/hiv.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -100,6 +102,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     LabOrderSetController,
     CriticalAlertController,
     DrugController,
+    HivController,
   ],
   providers: [
     AuthService,
@@ -129,6 +132,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     LabOrderSetService,
     CriticalAlertService,
     DrugService,
+    HivService,
     JwtStrategy,
   ],
 })

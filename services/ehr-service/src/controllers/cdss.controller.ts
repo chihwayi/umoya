@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { CdssService } from '../services/cdss.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -10,13 +10,22 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @UseGuards(JwtAuthGuard)
 @Controller('cdss')
 export class CdssController {
+  private readonly logger = new Logger(CdssController.name);
+  
   constructor(private cdssService: CdssService) {}
 
   @Post('drug-interactions')
   @ApiOperation({ summary: 'Check drug interactions' })
   @ApiResponse({ status: 200, description: 'Drug interactions analyzed' })
-  async checkDrugInteractions(@Body() medications: string[], @Request() req: RequestWithTenant) {
-    return this.cdssService.checkDrugInteractions(medications);
+  async checkDrugInteractions(
+    @Body() body: { drugIds: string[], patientId?: string },
+    @Request() req: RequestWithTenant
+  ) {
+    return this.cdssService.checkDrugInteractions(
+      body.drugIds,
+      body.patientId,
+      req.tenantDb
+    );
   }
 
   @Post('diagnosis-assist')
@@ -26,18 +35,24 @@ export class CdssController {
     return this.cdssService.diagnosisAssist(symptoms);
   }
 
-  @Get('guidelines/:condition')
+  @Post('guidelines')
   @ApiOperation({ summary: 'Get clinical guidelines for condition' })
   @ApiResponse({ status: 200, description: 'Clinical guidelines retrieved' })
-  async getGuidelines(@Param('condition') condition: string, @Request() req: RequestWithTenant) {
-    return this.cdssService.getGuidelines(condition);
+  async getGuidelines(
+    @Body() body: { condition: string, patientData?: any },
+    @Request() req: RequestWithTenant
+  ) {
+    return this.cdssService.getGuidelines(body.condition, body.patientData);
   }
 
   @Post('risk-assessment')
   @ApiOperation({ summary: 'Patient risk assessment' })
   @ApiResponse({ status: 200, description: 'Risk assessment completed' })
   async riskAssessment(@Body() patientData: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.riskAssessment(patientData);
+    this.logger.log(`[CdssController] riskAssessment - tenantDb: ${!!req.tenantDb}, patientId: ${patientData?.patientId || 'undefined'}`);
+    const result = await this.cdssService.riskAssessment(patientData, req.tenantDb);
+    this.logger.log(`[CdssController] riskAssessment result - has historical_context: ${!!result?.historical_context}, has trends: ${!!result?.trends}`);
+    return result;
   }
 
   @Post('allergy-check')
@@ -45,5 +60,58 @@ export class CdssController {
   @ApiResponse({ status: 200, description: 'Allergy check completed' })
   async allergyCheck(@Body() data: { patientId: string, medication: string }, @Request() req: RequestWithTenant) {
     return this.cdssService.allergyCheck(data.patientId, data.medication, req.tenantDb);
+  }
+
+  @Post('dosing-recommendation')
+  @ApiOperation({ summary: 'Get medication dosing recommendation' })
+  @ApiResponse({ status: 200, description: 'Dosing recommendation provided' })
+  async getDosingRecommendation(@Body() dosingRequest: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.getDosingRecommendation(dosingRequest);
+  }
+
+  @Post('labs/interpret')
+  @ApiOperation({ summary: 'Interpret lab results' })
+  @ApiResponse({ status: 200, description: 'Lab results interpreted' })
+  async interpretLabResults(@Body() body: { labResults: any, historicalLabs?: any[] }, @Request() req: RequestWithTenant) {
+    return this.cdssService.interpretLabResults(body.labResults, body.historicalLabs);
+  }
+
+  @Post('medications/duplicates')
+  @ApiOperation({ summary: 'Detect duplicate therapy' })
+  @ApiResponse({ status: 200, description: 'Duplicate therapy detected' })
+  async detectDuplicateTherapy(@Body() body: { medications: any[], prescriptions?: any[] }, @Request() req: RequestWithTenant) {
+    return this.cdssService.detectDuplicateTherapy(body.medications, body.prescriptions);
+  }
+
+  @Post('medications/high-risk')
+  @ApiOperation({ summary: 'Check high-risk medications' })
+  @ApiResponse({ status: 200, description: 'High-risk medications checked' })
+  async checkHighRiskMedications(@Body() body: { medications: any[], patientAge?: number, patientGender?: string, diagnoses?: string[], renalFunction?: number }, @Request() req: RequestWithTenant) {
+    return this.cdssService.checkHighRiskMedications(
+      body.medications,
+      body.patientAge,
+      body.patientGender,
+      body.diagnoses,
+      body.renalFunction
+    );
+  }
+
+  @Post('medications/food-interactions')
+  @ApiOperation({ summary: 'Check drug–food interactions' })
+  @ApiResponse({ status: 200, description: 'Drug–food interactions checked' })
+  async checkFoodInteractions(@Body() body: { medications: any[] }, @Request() req: RequestWithTenant) {
+    return this.cdssService.checkFoodInteractions(body.medications);
+  }
+
+  @Post('care-gaps/detect')
+  @ApiOperation({ summary: 'Detect care gaps' })
+  @ApiResponse({ status: 200, description: 'Care gaps detected' })
+  async detectCareGaps(@Body() body: { patientAge?: number, patientGender?: string, visitHistory?: any[], diagnoses?: string[] }, @Request() req: RequestWithTenant) {
+    return this.cdssService.detectCareGaps(
+      body.patientAge,
+      body.patientGender,
+      body.visitHistory,
+      body.diagnoses
+    );
   }
 }

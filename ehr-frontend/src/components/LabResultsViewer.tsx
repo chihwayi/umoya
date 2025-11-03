@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   TestTube, AlertTriangle, TrendingUp, TrendingDown, Minus,
-  Calendar, User, CheckCircle, XCircle, ArrowUp, ArrowDown
+  Calendar, User, CheckCircle, XCircle, ArrowUp, ArrowDown, Brain, RefreshCw
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
@@ -50,6 +50,8 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
   const [loading, setLoading] = useState(true);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [cdssAnalysis, setCdssAnalysis] = useState<any>(null);
+  const [loadingCdss, setLoadingCdss] = useState(false);
 
   useEffect(() => {
     const loadResults = async () => {
@@ -164,6 +166,50 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
       percent: Math.abs(parseFloat(percentChange)),
       recent: recent
     };
+  };
+
+  const runCdssAnalysis = async () => {
+    if (labOrders.length === 0 || !labOrders[0]?.results) return;
+    
+    setLoadingCdss(true);
+    try {
+      // Get current lab results
+      const currentResults: Record<string, number> = {};
+      const historicalLabs: any[] = [];
+      
+      labOrders.forEach((order, orderIdx) => {
+        order.results?.forEach(result => {
+          const testName = result.testName;
+          const numericValue = parseFloat(result.value);
+          
+          if (!isNaN(numericValue)) {
+            if (orderIdx === 0) {
+              // Current results
+              currentResults[testName] = numericValue;
+            } else {
+              // Historical results
+              if (!historicalLabs[orderIdx - 1]) {
+                historicalLabs[orderIdx - 1] = {};
+              }
+              historicalLabs[orderIdx - 1][testName] = numericValue;
+            }
+          }
+        });
+      });
+
+      const response = await ehrApi.interpretLabResults(
+        currentResults,
+        historicalLabs.length > 0 ? historicalLabs : undefined,
+        token,
+        tenantSlug
+      );
+      
+      setCdssAnalysis(response.data);
+    } catch (error) {
+      console.error('Failed to get CDSS analysis:', error);
+    } finally {
+      setLoadingCdss(false);
+    }
   };
 
   // Simple trend chart component
@@ -390,6 +436,135 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
               <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="text-sm font-medium text-slate-700 mb-1">Clinical Interpretation</div>
                 <div className="text-sm text-slate-600">{order.interpretation}</div>
+              </div>
+            )}
+
+            {/* CDSS Analysis Section */}
+            {labOrders.indexOf(order) === 0 && (
+              <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-base font-bold text-slate-900">CDSS Lab Analysis</h3>
+                  </div>
+                  <button
+                    onClick={runCdssAnalysis}
+                    disabled={loadingCdss}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loadingCdss ? 'animate-spin' : ''}`} />
+                    {loadingCdss ? 'Analyzing...' : 'Run CDSS Analysis'}
+                  </button>
+                </div>
+
+                {cdssAnalysis && (
+                  <div className="space-y-4 mt-4">
+                    {/* Summary */}
+                    {cdssAnalysis.summary && (
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <div className="grid grid-cols-4 gap-3 text-sm">
+                          <div>
+                            <div className="text-xs text-slate-600">Total Tests</div>
+                            <div className="font-bold text-lg">{cdssAnalysis.summary.total_tests}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600">Normal</div>
+                            <div className="font-bold text-lg text-green-600">{cdssAnalysis.summary.normal}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600">Abnormal</div>
+                            <div className="font-bold text-lg text-orange-600">{cdssAnalysis.summary.abnormal}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-600">Critical</div>
+                            <div className="font-bold text-lg text-red-600">{cdssAnalysis.summary.critical}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Critical Alerts */}
+                    {cdssAnalysis.critical_alerts && cdssAnalysis.critical_alerts.length > 0 && (
+                      <div className="bg-red-50 rounded-lg p-3 border-2 border-red-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                          <h4 className="font-bold text-red-900">CRITICAL ALERTS</h4>
+                        </div>
+                        <ul className="space-y-2">
+                          {cdssAnalysis.critical_alerts.map((alert: any, idx: number) => (
+                            <li key={idx} className="text-sm text-red-800">
+                              <div className="font-semibold">{alert.message}</div>
+                              {alert.action && (
+                                <div className="text-xs text-red-700 mt-1 pl-4">{alert.action}</div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Warnings */}
+                    {cdssAnalysis.warnings && cdssAnalysis.warnings.length > 0 && (
+                      <div className="bg-orange-50 rounded-lg p-3 border border-orange-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="w-4 h-4 text-orange-600" />
+                          <h4 className="font-semibold text-orange-900">Warnings</h4>
+                        </div>
+                        <ul className="space-y-1">
+                          {cdssAnalysis.warnings.slice(0, 5).map((warning: any, idx: number) => (
+                            <li key={idx} className="text-sm text-orange-800">
+                              <div>{warning.message}</div>
+                              {warning.action && (
+                                <div className="text-xs text-orange-700 mt-1 pl-4">{warning.action}</div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {cdssAnalysis.recommendations && cdssAnalysis.recommendations.length > 0 && (
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-300">
+                        <h4 className="font-semibold text-blue-900 mb-2">Recommendations</h4>
+                        <ul className="space-y-1">
+                          {cdssAnalysis.recommendations.map((rec: string, idx: number) => (
+                            <li key={idx} className="text-sm text-blue-800 flex items-start gap-2">
+                              <span className="text-blue-600 mt-0.5">•</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Trend Analysis */}
+                    {cdssAnalysis.trends && Object.keys(cdssAnalysis.trends).length > 0 && (
+                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-300">
+                        <h4 className="font-semibold text-purple-900 mb-2">Trend Analysis</h4>
+                        <div className="space-y-2">
+                          {Object.entries(cdssAnalysis.trends).slice(0, 5).map(([testName, trend]: [string, any]) => (
+                            <div key={testName} className="text-sm">
+                              <div className="font-medium text-purple-900 capitalize">{testName.replace(/([A-Z])/g, ' $1').trim()}</div>
+                              <div className="text-xs text-purple-700 mt-1">
+                                Trend: <span className="font-semibold">{trend.trend}</span>
+                                {trend.change_percent !== undefined && (
+                                  <span className="ml-2">
+                                    ({trend.change_percent > 0 ? '+' : ''}{trend.change_percent}% change)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!cdssAnalysis && !loadingCdss && (
+                  <p className="text-sm text-slate-600">Click "Run CDSS Analysis" to get intelligent interpretation of lab results</p>
+                )}
               </div>
             )}
           </div>

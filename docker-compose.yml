@@ -240,8 +240,13 @@ services:
       - DB_USERNAME=medicore
       - DB_PASSWORD=medicore_password
       - JWT_SECRET=ehr-super-secret-key
+      - CDSS_SERVICE_URL=http://cdss-service:8000
+    volumes:
+      - ./services/ehr-service/src:/app/src
+      - ./services/ehr-service/package.json:/app/package.json
     depends_on:
       - postgres-master
+      - cdss-service
     networks:
       - medicore-network
 

@@ -94,6 +94,8 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
     foundDrug?: Drug;
   };
   const [items, setItems] = useState<Rx[]>([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
+  const [loadingFood, setLoadingFood] = useState(false);
+  const [foodInteractions, setFoodInteractions] = useState<any | null>(null);
 
   // Load allergies from structured table
   useEffect(() => {
@@ -163,6 +165,27 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
     } catch (error) {
       console.error('Failed to check interactions:', error);
       setDrugInteractions([]);
+    }
+  }, [items, token, tenantSlug]);
+
+  const runFoodInteractions = useCallback(async () => {
+    try {
+      setLoadingFood(true);
+      // Build medications list for CDSS (name/genericName, class if available)
+      const meds = items
+        .filter(rx => rx.name)
+        .map(rx => ({
+          name: rx.name,
+          genericName: rx.foundDrug?.genericName || rx.name,
+          drugClass: rx.foundDrug?.drugClass
+        }));
+      const resp = await ehrApi.checkFoodInteractions(meds, token, tenantSlug);
+      setFoodInteractions(resp.data || resp);
+    } catch (err) {
+      console.error('Failed to check food interactions:', err);
+      setFoodInteractions({ interactions: [], summary: { major: 0, moderate: 0 }, recommendations: ['Failed to check interactions'] });
+    } finally {
+      setLoadingFood(false);
     }
   }, [items, token, tenantSlug]);
 
@@ -300,6 +323,26 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
               >
                 <Plus className="w-5 h-5" />
               </button>
+              {items.some(rx => rx.name && rx.name.trim().length > 0) && (
+                <button
+                  onClick={runFoodInteractions}
+                  disabled={loadingFood}
+                  className="px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  title="Check drug-food interactions"
+                >
+                  {loadingFood ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      Food Interactions
+                    </>
+                  )}
+                </button>
+              )}
               <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
             </div>
           </div>
@@ -361,6 +404,55 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Drug–Food Interactions */}
+            {foodInteractions && (
+              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-blue-600" />
+                    <h4 className="font-semibold text-blue-900">Drug–Food Interactions</h4>
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Major: <span className="font-semibold text-red-600">{foodInteractions.summary?.major || 0}</span>
+                    <span className="mx-2">|</span>
+                    Moderate: <span className="font-semibold text-orange-600">{foodInteractions.summary?.moderate || 0}</span>
+                  </div>
+                </div>
+                {foodInteractions.interactions?.length > 0 ? (
+                  <div className="space-y-2">
+                    {foodInteractions.interactions.map((fx: any, idx: number) => (
+                      <div key={idx} className={`p-3 rounded-lg border ${fx.severity === 'major' ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-300'}`}>
+                        <p className={`font-semibold text-sm ${fx.severity === 'major' ? 'text-red-900' : 'text-orange-900'}`}>
+                          {fx.medication} × {fx.food} <span className="ml-2 text-xs">({(fx.severity || 'moderate').toUpperCase()})</span>
+                        </p>
+                        {fx.mechanism && (
+                          <p className="text-xs mt-1 text-slate-700">{fx.mechanism}</p>
+                        )}
+                        {fx.recommendation && (
+                          <p className={`text-xs mt-2 italic ${fx.severity === 'major' ? 'text-red-700' : 'text-orange-700'}`}>Recommendation: {fx.recommendation}</p>
+                        )}
+                        {fx.examples && (
+                          <p className="text-xs mt-1 text-slate-600">Examples: {Array.isArray(fx.examples) ? fx.examples.join(', ') : fx.examples}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No significant drug–food interactions detected.</p>
+                )}
+                {foodInteractions.recommendations && foodInteractions.recommendations.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-blue-200">
+                    <h5 className="text-xs font-semibold text-slate-700 mb-1">General Recommendations</h5>
+                    <ul className="text-xs text-slate-700 list-disc pl-5 space-y-1">
+                      {foodInteractions.recommendations.slice(0,5).map((r: string, idx: number) => (
+                        <li key={idx}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
             
