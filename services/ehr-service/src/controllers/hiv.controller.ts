@@ -64,7 +64,9 @@ export class HivController {
   @ApiOperation({ summary: 'Record HIV clinical visit' })
   @ApiResponse({ status: 201, description: 'Clinical visit recorded' })
   async createClinicalVisit(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.hivService.createClinicalVisit(body, req.tenantDb);
+    const providerRole = (req as any).user?.role || body.providerRole;
+    const providerId = (req as any).user?.id || body.providerId;
+    return this.hivService.createClinicalVisit({ ...body, providerId }, req.tenantDb, providerRole);
   }
 
   @Get('visits/enrollment/:enrollmentId')
@@ -72,6 +74,75 @@ export class HivController {
   @ApiResponse({ status: 200, description: 'Clinical visits retrieved' })
   async getClinicalVisits(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
     return this.hivService.getClinicalVisits(enrollmentId, req.tenantDb);
+  }
+
+  @Get('visits/count/:enrollmentId')
+  @ApiOperation({ summary: 'Get visit count and next visit number for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Visit count retrieved' })
+  async getVisitCount(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getVisitCount(enrollmentId, req.tenantDb);
+  }
+
+  // EAC Endpoints
+  @Post('eac/sessions')
+  @ApiOperation({ summary: 'Record EAC session' })
+  @ApiResponse({ status: 201, description: 'EAC session recorded' })
+  async createEacSession(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.hivService.createEacSession(body, req.tenantDb);
+  }
+
+  @Get('eac/enrollment/:enrollmentId')
+  @ApiOperation({ summary: 'Get EAC sessions for an enrollment' })
+  @ApiResponse({ status: 200, description: 'EAC sessions retrieved' })
+  async getEacSessions(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getEacSessions(enrollmentId, req.tenantDb);
+  }
+
+  @Get('eac/check/:enrollmentId')
+  @ApiOperation({ summary: 'Check if patient needs EAC based on viral load' })
+  @ApiResponse({ status: 200, description: 'EAC eligibility checked' })
+  async checkEacEligibility(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.checkEacEligibility(enrollmentId, req.tenantDb);
+  }
+
+  // ARV Change Request Endpoints
+  @Post('arv-change-requests')
+  @ApiOperation({ summary: 'Create ARV change request' })
+  @ApiResponse({ status: 201, description: 'Change request created' })
+  async createArvChangeRequest(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.hivService.createArvChangeRequest(body, req.tenantDb);
+  }
+
+  @Get('arv-change-requests')
+  @ApiOperation({ summary: 'Get ARV change requests (for doctors)' })
+  @ApiResponse({ status: 200, description: 'Change requests retrieved' })
+  async getArvChangeRequests(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getArvChangeRequests(query, req.tenantDb);
+  }
+
+  @Patch('arv-change-requests/:requestId/approve')
+  @ApiOperation({ summary: 'Approve ARV change request (doctor only)' })
+  @ApiResponse({ status: 200, description: 'Change request approved' })
+  async approveArvChangeRequest(@Param('requestId') requestId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    const doctorId = (req as any).user?.id;
+    const doctorName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name;
+    return this.hivService.approveArvChangeRequest(requestId, { ...body, approvedBy: doctorId, approvedByName: doctorName }, req.tenantDb);
+  }
+
+  @Patch('arv-change-requests/:requestId/reject')
+  @ApiOperation({ summary: 'Reject ARV change request (doctor only)' })
+  @ApiResponse({ status: 200, description: 'Change request rejected' })
+  async rejectArvChangeRequest(@Param('requestId') requestId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    const doctorId = (req as any).user?.id;
+    const doctorName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name;
+    return this.hivService.rejectArvChangeRequest(requestId, { ...body, approvedBy: doctorId, approvedByName: doctorName }, req.tenantDb);
+  }
+
+  @Get('arv-change-requests/enrollment/:enrollmentId/approved')
+  @ApiOperation({ summary: 'Get approved ARV change for enrollment' })
+  @ApiResponse({ status: 200, description: 'Approved change retrieved' })
+  async getApprovedArvChange(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getApprovedArvChangeForEnrollment(enrollmentId, req.tenantDb);
   }
 
   @Post('tb-screenings')
@@ -86,6 +157,20 @@ export class HivController {
   @ApiResponse({ status: 201, description: 'Cervical cancer screening recorded' })
   async createCervicalCancerScreening(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.hivService.createCervicalCancerScreening(body, req.tenantDb);
+  }
+
+  @Post('art-initiation-details')
+  @ApiOperation({ summary: 'Save ART initiation details' })
+  @ApiResponse({ status: 201, description: 'ART initiation details saved' })
+  async saveArtInitiationDetails(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.hivService.saveArtInitiationDetails(body, req.tenantDb);
+  }
+
+  @Get('lookup/:tableName')
+  @ApiOperation({ summary: 'Get lookup table data' })
+  @ApiResponse({ status: 200, description: 'Lookup data retrieved' })
+  async getLookupData(@Param('tableName') tableName: string, @Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getLookupData(tableName, query, req.tenantDb);
   }
 }
 

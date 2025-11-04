@@ -392,7 +392,9 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
       {showEnrollmentModal && selectedPatient && (
         <HIVEnrollmentModal
           patientId={selectedPatient.id}
-          patientName={`${selectedPatient.firstName} ${selectedPatient.lastName}`}
+          patientName={`${selectedPatient.first_name || selectedPatient.firstName} ${selectedPatient.last_name || selectedPatient.lastName}`}
+          patientAge={selectedPatient.date_of_birth || selectedPatient.dateOfBirth ? Math.floor((new Date().getTime() - new Date(selectedPatient.date_of_birth || selectedPatient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : undefined}
+          patientSex={selectedPatient.gender}
           onClose={() => setShowEnrollmentModal(false)}
           onSuccess={() => {
             setShowEnrollmentModal(false);

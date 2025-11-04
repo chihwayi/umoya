@@ -103,6 +103,9 @@ export class DatabaseProvisioningService {
         this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
       }
       
+      // Seed lookup tables with initial data
+      await this.seedLookupTables(tenantDataSource);
+      
       this.logger.log('Schema migration completed');
       
     } finally {
@@ -496,11 +499,371 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_enrollment_status ON hiv_care_enrollments(enrollment_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_enrollment_number ON hiv_care_enrollments(enrollment_number)`);
     
-    // HIV Clinical Visits Table
-    statements.push(`CREATE TABLE IF NOT EXISTS hiv_clinical_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE, visit_date DATE NOT NULL, visit_type VARCHAR(50) NOT NULL CHECK (visit_type IN ('routine', 'followup', 'adherence', 'side_effect', 'opportunistic_infection', 'emergency')), provider_id UUID NOT NULL REFERENCES users(id), cd4_count INTEGER, viral_load DECIMAL(10,2), viral_load_unit VARCHAR(10) DEFAULT 'copies/mL', viral_load_suppressed BOOLEAN, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(4,2), blood_pressure VARCHAR(20), adherence_percentage INTEGER CHECK (adherence_percentage >= 0 AND adherence_percentage <= 100), side_effects TEXT[], opportunistic_infections TEXT[], tb_symptoms VARCHAR(50) CHECK (tb_symptoms IN ('none', 'cough', 'night_sweats', 'weight_loss', 'fever', 'other')), tb_screened BOOLEAN DEFAULT false, tb_screened_result VARCHAR(50), pregnancy_status VARCHAR(50) CHECK (pregnancy_status IN ('not_pregnant', 'pregnant', 'breastfeeding', 'unknown')), gestational_age_weeks INTEGER, oi_prophylaxis TEXT, current_regimen VARCHAR(255), regimen_changed BOOLEAN DEFAULT false, regimen_change_reason TEXT, next_appointment_date DATE, visit_notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    // HIV ART Initiation Details Table - Captures comprehensive registration/initiation data
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_art_initiation_details (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      enrollment_id UUID REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      
+      -- OI/ART Number
+      oi_art_number VARCHAR(100) UNIQUE,
+      
+      -- Registration Details
+      date_of_registration DATE NOT NULL,
+      name_of_registration_health_centre VARCHAR(255),
+      age_at_registration INTEGER,
+      sex_assigned_at_birth VARCHAR(10) CHECK (sex_assigned_at_birth IN ('Male', 'Female')),
+      
+      -- Marital Status (multiple checkboxes allowed)
+      marital_status_married BOOLEAN DEFAULT false,
+      marital_status_never_married BOOLEAN DEFAULT false,
+      marital_status_widowed BOOLEAN DEFAULT false,
+      marital_status_divorced_separated BOOLEAN DEFAULT false,
+      marital_status_living_together BOOLEAN DEFAULT false,
+      marital_status_minor BOOLEAN DEFAULT false,
+      
+      -- Patient Profile (multiple checkboxes allowed)
+      patient_profile_general_population BOOLEAN DEFAULT false,
+      patient_profile_sex_worker BOOLEAN DEFAULT false,
+      patient_profile_msm BOOLEAN DEFAULT false,
+      patient_profile_wsw BOOLEAN DEFAULT false,
+      patient_profile_pwud BOOLEAN DEFAULT false,
+      patient_profile_pwid BOOLEAN DEFAULT false,
+      patient_profile_transgender BOOLEAN DEFAULT false,
+      patient_profile_others BOOLEAN DEFAULT false,
+      patient_profile_others_details VARCHAR(255),
+      
+      -- Education Level (single selection)
+      education_level VARCHAR(20) CHECK (education_level IN ('None', 'Primary', 'Secondary', 'Tertiary')),
+      
+      -- Contact Information
+      physical_address TEXT,
+      kraal VARCHAR(255),
+      village VARCHAR(255),
+      school VARCHAR(255),
+      clinic VARCHAR(255),
+      telephone VARCHAR(50),
+      cellphone VARCHAR(50),
+      work_address TEXT,
+      work_telephone VARCHAR(50),
+      occupation VARCHAR(255),
+      
+      -- Next of Kin
+      next_of_kin_name VARCHAR(255),
+      
+      -- Linkage Information (multiple checkboxes allowed)
+      linkage_from_eid BOOLEAN DEFAULT false,
+      linkage_from_hts BOOLEAN DEFAULT false,
+      linkage_from_pmtct BOOLEAN DEFAULT false,
+      linkage_from_sti BOOLEAN DEFAULT false,
+      linkage_from_tb_program BOOLEAN DEFAULT false,
+      linkage_from_vmmc BOOLEAN DEFAULT false,
+      linkage_from_other BOOLEAN DEFAULT false,
+      linkage_from_other_details VARCHAR(255),
+      
+      -- Orphan Status (for patients <18 years)
+      orphan_status_double BOOLEAN DEFAULT false,
+      orphan_status_single BOOLEAN DEFAULT false,
+      orphan_status_not_orphan BOOLEAN DEFAULT false,
+      
+      -- HIV Test Details
+      date_first_confirmed_hiv_test DATE,
+      institution_name_vct_pmtct VARCHAR(255),
+      hiv_test_used_antibody BOOLEAN DEFAULT false,
+      hiv_test_used_pcr BOOLEAN DEFAULT false,
+      
+      -- Reason for HIV Test (multiple checkboxes allowed)
+      reason_hiv_test_antenatal BOOLEAN DEFAULT false,
+      reason_hiv_test_pep BOOLEAN DEFAULT false,
+      reason_hiv_test_death_child_spouse BOOLEAN DEFAULT false,
+      reason_hiv_test_prep BOOLEAN DEFAULT false,
+      reason_hiv_test_hospital_illness BOOLEAN DEFAULT false,
+      reason_hiv_test_spouse_child_lt5_art BOOLEAN DEFAULT false,
+      reason_hiv_test_occupational BOOLEAN DEFAULT false,
+      reason_hiv_test_tb BOOLEAN DEFAULT false,
+      reason_hiv_test_vct BOOLEAN DEFAULT false,
+      reason_hiv_test_others BOOLEAN DEFAULT false,
+      reason_hiv_test_others_details VARCHAR(255),
+      
+      -- Confirmatory and Retesting
+      confirmatory_hiv_test BOOLEAN DEFAULT false,
+      retesting_hiv_for_art_initiation BOOLEAN DEFAULT false,
+      
+      -- Medical Insurance
+      medical_insurance_scheme_name VARCHAR(255),
+      medical_insurance_policy_number VARCHAR(100),
+      medical_insurance_member_name VARCHAR(255),
+      medical_insurance_relationship_to_member VARCHAR(100),
+      
+      -- Consent/Assent
+      consent_personal_tracing BOOLEAN DEFAULT false,
+      consent_personal_tracing_date DATE,
+      consent_index_case_testing BOOLEAN DEFAULT false,
+      consent_index_case_testing_date DATE,
+      disclosure_hiv_status VARCHAR(10) CHECK (disclosure_hiv_status IN ('Yes', 'No')),
+      disclosure_hiv_status_to_whom VARCHAR(255),
+      disclosure_hiv_status_final_date DATE,
+      disclosure_hiv_status_final_to_whom VARCHAR(255),
+      
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_initiation_patient_id ON hiv_art_initiation_details(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_initiation_enrollment_id ON hiv_art_initiation_details(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_initiation_oi_art_number ON hiv_art_initiation_details(oi_art_number)`);
+    
+    // HIV Clinical Visits Table - Enhanced with comprehensive data points
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_clinical_visits (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      visit_number INTEGER,
+      visit_date DATE NOT NULL,
+      visit_type VARCHAR(10) NOT NULL CHECK (visit_type IN ('A', 'B', 'C', 'D', 'E', 'F', 'G')),
+      provider_id UUID NOT NULL REFERENCES users(id),
+      provider_role VARCHAR(50),
+      
+      -- Vital Signs
+      weight_kg DECIMAL(5,2),
+      height_cm DECIMAL(5,2),
+      bmi DECIMAL(4,2),
+      blood_pressure VARCHAR(20),
+      
+      -- Reproductive Health
+      pregnancy_lactating_status VARCHAR(10) CHECK (pregnancy_lactating_status IN ('P', 'L', 'NPL', 'N/A')),
+      first_anc_booking_date DATE,
+      delivery_date DATE,
+      family_planning_status TEXT[],
+      
+      -- Clinical Status
+      functional_status VARCHAR(10) CHECK (functional_status IN ('W', 'A', 'B')),
+      who_clinical_stage INTEGER CHECK (who_clinical_stage IN (1, 2, 3, 4)),
+      opportunistic_infections TEXT[],
+      
+      -- TB Status
+      tb_screening VARCHAR(10) CHECK (tb_screening IN ('Y', 'S', 'ON', 'N')),
+      tb_investigation_result VARCHAR(10) CHECK (tb_investigation_result IN ('1', '2', '3', '4', '5')),
+      tb_diagnosed BOOLEAN DEFAULT false,
+      tb_diagnosis_date DATE,
+      tb_treatment_started BOOLEAN DEFAULT false,
+      
+      -- TPT (Tuberculosis Preventive Therapy)
+      ipt_eligibility VARCHAR(1) CHECK (ipt_eligibility IN ('Y', 'N')),
+      tpt_status VARCHAR(10) CHECK (tpt_status IN ('II', 'CI', 'RI', 'IS', 'HPI', 'IC', 'INI', 'NE', 'N/A')),
+      tpt_not_started_stopped_reason VARCHAR(10),
+      tpt_quantity_dispensed INTEGER,
+      tpt_adherence_percentage INTEGER CHECK (tpt_adherence_percentage >= 0 AND tpt_adherence_percentage <= 100),
+      
+      -- Prophylaxis
+      cotrimoxazole_quantity_dispensed INTEGER,
+      cotrimoxazole_adherence_percentage INTEGER CHECK (cotrimoxazole_adherence_percentage >= 0 AND cotrimoxazole_adherence_percentage <= 100),
+      fluconazole_quantity_prescribed INTEGER,
+      fluconazole_quantity_dispensed INTEGER,
+      
+      -- ARV Status & Regimens
+      arv_status VARCHAR(10) CHECK (arv_status IN ('1', '2', '2a', '2b', '3', '4', '5', '6', '7')),
+      arv_reason VARCHAR(10),
+      arv_regimen_code VARCHAR(10),
+      arv_regimen_name VARCHAR(255),
+      arv_quantity_prescribed INTEGER,
+      arv_quantity_dispensed INTEGER,
+      arv_adherence_percentage INTEGER CHECK (arv_adherence_percentage >= 0 AND arv_adherence_percentage <= 100),
+      regimen_changed BOOLEAN DEFAULT false,
+      regimen_change_approved_by UUID REFERENCES users(id),
+      regimen_change_approved_at TIMESTAMP WITH TIME ZONE,
+      
+      -- Lab Results
+      cd4_count INTEGER,
+      cd4_percentage DECIMAL(5,2),
+      cd4_test_date DATE,
+      viral_load DECIMAL(10,2),
+      viral_load_unit VARCHAR(10) DEFAULT 'copies/mL',
+      viral_load_sample_collected_date DATE,
+      viral_load_result_received_date DATE,
+      viral_load_test_date DATE,
+      viral_load_suppressed BOOLEAN,
+      alt_result DECIMAL(10,2),
+      creatinine_result DECIMAL(10,2),
+      other_diagnostics TEXT,
+      
+      -- Cryptococcal Status
+      cryptococcal_signs_code VARCHAR(10),
+      cryptococcal_status_code VARCHAR(10),
+      cryptococcal_csf_investigation_done BOOLEAN DEFAULT false,
+      cryptococcal_preemptive_treatment_result BOOLEAN,
+      cryptococcal_treatment_code VARCHAR(10),
+      
+      -- Cervical Cancer Screening
+      cervical_cancer_hpv_test_result VARCHAR(10) CHECK (cervical_cancer_hpv_test_result IN ('Pos', 'Neg', 'Pending')),
+      cervical_cancer_viac_result VARCHAR(10) CHECK (cervical_cancer_viac_result IN ('Pos', 'Neg', 'Pending')),
+      cervical_cancer_treatment_code VARCHAR(10),
+      
+      -- Mental Health
+      mental_health_result_code VARCHAR(10),
+      mental_health_management_code VARCHAR(10),
+      
+      -- TB Investigation Details
+      tb_investigation_xpert_mtb_rif VARCHAR(50),
+      tb_investigation_ultra_lf_lam VARCHAR(50),
+      tb_investigation_tst_children VARCHAR(50),
+      
+      -- ARV Initiation Category
+      arv_initiation_category_code VARCHAR(20),
+      
+      -- ARV Medicine Details
+      arv_duration_prescribed VARCHAR(100),
+      arv_reason_not_on_code VARCHAR(10),
+      arv_reason_start_code VARCHAR(10),
+      arv_change_stop_reason_code VARCHAR(10),
+      
+      -- Adverse Events
+      adverse_events_status VARCHAR(50)[],
+      
+      -- Referrals & Follow-up
+      referred_to VARCHAR(10),
+      referred_to_details TEXT,
+      next_review_date DATE,
+      visit_status VARCHAR(10) CHECK (visit_status IN ('E', 'OT', 'L', 'D', 'LO')),
+      follow_up_status VARCHAR(10) CHECK (follow_up_status IN ('Tx', 'Miss', 'LTFU', 'TO', 'D', 'OO', 'O')),
+      follow_up_details TEXT,
+      
+      -- Notes & Tracking
+      visit_notes TEXT,
+      clinician_initials VARCHAR(50),
+      pharmacy_dispenser_initials VARCHAR(50),
+      
+      -- Legacy fields (for backward compatibility)
+      visit_type_legacy VARCHAR(50),
+      cd4_count_legacy INTEGER,
+      viral_load_legacy DECIMAL(10,2),
+      viral_load_unit_legacy VARCHAR(10),
+      viral_load_suppressed_legacy BOOLEAN,
+      weight_legacy DECIMAL(5,2),
+      height_legacy DECIMAL(5,2),
+      bmi_legacy DECIMAL(4,2),
+      blood_pressure_legacy VARCHAR(20),
+      adherence_percentage_legacy INTEGER,
+      side_effects_legacy TEXT[],
+      opportunistic_infections_legacy TEXT[],
+      tb_symptoms_legacy VARCHAR(50),
+      tb_screened_legacy BOOLEAN,
+      tb_screened_result_legacy VARCHAR(50),
+      pregnancy_status_legacy VARCHAR(50),
+      gestational_age_weeks_legacy INTEGER,
+      oi_prophylaxis_legacy TEXT,
+      current_regimen_legacy VARCHAR(255),
+      regimen_changed_legacy BOOLEAN,
+      regimen_change_reason_legacy TEXT,
+      next_appointment_date_legacy DATE,
+      visit_notes_legacy TEXT,
+      
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_enrollment_id ON hiv_clinical_visits(enrollment_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_visit_date ON hiv_clinical_visits(visit_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_provider_id ON hiv_clinical_visits(provider_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_visits_viral_load ON hiv_clinical_visits(viral_load)`);
+    
+    // Enhanced Adherence Counseling (EAC) Table - WHO Guidelines
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_eac_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      session_number INTEGER NOT NULL,
+      session_date DATE NOT NULL,
+      counselor_id UUID NOT NULL REFERENCES users(id),
+      counselor_name VARCHAR(255),
+      
+      -- Adherence Assessment
+      adherence_barriers TEXT[],
+      barriers_other_details TEXT,
+      adherence_percentage_self_reported INTEGER CHECK (adherence_percentage_self_reported >= 0 AND adherence_percentage_self_reported <= 100),
+      adherence_assessment_method VARCHAR(50),
+      
+      -- Interventions
+      interventions_provided TEXT[],
+      interventions_other_details TEXT,
+      medication_simplification BOOLEAN DEFAULT false,
+      adherence_tools_provided TEXT[],
+      support_systems_identified TEXT[],
+      
+      -- Patient Feedback
+      patient_feedback TEXT,
+      patient_concerns TEXT,
+      patient_commitment_level VARCHAR(20) CHECK (patient_commitment_level IN ('High', 'Medium', 'Low')),
+      
+      -- Follow-up Plan
+      next_session_date DATE,
+      follow_up_actions TEXT[],
+      follow_up_responsible_person VARCHAR(255),
+      
+      -- Outcome Assessment
+      session_outcome VARCHAR(50) CHECK (session_outcome IN ('Completed', 'Partial', 'Missed', 'Rescheduled')),
+      outcome_notes TEXT,
+      adherence_improvement_observed BOOLEAN DEFAULT false,
+      
+      -- EAC Program Status
+      eac_program_status VARCHAR(50) CHECK (eac_program_status IN ('Active', 'Completed', 'Discontinued', 'Returned to Care')),
+      eac_completion_date DATE,
+      return_to_conventional_care_date DATE,
+      
+      session_notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      
+      UNIQUE(enrollment_id, session_number)
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_eac_enrollment_id ON hiv_eac_sessions(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_eac_session_date ON hiv_eac_sessions(session_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_eac_program_status ON hiv_eac_sessions(eac_program_status)`);
+    
+    // ARV Regimen Change Request Table - For Doctor Approval
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_change_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      request_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      requested_by UUID NOT NULL REFERENCES users(id),
+      requested_by_name VARCHAR(255),
+      
+      -- Current Status
+      current_regimen_code VARCHAR(10),
+      current_regimen_name VARCHAR(255),
+      current_viral_load DECIMAL(10,2),
+      current_viral_load_date DATE,
+      previous_viral_load DECIMAL(10,2),
+      previous_viral_load_date DATE,
+      
+      -- EAC Information
+      eac_completed BOOLEAN DEFAULT false,
+      eac_sessions_completed INTEGER DEFAULT 0,
+      eac_completion_date DATE,
+      
+      -- Change Request Details
+      requested_regimen_code VARCHAR(10) NOT NULL,
+      requested_regimen_name VARCHAR(255) NOT NULL,
+      change_reason_code VARCHAR(10),
+      change_reason_details TEXT,
+      clinical_justification TEXT,
+      
+      -- Approval Status
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+      approved_by UUID REFERENCES users(id),
+      approved_by_name VARCHAR(255),
+      approval_date DATE,
+      approval_notes TEXT,
+      rejection_reason TEXT,
+      
+      -- Visit Linkage
+      visit_id UUID REFERENCES hiv_clinical_visits(id),
+      visit_recorded BOOLEAN DEFAULT false,
+      visit_recorded_date DATE,
+      
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_arv_change_enrollment_id ON hiv_arv_change_requests(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_arv_change_status ON hiv_arv_change_requests(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_arv_change_requested_by ON hiv_arv_change_requests(requested_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_arv_change_approved_by ON hiv_arv_change_requests(approved_by)`);
     
     // TB Screening Table
     statements.push(`CREATE TABLE IF NOT EXISTS tb_screenings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, screening_date DATE NOT NULL, screening_type VARCHAR(50) NOT NULL CHECK (screening_type IN ('symptom_screen', 'chest_xray', 'sputum_afb', 'gene_xpert', 'culture', 'lpa')), screening_result VARCHAR(50) CHECK (screening_result IN ('negative', 'positive', 'indeterminate', 'pending')), symptom_cough BOOLEAN DEFAULT false, symptom_fever BOOLEAN DEFAULT false, symptom_night_sweats BOOLEAN DEFAULT false, symptom_weight_loss BOOLEAN DEFAULT false, symptom_duration_weeks INTEGER, chest_xray_result VARCHAR(50), sputum_afb_result VARCHAR(50), gene_xpert_result VARCHAR(50), culture_result VARCHAR(50), tb_diagnosed BOOLEAN DEFAULT false, tb_diagnosis_date DATE, tb_treatment_started BOOLEAN DEFAULT false, tb_treatment_start_date DATE, screened_by UUID NOT NULL REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -512,6 +875,357 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE TABLE IF NOT EXISTS cervical_cancer_screenings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, screening_date DATE NOT NULL, screening_method VARCHAR(50) NOT NULL CHECK (screening_method IN ('via', 'pap_smear', 'hpv_test', 'colposcopy')), screening_result VARCHAR(50) CHECK (screening_result IN ('normal', 'abnormal', 'positive', 'negative', 'suspicious', 'pending')), via_result VARCHAR(50), pap_result VARCHAR(50), hpv_result VARCHAR(50), hpv_types TEXT[], colposcopy_result VARCHAR(50), biopsy_required BOOLEAN DEFAULT false, biopsy_result VARCHAR(50), treatment_provided TEXT, treatment_date DATE, next_screening_date DATE, screened_by UUID NOT NULL REFERENCES users(id), reviewed_by UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cervical_screenings_patient_id ON cervical_cancer_screenings(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cervical_screenings_screening_date ON cervical_cancer_screenings(screening_date)`);
+    
+    // ============================================
+    // HIV VISIT LOOKUP TABLES
+    // ============================================
+    
+    // WHO Clinical Staging - Version 6 (January 2024)
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_who_staging (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      stage INTEGER NOT NULL CHECK (stage IN (1, 2, 3, 4)),
+      category VARCHAR(20) NOT NULL CHECK (category IN ('Adults', 'Paediatrics')),
+      condition_code VARCHAR(50) UNIQUE NOT NULL,
+      condition_name TEXT NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_who_staging_stage ON hiv_who_staging(stage)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_who_staging_category ON hiv_who_staging(category)`);
+    
+    // Visit Types
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_visit_types (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_visit_types_code ON hiv_visit_types(code)`);
+    
+    // BMI Classifications (for reference, but can be calculated)
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_bmi_classifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      min_bmi DECIMAL(4,1),
+      max_bmi DECIMAL(4,1),
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Pregnancy/Breastfeeding Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_pregnancy_lactating_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Family Planning Methods
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_family_planning_methods (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Functional Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_functional_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // TB Screening Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tb_screening_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // TB Investigation Results
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tb_investigation_results (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Opportunistic Infections and Other Problems
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_opportunistic_infections (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(20) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      category VARCHAR(50),
+      description TEXT,
+      has_sub_categories BOOLEAN DEFAULT false,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oi_code ON hiv_opportunistic_infections(code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oi_category ON hiv_opportunistic_infections(category)`);
+    
+    // OI Sub-categories (for Hypertension, Diabetes, Hepatitis B/C, Cancer)
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_oi_sub_categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oi_id UUID NOT NULL REFERENCES hiv_opportunistic_infections(id) ON DELETE CASCADE,
+      code VARCHAR(20) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oi_sub_categories_oi_id ON hiv_oi_sub_categories(oi_id)`);
+    
+    // Mental Health Screening Results
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_mental_health_results (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Mental Health Management Actions
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_mental_health_management (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // TPT Eligibility
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tpt_eligibility (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_eligible BOOLEAN,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // TPT Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tpt_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Cryptococcal Signs
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_cryptococcal_signs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Cryptococcal Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_cryptococcal_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Cryptococcal Meningitis Treatment
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_cryptococcal_treatment (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // ARV Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // ART Initiation Category
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_art_initiation_category (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(20) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Adverse Events Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_adverse_events_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      severity VARCHAR(20) CHECK (severity IN ('minor', 'major', 'stopping')),
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // ARV Reasons (Not on ARV)
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_reasons_not_on (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // ARV Reasons (Start ARV)
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_reasons_start (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Reason for Change/Stop ARV
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_change_stop_reasons (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Visit Status
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_visit_status (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // Final Outcome
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_final_outcome (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    
+    // ART Regimens - CRITICAL: These change frequently
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_art_regimens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      line VARCHAR(20) NOT NULL CHECK (line IN ('1st Line', '2nd Line', '3rd Line', 'Children 1st Line', 'Children 2nd Line', 'Children 3rd Line')),
+      category VARCHAR(50) NOT NULL CHECK (category IN ('Adult', 'Paediatric')),
+      components TEXT[] NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      is_preferred BOOLEAN DEFAULT false,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_regimens_code ON hiv_art_regimens(code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_regimens_line ON hiv_art_regimens(line)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_regimens_category ON hiv_art_regimens(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_art_regimens_is_active ON hiv_art_regimens(is_active)`);
+    
+    // Pre-Cancerous Lesion Treatment
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_precancerous_lesion_treatment (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(10) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
     
     return statements;
   }
@@ -560,13 +1274,588 @@ export class DatabaseProvisioningService {
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_care_enrollments_updated_at BEFORE UPDATE ON hiv_care_enrollments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_art_initiation_details_updated_at BEFORE UPDATE ON hiv_art_initiation_details
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_clinical_visits_updated_at BEFORE UPDATE ON hiv_clinical_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_tb_screenings_updated_at BEFORE UPDATE ON tb_screenings
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_cervical_cancer_screenings_updated_at BEFORE UPDATE ON cervical_cancer_screenings
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_who_staging_updated_at BEFORE UPDATE ON hiv_who_staging
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_visit_types_updated_at BEFORE UPDATE ON hiv_visit_types
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_bmi_classifications_updated_at BEFORE UPDATE ON hiv_bmi_classifications
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_pregnancy_lactating_status_updated_at BEFORE UPDATE ON hiv_pregnancy_lactating_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_family_planning_methods_updated_at BEFORE UPDATE ON hiv_family_planning_methods
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_functional_status_updated_at BEFORE UPDATE ON hiv_functional_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_tb_screening_status_updated_at BEFORE UPDATE ON hiv_tb_screening_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_tb_investigation_results_updated_at BEFORE UPDATE ON hiv_tb_investigation_results
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_opportunistic_infections_updated_at BEFORE UPDATE ON hiv_opportunistic_infections
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_oi_sub_categories_updated_at BEFORE UPDATE ON hiv_oi_sub_categories
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_mental_health_results_updated_at BEFORE UPDATE ON hiv_mental_health_results
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_mental_health_management_updated_at BEFORE UPDATE ON hiv_mental_health_management
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_tpt_eligibility_updated_at BEFORE UPDATE ON hiv_tpt_eligibility
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_tpt_status_updated_at BEFORE UPDATE ON hiv_tpt_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_cryptococcal_signs_updated_at BEFORE UPDATE ON hiv_cryptococcal_signs
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_cryptococcal_status_updated_at BEFORE UPDATE ON hiv_cryptococcal_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_cryptococcal_treatment_updated_at BEFORE UPDATE ON hiv_cryptococcal_treatment
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_arv_status_updated_at BEFORE UPDATE ON hiv_arv_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_art_initiation_category_updated_at BEFORE UPDATE ON hiv_art_initiation_category
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_adverse_events_status_updated_at BEFORE UPDATE ON hiv_adverse_events_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_arv_reasons_not_on_updated_at BEFORE UPDATE ON hiv_arv_reasons_not_on
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_arv_reasons_start_updated_at BEFORE UPDATE ON hiv_arv_reasons_start
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_arv_change_stop_reasons_updated_at BEFORE UPDATE ON hiv_arv_change_stop_reasons
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_visit_status_updated_at BEFORE UPDATE ON hiv_visit_status
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_final_outcome_updated_at BEFORE UPDATE ON hiv_final_outcome
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_art_regimens_updated_at BEFORE UPDATE ON hiv_art_regimens
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_precancerous_lesion_treatment_updated_at BEFORE UPDATE ON hiv_precancerous_lesion_treatment
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
+  }
+
+  private async seedLookupTables(tenantDataSource: DataSource): Promise<void> {
+    this.logger.log('Seeding HIV lookup tables with initial data...');
+    
+    try {
+      // Seed Visit Types
+      await tenantDataSource.query(`
+        INSERT INTO hiv_visit_types (code, name, description, display_order) VALUES
+        ('A', 'Present Self/conventional care (not in a DSD model)', NULL, 1),
+        ('B', 'Sent Care Giver / Treatment Supporter (not in DSD model)', NULL, 2),
+        ('C', 'Visit made at another clinic', NULL, 3),
+        ('D', 'oMalayitsha / Cross Border Transport', NULL, 4),
+        ('E', 'CARG (Family, KPs, General Population)', NULL, 5),
+        ('F', 'Clubs (Teen, Carer & Child, Post partum)', NULL, 6),
+        ('G', 'Fast Track', NULL, 7),
+        ('H', 'Outreach by Facility HCW', NULL, 8),
+        ('I', 'Drop in Centre', NULL, 9),
+        ('J', 'Out of Facility Community ART Distribution (OFCAD)', NULL, 10),
+        ('K', 'Private Pharmacy', NULL, 11),
+        ('L', 'Other, Specify', NULL, 12)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed BMI Classifications
+      await tenantDataSource.query(`
+        INSERT INTO hiv_bmi_classifications (code, name, min_bmi, max_bmi, display_order) VALUES
+        ('UW', 'Underweight', 0, 18.4, 1),
+        ('NW', 'Normal weight', 18.5, 24.9, 2),
+        ('PO', 'Pre-obesity', 25.0, 29.9, 3),
+        ('Ob1', 'Obesity class I', 30.0, 34.9, 4),
+        ('Ob2', 'Obesity class II', 35.0, 39.9, 5),
+        ('Ob3', 'Obesity class III', 40.0, NULL, 6)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Pregnancy/Lactating Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_pregnancy_lactating_status (code, name, display_order) VALUES
+        ('P', 'Pregnant', 1),
+        ('EFF', 'Exclusive Formula Feeding', 2),
+        ('MF', 'Mixed Feeding (Below 6 Months)', 3),
+        ('BFCF', 'Breast Feeding & Complementary Feeding', 4),
+        ('SBF', 'Stopped Breastfeeding', 5),
+        ('NPL', 'Neither Pregnant nor lactating (for women)', 6),
+        ('N/A', 'Not Applicable (for men & minors)', 7)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Family Planning Methods
+      await tenantDataSource.query(`
+        INSERT INTO hiv_family_planning_methods (code, name, display_order) VALUES
+        ('M', 'Implants', 1),
+        ('Z', 'Sterilization', 2),
+        ('A', 'Abstinence', 3),
+        ('C', 'Condom', 4),
+        ('O', 'Not using', 5),
+        ('T', 'Traditional/Withdrawal', 6),
+        ('P', 'Pills', 7),
+        ('L', 'IUD', 8),
+        ('J', 'Injections (e.g Depo)', 9),
+        ('D', 'Dual Method', 10)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Functional Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_functional_status (code, name, display_order) VALUES
+        ('W', 'Work/School', 1),
+        ('A', 'Ambulatory', 2),
+        ('B', 'Bedridden', 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed TB Screening Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_tb_screening_status (code, name, display_order) VALUES
+        ('Y', 'Screened and has no signs', 1),
+        ('S', 'Presumptive - if there are signs', 2),
+        ('ON', 'On TB Treatment', 3),
+        ('N', 'TB status not assessed', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed TB Investigation Results
+      await tenantDataSource.query(`
+        INSERT INTO hiv_tb_investigation_results (code, name, display_order) VALUES
+        ('1', 'Investigated and has Active TB not started on TB treatment', 1),
+        ('2', 'Investigated and had active Tuberculosis started TB treatment', 2),
+        ('3', 'Investigated and has No Active TB', 3),
+        ('4', 'Not Investigated', 4),
+        ('5', 'Not Applicable', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Opportunistic Infections
+      await tenantDataSource.query(`
+        INSERT INTO hiv_opportunistic_infections (code, name, category, has_sub_categories, display_order) VALUES
+        ('Z', 'Zoster', 'OI', false, 1),
+        ('P', 'Pneumonia', 'OI', false, 2),
+        ('D', 'Dementia/Encephalitis', 'OI', false, 3),
+        ('T', 'Thrush: oral/Vaginal', 'OI', false, 4),
+        ('U', 'Ulcers: mouth, genital, etc.', 'OI', false, 5),
+        ('I', 'IRIS', 'OI', false, 6),
+        ('W', 'Weight Loss', 'OI', false, 7),
+        ('To', 'Toxoplasmosis', 'OI', false, 8),
+        ('STI', 'Sexual Transmitted Infection', 'OI', false, 9),
+        ('H', 'Hypertension', 'Other', true, 10),
+        ('Cx', 'Cancer', 'Other', false, 11),
+        ('DM', 'Diabetes (Screened)', 'Other', true, 12),
+        ('HBV', 'Hepatitis B', 'Other', true, 13),
+        ('HCV', 'Hepatitis C', 'Other', true, 14),
+        ('O', 'Other, specify', 'Other', false, 15)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed OI Sub-categories (after getting OI IDs)
+      const hptOi = await tenantDataSource.query(`SELECT id FROM hiv_opportunistic_infections WHERE code = 'H'`);
+      const dmOi = await tenantDataSource.query(`SELECT id FROM hiv_opportunistic_infections WHERE code = 'DM'`);
+      const hbvOi = await tenantDataSource.query(`SELECT id FROM hiv_opportunistic_infections WHERE code = 'HBV'`);
+      const hcvOi = await tenantDataSource.query(`SELECT id FROM hiv_opportunistic_infections WHERE code = 'HCV'`);
+
+      if (hptOi.length > 0) {
+        await tenantDataSource.query(`
+          INSERT INTO hiv_oi_sub_categories (oi_id, code, name, display_order) VALUES
+          ('${hptOi[0].id}', 'HPT 2', 'Diagnosed', 1),
+          ('${hptOi[0].id}', 'HPT 3', 'Managed', 2)
+          ON CONFLICT (code) DO NOTHING
+        `);
+      }
+
+      if (dmOi.length > 0) {
+        await tenantDataSource.query(`
+          INSERT INTO hiv_oi_sub_categories (oi_id, code, name, display_order) VALUES
+          ('${dmOi[0].id}', 'D1', 'Screened', 1),
+          ('${dmOi[0].id}', 'T1D', 'Diabetes Type I', 2),
+          ('${dmOi[0].id}', 'T2D', 'Diabetes Type II', 3),
+          ('${dmOi[0].id}', 'D3', 'Managed for Diabetes', 4)
+          ON CONFLICT (code) DO NOTHING
+        `);
+      }
+
+      if (hbvOi.length > 0) {
+        await tenantDataSource.query(`
+          INSERT INTO hiv_oi_sub_categories (oi_id, code, name, display_order) VALUES
+          ('${hbvOi[0].id}', 'HBV 1', 'Tested', 1),
+          ('${hbvOi[0].id}', 'HBV 2', 'Positive', 2),
+          ('${hbvOi[0].id}', 'HBV 3', 'on a TDF based regimen', 3)
+          ON CONFLICT (code) DO NOTHING
+        `);
+      }
+
+      if (hcvOi.length > 0) {
+        await tenantDataSource.query(`
+          INSERT INTO hiv_oi_sub_categories (oi_id, code, name, display_order) VALUES
+          ('${hcvOi[0].id}', 'HCV 1', 'Tested', 1),
+          ('${hcvOi[0].id}', 'HCV 2', 'Positive', 2),
+          ('${hcvOi[0].id}', 'HCV 3', 'Treated', 3),
+          ('${hcvOi[0].id}', 'HCV 4', 'Cured', 4)
+          ON CONFLICT (code) DO NOTHING
+        `);
+      }
+
+      // Seed Mental Health Results
+      await tenantDataSource.query(`
+        INSERT INTO hiv_mental_health_results (code, name, display_order) VALUES
+        ('N', 'Not screened', 1),
+        ('ND', 'No Mental Health Disorders', 2),
+        ('D', 'Depression', 3),
+        ('A', 'Anxiety', 4),
+        ('SA', 'Substance Misuse', 5),
+        ('O', 'Other, Specify', 6)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Mental Health Management
+      await tenantDataSource.query(`
+        INSERT INTO hiv_mental_health_management (code, name, display_order) VALUES
+        ('R', 'Referred', 1),
+        ('Rx', 'Treated', 2),
+        ('NT', 'Not treated', 3),
+        ('N/A', 'Not Applicable', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed TPT Eligibility
+      await tenantDataSource.query(`
+        INSERT INTO hiv_tpt_eligibility (code, name, is_eligible, display_order) VALUES
+        ('Y', 'Eligible for TPT', true, 1),
+        ('TB', 'Active TB disease', false, 2),
+        ('ON', 'On TB treatment', false, 3),
+        ('AL', 'Active Liver disease', false, 4),
+        ('AA', 'Heavy Alcohol Abuse', false, 5),
+        ('CPT', 'Completed IPT in the past = 3yrs', false, 6),
+        ('DDI', 'Drug to Drug interactions', false, 7)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed TPT Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_tpt_status (code, name, display_order) VALUES
+        ('AT', 'Active TB disease', 1),
+        ('II', 'INH Initiated', 2),
+        ('3I', '3HP Initiated', 3),
+        ('CT', 'Continue INH', 4),
+        ('TC', 'INH Completed', 5),
+        ('RI', 'Restart INH', 6),
+        ('R3', 'Restart 3HP', 7),
+        ('TNI', 'TPT Not Initiated due to available regimens', 8),
+        ('PN', 'INH Stopped due to Peripheral Neuropathy', 9),
+        ('PP', 'Patient Refused INH', 10)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Cryptococcal Signs
+      await tenantDataSource.query(`
+        INSERT INTO hiv_cryptococcal_signs (code, name, display_order) VALUES
+        ('Y', 'Screened has no signs', 1),
+        ('S', 'Presumptive Cryptococcal Signs', 2),
+        ('N', 'Not assessed', 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Cryptococcal Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_cryptococcal_status (code, name, display_order) VALUES
+        ('1', 'Yes (Positive)', 1),
+        ('2', 'Yes (Negative)', 2),
+        ('3', 'N-Not Assessed', 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Cryptococcal Treatment
+      await tenantDataSource.query(`
+        INSERT INTO hiv_cryptococcal_treatment (code, name, display_order) VALUES
+        ('a', 'Liposomal Amphotericin B, Flucytosine + Fluconazole', 1),
+        ('b', 'Liposomal Amphotericin B + Flucytosine', 2),
+        ('c', 'Fluconazole + Flucytosine', 3),
+        ('d', 'Others Specify', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ARV Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_arv_status (code, name, display_order) VALUES
+        ('1', 'No ARV', 1),
+        ('2a', 'Start ARV', 2),
+        ('2b', 'Start ARV (Pregnant)', 3),
+        ('3', 'Continue', 4),
+        ('4', 'Change', 5),
+        ('5', 'Stop', 6),
+        ('6', 'Restart', 7),
+        ('7', 'Transfer Out', 8)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Initiation Category
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_initiation_category (code, name, display_order) VALUES
+        ('N1', 'Newly Initiated ART', 1),
+        ('N2.1', 'Re-initiation < 3 months after stopping ART', 2),
+        ('N2.2', 'Re-initiation 3-5 months after stopping ART', 3),
+        ('N2.3', 'Re-initiation 6+ months after stopping ART', 4),
+        ('N3.1', 'Re-engagement <3 months after lost to follow up', 5),
+        ('N3.2', 'Re-engagement 3-5 months after lost to follow up', 6),
+        ('N3.3', 'Re-engagement 6+ months after lost to follow up', 7),
+        ('N4', 'transfer in on ART from the private sector or diaspora', 8)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Adverse Events Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_adverse_events_status (code, name, severity, display_order) VALUES
+        ('a', 'INH1-minor adverse events reported on INH', 'minor', 1),
+        ('b', 'INH2-stopping INH due to adverse events', 'stopping', 2),
+        ('C1', '3HP1-minor adverse events reported on 3HP', 'minor', 3),
+        ('C2', '3HP1-stopping 3HP1 due to adverse events', 'stopping', 4),
+        ('c', 'CTX1-minor adverse event reported on CTX', 'minor', 5),
+        ('d', 'CTX2-stopping CTX due to adverse events', 'stopping', 6),
+        ('e', 'Diflucan1-minor adverse events reported on Diflucan', 'minor', 7),
+        ('f', 'Diflucan 2-stopping Diflucan due to adverse events', 'stopping', 8),
+        ('g', 'ART 1st Line1-minor adverse events reported on 1st Line ART', 'minor', 9),
+        ('h', 'ART 1st Line 2-stopping 1st Line ART due to adverse events', 'stopping', 10),
+        ('i', 'ART 2nd regimen1-minor adverse events reported on 2-line ART', 'minor', 11),
+        ('J', 'ART 2nd regimen2-stopping 2nd-line ART due to adverse events', 'stopping', 12),
+        ('k', 'ART 3rd regimen1-minor adverse events reported on Third line ART', 'minor', 13),
+        ('l', 'ART 3rd regimen2 - stopping Third line ART due to adverse events', 'stopping', 14)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ARV Reasons (Not on ARV)
+      await tenantDataSource.query(`
+        INSERT INTO hiv_arv_reasons_not_on (code, name, display_order) VALUES
+        ('11', 'No psychologically ready', 1),
+        ('13', 'No ARVs available', 2),
+        ('14', 'Not willing', 3),
+        ('15', 'On Initial 2 weeks of TB Treatment', 4),
+        ('16', 'Awaits Lab results', 5),
+        ('17', 'Has OI and is too sick to start', 6),
+        ('18', 'No start-other', 7),
+        ('19', 'On initial 4 weeks of Cryptococcal Meningitis treatment', 8)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ARV Reasons (Start ARV)
+      await tenantDataSource.query(`
+        INSERT INTO hiv_arv_reasons_start (code, name, display_order) VALUES
+        ('215', 'Treat all', 1),
+        ('216', 'Pregnant women', 2),
+        ('217', 'Lactation women', 3),
+        ('218', 'Other (Specify)', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ARV Change/Stop Reasons
+      await tenantDataSource.query(`
+        INSERT INTO hiv_arv_change_stop_reasons (code, name, display_order) VALUES
+        ('401', 'Start TB Rx', 1),
+        ('402', 'Nausea/Vomiting', 2),
+        ('403', 'Diarrhoea', 3),
+        ('404', 'Headache', 4),
+        ('405', 'Fever', 5),
+        ('406', 'Rash', 6),
+        ('407', 'Peripheral Neuropathy', 7),
+        ('408', 'Hepatitis', 8),
+        ('409', 'Jaundice', 9),
+        ('410', 'Dementia', 10),
+        ('411', 'Anemia', 11),
+        ('413', 'CNS Adverse event', 12),
+        ('414', 'Other Adverse event (specify)', 13),
+        ('415', 'Treatment Failure, clinical', 14),
+        ('416', 'Treatment Failure, immunological', 15),
+        ('417', 'Poor Adherence', 16),
+        ('418', 'Patient Decision', 17),
+        ('421', 'Stock out', 18),
+        ('422', 'Other reason (specify)', 19),
+        ('424', 'Virological Failure', 20),
+        ('425', 'Weight gain>10%', 21),
+        ('427', 'Treatment optimization', 22)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Visit Status
+      await tenantDataSource.query(`
+        INSERT INTO hiv_visit_status (code, name, display_order) VALUES
+        ('E', 'Earlier than review date', 1),
+        ('OT', 'On time', 2),
+        ('L', 'Late but not defaulter', 3),
+        ('D', 'Default<28days', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Final Outcome
+      await tenantDataSource.query(`
+        INSERT INTO hiv_final_outcome (code, name, display_order) VALUES
+        ('Tx', 'active on treatment', 1),
+        ('Miss', '1 or 2 missing Appointments', 2),
+        ('LTFU', 'Lost to Follow-up', 3),
+        ('TO', 'Transfer Out (specify)', 4),
+        ('D', 'Patient Died', 5),
+        ('OO', 'Patient Opted Out', 6),
+        ('O', 'Other, specify', 7)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Pre-Cancerous Lesion Treatment
+      await tenantDataSource.query(`
+        INSERT INTO hiv_precancerous_lesion_treatment (code, name, display_order) VALUES
+        ('N', 'No treatment done', 1),
+        ('VC', 'VIAC Pos, Cryotherapy Done', 2),
+        ('VT', 'VIAC Pos, Thermal Ablation Done', 3),
+        ('VL', 'VIAC Pos, LEEP Done', 4),
+        ('SC', 'Suspected Cancer', 5),
+        ('H', 'Hysterectomy', 6),
+        ('R', 'Refer for Further clinical investigation if HPV Neg, but VIAC Pos', 7)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed WHO Staging (Adults)
+      const whoStagingAdults = [
+        { stage: 1, conditions: ['Asymptomatic', 'Persistent Generalised Lymphadenopathy (PGL)'] },
+        { stage: 2, conditions: ['Weight loss, <10% of body weight', 'Recurrent RTI (Respiratory Tract Infection)', 'Herpes Zoster', 'Angular Cheilitis', 'Recurrent ulcerations occurring twice or more then in six months', 'Papular pruritic eruptions', 'Seborrheic dermatitis', 'Fungal nail infections of the fingers'] },
+        { stage: 3, conditions: ['Weight loss; >10% of body weight', 'Unexplained chronic diarrhoea >1 month', 'Unexplained prolonged fever >1 month', 'Pulmonary Tuberculosis, current or within the past 2 months or TB adenitis', 'Severe infection including pneumonia, meningitis, bone or joint infection', 'Oral Candidiasis', 'Oral hairy leukoplakia', 'Acute necrotising ulcerative gingivitis or necrotizing ulcerative periodontitis', 'Unexplained anaemia >1 month'] },
+        { stage: 4, conditions: ['HIV wasting syndrome', 'Pneumocystis Pneumonia', 'Recurrent severe or radiological bacterial pneumonia (two or more episodes within a year)', 'Cryptococcal meningitis or other extra pulmonary', 'Cryptococcus infections', 'Extra Pulmonary Tuberculosis except TB adenitis', 'Kaposi Sarcoma', 'HIV Encephalopathy', 'Candidiasis of the oesophagus, trachea, bronchi or lungs', 'Chronic Herpes simplex virus (HSV) infection (orolabial, genital or anorectal >1 month, or visceral any duration)', 'Cytomegalovirus (CMV) disease of an organ other than liver, spleen or lymph nodes', 'Progressive Multifocal Leukoencephalopathy (PML)', 'Any disseminated mycosis (e.g. histoplasmosis, coccidioidomycosis, or penicilliosis)', 'Lymphoma (cerebral or B cell non-Hodgkin)', 'Recurrent non typhoidal salmonella septicaemia (2 or more episodes in last year)', 'Invasive cervical cancer', 'Visceral leishmaniosis', 'Cryptosporidiosis with diarrhoea lasting more than 1 month', 'Psoriasis', 'Disseminated non-tuberculous mycobacterial infection', 'CNS toxoplasmosis'] }
+      ];
+
+      for (const stageData of whoStagingAdults) {
+        let order = 1;
+        for (const condition of stageData.conditions) {
+          const conditionCode = `ADULT_ST${stageData.stage}_${order}`.replace(/\s+/g, '_').toUpperCase().substring(0, 50);
+          await tenantDataSource.query(`
+            INSERT INTO hiv_who_staging (stage, category, condition_code, condition_name, display_order)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (condition_code) DO NOTHING
+          `, [stageData.stage, 'Adults', conditionCode, condition, order]);
+          order++;
+        }
+      }
+
+      // Seed WHO Staging (Paediatrics)
+      const whoStagingPaed = [
+        { stage: 1, conditions: ['Asymptomatic', 'PGL'] },
+        { stage: 2, conditions: ['Hepatosplenomegaly', 'Papular pruritic eruptions', 'Seborrheic dermatitis', 'Fungal nail infections of the fingers', 'Angular Cheilitis', 'Lineal Gingival erythema (LGE)', 'Human Papilloma Virus infection (extensive facial >5% of body area or disfiguring)', 'Molluscum contagiosum infection (extensive facial >5% of body area or disfiguring)', 'Recurrent ulcerations occurring twice or more then in six months', 'Parotid enlargement', 'Herpes Zoster', 'Recurrent Respiratory Tract Infections (RTI) (twice or more in any six month period)'] },
+        { stage: 3, conditions: ['Unexplained malnutrition (very low weight for age; up to 2 standard deviations)', 'Unexplained persistent diarrhoea (> 14 days and above)', 'Unexplained persistent fever (intermittent or constant and for longer than 1 month)', 'Oral Candidiasis (outside first 6 weeks of life)', 'Oral hairy leukoplakia', 'Pulmonary Tuberculosis', 'Severe presumed bacterial pneumonia', 'Acute necrotising ulcerative gingivitis, or stomatitis or acute necrotizing ulcerative periodontitis', 'Symptomatic Lymphocytic Interstitial Pneumonia', 'Chronic HIV associated disease (including bronchiectasis)', 'Unexplained anaemia or neutropenia >1 monthly'] },
+        { stage: 4, conditions: ['Unexplained severe wasting or severe malnutrition not adequately responding to standard therapy', 'Pneumocystis Jirovecci Pneumonia (PJP)', 'Recurrent severe presumed bacterial infection (e.g. meningitis, empyema, pyomyocitis bone or joint infection, bacteraemia)', 'Chronic Herpes simplex virus infection (chronic orolabial or intraoral lesions, of more than 1 month or visceral of any duration)', 'Extra pulmonary Tuberculosis', 'Kaposi Sarcoma', 'HIV Encephalopathy', 'Candidiasis of the oesophagus, trachea, bronchi or lungs', 'Cytomegalovirus (CMV) disease of an organ other than liver, spleen or lymph nodes with onset of age >1 month', 'Cryptococcal Meningitis', 'PML', 'Disseminated mycobacteriosis other than TB', 'Any disseminated mycosis (e.g. histoplasmosis, coccidioidomycosis, or penicilliosis)', 'Lymphoma (cerebral or B cell non-Hodgkin)', 'Cryptosporidiosis with diarrhoea lasting more than 1 month', 'Psoriasis', 'CNS toxoplasmosis (outside the neonatal period)', 'Acquired HIV-associated rectal fistula, including rectovaginal fistula', 'HIV associated nephropathy', 'HIV associated cardiomyopathy'] }
+      ];
+
+      for (const stageData of whoStagingPaed) {
+        let order = 1;
+        for (const condition of stageData.conditions) {
+          const conditionCode = `PAED_ST${stageData.stage}_${order}`.replace(/\s+/g, '_').toUpperCase().substring(0, 50);
+          await tenantDataSource.query(`
+            INSERT INTO hiv_who_staging (stage, category, condition_code, condition_name, display_order)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (condition_code) DO NOTHING
+          `, [stageData.stage, 'Paediatrics', conditionCode, condition, order]);
+          order++;
+        }
+      }
+
+      // Seed ART Regimens - Adult 1st Line
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('1c', 'AZT+3TC+NVP', '1st Line', 'Adult', ARRAY['AZT', '3TC', 'NVP'], false, 1),
+        ('1d', 'AZT+3TC+EFV', '1st Line', 'Adult', ARRAY['AZT', '3TC', 'EFV'], false, 2),
+        ('1e', 'TDF+3TC+NVP', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'NVP'], false, 3),
+        ('1f', 'TDF+3TC+EFV', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'EFV'], false, 4),
+        ('1g', 'AZT+3TC+EFV400', '1st Line', 'Adult', ARRAY['AZT', '3TC', 'EFV400'], false, 5),
+        ('1h', 'TDF+3TC+EFV400', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'EFV400'], false, 6),
+        ('1i', 'TDF+3TC+DTG(TLD1)', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'DTG'], true, 7),
+        ('1j', 'AZT+3TC+DTG', '1st Line', 'Adult', ARRAY['AZT', '3TC', 'DTG'], false, 8),
+        ('1k', 'TDF+FTC+EFV400', '1st Line', 'Adult', ARRAY['TDF', 'FTC', 'EFV400'], false, 9),
+        ('1l', 'TAF+FTC+EFV400', '1st Line', 'Adult', ARRAY['TAF', 'FTC', 'EFV400'], false, 10),
+        ('1m', 'TDF+FTC+ATC/r', '1st Line', 'Adult', ARRAY['TDF', 'FTC', 'ATC/r'], false, 11),
+        ('1n', 'TDF+3TC+ATC/r', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'ATC/r'], false, 12),
+        ('1o', 'TDF+3TC+ATV/r', '1st Line', 'Adult', ARRAY['TDF', '3TC', 'ATV/r'], false, 13),
+        ('1p', 'TAF+FTC+ATV/r', '1st Line', 'Adult', ARRAY['TAF', 'FTC', 'ATV/r'], false, 14),
+        ('1q', 'TAF+3TC+ATV/r', '1st Line', 'Adult', ARRAY['TAF', '3TC', 'ATV/r'], false, 15),
+        ('1r', 'ABC+3TC+DTG', '1st Line', 'Adult', ARRAY['ABC', '3TC', 'DTG'], false, 16),
+        ('1s', 'Other, Specify', '1st Line', 'Adult', ARRAY['Other'], false, 17)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Regimens - Adult 2nd Line
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('2a', 'AZT+3TC+ILPV/r', '2nd Line', 'Adult', ARRAY['AZT', '3TC', 'LPV/r'], false, 1),
+        ('2b', 'TDF+3TC+LPV/r', '2nd Line', 'Adult', ARRAY['TDF', '3TC', 'LPV/r'], false, 2),
+        ('2c', 'ABC+DDI250+LPV/r', '2nd Line', 'Adult', ARRAY['ABC', 'DDI250', 'LPV/r'], false, 3),
+        ('2d', 'AZT+3TC+ATV/r', '2nd Line', 'Adult', ARRAY['AZT', '3TC', 'ATV/r'], false, 4),
+        ('2e', 'TDF+3TC+ATV/r', '2nd Line', 'Adult', ARRAY['TDF', '3TC', 'ATV/r'], false, 5),
+        ('2f', 'ABC+DDI250+ATV/r', '2nd Line', 'Adult', ARRAY['ABC', 'DDI250', 'ATV/r'], false, 6),
+        ('2g', 'ABC+DDI400+LPV/r', '2nd Line', 'Adult', ARRAY['ABC', 'DDI400', 'LPV/r'], false, 7),
+        ('2h', 'AZT+DDI250+LPV/r', '2nd Line', 'Adult', ARRAY['AZT', 'DDI250', 'LPV/r'], false, 8),
+        ('2i', 'AZT+DDI400+LPV/r', '2nd Line', 'Adult', ARRAY['AZT', 'DDI400', 'LPV/r'], false, 9),
+        ('2j', 'ABC+DDI400+ATV/r', '2nd Line', 'Adult', ARRAY['ABC', 'DDI400', 'ATV/r'], false, 10),
+        ('2k', 'ABC+3TC+DTG', '2nd Line', 'Adult', ARRAY['ABC', '3TC', 'DTG'], false, 11),
+        ('2l', 'AZT+3TC+DTG', '2nd Line', 'Adult', ARRAY['AZT', '3TC', 'DTG'], false, 12),
+        ('2m', 'TDF+3TC+DTG(TLD2)', '2nd Line', 'Adult', ARRAY['TDF', '3TC', 'DTG'], true, 13),
+        ('2n', 'TAF+3TC+DTG', '2nd Line', 'Adult', ARRAY['TAF', '3TC', 'DTG'], false, 14),
+        ('2o', 'Other, Specify', '2nd Line', 'Adult', ARRAY['Other'], false, 15)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Regimens - Adult 3rd Line
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('3a', 'RAL/DRV/RTV', '3rd Line', 'Adult', ARRAY['RAL', 'DRV', 'RTV'], false, 1),
+        ('3b', 'Other, Specify', '3rd Line', 'Adult', ARRAY['Other'], false, 2)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Regimens - Children 1st/2nd Line (Codes 4c-4k)
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('4c', 'AZT+3TC+NVP', 'Children 1st Line', 'Paediatric', ARRAY['AZT', '3TC', 'NVP'], false, 1),
+        ('4d', 'AZT+3TC+EFV', 'Children 1st Line', 'Paediatric', ARRAY['AZT', '3TC', 'EFV'], false, 2),
+        ('4e', 'AZT+3TC+LPV/r', 'Children 1st Line', 'Paediatric', ARRAY['AZT', '3TC', 'LPV/r'], false, 3),
+        ('4f', 'ABC+DDI+LPV/r', 'Children 1st Line', 'Paediatric', ARRAY['ABC', 'DDI', 'LPV/r'], false, 4),
+        ('4g', 'ABC+3TC+LPV/r', 'Children 1st Line', 'Paediatric', ARRAY['ABC', '3TC', 'LPV/r'], false, 5),
+        ('4h', 'ABC+3TC+EFV', 'Children 1st Line', 'Paediatric', ARRAY['ABC', '3TC', 'EFV'], false, 6),
+        ('4i', 'AZT+3TC+RAL', 'Children 1st Line', 'Paediatric', ARRAY['AZT', '3TC', 'RAL'], false, 7),
+        ('4j', 'ABC+3TC+DTG', 'Children 1st Line', 'Paediatric', ARRAY['ABC', '3TC', 'DTG'], false, 8),
+        ('4k', 'TDF+3TC+DTG', 'Children 1st Line', 'Paediatric', ARRAY['TDF', '3TC', 'DTG'], false, 9)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Regimens - Children 2nd Line (Codes 5a-5m)
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('5a', 'ABC+DDI+LPV/r', 'Children 2nd Line', 'Paediatric', ARRAY['ABC', 'DDI', 'LPV/r'], false, 1),
+        ('5b', 'ABC+3TC+LPV/r', 'Children 2nd Line', 'Paediatric', ARRAY['ABC', '3TC', 'LPV/r'], false, 2),
+        ('5c', 'AZT+3TC+NPV', 'Children 2nd Line', 'Paediatric', ARRAY['AZT', '3TC', 'NVP'], false, 3),
+        ('5e', 'ABC+DDI+LPV/r', 'Children 2nd Line', 'Paediatric', ARRAY['ABC', 'DDI', 'LPV/r'], false, 4),
+        ('5f', 'ABC+3TC+NPV', 'Children 2nd Line', 'Paediatric', ARRAY['ABC', '3TC', 'NVP'], false, 5),
+        ('5g', 'ABC+3TC+DTG', 'Children 2nd Line', 'Paediatric', ARRAY['ABC', '3TC', 'DTG'], false, 6),
+        ('5h', 'TDF+3TC+ATV/r', 'Children 2nd Line', 'Paediatric', ARRAY['TDF', '3TC', 'ATV/r'], false, 7),
+        ('5i', 'TDF+3TC+DTG', 'Children 2nd Line', 'Paediatric', ARRAY['TDF', '3TC', 'DTG'], false, 8),
+        ('5j', 'AZT+3TC+DTG', 'Children 2nd Line', 'Paediatric', ARRAY['AZT', '3TC', 'DTG'], false, 9),
+        ('5k', 'TDF+3TC+LPV/r', 'Children 2nd Line', 'Paediatric', ARRAY['TDF', '3TC', 'LPV/r'], false, 10),
+        ('5l', 'AZT+3TC+LPV/r', 'Children 2nd Line', 'Paediatric', ARRAY['AZT', '3TC', 'LPV/r'], false, 11),
+        ('5m', 'Other, Specify', 'Children 2nd Line', 'Paediatric', ARRAY['Other'], false, 12)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed ART Regimens - Children 3rd Line (Codes 6a-6c)
+      await tenantDataSource.query(`
+        INSERT INTO hiv_art_regimens (code, name, line, category, components, is_preferred, display_order) VALUES
+        ('6a', 'RAL/DRV/RTV', 'Children 3rd Line', 'Paediatric', ARRAY['RAL', 'DRV', 'RTV'], false, 1),
+        ('6b', 'DTG+DRV+2NRTIs', 'Children 3rd Line', 'Paediatric', ARRAY['DTG', 'DRV', '2NRTIs'], false, 2),
+        ('6c', 'Other, Specify', 'Children 3rd Line', 'Paediatric', ARRAY['Other'], false, 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      this.logger.log('HIV lookup tables seeded successfully');
+    } catch (error) {
+      this.logger.error('Error seeding lookup tables:', error);
+      // Don't throw - allow schema to be created even if seeding fails
+    }
   }
 
   async deleteDatabase(databaseName: string): Promise<void> {

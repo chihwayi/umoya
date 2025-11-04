@@ -1,0 +1,2025 @@
+import React, { useState, useEffect } from 'react';
+import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ehrApi } from '../services/api';
+import { useNotification } from './GlobalNotification';
+
+interface HIVClinicalVisitModalProps {
+  enrollment: any;
+  onClose: () => void;
+  onSuccess: () => void;
+  tenantSlug: string;
+}
+
+const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
+  enrollment,
+  onClose,
+  onSuccess,
+  tenantSlug
+}) => {
+  const { showSuccess, showError } = useNotification();
+  const [loading, setLoading] = useState(false);
+  const [loadingLookups, setLoadingLookups] = useState(true);
+  const [lookups, setLookups] = useState<any>({});
+  const [activeStep, setActiveStep] = useState(1);
+  const [lastVisitNextReviewDate, setLastVisitNextReviewDate] = useState<string | null>(null);
+  const [hasStartedArv, setHasStartedArv] = useState(false);
+  const [lastInitiatedRegimenCode, setLastInitiatedRegimenCode] = useState<string | null>(null);
+  const [lastInitiatedRegimenName, setLastInitiatedRegimenName] = useState<string | null>(null);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
+  const [approvedArvChange, setApprovedArvChange] = useState<any>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>('');
+  const [eacEligibility, setEacEligibility] = useState<any>(null);
+  const [showEacModal, setShowEacModal] = useState(false);
+  
+  // Determine if patient is female (for reproductive health step)
+  const isFemale = enrollment?.gender?.toLowerCase() === 'female';
+  
+  // Calculate patient age from date of birth
+  const calculateAge = (dateOfBirth: string | null | undefined): number | null => {
+    if (!dateOfBirth) return null;
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+  
+  const patientAge = calculateAge(enrollment?.date_of_birth);
+  const isChild = patientAge !== null && patientAge <= 15;
+  
+  // Filter regimens based on age
+  const filteredRegimens = lookups.artRegimens?.filter((regimen: any) => {
+    if (isChild) {
+      return regimen.category === 'Paediatric';
+    } else {
+      return regimen.category === 'Adult';
+    }
+  }) || [];
+
+  // Form state - comprehensive visit data
+  const [form, setForm] = useState({
+    // Step 1: Visit Basics
+    visitNumber: 1,
+    visitDate: new Date().toISOString().split('T')[0],
+    visitType: '',
+    
+    // Step 2: Vitals & Measurements
+    weightKg: '',
+    heightCm: '',
+    bmi: '',
+    bmiClassification: '',
+    bloodPressure: '',
+    
+    // Step 3: Reproductive Health
+    pregnancyLactatingStatus: '',
+    firstAncBookingDate: '',
+    deliveryDate: '',
+    familyPlanningStatus: [] as string[],
+    
+    // Step 4: Clinical Status
+    functionalStatus: '',
+    whoClinicalStage: '',
+    opportunisticInfections: [] as string[],
+    oiSubCategories: {} as { [key: string]: string },
+    mentalHealthResult: '',
+    mentalHealthManagement: '',
+    
+    // Step 5: TB & TPT
+    tbScreening: '',
+    tbInvestigationResult: '',
+    tbInvestigationXpertMtbRif: '',
+    tbInvestigationUltraLfLam: '',
+    tbInvestigationTstChildren: '',
+    tptEligibility: '',
+    tptStatus: '',
+    tptQuantityDispensed: '',
+    tptAdherencePercentage: '',
+    cotrimoxazoleQuantityDispensed: '',
+    cotrimoxazoleAdherencePercentage: '',
+    fluconazoleQuantityPrescribed: '',
+    fluconazoleQuantityDispensed: '',
+    
+    // Step 6: ARV & Lab Results
+    arvStatus: '',
+    arvInitiationCategory: '',
+    arvReasonNotOn: '',
+    arvReasonStart: '',
+    arvChangeStopReason: '',
+    arvRegimenCode: '',
+    arvRegimenName: '',
+    arvDurationPrescribed: '',
+    arvQuantityPrescribed: '',
+    arvQuantityDispensed: '',
+    arvAdherencePercentage: '',
+    regimenChanged: false,
+    adverseEventsStatus: [] as string[],
+    
+    // Lab Results
+    cd4Count: '',
+    cd4Percentage: '',
+    cd4TestDate: '',
+    viralLoad: '',
+    viralLoadUnit: 'copies/mL',
+    viralLoadSampleCollectedDate: '',
+    viralLoadResultReceivedDate: '',
+    viralLoadTestDate: '',
+    viralLoadSuppressed: false,
+    
+    // Cryptococcal
+    cryptococcalSigns: '',
+    cryptococcalStatus: '',
+    cryptococcalCsfInvestigationDone: false,
+    cryptococcalPreemptiveTreatmentResult: false,
+    cryptococcalTreatment: '',
+    
+    // Cervical Cancer
+    cervicalCancerHpvTestResult: '',
+    cervicalCancerViacResult: '',
+    cervicalCancerTreatment: '',
+    
+    // Follow-up
+    nextReviewDate: '',
+    visitStatus: '',
+    finalOutcome: '',
+    visitNotes: '',
+    clinicianInitials: '',
+    pharmacyDispenserInitials: ''
+  });
+
+  // Helper functions to determine field visibility based on WHO/DSD standards
+  const isDrugCollectionOnly = (visitType: string) => {
+    // Visit types that are drug collection only (no clinical assessment)
+    // B: Sent Care Giver, D: Cross Border Transport, G: Fast Track, J: OFCAD, K: Private Pharmacy
+    return ['B', 'D', 'G', 'J', 'K'].includes(visitType);
+  };
+
+  const isDSDModel = (visitType: string) => {
+    // Differentiated Service Delivery models (limited clinical, periodic full assessment)
+    // E: CARG, F: Clubs
+    return ['E', 'F'].includes(visitType);
+  };
+
+  const isMinimalClinical = (visitType: string) => {
+    // Visit types with minimal clinical assessment (mainly documentation)
+    // C: Visit at another clinic, L: Other
+    return ['C', 'L'].includes(visitType);
+  };
+
+  const requiresFullClinical = (visitType: string) => {
+    // Visit types requiring full clinical assessment
+    // A: Present Self (conventional), H: Outreach, I: Drop in Centre
+    return ['A', 'H', 'I'].includes(visitType);
+  };
+
+  const shouldShowClinicalFields = () => {
+    if (!form.visitType) return true; // Show all by default until visit type selected
+    return !isDrugCollectionOnly(form.visitType) && !isMinimalClinical(form.visitType);
+  };
+
+  const shouldShowLimitedClinical = () => {
+    if (!form.visitType) return false;
+    return isDSDModel(form.visitType);
+  };
+
+  const shouldShowFullClinical = () => {
+    if (!form.visitType) return true;
+    return requiresFullClinical(form.visitType);
+  };
+
+  useEffect(() => {
+    loadLookupData();
+    loadVisitCount();
+    loadCurrentUser();
+    checkEacEligibility();
+  }, []);
+
+  const loadCurrentUser = () => {
+    try {
+      const userStr = localStorage.getItem('ehr_user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUserRole(user.role || '');
+      }
+    } catch (error) {
+      console.error('Failed to load current user:', error);
+    }
+  };
+
+  const checkEacEligibility = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.checkEacEligibility(enrollment.id, token, tenantSlug);
+      setEacEligibility(response.data);
+      if (response.data?.needsEac) {
+        // Will show alert/notification in UI
+      }
+    } catch (error) {
+      console.error('Failed to check EAC eligibility:', error);
+    }
+  };
+
+  const loadVisitCount = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.getHivVisitCount(enrollment.id, token, tenantSlug);
+      if (response.data?.nextVisitNumber) {
+        const visitNumber = response.data.nextVisitNumber;
+        setForm(prev => ({ ...prev, visitNumber }));
+        setIsFirstVisit(visitNumber === 1);
+      }
+      if (response.data?.lastVisitNextReviewDate) {
+        setLastVisitNextReviewDate(response.data.lastVisitNextReviewDate);
+      }
+      if (response.data?.hasStartedArv !== undefined) {
+        setHasStartedArv(response.data.hasStartedArv);
+      }
+      if (response.data?.lastInitiatedRegimenCode) {
+        setLastInitiatedRegimenCode(response.data.lastInitiatedRegimenCode);
+        setLastInitiatedRegimenName(response.data.lastInitiatedRegimenName);
+      }
+      
+      // Check for approved ARV change request
+      await loadApprovedArvChange();
+    } catch (error) {
+      console.error('Failed to load visit count:', error);
+      // Default to 1 if error
+      setForm(prev => ({ ...prev, visitNumber: 1 }));
+      setIsFirstVisit(true);
+    }
+  };
+
+  const loadApprovedArvChange = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.getApprovedArvChange(enrollment.id, token, tenantSlug);
+      if (response.data) {
+        setApprovedArvChange(response.data);
+        // If Change status is selected, auto-populate regimen
+        if (form.arvStatus === '4') {
+          setForm(prev => ({
+            ...prev,
+            arvRegimenCode: response.data.requested_regimen_code,
+            arvRegimenName: response.data.requested_regimen_name
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load approved ARV change:', error);
+    }
+  };
+
+  const loadLookupData = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      setLoadingLookups(true);
+      
+      // Load all lookup tables in parallel
+      const [
+        visitTypes, bmiClassifications, pregnancyStatus, familyPlanning,
+        functionalStatus, tbScreeningStatus, tbInvestigationResults,
+        opportunisticInfections, mentalHealthResults, mentalHealthManagement,
+        tptEligibility, tptStatus, cryptococcalSigns, cryptococcalStatus,
+        cryptococcalTreatment, arvStatus, artInitiationCategory,
+        adverseEvents, arvReasonsNotOn, arvReasonsStart, arvChangeStopReasons,
+        visitStatus, finalOutcome, artRegimens, precancerousTreatment
+      ] = await Promise.all([
+        ehrApi.getHivLookupData('visit_types', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('bmi_classifications', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('pregnancy_lactating_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('family_planning_methods', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('functional_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('tb_screening_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('tb_investigation_results', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('opportunistic_infections', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('mental_health_results', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('mental_health_management', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('tpt_eligibility', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('tpt_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('cryptococcal_signs', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('cryptococcal_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('cryptococcal_treatment', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('arv_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('art_initiation_category', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('adverse_events_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('arv_reasons_not_on', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('arv_reasons_start', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('arv_change_stop_reasons', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('visit_status', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('final_outcome', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('art_regimens', {}, token, tenantSlug),
+        ehrApi.getHivLookupData('precancerous_lesion_treatment', {}, token, tenantSlug)
+      ]);
+
+      setLookups({
+        visitTypes: visitTypes.data.data || [],
+        bmiClassifications: bmiClassifications.data.data || [],
+        pregnancyStatus: pregnancyStatus.data.data || [],
+        familyPlanning: familyPlanning.data.data || [],
+        functionalStatus: functionalStatus.data.data || [],
+        tbScreeningStatus: tbScreeningStatus.data.data || [],
+        tbInvestigationResults: tbInvestigationResults.data.data || [],
+        opportunisticInfections: opportunisticInfections.data.data || [],
+        mentalHealthResults: mentalHealthResults.data.data || [],
+        mentalHealthManagement: mentalHealthManagement.data.data || [],
+        tptEligibility: tptEligibility.data.data || [],
+        tptStatus: tptStatus.data.data || [],
+        cryptococcalSigns: cryptococcalSigns.data.data || [],
+        cryptococcalStatus: cryptococcalStatus.data.data || [],
+        cryptococcalTreatment: cryptococcalTreatment.data.data || [],
+        arvStatus: arvStatus.data.data || [],
+        artInitiationCategory: artInitiationCategory.data.data || [],
+        adverseEvents: adverseEvents.data.data || [],
+        arvReasonsNotOn: arvReasonsNotOn.data.data || [],
+        arvReasonsStart: arvReasonsStart.data.data || [],
+        arvChangeStopReasons: arvChangeStopReasons.data.data || [],
+        visitStatus: visitStatus.data.data || [],
+        finalOutcome: finalOutcome.data.data || [],
+        artRegimens: artRegimens.data.data || [],
+        precancerousTreatment: precancerousTreatment.data.data || []
+      });
+    } catch (error) {
+      console.error('Failed to load lookup data:', error);
+      showError('Error', 'Failed to load form options');
+    } finally {
+      setLoadingLookups(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) {
+        showError('Error', 'Authentication required');
+        return;
+      }
+
+      const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
+
+      const visitData = {
+        enrollmentId: enrollment.id,
+        visitNumber: form.visitNumber,
+        visitDate: form.visitDate,
+        visitType: form.visitType,
+        providerId: currentUser.id,
+        
+        // Vitals
+        weightKg: form.weightKg ? parseFloat(form.weightKg) : null,
+        heightCm: form.heightCm ? parseFloat(form.heightCm) : null,
+        bmi: form.bmi ? parseFloat(form.bmi) : null,
+        bloodPressure: form.bloodPressure || null,
+        
+        // Reproductive Health
+        pregnancyLactatingStatus: form.pregnancyLactatingStatus || null,
+        firstAncBookingDate: form.firstAncBookingDate || null,
+        deliveryDate: form.deliveryDate || null,
+        familyPlanningStatus: form.familyPlanningStatus,
+        
+        // Clinical Status
+        functionalStatus: form.functionalStatus || null,
+        whoClinicalStage: form.whoClinicalStage ? parseInt(form.whoClinicalStage) : null,
+        opportunisticInfections: form.opportunisticInfections,
+        
+        // TB
+        tbScreening: form.tbScreening || null,
+        tbInvestigationResult: form.tbInvestigationResult || null,
+        tbInvestigationXpertMtbRif: form.tbInvestigationXpertMtbRif || null,
+        tbInvestigationUltraLfLam: form.tbInvestigationUltraLfLam || null,
+        tbInvestigationTstChildren: form.tbInvestigationTstChildren || null,
+        
+        // TPT
+        tptEligibility: form.tptEligibility || null,
+        tptStatus: form.tptStatus || null,
+        tptQuantityDispensed: form.tptQuantityDispensed ? parseInt(form.tptQuantityDispensed) : null,
+        tptAdherencePercentage: form.tptAdherencePercentage ? parseInt(form.tptAdherencePercentage) : null,
+        
+        // Prophylaxis
+        cotrimoxazoleQuantityDispensed: form.cotrimoxazoleQuantityDispensed ? parseInt(form.cotrimoxazoleQuantityDispensed) : null,
+        cotrimoxazoleAdherencePercentage: form.cotrimoxazoleAdherencePercentage ? parseInt(form.cotrimoxazoleAdherencePercentage) : null,
+        fluconazoleQuantityPrescribed: form.fluconazoleQuantityPrescribed ? parseInt(form.fluconazoleQuantityPrescribed) : null,
+        fluconazoleQuantityDispensed: form.fluconazoleQuantityDispensed ? parseInt(form.fluconazoleQuantityDispensed) : null,
+        
+        // ARV
+        arvStatus: form.arvStatus || null,
+        arvInitiationCategoryCode: form.arvInitiationCategory || null,
+        arvReasonNotOnCode: form.arvReasonNotOn || null,
+        arvReasonStartCode: form.arvReasonStart || null,
+        arvChangeStopReasonCode: form.arvChangeStopReason || null,
+        arvRegimenCode: form.arvRegimenCode || null,
+        arvRegimenName: form.arvRegimenName || null,
+        arvDurationPrescribed: form.arvDurationPrescribed || null,
+        arvQuantityPrescribed: form.arvQuantityPrescribed ? parseInt(form.arvQuantityPrescribed) : null,
+        arvQuantityDispensed: form.arvQuantityDispensed ? parseInt(form.arvQuantityDispensed) : null,
+        arvAdherencePercentage: form.arvAdherencePercentage ? parseInt(form.arvAdherencePercentage) : null,
+        regimenChanged: form.regimenChanged,
+        adverseEventsStatus: form.adverseEventsStatus,
+        
+        // Lab Results
+        cd4Count: form.cd4Count ? parseInt(form.cd4Count) : null,
+        cd4Percentage: form.cd4Percentage ? parseFloat(form.cd4Percentage) : null,
+        cd4TestDate: form.cd4TestDate || null,
+        viralLoad: form.viralLoad ? parseFloat(form.viralLoad) : null,
+        viralLoadUnit: form.viralLoadUnit,
+        viralLoadSampleCollectedDate: form.viralLoadSampleCollectedDate || null,
+        viralLoadResultReceivedDate: form.viralLoadResultReceivedDate || null,
+        viralLoadTestDate: form.viralLoadTestDate || null,
+        viralLoadSuppressed: form.viralLoadSuppressed,
+        
+        // Cryptococcal
+        cryptococcalSignsCode: form.cryptococcalSigns || null,
+        cryptococcalStatusCode: form.cryptococcalStatus || null,
+        cryptococcalCsfInvestigationDone: form.cryptococcalCsfInvestigationDone,
+        cryptococcalPreemptiveTreatmentResult: form.cryptococcalPreemptiveTreatmentResult,
+        cryptococcalTreatmentCode: form.cryptococcalTreatment || null,
+        
+        // Cervical Cancer
+        cervicalCancerHpvTestResult: form.cervicalCancerHpvTestResult || null,
+        cervicalCancerViacResult: form.cervicalCancerViacResult || null,
+        cervicalCancerTreatmentCode: form.cervicalCancerTreatment || null,
+        
+        // Mental Health
+        mentalHealthResultCode: form.mentalHealthResult || null,
+        mentalHealthManagementCode: form.mentalHealthManagement || null,
+        
+        // Follow-up
+        nextReviewDate: form.nextReviewDate || null,
+        visitStatus: form.visitStatus || null,
+        finalOutcome: form.finalOutcome || null,
+        visitNotes: form.visitNotes || null,
+        clinicianInitials: form.clinicianInitials || null,
+        pharmacyDispenserInitials: form.pharmacyDispenserInitials || null
+      };
+
+      await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
+      
+      // Check EAC eligibility after saving visit with viral load
+      if (form.viralLoad && parseFloat(form.viralLoad) > 1000) {
+        await checkEacEligibility();
+        const updatedEligibility = await ehrApi.checkEacEligibility(enrollment.id, token, tenantSlug);
+        if (updatedEligibility.data?.needsEac) {
+          showSuccess('Success', 'Clinical visit recorded. Patient requires EAC (Enhanced Adherence Counseling) due to high viral load.');
+        } else {
+          showSuccess('Success', 'Clinical visit recorded successfully');
+        }
+      } else {
+        showSuccess('Success', 'Clinical visit recorded successfully');
+      }
+      
+      onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error('Failed to save visit:', error);
+      showError('Error', error.response?.data?.message || 'Failed to record clinical visit');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate BMI when weight or height changes
+  useEffect(() => {
+    if (form.weightKg && form.heightCm) {
+      const weight = parseFloat(form.weightKg);
+      const height = parseFloat(form.heightCm) / 100; // Convert cm to meters
+      if (weight > 0 && height > 0) {
+        const bmi = (weight / (height * height)).toFixed(1);
+        setForm(prev => ({ ...prev, bmi }));
+        
+        // Auto-select BMI classification
+        const classification = lookups.bmiClassifications?.find((cat: any) => {
+          const min = cat.min_bmi || 0;
+          const max = cat.max_bmi || 999;
+          return parseFloat(bmi) >= min && parseFloat(bmi) <= max;
+        });
+        if (classification) {
+          setForm(prev => ({ ...prev, bmiClassification: classification.code }));
+        }
+      }
+    }
+  }, [form.weightKg, form.heightCm, lookups.bmiClassifications]);
+
+  // Auto-calculate Next Review Date based on ARV Quantity Dispensed (1 ARV = 1 day)
+  useEffect(() => {
+    if (form.visitDate && form.arvQuantityDispensed) {
+      const quantity = parseFloat(form.arvQuantityDispensed);
+      if (quantity > 0) {
+        const visitDate = new Date(form.visitDate);
+        const nextReviewDate = new Date(visitDate);
+        nextReviewDate.setDate(nextReviewDate.getDate() + quantity);
+        
+        // Format as YYYY-MM-DD for date input
+        const formattedDate = nextReviewDate.toISOString().split('T')[0];
+        setForm(prev => ({ ...prev, nextReviewDate: formattedDate }));
+      }
+    }
+  }, [form.visitDate, form.arvQuantityDispensed]);
+
+  // Auto-determine Visit Status based on comparison with last visit's next review date
+  useEffect(() => {
+    if (form.visitDate && lastVisitNextReviewDate) {
+      const currentVisitDate = new Date(form.visitDate);
+      const expectedReviewDate = new Date(lastVisitNextReviewDate);
+      
+      // Calculate difference in days
+      const diffTime = currentVisitDate.getTime() - expectedReviewDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      let status = '';
+      
+      if (diffDays < -3) {
+        // More than 3 days early
+        status = 'E'; // Earlier than review date
+      } else if (diffDays >= -3 && diffDays <= 3) {
+        // Within 3 days (on time or slightly early/late)
+        status = 'OT'; // On time
+      } else if (diffDays > 3 && diffDays < 28) {
+        // Late but less than 28 days
+        status = 'L'; // Late but not defaulter
+      } else if (diffDays >= 28) {
+        // 28 days or more late
+        status = 'D'; // Default<28days (Defaulter)
+      }
+      
+      if (status) {
+        setForm(prev => ({ ...prev, visitStatus: status }));
+      }
+    }
+  }, [form.visitDate, lastVisitNextReviewDate]);
+
+  if (loadingLookups) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          <div className="flex items-center gap-4">
+            <Activity className="w-8 h-8 text-emerald-600 animate-spin" />
+            <p className="text-slate-700">Loading form data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+      <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 flex items-center justify-between rounded-t-2xl sticky top-0 z-10">
+          <div>
+            <h2 className="text-xl font-bold text-white">Record Clinical Visit</h2>
+            <p className="text-sm text-emerald-100">
+              {enrollment.first_name} {enrollment.last_name} - Visit #{form.visitNumber}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white hover:text-emerald-100">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="px-6 py-4 border-b border-slate-200">
+          {(() => {
+            // For drug collection visits, only show steps 1 and 6
+            if (isDrugCollectionOnly(form.visitType)) {
+              return (
+                <>
+                  <div className="flex items-center justify-between">
+                    {[1, 6].map((step) => {
+                      const isActive = activeStep === step;
+                      const isCompleted = activeStep > step;
+                      return (
+                        <div key={step} className="flex items-center flex-1">
+                          <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${
+                            isActive || isCompleted
+                              ? 'bg-emerald-600 text-white' 
+                              : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {step === 6 ? (isFemale ? 6 : 5) : step}
+                          </div>
+                          {step < 6 && (
+                            <div className={`flex-1 h-1 mx-2 ${
+                              isCompleted ? 'bg-emerald-600' : 'bg-slate-200'
+                            }`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-xs text-slate-600">
+                    {[1, 6].map((step) => (
+                      <div key={step} className="flex items-center flex-1">
+                        <span className="w-10 text-center">
+                          {step === 1 ? '1. Basics' : `${isFemale ? '6' : '5'}. ARV & Labs`}
+                        </span>
+                        {step < 6 && <span className="flex-1 mx-2"></span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            }
+            
+            // For regular visits, show all steps (excluding step 3 for non-females)
+            const steps = [1, 2, 3, 4, 5, 6].filter(step => isFemale || step !== 3);
+            const labels: { [key: number]: string } = isFemale 
+              ? {
+                  1: '1. Basics',
+                  2: '2. Vitals',
+                  3: '3. Reproductive',
+                  4: '4. Clinical',
+                  5: '5. TB & TPT',
+                  6: '6. ARV & Labs'
+                }
+              : {
+                  1: '1. Basics',
+                  2: '2. Vitals',
+                  4: '3. Clinical',
+                  5: '4. TB & TPT',
+                  6: '5. ARV & Labs'
+                };
+            
+            return (
+              <>
+                <div className="flex items-center justify-between">
+                  {steps.map((step, index) => {
+                    const displayStep = isFemale ? step : (step > 3 ? step - 1 : step);
+                    const isActive = activeStep === step;
+                    const isCompleted = activeStep > step;
+                    const isLastStep = index === steps.length - 1;
+                    return (
+                      <div key={step} className="flex items-center flex-1">
+                        <div className={`flex items-center justify-center w-10 h-10 rounded-full font-semibold ${
+                          isActive || isCompleted
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {displayStep}
+                        </div>
+                        {!isLastStep && (
+                          <div className={`flex-1 h-1 mx-2 ${
+                            isCompleted ? 'bg-emerald-600' : 'bg-slate-200'
+                          }`} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-slate-600">
+                  {steps.map((step, index) => {
+                    const isLastStep = index === steps.length - 1;
+                    return (
+                      <div key={step} className="flex items-center flex-1">
+                        <span className="w-10 text-center">{labels[step]}</span>
+                        {!isLastStep && <span className="flex-1 mx-2"></span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Form Content */}
+        <div className="p-6">
+          {/* Step 1: Visit Basics */}
+          {activeStep === 1 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step 1: Visit Information</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Visit Number
+                  </label>
+                  <input
+                    type="number"
+                    value={form.visitNumber}
+                    readOnly
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Auto-calculated based on existing visits</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Visit Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={form.visitDate}
+                    onChange={(e) => setForm(prev => ({ ...prev, visitDate: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Visit Type *
+                  </label>
+                  <select
+                    value={form.visitType}
+                    onChange={(e) => {
+                      const newVisitType = e.target.value;
+                      setForm(prev => ({ ...prev, visitType: newVisitType }));
+                      // If drug collection visit, skip to ARV step
+                      if (isDrugCollectionOnly(newVisitType) && activeStep < (isFemale ? 6 : 6)) {
+                        // Skip to ARV step (last step)
+                        setTimeout(() => setActiveStep(isFemale ? 6 : 6), 100);
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="">Select visit type</option>
+                    {lookups.visitTypes?.map((type: any) => (
+                      <option key={type.code} value={type.code}>
+                        {type.code} - {type.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Vitals & Measurements */}
+          {activeStep === 2 && shouldShowClinicalFields() && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step 2: Vital Signs & Measurements</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={form.weightKg}
+                    onChange={(e) => setForm(prev => ({ ...prev, weightKg: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Height (cm) - for &lt;15 years
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={form.heightCm}
+                    onChange={(e) => setForm(prev => ({ ...prev, heightCm: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    BMI (calculated)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.bmi || 'Auto-calculated'}
+                    readOnly
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    BMI Classification
+                  </label>
+                  <select
+                    value={form.bmiClassification}
+                    onChange={(e) => setForm(prev => ({ ...prev, bmiClassification: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select classification</option>
+                    {lookups.bmiClassifications?.map((cat: any) => (
+                      <option key={cat.code} value={cat.code}>
+                        {cat.code} - {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Blood Pressure (mmHg)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 120/80"
+                    value={form.bloodPressure}
+                    onChange={(e) => setForm(prev => ({ ...prev, bloodPressure: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Reproductive Health - Only for females */}
+          {activeStep === 3 && isFemale && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step 3: Reproductive Health</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Pregnancy & Breast-feeding Status
+                  </label>
+                  <select
+                    value={form.pregnancyLactatingStatus}
+                    onChange={(e) => setForm(prev => ({ ...prev, pregnancyLactatingStatus: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select status</option>
+                    {lookups.pregnancyStatus?.map((status: any) => (
+                      <option key={status.code} value={status.code}>
+                        {status.code} - {status.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Date of 1st ANC Booking
+                  </label>
+                  <input
+                    type="date"
+                    value={form.firstAncBookingDate}
+                    onChange={(e) => setForm(prev => ({ ...prev, firstAncBookingDate: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Delivery Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.deliveryDate}
+                    onChange={(e) => setForm(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Family Planning Status (multiple response)
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {lookups.familyPlanning?.map((method: any) => (
+                    <label key={method.code} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.familyPlanningStatus.includes(method.code)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setForm(prev => ({
+                              ...prev,
+                              familyPlanningStatus: [...prev.familyPlanningStatus, method.code]
+                            }));
+                          } else {
+                            setForm(prev => ({
+                              ...prev,
+                              familyPlanningStatus: prev.familyPlanningStatus.filter((c: string) => c !== method.code)
+                            }));
+                          }
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-700">
+                        {method.code} - {method.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Clinical Status */}
+          {activeStep === (isFemale ? 4 : 4) && shouldShowClinicalFields() && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step {isFemale ? 4 : 3}: Clinical Status</h3>
+              {!shouldShowFullClinical() && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>DSD Model Visit:</strong> Limited clinical assessment. Full clinical assessment recommended at next conventional visit.
+                  </p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Functional Status
+                  </label>
+                  <select
+                    value={form.functionalStatus}
+                    onChange={(e) => setForm(prev => ({ ...prev, functionalStatus: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select status</option>
+                    {lookups.functionalStatus?.map((status: any) => (
+                      <option key={status.code} value={status.code}>
+                        {status.code} - {status.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    WHO Clinical Stage (1-4)
+                  </label>
+                  <select
+                    value={form.whoClinicalStage}
+                    onChange={(e) => setForm(prev => ({ ...prev, whoClinicalStage: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select stage</option>
+                    <option value="1">Stage 1</option>
+                    <option value="2">Stage 2</option>
+                    <option value="3">Stage 3</option>
+                    <option value="4">Stage 4</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Opportunistic Infections & Other Problems (multiple response)
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-4">
+                  {lookups.opportunisticInfections?.map((oi: any) => (
+                    <label key={oi.code} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.opportunisticInfections.includes(oi.code)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setForm(prev => ({
+                              ...prev,
+                              opportunisticInfections: [...prev.opportunisticInfections, oi.code]
+                            }));
+                          } else {
+                            setForm(prev => ({
+                              ...prev,
+                              opportunisticInfections: prev.opportunisticInfections.filter((c: string) => c !== oi.code)
+                            }));
+                          }
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-700">
+                        {oi.code} - {oi.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Mental Health Screening Result
+                  </label>
+                  <select
+                    value={form.mentalHealthResult}
+                    onChange={(e) => setForm(prev => ({ ...prev, mentalHealthResult: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select result</option>
+                    {lookups.mentalHealthResults?.map((result: any) => (
+                      <option key={result.code} value={result.code}>
+                        {result.code} - {result.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Mental Health Management
+                  </label>
+                  <select
+                    value={form.mentalHealthManagement}
+                    onChange={(e) => setForm(prev => ({ ...prev, mentalHealthManagement: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  >
+                    <option value="">Select management</option>
+                    {lookups.mentalHealthManagement?.map((mgmt: any) => (
+                      <option key={mgmt.code} value={mgmt.code}>
+                        {mgmt.code} - {mgmt.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: TB & TPT */}
+          {activeStep === (isFemale ? 5 : 5) && shouldShowClinicalFields() && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step {isFemale ? 5 : 4}: TB Status & Tuberculosis Preventive Therapy</h3>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">TB Screening</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TB Screening Status
+                    </label>
+                    <select
+                      value={form.tbScreening}
+                      onChange={(e) => setForm(prev => ({ ...prev, tbScreening: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select status</option>
+                      {lookups.tbScreeningStatus?.map((status: any) => (
+                        <option key={status.code} value={status.code}>
+                          {status.code} - {status.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TB Investigation Result
+                    </label>
+                    <select
+                      value={form.tbInvestigationResult}
+                      onChange={(e) => setForm(prev => ({ ...prev, tbInvestigationResult: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select result</option>
+                      {lookups.tbInvestigationResults?.map((result: any) => (
+                        <option key={result.code} value={result.code}>
+                          {result.code} - {result.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Xpert MTB/Rif
+                    </label>
+                    <input
+                      type="text"
+                      value={form.tbInvestigationXpertMtbRif}
+                      onChange={(e) => setForm(prev => ({ ...prev, tbInvestigationXpertMtbRif: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      (Ultra)LF-LAM
+                    </label>
+                    <input
+                      type="text"
+                      value={form.tbInvestigationUltraLfLam}
+                      onChange={(e) => setForm(prev => ({ ...prev, tbInvestigationUltraLfLam: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TST (Children)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.tbInvestigationTstChildren}
+                      onChange={(e) => setForm(prev => ({ ...prev, tbInvestigationTstChildren: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">Tuberculosis Preventive Therapy (TPT)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TPT Eligibility
+                    </label>
+                    <select
+                      value={form.tptEligibility}
+                      onChange={(e) => setForm(prev => ({ ...prev, tptEligibility: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select eligibility</option>
+                      {lookups.tptEligibility?.map((elig: any) => (
+                        <option key={elig.code} value={elig.code}>
+                          {elig.code} - {elig.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TPT Status
+                    </label>
+                    <select
+                      value={form.tptStatus}
+                      onChange={(e) => setForm(prev => ({ ...prev, tptStatus: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select status</option>
+                      {lookups.tptStatus?.map((status: any) => (
+                        <option key={status.code} value={status.code}>
+                          {status.code} - {status.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TPT Quantity Dispensed (tablets/ml)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.tptQuantityDispensed}
+                      onChange={(e) => setForm(prev => ({ ...prev, tptQuantityDispensed: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      TPT % Adherence
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.tptAdherencePercentage}
+                      onChange={(e) => setForm(prev => ({ ...prev, tptAdherencePercentage: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">Prophylaxis</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Cotrimoxazole Quantity Dispensed
+                    </label>
+                    <input
+                      type="number"
+                      value={form.cotrimoxazoleQuantityDispensed}
+                      onChange={(e) => setForm(prev => ({ ...prev, cotrimoxazoleQuantityDispensed: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Cotrimoxazole % Adherence
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.cotrimoxazoleAdherencePercentage}
+                      onChange={(e) => setForm(prev => ({ ...prev, cotrimoxazoleAdherencePercentage: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Fluconazole Quantity Prescribed
+                    </label>
+                    <input
+                      type="number"
+                      value={form.fluconazoleQuantityPrescribed}
+                      onChange={(e) => setForm(prev => ({ ...prev, fluconazoleQuantityPrescribed: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Fluconazole Quantity Dispensed
+                    </label>
+                    <input
+                      type="number"
+                      value={form.fluconazoleQuantityDispensed}
+                      onChange={(e) => setForm(prev => ({ ...prev, fluconazoleQuantityDispensed: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: ARV & Lab Results */}
+          {activeStep === (isFemale ? 6 : 6) && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-slate-900">Step {isFemale ? 6 : 5}: ARV Medicine & Lab Results</h3>
+              
+              {/* Show message for drug collection visits */}
+              {isDrugCollectionOnly(form.visitType) && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Drug Collection Visit:</strong> This visit type is for medication pickup only. Clinical assessment fields are hidden per WHO DSD guidelines.
+                  </p>
+                </div>
+              )}
+              
+              {/* ARV Section */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">ARV Status & Regimen</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      ARV Status *
+                    </label>
+                    <select
+                      value={form.arvStatus}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        setForm(prev => ({ ...prev, arvStatus: newStatus }));
+                        
+                        // If continuing on ARV, auto-select last initiated regimen
+                        if (newStatus === '3' && lastInitiatedRegimenCode) {
+                          setForm(prev => ({
+                            ...prev,
+                            arvRegimenCode: lastInitiatedRegimenCode,
+                            arvRegimenName: lastInitiatedRegimenName || ''
+                          }));
+                        }
+                        
+                        // If changing ARV, use doctor-approved regimen
+                        if (newStatus === '4' && approvedArvChange) {
+                          setForm(prev => ({
+                            ...prev,
+                            arvRegimenCode: approvedArvChange.requested_regimen_code,
+                            arvRegimenName: approvedArvChange.requested_regimen_name
+                          }));
+                        }
+                        
+                        // Clear dependent fields when changing ARV status
+                        if (newStatus !== '1') {
+                          setForm(prev => ({ ...prev, arvReasonNotOn: '' }));
+                        }
+                        if (newStatus !== '2a' && newStatus !== '2b') {
+                          setForm(prev => ({ ...prev, arvReasonStart: '', arvInitiationCategory: '' }));
+                        }
+                        if (newStatus !== '4') {
+                          setForm(prev => ({ ...prev, arvChangeStopReason: '' }));
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select ARV status</option>
+                      {lookups.arvStatus?.filter((status: any) => {
+                        // First visit: Can be "No ARV" (1) or "Start ARV" (2a, 2b)
+                        if (isFirstVisit) {
+                          return status.code === '1' || status.code === '2a' || status.code === '2b';
+                        }
+                        // Subsequent visits
+                        if (hasStartedArv) {
+                          // If already started ARV, can only continue (3) or other statuses, but NOT start again (2a, 2b)
+                          // Change (4) is only available if there's an approved change request
+                          if (status.code === '4') {
+                            return approvedArvChange !== null;
+                          }
+                          return status.code !== '2a' && status.code !== '2b';
+                        } else {
+                          // If never started ARV, can only be "No ARV" (1)
+                          return status.code === '1';
+                        }
+                      }).map((status: any) => (
+                        <option key={status.code} value={status.code}>
+                          {status.code} - {status.name}
+                        </option>
+                      ))}
+                    </select>
+                    {isFirstVisit && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        First visit: Can select "No ARV" or "Start ARV"
+                      </p>
+                    )}
+                    {!isFirstVisit && hasStartedArv && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Patient has started ARV. Must continue on treatment. Regimen will match last initiated regimen.
+                      </p>
+                    )}
+                    {!isFirstVisit && !hasStartedArv && (
+                      <p className="text-xs text-yellow-600 mt-1">
+                        Patient has not started ARV yet. Only "No ARV" status available.
+                      </p>
+                    )}
+                    {form.arvStatus === '4' && !approvedArvChange && (
+                      <p className="text-xs text-red-600 mt-1">
+                        ⚠️ Change status requires doctor approval. Please ensure a doctor has approved the regimen change request before recording this visit.
+                      </p>
+                    )}
+                    {form.arvStatus === '4' && approvedArvChange && (
+                      <p className="text-xs text-green-600 mt-1">
+                        ✓ Approved by Dr. {approvedArvChange.approved_by_name} on {new Date(approvedArvChange.approval_date).toLocaleDateString()}. Regimen locked to approved change.
+                      </p>
+                    )}
+                  </div>
+
+                  {form.arvStatus === '2a' || form.arvStatus === '2b' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          ART Initiation Category
+                        </label>
+                        <select
+                          value={form.arvInitiationCategory}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvInitiationCategory: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        >
+                          <option value="">Select category</option>
+                          {lookups.artInitiationCategory?.map((cat: any) => (
+                            <option key={cat.code} value={cat.code}>
+                              {cat.code} - {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Reason for Starting ARV
+                        </label>
+                        <select
+                          value={form.arvReasonStart}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvReasonStart: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        >
+                          <option value="">Select reason</option>
+                          {lookups.arvReasonsStart?.map((reason: any) => (
+                            <option key={reason.code} value={reason.code}>
+                              {reason.code} - {reason.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  ) : form.arvStatus === '1' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Reason Not on ARV
+                      </label>
+                      <select
+                        value={form.arvReasonNotOn}
+                        onChange={(e) => setForm(prev => ({ ...prev, arvReasonNotOn: e.target.value }))}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      >
+                        <option value="">Select reason</option>
+                        {lookups.arvReasonsNotOn?.map((reason: any) => (
+                          <option key={reason.code} value={reason.code}>
+                            {reason.code} - {reason.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (form.arvStatus === '4' || form.arvStatus === '5') ? (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Reason for Change/Stop ARV
+                      </label>
+                      <select
+                        value={form.arvChangeStopReason}
+                        onChange={(e) => setForm(prev => ({ ...prev, arvChangeStopReason: e.target.value }))}
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      >
+                        <option value="">Select reason</option>
+                        {lookups.arvChangeStopReasons?.map((reason: any) => (
+                          <option key={reason.code} value={reason.code}>
+                            {reason.code} - {reason.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  {(form.arvStatus === '2a' || form.arvStatus === '2b' || form.arvStatus === '3' || form.arvStatus === '4' || form.arvStatus === '6') && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          ARV Regimen
+                        </label>
+                        <select
+                          value={form.arvRegimenCode}
+                          onChange={(e) => {
+                            const selected = filteredRegimens.find((r: any) => r.code === e.target.value);
+                            setForm(prev => ({
+                              ...prev,
+                              arvRegimenCode: e.target.value,
+                              arvRegimenName: selected?.name || ''
+                            }));
+                          }}
+                          disabled={
+                            (form.arvStatus === '3' && lastInitiatedRegimenCode !== null) ||
+                            (form.arvStatus === '4' && approvedArvChange !== null)
+                          }
+                          className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                            ((form.arvStatus === '3' && lastInitiatedRegimenCode !== null) ||
+                             (form.arvStatus === '4' && approvedArvChange !== null))
+                              ? 'bg-slate-50 cursor-not-allowed' 
+                              : ''
+                          }`}
+                        >
+                          <option value="">Select regimen</option>
+                          {filteredRegimens.map((regimen: any) => (
+                            <option key={regimen.code} value={regimen.code}>
+                              {regimen.code} - {regimen.name} ({regimen.line})
+                            </option>
+                          ))}
+                        </select>
+                        {patientAge !== null && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            Showing {isChild ? 'Paediatric' : 'Adult'} regimens (Age: {patientAge} years)
+                          </p>
+                        )}
+                        {form.arvStatus === '3' && lastInitiatedRegimenCode && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Regimen locked to continue on last initiated regimen per WHO guidelines
+                          </p>
+                        )}
+                        {form.arvStatus === '4' && approvedArvChange && (
+                          <p className="text-xs text-green-600 mt-1">
+                            Regimen locked to doctor-approved change: {approvedArvChange.requested_regimen_name}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Duration Prescribed (tablets/ml)
+                        </label>
+                        <input
+                          type="text"
+                          value={form.arvDurationPrescribed}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvDurationPrescribed: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          ARV Quantity Prescribed
+                        </label>
+                        <input
+                          type="number"
+                          value={form.arvQuantityPrescribed}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvQuantityPrescribed: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          ARV Quantity Dispensed
+                        </label>
+                        <input
+                          type="number"
+                          value={form.arvQuantityDispensed}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvQuantityDispensed: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          ARV % Adherence
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.arvAdherencePercentage}
+                          onChange={(e) => setForm(prev => ({ ...prev, arvAdherencePercentage: e.target.value }))}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={form.regimenChanged}
+                          onChange={(e) => setForm(prev => ({ ...prev, regimenChanged: e.target.checked }))}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <label className="text-sm font-medium text-slate-700">
+                          Regimen Changed
+                        </label>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Adverse Events Status (multiple response)
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-40 overflow-y-auto border border-slate-200 rounded-lg p-4">
+                    {lookups.adverseEvents?.map((event: any) => (
+                      <label key={event.code} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.adverseEventsStatus.includes(event.code)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm(prev => ({
+                                ...prev,
+                                adverseEventsStatus: [...prev.adverseEventsStatus, event.code]
+                              }));
+                            } else {
+                              setForm(prev => ({
+                                ...prev,
+                                adverseEventsStatus: prev.adverseEventsStatus.filter((c: string) => c !== event.code)
+                              }));
+                            }
+                          }}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-sm text-slate-700">
+                          {event.code} - {event.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lab Results Section - Hidden for drug collection visits */}
+              {!isDrugCollectionOnly(form.visitType) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-slate-900 mb-3">Lab Results</h4>
+                  
+                  {/* EAC Warning for High Viral Load */}
+                  {form.viralLoad && parseFloat(form.viralLoad) > 1000 && (
+                    <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-red-900 mb-1">
+                            ⚠️ High Viral Load Detected: {form.viralLoad} copies/mL
+                          </p>
+                          <p className="text-xs text-red-800">
+                            If this is the second consecutive VL &gt;1000 copies/mL (3-6 months apart), patient will require EAC (Enhanced Adherence Counseling) per WHO guidelines. Check the EAC tab in patient details after saving.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      CD4 Count
+                    </label>
+                    <input
+                      type="number"
+                      value={form.cd4Count}
+                      onChange={(e) => setForm(prev => ({ ...prev, cd4Count: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      CD4 Percentage
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={form.cd4Percentage}
+                      onChange={(e) => setForm(prev => ({ ...prev, cd4Percentage: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      CD4 Test Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.cd4TestDate}
+                      onChange={(e) => setForm(prev => ({ ...prev, cd4TestDate: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Viral Load Sample Collected Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.viralLoadSampleCollectedDate}
+                      onChange={(e) => setForm(prev => ({ ...prev, viralLoadSampleCollectedDate: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Viral Load Result Received Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.viralLoadResultReceivedDate}
+                      onChange={(e) => setForm(prev => ({ ...prev, viralLoadResultReceivedDate: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      VL Result (copies/ml or undetected)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., 50 or 'undetected'"
+                      value={form.viralLoad}
+                      onChange={(e) => setForm(prev => ({ ...prev, viralLoad: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={form.viralLoadSuppressed}
+                      onChange={(e) => setForm(prev => ({ ...prev, viralLoadSuppressed: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    <label className="text-sm font-medium text-slate-700">
+                      Viral Load Suppressed
+                    </label>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* Cryptococcal Section - Hidden for drug collection visits */}
+              {!isDrugCollectionOnly(form.visitType) && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">Cryptococcal Status</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Cryptococcal Screening (Serum CrAg Test)
+                    </label>
+                    <select
+                      value={form.cryptococcalSigns}
+                      onChange={(e) => setForm(prev => ({ ...prev, cryptococcalSigns: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select</option>
+                      {lookups.cryptococcalSigns?.map((sign: any) => (
+                        <option key={sign.code} value={sign.code}>
+                          {sign.code} - {sign.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Cryptococcal Status
+                    </label>
+                    <select
+                      value={form.cryptococcalStatus}
+                      onChange={(e) => setForm(prev => ({ ...prev, cryptococcalStatus: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select</option>
+                      {lookups.cryptococcalStatus?.map((status: any) => (
+                        <option key={status.code} value={status.code}>
+                          {status.code} - {status.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={form.cryptococcalCsfInvestigationDone}
+                      onChange={(e) => setForm(prev => ({ ...prev, cryptococcalCsfInvestigationDone: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    <label className="text-sm font-medium text-slate-700">
+                      CSF Investigation Done
+                    </label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={form.cryptococcalPreemptiveTreatmentResult}
+                      onChange={(e) => setForm(prev => ({ ...prev, cryptococcalPreemptiveTreatmentResult: e.target.checked }))}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                    />
+                    <label className="text-sm font-medium text-slate-700">
+                      Pre-emptive Treatment Results (Yes)
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Cryptococcal Meningitis Treatment
+                    </label>
+                    <select
+                      value={form.cryptococcalTreatment}
+                      onChange={(e) => setForm(prev => ({ ...prev, cryptococcalTreatment: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select treatment</option>
+                      {lookups.cryptococcalTreatment?.map((treatment: any) => (
+                        <option key={treatment.code} value={treatment.code}>
+                          {treatment.code} - {treatment.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* Cervical Cancer Section - Only for females and not drug collection */}
+              {isFemale && !isDrugCollectionOnly(form.visitType) && (
+                <div className="bg-pink-50 border border-pink-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-slate-900 mb-3">Cervical Cancer Screening</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      HPV Test Result (Pos/Neg)
+                    </label>
+                    <select
+                      value={form.cervicalCancerHpvTestResult}
+                      onChange={(e) => setForm(prev => ({ ...prev, cervicalCancerHpvTestResult: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select</option>
+                      <option value="Pos">Positive</option>
+                      <option value="Neg">Negative</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      VIAC Result (Pos/Neg)
+                    </label>
+                    <select
+                      value={form.cervicalCancerViacResult}
+                      onChange={(e) => setForm(prev => ({ ...prev, cervicalCancerViacResult: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select</option>
+                      <option value="Pos">Positive</option>
+                      <option value="Neg">Negative</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Treatment (use codes below)
+                    </label>
+                    <select
+                      value={form.cervicalCancerTreatment}
+                      onChange={(e) => setForm(prev => ({ ...prev, cervicalCancerTreatment: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select treatment</option>
+                      {lookups.precancerousTreatment?.map((treatment: any) => (
+                        <option key={treatment.code} value={treatment.code}>
+                          {treatment.code} - {treatment.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              )}
+
+              {/* Follow-up Section */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <h4 className="font-semibold text-slate-900 mb-3">Follow-up & Outcome</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Next Review Date
+                    </label>
+                    <input
+                      type="date"
+                      value={form.nextReviewDate}
+                      onChange={(e) => setForm(prev => ({ ...prev, nextReviewDate: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Auto-calculated: Visit Date + ARV Quantity Dispensed (1 ARV = 1 day). Editable for clinical visits.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Visit Status
+                    </label>
+                    <select
+                      value={form.visitStatus}
+                      onChange={(e) => setForm(prev => ({ ...prev, visitStatus: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select status</option>
+                      {lookups.visitStatus?.map((status: any) => (
+                        <option key={status.code} value={status.code}>
+                          {status.code} - {status.name}
+                        </option>
+                      ))}
+                    </select>
+                    {lastVisitNextReviewDate && form.visitDate && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Auto-determined by comparing visit date with last visit's review date ({new Date(lastVisitNextReviewDate).toLocaleDateString()}). Editable.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Final Outcome
+                    </label>
+                    <select
+                      value={form.finalOutcome}
+                      onChange={(e) => setForm(prev => ({ ...prev, finalOutcome: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="">Select outcome</option>
+                      {lookups.finalOutcome?.map((outcome: any) => (
+                        <option key={outcome.code} value={outcome.code}>
+                          {outcome.code} - {outcome.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Visit Notes
+                    </label>
+                    <textarea
+                      value={form.visitNotes}
+                      onChange={(e) => setForm(prev => ({ ...prev, visitNotes: e.target.value }))}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Clinician Initials
+                    </label>
+                    <input
+                      type="text"
+                      value={form.clinicianInitials}
+                      onChange={(e) => setForm(prev => ({ ...prev, clinicianInitials: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Pharmacy Dispenser Initials
+                    </label>
+                    <input
+                      type="text"
+                      value={form.pharmacyDispenserInitials}
+                      onChange={(e) => setForm(prev => ({ ...prev, pharmacyDispenserInitials: e.target.value }))}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-between sticky bottom-0 bg-white">
+          <button
+            onClick={() => {
+              if (activeStep > 1) {
+                // Skip step 3 for non-females when going backwards
+                if (!isFemale && activeStep === 4) {
+                  setActiveStep(2); // Go from step 4 (Clinical) back to step 2 (Vitals)
+                } else if (!isFemale && activeStep === 5) {
+                  setActiveStep(4); // Go from step 5 (TB) back to step 4 (Clinical)
+                } else if (!isFemale && activeStep === 6) {
+                  setActiveStep(5); // Go from step 6 (ARV) back to step 5 (TB)
+                } 
+                // For drug collection visits, go back to step 1
+                else if (isDrugCollectionOnly(form.visitType) && activeStep === (isFemale ? 6 : 6)) {
+                  setActiveStep(1); // Go from ARV step back to visit basics
+                }
+                else {
+                  setActiveStep(prev => prev - 1);
+                }
+              }
+            }}
+            disabled={activeStep === 1}
+            className="px-6 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <div className="flex gap-2">
+            {(() => {
+              // Determine if we should show "Next" or "Save"
+              const isLastStep = isDrugCollectionOnly(form.visitType) 
+                ? activeStep >= 6 
+                : activeStep >= (isFemale ? 6 : 6);
+              
+              return !isLastStep ? (
+                <button
+                  onClick={() => {
+                    // Skip step 3 for non-females when going forward
+                    if (!isFemale && activeStep === 2) {
+                      setActiveStep(4); // Skip step 3, go from step 2 (Vitals) to step 4 (Clinical)
+                    } 
+                    // Skip clinical steps for drug collection visits
+                    else if (isDrugCollectionOnly(form.visitType) && activeStep === 1) {
+                      setActiveStep(6); // Skip directly to ARV step
+                    } 
+                    // Skip clinical steps when going forward from visit basics for drug collection
+                    else if (isDrugCollectionOnly(form.visitType) && activeStep < 6) {
+                      setActiveStep(6); // Skip to ARV step
+                    }
+                    else {
+                      setActiveStep(prev => prev + 1);
+                    }
+                  }}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                >
+                  Next
+                  </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Activity className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Visit
+                    </>
+                  )}
+                </button>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default HIVClinicalVisitModal;
+

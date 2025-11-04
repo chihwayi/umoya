@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Activity, Heart, TrendingUp, AlertTriangle, Eye, Search, Filter } from 'lucide-react';
+import { Users, Calendar, Activity, Heart, TrendingUp, AlertTriangle, Eye, Search, Filter, FileText } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import HIVPatientDetailModal from './HIVPatientDetailModal';
+import HIVClinicalVisitModal from './HIVClinicalVisitModal';
 
 interface HIVPatientManagementProps {
   tenantSlug: string;
@@ -14,6 +16,9 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('active');
+  const [selectedEnrollment, setSelectedEnrollment] = useState<any>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showVisitModal, setShowVisitModal] = useState(false);
 
   useEffect(() => {
     loadEnrollments();
@@ -148,19 +153,74 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                 )}
               </div>
 
-              <button
-                onClick={() => {
-                  // Navigate to patient detail or open visit modal
-                  showSuccess('Info', 'Patient detail view will open here');
-                }}
-                className="mt-4 w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
-              >
-                <Eye className="w-4 h-4" />
-                View Details
-              </button>
+              {/* EAC Alert Badge */}
+              {(() => {
+                // Check if patient has high VL - this is a simple check, full check happens in detail modal
+                const hasHighVl = enrollment.baseline_viral_load && parseFloat(enrollment.baseline_viral_load) > 1000;
+                return hasHighVl && (
+                  <div className="mt-3 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-800">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span className="text-xs font-semibold">High VL Detected - Check EAC Status</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedEnrollment(enrollment);
+                    setShowDetailModal(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  View Details
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedEnrollment(enrollment);
+                    setShowVisitModal(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Record Visit
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Patient Detail Modal */}
+      {showDetailModal && selectedEnrollment && (
+        <HIVPatientDetailModal
+          enrollment={selectedEnrollment}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedEnrollment(null);
+          }}
+          tenantSlug={tenantSlug}
+        />
+      )}
+
+      {/* Clinical Visit Modal */}
+      {showVisitModal && selectedEnrollment && (
+        <HIVClinicalVisitModal
+          enrollment={selectedEnrollment}
+          onClose={() => {
+            setShowVisitModal(false);
+            setSelectedEnrollment(null);
+          }}
+          onSuccess={() => {
+            setShowVisitModal(false);
+            setSelectedEnrollment(null);
+            loadEnrollments();
+          }}
+          tenantSlug={tenantSlug}
+        />
       )}
     </div>
   );
