@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
+import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle, Book } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import HIVQuickReferenceGuide from './HIVQuickReferenceGuide';
 
 interface HIVClinicalVisitModalProps {
   enrollment: any;
@@ -31,6 +32,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [eacEligibility, setEacEligibility] = useState<any>(null);
   const [showEacModal, setShowEacModal] = useState(false);
+  const [showQuickReference, setShowQuickReference] = useState(false);
   const [viralLoadSource, setViralLoadSource] = useState<'lab_system' | 'manual' | null>(null);
   const [viralLoadAutoPopulated, setViralLoadAutoPopulated] = useState(false);
   const [labOrderCreated, setLabOrderCreated] = useState(false);
@@ -728,9 +730,19 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
               {enrollment.first_name} {enrollment.last_name} - Visit #{form.visitNumber}
             </p>
           </div>
-          <button onClick={onClose} className="text-white hover:text-emerald-100">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowQuickReference(true)}
+              className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors text-sm"
+              title="Quick Reference Guide"
+            >
+              <Book className="w-4 h-4" />
+              Reference
+            </button>
+            <button onClick={onClose} className="text-white hover:text-emerald-100">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* EAC Urgent Alert Banner - Requires EAC */}
@@ -2314,14 +2326,45 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Visit Notes
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-slate-700">
+                        Visit Notes
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const template = visitPreparationChecklist?.lastVisitNotes 
+                              ? `Previous visit notes: ${visitPreparationChecklist.lastVisitNotes}\n\nCurrent visit: `
+                              : 'Patient presents for routine follow-up. ';
+                            setForm(prev => ({ ...prev, visitNotes: template + (prev.visitNotes || '') }));
+                          }}
+                          className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                          title="Insert template"
+                        >
+                          Template
+                        </button>
+                        {eacEligibility?.needsEac && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const eacTemplate = `⚠️ EAC REQUIRED: Patient has high viral load (VL > 1000 copies/mL). EAC intervention initiated per WHO guidelines. `;
+                              setForm(prev => ({ ...prev, visitNotes: eacTemplate + (prev.visitNotes || '') }));
+                            }}
+                            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                            title="Insert EAC template"
+                          >
+                            EAC Template
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <textarea
                       value={form.visitNotes}
                       onChange={(e) => setForm(prev => ({ ...prev, visitNotes: e.target.value }))}
-                      rows={3}
+                      rows={4}
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="Enter visit notes..."
                     />
                   </div>
 
@@ -2434,6 +2477,11 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Quick Reference Guide */}
+      {showQuickReference && (
+        <HIVQuickReferenceGuide onClose={() => setShowQuickReference(false)} />
+      )}
     </div>
   );
 };

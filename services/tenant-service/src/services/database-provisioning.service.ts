@@ -823,6 +823,124 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_eac_session_date ON hiv_eac_sessions(session_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_eac_program_status ON hiv_eac_sessions(eac_program_status)`);
     
+    // Referral Management Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_referrals (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID NOT NULL REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      visit_id UUID REFERENCES hiv_clinical_visits(id) ON DELETE SET NULL,
+      referral_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      referral_type VARCHAR(10) NOT NULL CHECK (referral_type IN ('P', 'T', 'F', 'D', 'H', 'O')),
+      referral_type_details TEXT,
+      referred_to_facility VARCHAR(255),
+      referred_to_provider VARCHAR(255),
+      referral_reason TEXT NOT NULL,
+      referral_status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (referral_status IN ('pending', 'in_progress', 'completed', 'declined', 'cancelled')),
+      referral_priority VARCHAR(20) DEFAULT 'normal' CHECK (referral_priority IN ('urgent', 'high', 'normal', 'low')),
+      referred_by UUID NOT NULL REFERENCES users(id),
+      referred_by_name VARCHAR(255),
+      completed_date DATE,
+      completed_by UUID REFERENCES users(id),
+      outcome TEXT,
+      outcome_notes TEXT,
+      follow_up_required BOOLEAN DEFAULT false,
+      follow_up_date DATE,
+      declined_reason TEXT,
+      cancelled_reason TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_referrals_enrollment_id ON hiv_referrals(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_referrals_visit_id ON hiv_referrals(visit_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_referrals_status ON hiv_referrals(referral_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_referrals_date ON hiv_referrals(referral_date)`);
+    
+    // SMS/WhatsApp Reminders Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_reminders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID REFERENCES hiv_care_enrollments(id) ON DELETE CASCADE,
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      reminder_type VARCHAR(50) NOT NULL CHECK (reminder_type IN ('appointment', 'viral_load_test', 'cd4_test', 'eac_session', 'medication_refill', 'follow_up')),
+      reminder_date DATE NOT NULL,
+      reminder_time TIME,
+      message TEXT NOT NULL,
+      phone_number VARCHAR(20),
+      delivery_method VARCHAR(20) NOT NULL DEFAULT 'sms' CHECK (delivery_method IN ('sms', 'whatsapp', 'email')),
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'failed', 'cancelled')),
+      sent_at TIMESTAMP WITH TIME ZONE,
+      delivered_at TIMESTAMP WITH TIME ZONE,
+      failure_reason TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_reminders_enrollment_id ON hiv_reminders(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_reminders_patient_id ON hiv_reminders(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_reminders_status ON hiv_reminders(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_reminders_date ON hiv_reminders(reminder_date)`);
+    
+    // Medication Stock Management Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_medication_stock (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      medication_name VARCHAR(255) NOT NULL,
+      medication_code VARCHAR(50),
+      medication_type VARCHAR(50) NOT NULL CHECK (medication_type IN ('arv', 'prophylaxis', 'tpt', 'other')),
+      unit_of_measure VARCHAR(20) DEFAULT 'tablets',
+      current_stock DECIMAL(10,2) NOT NULL DEFAULT 0,
+      minimum_stock_level DECIMAL(10,2) NOT NULL DEFAULT 0,
+      maximum_stock_level DECIMAL(10,2),
+      reorder_level DECIMAL(10,2) NOT NULL DEFAULT 0,
+      expiry_date DATE,
+      batch_number VARCHAR(100),
+      supplier VARCHAR(255),
+      last_restocked_date DATE,
+      last_restocked_quantity DECIMAL(10,2),
+      last_restocked_by UUID REFERENCES users(id),
+      notes TEXT,
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_stock_medication_type ON hiv_medication_stock(medication_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_stock_active ON hiv_medication_stock(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_stock_expiry ON hiv_medication_stock(expiry_date)`);
+    
+    // Stock Transaction History
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_stock_transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      stock_id UUID NOT NULL REFERENCES hiv_medication_stock(id) ON DELETE CASCADE,
+      transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('dispensed', 'restocked', 'adjusted', 'expired', 'returned')),
+      quantity DECIMAL(10,2) NOT NULL,
+      balance_before DECIMAL(10,2) NOT NULL,
+      balance_after DECIMAL(10,2) NOT NULL,
+      transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      reference_type VARCHAR(50),
+      reference_id UUID,
+      notes TEXT,
+      performed_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transactions_stock_id ON hiv_stock_transactions(stock_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON hiv_stock_transactions(transaction_date)`);
+    
+    // Audit Trail Table
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_audit_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      enrollment_id UUID REFERENCES hiv_care_enrollments(id) ON DELETE SET NULL,
+      action_type VARCHAR(50) NOT NULL CHECK (action_type IN ('regimen_change', 'arv_status_change', 'enrollment_status_change', 'visit_created', 'visit_modified', 'lab_result_entered', 'referral_created', 'referral_updated', 'eac_session_created', 'tpt_status_change')),
+      action_description TEXT NOT NULL,
+      old_value JSONB,
+      new_value JSONB,
+      performed_by UUID NOT NULL REFERENCES users(id),
+      performed_by_name VARCHAR(255),
+      ip_address VARCHAR(45),
+      user_agent TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_audit_enrollment_id ON hiv_audit_log(enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_audit_action_type ON hiv_audit_log(action_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_audit_performed_by ON hiv_audit_log(performed_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_audit_created_at ON hiv_audit_log(created_at)`);
+    
     // ARV Regimen Change Request Table - For Doctor Approval
     statements.push(`CREATE TABLE IF NOT EXISTS hiv_arv_change_requests (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -2,6 +2,7 @@ import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards } 
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { HivService } from '../services/hiv.service';
+import { HivMonthlyReturnService } from '../services/hiv-monthly-return.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('HIV/AIDS/TB')
@@ -9,7 +10,10 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class HivController {
-  constructor(private readonly hivService: HivService) {}
+  constructor(
+    private readonly hivService: HivService,
+    private readonly hivMonthlyReturnService: HivMonthlyReturnService,
+  ) {}
 
   @Post('tests')
   @ApiOperation({ summary: 'Record HIV test result' })
@@ -66,7 +70,8 @@ export class HivController {
   async createClinicalVisit(@Body() body: any, @Request() req: RequestWithTenant) {
     const providerRole = (req as any).user?.role || body.providerRole;
     const providerId = (req as any).user?.id || body.providerId;
-    return this.hivService.createClinicalVisit({ ...body, providerId }, req.tenantDb, providerRole);
+    const providerName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name || body.providerName || 'Unknown';
+    return this.hivService.createClinicalVisit({ ...body, providerId, providerName }, req.tenantDb, providerRole, req.tenantId);
   }
 
   @Get('visits/enrollment/:enrollmentId')
@@ -173,11 +178,18 @@ export class HivController {
     return this.hivService.getMatchingLabResults(patientId, visitDate, req.tenantDb);
   }
 
-  @Get('lookup/:tableName')
-  @ApiOperation({ summary: 'Get lookup table data' })
-  @ApiResponse({ status: 200, description: 'Lookup data retrieved' })
-  async getLookupData(@Param('tableName') tableName: string, @Query() query: any, @Request() req: RequestWithTenant) {
-    return this.hivService.getLookupData(tableName, query, req.tenantDb);
+  @Get('quality-metrics')
+  @ApiOperation({ summary: 'Get HIV quality metrics and outcomes' })
+  @ApiResponse({ status: 200, description: 'Quality metrics retrieved' })
+  async getQualityMetrics(@Request() req: RequestWithTenant) {
+    return this.hivService.getQualityMetrics(req.tenantDb);
+  }
+
+  @Get('ltfu-patients')
+  @ApiOperation({ summary: 'Get lost to follow-up patients' })
+  @ApiResponse({ status: 200, description: 'LTFU patients retrieved' })
+  async getLTFUPatients(@Query('days') days: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getLTFUPatients(parseInt(days) || 90, req.tenantDb);
   }
 
   @Get('monitoring-schedules/:enrollmentId')
@@ -185,13 +197,6 @@ export class HivController {
   @ApiResponse({ status: 200, description: 'Monitoring schedules retrieved' })
   async getMonitoringSchedules(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
     return this.hivService.getMonitoringSchedules(enrollmentId, req.tenantDb);
-  }
-
-  @Get('quality-metrics')
-  @ApiOperation({ summary: 'Get HIV quality metrics and outcomes' })
-  @ApiResponse({ status: 200, description: 'Quality metrics retrieved' })
-  async getQualityMetrics(@Request() req: RequestWithTenant) {
-    return this.hivService.getQualityMetrics(req.tenantDb);
   }
 
   @Get('alerts/:enrollmentId')
@@ -248,11 +253,101 @@ export class HivController {
     );
   }
 
-  @Get('ltfu-patients')
-  @ApiOperation({ summary: 'Get lost to follow-up patients' })
-  @ApiResponse({ status: 200, description: 'LTFU patients retrieved' })
-  async getLTFUPatients(@Query('days') days: string, @Request() req: RequestWithTenant) {
-    return this.hivService.getLTFUPatients(parseInt(days) || 90, req.tenantDb);
+  // Referral Management Endpoints
+  @Post('referrals')
+  @ApiOperation({ summary: 'Create referral' })
+  @ApiResponse({ status: 201, description: 'Referral created' })
+  async createReferral(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req as any).user?.id;
+    const userName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name;
+    return this.hivService.createReferral({ ...body, referredBy: userId, referredByName: userName }, req.tenantDb);
+  }
+
+  @Get('referrals')
+  @ApiOperation({ summary: 'Get referrals' })
+  @ApiResponse({ status: 200, description: 'Referrals retrieved' })
+  async getReferrals(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getReferrals(query, req.tenantDb);
+  }
+
+  @Get('referrals/enrollment/:enrollmentId')
+  @ApiOperation({ summary: 'Get referrals for enrollment' })
+  @ApiResponse({ status: 200, description: 'Referrals retrieved' })
+  async getEnrollmentReferrals(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getEnrollmentReferrals(enrollmentId, req.tenantDb);
+  }
+
+  @Patch('referrals/:referralId/update-status')
+  @ApiOperation({ summary: 'Update referral status' })
+  @ApiResponse({ status: 200, description: 'Referral updated' })
+  async updateReferralStatus(@Param('referralId') referralId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req as any).user?.id;
+    return this.hivService.updateReferralStatus(referralId, { ...body, updatedBy: userId }, req.tenantDb);
+  }
+
+  // Audit Trail Endpoints (must be before lookup route)
+  @Get('audit-log/enrollment/:enrollmentId')
+  @ApiOperation({ summary: 'Get audit log for enrollment' })
+  @ApiResponse({ status: 200, description: 'Audit log retrieved' })
+  async getAuditLog(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getAuditLog(enrollmentId, req.tenantDb);
+  }
+
+  // Monthly Return Form (must be before lookup route)
+  @Get('monthly-return')
+  @ApiOperation({ summary: 'Generate monthly return form (C and D sections)' })
+  @ApiResponse({ status: 200, description: 'Monthly return form generated' })
+  async getMonthlyReturn(@Query('year') year: string, @Query('month') month: string, @Request() req: RequestWithTenant) {
+    const yearNum = parseInt(year) || new Date().getFullYear();
+    const monthNum = parseInt(month) || new Date().getMonth() + 1;
+    return this.hivMonthlyReturnService.generateMonthlyReturn(yearNum, monthNum, req.tenantDb);
+  }
+
+  @Get('lookup/:tableName')
+  @ApiOperation({ summary: 'Get lookup table data' })
+  @ApiResponse({ status: 200, description: 'Lookup data retrieved' })
+  async getLookupData(@Param('tableName') tableName: string, @Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getLookupData(tableName, query, req.tenantDb);
+  }
+
+  // Medication Stock Management
+  @Get('medication-stock')
+  @ApiOperation({ summary: 'Get medication stock' })
+  @ApiResponse({ status: 200, description: 'Medication stock retrieved' })
+  async getMedicationStock(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getMedicationStock(query, req.tenantDb);
+  }
+
+  @Post('medication-stock')
+  @ApiOperation({ summary: 'Create medication stock item' })
+  @ApiResponse({ status: 201, description: 'Medication stock item created' })
+  async createMedicationStock(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req as any).user?.id;
+    return this.hivService.createMedicationStock(body, req.tenantDb, userId);
+  }
+
+  @Patch('medication-stock/:stockId')
+  @ApiOperation({ summary: 'Update medication stock item' })
+  @ApiResponse({ status: 200, description: 'Medication stock item updated' })
+  async updateMedicationStock(@Param('stockId') stockId: string, @Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req as any).user?.id;
+    return this.hivService.updateMedicationStock(stockId, body, req.tenantDb, userId);
+  }
+
+  // Cohort Analysis
+  @Get('cohort-analysis')
+  @ApiOperation({ summary: 'Get cohort analysis' })
+  @ApiResponse({ status: 200, description: 'Cohort analysis retrieved' })
+  async getCohortAnalysis(@Query('type') type: string, @Query('range') range: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getCohortAnalysis(type || 'enrollment', range || '12months', req.tenantDb);
+  }
+
+  // Comparison Reports
+  @Get('comparison-report')
+  @ApiOperation({ summary: 'Get comparison report' })
+  @ApiResponse({ status: 200, description: 'Comparison report retrieved' })
+  async getComparisonReport(@Query() query: any, @Request() req: RequestWithTenant) {
+    return this.hivService.getComparisonReport(query, req.tenantDb);
   }
 }
 

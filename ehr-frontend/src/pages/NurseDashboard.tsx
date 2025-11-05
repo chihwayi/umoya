@@ -5,7 +5,7 @@ import {
   Eye, Stethoscope, FileText, Clock, AlertTriangle, CheckCircle,
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
-  ChevronDown, Settings, Shield, UserCircle, Menu, X
+  ChevronDown, Settings, Shield, UserCircle, Menu, X, Package
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -23,6 +23,9 @@ import HIVTestingComponent from '../components/HIVTestingComponent';
 import HIVPatientManagement from '../components/HIVPatientManagement';
 import TBScreeningComponent from '../components/TBScreeningComponent';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
+import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
+import HIVStockManagement from '../components/HIVStockManagement';
+import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
 
 interface Patient {
   id: string;
@@ -103,6 +106,9 @@ const NurseDashboard: React.FC = () => {
   const [showHivModal, setShowHivModal] = useState(false);
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
   const [showHivTestingModal, setShowHivTestingModal] = useState(false);
+  const [qualityMetrics, setQualityMetrics] = useState<any>(null);
+  const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
+  const [ltfuDays, setLtfuDays] = useState(90);
 
   // Calculate task counts from appointments directly
   const calculateTaskCountsFromAppointments = useCallback((appointments: any[]) => {
@@ -295,6 +301,31 @@ const NurseDashboard: React.FC = () => {
     else if (path.includes('/nurse/medications')) { setActiveTab('notes'); setNotesPreset('medications'); }
     else setActiveTab('calendar');
   }, [location.pathname]);
+
+  // Load Quality Metrics and LTFU when in HIV section
+  useEffect(() => {
+    if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'monthly-return')) {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      const loadMetrics = async () => {
+        try {
+          if (activeTab === 'quality-metrics') {
+            const metricsRes = await ehrApi.getQualityMetrics(token, tenantSlug);
+            setQualityMetrics(metricsRes.data);
+          }
+          if (activeTab === 'ltfu') {
+            const ltfuRes = await ehrApi.getLTFUPatients(ltfuDays, token, tenantSlug);
+            setLtfuPatients(ltfuRes.data.patients || []);
+          }
+        } catch (error) {
+          console.error('Failed to load metrics:', error);
+        }
+      };
+
+      loadMetrics();
+    }
+  }, [activeSection, activeTab, tenantSlug, ltfuDays]);
 
   const fetchAuthorizedOrders = async () => {
     try {
@@ -1220,6 +1251,50 @@ const NurseDashboard: React.FC = () => {
                 <Activity className="w-4 h-4 inline mr-2" />
                 Cervical Cancer Screening
               </button>
+              <button
+                onClick={() => setActiveTab('quality-metrics')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'quality-metrics'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4 inline mr-2" />
+                Quality Metrics
+              </button>
+              <button
+                onClick={() => setActiveTab('stock-management')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'stock-management'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Package className="w-4 h-4 inline mr-2" />
+                Stock Management
+              </button>
+              <button
+                onClick={() => setActiveTab('ltfu')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'ltfu'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Clock className="w-4 h-4 inline mr-2" />
+                LTFU Management
+              </button>
+              <button
+                onClick={() => setActiveTab('monthly-return')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'monthly-return'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <FileText className="w-4 h-4 inline mr-2" />
+                Monthly Return
+              </button>
             </nav>
           )}
         </div>
@@ -1508,6 +1583,173 @@ const NurseDashboard: React.FC = () => {
         )}
         {activeSection === 'hiv' && activeTab === 'cervical-cancer' && (
           <CervicalCancerScreeningComponent tenantSlug={tenantSlug || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'quality-metrics' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-900">HIV Quality Metrics & Outcomes</h2>
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem('ehr_token');
+                  if (token && tenantSlug) {
+                    try {
+                      const metricsRes = await ehrApi.getQualityMetrics(token, tenantSlug);
+                      setQualityMetrics(metricsRes.data);
+                      showSuccess('Success', 'Quality metrics refreshed');
+                    } catch (error) {
+                      showError('Error', 'Failed to refresh metrics');
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-semibold"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh Metrics
+              </button>
+            </div>
+            {qualityMetrics ? (
+              <HIVQualityMetricsChart metrics={qualityMetrics} />
+            ) : (
+              <div className="text-center py-12">
+                <Activity className="w-12 h-12 text-emerald-400 mx-auto animate-spin mb-4" />
+                <p className="text-slate-600">Loading quality metrics...</p>
+              </div>
+            )}
+          </div>
+        )}
+        {activeSection === 'hiv' && activeTab === 'stock-management' && (
+          <HIVStockManagement tenantSlug={tenantSlug || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'ltfu' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-900">Lost to Follow-Up (LTFU) Management</h2>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-slate-600">Days since last visit:</label>
+                <select
+                  value={ltfuDays}
+                  onChange={(e) => {
+                    setLtfuDays(parseInt(e.target.value));
+                    const token = localStorage.getItem('ehr_token');
+                    if (token && tenantSlug) {
+                      ehrApi.getLTFUPatients(parseInt(e.target.value), token, tenantSlug).then(res => {
+                        setLtfuPatients(res.data.patients || []);
+                      });
+                    }
+                  }}
+                  className="px-3 py-2 border border-slate-300 rounded-lg"
+                >
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                  <option value="120">120 days</option>
+                  <option value="180">180 days</option>
+                </select>
+              </div>
+            </div>
+
+            {ltfuPatients.length === 0 ? (
+              <div className="text-center py-12">
+                <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-600 mb-2">No LTFU Patients</h3>
+                <p className="text-slate-500">All patients have been seen within the last {ltfuDays} days</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-6">
+                  <p className="font-semibold text-red-900">
+                    ⚠️ {ltfuPatients.length} patient{ltfuPatients.length > 1 ? 's' : ''} lost to follow-up 
+                    ({ltfuPatients.length} not seen in {ltfuDays}+ days)
+                  </p>
+                  <p className="text-sm text-red-700 mt-1">
+                    These patients require immediate follow-up action to prevent further disengagement
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Patient</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Enrollment</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Last Visit</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Days Since</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">ART Start</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Risk Level</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ltfuPatients.map((patient: any) => {
+                        const daysSince = patient.days_since_last_visit || 
+                          (patient.last_visit_date 
+                            ? Math.floor((new Date().getTime() - new Date(patient.last_visit_date).getTime()) / (1000 * 60 * 60 * 24))
+                            : null);
+                        const riskLevel = daysSince && daysSince > 180 ? 'critical' : daysSince && daysSince > 90 ? 'high' : 'medium';
+
+                        return (
+                          <tr key={patient.id} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="font-semibold text-slate-900">
+                                  {patient.first_name} {patient.last_name}
+                                </p>
+                                <p className="text-xs text-slate-500">{patient.patient_number}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600">
+                              {patient.enrollment_number}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {patient.last_visit_date 
+                                ? formatDateToDDMMYYYY(patient.last_visit_date)
+                                : <span className="text-red-600 font-semibold">Never</span>
+                              }
+                            </td>
+                            <td className="px-4 py-3">
+                              {daysSince !== null ? (
+                                <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                  riskLevel === 'critical' ? 'bg-red-100 text-red-800' :
+                                  riskLevel === 'high' ? 'bg-orange-100 text-orange-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {daysSince} days
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">N/A</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600">
+                              {patient.art_start_date ? formatDateToDDMMYYYY(patient.art_start_date) : 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                riskLevel === 'critical' ? 'bg-red-600 text-white' :
+                                riskLevel === 'high' ? 'bg-orange-600 text-white' :
+                                'bg-yellow-600 text-white'
+                              }`}>
+                                {riskLevel.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => {
+                                  navigate(`/ehr/${tenantSlug}/nurse/hiv-patients?patient=${patient.patient_id}`);
+                                }}
+                                className="px-3 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-semibold"
+                              >
+                                View Patient
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

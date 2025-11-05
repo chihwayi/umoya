@@ -67,6 +67,7 @@ import { HivQualityMetricsService } from './services/hiv-quality-metrics.service
 import { HivVisitTemplatesService } from './services/hiv-visit-templates.service';
 import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
+import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -145,6 +146,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     HivVisitTemplatesService,
     HivTptTrackerService,
     HivPediatricDosingService,
+    HivMonthlyReturnService,
     JwtStrategy,
   ],
 })

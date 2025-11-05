@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Activity, Heart, TrendingUp, AlertTriangle, Eye, Search, Filter, FileText } from 'lucide-react';
+import { Users, Calendar, Activity, Heart, TrendingUp, AlertTriangle, Eye, Search, Filter, FileText, CheckSquare, Square, Download, Printer } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
@@ -20,6 +20,8 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [eacStatusMap, setEacStatusMap] = useState<{ [key: string]: any }>({});
+  const [selectedEnrollments, setSelectedEnrollments] = useState<Set<string>>(new Set());
+  const [bulkActionMode, setBulkActionMode] = useState(false);
 
   useEffect(() => {
     loadEnrollments();
@@ -75,7 +77,29 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
             <h2 className="text-2xl font-bold mb-2">HIV Patients on Care</h2>
             <p className="text-emerald-100">Manage enrolled HIV patients</p>
           </div>
-          <Users className="w-12 h-12 opacity-80" />
+          <div className="flex items-center gap-3">
+            {bulkActionMode && (
+              <div className="bg-white/20 rounded-lg px-4 py-2">
+                <span className="text-sm font-semibold">
+                  {selectedEnrollments.size} selected
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setBulkActionMode(!bulkActionMode);
+                setSelectedEnrollments(new Set());
+              }}
+              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                bulkActionMode
+                  ? 'bg-white text-emerald-600 hover:bg-emerald-50'
+                  : 'bg-white/20 hover:bg-white/30 text-white'
+              }`}
+            >
+              {bulkActionMode ? 'Cancel' : 'Bulk Actions'}
+            </button>
+            <Users className="w-12 h-12 opacity-80" />
+          </div>
         </div>
       </div>
 
@@ -120,15 +144,52 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEnrollments.map((enrollment) => {
-            const eacStatus = eacStatusMap[enrollment.id] || {};
-            const needsEac = eacStatus.needsEac || false;
-            const activeEac = eacStatus.activeEac || false;
-            return (
-            <div 
-              key={enrollment.id} 
-              className={`rounded-xl shadow-lg p-6 border-2 hover:shadow-xl transition-all ${
+        <>
+          {/* Bulk Actions Bar */}
+          {bulkActionMode && selectedEnrollments.size > 0 && (
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 flex items-center justify-between">
+              <span className="font-semibold text-blue-900">
+                {selectedEnrollments.size} patient{selectedEnrollments.size !== 1 ? 's' : ''} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    // Bulk print patient cards
+                    const token = localStorage.getItem('ehr_token');
+                    if (!token) return;
+                    showSuccess('Info', `Printing ${selectedEnrollments.size} patient cards...`);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print Cards
+                </button>
+                <button
+                  onClick={async () => {
+                    // Bulk export
+                    showSuccess('Info', `Exporting ${selectedEnrollments.size} patient summaries...`);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredEnrollments.map((enrollment) => {
+              const eacStatus = eacStatusMap[enrollment.id] || {};
+              const needsEac = eacStatus.needsEac || false;
+              const activeEac = eacStatus.activeEac || false;
+              const isSelected = selectedEnrollments.has(enrollment.id);
+              return (
+              <div 
+                key={enrollment.id} 
+                className={`rounded-xl shadow-lg p-6 border-2 hover:shadow-xl transition-all ${
+                  isSelected ? 'ring-4 ring-blue-500' : ''
+                } ${
                 needsEac 
                   ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-400 animate-pulse' 
                   : activeEac
@@ -136,6 +197,30 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                   : 'bg-white border-slate-200'
               }`}
             >
+              {/* Bulk Selection Checkbox */}
+              {bulkActionMode && (
+                <div className="mb-3 flex items-center justify-end">
+                  <button
+                    onClick={() => {
+                      const newSet = new Set(selectedEnrollments);
+                      if (isSelected) {
+                        newSet.delete(enrollment.id);
+                      } else {
+                        newSet.add(enrollment.id);
+                      }
+                      setSelectedEnrollments(newSet);
+                    }}
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-6 h-6" />
+                    ) : (
+                      <Square className="w-6 h-6 border-2 border-slate-300 rounded" />
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* EAC Urgent Badge */}
               {needsEac && (
                 <div className="mb-4 -mt-2 -mx-2 bg-red-600 text-white px-4 py-2 rounded-t-xl flex items-center justify-center gap-2 shadow-lg">
@@ -280,6 +365,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           );
           })}
         </div>
+        </>
       )}
 
       {/* Patient Detail Modal */}

@@ -3,13 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle, XCircle, TrendingUp, TrendingDown,
   Users, Search, Filter, Eye, FileText, Pill, TestTube, Calendar, Clock,
-  ArrowLeft, RefreshCw, Check, X, AlertCircle, Heart, Zap, BarChart3, ChevronDown, ChevronUp
+  ArrowLeft, RefreshCw, Check, X, AlertCircle, Heart, Zap, BarChart3, ChevronDown, ChevronUp, Download
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ModalPortal from '../components/ModalPortal';
 import HIVPatientDetailModal from '../components/HIVPatientDetailModal';
+import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
+import { exportQualityMetricsToPDF } from '../utils/pdfExport';
+import HIVCohortAnalysis from '../components/HIVCohortAnalysis';
+import HIVComparisonReports from '../components/HIVComparisonReports';
+import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
 
 interface HIVEnrollment {
   id: string;
@@ -54,7 +59,7 @@ const HIVDoctorDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'ltfu'>('patients');
+  const [activeTab, setActiveTab] = useState<'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'monthly-return'>('patients');
   const [enrollments, setEnrollments] = useState<HIVEnrollment[]>([]);
   const [filteredEnrollments, setFilteredEnrollments] = useState<HIVEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -513,7 +518,10 @@ const HIVDoctorDashboard: React.FC = () => {
                 { id: 'eac-programs', label: 'EAC Programs', icon: Activity, badge: stats.activeEac },
                 { id: 'alerts', label: 'Alerts', icon: AlertTriangle, badge: stats.needsEac + stats.treatmentFailures },
                 { id: 'quality', label: 'Quality Metrics', icon: BarChart3, badge: null },
-                { id: 'ltfu', label: 'LTFU Management', icon: Clock, badge: ltfuPatients.length }
+                { id: 'cohort', label: 'Cohort Analysis', icon: TrendingUp, badge: null },
+                { id: 'comparison', label: 'Comparison Reports', icon: BarChart3, badge: null },
+                { id: 'ltfu', label: 'LTFU Management', icon: Clock, badge: ltfuPatients.length },
+                { id: 'monthly-return', label: 'Monthly Return', icon: FileText, badge: null }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1396,6 +1404,58 @@ const HIVDoctorDashboard: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'quality' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-900">HIV Quality Metrics & Outcomes</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => qualityMetrics && exportQualityMetricsToPDF(qualityMetrics)}
+                  disabled={!qualityMetrics}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  Export PDF
+                </button>
+                <button
+                  onClick={loadData}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-semibold"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh Metrics
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-12">
+                <Activity className="w-12 h-12 text-emerald-400 mx-auto animate-spin mb-4" />
+                <p className="text-slate-600">Loading quality metrics...</p>
+              </div>
+            ) : !qualityMetrics ? (
+              <div className="text-center py-12">
+                <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-600 mb-2">No Data Available</h3>
+                <p className="text-slate-500">Quality metrics will be calculated once patient visits are recorded</p>
+              </div>
+            ) : (
+              <HIVQualityMetricsChart metrics={qualityMetrics} />
+            )}
+          </div>
+        )}
+
+        {activeTab === 'cohort' && (
+          <HIVCohortAnalysis tenantSlug={tenantSlug!} />
+        )}
+
+        {activeTab === 'comparison' && (
+          <HIVComparisonReports tenantSlug={tenantSlug!} />
+        )}
+
+        {activeTab === 'monthly-return' && (
+          <HIVMonthlyReturnForm tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
         )}
 
         {activeTab === 'ltfu' && (

@@ -1112,4 +1112,115 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  // Referral Management
+  createReferral: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/referrals', data, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getReferrals: async (query: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/referrals', {
+      params: query,
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getEnrollmentReferrals: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/referrals/enrollment/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  updateReferralStatus: async (referralId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/hiv/referrals/${referralId}/update-status`, data, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  // Audit Trail
+  getAuditLog: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/audit-log/enrollment/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  // Medication Stock Management
+  getMedicationStock: async (query: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/medication-stock', {
+      params: query,
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  createMedicationStock: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/medication-stock', data, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  updateMedicationStock: async (stockId: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/hiv/medication-stock/${stockId}`, data, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  // Cohort Analysis
+  getCohortAnalysis: async (cohortType: string, timeRange: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/cohort-analysis', {
+      params: { type: cohortType, range: timeRange },
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  // Comparison Reports
+  getComparisonReport: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/comparison-report', {
+      params,
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Monthly Return Form
+  getMonthlyReturn: async (year: number, month: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/monthly-return', {
+      params: { year, month },
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
 };

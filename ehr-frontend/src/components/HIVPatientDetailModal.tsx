@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle, Printer, Download, ArrowRight } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import EacSessionModal from './EacSessionModal';
+import HIVPatientSummaryCard from './HIVPatientSummaryCard';
+import { exportVisitToPDF, VisitPDFData } from '../utils/pdfExport';
 
 interface HIVPatientDetailModalProps {
   enrollment: any;
@@ -24,12 +26,14 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
   const [hivTests, setHivTests] = useState<any[]>([]);
   const [eacEligibility, setEacEligibility] = useState<any>(null);
   const [eacSessions, setEacSessions] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'tests' | 'art-initiation' | 'eac' | 'monitoring' | 'adherence' | 'regimen-history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'tests' | 'art-initiation' | 'eac' | 'monitoring' | 'adherence' | 'regimen-history' | 'referrals'>('overview');
   const [showEacSessionModal, setShowEacSessionModal] = useState(false);
   const [monitoringSchedules, setMonitoringSchedules] = useState<any[]>([]);
   const [adherenceTracking, setAdherenceTracking] = useState<any[]>([]);
   const [regimenHistory, setRegimenHistory] = useState<any[]>([]);
   const [clinicalAlerts, setClinicalAlerts] = useState<any[]>([]);
+  const [showSummaryCard, setShowSummaryCard] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   useEffect(() => {
     if (enrollment) {
@@ -123,6 +127,15 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
         setClinicalAlerts([]);
       }
 
+      // Load Audit Log
+      try {
+        const auditResponse = await ehrApi.getAuditLog(enrollment.id, token, tenantSlug);
+        setAuditLogs(auditResponse.data.logs || []);
+      } catch (error) {
+        console.error('Failed to load audit log:', error);
+        setAuditLogs([]);
+      }
+
       // Load ART initiation details (if available)
       // Note: We'll need to add an API endpoint for this, or query it directly
       // For now, we'll skip it
@@ -186,9 +199,19 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
             </h2>
             <p className="text-sm text-emerald-100">HIV Care Patient Summary</p>
           </div>
-          <button onClick={onClose} className="text-white hover:text-emerald-100">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSummaryCard(true)}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors"
+              title="Print Patient Summary Card"
+            >
+              <Printer className="w-4 h-4" />
+              Print Card
+            </button>
+            <button onClick={onClose} className="text-white hover:text-emerald-100">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -199,7 +222,9 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
               { key: 'visits', label: 'Clinical Visits', icon: FileText },
               { key: 'tests', label: 'HIV Tests', icon: TestTube },
               { key: 'art-initiation', label: 'ART Initiation', icon: Pill },
-              { key: 'eac', label: 'EAC', icon: Activity, badge: eacEligibility?.needsEac }
+              { key: 'eac', label: 'EAC', icon: Activity, badge: eacEligibility?.needsEac },
+              { key: 'referrals', label: 'Referrals', icon: ArrowRight },
+              { key: 'audit', label: 'Audit Log', icon: FileText }
             ].map(({ key, label, icon: Icon, badge }) => (
               <button
                 key={key}
@@ -429,6 +454,42 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                             {visit.visit_date ? formatDateToDDMMYYYY(visit.visit_date) : 'N/A'}
                           </p>
                         </div>
+                        <button
+                          onClick={() => {
+                            const visitData: VisitPDFData = {
+                              patientName: `${enrollment.first_name} ${enrollment.last_name}`,
+                              patientNumber: enrollment.patient_number || patientDetails?.patientNumber || '',
+                              enrollmentNumber: enrollment.enrollment_number,
+                              visitDate: visit.visit_date ? formatDateToDDMMYYYY(visit.visit_date) : 'N/A',
+                              visitNumber: visit.visit_number || 0,
+                              visitType: getVisitTypeLabel(visit.visit_type),
+                              provider: visit.clinician_initials || 'N/A',
+                              weightKg: visit.weight_kg,
+                              heightCm: visit.height_cm,
+                              bmi: visit.bmi,
+                              bloodPressure: visit.blood_pressure,
+                              whoClinicalStage: visit.who_clinical_stage,
+                              functionalStatus: visit.functional_status,
+                              arvStatus: getArvStatusLabel(visit.arv_status),
+                              arvRegimenName: visit.arv_regimen_name,
+                              arvQuantityDispensed: visit.arv_quantity_dispensed,
+                              arvAdherencePercentage: visit.arv_adherence_percentage,
+                              viralLoad: visit.viral_load,
+                              viralLoadUnit: visit.viral_load_unit,
+                              viralLoadTestDate: visit.viral_load_test_date ? formatDateToDDMMYYYY(visit.viral_load_test_date) : undefined,
+                              cd4Count: visit.cd4_count,
+                              cd4TestDate: visit.cd4_test_date ? formatDateToDDMMYYYY(visit.cd4_test_date) : undefined,
+                              visitNotes: visit.visit_notes,
+                              nextReviewDate: visit.next_review_date ? formatDateToDDMMYYYY(visit.next_review_date) : undefined
+                            };
+                            exportVisitToPDF(visitData);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium transition-colors"
+                          title="Export Visit to PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                          Export PDF
+                        </button>
                       </div>
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -882,6 +943,16 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
             </div>
           )}
 
+          {activeTab === 'referrals' && (
+            <div className="space-y-6">
+              <HIVReferralManagement
+                enrollmentId={enrollment.id}
+                patientName={`${enrollment.first_name} ${enrollment.last_name}`}
+                tenantSlug={tenantSlug}
+              />
+            </div>
+          )}
+
           {activeTab === 'regimen-history' && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-slate-900 mb-4">Regimen History Timeline</h3>
@@ -1002,6 +1073,16 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
           patientId={enrollment.patient_id}
           existingSessionsCount={eacSessions.length}
           tenantSlug={tenantSlug}
+        />
+      )}
+
+      {/* Patient Summary Card */}
+      {showSummaryCard && (
+        <HIVPatientSummaryCard
+          enrollment={enrollment}
+          patientDetails={patientDetails}
+          clinicalVisits={clinicalVisits}
+          onClose={() => setShowSummaryCard(false)}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios from 'axios';
 import { LabResultsMatchingService } from './lab-results-matching.service';
@@ -7,6 +7,8 @@ import { HivQualityMetricsService } from './hiv-quality-metrics.service';
 import { HivVisitTemplatesService } from './hiv-visit-templates.service';
 import { HivTptTrackerService } from './hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './hiv-pediatric-dosing.service';
+import { AppointmentService } from './appointment.service';
+import { TenantService } from './tenant.service';
 
 @Injectable()
 export class HivService {
@@ -19,7 +21,10 @@ export class HivService {
     private qualityMetricsService: HivQualityMetricsService,
     private visitTemplatesService: HivVisitTemplatesService,
     private tptTrackerService: HivTptTrackerService,
-    private pediatricDosingService: HivPediatricDosingService
+    private pediatricDosingService: HivPediatricDosingService,
+    @Inject(forwardRef(() => AppointmentService))
+    private appointmentService: AppointmentService,
+    private tenantService: TenantService
   ) {}
 
   async createHivTest(body: any, tenantDb: DataSource) {
@@ -393,9 +398,9 @@ export class HivService {
     return result[0];
   }
 
-  async createClinicalVisit(body: any, tenantDb: DataSource, providerRole?: string) {
+  async createClinicalVisit(body: any, tenantDb: DataSource, providerRole?: string, tenantId?: string) {
     const {
-      enrollmentId, visitDate, visitType, providerId,
+      enrollmentId, visitDate, visitType, providerId, providerName,
       // Vital Signs
       weightKg, heightCm, bmi, bloodPressure,
       // Reproductive Health
@@ -431,11 +436,12 @@ export class HivService {
     let finalRegimenChangeApprovedBy = regimenChangeApprovedBy || null;
     let finalRegimenChangeApprovedAt = null;
     let approvedChangeRequestId = null; // Store ID to mark as recorded after visit insert
+    let approvedChange: any = null; // Store approved change for audit logging
     
     if (arvStatus === '4') {
       if (providerRole !== 'doctor') {
         // Check if there's an approved change request for this enrollment
-        const approvedChange = await this.getApprovedArvChangeForEnrollment(enrollmentId, tenantDb);
+        approvedChange = await this.getApprovedArvChangeForEnrollment(enrollmentId, tenantDb);
         if (!approvedChange) {
           throw new Error('Regimen change requires doctor approval. Please ensure a doctor has approved the regimen change request.');
         }
@@ -449,6 +455,18 @@ export class HivService {
         approvedChangeRequestId = approvedChange.id; // Store ID to mark as recorded after visit insert
       } else if (providerRole === 'doctor') {
         // Doctor can directly approve, set approved_at to now
+        // Get current regimen for audit logging
+        const currentRegimen = await tenantDb.query(`
+          SELECT arv_regimen_code, arv_regimen_name 
+          FROM hiv_clinical_visits 
+          WHERE enrollment_id = $1 
+          ORDER BY visit_date DESC, visit_number DESC 
+          LIMIT 1
+        `, [enrollmentId]);
+        approvedChange = currentRegimen.length > 0 ? {
+          current_regimen_code: currentRegimen[0].arv_regimen_code,
+          current_regimen_name: currentRegimen[0].arv_regimen_name
+        } : null;
         finalRegimenChangeApprovedBy = providerId;
         finalRegimenChangeApprovedAt = new Date();
       }
@@ -563,6 +581,32 @@ export class HivService {
             visit_id = $1
         WHERE id = $2
       `, [result[0].id, approvedChangeRequestId]);
+      
+      // Log audit trail for regimen change
+      await this.logAuditAction(
+        'regimen_change',
+        `Regimen changed from ${approvedChange?.current_regimen_name || 'N/A'} to ${arvRegimenName}`,
+        enrollmentId,
+        { regimenCode: approvedChange?.current_regimen_code, regimenName: approvedChange?.current_regimen_name },
+        { regimenCode: arvRegimenCode, regimenName: arvRegimenName },
+        providerId,
+        providerName || 'Unknown',
+        tenantDb
+      );
+    }
+    
+    // Log audit trail for visit creation
+    if (result[0]?.id) {
+      await this.logAuditAction(
+        'visit_created',
+        `Clinical visit #${visitNumber || 'N/A'} recorded - Type: ${visitType}`,
+        enrollmentId,
+        null,
+        { visitId: result[0].id, visitNumber, visitType, visitDate, arvStatus, arvRegimenName },
+        providerId,
+        providerName || 'Unknown',
+        tenantDb
+      );
     }
 
     // ============================================
@@ -766,8 +810,118 @@ export class HivService {
         JSON.stringify({ adherencePercentage: arvAdherencePercentage, visitId, visitDate })
       ]);
     }
+
+    // ============================================
+    // Auto-Schedule Appointment from Next Review Date
+    // ============================================
+    if (nextReviewDate && tenantId && providerId) {
+      try {
+        // Get enrollment to find patient_id
+        const enrollmentData = await tenantDb.query(`
+          SELECT patient_id FROM hiv_care_enrollments WHERE id = $1
+        `, [enrollmentId]);
+
+        if (enrollmentData.length > 0 && enrollmentData[0].patient_id) {
+          const patientId = enrollmentData[0].patient_id;
+          
+          // Create appointment for next review date
+          // Use providerId as doctorId (or get default doctor from enrollment's primary provider)
+          let doctorId = providerId;
+          
+          // Try to get a doctor if provider is not a doctor
+          if (providerRole !== 'doctor') {
+            const doctor = await tenantDb.query(`
+              SELECT id FROM users 
+              WHERE role = 'doctor' AND id IN (
+                SELECT DISTINCT doctor_id FROM appointments 
+                WHERE patient_id = $1 
+                ORDER BY appointment_date DESC 
+                LIMIT 1
+              )
+              LIMIT 1
+            `, [patientId]);
+            
+            if (doctor.length > 0) {
+              doctorId = doctor[0].id;
+            }
+          }
+
+          // Schedule appointment at 9 AM on next review date
+          const appointmentDate = new Date(nextReviewDate);
+          appointmentDate.setHours(9, 0, 0, 0);
+
+          await this.appointmentService.create({
+            patientId,
+            doctorId,
+            appointmentDate: appointmentDate.toISOString(),
+            appointmentType: 'HIV Follow-up',
+            reason: `HIV Care follow-up visit - Next review scheduled`,
+            notes: `Auto-scheduled from HIV clinical visit. Visit #${visitNumber || 'N/A'}`,
+            durationMinutes: 30
+          }, providerId, tenantId);
+
+          this.logger.log(`Auto-scheduled appointment for patient ${patientId} on ${nextReviewDate}`);
+        }
+      } catch (error) {
+        // Log error but don't fail visit creation if appointment scheduling fails
+        this.logger.error(`Failed to auto-schedule appointment: ${error.message}`, error.stack);
+      }
+    }
     
     return result[0];
+  }
+
+  /**
+   * Audit Trail - Log critical actions
+   */
+  async logAuditAction(
+    actionType: string,
+    actionDescription: string,
+    enrollmentId: string | null,
+    oldValue: any,
+    newValue: any,
+    performedBy: string,
+    performedByName: string,
+    tenantDb: DataSource
+  ) {
+    try {
+      await tenantDb.query(`
+        INSERT INTO hiv_audit_log (
+          enrollment_id, action_type, action_description,
+          old_value, new_value, performed_by, performed_by_name
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        enrollmentId,
+        actionType,
+        actionDescription,
+        oldValue ? JSON.stringify(oldValue) : null,
+        newValue ? JSON.stringify(newValue) : null,
+        performedBy,
+        performedByName
+      ]);
+    } catch (error) {
+      this.logger.error('Failed to log audit action:', error);
+      // Don't throw - audit logging should not break the main operation
+    }
+  }
+
+  /**
+   * Get audit log for enrollment
+   */
+  async getAuditLog(enrollmentId: string, tenantDb: DataSource) {
+    try {
+      const logs = await tenantDb.query(`
+        SELECT al.*, u.first_name, u.last_name
+        FROM hiv_audit_log al
+        LEFT JOIN users u ON al.performed_by = u.id
+        WHERE al.enrollment_id = $1
+        ORDER BY al.created_at DESC
+      `, [enrollmentId]);
+      return { logs: logs || [] };
+    } catch (error) {
+      this.logger.warn(`Audit log table may not exist: ${error.message}`);
+      return { logs: [] };
+    }
   }
 
   async getClinicalVisits(enrollmentId: string, tenantDb: DataSource) {
@@ -1244,13 +1398,18 @@ export class HivService {
    * Get monitoring schedules for an enrollment
    */
   async getMonitoringSchedules(enrollmentId: string, tenantDb: DataSource) {
-    const schedules = await tenantDb.query(
-      `SELECT * FROM hiv_monitoring_schedules 
-       WHERE enrollment_id = $1 
-       ORDER BY next_scheduled_date ASC`,
-      [enrollmentId]
-    );
-    return { schedules };
+    try {
+      const schedules = await tenantDb.query(
+        `SELECT * FROM hiv_monitoring_schedules 
+         WHERE enrollment_id = $1 
+         ORDER BY next_scheduled_date ASC`,
+        [enrollmentId]
+      );
+      return { schedules: schedules || [] };
+    } catch (error) {
+      this.logger.warn(`Monitoring schedules table may not exist: ${error.message}`);
+      return { schedules: [] };
+    }
   }
 
   /**
@@ -1278,40 +1437,55 @@ export class HivService {
    * Get clinical alerts for an enrollment
    */
   async getClinicalAlerts(enrollmentId: string, tenantDb: DataSource) {
-    const alerts = await tenantDb.query(
-      `SELECT * FROM hiv_clinical_alerts 
-       WHERE enrollment_id = $1 
-       AND is_resolved = false
-       ORDER BY severity DESC, created_at DESC`,
-      [enrollmentId]
-    );
-    return { alerts };
+    try {
+      const alerts = await tenantDb.query(
+        `SELECT * FROM hiv_clinical_alerts 
+         WHERE enrollment_id = $1 
+         AND is_resolved = false
+         ORDER BY severity DESC, created_at DESC`,
+        [enrollmentId]
+      );
+      return { alerts: alerts || [] };
+    } catch (error) {
+      this.logger.warn(`Clinical alerts table may not exist: ${error.message}`);
+      return { alerts: [] };
+    }
   }
 
   /**
    * Get adherence tracking data
    */
   async getAdherenceTracking(enrollmentId: string, tenantDb: DataSource) {
-    const tracking = await tenantDb.query(
-      `SELECT * FROM hiv_adherence_tracking 
-       WHERE enrollment_id = $1 
-       ORDER BY tracking_date DESC`,
-      [enrollmentId]
-    );
-    return { tracking };
+    try {
+      const tracking = await tenantDb.query(
+        `SELECT * FROM hiv_adherence_tracking 
+         WHERE enrollment_id = $1 
+         ORDER BY tracking_date DESC`,
+        [enrollmentId]
+      );
+      return { tracking: tracking || [] };
+    } catch (error) {
+      this.logger.warn(`Adherence tracking table may not exist: ${error.message}`);
+      return { tracking: [] };
+    }
   }
 
   /**
    * Get regimen history timeline
    */
   async getRegimenHistory(enrollmentId: string, tenantDb: DataSource) {
-    const history = await tenantDb.query(
-      `SELECT * FROM hiv_regimen_history 
-       WHERE enrollment_id = $1 
-       ORDER BY start_date DESC`,
-      [enrollmentId]
-    );
-    return { history };
+    try {
+      const history = await tenantDb.query(
+        `SELECT * FROM hiv_regimen_history 
+         WHERE enrollment_id = $1 
+         ORDER BY start_date DESC`,
+        [enrollmentId]
+      );
+      return { history: history || [] };
+    } catch (error) {
+      this.logger.warn(`Regimen history table may not exist: ${error.message}`);
+      return { history: [] };
+    }
   }
 
   /**
@@ -1361,17 +1535,248 @@ export class HivService {
         e.art_start_date,
         MAX(v.visit_date) as last_visit_date,
         MAX(v.next_review_date) as last_next_review_date,
-        EXTRACT(DAY FROM (CURRENT_DATE - MAX(v.visit_date))) as days_since_last_visit
+        CASE 
+          WHEN MAX(v.visit_date) IS NOT NULL THEN 
+            (CURRENT_DATE - MAX(v.visit_date)::date)::integer
+          ELSE 
+            (CURRENT_DATE - e.enrollment_date::date)::integer
+        END as days_since_last_visit
       FROM hiv_care_enrollments e
       JOIN patients p ON e.patient_id = p.id
       LEFT JOIN hiv_clinical_visits v ON v.enrollment_id = e.id
       WHERE e.enrollment_status = 'active'
       GROUP BY e.id, e.enrollment_number, e.patient_id, p.first_name, p.last_name, p.patient_number, e.enrollment_date, e.art_start_date
-      HAVING MAX(v.visit_date) < $1 OR MAX(v.visit_date) IS NULL
+      HAVING MAX(v.visit_date) < $1::date OR MAX(v.visit_date) IS NULL
       ORDER BY days_since_last_visit DESC NULLS LAST`,
       [cutoffDate.toISOString().split('T')[0]]
     );
 
     return { patients: result };
+  }
+
+  /**
+   * Referral Management
+   */
+  async createReferral(body: any, tenantDb: DataSource) {
+    const {
+      enrollmentId, visitId, referralDate, referralType, referralTypeDetails,
+      referredToFacility, referredToProvider, referralReason, referralPriority,
+      referredBy, referredByName
+    } = body;
+
+    const result = await tenantDb.query(`
+      INSERT INTO hiv_referrals (
+        enrollment_id, visit_id, referral_date, referral_type, referral_type_details,
+        referred_to_facility, referred_to_provider, referral_reason, referral_priority,
+        referred_by, referred_by_name, referral_status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
+      RETURNING *
+    `, [
+      enrollmentId, visitId || null, referralDate || new Date().toISOString().split('T')[0],
+      referralType, referralTypeDetails || null, referredToFacility || null,
+      referredToProvider || null, referralReason, referralPriority || 'normal',
+      referredBy, referredByName
+    ]);
+
+    return result[0];
+  }
+
+  async getReferrals(query: any, tenantDb: DataSource) {
+    let sql = `
+      SELECT r.*, 
+        e.enrollment_number, e.patient_id,
+        p.first_name, p.last_name, p.patient_number,
+        v.visit_number, v.visit_date
+      FROM hiv_referrals r
+      JOIN hiv_care_enrollments e ON r.enrollment_id = e.id
+      JOIN patients p ON e.patient_id = p.id
+      LEFT JOIN hiv_clinical_visits v ON r.visit_id = v.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    let paramCount = 1;
+
+    if (query.status) {
+      sql += ` AND r.referral_status = $${paramCount++}`;
+      params.push(query.status);
+    }
+
+    if (query.enrollmentId) {
+      sql += ` AND r.enrollment_id = $${paramCount++}`;
+      params.push(query.enrollmentId);
+    }
+
+    if (query.referralType) {
+      sql += ` AND r.referral_type = $${paramCount++}`;
+      params.push(query.referralType);
+    }
+
+    sql += ` ORDER BY r.referral_date DESC, r.created_at DESC`;
+
+    const referrals = await tenantDb.query(sql, params);
+    return { referrals };
+  }
+
+  async getEnrollmentReferrals(enrollmentId: string, tenantDb: DataSource) {
+    const referrals = await tenantDb.query(`
+      SELECT r.*, 
+        v.visit_number, v.visit_date
+      FROM hiv_referrals r
+      LEFT JOIN hiv_clinical_visits v ON r.visit_id = v.id
+      WHERE r.enrollment_id = $1
+      ORDER BY r.referral_date DESC
+    `, [enrollmentId]);
+
+    return { referrals };
+  }
+
+  async updateReferralStatus(referralId: string, body: any, tenantDb: DataSource) {
+    const { referralStatus, outcome, outcomeNotes, completedDate, declinedReason, cancelledReason, updatedBy } = body;
+
+    const updateFields: string[] = [];
+    const params: any[] = [];
+    let paramCount = 1;
+
+    updateFields.push(`referral_status = $${paramCount++}`);
+    params.push(referralStatus);
+
+    if (outcome !== undefined) {
+      updateFields.push(`outcome = $${paramCount++}`);
+      params.push(outcome);
+    }
+
+    if (outcomeNotes !== undefined) {
+      updateFields.push(`outcome_notes = $${paramCount++}`);
+      params.push(outcomeNotes);
+    }
+
+    if (completedDate !== undefined) {
+      updateFields.push(`completed_date = $${paramCount++}`);
+      params.push(completedDate);
+      if (updatedBy) {
+        updateFields.push(`completed_by = $${paramCount++}`);
+        params.push(updatedBy);
+      }
+    }
+
+    if (declinedReason !== undefined) {
+      updateFields.push(`declined_reason = $${paramCount++}`);
+      params.push(declinedReason);
+    }
+
+    if (cancelledReason !== undefined) {
+      updateFields.push(`cancelled_reason = $${paramCount++}`);
+      params.push(cancelledReason);
+    }
+
+    updateFields.push(`updated_at = NOW()`);
+
+    params.push(referralId);
+
+    const result = await tenantDb.query(`
+      UPDATE hiv_referrals
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `, params);
+
+    return result[0];
+  }
+
+  // Medication Stock Management
+  async getMedicationStock(query: any, tenantDb: DataSource) {
+    let sql = 'SELECT * FROM hiv_medication_stock WHERE is_active = true';
+    const params: any[] = [];
+    let paramCount = 1;
+
+    if (query.medicationType && query.medicationType !== 'all') {
+      sql += ` AND medication_type = $${paramCount}`;
+      params.push(query.medicationType);
+      paramCount++;
+    }
+
+    if (query.lowStock) {
+      sql += ` AND current_stock <= reorder_level`;
+    }
+
+    sql += ' ORDER BY medication_name';
+    const stock = await tenantDb.query(sql, params);
+    return { stock };
+  }
+
+  async createMedicationStock(body: any, tenantDb: DataSource, userId: string) {
+    const {
+      medicationName, medicationCode, medicationType, unitOfMeasure,
+      currentStock, minimumStockLevel, maximumStockLevel, reorderLevel,
+      expiryDate, batchNumber, supplier, notes
+    } = body;
+
+    const result = await tenantDb.query(`
+      INSERT INTO hiv_medication_stock (
+        medication_name, medication_code, medication_type, unit_of_measure,
+        current_stock, minimum_stock_level, maximum_stock_level, reorder_level,
+        expiry_date, batch_number, supplier, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [medicationName, medicationCode, medicationType, unitOfMeasure || 'tablets',
+        currentStock || 0, minimumStockLevel || 0, maximumStockLevel, reorderLevel || 0,
+        expiryDate, batchNumber, supplier, notes]);
+    
+    return result[0];
+  }
+
+  async updateMedicationStock(stockId: string, body: any, tenantDb: DataSource, userId: string) {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramCount = 1;
+
+    const fieldMap: any = {
+      medicationName: 'medication_name',
+      medicationCode: 'medication_code',
+      medicationType: 'medication_type',
+      unitOfMeasure: 'unit_of_measure',
+      currentStock: 'current_stock',
+      minimumStockLevel: 'minimum_stock_level',
+      maximumStockLevel: 'maximum_stock_level',
+      reorderLevel: 'reorder_level',
+      expiryDate: 'expiry_date',
+      batchNumber: 'batch_number',
+      supplier: 'supplier',
+      notes: 'notes',
+      isActive: 'is_active'
+    };
+
+    Object.keys(body).forEach(key => {
+      if (body[key] !== undefined && fieldMap[key]) {
+        updates.push(`${fieldMap[key]} = $${paramCount}`);
+        params.push(body[key]);
+        paramCount++;
+      }
+    });
+
+    if (updates.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    updates.push(`updated_at = NOW()`);
+    params.push(stockId);
+
+    const result = await tenantDb.query(`
+      UPDATE hiv_medication_stock
+      SET ${updates.join(', ')}
+      WHERE id = $${paramCount}
+      RETURNING *
+    `, params);
+    
+    return result[0];
+  }
+
+  // Cohort Analysis and Comparison Reports
+  async getCohortAnalysis(cohortType: string, timeRange: string, tenantDb: DataSource) {
+    return this.qualityMetricsService.getCohortAnalysis(cohortType as any, timeRange, tenantDb);
+  }
+
+  async getComparisonReport(params: any, tenantDb: DataSource) {
+    return this.qualityMetricsService.getComparisonReport(params, tenantDb);
   }
 }
