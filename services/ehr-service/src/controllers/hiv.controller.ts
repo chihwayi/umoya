@@ -166,11 +166,93 @@ export class HivController {
     return this.hivService.saveArtInitiationDetails(body, req.tenantDb);
   }
 
+  @Get('lab-results/match')
+  @ApiOperation({ summary: 'Get matching lab results for a visit date' })
+  @ApiResponse({ status: 200, description: 'Matching lab results found' })
+  async getMatchingLabResults(@Query('patientId') patientId: string, @Query('visitDate') visitDate: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getMatchingLabResults(patientId, visitDate, req.tenantDb);
+  }
+
   @Get('lookup/:tableName')
   @ApiOperation({ summary: 'Get lookup table data' })
   @ApiResponse({ status: 200, description: 'Lookup data retrieved' })
   async getLookupData(@Param('tableName') tableName: string, @Query() query: any, @Request() req: RequestWithTenant) {
     return this.hivService.getLookupData(tableName, query, req.tenantDb);
+  }
+
+  @Get('monitoring-schedules/:enrollmentId')
+  @ApiOperation({ summary: 'Get monitoring schedules for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Monitoring schedules retrieved' })
+  async getMonitoringSchedules(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getMonitoringSchedules(enrollmentId, req.tenantDb);
+  }
+
+  @Get('quality-metrics')
+  @ApiOperation({ summary: 'Get HIV quality metrics and outcomes' })
+  @ApiResponse({ status: 200, description: 'Quality metrics retrieved' })
+  async getQualityMetrics(@Request() req: RequestWithTenant) {
+    return this.hivService.getQualityMetrics(req.tenantDb);
+  }
+
+  @Get('alerts/:enrollmentId')
+  @ApiOperation({ summary: 'Get clinical alerts for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Clinical alerts retrieved' })
+  async getClinicalAlerts(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getClinicalAlerts(enrollmentId, req.tenantDb);
+  }
+
+  @Get('adherence/:enrollmentId')
+  @ApiOperation({ summary: 'Get adherence tracking data for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Adherence data retrieved' })
+  async getAdherenceTracking(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getAdherenceTracking(enrollmentId, req.tenantDb);
+  }
+
+  @Get('regimen-history/:enrollmentId')
+  @ApiOperation({ summary: 'Get regimen history timeline for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Regimen history retrieved' })
+  async getRegimenHistory(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getRegimenHistory(enrollmentId, req.tenantDb);
+  }
+
+  @Get('tpt-eligibility/:enrollmentId')
+  @ApiOperation({ summary: 'Check TPT eligibility for an enrollment' })
+  @ApiResponse({ status: 200, description: 'TPT eligibility status' })
+  async checkTptEligibility(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.checkTptEligibility(enrollmentId, req.tenantDb);
+  }
+
+  @Get('tpt-completion/:enrollmentId')
+  @ApiOperation({ summary: 'Get TPT completion status for an enrollment' })
+  @ApiResponse({ status: 200, description: 'TPT completion status' })
+  async getTptCompletionStatus(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getTptCompletionStatus(enrollmentId, req.tenantDb);
+  }
+
+  @Get('visit-templates')
+  @ApiOperation({ summary: 'Get visit templates' })
+  @ApiResponse({ status: 200, description: 'Visit templates retrieved' })
+  async getVisitTemplates(@Query('visitType') visitType: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getVisitTemplates(req.tenantDb, visitType);
+  }
+
+  @Post('calculate-pediatric-dose')
+  @ApiOperation({ summary: 'Calculate pediatric ARV dose' })
+  @ApiResponse({ status: 200, description: 'Pediatric dose calculated' })
+  async calculatePediatricDose(@Body() body: any) {
+    return this.hivService.calculatePediatricDose(
+      body.regimenCode,
+      body.weightKg,
+      body.ageMonths,
+      body.bsa
+    );
+  }
+
+  @Get('ltfu-patients')
+  @ApiOperation({ summary: 'Get lost to follow-up patients' })
+  @ApiResponse({ status: 200, description: 'LTFU patients retrieved' })
+  async getLTFUPatients(@Query('days') days: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getLTFUPatients(parseInt(days) || 90, req.tenantDb);
   }
 }
 

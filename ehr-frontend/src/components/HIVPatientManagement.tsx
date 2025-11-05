@@ -19,6 +19,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
   const [selectedEnrollment, setSelectedEnrollment] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showVisitModal, setShowVisitModal] = useState(false);
+  const [eacStatusMap, setEacStatusMap] = useState<{ [key: string]: any }>({});
 
   useEffect(() => {
     loadEnrollments();
@@ -31,7 +32,21 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
 
       setLoading(true);
       const response = await ehrApi.getHivEnrollments(filterStatus, token, tenantSlug);
-      setEnrollments(response.data.enrollments || []);
+      const enrollmentsList = response.data.enrollments || [];
+      setEnrollments(enrollmentsList);
+
+      // Check EAC eligibility for each enrollment
+      const eacMap: { [key: string]: any } = {};
+      for (const enrollment of enrollmentsList) {
+        try {
+          const eacResponse = await ehrApi.checkEacEligibility(enrollment.id, token, tenantSlug);
+          eacMap[enrollment.id] = eacResponse.data || {};
+        } catch (error) {
+          console.error(`Failed to check EAC for ${enrollment.id}:`, error);
+          eacMap[enrollment.id] = {};
+        }
+      }
+      setEacStatusMap(eacMap);
     } catch (error) {
       console.error('Failed to load enrollments:', error);
       showError('Error', 'Failed to load HIV patients');
@@ -106,13 +121,54 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEnrollments.map((enrollment) => (
-            <div key={enrollment.id} className="bg-white rounded-xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-all">
+          {filteredEnrollments.map((enrollment) => {
+            const eacStatus = eacStatusMap[enrollment.id] || {};
+            const needsEac = eacStatus.needsEac || false;
+            const activeEac = eacStatus.activeEac || false;
+            return (
+            <div 
+              key={enrollment.id} 
+              className={`rounded-xl shadow-lg p-6 border-2 hover:shadow-xl transition-all ${
+                needsEac 
+                  ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-400 animate-pulse' 
+                  : activeEac
+                  ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-400'
+                  : 'bg-white border-slate-200'
+              }`}
+            >
+              {/* EAC Urgent Badge */}
+              {needsEac && (
+                <div className="mb-4 -mt-2 -mx-2 bg-red-600 text-white px-4 py-2 rounded-t-xl flex items-center justify-center gap-2 shadow-lg">
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                  <span className="font-bold text-sm">⚠️ EAC REQUIRED - URGENT</span>
+                </div>
+              )}
+              
+              {/* Active EAC Badge */}
+              {activeEac && !needsEac && (
+                <div className="mb-4 -mt-2 -mx-2 bg-blue-600 text-white px-4 py-2 rounded-t-xl flex items-center justify-center gap-2 shadow-lg">
+                  <Activity className="w-5 h-5" />
+                  <span className="font-bold text-sm">📋 ACTIVE EAC PROGRAM</span>
+                </div>
+              )}
+
               <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {enrollment.first_name} {enrollment.last_name}
-                  </h3>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-slate-900">
+                      {enrollment.first_name} {enrollment.last_name}
+                    </h3>
+                    {needsEac && (
+                      <span className="px-2 py-0.5 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+                        EAC REQUIRED
+                      </span>
+                    )}
+                    {activeEac && !needsEac && (
+                      <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                        ACTIVE EAC
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-600">Enrollment: {enrollment.enrollment_number}</p>
                   <p className="text-xs text-slate-500">Patient ID: {enrollment.patient_number}</p>
                 </div>
@@ -153,19 +209,42 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                 )}
               </div>
 
-              {/* EAC Alert Badge */}
-              {(() => {
-                // Check if patient has high VL - this is a simple check, full check happens in detail modal
-                const hasHighVl = enrollment.baseline_viral_load && parseFloat(enrollment.baseline_viral_load) > 1000;
-                return hasHighVl && (
-                  <div className="mt-3 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-800">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-xs font-semibold">High VL Detected - Check EAC Status</span>
+              {/* EAC Warning Message */}
+              {needsEac && (
+                <div className="mt-3 mb-3 px-4 py-3 bg-red-100 border-2 border-red-400 rounded-lg shadow-sm">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-900 mb-1">
+                        Patient Requires Enhanced Adherence Counseling
+                      </p>
+                      <p className="text-xs text-red-800">
+                        2 consecutive high viral loads detected. EAC intervention required per WHO guidelines.
+                      </p>
                     </div>
                   </div>
-                );
-              })()}
+                </div>
+              )}
+              
+              {activeEac && !needsEac && (
+                <div className="mt-3 mb-3 px-4 py-3 bg-blue-100 border-2 border-blue-400 rounded-lg shadow-sm">
+                  <div className="flex items-start gap-2">
+                    <Activity className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-blue-900 mb-1">
+                        Patient is in Active EAC Program
+                      </p>
+                      <p className="text-xs text-blue-800">
+                        {eacStatus.eacProgram?.sessions_completed ? (
+                          <>EAC sessions in progress ({eacStatus.eacProgram.sessions_completed} sessions completed). Continue monitoring adherence.</>
+                        ) : (
+                          <>EAC program is active. Continue conducting EAC sessions per WHO guidelines.</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-4 flex gap-2">
                 <button
@@ -173,7 +252,11 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                     setSelectedEnrollment(enrollment);
                     setShowDetailModal(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-medium ${
+                    needsEac
+                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  }`}
                 >
                   <Eye className="w-4 h-4" />
                   View Details
@@ -183,14 +266,19 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                     setSelectedEnrollment(enrollment);
                     setShowVisitModal(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                  className={`flex-1 px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-medium ${
+                    needsEac
+                      ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-lg border-2 border-red-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                 >
                   <FileText className="w-4 h-4" />
-                  Record Visit
+                  {needsEac ? '⚠️ Record Visit' : 'Record Visit'}
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 

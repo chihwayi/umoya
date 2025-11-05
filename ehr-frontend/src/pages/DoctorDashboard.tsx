@@ -761,6 +761,7 @@ const DoctorDashboard: React.FC = () => {
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
+      { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
     ];
   };
@@ -931,6 +932,46 @@ const DoctorDashboard: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Quick Actions - HIV/AIDS Care */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-red-500 via-orange-500 to-red-600 rounded-2xl shadow-xl border-4 border-red-400 p-6 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
+                    <Activity className="w-10 h-10 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-2">HIV/AIDS Patient Management</h3>
+                    <p className="text-red-50 text-base mb-3">
+                      Comprehensive HIV care oversight, ARV regimen management, EAC program monitoring, and treatment failure alerts
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        ARV Regimen Changes
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        EAC Monitoring
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Treatment Alerts
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Viral Load Trends
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/hiv`)}
+                  className="px-6 py-3 bg-white text-red-600 rounded-xl hover:bg-red-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Activity className="w-5 h-5" />
+                  Open HIV Dashboard
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Tab Navigation */}

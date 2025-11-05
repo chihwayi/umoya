@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle } from 'lucide-react';
+import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface HIVClinicalVisitModalProps {
   enrollment: any;
@@ -30,6 +31,14 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
   const [eacEligibility, setEacEligibility] = useState<any>(null);
   const [showEacModal, setShowEacModal] = useState(false);
+  const [viralLoadSource, setViralLoadSource] = useState<'lab_system' | 'manual' | null>(null);
+  const [viralLoadAutoPopulated, setViralLoadAutoPopulated] = useState(false);
+  const [labOrderCreated, setLabOrderCreated] = useState(false);
+  const [creatingLabOrder, setCreatingLabOrder] = useState(false);
+  const [visitPreparationChecklist, setVisitPreparationChecklist] = useState<any>(null);
+  const [monitoringSchedules, setMonitoringSchedules] = useState<any[]>([]);
+  const [tptEligibilityStatus, setTptEligibilityStatus] = useState<any>(null);
+  const [tptCompletionStatus, setTptCompletionStatus] = useState<any>(null);
   
   // Determine if patient is female (for reproductive health step)
   const isFemale = enrollment?.gender?.toLowerCase() === 'female';
@@ -114,7 +123,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     arvQuantityPrescribed: '',
     arvQuantityDispensed: '',
     arvAdherencePercentage: '',
-    regimenChanged: false,
     adverseEventsStatus: [] as string[],
     
     // Lab Results
@@ -126,7 +134,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     viralLoadSampleCollectedDate: '',
     viralLoadResultReceivedDate: '',
     viralLoadTestDate: '',
-    viralLoadSuppressed: false,
     
     // Cryptococcal
     cryptococcalSigns: '',
@@ -194,7 +201,80 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     loadVisitCount();
     loadCurrentUser();
     checkEacEligibility();
+    loadVisitPreparationChecklist();
   }, []);
+
+  const loadVisitPreparationChecklist = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      // Load monitoring schedules
+      const schedulesRes = await ehrApi.getMonitoringSchedules(enrollment.id, token, tenantSlug);
+      const schedules = schedulesRes.data.schedules || [];
+      setMonitoringSchedules(schedules);
+
+      // Build checklist
+      const checklist: any = {
+        overdueTests: schedules.filter((s: any) => {
+          const nextDate = new Date(s.next_scheduled_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          return nextDate < today;
+        }),
+        dueSoonTests: schedules.filter((s: any) => {
+          const nextDate = new Date(s.next_scheduled_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          return daysUntil >= 0 && daysUntil <= 7;
+        }),
+        pendingLabResults: [], // Will be populated from lab orders
+        lastVisitNotes: null, // Will be populated from last visit
+        adherenceConcerns: null as any // Will be populated from adherence tracking
+      };
+
+      // Load last visit for notes
+      try {
+        const visitsRes = await ehrApi.getHivClinicalVisits(enrollment.id, token, tenantSlug);
+        const visits = visitsRes.data.visits || [];
+        if (visits.length > 0) {
+          checklist.lastVisitNotes = visits[0].visit_notes;
+        }
+      } catch (error) {
+        console.error('Failed to load visits for checklist:', error);
+      }
+
+      // Load adherence data
+      try {
+        const adherenceRes = await ehrApi.getAdherenceTracking(enrollment.id, token, tenantSlug);
+        const adherence = adherenceRes.data.tracking || [];
+        if (adherence.length > 0 && adherence[0].adherence_percentage < 95) {
+          checklist.adherenceConcerns = {
+            percentage: adherence[0].adherence_percentage,
+            date: adherence[0].tracking_date
+          };
+        }
+      } catch (error) {
+        console.error('Failed to load adherence for checklist:', error);
+      }
+
+      setVisitPreparationChecklist(checklist);
+
+      // Load TPT eligibility and completion status
+      try {
+        const tptEligibilityRes = await ehrApi.checkTptEligibility(enrollment.id, token, tenantSlug);
+        setTptEligibilityStatus(tptEligibilityRes.data);
+
+        const tptCompletionRes = await ehrApi.getTptCompletionStatus(enrollment.id, token, tenantSlug);
+        setTptCompletionStatus(tptCompletionRes.data);
+      } catch (error) {
+        console.error('Failed to load TPT status:', error);
+      }
+    } catch (error) {
+      console.error('Failed to load visit preparation checklist:', error);
+    }
+  };
 
   const loadCurrentUser = () => {
     try {
@@ -263,14 +343,13 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
       const response = await ehrApi.getApprovedArvChange(enrollment.id, token, tenantSlug);
       if (response.data) {
         setApprovedArvChange(response.data);
-        // If Change status is selected, auto-populate regimen
-        if (form.arvStatus === '4') {
-          setForm(prev => ({
-            ...prev,
-            arvRegimenCode: response.data.requested_regimen_code,
-            arvRegimenName: response.data.requested_regimen_name
-          }));
-        }
+        // Auto-populate ARV status to '4' (Change) and lock the approved regimen
+        setForm(prev => ({
+          ...prev,
+          arvStatus: '4', // Auto-set to Change status
+          arvRegimenCode: response.data.requested_regimen_code,
+          arvRegimenName: response.data.requested_regimen_name
+        }));
       }
     } catch (error) {
       console.error('Failed to load approved ARV change:', error);
@@ -422,7 +501,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         arvQuantityPrescribed: form.arvQuantityPrescribed ? parseInt(form.arvQuantityPrescribed) : null,
         arvQuantityDispensed: form.arvQuantityDispensed ? parseInt(form.arvQuantityDispensed) : null,
         arvAdherencePercentage: form.arvAdherencePercentage ? parseInt(form.arvAdherencePercentage) : null,
-        regimenChanged: form.regimenChanged,
         adverseEventsStatus: form.adverseEventsStatus,
         
         // Lab Results
@@ -434,7 +512,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         viralLoadSampleCollectedDate: form.viralLoadSampleCollectedDate || null,
         viralLoadResultReceivedDate: form.viralLoadResultReceivedDate || null,
         viralLoadTestDate: form.viralLoadTestDate || null,
-        viralLoadSuppressed: form.viralLoadSuppressed,
         
         // Cryptococcal
         cryptococcalSignsCode: form.cryptococcalSigns || null,
@@ -556,6 +633,77 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     }
   }, [form.visitDate, lastVisitNextReviewDate]);
 
+  // Auto-populate viral load from lab results when visit date changes
+  useEffect(() => {
+    const loadMatchingLabResults = async () => {
+      // Only try to match if visit date is set and we haven't manually overridden
+      if (!form.visitDate) {
+        return;
+      }
+
+      // Skip if user has explicitly marked as manual override
+      if (viralLoadSource === 'manual') {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) return;
+
+        console.log('🔍 Fetching matching lab results for patient:', enrollment.patient_id, 'visit date:', form.visitDate);
+
+        const response = await ehrApi.getMatchingLabResults(
+          enrollment.patient_id,
+          form.visitDate,
+          token,
+          tenantSlug
+        );
+
+        console.log('📊 Lab results matching response:', response.data);
+
+        if (response.data?.matched && response.data.viralLoad !== null) {
+          console.log('✅ Auto-populating viral load:', response.data.viralLoad);
+          setForm(prev => ({
+            ...prev,
+            viralLoad: response.data.viralLoad?.toString() || '',
+            viralLoadUnit: response.data.viralLoadUnit || 'copies/mL',
+            viralLoadTestDate: response.data.viralLoadTestDate ? new Date(response.data.viralLoadTestDate).toISOString().split('T')[0] : ''
+          }));
+          setViralLoadSource('lab_system');
+          setViralLoadAutoPopulated(true);
+        } else {
+          console.log('❌ No matching lab results found');
+          // No match found, reset if it was previously auto-populated
+          if (viralLoadAutoPopulated && viralLoadSource === 'lab_system') {
+            setForm(prev => ({
+              ...prev,
+              viralLoad: '',
+              viralLoadUnit: 'copies/mL',
+              viralLoadTestDate: ''
+            }));
+            setViralLoadAutoPopulated(false);
+            setViralLoadSource(null);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Failed to load matching lab results:', error);
+        // Don't show error to user, just log it
+      }
+    };
+
+    loadMatchingLabResults();
+  }, [form.visitDate, enrollment.patient_id]);
+
+  // Handle manual override of viral load
+  const handleViralLoadChange = (value: string) => {
+    setForm(prev => ({ ...prev, viralLoad: value }));
+    // If user manually edits, mark as manual override
+    if (viralLoadAutoPopulated) {
+      setViralLoadSource('manual');
+      setViralLoadAutoPopulated(false);
+    }
+  };
+
   if (loadingLookups) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
@@ -584,6 +732,92 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {/* EAC Urgent Alert Banner - Requires EAC */}
+        {eacEligibility?.needsEac && (
+          <div className="mx-6 mt-4 mb-6 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl p-6 shadow-2xl border-4 border-red-400 animate-pulse">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="w-12 h-12 text-white animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold mb-2 flex items-center gap-3">
+                  ⚠️ URGENT: Patient Requires Enhanced Adherence Counseling (EAC)
+                </h3>
+                <p className="text-lg mb-3 text-red-50">
+                  This patient has 2 consecutive high viral loads (&gt;1000 copies/mL) and requires EAC intervention per WHO guidelines.
+                </p>
+                {eacEligibility.recentVisits && eacEligibility.recentVisits.length >= 2 && (
+                  <div className="bg-white/20 rounded-lg p-4 mb-3">
+                    <p className="font-semibold mb-2 text-white">Recent High Viral Loads:</p>
+                    <div className="space-y-1">
+                      {eacEligibility.recentVisits.map((visit: any, idx: number) => (
+                        <p key={idx} className="text-white">
+                          Visit {idx + 1}: VL = <span className="font-bold">{visit.viral_load} copies/mL</span> on{' '}
+                          {new Date(visit.visit_date).toLocaleDateString()}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3 mt-4">
+                  <p className="text-sm text-red-100 self-center flex-1">
+                    💡 <strong>Action Required:</strong> After recording this visit, ensure EAC sessions are scheduled and documented. 
+                    Check the EAC tab in patient details to record EAC sessions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EAC Active Program Alert - Patient is in EAC */}
+        {eacEligibility?.activeEac && !eacEligibility?.needsEac && (
+          <div className="mx-6 mt-4 mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-6 shadow-xl border-2 border-blue-400">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <Activity className="w-12 h-12 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2 flex items-center gap-3">
+                  📋 Patient is in Active EAC Program
+                </h3>
+                <p className="text-base mb-3 text-blue-50">
+                  This patient is currently undergoing Enhanced Adherence Counseling. Continue monitoring adherence and viral load during EAC sessions.
+                </p>
+                {eacEligibility.eacProgram && (
+                  <div className="bg-white/20 rounded-lg p-4 mb-3">
+                    <p className="font-semibold mb-2 text-white">EAC Program Details:</p>
+                    <div className="space-y-1 text-sm">
+                      <p className="text-white">
+                        <span className="font-semibold">Status:</span> {eacEligibility.eacProgram.eac_program_status || 'Active'}
+                      </p>
+                      {eacEligibility.eacProgram.eac_start_date && (
+                        <p className="text-white">
+                          <span className="font-semibold">Started:</span> {new Date(eacEligibility.eacProgram.eac_start_date).toLocaleDateString()}
+                        </p>
+                      )}
+                      {eacEligibility.eacProgram.sessions_completed !== undefined && (
+                        <p className="text-white">
+                          <span className="font-semibold">Sessions Completed:</span> {eacEligibility.eacProgram.sessions_completed} 
+                          {eacEligibility.eacProgram.sessions_completed < 3 && (
+                            <span className="ml-2 text-yellow-200">(Target: 3-6 sessions per WHO guidelines)</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3 mt-4">
+                  <p className="text-sm text-blue-100 self-center flex-1">
+                    💡 <strong>Continue EAC:</strong> Ensure EAC sessions are being conducted regularly. 
+                    Monitor viral load during sessions to track adherence improvement.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Progress Steps */}
         <div className="px-6 py-4 border-b border-slate-200">
@@ -1122,7 +1356,57 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
               </div>
 
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                <h4 className="font-semibold text-slate-900 mb-3">Tuberculosis Preventive Therapy (TPT)</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-slate-900">Tuberculosis Preventive Therapy (TPT)</h4>
+                  {tptEligibilityStatus && (
+                    <span className={`px-3 py-1 rounded text-xs font-semibold ${
+                      tptEligibilityStatus.isEligible ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {tptEligibilityStatus.isEligible ? '✅ Eligible' : '❌ Not Eligible'}
+                    </span>
+                  )}
+                </div>
+                {/* TPT Eligibility Alert */}
+                {tptEligibilityStatus && !tptEligibilityStatus.isEligible && tptEligibilityStatus.reason && (
+                  <div className="bg-red-100 border-l-4 border-red-500 p-3 rounded mb-4">
+                    <p className="text-sm text-red-800 font-semibold">{tptEligibilityStatus.reason}</p>
+                    {tptEligibilityStatus.currentStatus && (
+                      <p className="text-xs text-red-700 mt-1">Current Status: {tptEligibilityStatus.currentStatus}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* TPT Completion Status */}
+                {tptCompletionStatus && tptCompletionStatus.startDate && (
+                  <div className="bg-blue-100 border-l-4 border-blue-500 p-3 rounded mb-4">
+                    <p className="text-sm text-blue-800 font-semibold mb-2">
+                      TPT Progress: {tptCompletionStatus.monthsCompleted} of 6 months completed
+                    </p>
+                    <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+                      <div 
+                        className={`h-2 rounded-full ${tptCompletionStatus.isComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+                        style={{ width: `${(tptCompletionStatus.monthsCompleted / 6) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-blue-700">
+                      Started: {formatDateToDDMMYYYY(tptCompletionStatus.startDate)}
+                      {tptCompletionStatus.expectedCompletionDate && (
+                        <span className="ml-3">
+                          Expected Completion: {formatDateToDDMMYYYY(tptCompletionStatus.expectedCompletionDate)}
+                        </span>
+                      )}
+                      {tptCompletionStatus.monthsRemaining > 0 && (
+                        <span className="ml-3 font-semibold">
+                          {tptCompletionStatus.monthsRemaining} month{tptCompletionStatus.monthsRemaining !== 1 ? 's' : ''} remaining
+                        </span>
+                      )}
+                    </p>
+                    {tptCompletionStatus.isComplete && (
+                      <p className="text-xs text-green-700 font-semibold mt-1">✅ TPT Course Completed</p>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1271,6 +1555,11 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                       value={form.arvStatus}
                       onChange={(e) => {
                         const newStatus = e.target.value;
+                        // If there's an approved change, prevent changing away from '4' (Change)
+                        if (approvedArvChange && newStatus !== '4') {
+                          showError('Cannot change ARV status', 'Doctor has approved a regimen change that must be recorded in this visit.');
+                          return;
+                        }
                         setForm(prev => ({ ...prev, arvStatus: newStatus }));
                         
                         // If continuing on ARV, auto-select last initiated regimen
@@ -1302,7 +1591,10 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                           setForm(prev => ({ ...prev, arvChangeStopReason: '' }));
                         }
                       }}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      disabled={approvedArvChange !== null}
+                      className={`w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                        approvedArvChange !== null ? 'bg-slate-50 cursor-not-allowed' : ''
+                      }`}
                     >
                       <option value="">Select ARV status</option>
                       {lookups.arvStatus?.filter((status: any) => {
@@ -1348,10 +1640,18 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                         ⚠️ Change status requires doctor approval. Please ensure a doctor has approved the regimen change request before recording this visit.
                       </p>
                     )}
-                    {form.arvStatus === '4' && approvedArvChange && (
-                      <p className="text-xs text-green-600 mt-1">
-                        ✓ Approved by Dr. {approvedArvChange.approved_by_name} on {new Date(approvedArvChange.approval_date).toLocaleDateString()}. Regimen locked to approved change.
-                      </p>
+                    {approvedArvChange && (
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm text-green-800 font-semibold mb-1">
+                          ✓ Doctor-Approved Regimen Change
+                        </p>
+                        <p className="text-xs text-green-700">
+                          Approved by Dr. {approvedArvChange.approved_by_name} on {new Date(approvedArvChange.approval_date).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          ARV Status and Regimen are pre-filled and locked. This change must be recorded in this visit. After this visit, you can use "Continue" status for subsequent visits.
+                        </p>
+                      </div>
                     )}
                   </div>
 
@@ -1469,6 +1769,40 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                             Showing {isChild ? 'Paediatric' : 'Adult'} regimens (Age: {patientAge} years)
                           </p>
                         )}
+                        {isChild && form.arvRegimenCode && form.weightKg && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const token = localStorage.getItem('ehr_token');
+                                if (!token) return;
+
+                                const ageMonths = Math.floor((patientAge || 0) * 12);
+                                const bsa = form.heightCm && form.weightKg 
+                                  ? Math.sqrt((parseFloat(form.heightCm) * parseFloat(form.weightKg)) / 3600)
+                                  : undefined;
+
+                                const doseRes = await ehrApi.calculatePediatricDose({
+                                  regimenCode: form.arvRegimenCode,
+                                  weightKg: parseFloat(form.weightKg),
+                                  ageMonths,
+                                  bsa
+                                }, token, tenantSlug);
+
+                                if (doseRes.data) {
+                                  showSuccess('Pediatric Dose Calculated', 
+                                    `Recommended: ${doseRes.data.dose}\nFrequency: ${doseRes.data.frequency}\nFormulation: ${doseRes.data.formulation}\n\n${doseRes.data.notes}`
+                                  );
+                                }
+                              } catch (error) {
+                                showError('Error', 'Failed to calculate pediatric dose');
+                              }
+                            }}
+                            className="mt-2 px-3 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700"
+                          >
+                            📊 Calculate Pediatric Dose
+                          </button>
+                        )}
                         {form.arvStatus === '3' && lastInitiatedRegimenCode && (
                           <p className="text-xs text-blue-600 mt-1">
                             Regimen locked to continue on last initiated regimen per WHO guidelines
@@ -1531,17 +1865,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                         />
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={form.regimenChanged}
-                          onChange={(e) => setForm(prev => ({ ...prev, regimenChanged: e.target.checked }))}
-                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                        />
-                        <label className="text-sm font-medium text-slate-700">
-                          Regimen Changed
-                        </label>
-                      </div>
                     </>
                   )}
                 </div>
@@ -1644,12 +1967,85 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Viral Load Sample Collected Date
                     </label>
-                    <input
-                      type="date"
-                      value={form.viralLoadSampleCollectedDate}
-                      onChange={(e) => setForm(prev => ({ ...prev, viralLoadSampleCollectedDate: e.target.value }))}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={form.viralLoadSampleCollectedDate}
+                        onChange={(e) => {
+                          setForm(prev => ({ ...prev, viralLoadSampleCollectedDate: e.target.value }));
+                          if (labOrderCreated) setLabOrderCreated(false);
+                        }}
+                        className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      />
+                      {form.viralLoadSampleCollectedDate && !labOrderCreated && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setCreatingLabOrder(true);
+                              const token = localStorage.getItem('ehr_token');
+                              if (!token) {
+                                showError('Error', 'Authentication required');
+                                return;
+                              }
+                              const userStr = localStorage.getItem('ehr_user');
+                              const currentUser = userStr ? JSON.parse(userStr) : null;
+                              if (!currentUser) {
+                                showError('Error', 'User information not found');
+                                return;
+                              }
+                              await ehrApi.createLabOrder({
+                                patientId: enrollment.patient_id,
+                                medicalRecordId: null,
+                                tests: [{
+                                  testCode: 'VL',
+                                  testName: 'HIV Viral Load',
+                                  category: 'immunology',
+                                  specimenType: 'plasma',
+                                  instructions: 'HIV care - Viral Load monitoring'
+                                }],
+                                priority: 'routine',
+                                clinicalInfo: `HIV Clinical Visit - Visit #${form.visitNumber}`,
+                                specialInstructions: `Sample collected on ${form.viralLoadSampleCollectedDate}. Patient: ${enrollment.first_name} ${enrollment.last_name} (${enrollment.enrollment_number})`,
+                                scheduledDateTime: form.viralLoadSampleCollectedDate ? new Date(form.viralLoadSampleCollectedDate).toISOString() : new Date().toISOString()
+                              }, token, tenantSlug);
+                              setLabOrderCreated(true);
+                              showSuccess('Success', 'Lab order created. Lab technician can now find this order by patient ID/name and enter results.');
+                            } catch (error: any) {
+                              console.error('Failed to create lab order:', error);
+                              showError('Error', error?.response?.data?.message || 'Failed to create lab order');
+                            } finally {
+                              setCreatingLabOrder(false);
+                            }
+                          }}
+                          disabled={creatingLabOrder}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                        >
+                          {creatingLabOrder ? (
+                            <>
+                              <Activity className="w-4 h-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Activity className="w-4 h-4" />
+                              Send to Lab
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {labOrderCreated && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg border border-emerald-300">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-sm font-semibold">Order Created</span>
+                        </div>
+                      )}
+                    </div>
+                    {labOrderCreated && (
+                      <p className="text-xs text-emerald-700 mt-1">
+                        ✓ Lab order created. Lab technician can search by patient ID/name in lab system to enter results.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1667,27 +2063,48 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       VL Result (copies/ml or undetected)
+                      {viralLoadAutoPopulated && (
+                        <span className="ml-2 text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                          <Activity className="w-3 h-3" />
+                          Auto-filled from Lab System
+                        </span>
+                      )}
                     </label>
-                    <input
-                      type="text"
-                      placeholder="e.g., 50 or 'undetected'"
-                      value={form.viralLoad}
-                      onChange={(e) => setForm(prev => ({ ...prev, viralLoad: e.target.value }))}
-                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="e.g., 50 or 'undetected'"
+                        value={form.viralLoad}
+                        onChange={(e) => handleViralLoadChange(e.target.value)}
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                          viralLoadAutoPopulated 
+                            ? 'border-emerald-300 bg-emerald-50' 
+                            : 'border-slate-300'
+                        }`}
+                      />
+                      {viralLoadAutoPopulated && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, viralLoad: '' }));
+                            setViralLoadSource(null);
+                            setViralLoadAutoPopulated(false);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-600 hover:text-slate-900"
+                          title="Clear auto-filled value"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {viralLoadAutoPopulated && (
+                      <p className="text-xs text-emerald-700 mt-1 flex items-center gap-1">
+                        <Activity className="w-3 h-3" />
+                        Result matched from lab system. You can override manually if needed.
+                      </p>
+                    )}
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={form.viralLoadSuppressed}
-                      onChange={(e) => setForm(prev => ({ ...prev, viralLoadSuppressed: e.target.checked }))}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                    />
-                    <label className="text-sm font-medium text-slate-700">
-                      Viral Load Suppressed
-                    </label>
-                  </div>
                 </div>
               </div>
               )}

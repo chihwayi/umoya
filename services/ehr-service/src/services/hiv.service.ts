@@ -1,11 +1,26 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios from 'axios';
+import { LabResultsMatchingService } from './lab-results-matching.service';
+import { HivMonitoringService } from './hiv-monitoring.service';
+import { HivQualityMetricsService } from './hiv-quality-metrics.service';
+import { HivVisitTemplatesService } from './hiv-visit-templates.service';
+import { HivTptTrackerService } from './hiv-tpt-tracker.service';
+import { HivPediatricDosingService } from './hiv-pediatric-dosing.service';
 
 @Injectable()
 export class HivService {
   private readonly logger = new Logger(HivService.name);
   private readonly cdssUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
+  
+  constructor(
+    private labResultsMatchingService: LabResultsMatchingService,
+    private monitoringService: HivMonitoringService,
+    private qualityMetricsService: HivQualityMetricsService,
+    private visitTemplatesService: HivVisitTemplatesService,
+    private tptTrackerService: HivTptTrackerService,
+    private pediatricDosingService: HivPediatricDosingService
+  ) {}
 
   async createHivTest(body: any, tenantDb: DataSource) {
     const { patientId, testKitName, testResult, testKitLot, testKitExpiry, notes, testedBy } = body;
@@ -292,14 +307,55 @@ export class HivService {
 
   async getEnrollments(query: any, tenantDb: DataSource) {
     const status = query.status || 'active';
-    const enrollments = await tenantDb.query(
-      `SELECT e.*, p.first_name, p.last_name, p.patient_number, p.gender, p.date_of_birth 
+    
+    this.logger.debug(`getEnrollments called with status: ${status}, query:`, query);
+    
+    // Build query based on status filter
+    let querySql = `
+      SELECT 
+        e.*, 
+        p.first_name, 
+        p.last_name, 
+        p.patient_number, 
+        p.gender, 
+        p.date_of_birth,
+        (SELECT viral_load FROM hiv_clinical_visits WHERE enrollment_id = e.id AND viral_load IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_viral_load,
+        (SELECT viral_load_test_date FROM hiv_clinical_visits WHERE enrollment_id = e.id AND viral_load IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_viral_load_date,
+        (SELECT cd4_count FROM hiv_clinical_visits WHERE enrollment_id = e.id AND cd4_count IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_cd4_count,
+        (SELECT cd4_test_date FROM hiv_clinical_visits WHERE enrollment_id = e.id AND cd4_count IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_cd4_date,
+        (SELECT visit_date FROM hiv_clinical_visits WHERE enrollment_id = e.id ORDER BY visit_date DESC LIMIT 1) as last_visit_date,
+        (SELECT arv_regimen_name FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_regimen_name IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as current_regimen,
+        (SELECT arv_regimen_code FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_regimen_code IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as current_regimen_code,
+        (SELECT arv_status FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_status IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as arv_status
        FROM hiv_care_enrollments e
        JOIN patients p ON e.patient_id = p.id
-       WHERE e.enrollment_status = $1
-       ORDER BY e.enrollment_date DESC`,
-      [status]
-    );
+    `;
+    
+    let enrollments;
+    if (status === 'all') {
+      querySql += ` ORDER BY e.enrollment_date DESC`;
+      this.logger.debug('Executing query (all status):', querySql);
+      try {
+        enrollments = await tenantDb.query(querySql);
+        this.logger.debug(`Found ${enrollments.length} enrollments (all status)`);
+      } catch (error) {
+        this.logger.error('Error executing query for all status:', error);
+        // Fallback: return all enrollments without subqueries if there's an error
+        enrollments = await tenantDb.query(`
+          SELECT e.*, p.first_name, p.last_name, p.patient_number, p.gender, p.date_of_birth
+          FROM hiv_care_enrollments e
+          JOIN patients p ON e.patient_id = p.id
+          ORDER BY e.enrollment_date DESC
+        `);
+        this.logger.debug(`Fallback query returned ${enrollments.length} enrollments`);
+      }
+    } else {
+      querySql += ` WHERE e.enrollment_status = $1 ORDER BY e.enrollment_date DESC`;
+      this.logger.debug('Executing query (filtered status):', querySql, [status]);
+      enrollments = await tenantDb.query(querySql, [status]);
+      this.logger.debug(`Found ${enrollments.length} enrollments (status: ${status})`);
+    }
+    
     return { enrollments };
   }
 
@@ -313,7 +369,21 @@ export class HivService {
 
   async getEnrollmentById(enrollmentId: string, tenantDb: DataSource) {
     const result = await tenantDb.query(
-      `SELECT e.*, p.first_name, p.last_name, p.patient_number, p.gender, p.date_of_birth 
+      `SELECT 
+        e.*, 
+        p.first_name, 
+        p.last_name, 
+        p.patient_number, 
+        p.gender, 
+        p.date_of_birth,
+        (SELECT viral_load FROM hiv_clinical_visits WHERE enrollment_id = e.id AND viral_load IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_viral_load,
+        (SELECT viral_load_test_date FROM hiv_clinical_visits WHERE enrollment_id = e.id AND viral_load IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_viral_load_date,
+        (SELECT cd4_count FROM hiv_clinical_visits WHERE enrollment_id = e.id AND cd4_count IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_cd4_count,
+        (SELECT cd4_test_date FROM hiv_clinical_visits WHERE enrollment_id = e.id AND cd4_count IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as last_cd4_date,
+        (SELECT visit_date FROM hiv_clinical_visits WHERE enrollment_id = e.id ORDER BY visit_date DESC LIMIT 1) as last_visit_date,
+        (SELECT arv_regimen_name FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_regimen_name IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as current_regimen,
+        (SELECT arv_regimen_code FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_regimen_code IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as current_regimen_code,
+        (SELECT arv_status FROM hiv_clinical_visits WHERE enrollment_id = e.id AND arv_status IS NOT NULL ORDER BY visit_date DESC LIMIT 1) as arv_status
        FROM hiv_care_enrollments e
        JOIN patients p ON e.patient_id = p.id
        WHERE e.id = $1`,
@@ -360,6 +430,7 @@ export class HivService {
     // For status '4' (Change), check if there's an approved change request
     let finalRegimenChangeApprovedBy = regimenChangeApprovedBy || null;
     let finalRegimenChangeApprovedAt = null;
+    let approvedChangeRequestId = null; // Store ID to mark as recorded after visit insert
     
     if (arvStatus === '4') {
       if (providerRole !== 'doctor') {
@@ -375,14 +446,7 @@ export class HivService {
         // Set the approved by and approved at
         finalRegimenChangeApprovedBy = approvedChange.approved_by || null;
         finalRegimenChangeApprovedAt = approvedChange.approval_date || new Date();
-        // Mark the change request as recorded
-        await tenantDb.query(`
-          UPDATE hiv_arv_change_requests
-          SET visit_recorded = true,
-              visit_recorded_date = CURRENT_DATE,
-              visit_id = (SELECT id FROM hiv_clinical_visits WHERE enrollment_id = $1 ORDER BY created_at DESC LIMIT 1)
-          WHERE id = $2
-        `, [enrollmentId, approvedChange.id]);
+        approvedChangeRequestId = approvedChange.id; // Store ID to mark as recorded after visit insert
       } else if (providerRole === 'doctor') {
         // Doctor can directly approve, set approved_at to now
         finalRegimenChangeApprovedBy = providerId;
@@ -488,6 +552,219 @@ export class HivService {
         `UPDATE hiv_care_enrollments SET current_regimen = $1, updated_at = NOW() WHERE id = $2`,
         [arvRegimenName, enrollmentId]
       );
+    }
+    
+    // Mark the approved change request as recorded if this was a Change status visit
+    if (arvStatus === '4' && approvedChangeRequestId && result[0]?.id) {
+      await tenantDb.query(`
+        UPDATE hiv_arv_change_requests
+        SET visit_recorded = true,
+            visit_recorded_date = CURRENT_DATE,
+            visit_id = $1
+        WHERE id = $2
+      `, [result[0].id, approvedChangeRequestId]);
+    }
+
+    // ============================================
+    // Post-Visit Processing: Monitoring, Alerts, Tracking
+    // ============================================
+    const visitId = result[0]?.id;
+    const visitDateObj = new Date(visitDate);
+
+    // 1. Update Monitoring Schedules (VL & CD4)
+    if (viralLoad !== null && viralLoadTestDate) {
+      const nextVlDate = this.monitoringService.calculateNextViralLoadDate(
+        artStartDate,
+        new Date(viralLoadTestDate),
+        parseFloat(viralLoad.toString()),
+        arvStatus === '4' ? visitDateObj : null, // Regimen change date
+        visitDateObj
+      );
+
+      // Use UPSERT to update or create monitoring schedule
+      const existingSchedule = await tenantDb.query(`
+        SELECT id FROM hiv_monitoring_schedules 
+        WHERE enrollment_id = $1 AND test_type = 'viral_load'
+      `, [enrollmentId]);
+
+      if (existingSchedule.length > 0) {
+        await tenantDb.query(`
+          UPDATE hiv_monitoring_schedules SET
+          last_test_date = $1,
+          last_test_result = $2,
+          next_scheduled_date = $3,
+          is_overdue = false,
+          days_overdue = 0,
+          updated_at = NOW()
+          WHERE enrollment_id = $4 AND test_type = 'viral_load'
+        `, [viralLoadTestDate, viralLoad, nextVlDate.toISOString().split('T')[0], enrollmentId]);
+      } else {
+        await tenantDb.query(`
+          INSERT INTO hiv_monitoring_schedules (
+            enrollment_id, test_type, last_test_date, last_test_result,
+            next_scheduled_date, monitoring_frequency_months, is_overdue, days_overdue
+          ) VALUES ($1, 'viral_load', $2, $3, $4, 3, false, 0)
+        `, [enrollmentId, viralLoadTestDate, viralLoad, nextVlDate.toISOString().split('T')[0]]);
+      }
+    }
+
+    if (cd4Count !== null && cd4TestDate) {
+      const nextCd4Date = this.monitoringService.calculateNextCD4Date(
+        artStartDate,
+        new Date(cd4TestDate),
+        parseInt(cd4Count.toString()),
+        visitDateObj
+      );
+
+      // Use UPSERT to update or create monitoring schedule
+      const existingCd4Schedule = await tenantDb.query(`
+        SELECT id FROM hiv_monitoring_schedules 
+        WHERE enrollment_id = $1 AND test_type = 'cd4'
+      `, [enrollmentId]);
+
+      if (existingCd4Schedule.length > 0) {
+        await tenantDb.query(`
+          UPDATE hiv_monitoring_schedules SET
+          last_test_date = $1,
+          last_test_result = $2,
+          next_scheduled_date = $3,
+          is_overdue = false,
+          days_overdue = 0,
+          updated_at = NOW()
+          WHERE enrollment_id = $4 AND test_type = 'cd4'
+        `, [cd4TestDate, cd4Count, nextCd4Date.toISOString().split('T')[0], enrollmentId]);
+      } else {
+        await tenantDb.query(`
+          INSERT INTO hiv_monitoring_schedules (
+            enrollment_id, test_type, last_test_date, last_test_result,
+            next_scheduled_date, monitoring_frequency_months, is_overdue, days_overdue
+          ) VALUES ($1, 'cd4', $2, $3, $4, 6, false, 0)
+        `, [enrollmentId, cd4TestDate, cd4Count, nextCd4Date.toISOString().split('T')[0]]);
+      }
+    }
+
+    // 2. Track Regimen History
+    if (arvRegimenCode && arvRegimenName && ['2a', '2b', '3', '4'].includes(arvStatus || '')) {
+      // Check if this is a new regimen (not already active)
+      const existingRegimen = await tenantDb.query(`
+        SELECT id FROM hiv_regimen_history 
+        WHERE enrollment_id = $1 
+        AND regimen_code = $2 
+        AND is_active = true
+      `, [enrollmentId, arvRegimenCode]);
+
+      if (existingRegimen.length === 0) {
+        // End previous active regimen
+        await tenantDb.query(`
+          UPDATE hiv_regimen_history 
+          SET end_date = $1, is_active = false, updated_at = NOW()
+          WHERE enrollment_id = $2 AND is_active = true
+        `, [visitDate, enrollmentId]);
+
+        // Create new regimen history entry
+        await tenantDb.query(`
+          INSERT INTO hiv_regimen_history (
+            enrollment_id, visit_id, regimen_code, regimen_name,
+            start_date, reason_for_change, reason_details,
+            changed_by, viral_load_at_change, cd4_at_change, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+        `, [
+          enrollmentId, visitId, arvRegimenCode, arvRegimenName,
+          visitDate,
+          arvStatus === '4' ? 'Change' : arvStatus === '2a' ? 'Start' : 'Continue',
+          arvChangeStopReason || null,
+          providerId,
+          viralLoad || null,
+          cd4Count || null
+        ]);
+      }
+    }
+
+    // 3. Track Adherence
+    if (arvAdherencePercentage !== null && arvQuantityDispensed !== null) {
+      await tenantDb.query(`
+        INSERT INTO hiv_adherence_tracking (
+          enrollment_id, visit_id, tracking_date, adherence_percentage,
+          adherence_method, pills_dispensed, pills_returned,
+          recorded_by
+        ) VALUES ($1, $2, $3, $4, 'pill_count', $5, $6, $7)
+      `, [
+        enrollmentId, visitId, visitDate, arvAdherencePercentage,
+        arvQuantityDispensed,
+        (arvQuantityDispensed - (arvQuantityDispensed * (arvAdherencePercentage / 100))) || 0,
+        providerId
+      ]);
+    }
+
+    // 4. Track Side Effects
+    if (adverseEventsStatus && Array.isArray(adverseEventsStatus) && adverseEventsStatus.length > 0) {
+      for (const sideEffect of adverseEventsStatus) {
+        await tenantDb.query(`
+          INSERT INTO hiv_side_effects (
+            enrollment_id, visit_id, regimen_code, side_effect_type,
+            severity, onset_date, recorded_by
+          ) VALUES ($1, $2, $3, $4, 'moderate', $5, $6)
+        `, [enrollmentId, visitId, arvRegimenCode || null, sideEffect, visitDate, providerId]);
+      }
+    }
+
+    // 5. Generate Clinical Alerts
+    const treatmentFailureCheck = this.monitoringService.checkTreatmentFailure(
+      sanitizedArvStatus || '',
+      viralLoad ? parseFloat(viralLoad.toString()) : null,
+      viralLoadTestDate ? new Date(viralLoadTestDate) : null,
+      cd4Count ? parseInt(cd4Count.toString()) : null,
+      cd4TestDate ? new Date(cd4TestDate) : null,
+      visitDateObj
+    );
+
+    if (treatmentFailureCheck.isTreatmentFailure) {
+      await tenantDb.query(`
+        INSERT INTO hiv_clinical_alerts (
+          enrollment_id, alert_type, severity, title, message, related_data, is_resolved
+        ) VALUES ($1, $2, $3, $4, $5, $6, false)
+        ON CONFLICT DO NOTHING
+      `, [
+        enrollmentId,
+        'treatment_failure',
+        treatmentFailureCheck.severity,
+        'Treatment Failure Detected',
+        treatmentFailureCheck.reason || 'Treatment failure detected',
+        JSON.stringify({
+          viralLoad,
+          cd4Count,
+          visitId,
+          visitDate
+        })
+      ]);
+    }
+
+    // High VL alert
+    if (viralLoad && parseFloat(viralLoad.toString()) > 1000 && ['2a', '2b', '3', '4'].includes(sanitizedArvStatus || '')) {
+      await tenantDb.query(`
+        INSERT INTO hiv_clinical_alerts (
+          enrollment_id, alert_type, severity, title, message, related_data, is_resolved
+        ) VALUES ($1, 'high_vl', 'critical', 'High Viral Load', $2, $3, false)
+        ON CONFLICT DO NOTHING
+      `, [
+        enrollmentId,
+        `Viral load is ${viralLoad.toLocaleString()} copies/mL - Requires immediate attention`,
+        JSON.stringify({ viralLoad, visitId, visitDate })
+      ]);
+    }
+
+    // Adherence concern alert
+    if (arvAdherencePercentage !== null && arvAdherencePercentage < 95) {
+      await tenantDb.query(`
+        INSERT INTO hiv_clinical_alerts (
+          enrollment_id, alert_type, severity, title, message, related_data, is_resolved
+        ) VALUES ($1, 'adherence_concern', 'high', 'Adherence Concern', $2, $3, false)
+        ON CONFLICT DO NOTHING
+      `, [
+        enrollmentId,
+        `Adherence is ${arvAdherencePercentage}% - Below optimal threshold (95%)`,
+        JSON.stringify({ adherencePercentage: arvAdherencePercentage, visitId, visitDate })
+      ]);
     }
     
     return result[0];
@@ -677,6 +954,7 @@ export class HivService {
       nextSessionDate, followUpActions, followUpResponsiblePerson,
       sessionOutcome, outcomeNotes, adherenceImprovementObserved,
       eacProgramStatus, eacCompletionDate, returnToConventionalCareDate,
+      viralLoad, viralLoadUnit, viralLoadTestDate, viralLoadSuppressed, viralLoadImproved,
       sessionNotes
     } = body;
 
@@ -690,10 +968,11 @@ export class HivService {
         next_session_date, follow_up_actions, follow_up_responsible_person,
         session_outcome, outcome_notes, adherence_improvement_observed,
         eac_program_status, eac_completion_date, return_to_conventional_care_date,
+        viral_load, viral_load_unit, viral_load_test_date, viral_load_suppressed, viral_load_improved,
         session_notes
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
       )
       RETURNING *
     `, [
@@ -705,6 +984,8 @@ export class HivService {
       nextSessionDate || null, followUpActions || [], followUpResponsiblePerson || null,
       sessionOutcome || 'Completed', outcomeNotes || null, adherenceImprovementObserved || false,
       eacProgramStatus || 'Active', eacCompletionDate || null, returnToConventionalCareDate || null,
+      viralLoad || null, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'), 
+      viralLoadTestDate || null, viralLoadSuppressed || null, viralLoadImproved || false,
       sessionNotes || null
     ]);
 
@@ -870,11 +1151,227 @@ export class HivService {
     // Check if already in EAC
     const activeEac = await this.getActiveEacProgram(enrollmentId, tenantDb);
 
+    // Check if EAC was completed and patient has suppressed VL after completion
+    const completedEac = await tenantDb.query(
+      `SELECT eac_completion_date, return_to_conventional_care_date
+       FROM hiv_eac_sessions
+       WHERE enrollment_id = $1 
+       AND eac_program_status = 'Completed'
+       ORDER BY eac_completion_date DESC
+       LIMIT 1`,
+      [enrollmentId]
+    );
+
+    let eacCompletedAndSuppressed = false;
+    if (completedEac.length > 0 && completedEac[0].eac_completion_date) {
+      // Check if there's a suppressed VL after EAC completion
+      const completionDate = completedEac[0].eac_completion_date;
+      const postEacVl = await tenantDb.query(
+        `SELECT viral_load, visit_date
+         FROM hiv_clinical_visits
+         WHERE enrollment_id = $1 
+         AND viral_load IS NOT NULL
+         AND visit_date >= $2
+         ORDER BY visit_date DESC
+         LIMIT 1`,
+        [enrollmentId, completionDate]
+      );
+      
+      // If patient has suppressed VL (<1000) after EAC completion, no longer needs EAC
+      if (postEacVl.length > 0 && postEacVl[0].viral_load && parseFloat(postEacVl[0].viral_load) < 1000) {
+        eacCompletedAndSuppressed = true;
+      }
+    }
+
+    // EAC alert disappears when:
+    // 1. Patient doesn't have 2 consecutive high VLs (needsEac = false)
+    // 2. Visits are not 3-6 months apart (visitsValid = false)
+    // 3. Already in active EAC program (activeEac exists)
+    // 4. EAC was completed AND patient has suppressed VL after completion
+    const shouldShowEacAlert = needsEac && visitsValid && !activeEac && !eacCompletedAndSuppressed;
+
+    // Get session count for active EAC program
+    let sessionsCompleted = 0;
+    if (activeEac) {
+      const sessionCount = await tenantDb.query(
+        `SELECT COUNT(*) as count
+         FROM hiv_eac_sessions
+         WHERE enrollment_id = $1
+         AND eac_program_status = 'Active'`,
+        [enrollmentId]
+      );
+      sessionsCompleted = parseInt(sessionCount[0]?.count || '0');
+    }
+
     return {
-      needsEac: needsEac && visitsValid && !activeEac,
+      needsEac: shouldShowEacAlert,
       recentVisits: lastTwoVisits,
       activeEac: activeEac !== null,
-      eacProgram: activeEac
+      eacProgram: activeEac ? {
+        ...activeEac,
+        sessions_completed: sessionsCompleted,
+        eac_start_date: activeEac.session_date || activeEac.created_at
+      } : null,
+      eacCompleted: completedEac.length > 0,
+      eacCompletedAndSuppressed: eacCompletedAndSuppressed
     };
+  }
+
+  /**
+   * Get matching lab results for auto-population
+   */
+  async getMatchingLabResults(patientId: string, visitDate: string, tenantDb: DataSource) {
+    const visitDateObj = new Date(visitDate);
+    const matchedResults = await this.labResultsMatchingService.findMatchingViralLoad(
+      patientId,
+      visitDateObj,
+      tenantDb
+    );
+    
+    return {
+      matched: matchedResults.viralLoad !== null,
+      viralLoad: matchedResults.viralLoad,
+      viralLoadUnit: matchedResults.viralLoadUnit,
+      viralLoadTestDate: matchedResults.viralLoadTestDate,
+      viralLoadSuppressed: matchedResults.viralLoadSuppressed,
+      source: matchedResults.source,
+      labOrderId: matchedResults.labOrderId,
+      matchedBy: matchedResults.matchedBy
+    };
+  }
+
+  /**
+   * Get monitoring schedules for an enrollment
+   */
+  async getMonitoringSchedules(enrollmentId: string, tenantDb: DataSource) {
+    const schedules = await tenantDb.query(
+      `SELECT * FROM hiv_monitoring_schedules 
+       WHERE enrollment_id = $1 
+       ORDER BY next_scheduled_date ASC`,
+      [enrollmentId]
+    );
+    return { schedules };
+  }
+
+  /**
+   * Get quality metrics
+   */
+  async getQualityMetrics(tenantDb: DataSource) {
+    const [vlSuppression, patientsOnART, treatmentFailure, ltfu, timeToSuppression] = await Promise.all([
+      this.qualityMetricsService.calculateVLSuppressionRate(tenantDb),
+      this.qualityMetricsService.calculatePatientsOnART(tenantDb),
+      this.qualityMetricsService.calculateTreatmentFailureRate(tenantDb),
+      this.qualityMetricsService.calculateLTFURate(tenantDb),
+      this.qualityMetricsService.calculateAverageTimeToSuppression(tenantDb)
+    ]);
+
+    return {
+      vlSuppression,
+      patientsOnART,
+      treatmentFailure,
+      ltfu,
+      timeToSuppression
+    };
+  }
+
+  /**
+   * Get clinical alerts for an enrollment
+   */
+  async getClinicalAlerts(enrollmentId: string, tenantDb: DataSource) {
+    const alerts = await tenantDb.query(
+      `SELECT * FROM hiv_clinical_alerts 
+       WHERE enrollment_id = $1 
+       AND is_resolved = false
+       ORDER BY severity DESC, created_at DESC`,
+      [enrollmentId]
+    );
+    return { alerts };
+  }
+
+  /**
+   * Get adherence tracking data
+   */
+  async getAdherenceTracking(enrollmentId: string, tenantDb: DataSource) {
+    const tracking = await tenantDb.query(
+      `SELECT * FROM hiv_adherence_tracking 
+       WHERE enrollment_id = $1 
+       ORDER BY tracking_date DESC`,
+      [enrollmentId]
+    );
+    return { tracking };
+  }
+
+  /**
+   * Get regimen history timeline
+   */
+  async getRegimenHistory(enrollmentId: string, tenantDb: DataSource) {
+    const history = await tenantDb.query(
+      `SELECT * FROM hiv_regimen_history 
+       WHERE enrollment_id = $1 
+       ORDER BY start_date DESC`,
+      [enrollmentId]
+    );
+    return { history };
+  }
+
+  /**
+   * Check TPT eligibility
+   */
+  async checkTptEligibility(enrollmentId: string, tenantDb: DataSource) {
+    return this.tptTrackerService.checkTptEligibility(enrollmentId, tenantDb);
+  }
+
+  /**
+   * Get TPT completion status
+   */
+  async getTptCompletionStatus(enrollmentId: string, tenantDb: DataSource) {
+    return this.tptTrackerService.getTptCompletionStatus(enrollmentId, tenantDb);
+  }
+
+  /**
+   * Get visit templates
+   */
+  async getVisitTemplates(tenantDb: DataSource, visitType?: string) {
+    return this.visitTemplatesService.getTemplates(tenantDb, visitType);
+  }
+
+  /**
+   * Calculate pediatric dose
+   */
+  calculatePediatricDose(regimenCode: string, weightKg: number, ageMonths: number, bsa?: number) {
+    return this.pediatricDosingService.calculatePediatricDose(regimenCode, weightKg, ageMonths, bsa);
+  }
+
+  /**
+   * Get LTFU patients
+   */
+  async getLTFUPatients(daysSinceLastVisit: number, tenantDb: DataSource) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysSinceLastVisit);
+
+    const result = await tenantDb.query(
+      `SELECT 
+        e.id,
+        e.enrollment_number,
+        e.patient_id,
+        p.first_name,
+        p.last_name,
+        p.patient_number,
+        e.enrollment_date,
+        e.art_start_date,
+        MAX(v.visit_date) as last_visit_date,
+        MAX(v.next_review_date) as last_next_review_date,
+        EXTRACT(DAY FROM (CURRENT_DATE - MAX(v.visit_date))) as days_since_last_visit
+      FROM hiv_care_enrollments e
+      JOIN patients p ON e.patient_id = p.id
+      LEFT JOIN hiv_clinical_visits v ON v.enrollment_id = e.id
+      WHERE e.enrollment_status = 'active'
+      GROUP BY e.id, e.enrollment_number, e.patient_id, p.first_name, p.last_name, p.patient_number, e.enrollment_date, e.art_start_date
+      HAVING MAX(v.visit_date) < $1 OR MAX(v.visit_date) IS NULL
+      ORDER BY days_since_last_visit DESC NULLS LAST`,
+      [cutoffDate.toISOString().split('T')[0]]
+    );
+
+    return { patients: result };
   }
 }

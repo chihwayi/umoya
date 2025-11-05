@@ -847,6 +847,15 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+  getHivEnrollmentById: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/enrollments/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: { enrollment: response.data } };
+  },
   createTbScreening: async (body: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/hiv/tb-screenings', body, {
       headers: { 
@@ -952,6 +961,17 @@ export const ehrApi = {
     return { data: response.data };
   },
   
+  getMatchingLabResults: async (patientId: string, visitDate: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/lab-results/match`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { patientId, visitDate }
+    });
+    return { data: response.data };
+  },
+  
   // ARV Change Request APIs
   createArvChangeRequest: async (body: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/hiv/arv-change-requests', body, {
@@ -992,6 +1012,99 @@ export const ehrApi = {
   },
   getApprovedArvChange: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/arv-change-requests/enrollment/${enrollmentId}/approved`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  // HIV Monitoring & Quality Metrics APIs
+  getMonitoringSchedules: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/monitoring-schedules/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getQualityMetrics: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/quality-metrics', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getClinicalAlerts: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/alerts/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getAdherenceTracking: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/adherence/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getRegimenHistory: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/regimen-history/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  checkTptEligibility: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/tpt-eligibility/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getTptCompletionStatus: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/tpt-completion/${enrollmentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getVisitTemplates: async (visitType: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/visit-templates', {
+      params: visitType ? { visitType } : {},
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  calculatePediatricDose: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/calculate-pediatric-dose', body, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getLTFUPatients: async (days: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/hiv/ltfu-patients', {
+      params: { days },
       headers: { 
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`

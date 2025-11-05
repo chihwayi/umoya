@@ -61,6 +61,12 @@ import { LabOrderSetService } from './services/lab-order-set.service';
 import { CriticalAlertService } from './services/critical-alert.service';
 import { DrugService } from './services/drug.service';
 import { HivService } from './services/hiv.service';
+import { LabResultsMatchingService } from './services/lab-results-matching.service';
+import { HivMonitoringService } from './services/hiv-monitoring.service';
+import { HivQualityMetricsService } from './services/hiv-quality-metrics.service';
+import { HivVisitTemplatesService } from './services/hiv-visit-templates.service';
+import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
+import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -133,6 +139,12 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     CriticalAlertService,
     DrugService,
     HivService,
+    LabResultsMatchingService,
+    HivMonitoringService,
+    HivQualityMetricsService,
+    HivVisitTemplatesService,
+    HivTptTrackerService,
+    HivPediatricDosingService,
     JwtStrategy,
   ],
 })

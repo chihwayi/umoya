@@ -17,6 +17,7 @@ import DoctorAppointmentManagement from './pages/DoctorAppointmentManagement.tsx
 import DoctorPatientsList from './pages/DoctorPatientsList.tsx';
 import DoctorTreatmentHistory from './pages/DoctorTreatmentHistory.tsx';
 import DoctorTreatmentHistoryDetail from './pages/DoctorTreatmentHistoryDetail.tsx';
+import HIVDoctorDashboard from './pages/HIVDoctorDashboard.tsx';
 import NurseDashboard from './pages/NurseDashboard.tsx';
 import NursePatientSummary from './pages/NursePatientSummary.tsx';
 import LabDashboard from './pages/LabDashboard.tsx';
@@ -42,6 +43,7 @@ function App() {
             <Route path="/ehr/:tenantSlug/doctor/appointments" element={<DoctorAppointmentManagement />} />
             <Route path="/ehr/:tenantSlug/doctor/treatments" element={<DoctorTreatmentHistory />} />
             <Route path="/ehr/:tenantSlug/doctor/treatments/:patientId" element={<DoctorTreatmentHistoryDetail />} />
+            <Route path="/ehr/:tenantSlug/doctor/hiv" element={<HIVDoctorDashboard />} />
             {/* Nurse routes */}
             <Route path="/ehr/:tenantSlug/nurse" element={<NurseDashboard />} />
             <Route path="/ehr/:tenantSlug/nurse/queue" element={<NurseDashboard />} />
