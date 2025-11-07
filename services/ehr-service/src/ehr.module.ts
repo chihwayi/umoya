@@ -27,10 +27,15 @@ import { OrderController } from './controllers/order.controller';
 import { ProblemController } from './controllers/problem.controller';
 import { AllergyController } from './controllers/allergy.controller';
 import { LabTestController } from './controllers/lab-test.controller';
+import { LabTestCatalogController } from './controllers/lab-test-catalog.controller';
 import { LabOrderSetController } from './controllers/lab-order-set.controller';
+import { LabOrderSetEnhancedController } from './controllers/lab-order-set-enhanced.controller';
+import { LabCriticalAlertController } from './controllers/lab-critical-alert.controller';
 import { CriticalAlertController } from './controllers/critical-alert.controller';
 import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
+import { ImagingController } from './controllers/imaging.controller';
+import { MaternityController } from './controllers/maternity.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -57,7 +62,10 @@ import { OrderService } from './services/order.service';
 import { ProblemService } from './services/problem.service';
 import { AllergyService } from './services/allergy.service';
 import { LabTestService } from './services/lab-test.service';
+import { LabTestCatalogService } from './services/lab-test-catalog.service';
 import { LabOrderSetService } from './services/lab-order-set.service';
+import { LabOrderSetEnhancedService } from './services/lab-order-set-enhanced.service';
+import { LabCriticalAlertService } from './services/lab-critical-alert.service';
 import { CriticalAlertService } from './services/critical-alert.service';
 import { DrugService } from './services/drug.service';
 import { HivService } from './services/hiv.service';
@@ -68,6 +76,8 @@ import { HivVisitTemplatesService } from './services/hiv-visit-templates.service
 import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
+import { ImagingService } from './services/imaging.service';
+import { MaternityService } from './services/maternity.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -106,10 +116,15 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     ProblemController,
     AllergyController,
     LabTestController,
+    LabTestCatalogController,
     LabOrderSetController,
+    LabOrderSetEnhancedController,
+    LabCriticalAlertController,
     CriticalAlertController,
     DrugController,
     HivController,
+    ImagingController,
+    MaternityController,
   ],
   providers: [
     AuthService,
@@ -136,7 +151,10 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     ProblemService,
     AllergyService,
     LabTestService,
+    LabTestCatalogService,
     LabOrderSetService,
+    LabOrderSetEnhancedService,
+    LabCriticalAlertService,
     CriticalAlertService,
     DrugService,
     HivService,
@@ -147,6 +165,8 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     HivTptTrackerService,
     HivPediatricDosingService,
     HivMonthlyReturnService,
+    ImagingService,
+    MaternityService,
     JwtStrategy,
   ],
 })

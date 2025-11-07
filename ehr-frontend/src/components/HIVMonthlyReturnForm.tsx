@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNotification } from '../contexts/NotificationContext';
+import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { FileText, Download, Calendar, Loader2 } from 'lucide-react';
 

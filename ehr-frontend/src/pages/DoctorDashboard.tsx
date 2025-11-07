@@ -5,7 +5,8 @@ import {
   Play, Pause, Square, FileText, Pill, TestTube, Bell, 
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
-  LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp
+  LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
+  Camera, TrendingUp, Baby
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -28,6 +29,10 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import { chartApi } from '../services/api';
 import ClinicalAlerts from '../components/ClinicalAlerts';
 import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
+import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
+import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
+import ImagingOrderModal from '../components/ImagingOrderModal';
+import AdvancedResultComparison from '../components/AdvancedResultComparison';
 
 interface Appointment {
   id: string;
@@ -134,6 +139,9 @@ const DoctorDashboard: React.FC = () => {
   const [showLabResultsModal, setShowLabResultsModal] = useState(false);
   const [showAllOrders, setShowAllOrders] = useState(false);
   const [showAllMedications, setShowAllMedications] = useState(false);
+  const [showEnhancedLabOrderModal, setShowEnhancedLabOrderModal] = useState(false);
+  const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
+  const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
 
   // Get current user info
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -142,8 +150,9 @@ const DoctorDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment' | 'critical-alerts'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [criticalAlertCount, setCriticalAlertCount] = useState(0);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -151,6 +160,25 @@ const DoctorDashboard: React.FC = () => {
       setCurrentUser(JSON.parse(userData));
     }
   }, []);
+
+  // Load critical alert count on mount and refresh every 2 minutes
+  useEffect(() => {
+    const loadAlertCount = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (token && tenantSlug) {
+          const response = await ehrApi.getCriticalAlertStats(tenantSlug, token);
+          setCriticalAlertCount(response.data?.pending_count || 0);
+        }
+      } catch (error) {
+        console.error('Failed to load alert count:', error);
+      }
+    };
+
+    loadAlertCount();
+    const interval = setInterval(loadAlertCount, 120000); // Every 2 minutes
+    return () => clearInterval(interval);
+  }, [tenantSlug]);
 
   useEffect(() => {
     if (currentUser) {
@@ -762,6 +790,7 @@ const DoctorDashboard: React.FC = () => {
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
+      { icon: Baby, label: 'Maternity & Obstetrics', desc: 'High-risk pregnancies & deliveries', color: 'from-pink-500 to-rose-500', route: 'doctor/maternity' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
     ];
   };
@@ -974,10 +1003,50 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* Quick Actions - Maternity & Obstetrics */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 rounded-2xl shadow-xl border-4 border-pink-400 p-6 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
+                    <Baby className="w-10 h-10 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-2">Maternity & Obstetrics</h3>
+                    <p className="text-pink-50 text-base mb-3">
+                      High-risk pregnancy management, delivery oversight, maternal complications, and referral cases
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        High-Risk Cases
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Upcoming Deliveries
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Complications
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Referral Review
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/maternity`)}
+                  className="px-6 py-3 bg-white text-pink-600 rounded-xl hover:bg-pink-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Baby className="w-5 h-5" />
+                  Open Maternity
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Tab Navigation */}
           <div className="mb-8">
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-2 shadow-sm sticky top-16 z-20">
-              <nav className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <nav className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                 <button
                   onClick={() => setActiveTab('dashboard')}
                   className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
@@ -1017,11 +1086,27 @@ const DoctorDashboard: React.FC = () => {
                     activeTab === 'current-appointment'
                       ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow'
                       : 'bg-white text-slate-700 border border-slate-200 hover:border-sky-200 hover:text-sky-700'
-                }`}
+                  }`}
               >
                 <FileText className={`w-4 h-4 ${activeTab === 'current-appointment' ? 'text-white' : 'text-slate-500 group-hover:text-sky-600'}`} />
                 <span>Current Appointment</span>
               </button>
+              <button
+                  onClick={() => setActiveTab('critical-alerts')}
+                  className={`group relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                    activeTab === 'critical-alerts'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-red-200 hover:text-red-700'
+                  }`}
+                >
+                  <AlertTriangle className={`w-4 h-4 ${activeTab === 'critical-alerts' ? 'text-white' : 'text-slate-500 group-hover:text-red-600'}`} />
+                  <span>Critical Alerts</span>
+                  {criticalAlertCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                      {criticalAlertCount}
+                    </span>
+                  )}
+                </button>
               </nav>
             </div>
           </div>
@@ -1039,6 +1124,20 @@ const DoctorDashboard: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-3">
+                    {/* Critical Alerts - URGENT PRIORITY */}
+                    {criticalAlertCount > 0 && (
+                      <div 
+                        onClick={() => setActiveTab('critical-alerts')}
+                        className="p-3 border-2 border-red-500 bg-red-50 rounded-lg flex items-center justify-between cursor-pointer hover:bg-red-100 transition-colors animate-pulse"
+                      >
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                          <div className="text-sm font-bold text-red-900">🚨 CRITICAL LAB RESULTS PENDING</div>
+                        </div>
+                        <span className="text-xs px-3 py-1 rounded-full bg-red-600 text-white font-bold">{criticalAlertCount}</span>
+                      </div>
+                    )}
+                    
                     {/* Tasks: results to review, notes to finalize, messages could be wired later */}
                     <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
                       <div className="text-sm text-slate-700">Authorized orders awaiting nursing execution</div>
@@ -1205,6 +1304,20 @@ const DoctorDashboard: React.FC = () => {
             />
           )}
 
+          {activeTab === 'critical-alerts' && (
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                <AlertTriangle className="w-6 h-6 text-red-600 mr-2" />
+                Critical Lab Results & Alerts
+              </h2>
+              <CriticalResultAlertPanel
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                showAllAlerts={false}
+              />
+            </div>
+          )}
+
           {activeTab === 'current-appointment' && (
             <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
               {currentAppointment ? (
@@ -1231,13 +1344,21 @@ const DoctorDashboard: React.FC = () => {
                           <Pill className="w-4 h-4" />
                           Rx
                         </button>
-                        <button onClick={() => setShowLabOrdersModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button onClick={() => setShowEnhancedLabOrderModal(true)} className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
                           <TestTube className="w-4 h-4" />
-                          Lab Orders
+                          Order Labs
+                        </button>
+                        <button onClick={() => setShowImagingOrderModal(true)} className="px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
+                          <Camera className="w-4 h-4" />
+                          🆕 Order Imaging
                         </button>
                         <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <TestTube className="w-4 h-4" />
                           Lab Results
+                        </button>
+                        <button onClick={() => setShowResultComparisonModal(true)} className="px-3 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
+                          <TrendingUp className="w-4 h-4" />
+                          🆕 Result Trends
                         </button>
                         <button onClick={() => setShowVitalsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <Activity className="w-4 h-4" />
@@ -2155,6 +2276,49 @@ const DoctorDashboard: React.FC = () => {
           </div>
         </div>
         </ModalPortal>
+      )}
+
+      {/* Enhanced Lab Order Modal (NEW!) */}
+      {showEnhancedLabOrderModal && currentAppointment && (
+        <EnhancedLabOrderModal
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowEnhancedLabOrderModal(false)}
+          onSuccess={() => {
+            setShowEnhancedLabOrderModal(false);
+            fetchTodayAppointments();
+          }}
+          orderingProviderId={currentUser?.id || ''}
+        />
+      )}
+
+      {/* Imaging Order Modal (NEW!) */}
+      {showImagingOrderModal && currentAppointment && (
+        <ImagingOrderModal
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowImagingOrderModal(false)}
+          onSuccess={() => {
+            setShowImagingOrderModal(false);
+            fetchTodayAppointments();
+          }}
+          orderingProviderId={currentUser?.id}
+        />
+      )}
+
+      {/* Advanced Result Comparison Modal (NEW!) */}
+      {showResultComparisonModal && currentAppointment && (
+        <AdvancedResultComparison
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowResultComparisonModal(false)}
+        />
       )}
     </div>
   );

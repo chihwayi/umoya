@@ -26,6 +26,7 @@ import CervicalCancerScreeningComponent from '../components/CervicalCancerScreen
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
 import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
+import MaternityDashboard from '../components/MaternityDashboard';
 
 interface Patient {
   id: string;
@@ -78,7 +79,7 @@ const NurseDashboard: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('tasks');
-  const [activeSection, setActiveSection] = useState<'main' | 'hiv'>('main');
+  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
@@ -1102,6 +1103,20 @@ const NurseDashboard: React.FC = () => {
               <Activity className="w-4 h-4" />
               HIV/AIDS/TB Program
             </button>
+            <button
+              onClick={() => {
+                setActiveSection('maternity');
+                setActiveTab('maternity');
+              }}
+              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
+                activeSection === 'maternity'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-emerald-100 hover:text-white'
+              }`}
+            >
+              <Heart className="w-4 h-4" />
+              Maternity & Obstetrics
+            </button>
           </nav>
         </div>
       </div>
@@ -1749,6 +1764,22 @@ const NurseDashboard: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Maternity Section */}
+        {activeSection === 'maternity' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <Heart className="w-6 h-6 text-pink-600 mr-2" />
+                Maternity & Obstetrics Care
+              </h2>
+            </div>
+            <MaternityDashboard
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
           </div>
         )}
       </div>

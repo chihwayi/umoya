@@ -467,6 +467,53 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_status ON critical_result_alerts(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_created_at ON critical_result_alerts(created_at)`);
     
+    // Enhanced LIS: Lab Test Catalog (detailed test definitions)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_test_catalog (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), test_code VARCHAR(50) UNIQUE NOT NULL, loinc_code VARCHAR(50), test_name VARCHAR(255) NOT NULL, category VARCHAR(100) NOT NULL CHECK (category IN ('Hematology','Chemistry','Microbiology','Immunology','Serology','Toxicology','Urinalysis','Cytology','Molecular','Other')), specimen_type VARCHAR(100) NOT NULL, specimen_volume VARCHAR(50), container_type VARCHAR(100), turnaround_time INTEGER, cost DECIMAL(10,2), description TEXT, clinical_significance TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_test_code ON lab_test_catalog(test_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_loinc_code ON lab_test_catalog(loinc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_category ON lab_test_catalog(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_is_active ON lab_test_catalog(is_active)`);
+    
+    // Enhanced LIS: Lab Test Components (individual measurable components of a test)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_test_components (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), test_catalog_id UUID NOT NULL REFERENCES lab_test_catalog(id) ON DELETE CASCADE, component_name VARCHAR(255) NOT NULL, component_code VARCHAR(50), loinc_code VARCHAR(50), unit VARCHAR(50), reference_range_min DECIMAL(10,4), reference_range_max DECIMAL(10,4), reference_range_text TEXT, critical_low DECIMAL(10,4), critical_high DECIMAL(10,4), age_specific BOOLEAN DEFAULT false, gender_specific BOOLEAN DEFAULT false, sort_order INTEGER DEFAULT 0, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_test_catalog_id ON lab_test_components(test_catalog_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_component_code ON lab_test_components(component_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_sort_order ON lab_test_components(sort_order)`);
+    
+    // Enhanced LIS: Lab Reference Ranges (age/gender specific ranges)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_reference_ranges (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), component_id UUID NOT NULL REFERENCES lab_test_components(id) ON DELETE CASCADE, age_min INTEGER, age_max INTEGER, gender VARCHAR(10) CHECK (gender IN ('male','female','all')), range_min DECIMAL(10,4), range_max DECIMAL(10,4), range_text TEXT, unit VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reference_ranges_component_id ON lab_reference_ranges(component_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reference_ranges_gender ON lab_reference_ranges(gender)`);
+    
+    // Enhanced LIS: Lab Order Set Items (junction table for order sets)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_order_set_items (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_set_id UUID NOT NULL REFERENCES lab_order_sets(id) ON DELETE CASCADE, test_catalog_id UUID NOT NULL REFERENCES lab_test_catalog(id) ON DELETE CASCADE, sort_order INTEGER DEFAULT 0, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_set_items_order_set_id ON lab_order_set_items(order_set_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_set_items_test_catalog_id ON lab_order_set_items(test_catalog_id)`);
+    
+    // Enhanced LIS: Lab Critical Alerts (enhanced version)
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_critical_alerts (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, lab_order_id UUID REFERENCES lab_orders(id) ON DELETE CASCADE, component_name VARCHAR(255) NOT NULL, result_value VARCHAR(100) NOT NULL, critical_range VARCHAR(100), severity VARCHAR(20) CHECK (severity IN ('critical','panic')) DEFAULT 'critical', alert_status VARCHAR(20) CHECK (alert_status IN ('pending','acknowledged','escalated')) DEFAULT 'pending', alerted_to UUID REFERENCES users(id), alerted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), acknowledged_by UUID REFERENCES users(id), acknowledged_at TIMESTAMP WITH TIME ZONE, acknowledgment_notes TEXT, escalated_to UUID REFERENCES users(id), escalated_at TIMESTAMP WITH TIME ZONE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_patient_id ON lab_critical_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_lab_order_id ON lab_critical_alerts(lab_order_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_alert_status ON lab_critical_alerts(alert_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_alerted_to ON lab_critical_alerts(alerted_to)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_created_at ON lab_critical_alerts(created_at)`);
+    
+    // Enhanced LIS: Enhance lab_orders table with new columns
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS order_set_id UUID REFERENCES lab_order_sets(id)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS test_catalog_id UUID REFERENCES lab_test_catalog(id)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS ordering_provider UUID REFERENCES users(id)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS clinical_indication TEXT`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS icd10_codes TEXT[]`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS specimen_collected_at TIMESTAMP WITH TIME ZONE`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS specimen_received_at TIMESTAMP WITH TIME ZONE`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_reported_at TIMESTAMP WITH TIME ZONE`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_by UUID REFERENCES users(id)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_at TIMESTAMP WITH TIME ZONE`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged)`);
+    
     // Add drugs table (medication catalog)
     statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
@@ -484,6 +531,116 @@ export class DatabaseProvisioningService {
     // Add drug_id column to orders table (for linking prescriptions to drugs)
     statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_orders_drug_id ON orders(drug_id) WHERE drug_id IS NOT NULL`);
+    
+    // Radiology & Medical Imaging Module
+    // Imaging Modalities (X-Ray, CT, MRI, Ultrasound, etc.)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_modalities (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), modality_code VARCHAR(20) UNIQUE NOT NULL CHECK (modality_code IN ('XR','CT','MRI','US','MG','FL','NM','PET')), modality_name VARCHAR(100) NOT NULL, description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_modalities_modality_code ON imaging_modalities(modality_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_modalities_is_active ON imaging_modalities(is_active)`);
+    
+    // Imaging Study Types (specific procedures)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_study_types (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), modality_id UUID NOT NULL REFERENCES imaging_modalities(id) ON DELETE CASCADE, study_code VARCHAR(50) UNIQUE NOT NULL, study_name VARCHAR(255) NOT NULL, body_part VARCHAR(100), views TEXT[], typical_images INTEGER DEFAULT 1, contrast_required BOOLEAN DEFAULT false, cost DECIMAL(10,2), description TEXT, preparation_instructions TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_modality_id ON imaging_study_types(modality_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_study_code ON imaging_study_types(study_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_body_part ON imaging_study_types(body_part)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_is_active ON imaging_study_types(is_active)`);
+    
+    // Imaging Orders
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_patient_id ON imaging_orders(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_number ON imaging_orders(order_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(study_type_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordering_provider ON imaging_orders(ordering_provider)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_status ON imaging_orders(order_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordered_at ON imaging_orders(ordered_at)`);
+    
+    // Imaging Studies (actual imaging session)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_studies (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, accession_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), study_date DATE NOT NULL, study_time TIME NOT NULL, technologist UUID REFERENCES users(id), radiologist_assigned UUID REFERENCES users(id), study_status VARCHAR(30) DEFAULT 'in_progress' CHECK (study_status IN ('in_progress','awaiting_report','reported','signed','amended')), number_of_images INTEGER DEFAULT 0, study_description TEXT, technique TEXT, contrast_used BOOLEAN DEFAULT false, contrast_type VARCHAR(100), contrast_volume VARCHAR(50), radiation_dose VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_imaging_order_id ON imaging_studies(imaging_order_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_patient_id ON imaging_studies(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_accession_number ON imaging_studies(accession_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_study_type_id ON imaging_studies(study_type_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_radiologist_assigned ON imaging_studies(radiologist_assigned)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_study_status ON imaging_studies(study_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_study_date ON imaging_studies(study_date)`);
+    
+    // Imaging Files (images/DICOM files)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_files (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, file_name VARCHAR(255) NOT NULL, file_path TEXT NOT NULL, file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('DICOM','JPEG','PNG','PDF','TIFF')), file_size BIGINT, image_number INTEGER, view_position VARCHAR(50), is_primary BOOLEAN DEFAULT false, uploaded_by UUID REFERENCES users(id), uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_imaging_study_id ON imaging_files(imaging_study_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_is_primary ON imaging_files(is_primary)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_uploaded_at ON imaging_files(uploaded_at)`);
+    
+    // Imaging Reports
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, report_status VARCHAR(20) DEFAULT 'draft' CHECK (report_status IN ('draft','preliminary','final','amended')), clinical_history TEXT, technique TEXT, findings TEXT NOT NULL, impression TEXT NOT NULL, recommendations TEXT, comparison_studies TEXT, critical_findings TEXT, is_critical BOOLEAN DEFAULT false, drafted_by UUID REFERENCES users(id), drafted_at TIMESTAMP WITH TIME ZONE, signed_by UUID REFERENCES users(id), signed_at TIMESTAMP WITH TIME ZONE, amended_by UUID REFERENCES users(id), amendment_reason TEXT, amended_at TIMESTAMP WITH TIME ZONE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_imaging_study_id ON imaging_reports(imaging_study_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_patient_id ON imaging_reports(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_report_status ON imaging_reports(report_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_is_critical ON imaging_reports(is_critical)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_drafted_by ON imaging_reports(drafted_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_signed_by ON imaging_reports(signed_by)`);
+    
+    // Imaging Report Templates
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_report_templates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), modality_id UUID REFERENCES imaging_modalities(id), study_type_id UUID REFERENCES imaging_study_types(id), template_name VARCHAR(255) NOT NULL, template_code VARCHAR(50) UNIQUE NOT NULL, technique_template TEXT, findings_template TEXT, impression_template TEXT, is_default BOOLEAN DEFAULT false, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_templates_modality_id ON imaging_report_templates(modality_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_templates_study_type_id ON imaging_report_templates(study_type_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_templates_template_code ON imaging_report_templates(template_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_templates_is_default ON imaging_report_templates(is_default)`);
+    
+    // Imaging Annotations (for image markup)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_annotations (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_file_id UUID NOT NULL REFERENCES imaging_files(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id), annotation_type VARCHAR(50) NOT NULL CHECK (annotation_type IN ('arrow','circle','rectangle','line','text','measurement','freehand')), annotation_data JSONB NOT NULL, annotation_text TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_annotations_imaging_file_id ON imaging_annotations(imaging_file_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_annotations_user_id ON imaging_annotations(user_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_annotations_annotation_type ON imaging_annotations(annotation_type)`);
+    
+    // Maternity & Obstetrics Module
+    // Maternity Enrollments (Pregnancy Registration)
+    statements.push(`CREATE TABLE IF NOT EXISTS maternity_enrollments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, enrollment_number VARCHAR(50) UNIQUE NOT NULL, enrollment_date DATE NOT NULL, expected_delivery_date DATE, edd_method VARCHAR(50) CHECK (edd_method IN ('LMP','Ultrasound','Clinical')), lmp_date DATE, gestational_age_at_enrollment INTEGER, gravida INTEGER, para INTEGER, parity_term INTEGER, parity_preterm INTEGER, parity_abortions INTEGER, parity_living INTEGER, previous_cesarean BOOLEAN DEFAULT false, previous_complications TEXT, current_pregnancy_complications TEXT, risk_category VARCHAR(20) DEFAULT 'low' CHECK (risk_category IN ('low','medium','high')), enrollment_status VARCHAR(30) DEFAULT 'active' CHECK (enrollment_status IN ('active','delivered','transferred_out','pregnancy_loss')), enrolled_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_patient_id ON maternity_enrollments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_enrollment_number ON maternity_enrollments(enrollment_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_enrollment_status ON maternity_enrollments(enrollment_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_risk_category ON maternity_enrollments(risk_category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_expected_delivery_date ON maternity_enrollments(expected_delivery_date)`);
+    
+    // ANC Visits (WHO 8-visit model)
+    statements.push(`CREATE TABLE IF NOT EXISTS anc_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_number INTEGER NOT NULL, visit_date DATE NOT NULL, gestational_age INTEGER, gestational_age_days INTEGER, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, respiratory_rate INTEGER, fundal_height DECIMAL(4,1), fetal_heart_rate INTEGER, fetal_presentation VARCHAR(50), fetal_movement VARCHAR(50), edema VARCHAR(50), edema_location TEXT, proteinuria VARCHAR(50), glucose_urine VARCHAR(50), hemoglobin DECIMAL(4,1), blood_group VARCHAR(10), rhesus VARCHAR(10), vdrl_syphilis VARCHAR(20), hiv_status VARCHAR(20), hep_b_status VARCHAR(20), tetanus_immunization BOOLEAN, ipt_malaria INTEGER, iron_folate BOOLEAN, deworming BOOLEAN, insecticide_treated_net BOOLEAN, danger_signs_discussed BOOLEAN, birth_plan_discussed BOOLEAN, complications_identified TEXT, interventions TEXT, referral_needed BOOLEAN, referral_reason TEXT, referral_facility VARCHAR(255), next_visit_date DATE, provider UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_maternity_enrollment_id ON anc_visits(maternity_enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_patient_id ON anc_visits(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_visit_date ON anc_visits(visit_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_provider ON anc_visits(provider)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_next_visit_date ON anc_visits(next_visit_date)`);
+    
+    // Ultrasound Scans
+    statements.push(`CREATE TABLE IF NOT EXISTS ultrasound_scans (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, scan_date DATE NOT NULL, gestational_age INTEGER, scan_type VARCHAR(50) CHECK (scan_type IN ('dating','anomaly','growth','biophysical','other')), number_of_fetuses INTEGER DEFAULT 1, fetal_viability BOOLEAN, fetal_heartbeat INTEGER, fetal_presentation VARCHAR(50), placenta_position VARCHAR(100), amniotic_fluid VARCHAR(50), afi DECIMAL(4,1), estimated_fetal_weight DECIMAL(6,2), biparietal_diameter DECIMAL(4,1), head_circumference DECIMAL(5,1), abdominal_circumference DECIMAL(5,1), femur_length DECIMAL(4,1), anomalies_detected TEXT, edd_by_ultrasound DATE, findings TEXT, performed_by UUID REFERENCES users(id), image_path TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_maternity_enrollment_id ON ultrasound_scans(maternity_enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_patient_id ON ultrasound_scans(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_scan_date ON ultrasound_scans(scan_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_scan_type ON ultrasound_scans(scan_type)`);
+    
+    // Deliveries
+    statements.push(`CREATE TABLE IF NOT EXISTS deliveries (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, delivery_date DATE NOT NULL, delivery_time TIME NOT NULL, gestational_age_at_delivery INTEGER, gestational_age_days INTEGER, admission_date TIMESTAMP WITH TIME ZONE, delivery_type VARCHAR(50) CHECK (delivery_type IN ('spontaneous_vaginal','assisted_vaginal','cesarean','instrumental')), delivery_method VARCHAR(100), indication_for_intervention TEXT, labor_onset VARCHAR(50), induction_method VARCHAR(100), duration_of_labor_hours DECIMAL(4,1), rupture_of_membranes TIMESTAMP WITH TIME ZONE, membrane_rupture_type VARCHAR(50), anesthesia_type VARCHAR(50), episiotomy BOOLEAN, perineal_tear_degree VARCHAR(20), blood_loss DECIMAL(6,1), placenta_delivery VARCHAR(50), placenta_complete BOOLEAN, maternal_complications TEXT, maternal_outcome VARCHAR(50), attending_provider UUID REFERENCES users(id), assistant_provider UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_deliveries_maternity_enrollment_id ON deliveries(maternity_enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_deliveries_patient_id ON deliveries(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_deliveries_delivery_date ON deliveries(delivery_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_deliveries_delivery_type ON deliveries(delivery_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_deliveries_attending_provider ON deliveries(attending_provider)`);
+    
+    // Birth Outcomes
+    statements.push(`CREATE TABLE IF NOT EXISTS birth_outcomes (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), delivery_id UUID NOT NULL REFERENCES deliveries(id) ON DELETE CASCADE, birth_order INTEGER DEFAULT 1, birth_outcome VARCHAR(50) CHECK (birth_outcome IN ('live_birth','stillbirth','neonatal_death')), sex VARCHAR(20), birth_weight DECIMAL(5,2), birth_length DECIMAL(4,1), head_circumference DECIMAL(4,1), apgar_1min INTEGER, apgar_5min INTEGER, apgar_10min INTEGER, resuscitation_required BOOLEAN, resuscitation_type TEXT, congenital_anomalies TEXT, neonatal_complications TEXT, breastfeeding_initiated BOOLEAN, breastfeeding_within_1hour BOOLEAN, vitamin_k_given BOOLEAN, eye_prophylaxis_given BOOLEAN, newborn_outcome VARCHAR(50), time_of_death TIMESTAMP WITH TIME ZONE, cause_of_death TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_delivery_id ON birth_outcomes(delivery_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_birth_outcome ON birth_outcomes(birth_outcome)`);
+    
+    // Postnatal Visits
+    statements.push(`CREATE TABLE IF NOT EXISTS postnatal_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, delivery_id UUID REFERENCES deliveries(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_date DATE NOT NULL, days_postpartum INTEGER, weight DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, general_condition VARCHAR(50), uterine_involution VARCHAR(50), lochia VARCHAR(50), perineum_condition VARCHAR(50), breast_condition VARCHAR(50), breastfeeding_status VARCHAR(50), breastfeeding_problems TEXT, emotional_status VARCHAR(50), danger_signs TEXT, family_planning_discussed BOOLEAN, family_planning_method VARCHAR(100), newborn_status VARCHAR(50), newborn_complications TEXT, provider UUID REFERENCES users(id), notes TEXT, next_visit_date DATE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_maternity_enrollment_id ON postnatal_visits(maternity_enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_patient_id ON postnatal_visits(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_visit_date ON postnatal_visits(visit_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_provider ON postnatal_visits(provider)`);
+    
+    // Maternity Risk Factors
+    statements.push(`CREATE TABLE IF NOT EXISTS maternity_risk_factors (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, risk_factor VARCHAR(100) NOT NULL, risk_category VARCHAR(20) CHECK (risk_category IN ('medical','obstetric','social')), severity VARCHAR(20) CHECK (severity IN ('low','medium','high')), identified_date DATE NOT NULL, resolved_date DATE, notes TEXT, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_maternity_enrollment_id ON maternity_risk_factors(maternity_enrollment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_risk_category ON maternity_risk_factors(risk_category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_severity ON maternity_risk_factors(severity)`);
     
     // HIV/AIDS/TB/Cervical Cancer Tables
     // HIV Test Results Table
@@ -1516,9 +1673,33 @@ export class DatabaseProvisioningService {
           FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_critical_alerts_updated_at BEFORE UPDATE ON critical_result_alerts
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_lab_test_catalog_updated_at BEFORE UPDATE ON lab_test_catalog
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_drugs_updated_at BEFORE UPDATE ON drugs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_drug_interactions_updated_at BEFORE UPDATE ON drug_interactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_modalities_updated_at BEFORE UPDATE ON imaging_modalities
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_study_types_updated_at BEFORE UPDATE ON imaging_study_types
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_orders_updated_at BEFORE UPDATE ON imaging_orders
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_studies_updated_at BEFORE UPDATE ON imaging_studies
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_reports_updated_at BEFORE UPDATE ON imaging_reports
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_report_templates_updated_at BEFORE UPDATE ON imaging_report_templates
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_maternity_enrollments_updated_at BEFORE UPDATE ON maternity_enrollments
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_anc_visits_updated_at BEFORE UPDATE ON anc_visits
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_ultrasound_scans_updated_at BEFORE UPDATE ON ultrasound_scans
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_deliveries_updated_at BEFORE UPDATE ON deliveries
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_postnatal_visits_updated_at BEFORE UPDATE ON postnatal_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_tests_updated_at BEFORE UPDATE ON hiv_tests
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
