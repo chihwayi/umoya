@@ -72,10 +72,45 @@ END $$;
 -- 2. RADIOLOGY - Test Demo Data
 -- ===================================================
 
+-- Ensure a demo radiologist exists
+DO $$
+DECLARE
+  v_radiologist_id UUID;
+BEGIN
+  SELECT id INTO v_radiologist_id FROM users WHERE email = 'radiologist@bulawayo-general.co.zw';
+
+  IF v_radiologist_id IS NULL THEN
+    INSERT INTO users (
+      email,
+      password_hash,
+      first_name,
+      last_name,
+      role,
+      license_number,
+      specialization,
+      phone,
+      must_change_password
+    )
+    VALUES (
+      'radiologist@bulawayo-general.co.zw',
+      '$2b$10$53yYB1QraHibRFYL1g1Bzu9zRcQ90b5QciaSd9GBmo5laFu8lqVbC', -- Password1#
+      'Rudo',
+      'Munyoro',
+      'radiologist',
+      'RAD-001234',
+      'Diagnostic Radiology',
+      '+263 77 555 1212',
+      false
+    )
+    RETURNING id INTO v_radiologist_id;
+  END IF;
+END $$;
+
 DO $$
 DECLARE
   v_patient_id UUID;
   v_doctor_id UUID;
+  v_radiologist_id UUID;
   v_study_type_id UUID;
   v_imaging_order_id UUID;
   v_imaging_study_id UUID;
@@ -85,6 +120,8 @@ BEGIN
   
   -- Get a doctor
   SELECT id INTO v_doctor_id FROM users WHERE role = 'doctor' LIMIT 1;
+  -- Get the demo radiologist
+  SELECT id INTO v_radiologist_id FROM users WHERE role = 'radiologist' ORDER BY created_at LIMIT 1;
   
   -- Get Chest X-Ray study type
   SELECT id INTO v_study_type_id FROM imaging_study_types WHERE study_code = 'CXR-PA-LAT' LIMIT 1;
@@ -115,7 +152,7 @@ BEGIN
     INSERT INTO imaging_studies (
       imaging_order_id, patient_id, accession_number, study_type_id,
       study_date, study_time, study_status, number_of_images,
-      study_description, technique
+      study_description, technique, radiologist_assigned
     )
     VALUES (
       v_imaging_order_id,
@@ -124,13 +161,20 @@ BEGIN
       v_study_type_id,
       CURRENT_DATE,
       CURRENT_TIME,
-      'awaiting_report',
+      CASE WHEN v_radiologist_id IS NOT NULL THEN 'awaiting_report' ELSE 'in_progress' END,
       2,
       'Chest X-Ray PA and Lateral views',
-      'PA and lateral chest radiographs obtained in upright position'
+      'PA and lateral chest radiographs obtained in upright position',
+      v_radiologist_id
     )
     RETURNING id INTO v_imaging_study_id;
-    
+
+    IF v_radiologist_id IS NOT NULL THEN
+      UPDATE imaging_orders
+      SET order_status = 'awaiting_report'
+      WHERE id = v_imaging_order_id;
+    END IF;
+
     RAISE NOTICE '✅ Created demo chest X-ray order awaiting report';
   END IF;
 END $$;

@@ -16,13 +16,13 @@ const MaternityDoctorDashboard: React.FC = () => {
   }, []);
 
   const handleBack = () => {
-    navigate(`/${tenantSlug}/doctor`);
+    navigate(`/ehr/${tenantSlug}/doctor`);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('ehr_token');
     localStorage.removeItem('ehr_user');
-    navigate(`/${tenantSlug}/login`);
+    navigate(`/ehr/${tenantSlug}`);
   };
 
   return (

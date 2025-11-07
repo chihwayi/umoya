@@ -312,5 +312,19 @@ export class MaternityController {
   async getOverdueANCVisits(@Request() req: RequestWithTenant) {
     return this.maternityService.getOverdueANCVisits(req.tenantDb);
   }
+
+  @Get('neonatal/recent-outcomes')
+  @ApiOperation({ summary: 'Get recent neonatal outcomes' })
+  @ApiResponse({ status: 200, description: 'Recent neonatal outcomes' })
+  async getRecentNeonatalOutcomes(@Request() req: RequestWithTenant) {
+    return this.maternityService.getRecentNeonatalOutcomes(req.tenantDb);
+  }
+
+  @Get('postnatal/recent-visits')
+  @ApiOperation({ summary: 'Get recent postnatal visits' })
+  @ApiResponse({ status: 200, description: 'Recent postnatal visits' })
+  async getRecentPostnatalVisits(@Request() req: RequestWithTenant) {
+    return this.maternityService.getRecentPostnatalVisits(req.tenantDb);
+  }
 }
 

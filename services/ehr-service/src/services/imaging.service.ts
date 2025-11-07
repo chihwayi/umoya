@@ -739,8 +739,13 @@ export class ImagingService {
     if (filters.modalityId) params.push(filters.modalityId);
     if (filters.studyTypeId) params.push(filters.studyTypeId);
 
-    const templates = await tenantDb.query(query, params);
-    return { templates, total: templates.length };
+    try {
+      const templates = await tenantDb.query(query, params);
+      return { templates, total: templates.length };
+    } catch (error) {
+      this.logger.error(`Failed to load imaging report templates: ${error instanceof Error ? error.message : String(error)}`);
+      return { templates: [], total: 0 };
+    }
   }
 
   // ===== ANNOTATIONS =====

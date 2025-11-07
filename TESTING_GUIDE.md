@@ -145,4 +145,15 @@ The 3 new buttons (Lab, Imaging, Trends) appear when you:
 
 **Frontend rebuilt and serving. Hard refresh (Cmd+Shift+R) then follow the steps above!** 🚀
 
+### Roles & Credentials
+
+| Role | Email | Password | Notes |
+| --- | --- | --- | --- |
+| Doctor | doctor@bulawayo-general.co.zw | Password1# | Full doctor workflow for enhanced LIS, imaging orders, maternity referrals |
+| Nurse | nurse@bulawayo-general.co.zw | Password1# | Handles maternity enrollments, ANC visits |
+| Radiologist | radiologist@bulawayo-general.co.zw | Password1# | Accesses dedicated radiologist dashboard, reads and reports imaging studies |
+| Tenant Admin | admin@bulawayo-general.co.zw | Password1# | Access to tenant management web app |
+
+> **Tip:** All accounts force a password reset on first login unless changed via the tenant admin console.
+
 

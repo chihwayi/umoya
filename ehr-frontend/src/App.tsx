@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { NotificationProvider } from './components/GlobalNotification.tsx';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider.tsx';
 import TenantDirectory from './pages/TenantDirectory.tsx';
@@ -26,12 +26,22 @@ import LabDashboard from './pages/LabDashboard.tsx';
 
 
 function App() {
+  const TenantRedirect: React.FC = () => {
+    const { tenantSlug } = useParams<{ tenantSlug: string }>();
+    if (!tenantSlug) {
+      return <Navigate to="/" replace />;
+    }
+    return <Navigate to={`/ehr/${tenantSlug}`} replace />;
+  };
+
   return (
     <NotificationProvider>
       <AutoLogoutProvider>
         <Router>
           <Routes>
             <Route path="/" element={<TenantDirectory />} />
+            <Route path="/:tenantSlug" element={<TenantRedirect />} />
+            <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
             <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
             <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
             <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />

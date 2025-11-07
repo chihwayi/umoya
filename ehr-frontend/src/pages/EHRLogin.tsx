@@ -49,6 +49,8 @@ const EHRLogin: React.FC = () => {
         // Redirect based on user role
         if (response.data.user.role === 'doctor') {
           navigate(`/ehr/${tenantSlug}/doctor`);
+        } else if (response.data.user.role === 'radiologist') {
+          navigate(`/ehr/${tenantSlug}/radiologist`);
         } else if (response.data.user.role === 'lab_tech' || response.data.user.role === 'lab_technician') {
           navigate(`/ehr/${tenantSlug}/lab`);
         } else {

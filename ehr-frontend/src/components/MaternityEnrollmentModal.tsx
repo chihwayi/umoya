@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
-import { X, Heart, Baby, Calendar, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, Heart, Baby, Calendar, AlertTriangle, Search } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 interface MaternityEnrollmentModalProps {
-  patientId: string;
-  patientName: string;
-  patientDateOfBirth: string;
+  patientId?: string;
+  patientName?: string;
+  patientDateOfBirth?: string;
   tenantSlug: string;
   token: string;
   onClose: () => void;
   onSuccess?: () => void;
+}
+
+interface PatientOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  patientNumber?: string;
+  dateOfBirth?: string;
+  phone?: string;
 }
 
 export default function MaternityEnrollmentModal({
@@ -22,6 +31,22 @@ export default function MaternityEnrollmentModal({
   onClose,
   onSuccess,
 }: MaternityEnrollmentModalProps) {
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [patientResults, setPatientResults] = useState<PatientOption[]>([]);
+  const [patientLookupLoading, setPatientLookupLoading] = useState(false);
+  const [patientLookupError, setPatientLookupError] = useState<string | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(() => {
+    if (patientId && patientName) {
+      return {
+        id: patientId,
+        firstName: patientName.split(' ')[0] || patientName,
+        lastName: patientName.split(' ').slice(1).join(' '),
+        dateOfBirth: patientDateOfBirth,
+      };
+    }
+    return null;
+  });
+
   const [enrollmentDate, setEnrollmentDate] = useState(new Date().toISOString().split('T')[0]);
   const [lmpDate, setLmpDate] = useState('');
   const [edd, setEdd] = useState('');
@@ -35,6 +60,13 @@ export default function MaternityEnrollmentModal({
   const [previousComplications, setPreviousComplications] = useState('');
   const [loading, setLoading] = useState(false);
   const { showSuccess, showError } = useNotification();
+
+  const computedPatientName = useMemo(() => {
+    if (selectedPatient) {
+      return `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim();
+    }
+    return patientName || '';
+  }, [patientName, selectedPatient]);
 
   const calculateEDD = (lmp: string) => {
     if (!lmp) return;
@@ -54,6 +86,11 @@ export default function MaternityEnrollmentModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!selectedPatient) {
+      showError('Select the patient to enroll in maternity care');
+      return;
+    }
+
     if (!lmpDate) {
       showError('Please provide Last Menstrual Period date');
       return;
@@ -63,7 +100,7 @@ export default function MaternityEnrollmentModal({
       setLoading(true);
 
       await ehrApi.createMaternityEnrollment(tenantSlug, token, {
-        patient_id: patientId,
+        patient_id: selectedPatient.id,
         enrollment_date: enrollmentDate,
         lmp_date: lmpDate,
         gravida,
@@ -87,6 +124,54 @@ export default function MaternityEnrollmentModal({
     }
   };
 
+  useEffect(() => {
+    const search = async () => {
+      if (!patientSearchTerm || patientSearchTerm.length < 2) {
+        setPatientResults([]);
+        setPatientLookupError(null);
+        return;
+      }
+
+      try {
+        setPatientLookupLoading(true);
+        setPatientLookupError(null);
+        const res = await ehrApi.searchPatients(patientSearchTerm, token, tenantSlug);
+        const payload = res.data;
+        const rows: any[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.patients)
+            ? payload.patients
+            : [];
+        const filteredRows = rows.filter((p) => {
+          const gender = (p.gender || p.sex || '').toString().toLowerCase();
+          return gender === '' || gender === 'female'
+            || gender === 'f' || gender === 'woman' || gender === 'girl';
+        });
+        setPatientResults(
+          filteredRows.map((p) => ({
+            id: p.id,
+            firstName: p.first_name || p.firstName || '',
+            lastName: p.last_name || p.lastName || '',
+            patientNumber: p.patient_number || p.patientNumber,
+            dateOfBirth: p.date_of_birth || p.dateOfBirth,
+            phone: p.phone,
+          })),
+        );
+      } catch (err) {
+        console.error('Failed to search patients', err);
+        setPatientLookupError('Unable to search patients. Try again.');
+      } finally {
+        setPatientLookupLoading(false);
+      }
+    };
+
+    const timeout = setTimeout(search, 300);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [patientSearchTerm, tenantSlug, token]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -98,7 +183,9 @@ export default function MaternityEnrollmentModal({
                 <Baby className="w-6 h-6 mr-2" />
                 Maternity Care Enrollment
               </h2>
-              <p className="text-pink-100 mt-1">Patient: {patientName}</p>
+              <p className="text-pink-100 mt-1">
+                Patient: {computedPatientName || 'Select patient'}
+              </p>
             </div>
             <button onClick={onClose} className="text-white hover:bg-pink-800 rounded-lg p-2">
               <X className="w-6 h-6" />
@@ -107,6 +194,83 @@ export default function MaternityEnrollmentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+          {!selectedPatient && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <Search className="w-4 h-4 text-pink-600" />
+                Search Patient to Enroll <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={patientSearchTerm}
+                onChange={(e) => setPatientSearchTerm(e.target.value)}
+                placeholder="Search by name, patient number, or national ID"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              />
+              {patientLookupError && (
+                <p className="text-sm text-red-600 mt-1">{patientLookupError}</p>
+              )}
+              {patientLookupLoading && (
+                <p className="text-sm text-gray-500 mt-1">Searching patients...</p>
+              )}
+              {!patientLookupLoading && patientResults.length > 0 && (
+                <div className="mt-3 border border-gray-200 rounded-lg divide-y max-h-56 overflow-y-auto">
+                  {patientResults.map((patient) => (
+                    <button
+                      key={patient.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatient(patient);
+                        setPatientResults([]);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-pink-50 focus:outline-none"
+                    >
+                      <div className="font-semibold text-gray-900">
+                        {patient.firstName} {patient.lastName}
+                      </div>
+                      <div className="text-xs text-gray-600 flex flex-wrap gap-3 mt-1">
+                        {patient.patientNumber && <span>#{patient.patientNumber}</span>}
+                        {patient.dateOfBirth && <span>DOB: {new Date(patient.dateOfBirth).toLocaleDateString()}</span>}
+                        {patient.phone && <span>{patient.phone}</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Don’t see the patient? Ensure they are registered in the system first.
+              </p>
+            </div>
+          )}
+
+          {selectedPatient && (
+            <div className="mb-6 bg-pink-50 border border-pink-200 rounded-lg p-4 flex items-start justify-between">
+              <div>
+                <p className="text-sm text-pink-800 uppercase tracking-wide">Patient Selected</p>
+                <h3 className="text-lg font-semibold text-pink-900">
+                  {selectedPatient.firstName} {selectedPatient.lastName}
+                </h3>
+                <div className="text-sm text-pink-800 flex flex-wrap gap-4 mt-1">
+                  {selectedPatient.patientNumber && <span>#{selectedPatient.patientNumber}</span>}
+                  {selectedPatient.dateOfBirth && (
+                    <span>DOB: {new Date(selectedPatient.dateOfBirth).toLocaleDateString()}</span>
+                  )}
+                  {selectedPatient.phone && <span>{selectedPatient.phone}</span>}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedPatient(null);
+                  setPatientSearchTerm('');
+                }}
+                className="text-xs px-3 py-1 bg-white text-pink-600 border border-pink-300 rounded-lg hover:bg-pink-100"
+              >
+                Change patient
+              </button>
+            </div>
+          )}
+
           {/* Enrollment Date */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -315,7 +479,7 @@ export default function MaternityEnrollmentModal({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!lmpDate || loading}
+                disabled={!selectedPatient || !lmpDate || loading}
                 className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {loading ? (

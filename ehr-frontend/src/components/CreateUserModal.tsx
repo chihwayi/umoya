@@ -30,9 +30,10 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onUs
     { value: 'admin', label: 'Administrator' },
     { value: 'doctor', label: 'Doctor' },
     { value: 'nurse', label: 'Nurse' },
-    { value: 'receptionist', label: 'Receptionist' },
+    { value: 'radiologist', label: 'Radiologist' },
+    { value: 'lab_tech', label: 'Lab Technician' },
     { value: 'pharmacist', label: 'Pharmacist' },
-    { value: 'lab_tech', label: 'Lab Technician' }
+    { value: 'receptionist', label: 'Receptionist' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {

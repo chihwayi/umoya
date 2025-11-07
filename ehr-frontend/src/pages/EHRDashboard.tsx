@@ -8,7 +8,7 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle
+  CheckCircle, Camera
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -37,6 +37,11 @@ const EHRDashboard: React.FC = () => {
       // Redirect doctors directly to their dashboard
       if (parsedUser.role === 'doctor') {
         navigate(`/ehr/${tenantSlug}/doctor`);
+        return;
+      }
+      // Redirect radiologists directly to their dashboard
+      if (parsedUser.role === 'radiologist') {
+        navigate(`/ehr/${tenantSlug}/radiologist`);
         return;
       }
       // Redirect nurses directly to nurse dashboard
@@ -89,6 +94,11 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
         ];
+      case 'radiologist':
+        return [
+          { icon: Camera, label: 'Radiologist Worklist', desc: 'View imaging worklist', color: 'from-purple-500 to-indigo-500', route: 'radiologist' },
+          { icon: TestTube, label: 'Imaging Orders', desc: 'Review assigned studies', color: 'from-blue-500 to-cyan-500', route: 'radiologist' },
+        ];
       case 'receptionist':
         return [
           ...baseActions,
@@ -132,6 +142,14 @@ const EHRDashboard: React.FC = () => {
         { label: 'System Uptime', value: '99.9%', icon: Server, color: 'text-emerald-600' },
         { label: 'Storage Used', value: '2.4GB', icon: HardDrive, color: 'text-orange-600' },
         { label: 'Security Alerts', value: '0', icon: Shield, color: 'text-red-600' },
+      ];
+    }
+    if (role === 'radiologist') {
+      return [
+        { label: 'Unassigned Studies', value: '18', icon: Camera, color: 'text-purple-600' },
+        { label: 'My Queue', value: '6', icon: Users, color: 'text-indigo-600' },
+        { label: 'Draft Reports', value: '2', icon: FileText, color: 'text-amber-600' },
+        { label: 'Critical Findings', value: '1', icon: AlertTriangle, color: 'text-red-600' },
       ];
     }
     return [

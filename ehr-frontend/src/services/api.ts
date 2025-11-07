@@ -1459,6 +1459,57 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getImagingReportTemplates: async (tenantSlug: string, token: string, params: { modality?: string; study_type?: string } = {}) => {
+    const response = await ehrAxios.get('/imaging/reports/templates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  getImageAnnotations: async (tenantSlug: string, token: string, imageId: string) => {
+    const response = await ehrAxios.get(`/imaging/images/${imageId}/annotations`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  addImageAnnotation: async (tenantSlug: string, token: string, imageId: string, annotation: { annotation_type: string; annotation_text?: string; annotation_data?: any }) => {
+    const response = await ehrAxios.post(`/imaging/images/${imageId}/annotations`, annotation, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+ 
+  uploadImagingStudyImage: async (tenantSlug: string, token: string, studyId: string, payload: any) => {
+    const response = await ehrAxios.post(`/imaging/studies/${studyId}/images`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteImagingStudyImage: async (tenantSlug: string, token: string, studyId: string, imageId: string) => {
+    const response = await ehrAxios.delete(`/imaging/studies/${studyId}/images/${imageId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+ 
   assignRadiologist: async (tenantSlug: string, token: string, studyId: string, radiologistId: string) => {
     const response = await ehrAxios.patch(`/imaging/studies/${studyId}/assign`, 
       { radiologist_id: radiologistId },
@@ -1644,6 +1695,56 @@ export const ehrApi = {
 
   getUpcomingDeliveries: async (tenantSlug: string, token: string) => {
     const response = await ehrAxios.get('/maternity/upcoming-deliveries', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getOverdueANC: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/maternity/overdue-anc', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getRecentNeonatalOutcomes: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/maternity/neonatal/recent-outcomes', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getRecentPostnatalVisits: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/maternity/postnatal/recent-visits', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+ 
+  addMaternityRiskFactor: async (tenantSlug: string, token: string, enrollmentId: string, riskData: any) => {
+    const response = await ehrAxios.post(`/maternity/enrollments/${enrollmentId}/risk-factors`, riskData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getMaternityRiskFactors: async (tenantSlug: string, token: string, enrollmentId: string) => {
+    const response = await ehrAxios.get(`/maternity/enrollments/${enrollmentId}/risk-factors`, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`

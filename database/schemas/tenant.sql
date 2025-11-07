@@ -31,7 +31,7 @@ CREATE TABLE tenant_users (
     email VARCHAR(255) UNIQUE NOT NULL,
     "passwordHash" VARCHAR(255) NOT NULL,
     phone VARCHAR(50),
-    role VARCHAR(50) NOT NULL CHECK (role IN ('tenant_admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'accountant')),
+    role VARCHAR(50) NOT NULL CHECK (role IN ('tenant_admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'accountant', 'radiologist')),
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended')),
     "licenseNumber" VARCHAR(100),
     specialization VARCHAR(100),

@@ -1220,7 +1220,7 @@ const NurseDashboard: React.FC = () => {
                 Nursing Notes
               </button>
             </nav>
-          ) : (
+          ) : activeSection === 'hiv' ? (
             <nav className="flex space-x-8 overflow-x-auto" aria-label="HIV Tabs">
               <button
                 onClick={() => setActiveTab('testing')}
@@ -1311,6 +1311,21 @@ const NurseDashboard: React.FC = () => {
                 Monthly Return
               </button>
             </nav>
+          ) : (
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-4">
+              <div className="flex items-center gap-3 text-white">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Heart className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm uppercase text-white/80 tracking-wide">Maternity & Obstetrics Workspace</p>
+                  <p className="text-base font-semibold">Monitor high-risk pregnancies, ANC follow-ups, and deliveries</p>
+                </div>
+              </div>
+              <div className="text-xs text-emerald-100/90">
+                Data refreshes automatically. Use the detailed cards below to open charts and manage care.
+              </div>
+            </div>
           )}
         </div>
       </div>

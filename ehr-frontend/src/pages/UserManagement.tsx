@@ -32,7 +32,7 @@ const UserManagement: React.FC = () => {
   const [resetUser, setResetUser] = useState<any>(null);
   const { showSuccess, showError, showInfo } = useNotification();
 
-  const roles = ['admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_tech'];
+  const roles = ['admin', 'doctor', 'nurse', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist'];
 
   useEffect(() => {
     fetchUsers();
@@ -106,8 +106,10 @@ const UserManagement: React.FC = () => {
       case 'nurse': return 'bg-green-100 text-green-800';
       case 'receptionist': return 'bg-orange-100 text-orange-800';
       case 'pharmacist': return 'bg-teal-100 text-teal-800';
-      case 'lab_tech': return 'bg-cyan-100 text-cyan-800';
-      case 'lab_technician': return 'bg-cyan-100 text-cyan-800';
+      case 'lab_tech':
+      case 'lab_technician':
+        return 'bg-cyan-100 text-cyan-800';
+      case 'radiologist': return 'bg-rose-100 text-rose-700';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -175,7 +177,9 @@ const UserManagement: React.FC = () => {
             >
               <option value="">All Roles</option>
               {roles.map(role => (
-                <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                <option key={role} value={role}>
+                  {role.replace('_', ' ').replace(/\w/g, (c) => c.toUpperCase())}
+                </option>
               ))}
             </select>
           </div>

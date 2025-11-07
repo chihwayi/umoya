@@ -247,7 +247,7 @@ export default function RadiologistWorklist({
                       <div>
                         <span className="text-gray-600">Time Pending:</span>
                         <p className={`font-medium ${study.hours_pending > 24 ? 'text-red-600' : ''}`}>
-                          {study.hours_pending?.toFixed(1)}h
+                          {Number.isFinite(study.hours_pending) ? Number(study.hours_pending).toFixed(1) : '—'}h
                         </p>
                       </div>
                     </div>

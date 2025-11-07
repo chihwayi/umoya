@@ -33,7 +33,7 @@ export interface TenantUser {
   lastName: string;
   email: string;
   phone: string;
-  role: 'tenant_admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accountant';
+  role: 'tenant_admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accountant' | 'radiologist';
   status: 'active' | 'inactive' | 'suspended';
   licenseNumber?: string;
   specialization?: string;
@@ -49,7 +49,7 @@ export interface CreateTenantUserRequest {
   lastName: string;
   email: string;
   phone: string;
-  role: string;
+  role: 'tenant_admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accountant' | 'radiologist';
   licenseNumber?: string;
   specialization?: string;
   temporaryPassword: string;

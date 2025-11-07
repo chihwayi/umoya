@@ -93,7 +93,11 @@ export class MaternityService {
         p.patient_number,
         p.date_of_birth,
         p.phone,
-        EXTRACT(DAY FROM (me.expected_delivery_date::date - CURRENT_DATE::date))::int as days_to_edd,
+        CASE
+          WHEN me.expected_delivery_date IS NOT NULL
+            THEN (me.expected_delivery_date::date - CURRENT_DATE::date)
+          ELSE NULL
+        END as days_to_edd,
         COUNT(DISTINCT av.id) as anc_visit_count,
         COUNT(DISTINCT us.id) as ultrasound_count,
         MAX(av.visit_date) as last_anc_visit_date
@@ -1050,7 +1054,11 @@ export class MaternityService {
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         p.phone,
-        EXTRACT(DAY FROM (me.expected_delivery_date::date - CURRENT_DATE::date))::int as days_to_edd,
+        CASE
+          WHEN me.expected_delivery_date IS NOT NULL
+            THEN (me.expected_delivery_date::date - CURRENT_DATE::date)
+          ELSE NULL
+        END as days_to_edd,
         MAX(av.visit_date) as last_anc_visit_date,
         COUNT(DISTINCT rf.id) as risk_factor_count
       FROM maternity_enrollments me
@@ -1075,7 +1083,11 @@ export class MaternityService {
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         p.phone,
-        EXTRACT(DAY FROM (me.expected_delivery_date::date - CURRENT_DATE::date))::int as days_to_edd,
+        CASE
+          WHEN me.expected_delivery_date IS NOT NULL
+            THEN (me.expected_delivery_date::date - CURRENT_DATE::date)
+          ELSE NULL
+        END as days_to_edd,
         MAX(av.visit_date) as last_anc_visit_date,
         COUNT(DISTINCT av.id) as anc_visit_count
       FROM maternity_enrollments me
@@ -1101,7 +1113,11 @@ export class MaternityService {
         p.phone,
         MAX(av.next_visit_date) as next_visit_date,
         MAX(av.visit_date) as last_visit_date,
-        EXTRACT(DAY FROM (CURRENT_DATE::date - MAX(av.next_visit_date)::date))::int as days_overdue
+        CASE
+          WHEN MAX(av.next_visit_date) IS NOT NULL
+            THEN (CURRENT_DATE::date - MAX(av.next_visit_date)::date)
+          ELSE NULL
+        END as days_overdue
       FROM maternity_enrollments me
       INNER JOIN patients p ON p.id = me.patient_id
       LEFT JOIN anc_visits av ON av.maternity_enrollment_id = me.id
@@ -1113,6 +1129,58 @@ export class MaternityService {
     );
 
     return { patients: overdue, total: overdue.length };
+  }
+
+  async getRecentNeonatalOutcomes(tenantDb: DataSource) {
+    const outcomes = await tenantDb.query(
+      `
+      SELECT 
+        bo.id,
+        bo.delivery_id,
+        bo.birth_order,
+        bo.birth_outcome,
+        bo.newborn_outcome,
+        bo.birth_weight,
+        bo.resuscitation_required,
+        bo.neonatal_complications,
+        bo.time_of_death,
+        me.id as enrollment_id,
+        me.patient_id,
+        p.first_name || ' ' || p.last_name as patient_name,
+        d.delivery_date
+      FROM birth_outcomes bo
+      INNER JOIN deliveries d ON d.id = bo.delivery_id
+      INNER JOIN maternity_enrollments me ON me.id = d.maternity_enrollment_id
+      INNER JOIN patients p ON p.id = me.patient_id
+      WHERE d.delivery_date > CURRENT_DATE - INTERVAL '14 days'
+      ORDER BY d.delivery_date DESC, bo.birth_order
+      LIMIT 20
+      `,
+    );
+
+    return { outcomes, total: outcomes.length };
+  }
+
+  async getRecentPostnatalVisits(tenantDb: DataSource) {
+    const visits = await tenantDb.query(
+      `
+      SELECT 
+        pv.*,
+        me.id as enrollment_id,
+        me.patient_id,
+        p.first_name || ' ' || p.last_name as patient_name,
+        d.delivery_date
+      FROM postnatal_visits pv
+      INNER JOIN maternity_enrollments me ON me.id = pv.maternity_enrollment_id
+      INNER JOIN patients p ON p.id = me.patient_id
+      LEFT JOIN deliveries d ON d.id = pv.delivery_id
+      WHERE pv.visit_date > CURRENT_DATE - INTERVAL '14 days'
+      ORDER BY pv.visit_date DESC
+      LIMIT 20
+      `,
+    );
+
+    return { visits, total: visits.length };
   }
 }
 

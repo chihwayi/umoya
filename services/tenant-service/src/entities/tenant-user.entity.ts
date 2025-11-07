@@ -8,7 +8,8 @@ export enum UserRole {
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
   LAB_TECHNICIAN = 'lab_technician',
-  ACCOUNTANT = 'accountant'
+  ACCOUNTANT = 'accountant',
+  RADIOLOGIST = 'radiologist'
 }
 
 export enum UserStatus {

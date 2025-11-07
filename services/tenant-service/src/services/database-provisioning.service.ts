@@ -97,13 +97,18 @@ export class DatabaseProvisioningService {
         `);
         await tenantDataSource.query(`
           ALTER TABLE users ADD CONSTRAINT users_role_check 
-          CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech'));
+          CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist'));
         `);
       } catch (e) {
         this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
       }
       
-      // Seed lookup tables with initial data
+      // Seed baseline users and clinical catalogs
+      await this.seedDefaultUsers(tenantDataSource);
+      await this.seedLabCatalog(tenantDataSource);
+      await this.seedImagingCatalog(tenantDataSource);
+      
+      // Seed lookup tables with initial data (HIV, maternity, etc.)
       await this.seedLookupTables(tenantDataSource);
       
       this.logger.log('Schema migration completed');
@@ -123,7 +128,7 @@ export class DatabaseProvisioningService {
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist')),
           license_number VARCHAR(100),
           specialization VARCHAR(100),
           phone VARCHAR(50),
@@ -546,7 +551,7 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_is_active ON imaging_study_types(is_active)`);
     
     // Imaging Orders
-    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','awaiting_report','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_patient_id ON imaging_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_number ON imaging_orders(order_number)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(study_type_id)`);
@@ -2289,6 +2294,215 @@ export class DatabaseProvisioningService {
     }
   }
 
+  private async seedDefaultUsers(tenantDataSource: DataSource): Promise<void> {
+    this.logger.log('Seeding default clinical users (doctor, nurse, radiologist)...');
+
+    const defaultPasswordHash = '$2b$10$53yYB1QraHibRFYL1g1Bzu9zRcQ90b5QciaSd9GBmo5laFu8lqVbC'; // Password1#
+
+    await tenantDataSource.query(`
+      INSERT INTO users (email, password_hash, first_name, last_name, role, license_number, specialization, phone, must_change_password)
+      VALUES
+        ('doctor@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Doctor', 'Bulawayo', 'doctor', 'MD-0001', 'Internal Medicine', '+263 77 555 1000', false),
+        ('nurse@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Nurse', 'Dube', 'nurse', 'RN-0008', 'Maternal & Child Health', '+263 77 555 2000', false),
+        ('radiologist@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Rudo', 'Munyoro', 'radiologist', 'RAD-001234', 'Diagnostic Radiology', '+263 77 555 1212', false)
+      ON CONFLICT (email) DO NOTHING;
+    `);
+  }
+
+  private async seedLabCatalog(tenantDataSource: DataSource): Promise<void> {
+    this.logger.log('Seeding baseline laboratory catalog...');
+
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_catalog (test_code, loinc_code, test_name, category, specimen_type, specimen_volume, container_type, turnaround_time, cost, description, clinical_significance, is_active)
+      VALUES
+        ('CBC', '58410-2', 'Complete Blood Count (CBC)', 'Hematology', 'Whole Blood', '3-5 mL', 'EDTA (Purple Top)', 2, 15.00,
+         'Comprehensive blood test measuring red and white cells with platelets',
+         'Evaluates overall health, detects anemia, infection, and blood disorders', true),
+        ('BMP', '51990-0', 'Basic Metabolic Panel', 'Chemistry', 'Serum', '5 mL', 'Red Top or Gold Top', 3, 25.00,
+         'Glucose, calcium, electrolytes, and kidney function tests',
+         'Evaluates kidney function, electrolyte balance, and blood sugar levels', true),
+        ('LIPID', '57698-3', 'Lipid Panel', 'Chemistry', 'Serum', '5 mL', 'Red Top or Gold Top', 4, 30.00,
+         'Measures cholesterol and triglycerides to assess cardiovascular risk',
+         'Screens for risk of heart disease and stroke', true),
+        ('LFT', '24325-3', 'Liver Function Tests', 'Chemistry', 'Serum', '5 mL', 'Red Top or Gold Top', 4, 35.00,
+         'Measures liver enzymes and proteins to assess liver function',
+         'Detects liver disease, damage, or dysfunction', true),
+        ('HBA1C', '4548-4', 'Hemoglobin A1C', 'Chemistry', 'Whole Blood', '2 mL', 'EDTA (Purple Top)', 3, 20.00,
+         'Measures average blood glucose control over the past 2-3 months',
+         'Monitors long-term diabetes control', true),
+        ('MALARIA', NULL, 'Malaria Rapid Test (RDT)', 'Microbiology', 'Whole Blood', '5 µL', 'Capillary or EDTA', 1, 5.00,
+         'Rapid diagnostic test for Plasmodium species antigens',
+         'Detects active malaria infection', true),
+        ('HIV', NULL, 'HIV Rapid Antibody Test', 'Serology', 'Whole Blood or Serum', '50 µL', 'Capillary or Red Top', 1, 8.00,
+         'Rapid antibody test for HIV-1 and HIV-2',
+         'Screens for HIV infection', true),
+        ('VDRL', '5292-8', 'VDRL (Syphilis Screen)', 'Serology', 'Serum', '2 mL', 'Red Top', 2, 10.00,
+         'Screening test for syphilis antibodies',
+         'Detects active or past syphilis infection', true),
+        ('HBSAG', '5196-1', 'Hepatitis B Surface Antigen', 'Serology', 'Serum', '2 mL', 'Red Top', 2, 12.00,
+         'Tests for active Hepatitis B infection',
+         'Screens for Hepatitis B virus', true),
+        ('UA', '24356-8', 'Urinalysis (Complete)', 'Urinalysis', 'Urine', '10-15 mL', 'Sterile Container', 2, 10.00,
+         'Complete urinalysis including physical, chemical, and microscopic examination',
+         'Screens for urinary tract infections, kidney disease, and metabolic disorders', true),
+        ('HCG', '21198-7', 'Pregnancy Test (HCG)', 'Serology', 'Urine or Serum', '5 mL', 'Sterile Container or Red Top', 1, 8.00,
+         'Qualitative test for human chorionic gonadotropin',
+         'Confirms pregnancy', true)
+      ON CONFLICT (test_code) DO NOTHING;
+    `);
+
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, gender_specific, sort_order)
+      SELECT id, 'Hemoglobin', 'HGB', '718-7', 'g/dL', 12.0, 17.5, 7.0, 20.0, true, 1 FROM lab_test_catalog WHERE test_code = 'CBC'
+      ON CONFLICT DO NOTHING;
+    `);
+    await tenantDataSource.query(`
+      INSERT INTO lab_reference_ranges (component_id, age_min, age_max, gender, range_min, range_max, unit)
+      SELECT id, 18, 120, 'male', 13.5, 17.5, 'g/dL' FROM lab_test_components WHERE component_code = 'HGB'
+      ON CONFLICT DO NOTHING;
+    `);
+    await tenantDataSource.query(`
+      INSERT INTO lab_reference_ranges (component_id, age_min, age_max, gender, range_min, range_max, unit)
+      SELECT id, 18, 120, 'female', 12.0, 15.5, 'g/dL' FROM lab_test_components WHERE component_code = 'HGB'
+      ON CONFLICT DO NOTHING;
+    `);
+
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, sort_order)
+      SELECT id, 'White Blood Cell Count', 'WBC', '6690-2', '10^9/L', 4.0, 11.0, 2.0, 30.0, 2 FROM lab_test_catalog WHERE test_code = 'CBC'
+      ON CONFLICT DO NOTHING;
+    `);
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, sort_order)
+      SELECT id, 'Platelet Count', 'PLT', '777-3', '10^9/L', 150.0, 400.0, 50.0, 1000.0, 3 FROM lab_test_catalog WHERE test_code = 'CBC'
+      ON CONFLICT DO NOTHING;
+    `);
+
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, sort_order)
+      SELECT id, 'Glucose', 'GLU', '2345-7', 'mg/dL', 70.0, 100.0, 40.0, 500.0, 1 FROM lab_test_catalog WHERE test_code = 'BMP'
+      ON CONFLICT DO NOTHING;
+    `);
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, sort_order)
+      SELECT id, 'Sodium', 'NA', '2951-2', 'mmol/L', 135.0, 145.0, 120.0, 160.0, 2 FROM lab_test_catalog WHERE test_code = 'BMP'
+      ON CONFLICT DO NOTHING;
+    `);
+    await tenantDataSource.query(`
+      INSERT INTO lab_test_components (test_catalog_id, component_name, component_code, loinc_code, unit, reference_range_min, reference_range_max, critical_low, critical_high, sort_order)
+      SELECT id, 'Potassium', 'K', '2823-3', 'mmol/L', 3.5, 5.0, 2.5, 6.5, 3 FROM lab_test_catalog WHERE test_code = 'BMP'
+      ON CONFLICT DO NOTHING;
+    `);
+
+    await tenantDataSource.query(`
+      INSERT INTO lab_order_sets (set_name, set_code, description, test_ids, category, is_active)
+      VALUES
+        ('Pre-Operative Panel', 'PREOP', 'Standard pre-operative tests', '[]'::jsonb, 'Surgery', true),
+        ('Diabetes Monitoring', 'DM', 'Standard diabetes monitoring tests', '[]'::jsonb, 'Endocrinology', true),
+        ('Antenatal Panel', 'ANC', 'Standard antenatal care tests', '[]'::jsonb, 'Obstetrics', true),
+        ('Cardiac Risk Assessment', 'CARDIAC', 'Cardiovascular risk evaluation', '[]'::jsonb, 'Cardiology', true)
+      ON CONFLICT (set_code) DO NOTHING;
+    `);
+
+    const labOrderSetLinks = [
+      { set: 'PREOP', test: 'CBC', order: 1 },
+      { set: 'PREOP', test: 'BMP', order: 2 },
+      { set: 'PREOP', test: 'HCG', order: 3 },
+      { set: 'DM', test: 'HBA1C', order: 1 },
+      { set: 'DM', test: 'BMP', order: 2 },
+      { set: 'DM', test: 'LIPID', order: 3 },
+      { set: 'ANC', test: 'CBC', order: 1 },
+      { set: 'ANC', test: 'HIV', order: 2 },
+      { set: 'ANC', test: 'VDRL', order: 3 },
+      { set: 'ANC', test: 'HBSAG', order: 4 },
+      { set: 'ANC', test: 'UA', order: 5 },
+      { set: 'CARDIAC', test: 'LIPID', order: 1 },
+      { set: 'CARDIAC', test: 'HBA1C', order: 2 },
+      { set: 'CARDIAC', test: 'BMP', order: 3 }
+    ];
+
+    for (const link of labOrderSetLinks) {
+      await tenantDataSource.query(`
+        INSERT INTO lab_order_set_items (order_set_id, test_catalog_id, sort_order)
+        SELECT os.id, tc.id, ${link.order}
+        FROM lab_order_sets os, lab_test_catalog tc
+        WHERE os.set_code = '${link.set}' AND tc.test_code = '${link.test}'
+        ON CONFLICT DO NOTHING;
+      `);
+    }
+  }
+
+  private async seedImagingCatalog(tenantDataSource: DataSource): Promise<void> {
+    this.logger.log('Seeding baseline imaging catalog...');
+
+    await tenantDataSource.query(`
+      INSERT INTO imaging_modalities (modality_code, modality_name, description, is_active)
+      VALUES 
+        ('XR', 'X-Ray (Radiography)', 'Conventional radiography using ionizing radiation', true),
+        ('CT', 'CT Scan (Computed Tomography)', 'Cross-sectional imaging using X-rays and computer processing', true),
+        ('MRI', 'MRI (Magnetic Resonance Imaging)', 'Imaging using magnetic fields and radio waves', true),
+        ('US', 'Ultrasound', 'Imaging using high-frequency sound waves', true),
+        ('MG', 'Mammography', 'Breast imaging using low-dose X-rays', true),
+        ('FL', 'Fluoroscopy', 'Real-time X-ray imaging', true),
+        ('NM', 'Nuclear Medicine', 'Imaging using radioactive tracers', true),
+        ('PET', 'PET Scan', 'Positron emission tomography for metabolic imaging', true)
+      ON CONFLICT (modality_code) DO NOTHING;
+    `);
+
+    const imagingStudies = [
+      { modality: 'XR', code: 'CXR-PA', name: 'Chest X-Ray (PA)', body: 'Chest', views: '{PA}', images: 1, contrast: false, cost: 25.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
+      { modality: 'XR', code: 'CXR-PA-LAT', name: 'Chest X-Ray (PA & Lateral)', body: 'Chest', views: '{PA,Lateral}', images: 2, contrast: false, cost: 35.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
+      { modality: 'XR', code: 'SPINE-L', name: 'Lumbar Spine X-Ray', body: 'Lumbar Spine', views: '{AP,Lateral}', images: 2, contrast: false, cost: 45.00, prep: 'Remove metal objects. Stand still during imaging.' },
+      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: NULL, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
+      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: NULL, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
+      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: NULL, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
+      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: NULL, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
+      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: NULL, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
+      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: NULL, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
+      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: NULL, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
+      { modality: 'MG', code: 'MG-SCREENING', name: 'Screening Mammogram', body: 'Breast', views: '{CC,MLO}', images: 4, contrast: false, cost: 120.00, prep: 'Avoid deodorant/powder on exam day. Wear two-piece clothing.' }
+    ];
+
+    for (const study of imagingStudies) {
+      await tenantDataSource.query(`
+        INSERT INTO imaging_study_types (modality_id, study_code, study_name, body_part, views, typical_images, contrast_required, cost, description, preparation_instructions, is_active)
+        SELECT mod.id, '${study.code}', '${study.name.replace(/'/g, "''")}', '${study.body}', ${study.views ? `'${study.views}'::text[]` : 'NULL'}, ${study.images}, ${study.contrast}, ${study.cost.toFixed(2)},
+               '${study.name.replace(/'/g, "''")}', ${study.prep ? `'${study.prep.replace(/'/g, "''")}'` : 'NULL'}, true
+        FROM imaging_modalities mod
+        WHERE mod.modality_code = '${study.modality}'
+        ON CONFLICT (study_code) DO NOTHING;
+      `);
+    }
+
+    await tenantDataSource.query(`
+      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
+      SELECT mod.id, st.id,
+             'Chest X-Ray - Normal', 'CXR-NORMAL',
+             'PA and lateral chest radiographs were obtained.',
+             E'LUNGS: Clear bilaterally. No focal consolidation, pleural effusion, or pneumothorax.\nHEART: Normal size and contour.\nMEDIASTINUM: Normal width. No mediastinal mass.\nBONES: No acute fracture.\nSOFT TISSUES: Unremarkable.',
+             'Normal chest radiograph.',
+             true
+      FROM imaging_modalities mod
+      JOIN imaging_study_types st ON st.study_code = 'CXR-PA-LAT'
+      WHERE mod.modality_code = 'XR'
+      ON CONFLICT (template_code) DO NOTHING;
+    `);
+
+    await tenantDataSource.query(`
+      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
+      SELECT mod.id, st.id,
+             'Abdomen Ultrasound - Normal', 'US-ABD-NORMAL',
+             'Grayscale ultrasound examination of the abdomen.',
+             E'LIVER: Normal size, echogenicity, and contour. No focal lesion.\nGALLBLADDER: Normal. No stones or wall thickening.\nKIDNEYS: Normal size and echogenicity. No hydronephrosis or stones.\nSPLEEN: Normal.\nASCITES: None.',
+             'Normal abdominal ultrasound.',
+             true
+      FROM imaging_modalities mod
+      JOIN imaging_study_types st ON st.study_code = 'US-ABD'
+      WHERE mod.modality_code = 'US'
+      ON CONFLICT (template_code) DO NOTHING;
+    `);
+  }
+
   async deleteDatabase(databaseName: string): Promise<void> {
     try {
       // Terminate connections to the database
@@ -2301,11 +2515,4 @@ export class DatabaseProvisioningService {
       // Drop database
       await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
       
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-      
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
-  }
-}
+      this.logger.log(`

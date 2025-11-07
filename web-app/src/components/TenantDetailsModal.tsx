@@ -30,7 +30,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     lastName: '',
     email: '',
     phone: '',
-    role: 'admin',
+    role: 'tenant_admin',
     temporaryPassword: ''
   });
 
@@ -66,7 +66,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
         lastName: '',
         email: '',
         phone: '',
-        role: 'admin',
+        role: 'tenant_admin',
         temporaryPassword: ''
       });
       loadUsers();
@@ -208,14 +208,17 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                   />
                   <select
                     value={newUser.role}
-                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value as CreateTenantUserRequest['role'] })}
                     className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
                   >
-                    <option value="admin">👨💼 Admin</option>
+                    <option value="tenant_admin">👨💼 Admin</option>
                     <option value="doctor">👨⚕️ Doctor</option>
                     <option value="nurse">👩⚕️ Nurse</option>
-                    <option value="receptionist">👩💻 Receptionist</option>
+                    <option value="radiologist">🩻 Radiologist</option>
+                    <option value="lab_technician">🧪 Lab Technician</option>
                     <option value="pharmacist">💊 Pharmacist</option>
+                    <option value="receptionist">👩💻 Receptionist</option>
+                    <option value="accountant">📊 Accountant</option>
                   </select>
                   <input
                     type="password"
