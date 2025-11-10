@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
@@ -144,6 +144,60 @@ const DoctorDashboard: React.FC = () => {
   const [showEnhancedLabOrderModal, setShowEnhancedLabOrderModal] = useState(false);
   const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
+
+  const specialistModules = useMemo(() => {
+    const tenantPath = (path: string) => (tenantSlug ? `/ehr/${tenantSlug}${path}` : '#');
+    return [
+      {
+        title: 'HIV/AIDS Patient Management',
+        description: 'Comprehensive HIV care oversight, ARV regimen management, and treatment failure alerts.',
+        gradient: 'from-red-500 via-orange-500 to-red-600',
+        border: 'border-red-400',
+        icon: Activity,
+        chips: ['ARV Regimen Changes', 'EAC Monitoring', 'Treatment Alerts', 'Viral Load Trends'],
+        buttonLabel: 'Open HIV Dashboard',
+        buttonTextColor: 'text-red-600',
+        buttonHover: 'hover:bg-red-50',
+        route: tenantPath('/doctor/hiv'),
+      },
+      {
+        title: 'Maternity & Obstetrics',
+        description: 'High-risk pregnancy management, delivery oversight, maternal complications, and referral cases.',
+        gradient: 'from-pink-500 via-rose-500 to-pink-600',
+        border: 'border-pink-400',
+        icon: Baby,
+        chips: ['High-Risk Cases', 'Upcoming Deliveries', 'Complication Watch', 'Referral Review'],
+        buttonLabel: 'Open Maternity Center',
+        buttonTextColor: 'text-pink-600',
+        buttonHover: 'hover:bg-pink-50',
+        route: tenantPath('/doctor/maternity'),
+      },
+      {
+        title: 'Oncology Care Navigator',
+        description: 'Coordinate tumor board plans, therapy regimens, infusion sessions, and toxicity tracking.',
+        gradient: 'from-purple-600 via-fuchsia-600 to-rose-600',
+        border: 'border-fuchsia-400',
+        icon: FlaskConical,
+        chips: ['Tumor Board Workflow', 'Regimen Tracking', 'Infusion Sessions', 'Adverse Events'],
+        buttonLabel: 'Open Oncology Hub',
+        buttonTextColor: 'text-fuchsia-600',
+        buttonHover: 'hover:bg-fuchsia-50',
+        route: tenantPath('/doctor/oncology'),
+      },
+      {
+        title: 'Ophthalmology Clinic',
+        description: 'Manage eye encounters, visual acuity, refraction, OCT imaging, and follow-up cadences.',
+        gradient: 'from-sky-500 via-indigo-500 to-blue-600',
+        border: 'border-sky-400',
+        icon: Eye,
+        chips: ['Visual Acuity Logs', 'Refraction Records', 'OCT Imaging', 'Follow-Up Scheduling'],
+        buttonLabel: 'Open Ophthalmology Suite',
+        buttonTextColor: 'text-sky-600',
+        buttonHover: 'hover:bg-sky-50',
+        route: tenantPath('/doctor/ophthalmology'),
+      },
+    ];
+  }, [tenantSlug]);
 
   // Get current user info
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -1026,163 +1080,50 @@ const DoctorDashboard: React.FC = () => {
             })}
           </div>
 
-          {/* Quick Actions - HIV/AIDS Care */}
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-red-500 via-orange-500 to-red-600 rounded-2xl shadow-xl border-4 border-red-400 p-6 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
-                    <Activity className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-2">HIV/AIDS Patient Management</h3>
-                    <p className="text-red-50 text-base mb-3">
-                      Comprehensive HIV care oversight, ARV regimen management, EAC program monitoring, and treatment failure alerts
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        ARV Regimen Changes
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        EAC Monitoring
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Treatment Alerts
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Viral Load Trends
-                      </span>
+          {/* Specialist Modules */}
+          <div className="mb-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              {specialistModules.map((module) => {
+                const Icon = module.icon;
+                return (
+                  <div
+                    key={module.title}
+                    className={`group relative overflow-hidden rounded-2xl border-4 ${module.border} bg-gradient-to-r ${module.gradient} shadow-lg transition-all duration-300 hover:shadow-2xl`}
+                  >
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-white transition-opacity duration-300" />
+                    <div className="relative flex h-full flex-col gap-4 p-5 text-white">
+                      <div className="flex items-start gap-3">
+                        <div className="p-3 bg-white/15 rounded-xl backdrop-blur-sm">
+                          <Icon className="w-8 h-8 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold leading-tight">{module.title}</h3>
+                          <p className="text-sm text-white/80 mt-2">{module.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {module.chips.map((chip) => (
+                          <span
+                            key={chip}
+                            className="px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium tracking-wide backdrop-blur-sm"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-auto">
+                        <button
+                          onClick={() => module.route !== '#' && navigate(module.route)}
+                          className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white rounded-xl font-semibold shadow hover:shadow-lg transition ${module.buttonTextColor} ${module.buttonHover}`}
+                        >
+                          <Icon className={`w-4 h-4 ${module.buttonTextColor}`} />
+                          <span>{module.buttonLabel}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/hiv`)}
-                  className="px-6 py-3 bg-white text-red-600 rounded-xl hover:bg-red-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
-                >
-                  <Activity className="w-5 h-5" />
-                  Open HIV Dashboard
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions - Maternity & Obstetrics */}
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 rounded-2xl shadow-xl border-4 border-pink-400 p-6 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="p-4 bg-white/20 rounded-xl backdrop-blur-sm">
-                    <Baby className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-2">Maternity & Obstetrics</h3>
-                    <p className="text-pink-50 text-base mb-3">
-                      High-risk pregnancy management, delivery oversight, maternal complications, and referral cases
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        High-Risk Cases
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Upcoming Deliveries
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Complications
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Referral Review
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/maternity`)}
-                  className="px-6 py-3 bg-white text-pink-600 rounded-xl hover:bg-pink-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
-                >
-                  <Baby className="w-5 h-5" />
-                  Open Maternity Center
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions - Oncology */}
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-rose-600 rounded-2xl shadow-xl border-4 border-fuchsia-400 p-6 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="p-4 bg-white/15 rounded-xl backdrop-blur-sm">
-                    <FlaskConical className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-2">Oncology Care Navigator</h3>
-                    <p className="text-fuchsia-50 text-base mb-3">
-                      Coordinate tumor board plans, systemic therapy regimens, infusion sessions, and toxicity tracking in one console.
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Tumor Board Workflow
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Regimen Tracking
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Infusion Sessions
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Adverse Events
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/oncology`)}
-                  className="px-6 py-3 bg-white text-fuchsia-600 rounded-xl hover:bg-fuchsia-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
-                >
-                  <FlaskConical className="w-5 h-5" />
-                  Open Oncology Hub
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Actions - Ophthalmology */}
-          <div className="mb-8">
-            <div className="bg-gradient-to-r from-sky-500 via-indigo-500 to-blue-600 rounded-2xl shadow-xl border-4 border-sky-400 p-6 hover:shadow-2xl transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="p-4 bg-white/15 rounded-xl backdrop-blur-sm">
-                    <Eye className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-white mb-2">Ophthalmology Clinic</h3>
-                    <p className="text-blue-50 text-base mb-3">
-                      Manage eye encounters, visual acuity, refraction, OCT imaging, and follow-up cadences with structured tools.
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Visual Acuity Logs
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Refraction Records
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        OCT Imaging
-                      </span>
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
-                        Follow-Up Scheduling
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/ophthalmology`)}
-                  className="px-6 py-3 bg-white text-sky-600 rounded-xl hover:bg-sky-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
-                >
-                  <Eye className="w-5 h-5" />
-                  Open Ophthalmology Suite
-                </button>
-              </div>
+                );
+              })}
             </div>
           </div>
 

@@ -6,7 +6,6 @@ import {
   Calendar,
   ClipboardList,
   FlaskConical,
-  ArrowLeft,
   Layers,
   LogOut,
   Microscope,
@@ -16,6 +15,7 @@ import {
   Users2,
   X,
   Zap,
+  ArrowLeft,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
@@ -914,36 +914,38 @@ const OncologyDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
-              <FlaskConical className="w-6 h-6 text-blue-600" />
-              Oncology Navigator
-            </h1>
-            <p className="text-sm text-slate-500">
-              Tumor registry, systemic therapy, infusion workflows, and adverse event tracking
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+      <header className="bg-gradient-to-r from-purple-700 via-fuchsia-600 to-rose-500 border-b border-fuchsia-400 shadow">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between text-white">
+          <div className="flex items-start gap-3">
             <button
               onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+              aria-label="Back to doctor dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Doctor Dashboard
             </button>
+            <div>
+              <h1 className="text-2xl font-semibold flex items-center gap-2">
+                <FlaskConical className="w-6 h-6" />
+                Oncology Navigator
+              </h1>
+              <p className="text-sm text-white/80">
+                Tumor registry, systemic therapy, infusion workflows, and adverse event tracking
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
             {currentUser && (
               <div className="text-right">
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium">
                   {currentUser.firstName} {currentUser.lastName}
                 </p>
-                <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
+                <p className="text-xs text-white/70 capitalize">{currentUser.role}</p>
               </div>
             )}
             <button
               onClick={handleLogout}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
             >
               <LogOut className="w-4 h-4" />
               Logout
@@ -953,32 +955,18 @@ const OncologyDashboard: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="flex flex-wrap gap-3 items-center justify-between bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-          <div>
-            <p className="text-sm font-medium text-slate-700">Need to bounce back?</p>
-            <p className="text-xs text-slate-500">Return to your primary doctor workspace at any time.</p>
-          </div>
-          <button
-            onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Doctor Dashboard
-          </button>
-        </div>
-
         <section>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {summaryCards.map((card) => (
               <div
                 key={card.title}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between"
+                className={`rounded-2xl border-4 border-fuchsia-400 bg-gradient-to-br from-purple-600 via-fuchsia-600 to-rose-500 shadow-lg p-5 flex items-center justify-between text-white`}
               >
                 <div>
-                  <p className="text-sm text-slate-500">{card.title}</p>
-                  <p className="text-2xl font-semibold text-slate-900 mt-1">{card.value}</p>
+                  <p className="text-sm text-white/80">{card.title}</p>
+                  <p className="text-3xl font-semibold mt-1">{card.value}</p>
                 </div>
-                <div className={`p-3 rounded-xl bg-gradient-to-br ${card.gradient} text-white`}>
+                <div className="p-3 rounded-xl bg-white/20">
                   <card.icon className="w-6 h-6" />
                 </div>
               </div>
