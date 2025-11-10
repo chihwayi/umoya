@@ -23,6 +23,8 @@ import RadiologistDashboard from './pages/RadiologistDashboard.tsx';
 import NurseDashboard from './pages/NurseDashboard.tsx';
 import NursePatientSummary from './pages/NursePatientSummary.tsx';
 import LabDashboard from './pages/LabDashboard.tsx';
+import OncologyDashboard from './pages/OncologyDashboard.tsx';
+import OphthalmologyDashboard from './pages/OphthalmologyDashboard.tsx';
 
 
 function App() {
@@ -57,6 +59,8 @@ function App() {
             <Route path="/ehr/:tenantSlug/doctor/treatments/:patientId" element={<DoctorTreatmentHistoryDetail />} />
             <Route path="/ehr/:tenantSlug/doctor/hiv" element={<HIVDoctorDashboard />} />
             <Route path="/ehr/:tenantSlug/doctor/maternity" element={<MaternityDoctorDashboard />} />
+            <Route path="/ehr/:tenantSlug/doctor/oncology" element={<OncologyDashboard />} />
+            <Route path="/ehr/:tenantSlug/doctor/ophthalmology" element={<OphthalmologyDashboard />} />
             <Route path="/ehr/:tenantSlug/radiologist" element={<RadiologistDashboard />} />
             {/* Nurse routes */}
             <Route path="/ehr/:tenantSlug/nurse" element={<NurseDashboard />} />
@@ -69,6 +73,8 @@ function App() {
             <Route path="/ehr/:tenantSlug/nurse/patients/:patientId" element={<NursePatientSummary />} />
             {/* Lab Technician routes */}
             <Route path="/ehr/:tenantSlug/lab" element={<LabDashboard />} />
+            <Route path="/ehr/:tenantSlug/oncology" element={<OncologyDashboard />} />
+            <Route path="/ehr/:tenantSlug/ophthalmology" element={<OphthalmologyDashboard />} />
             <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
           </Routes>
         </Router>

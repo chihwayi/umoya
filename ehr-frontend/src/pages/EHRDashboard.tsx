@@ -8,7 +8,7 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle, Camera
+  CheckCircle, Camera, FlaskConical
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -85,6 +85,8 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
           { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500' },
+          { icon: FlaskConical, label: 'Oncology Center', desc: 'Regimens, tumor board, adverse events', color: 'from-rose-500 to-purple-500', route: 'doctor/oncology' },
+          { icon: Eye, label: 'Ophthalmology Suite', desc: 'Eye exams, imaging, follow-ups', color: 'from-sky-500 to-cyan-500', route: 'doctor/ophthalmology' },
         ];
       case 'nurse':
         return [

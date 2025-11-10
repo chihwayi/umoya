@@ -521,16 +521,32 @@ export class ImagingService {
       comparison_studies,
       critical_findings,
       is_critical,
+      structured_findings,
+      severity,
+      follow_up_recommended,
+      follow_up_interval,
+      coded_diagnoses,
     } = reportData;
+
+    const structuredFindingsJson =
+      structured_findings !== undefined && structured_findings !== null
+        ? JSON.stringify(structured_findings)
+        : JSON.stringify({});
+    const codedDiagnosesJson =
+      coded_diagnoses !== undefined && coded_diagnoses !== null
+        ? JSON.stringify(coded_diagnoses)
+        : JSON.stringify([]);
 
     const result = await tenantDb.query(
       `
       INSERT INTO imaging_reports (
         imaging_study_id, imaging_order_id, patient_id, report_status,
         clinical_history, technique, findings, impression, recommendations,
-        comparison_studies, critical_findings, is_critical, drafted_by, drafted_at
+        comparison_studies, critical_findings, is_critical, structured_findings,
+        severity, follow_up_recommended, follow_up_interval, coded_diagnoses,
+        drafted_by, drafted_at
       )
-      VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+      VALUES ($1, $2, $3, 'draft', $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16::jsonb, $17, NOW())
       RETURNING *
       `,
       [
@@ -545,6 +561,11 @@ export class ImagingService {
         comparison_studies,
         critical_findings,
         is_critical || false,
+        structuredFindingsJson,
+        severity || null,
+        follow_up_recommended ?? false,
+        follow_up_interval || null,
+        codedDiagnosesJson,
         userId,
       ],
     );
@@ -611,8 +632,25 @@ export class ImagingService {
   }
 
   async updateReport(tenantDb: DataSource, reportId: string, reportData: any) {
-    const { clinical_history, technique, findings, impression, recommendations, critical_findings, is_critical } =
-      reportData;
+    const {
+      clinical_history,
+      technique,
+      findings,
+      impression,
+      recommendations,
+      critical_findings,
+      is_critical,
+      structured_findings,
+      severity,
+      follow_up_recommended,
+      follow_up_interval,
+      coded_diagnoses,
+    } = reportData;
+
+    const structuredFindingsJson =
+      structured_findings !== undefined ? JSON.stringify(structured_findings) : null;
+    const codedDiagnosesJson =
+      coded_diagnoses !== undefined ? JSON.stringify(coded_diagnoses) : null;
 
     const result = await tenantDb.query(
       `
@@ -625,11 +663,30 @@ export class ImagingService {
         recommendations = COALESCE($5, recommendations),
         critical_findings = COALESCE($6, critical_findings),
         is_critical = COALESCE($7, is_critical),
+        structured_findings = COALESCE($8::jsonb, structured_findings),
+        severity = COALESCE($9, severity),
+        follow_up_recommended = COALESCE($10, follow_up_recommended),
+        follow_up_interval = COALESCE($11, follow_up_interval),
+        coded_diagnoses = COALESCE($12::jsonb, coded_diagnoses),
         updated_at = NOW()
-      WHERE id = $8 AND report_status = 'draft'
+      WHERE id = $13 AND report_status = 'draft'
       RETURNING *
       `,
-      [clinical_history, technique, findings, impression, recommendations, critical_findings, is_critical, reportId],
+      [
+        clinical_history,
+        technique,
+        findings,
+        impression,
+        recommendations,
+        critical_findings,
+        is_critical,
+        structuredFindingsJson,
+        severity,
+        follow_up_recommended,
+        follow_up_interval,
+        codedDiagnosesJson,
+        reportId,
+      ],
     );
 
     if (result.length === 0) {
@@ -783,6 +840,309 @@ export class ImagingService {
     );
 
     return { annotations, total: annotations.length };
+  }
+
+  // ===== DOCTOR RESULT REVIEW =====
+
+  private resolveDoctorWorkflowStatus(row: any) {
+    if (row.order_status === 'cancelled') {
+      return 'cancelled';
+    }
+
+    if (row.report_status === 'final') {
+      return row.acknowledged_at ? 'acknowledged' : 'awaiting_acknowledgement';
+    }
+
+    if (!row.study_id) {
+      if (row.order_status === 'scheduled') {
+        return 'scheduled';
+      }
+      return 'awaiting_study';
+    }
+
+    if (row.study_status === 'awaiting_report') {
+      return 'awaiting_report';
+    }
+
+    if (row.study_status === 'reported' || row.report_status === 'draft' || row.report_status === 'preliminary') {
+      return 'reporting';
+    }
+
+    return 'in_progress';
+  }
+
+  async getDoctorImagingResults(
+    tenantDb: DataSource,
+    doctorId: string,
+    options: { status?: string; patientId?: string } = {},
+  ) {
+    const params: any[] = [doctorId];
+    const conditions: string[] = ['io.ordering_provider = $1'];
+
+    if (options.patientId) {
+      params.push(options.patientId);
+      conditions.push(`io.patient_id = $${params.length}`);
+    }
+
+    const query = `
+      SELECT 
+        io.id as order_id,
+        io.order_number,
+        io.priority,
+        io.order_status,
+        io.ordered_at,
+        io.study_type_id,
+        io.clinical_indication,
+        io.clinical_history,
+        io.suspected_diagnosis,
+        st.study_name,
+        st.study_code,
+        st.body_part,
+        m.modality_name,
+        m.modality_code,
+        p.id as patient_id,
+        p.first_name,
+        p.last_name,
+        p.patient_number,
+        p.date_of_birth,
+        p.gender,
+        s.id as study_id,
+        s.study_status,
+        s.study_date,
+        s.study_time,
+        s.created_at as study_created_at,
+        s.updated_at as study_updated_at,
+        s.radiologist_assigned,
+        s.technologist,
+        r.id as report_id,
+        r.report_status,
+        r.is_critical,
+        r.signed_at,
+        r.created_at as report_created_at,
+        r.updated_at as report_updated_at,
+        r.drafted_by,
+        r.signed_by,
+        r.structured_findings,
+        r.severity as report_severity,
+        r.follow_up_recommended,
+        r.follow_up_interval,
+        r.coded_diagnoses,
+        ack.id as acknowledgement_id,
+        ack.acknowledged_at,
+        ack.acknowledgment_notes
+      FROM imaging_orders io
+      INNER JOIN imaging_study_types st ON st.id = io.study_type_id
+      INNER JOIN imaging_modalities m ON m.id = st.modality_id
+      INNER JOIN patients p ON p.id = io.patient_id
+      LEFT JOIN imaging_studies s ON s.imaging_order_id = io.id
+      LEFT JOIN LATERAL (
+        SELECT rep.*
+        FROM imaging_reports rep
+        WHERE rep.imaging_study_id = s.id
+        ORDER BY rep.created_at DESC
+        LIMIT 1
+      ) r ON true
+      LEFT JOIN imaging_report_acknowledgements ack 
+        ON ack.imaging_report_id = r.id 
+        AND ack.doctor_id = io.ordering_provider
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY io.ordered_at DESC
+      LIMIT 200
+    `;
+
+    const rows = await tenantDb.query(query, params);
+
+    const mapped = rows.map((row: any) => {
+      const workflowStatus = this.resolveDoctorWorkflowStatus(row);
+      let structuredFindings: any = {};
+      if (row.structured_findings) {
+        if (typeof row.structured_findings === 'string') {
+          try {
+            structuredFindings = JSON.parse(row.structured_findings);
+          } catch (error) {
+            structuredFindings = {};
+          }
+        } else {
+          structuredFindings = row.structured_findings;
+        }
+      }
+
+      let codedDiagnoses: any[] = [];
+      if (row.coded_diagnoses) {
+        if (typeof row.coded_diagnoses === 'string') {
+          try {
+            codedDiagnoses = JSON.parse(row.coded_diagnoses);
+          } catch (error) {
+            codedDiagnoses = [];
+          }
+        } else {
+          codedDiagnoses = row.coded_diagnoses;
+        }
+      }
+
+      const requiresFollowUp = row.follow_up_recommended && !row.acknowledged_at;
+
+      return {
+        order: {
+          id: row.order_id,
+          number: row.order_number,
+          priority: row.priority,
+          status: row.order_status,
+          ordered_at: row.ordered_at,
+          clinical_indication: row.clinical_indication,
+          clinical_history: row.clinical_history,
+          suspected_diagnosis: row.suspected_diagnosis,
+          study_type_id: row.study_type_id,
+          study_name: row.study_name,
+          study_code: row.study_code,
+          body_part: row.body_part,
+          modality_name: row.modality_name,
+          modality_code: row.modality_code,
+        },
+        patient: {
+          id: row.patient_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          patient_number: row.patient_number,
+          date_of_birth: row.date_of_birth,
+          gender: row.gender,
+          full_name: `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+        },
+        study: row.study_id
+          ? {
+              id: row.study_id,
+              status: row.study_status,
+              study_date: row.study_date,
+              study_time: row.study_time,
+              created_at: row.study_created_at,
+              updated_at: row.study_updated_at,
+              radiologist_assigned: row.radiologist_assigned,
+              technologist: row.technologist,
+            }
+          : null,
+        report: row.report_id
+          ? {
+              id: row.report_id,
+              status: row.report_status,
+              is_critical: row.is_critical,
+              signed_at: row.signed_at,
+              created_at: row.report_created_at,
+              updated_at: row.report_updated_at,
+              drafted_by: row.drafted_by,
+              signed_by: row.signed_by,
+              structured_findings: structuredFindings,
+              severity: row.report_severity,
+              follow_up_recommended: row.follow_up_recommended,
+              follow_up_interval: row.follow_up_interval,
+              coded_diagnoses: codedDiagnoses,
+            }
+          : null,
+        acknowledgement: row.acknowledgement_id
+          ? {
+              id: row.acknowledgement_id,
+              acknowledged_at: row.acknowledged_at,
+              notes: row.acknowledgment_notes,
+            }
+          : null,
+        workflow_status: workflowStatus,
+        is_action_required: (row.is_critical || requiresFollowUp) && !row.acknowledged_at,
+      };
+    });
+
+    const counts = {
+      total: mapped.length,
+      pending: mapped.filter(
+        (item) =>
+          !['acknowledged', 'cancelled'].includes(item.workflow_status),
+      ).length,
+      awaiting_ack: mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement').length,
+      completed: mapped.filter((item) => item.workflow_status === 'acknowledged').length,
+      critical: mapped.filter((item) => item.report?.is_critical && !item.acknowledgement).length,
+      cancelled: mapped.filter((item) => item.workflow_status === 'cancelled').length,
+    };
+
+    let filtered = mapped;
+    switch ((options.status || '').toLowerCase()) {
+      case 'pending':
+        filtered = mapped.filter(
+          (item) =>
+            !['acknowledged', 'cancelled'].includes(item.workflow_status),
+        );
+        break;
+      case 'completed':
+        filtered = mapped.filter((item) => item.workflow_status === 'acknowledged');
+        break;
+      case 'critical':
+        filtered = mapped.filter((item) => item.report?.is_critical && !item.acknowledgement);
+        break;
+      case 'awaiting_ack':
+        filtered = mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement');
+        break;
+      case 'cancelled':
+        filtered = mapped.filter((item) => item.workflow_status === 'cancelled');
+        break;
+      default:
+        break;
+    }
+
+    return {
+      results: filtered,
+      counts,
+    };
+  }
+
+  async acknowledgeReport(
+    tenantDb: DataSource,
+    reportId: string,
+    doctorId: string,
+    notes?: string,
+  ) {
+    const report = await tenantDb.query(
+      `
+      SELECT 
+        r.id,
+        r.report_status,
+        r.imaging_order_id,
+        io.ordering_provider
+      FROM imaging_reports r
+      INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+      WHERE r.id = $1
+      `,
+      [reportId],
+    );
+
+    if (report.length === 0) {
+      throw new NotFoundException(`Report with ID ${reportId} not found`);
+    }
+
+    if (report[0].ordering_provider !== doctorId) {
+      throw new BadRequestException('Only the ordering provider can acknowledge this report');
+    }
+
+    if (report[0].report_status !== 'final') {
+      throw new BadRequestException('Only finalized reports can be acknowledged');
+    }
+
+    const result = await tenantDb.query(
+      `
+      INSERT INTO imaging_report_acknowledgements (
+        imaging_report_id,
+        doctor_id,
+        acknowledgment_notes
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (imaging_report_id, doctor_id)
+      DO UPDATE SET 
+        acknowledgment_notes = EXCLUDED.acknowledgment_notes,
+        acknowledged_at = NOW(),
+        updated_at = NOW()
+      RETURNING *
+      `,
+      [reportId, doctorId, notes || null],
+    );
+
+    this.logger.log(`Report ${reportId} acknowledged by doctor ${doctorId}`);
+    return result[0];
   }
 
   // ===== RADIOLOGIST WORKLIST =====

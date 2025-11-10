@@ -123,6 +123,38 @@ export class LabOrder {
     uploadedAt: Date;
   }>;
 
+  @Column({
+    type: 'jsonb',
+    name: 'processing_context',
+    nullable: true,
+    default: () => `'{}'::jsonb`,
+  })
+  processingContext: Record<string, any>;
+
+  @Column({
+    type: 'jsonb',
+    name: 'workflow_events',
+    nullable: true,
+    default: () => `'[]'::jsonb`,
+  })
+  workflowEvents: Array<Record<string, any>>;
+
+  @Column({
+    type: 'jsonb',
+    name: 'handoff_notes',
+    nullable: true,
+    default: () => `'[]'::jsonb`,
+  })
+  handoffNotes: Array<Record<string, any>>;
+
+  @Column({
+    type: 'jsonb',
+    name: 'notification_log',
+    nullable: true,
+    default: () => `'[]'::jsonb`,
+  })
+  notificationLog: Array<Record<string, any>>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

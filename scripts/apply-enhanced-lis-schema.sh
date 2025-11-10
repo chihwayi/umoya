@@ -147,10 +147,55 @@ ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_reported_at TIMESTAMP WIT
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged BOOLEAN DEFAULT false;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_by UUID REFERENCES users(id);
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS processing_context JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS workflow_events JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS handoff_notes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS notification_log JSONB DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged);
+
+-- Lab Quality Controls
+CREATE TABLE IF NOT EXISTS lab_quality_controls (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  analyzer_name VARCHAR(100) NOT NULL,
+  test_code VARCHAR(50),
+  level VARCHAR(50),
+  lot_number VARCHAR(50),
+  run_datetime TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  result_value VARCHAR(100),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','pass','fail','review')),
+  comments TEXT,
+  recorded_by UUID REFERENCES users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_analyzer_name ON lab_quality_controls(analyzer_name);
+CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_run_datetime ON lab_quality_controls(run_datetime);
+CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_status ON lab_quality_controls(status);
+
+-- Lab Reagent Inventory
+CREATE TABLE IF NOT EXISTS lab_reagent_inventory (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reagent_name VARCHAR(150) NOT NULL,
+  analyzer_name VARCHAR(100),
+  lot_number VARCHAR(50),
+  quantity_available NUMERIC(10,2) DEFAULT 0,
+  unit VARCHAR(20) DEFAULT 'units',
+  minimum_threshold NUMERIC(10,2) DEFAULT 0,
+  expires_on DATE,
+  status VARCHAR(20) DEFAULT 'ok' CHECK (status IN ('ok','warning','critical','expired')),
+  notes TEXT,
+  updated_by UUID REFERENCES users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_reagent_name ON lab_reagent_inventory(reagent_name);
+CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_status ON lab_reagent_inventory(status);
+CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_expires_on ON lab_reagent_inventory(expires_on);
 
 -- Add trigger for lab_test_catalog
 DROP TRIGGER IF EXISTS update_lab_test_catalog_updated_at ON lab_test_catalog;

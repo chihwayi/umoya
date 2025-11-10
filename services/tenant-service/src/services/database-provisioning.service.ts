@@ -445,7 +445,7 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id)`);
     
     // Add lab_orders table
-    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, processing_context JSONB DEFAULT '{}'::jsonb, workflow_events JSONB DEFAULT '[]'::jsonb, handoff_notes JSONB DEFAULT '[]'::jsonb, notification_log JSONB DEFAULT '[]'::jsonb, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_patient_id ON lab_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_status ON lab_orders(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_ordering_provider_id ON lab_orders(ordering_provider_id)`);
@@ -515,6 +515,18 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged BOOLEAN DEFAULT false`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_by UUID REFERENCES users(id)`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS result_acknowledged_at TIMESTAMP WITH TIME ZONE`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS processing_context JSONB DEFAULT '{}'::jsonb`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS workflow_events JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS handoff_notes JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS notification_log JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_quality_controls (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), analyzer_name VARCHAR(100) NOT NULL, test_code VARCHAR(50), level VARCHAR(50), lot_number VARCHAR(50), run_datetime TIMESTAMP WITH TIME ZONE DEFAULT NOW(), result_value VARCHAR(100), status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','pass','fail','review')), comments TEXT, recorded_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_analyzer_name ON lab_quality_controls(analyzer_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_run_datetime ON lab_quality_controls(run_datetime)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_status ON lab_quality_controls(status)`);
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_reagent_inventory (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), reagent_name VARCHAR(150) NOT NULL, analyzer_name VARCHAR(100), lot_number VARCHAR(50), quantity_available NUMERIC(10,2) DEFAULT 0, unit VARCHAR(20) DEFAULT 'units', minimum_threshold NUMERIC(10,2) DEFAULT 0, expires_on DATE, status VARCHAR(20) DEFAULT 'ok' CHECK (status IN ('ok','warning','critical','expired')), notes TEXT, updated_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_reagent_name ON lab_reagent_inventory(reagent_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_status ON lab_reagent_inventory(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_expires_on ON lab_reagent_inventory(expires_on)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged)`);
@@ -576,13 +588,23 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_uploaded_at ON imaging_files(uploaded_at)`);
     
     // Imaging Reports
-    statements.push(`CREATE TABLE IF NOT EXISTS imaging_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, report_status VARCHAR(20) DEFAULT 'draft' CHECK (report_status IN ('draft','preliminary','final','amended')), clinical_history TEXT, technique TEXT, findings TEXT NOT NULL, impression TEXT NOT NULL, recommendations TEXT, comparison_studies TEXT, critical_findings TEXT, is_critical BOOLEAN DEFAULT false, drafted_by UUID REFERENCES users(id), drafted_at TIMESTAMP WITH TIME ZONE, signed_by UUID REFERENCES users(id), signed_at TIMESTAMP WITH TIME ZONE, amended_by UUID REFERENCES users(id), amendment_reason TEXT, amended_at TIMESTAMP WITH TIME ZONE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, report_status VARCHAR(20) DEFAULT 'draft' CHECK (report_status IN ('draft','preliminary','final','amended')), clinical_history TEXT, technique TEXT, findings TEXT NOT NULL, impression TEXT NOT NULL, recommendations TEXT, comparison_studies TEXT, critical_findings TEXT, is_critical BOOLEAN DEFAULT false, structured_findings JSONB DEFAULT '{}'::jsonb, severity VARCHAR(20), follow_up_recommended BOOLEAN DEFAULT false, follow_up_interval VARCHAR(100), coded_diagnoses JSONB DEFAULT '[]'::jsonb, drafted_by UUID REFERENCES users(id), drafted_at TIMESTAMP WITH TIME ZONE, signed_by UUID REFERENCES users(id), signed_at TIMESTAMP WITH TIME ZONE, amended_by UUID REFERENCES users(id), amendment_reason TEXT, amended_at TIMESTAMP WITH TIME ZONE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_imaging_study_id ON imaging_reports(imaging_study_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_patient_id ON imaging_reports(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_report_status ON imaging_reports(report_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_is_critical ON imaging_reports(is_critical)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_drafted_by ON imaging_reports(drafted_by)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_signed_by ON imaging_reports(signed_by)`);
+    statements.push(`ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS structured_findings JSONB DEFAULT '{}'::jsonb`);
+    statements.push(`ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS severity VARCHAR(20)`);
+    statements.push(`ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS follow_up_recommended BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS follow_up_interval VARCHAR(100)`);
+    statements.push(`ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS coded_diagnoses JSONB DEFAULT '[]'::jsonb`);
+    
+    // Imaging Report Acknowledgements (doctor review workflow)
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_report_acknowledgements (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_report_id UUID NOT NULL REFERENCES imaging_reports(id) ON DELETE CASCADE, doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, acknowledged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), acknowledgment_notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), UNIQUE(imaging_report_id, doctor_id))`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_acknowledgements_report_id ON imaging_report_acknowledgements(imaging_report_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_report_acknowledgements_doctor_id ON imaging_report_acknowledgements(doctor_id)`);
     
     // Imaging Report Templates
     statements.push(`CREATE TABLE IF NOT EXISTS imaging_report_templates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), modality_id UUID REFERENCES imaging_modalities(id), study_type_id UUID REFERENCES imaging_study_types(id), template_name VARCHAR(255) NOT NULL, template_code VARCHAR(50) UNIQUE NOT NULL, technique_template TEXT, findings_template TEXT, impression_template TEXT, is_default BOOLEAN DEFAULT false, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -654,6 +676,61 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_date ON hiv_tests(test_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_result ON hiv_tests(test_result)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_enrolled_in_care ON hiv_tests(enrolled_in_care)`);
+    
+    // Oncology module
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_cases (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, primary_diagnosis VARCHAR(255) NOT NULL, staging_system VARCHAR(50), overall_stage VARCHAR(20), stage_at_diagnosis VARCHAR(20), diagnosis_date DATE, primary_site VARCHAR(100), histology VARCHAR(100), oncologist_id UUID REFERENCES users(id), status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active','in_remission','completed_therapy','follow_up','deceased','transferred_out')), care_plan TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_cases_patient_id ON oncology_cases(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_cases_status ON oncology_cases(status)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_staging_entries (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, staging_system VARCHAR(50) NOT NULL, t_stage VARCHAR(10), n_stage VARCHAR(10), m_stage VARCHAR(10), overall_stage VARCHAR(20), stage_date DATE NOT NULL, performance_status VARCHAR(20), notes TEXT, recorded_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_staging_case_id ON oncology_staging_entries(oncology_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_staging_stage_date ON oncology_staging_entries(stage_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_regimens (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, regimen_name VARCHAR(255) NOT NULL, line_of_therapy VARCHAR(50), intent VARCHAR(50) CHECK (intent IN ('curative','adjuvant','neoadjuvant','palliative','maintenance','other')), cycles_planned INTEGER, start_date DATE, end_date DATE, status VARCHAR(30) DEFAULT 'planned' CHECK (status IN ('planned','active','completed','paused','cancelled')), regimen_details JSONB DEFAULT '{}'::jsonb, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_case_id ON oncology_regimens(oncology_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_status ON oncology_regimens(status)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), regimen_id UUID NOT NULL REFERENCES oncology_regimens(id) ON DELETE CASCADE, cycle_number INTEGER, session_date TIMESTAMP WITH TIME ZONE NOT NULL, location VARCHAR(100), administered_by UUID REFERENCES users(id), vitals JSONB DEFAULT '{}'::jsonb, drugs_administered JSONB DEFAULT '[]'::jsonb, premedications JSONB DEFAULT '[]'::jsonb, toxicities JSONB DEFAULT '[]'::jsonb, status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled','in_progress','completed','cancelled')), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_regimen_id ON oncology_infusion_sessions(regimen_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_session_date ON oncology_infusion_sessions(session_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_adverse_events (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, regimen_id UUID REFERENCES oncology_regimens(id) ON DELETE SET NULL, event_date TIMESTAMP WITH TIME ZONE NOT NULL, event_type VARCHAR(255) NOT NULL, grade VARCHAR(10), related_to VARCHAR(50), action_taken TEXT, outcome VARCHAR(100), resolved_date DATE, notes TEXT, reported_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_case_id ON oncology_adverse_events(oncology_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_event_date ON oncology_adverse_events(event_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS tumor_board_meetings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), meeting_date TIMESTAMP WITH TIME ZONE NOT NULL, facilitator UUID REFERENCES users(id), location VARCHAR(100), agenda TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_meetings_date ON tumor_board_meetings(meeting_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS tumor_board_recommendations (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), meeting_id UUID NOT NULL REFERENCES tumor_board_meetings(id) ON DELETE CASCADE, oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, recommendation TEXT NOT NULL, follow_up_actions TEXT, responsible_team VARCHAR(100), due_date DATE, status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','in_progress','completed','declined')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_recommendations_meeting_id ON tumor_board_recommendations(meeting_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_recommendations_case_id ON tumor_board_recommendations(oncology_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_recommendations_status ON tumor_board_recommendations(status)`);
+    
+    // Ophthalmology module
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_encounters (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, encounter_date TIMESTAMP WITH TIME ZONE NOT NULL, encounter_type VARCHAR(50) CHECK (encounter_type IN ('comprehensive_exam','follow_up','pre_op','post_op','emergency','other')), ophthalmologist_id UUID REFERENCES users(id), chief_complaint TEXT, assessment TEXT, plan TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_patient_id ON ophthalmology_encounters(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_date ON ophthalmology_encounters(encounter_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_visual_acuity (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), encounter_id UUID NOT NULL REFERENCES ophthalmology_encounters(id) ON DELETE CASCADE, eye VARCHAR(10) CHECK (eye IN ('OD','OS','OU')), distance_unaided VARCHAR(20), distance_aided VARCHAR(20), near_unaided VARCHAR(20), near_aided VARCHAR(20), pinhole VARCHAR(20), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_visual_acuity_encounter_id ON ophthalmology_visual_acuity(encounter_id)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_refraction (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), encounter_id UUID NOT NULL REFERENCES ophthalmology_encounters(id) ON DELETE CASCADE, eye VARCHAR(10) CHECK (eye IN ('OD','OS','OU')), sphere NUMERIC(5,2), cylinder NUMERIC(5,2), axis INTEGER, add_power NUMERIC(5,2), corrected_va VARCHAR(20), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_refraction_encounter_id ON ophthalmology_refraction(encounter_id)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_slit_lamp_findings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), encounter_id UUID NOT NULL REFERENCES ophthalmology_encounters(id) ON DELETE CASCADE, structure VARCHAR(100) NOT NULL, observation TEXT NOT NULL, severity VARCHAR(20), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_slit_lamp_encounter_id ON ophthalmology_slit_lamp_findings(encounter_id)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_oct_studies (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), encounter_id UUID NOT NULL REFERENCES ophthalmology_encounters(id) ON DELETE CASCADE, imaging_order_id UUID REFERENCES imaging_orders(id), eye VARCHAR(10) CHECK (eye IN ('OD','OS','OU')), study_date TIMESTAMP WITH TIME ZONE, image_reference TEXT, interpretation TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_oct_encounter_id ON ophthalmology_oct_studies(encounter_id)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_procedures (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, encounter_id UUID REFERENCES ophthalmology_encounters(id) ON DELETE SET NULL, procedure_name VARCHAR(255) NOT NULL, procedure_date DATE NOT NULL, eye VARCHAR(10) CHECK (eye IN ('OD','OS','OU')), outcome TEXT, complications TEXT, surgeon_id UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_procedures_patient_id ON ophthalmology_procedures(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_procedures_date ON ophthalmology_procedures(procedure_date)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_follow_ups (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, scheduled_date TIMESTAMP WITH TIME ZONE NOT NULL, reason TEXT, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('urgent','routine','low')), status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled','completed','cancelled','no_show')), related_encounter_id UUID REFERENCES ophthalmology_encounters(id) ON DELETE SET NULL, reminders_sent JSONB DEFAULT '[]'::jsonb, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_followups_patient_id ON ophthalmology_follow_ups(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_followups_status ON ophthalmology_follow_ups(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_followups_scheduled_date ON ophthalmology_follow_ups(scheduled_date)`);
     
     // HIV Care Enrollment Table
     statements.push(`CREATE TABLE IF NOT EXISTS hiv_care_enrollments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, enrollment_date DATE NOT NULL, enrollment_number VARCHAR(100) UNIQUE NOT NULL, enrollment_status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (enrollment_status IN ('active', 'transferred_out', 'lost_to_followup', 'deceased', 'discontinued')), enrollment_facility VARCHAR(255), previous_care_facility VARCHAR(255), previous_care_number VARCHAR(100), date_confirmed_positive DATE, art_start_date DATE, baseline_cd4 INTEGER, baseline_viral_load DECIMAL(10,2), baseline_viral_load_unit VARCHAR(10) DEFAULT 'copies/mL', baseline_clinical_stage VARCHAR(20) CHECK (baseline_clinical_stage IN ('stage1', 'stage2', 'stage3', 'stage4')), baseline_who_stage VARCHAR(20), current_regimen VARCHAR(255), transfer_out_date DATE, transfer_out_facility VARCHAR(255), loss_to_followup_date DATE, loss_to_followup_reason TEXT, deceased_date DATE, cause_of_death TEXT, discontinued_date DATE, discontinued_reason TEXT, enrollment_notes TEXT, created_by UUID NOT NULL REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -1693,6 +1770,8 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_imaging_studies_updated_at BEFORE UPDATE ON imaging_studies
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_imaging_reports_updated_at BEFORE UPDATE ON imaging_reports
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_imaging_report_acknowledgements_updated_at BEFORE UPDATE ON imaging_report_acknowledgements
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_imaging_report_templates_updated_at BEFORE UPDATE ON imaging_report_templates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,

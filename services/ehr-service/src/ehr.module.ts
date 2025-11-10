@@ -36,6 +36,8 @@ import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
 import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
+import { OncologyController } from './controllers/oncology.controller';
+import { OphthalmologyController } from './controllers/ophthalmology.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -78,6 +80,8 @@ import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.servi
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
 import { MaternityService } from './services/maternity.service';
+import { OncologyService } from './services/oncology.service';
+import { OphthalmologyService } from './services/ophthalmology.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -125,6 +129,8 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     HivController,
     ImagingController,
     MaternityController,
+    OncologyController,
+    OphthalmologyController,
   ],
   providers: [
     AuthService,
@@ -167,6 +173,8 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     HivMonthlyReturnService,
     ImagingService,
     MaternityService,
+    OncologyService,
+    OphthalmologyService,
     JwtStrategy,
   ],
 })

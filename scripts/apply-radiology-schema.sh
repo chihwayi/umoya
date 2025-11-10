@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS imaging_orders (
   suspected_diagnosis TEXT,
   icd10_codes TEXT[],
   priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')),
-  order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','completed','cancelled')),
+  order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','awaiting_report','completed','cancelled')),
   ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   scheduled_date TIMESTAMP WITH TIME ZONE,
   performed_at TIMESTAMP WITH TIME ZONE,
@@ -183,6 +183,26 @@ CREATE INDEX IF NOT EXISTS idx_imaging_reports_report_status ON imaging_reports(
 CREATE INDEX IF NOT EXISTS idx_imaging_reports_is_critical ON imaging_reports(is_critical);
 CREATE INDEX IF NOT EXISTS idx_imaging_reports_drafted_by ON imaging_reports(drafted_by);
 CREATE INDEX IF NOT EXISTS idx_imaging_reports_signed_by ON imaging_reports(signed_by);
+ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS structured_findings JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS severity VARCHAR(20);
+ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS follow_up_recommended BOOLEAN DEFAULT false;
+ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS follow_up_interval VARCHAR(100);
+ALTER TABLE imaging_reports ADD COLUMN IF NOT EXISTS coded_diagnoses JSONB DEFAULT '[]'::jsonb;
+
+-- Imaging Report Acknowledgements
+CREATE TABLE IF NOT EXISTS imaging_report_acknowledgements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  imaging_report_id UUID NOT NULL REFERENCES imaging_reports(id) ON DELETE CASCADE,
+  doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  acknowledged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  acknowledgment_notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(imaging_report_id, doctor_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_imaging_report_acknowledgements_report_id ON imaging_report_acknowledgements(imaging_report_id);
+CREATE INDEX IF NOT EXISTS idx_imaging_report_acknowledgements_doctor_id ON imaging_report_acknowledgements(doctor_id);
 
 -- Imaging Report Templates
 CREATE TABLE IF NOT EXISTS imaging_report_templates (
@@ -244,6 +264,11 @@ CREATE TRIGGER update_imaging_studies_updated_at
 DROP TRIGGER IF EXISTS update_imaging_reports_updated_at ON imaging_reports;
 CREATE TRIGGER update_imaging_reports_updated_at 
   BEFORE UPDATE ON imaging_reports
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_imaging_report_acknowledgements_updated_at ON imaging_report_acknowledgements;
+CREATE TRIGGER update_imaging_report_acknowledgements_updated_at 
+  BEFORE UPDATE ON imaging_report_acknowledgements
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_imaging_report_templates_updated_at ON imaging_report_templates;

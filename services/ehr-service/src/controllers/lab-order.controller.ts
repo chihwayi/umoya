@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { LabOrderService } from '../services/lab-order.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -72,5 +72,102 @@ export class LabOrderController {
   @ApiOperation({ summary: 'Update lab order status' })
   async updateStatus(@Param('id') id: string, @Body() body: { status: string }, @Request() req: RequestWithTenant) {
     return this.labOrderService.updateStatus(id, body.status as LabOrderStatus, req.tenantDb);
+  }
+
+  @Put(':id/processing-context')
+  @ApiOperation({ summary: 'Update processing context, analyzer assignment, or workflow notes' })
+  async updateProcessingContext(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      processingContext?: Record<string, any>;
+      appendEvent?: { type: string; description: string; metadata?: Record<string, any> };
+      status?: LabOrderStatus;
+      handoffNote?: { note: string; shift?: string };
+      notify?: {
+        channel: 'system' | 'sms' | 'email' | 'push';
+        recipients: string[];
+        subject?: string;
+        message: string;
+      };
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.id;
+    return this.labOrderService.updateProcessingContext(id, body, req.tenantDb, userId);
+  }
+
+  @Get('quality-controls')
+  @ApiOperation({ summary: 'List recent quality control runs' })
+  async getQualityControls(
+    @Query('analyzer') analyzer: string,
+    @Query('status') status: string,
+    @Query('limit') limit: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.labOrderService.getQualityControls(req.tenantDb, {
+      analyzerName: analyzer,
+      status,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Post('quality-controls')
+  @ApiOperation({ summary: 'Log a quality control run' })
+  async createQualityControl(
+    @Body()
+    body: {
+      analyzer_name: string;
+      test_code?: string;
+      level?: string;
+      lot_number?: string;
+      run_datetime?: string;
+      result_value?: string;
+      status?: 'pending' | 'pass' | 'fail' | 'review';
+      comments?: string;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.id;
+    return this.labOrderService.createQualityControlEntry(req.tenantDb, body, userId);
+  }
+
+  @Get('inventory/reagents')
+  @ApiOperation({ summary: 'Get reagent inventory levels' })
+  async getReagentInventory(@Request() req: RequestWithTenant) {
+    return this.labOrderService.getReagentInventory(req.tenantDb);
+  }
+
+  @Post('inventory/reagents')
+  @ApiOperation({ summary: 'Create or update a reagent inventory item' })
+  async upsertReagentInventory(
+    @Body()
+    body: {
+      id?: string;
+      reagent_name: string;
+      analyzer_name?: string;
+      lot_number?: string;
+      quantity_available?: number;
+      unit?: string;
+      minimum_threshold?: number;
+      expires_on?: string;
+      status?: 'ok' | 'warning' | 'critical' | 'expired';
+      notes?: string;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.id;
+    return this.labOrderService.upsertReagentInventoryItem(req.tenantDb, body, userId);
+  }
+
+  @Patch('inventory/reagents/:id/quantity')
+  @ApiOperation({ summary: 'Update reagent quantity' })
+  async updateReagentQuantity(
+    @Param('id') id: string,
+    @Body() body: { quantity_available: number; status?: 'ok' | 'warning' | 'critical' | 'expired' },
+    @Request() req: RequestWithTenant,
+  ) {
+    const userId = (req.user as any)?.id;
+    return this.labOrderService.updateReagentInventoryQuantity(req.tenantDb, id, body, userId);
   }
 }

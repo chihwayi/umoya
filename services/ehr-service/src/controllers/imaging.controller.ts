@@ -49,7 +49,7 @@ export class ImagingController {
     @Request() req: RequestWithTenant,
     @Body() orderData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.createOrder(req.tenantDb, orderData, userId);
   }
 
@@ -103,7 +103,7 @@ export class ImagingController {
     @Param('id') orderId: string,
     @Body() body: { cancellation_reason: string },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.cancelOrder(req.tenantDb, orderId, body.cancellation_reason, userId);
   }
 
@@ -116,7 +116,7 @@ export class ImagingController {
     @Request() req: RequestWithTenant,
     @Body() studyData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.createStudy(req.tenantDb, studyData, userId);
   }
 
@@ -161,7 +161,7 @@ export class ImagingController {
     @Param('id') studyId: string,
     @Body() imageData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.uploadImage(req.tenantDb, studyId, imageData, userId);
   }
 
@@ -195,8 +195,19 @@ export class ImagingController {
     @Request() req: RequestWithTenant,
     @Body() reportData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.createReport(req.tenantDb, reportData, userId);
+  }
+
+  @Get('reports/templates')
+  @ApiOperation({ summary: 'Get report templates' })
+  @ApiResponse({ status: 200, description: 'Report templates' })
+  async getReportTemplates(
+    @Request() req: RequestWithTenant,
+    @Query('modality') modalityId?: string,
+    @Query('study_type') studyTypeId?: string,
+  ) {
+    return this.imagingService.getReportTemplates(req.tenantDb, { modalityId, studyTypeId });
   }
 
   @Get('reports/:id')
@@ -237,7 +248,7 @@ export class ImagingController {
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.signReport(req.tenantDb, id, userId);
   }
 
@@ -249,19 +260,8 @@ export class ImagingController {
     @Param('id') id: string,
     @Body() body: { amendment_reason: string; findings: string; impression: string },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.amendReport(req.tenantDb, id, body, userId);
-  }
-
-  @Get('reports/templates')
-  @ApiOperation({ summary: 'Get report templates' })
-  @ApiResponse({ status: 200, description: 'Report templates' })
-  async getReportTemplates(
-    @Request() req: RequestWithTenant,
-    @Query('modality') modalityId?: string,
-    @Query('study_type') studyTypeId?: string,
-  ) {
-    return this.imagingService.getReportTemplates(req.tenantDb, { modalityId, studyTypeId });
   }
 
   // ===== ANNOTATIONS =====
@@ -274,7 +274,7 @@ export class ImagingController {
     @Param('imageId') imageId: string,
     @Body() annotationData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.addAnnotation(req.tenantDb, imageId, annotationData, userId);
   }
 
@@ -288,13 +288,39 @@ export class ImagingController {
     return this.imagingService.getImageAnnotations(req.tenantDb, imageId);
   }
 
+  // ===== ORDERING PROVIDER RESULTS =====
+
+  @Get('doctor/results')
+  @ApiOperation({ summary: 'Get imaging results for ordering doctor' })
+  @ApiResponse({ status: 200, description: 'Doctor imaging results' })
+  async getDoctorResults(
+    @Request() req: RequestWithTenant,
+    @Query('status') status?: string,
+    @Query('patient_id') patientId?: string,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.getDoctorImagingResults(req.tenantDb, userId, { status, patientId });
+  }
+
+  @Post('reports/:id/acknowledge')
+  @ApiOperation({ summary: 'Acknowledge imaging report as ordering doctor' })
+  @ApiResponse({ status: 200, description: 'Report acknowledged successfully' })
+  async acknowledgeReport(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: { acknowledgment_notes?: string },
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.acknowledgeReport(req.tenantDb, id, userId, body?.acknowledgment_notes);
+  }
+
   // ===== RADIOLOGIST WORKLIST =====
 
   @Get('worklist')
   @ApiOperation({ summary: 'Get radiologist worklist (unreported studies)' })
   @ApiResponse({ status: 200, description: 'Radiologist worklist' })
   async getRadiologistWorklist(@Request() req: RequestWithTenant) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.getRadiologistWorklist(req.tenantDb, userId);
   }
 
@@ -302,7 +328,7 @@ export class ImagingController {
   @ApiOperation({ summary: 'Get studies assigned to current radiologist' })
   @ApiResponse({ status: 200, description: 'Assigned studies' })
   async getMyStudies(@Request() req: RequestWithTenant) {
-    const userId = req.user?.userId;
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.getMyStudies(req.tenantDb, userId);
   }
 

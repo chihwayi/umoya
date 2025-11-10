@@ -6,7 +6,7 @@ import {
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
-  Camera, TrendingUp, Baby
+  Camera, TrendingUp, Baby, FlaskConical
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -33,6 +33,8 @@ import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
 import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
 import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
+import DoctorImagingResultsPanel from '../components/DoctorImagingResultsPanel';
+import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 
 interface Appointment {
   id: string;
@@ -153,6 +155,12 @@ const DoctorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment' | 'critical-alerts'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [criticalAlertCount, setCriticalAlertCount] = useState(0);
+  const [criticalImagingCount, setCriticalImagingCount] = useState(0);
+  const [imagingViewerOpen, setImagingViewerOpen] = useState(false);
+  const [selectedImagingStudyId, setSelectedImagingStudyId] = useState<string | null>(null);
+  const [imagingStudyDetails, setImagingStudyDetails] = useState<any | null>(null);
+  const [loadingImagingStudy, setLoadingImagingStudy] = useState(false);
+  const [imagingStudyLoadError, setImagingStudyLoadError] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -167,8 +175,20 @@ const DoctorDashboard: React.FC = () => {
       try {
         const token = localStorage.getItem('ehr_token');
         if (token && tenantSlug) {
-          const response = await ehrApi.getCriticalAlertStats(tenantSlug, token);
-          setCriticalAlertCount(response.data?.pending_count || 0);
+          const [labResponse, imagingResponse] = await Promise.all([
+            ehrApi.getCriticalAlertStats(tenantSlug, token),
+            ehrApi.getDoctorImagingResults(tenantSlug, token, { status: 'critical' }),
+          ]);
+
+          const labPending = labResponse.data?.pending_count || 0;
+          const imagingCritical =
+            imagingResponse.data?.counts?.critical ??
+            (Array.isArray(imagingResponse.data?.results)
+              ? imagingResponse.data.results.length
+              : 0);
+
+          setCriticalImagingCount(imagingCritical);
+          setCriticalAlertCount(labPending + imagingCritical);
         }
       } catch (error) {
         console.error('Failed to load alert count:', error);
@@ -209,6 +229,49 @@ const DoctorDashboard: React.FC = () => {
     };
     loadChartData();
   }, [currentAppointment, tenantSlug]);
+
+  const openImagingStudy = async (studyId: string) => {
+    if (!tenantSlug) return;
+    const token = localStorage.getItem('ehr_token') || '';
+    try {
+      setSelectedImagingStudyId(studyId);
+      setImagingViewerOpen(true);
+      setLoadingImagingStudy(true);
+      setImagingStudyLoadError(false);
+      const { data } = await ehrApi.getImagingStudy(tenantSlug, token, studyId);
+      setImagingStudyDetails(data);
+    } catch (error) {
+      console.error('Failed to load imaging study', error);
+      showError('Failed to load imaging study');
+      setImagingStudyLoadError(true);
+    } finally {
+      setLoadingImagingStudy(false);
+    }
+  };
+
+  const refreshImagingStudy = async () => {
+    if (!selectedImagingStudyId || !tenantSlug) return;
+    const token = localStorage.getItem('ehr_token') || '';
+    try {
+      setLoadingImagingStudy(true);
+      setImagingStudyLoadError(false);
+      const { data } = await ehrApi.getImagingStudy(tenantSlug, token, selectedImagingStudyId);
+      setImagingStudyDetails(data);
+    } catch (error) {
+      console.error('Failed to refresh imaging study', error);
+      showError('Failed to refresh imaging study');
+      setImagingStudyLoadError(true);
+    } finally {
+      setLoadingImagingStudy(false);
+    }
+  };
+
+  const closeImagingViewer = () => {
+    setImagingViewerOpen(false);
+    setSelectedImagingStudyId(null);
+    setImagingStudyDetails(null);
+    setImagingStudyLoadError(false);
+  };
 
   // Auto-calculate risk assessment when patient and data are ready
   useEffect(() => {
@@ -1037,7 +1100,87 @@ const DoctorDashboard: React.FC = () => {
                   className="px-6 py-3 bg-white text-pink-600 rounded-xl hover:bg-pink-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
                 >
                   <Baby className="w-5 h-5" />
-                  Open Maternity
+                  Open Maternity Center
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions - Oncology */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-rose-600 rounded-2xl shadow-xl border-4 border-fuchsia-400 p-6 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="p-4 bg-white/15 rounded-xl backdrop-blur-sm">
+                    <FlaskConical className="w-10 h-10 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-2">Oncology Care Navigator</h3>
+                    <p className="text-fuchsia-50 text-base mb-3">
+                      Coordinate tumor board plans, systemic therapy regimens, infusion sessions, and toxicity tracking in one console.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Tumor Board Workflow
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Regimen Tracking
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Infusion Sessions
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Adverse Events
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/oncology`)}
+                  className="px-6 py-3 bg-white text-fuchsia-600 rounded-xl hover:bg-fuchsia-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                  <FlaskConical className="w-5 h-5" />
+                  Open Oncology Hub
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions - Ophthalmology */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-sky-500 via-indigo-500 to-blue-600 rounded-2xl shadow-xl border-4 border-sky-400 p-6 hover:shadow-2xl transition-all duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="p-4 bg-white/15 rounded-xl backdrop-blur-sm">
+                    <Eye className="w-10 h-10 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white mb-2">Ophthalmology Clinic</h3>
+                    <p className="text-blue-50 text-base mb-3">
+                      Manage eye encounters, visual acuity, refraction, OCT imaging, and follow-up cadences with structured tools.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Visual Acuity Logs
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Refraction Records
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        OCT Imaging
+                      </span>
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold text-white backdrop-blur-sm">
+                        Follow-Up Scheduling
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor/ophthalmology`)}
+                  className="px-6 py-3 bg-white text-sky-600 rounded-xl hover:bg-sky-50 font-bold text-lg shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Eye className="w-5 h-5" />
+                  Open Ophthalmology Suite
                 </button>
               </div>
             </div>
@@ -1182,9 +1325,16 @@ const DoctorDashboard: React.FC = () => {
               </div>
               {/* Current Appointment moved to its own tab */}
 
-
+              <DoctorImagingResultsPanel
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                statusFilter="awaiting_ack"
+                hideTabs
+                compact
+                title="Imaging Reports Awaiting Review"
+                onOpenStudy={openImagingStudy}
+              />
               
-
               {/* Orders & Medication - side by side */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Orders Lifecycle */}
@@ -1305,15 +1455,27 @@ const DoctorDashboard: React.FC = () => {
           )}
 
           {activeTab === 'critical-alerts' && (
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                <AlertTriangle className="w-6 h-6 text-red-600 mr-2" />
-                Critical Lab Results & Alerts
-              </h2>
-              <CriticalResultAlertPanel
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                  <AlertTriangle className="w-6 h-6 text-red-600 mr-2" />
+                  Critical Lab Results & Alerts
+                </h2>
+                <CriticalResultAlertPanel
+                  tenantSlug={tenantSlug!}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  showAllAlerts={false}
+                />
+              </div>
+
+              <DoctorImagingResultsPanel
                 tenantSlug={tenantSlug!}
                 token={localStorage.getItem('ehr_token') || ''}
-                showAllAlerts={false}
+                statusFilter="critical"
+                hideTabs
+                compact
+                title={`Critical Imaging Findings (${criticalImagingCount})`}
+                onOpenStudy={openImagingStudy}
               />
             </div>
           )}
@@ -1383,6 +1545,16 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  <DoctorImagingResultsPanel
+                    tenantSlug={tenantSlug!}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    patientId={currentAppointment.patient.id}
+                    hideTabs
+                    compact
+                    title="This Patient's Imaging Timeline"
+                    onOpenStudy={openImagingStudy}
+                  />
 
                   {/* Compact Grid Layout - 3 Columns */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2307,6 +2479,20 @@ const DoctorDashboard: React.FC = () => {
             fetchTodayAppointments();
           }}
           orderingProviderId={currentUser?.id}
+        />
+      )}
+
+      {imagingViewerOpen && tenantSlug && (
+        <ImagingStudyViewerModal
+          isOpen={imagingViewerOpen}
+          onClose={closeImagingViewer}
+          study={loadingImagingStudy ? null : imagingStudyDetails}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onRefresh={refreshImagingStudy}
+          isLoading={loadingImagingStudy}
+          loadError={imagingStudyLoadError}
+          currentUser={currentUser}
         />
       )}
 

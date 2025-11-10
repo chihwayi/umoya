@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileSignature, Loader2, NotebookPen, PenSquare, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  FileSignature,
+  Loader2,
+  NotebookPen,
+  PenSquare,
+  Plus,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
@@ -20,7 +33,107 @@ interface ReportTemplate {
   impression_template?: string;
 }
 
-const defaultReportState = {
+type ReportSeverity = 'benign' | 'minor' | 'moderate' | 'significant' | 'critical';
+
+interface StructuredFinding {
+  id: string;
+  region: string;
+  finding: string;
+  significance: ReportSeverity;
+  recommendation?: string;
+}
+
+type ReportState = {
+  clinical_history: string;
+  technique: string;
+  findings: string;
+  impression: string;
+  recommendations: string;
+  comparison_studies: string;
+  critical_findings: string;
+  is_critical: boolean;
+  severity: ReportSeverity | '';
+  follow_up_recommended: boolean;
+  follow_up_interval: string;
+  coded_diagnoses: string[];
+  structured_findings: StructuredFinding[];
+};
+
+const SEVERITY_META: Record<ReportSeverity, { label: string; className: string }> = {
+  benign: { label: 'Benign / Normal', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  minor: { label: 'Minor Finding', className: 'bg-sky-100 text-sky-700 border-sky-200' },
+  moderate: { label: 'Moderate Concern', className: 'bg-amber-100 text-amber-700 border-amber-200' },
+  significant: { label: 'Significant Finding', className: 'bg-orange-100 text-orange-700 border-orange-200' },
+  critical: { label: 'Critical / Emergent', className: 'bg-red-100 text-red-700 border-red-200 animate-pulse' },
+};
+
+const SEVERITY_OPTIONS: { value: ReportSeverity; label: string }[] = [
+  { value: 'benign', label: 'Benign / Normal' },
+  { value: 'minor', label: 'Minor Finding' },
+  { value: 'moderate', label: 'Moderate Concern' },
+  { value: 'significant', label: 'Significant Finding' },
+  { value: 'critical', label: 'Critical / Emergent' },
+];
+
+const generateFindingId = () => `sf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const parseStructuredFindings = (value: any): StructuredFinding[] => {
+  if (!value) return [];
+
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed.map((item) => ({
+      id: item?.id || generateFindingId(),
+      region: item?.region || '',
+      finding: item?.finding || '',
+      significance: (item?.significance as ReportSeverity) || 'moderate',
+      recommendation: item?.recommendation || '',
+    }));
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    return Object.keys(parsed).map((key) => ({
+      id: generateFindingId(),
+      region: key,
+      finding: parsed[key]?.finding || '',
+      significance: (parsed[key]?.significance as ReportSeverity) || 'moderate',
+      recommendation: parsed[key]?.recommendation || '',
+    }));
+  }
+
+  return [];
+};
+
+const parseCodedDiagnoses = (value: any): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
+      }
+    } catch (error) {
+      return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const defaultReportState: ReportState = {
   clinical_history: '',
   technique: '',
   findings: '',
@@ -29,6 +142,11 @@ const defaultReportState = {
   comparison_studies: '',
   critical_findings: '',
   is_critical: false,
+  severity: '',
+  follow_up_recommended: false,
+  follow_up_interval: '',
+  coded_diagnoses: [],
+  structured_findings: [],
 };
 
 const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
@@ -39,12 +157,13 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   onRefresh,
 }) => {
   const { showError, showSuccess } = useNotification();
-  const [reportState, setReportState] = useState(defaultReportState);
+  const [reportState, setReportState] = useState<ReportState>(defaultReportState);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [diagnosisDraft, setDiagnosisDraft] = useState('');
 
   const existingReport = study?.report || null;
   const isAssignedRadiologist = useMemo(() => {
@@ -57,33 +176,105 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
     const assignedId = study.radiologist_assigned_id || study.radiologist_assigned;
     return assignedId === currentUser.id;
   }, [currentUser, study]);
+  const readOnly = !isAssignedRadiologist || existingReport?.report_status === 'final';
+  const currentSeverity = reportState.severity;
+
+  const renderSeverityBadge = (severity: ReportSeverity | '') => {
+    if (!severity || !SEVERITY_META[severity]) return null;
+    const meta = SEVERITY_META[severity];
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${meta.className}`}
+      >
+        <ShieldAlert className="w-3 h-3" />
+        {meta.label}
+      </span>
+    );
+  };
+
+  const handleChange = <K extends keyof ReportState>(field: K, value: ReportState[K]) => {
+    setReportState((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleStructuredFindingChange = <K extends keyof Omit<StructuredFinding, 'id'>>(
+    id: string,
+    field: K,
+    value: StructuredFinding[K],
+  ) => {
+    setReportState((prev) => ({
+      ...prev,
+      structured_findings: prev.structured_findings.map((finding) =>
+        finding.id === id ? { ...finding, [field]: value } : finding,
+      ),
+    }));
+  };
+
+  const addStructuredFinding = () => {
+    if (readOnly) return;
+    setReportState((prev) => ({
+      ...prev,
+      structured_findings: [
+        ...prev.structured_findings,
+        { id: generateFindingId(), region: '', finding: '', significance: 'moderate', recommendation: '' },
+      ],
+    }));
+  };
+
+  const removeStructuredFinding = (id: string) => {
+    if (readOnly) return;
+    setReportState((prev) => ({
+      ...prev,
+      structured_findings: prev.structured_findings.filter((finding) => finding.id !== id),
+    }));
+  };
+
+  const addDiagnosisCode = () => {
+    if (readOnly) return;
+    const code = diagnosisDraft.trim().toUpperCase();
+    if (!code) return;
+
+    setReportState((prev) => ({
+      ...prev,
+      coded_diagnoses: prev.coded_diagnoses.includes(code) ? prev.coded_diagnoses : [...prev.coded_diagnoses, code],
+    }));
+    setDiagnosisDraft('');
+  };
+
+  const removeDiagnosisCode = (code: string) => {
+    if (readOnly) return;
+    setReportState((prev) => ({
+      ...prev,
+      coded_diagnoses: prev.coded_diagnoses.filter((item) => item !== code),
+    }));
+  };
 
   useEffect(() => {
-    setReportState((prev) => {
-      if (existingReport) {
-        return {
-          clinical_history: existingReport.clinical_history || study?.clinical_history || '',
-          technique: existingReport.technique || '',
-          findings: existingReport.findings || '',
-          impression: existingReport.impression || '',
-          recommendations: existingReport.recommendations || '',
-          comparison_studies: existingReport.comparison_studies || '',
-          critical_findings: existingReport.critical_findings || '',
-          is_critical: Boolean(existingReport.is_critical),
-        };
-      }
-
-      return {
+    if (existingReport) {
+      const structuredFindings = parseStructuredFindings(existingReport.structured_findings);
+      const codedDiagnoses = parseCodedDiagnoses(existingReport.coded_diagnoses);
+      setReportState({
+        clinical_history: existingReport.clinical_history || study?.clinical_history || '',
+        technique: existingReport.technique || '',
+        findings: existingReport.findings || '',
+        impression: existingReport.impression || '',
+        recommendations: existingReport.recommendations || '',
+        comparison_studies: existingReport.comparison_studies || '',
+        critical_findings: existingReport.critical_findings || '',
+        is_critical: Boolean(existingReport.is_critical),
+        severity: (existingReport.severity as ReportSeverity) || '',
+        follow_up_recommended: Boolean(existingReport.follow_up_recommended),
+        follow_up_interval: existingReport.follow_up_interval || '',
+        coded_diagnoses: codedDiagnoses,
+        structured_findings: structuredFindings,
+      });
+    } else {
+      setReportState({
+        ...defaultReportState,
         clinical_history: study?.clinical_history || '',
         technique: study?.technique || '',
-        findings: '',
-        impression: '',
-        recommendations: '',
-        comparison_studies: '',
-        critical_findings: '',
-        is_critical: false,
-      };
-    });
+      });
+    }
+    setDiagnosisDraft('');
   }, [existingReport, study]);
 
   useEffect(() => {
@@ -130,10 +321,6 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
     }
   };
 
-  const handleChange = (field: keyof typeof defaultReportState, value: any) => {
-    setReportState((prev) => ({ ...prev, [field]: value }));
-  };
-
   const ensureStudyContext = () => {
     if (!study?.id || !study?.imaging_order_id || !study?.patient_id) {
       showError('Missing study context. Please reload the study.');
@@ -151,6 +338,17 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
 
     setSaving(true);
     try {
+      const filteredFindings = reportState.structured_findings
+        .filter((finding) => finding.region.trim() || finding.finding.trim())
+        .map(({ id, region, finding, significance, recommendation }) => ({
+          region: region.trim(),
+          finding: finding.trim(),
+          significance,
+          recommendation: recommendation?.trim() || undefined,
+        }));
+
+      const filteredDiagnoses = reportState.coded_diagnoses.map((code) => code.trim()).filter(Boolean);
+
       const payload = {
         imaging_study_id: study.id,
         imaging_order_id: study.imaging_order_id,
@@ -163,6 +361,14 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
         comparison_studies: reportState.comparison_studies,
         critical_findings: reportState.critical_findings,
         is_critical: reportState.is_critical,
+        structured_findings: filteredFindings,
+        severity: reportState.severity || null,
+        follow_up_recommended: reportState.follow_up_recommended,
+        follow_up_interval:
+          reportState.follow_up_recommended && reportState.follow_up_interval
+            ? reportState.follow_up_interval
+            : null,
+        coded_diagnoses: filteredDiagnoses,
       };
 
       if (existingReport?.id) {
@@ -246,8 +452,6 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
     );
   };
 
-  const readOnly = !isAssignedRadiologist || existingReport?.report_status === 'final';
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -263,6 +467,13 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
           {reportState.is_critical && (
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
               <ShieldAlert className="w-3 h-3" /> Critical Finding
+            </span>
+          )}
+          {renderSeverityBadge(currentSeverity)}
+          {reportState.follow_up_recommended && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border bg-orange-50 text-orange-700 border-orange-200">
+              <Clock className="w-3 h-3" />
+              Follow-up {reportState.follow_up_interval ? `in ${reportState.follow_up_interval}` : 'required'}
             </span>
           )}
         </div>
@@ -383,6 +594,220 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
               Flag report as critical and alert ordering clinician
             </label>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+              Overall Severity
+            </label>
+            <select
+              value={reportState.severity}
+              onChange={(e) => handleChange('severity', e.target.value as ReportSeverity | '')}
+              disabled={readOnly}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50"
+            >
+              <option value="">Select severity</option>
+              {SEVERITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="mt-2">{renderSeverityBadge(reportState.severity)}</div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+              Follow-up
+            </label>
+            <div className="rounded-lg border border-slate-200 px-3 py-2 bg-slate-50 flex flex-col gap-2">
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={reportState.follow_up_recommended}
+                  onChange={(e) => handleChange('follow_up_recommended', e.target.checked)}
+                  disabled={readOnly}
+                  className="h-4 w-4 rounded border border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Follow-up action required
+              </label>
+              <input
+                type="text"
+                value={reportState.follow_up_interval}
+                onChange={(e) => handleChange('follow_up_interval', e.target.value)}
+                disabled={readOnly || !reportState.follow_up_recommended}
+                placeholder="e.g. within 2 weeks"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+              Coded Diagnoses / Flags
+            </label>
+            <div className="rounded-lg border border-slate-200 px-3 py-2 bg-slate-50">
+              <div className="flex flex-wrap gap-2">
+                {reportState.coded_diagnoses.length === 0 && (
+                  <span className="text-xs text-slate-400">No coded diagnoses captured</span>
+                )}
+                {reportState.coded_diagnoses.map((code) => (
+                  <span
+                    key={code}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200"
+                  >
+                    {code}
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => removeDiagnosisCode(code)}
+                        className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              {!readOnly && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={diagnosisDraft}
+                    onChange={(e) => setDiagnosisDraft(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addDiagnosisCode();
+                      }
+                    }}
+                    placeholder="Enter ICD / SNOMED code"
+                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={addDiagnosisCode}
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-700"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Structured Findings</p>
+              <p className="text-xs text-slate-500">
+                Capture discrete findings to support downstream analytics and care coordination.
+              </p>
+            </div>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={addStructuredFinding}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <Plus className="w-3 h-3" />
+                Add Finding
+              </button>
+            )}
+          </div>
+
+          {reportState.structured_findings.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              No structured findings captured yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reportState.structured_findings.map((finding) => (
+                <div
+                  key={finding.id}
+                  className="rounded-xl border border-indigo-100 bg-white px-4 py-3 shadow-sm"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                        Region / Anatomy
+                      </label>
+                      <input
+                        type="text"
+                        value={finding.region}
+                        onChange={(e) => handleStructuredFindingChange(finding.id, 'region', e.target.value)}
+                        disabled={readOnly}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50"
+                        placeholder="e.g. Right lower lobe"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                        Finding
+                      </label>
+                      <textarea
+                        value={finding.finding}
+                        onChange={(e) => handleStructuredFindingChange(finding.id, 'finding', e.target.value)}
+                        disabled={readOnly}
+                        rows={2}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50"
+                        placeholder="Describe the observation..."
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                        Significance
+                      </label>
+                      <select
+                        value={finding.significance}
+                        onChange={(e) =>
+                          handleStructuredFindingChange(finding.id, 'significance', e.target.value as ReportSeverity)
+                        }
+                        disabled={readOnly}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50"
+                      >
+                        {SEVERITY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-2">{renderSeverityBadge(finding.significance)}</div>
+                    </div>
+                    <div className="md:col-span-4">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                        Recommended Action (optional)
+                      </label>
+                      <textarea
+                        value={finding.recommendation || ''}
+                        onChange={(e) => handleStructuredFindingChange(finding.id, 'recommendation', e.target.value)}
+                        disabled={readOnly}
+                        rows={2}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50"
+                        placeholder="e.g. Initiate antibiotics, schedule CT chest..."
+                      />
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <div className="flex items-center justify-between pt-2 text-xs text-slate-400">
+                      <span>Structured finding entry</span>
+                      <button
+                        type="button"
+                        onClick={() => removeStructuredFinding(finding.id)}
+                        className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {!isAssignedRadiologist && (
