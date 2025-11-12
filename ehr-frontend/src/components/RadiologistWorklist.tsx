@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Clock, AlertTriangle, User, FileText, CheckCircle, Eye } from 'lucide-react';
+import { Camera, Clock, AlertTriangle, User, FileText, CheckCircle, Eye, CreditCard, Lock } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
@@ -17,10 +17,14 @@ interface Study {
   clinical_indication: string;
   priority: string;
   study_status: string;
-  hours_pending: number;
+  hours_pending: number | string | null;
   number_of_images: number;
   radiologist_name?: string;
   report_status?: string;
+  order_status?: string;
+  payment_status?: string;
+  finance_transaction_id?: string | null;
+  fee_amount?: number | string | null;
 }
 
 interface RadiologistWorklistProps {
@@ -112,11 +116,35 @@ export default function RadiologistWorklist({
   const currentList = activeTab === 'worklist' ? studies : myStudies;
   const urgentCount = studies.filter((s) => s.priority === 'stat' || s.priority === 'urgent').length;
   const myAssignedCount = myStudies.length;
+  const awaitingPaymentCount = [...studies, ...myStudies].filter(
+    (s) => s.payment_status === 'awaiting_payment' || s.order_status === 'awaiting_payment',
+  ).length;
+
+  const formatCurrency = (value?: number | string | null) => {
+    if (value === null || value === undefined) return null;
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return null;
+    return `$${numeric.toFixed(2)}`;
+  };
+
+  const handleViewStudy = (study: Study) => {
+    const awaitingPayment =
+      study.payment_status === 'awaiting_payment' || study.order_status === 'awaiting_payment';
+    if (awaitingPayment) {
+      showError(
+        'Payment Pending',
+        'Accounts must confirm payment before this study can be opened. Please coordinate with the finance team.',
+      );
+      return;
+    }
+
+    onOpenStudy?.(study);
+  };
 
   return (
     <div className="space-y-4">
       {/* Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
@@ -157,6 +185,21 @@ export default function RadiologistWorklist({
             </div>
             <Clock className="w-8 h-8 text-green-500" />
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Awaiting Payment</p>
+              <p className={`text-2xl font-bold ${awaitingPaymentCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                {awaitingPaymentCount}
+              </p>
+            </div>
+            <CreditCard className="w-8 h-8 text-amber-500" />
+          </div>
+          <p className="text-xs text-amber-600 mt-2">
+            Studies remain locked until Accounts confirms payment.
+          </p>
         </div>
       </div>
 
@@ -204,14 +247,22 @@ export default function RadiologistWorklist({
           )}
 
           <div className="space-y-3">
-            {currentList.map((study) => (
+            {currentList.map((study) => {
+              const awaitingPayment =
+                study.payment_status === 'awaiting_payment' || study.order_status === 'awaiting_payment';
+              const feeAmountFormatted = formatCurrency(study.fee_amount);
+              const hoursPendingNumeric = Number(study.hours_pending);
+
+              return (
               <div
                 key={study.id}
-                className={`border-2 rounded-lg p-4 transition-all hover:shadow-md ${
-                  study.priority === 'stat' ? 'border-red-400 bg-red-50' :
-                  study.priority === 'urgent' ? 'border-yellow-400 bg-yellow-50' :
-                  'border-gray-200 hover:border-blue-400'
-                }`}
+                className={`border-2 rounded-lg p-4 transition-all ${
+                  study.priority === 'stat'
+                    ? 'border-red-400 bg-red-50'
+                    : study.priority === 'urgent'
+                    ? 'border-yellow-400 bg-yellow-50'
+                    : 'border-gray-200 hover:border-blue-400'
+                } ${awaitingPayment ? 'opacity-80' : 'hover:shadow-md'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -246,10 +297,18 @@ export default function RadiologistWorklist({
                       </div>
                       <div>
                         <span className="text-gray-600">Time Pending:</span>
-                        <p className={`font-medium ${study.hours_pending > 24 ? 'text-red-600' : ''}`}>
-                          {Number.isFinite(study.hours_pending) ? Number(study.hours_pending).toFixed(1) : '—'}h
+                        <p
+                          className={`font-medium ${hoursPendingNumeric > 24 ? 'text-red-600' : ''}`}
+                        >
+                          {Number.isFinite(hoursPendingNumeric) ? hoursPendingNumeric.toFixed(1) : '—'}h
                         </p>
                       </div>
+                      {feeAmountFormatted && (
+                        <div>
+                          <span className="text-gray-600">Estimated Fee:</span>
+                          <p className="font-medium text-gray-800">{feeAmountFormatted}</p>
+                        </div>
+                      )}
                     </div>
 
                     {study.clinical_indication && (
@@ -274,7 +333,12 @@ export default function RadiologistWorklist({
                     {activeTab === 'worklist' && (
                       <button
                         onClick={() => handleAssignToMe(study.id)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 whitespace-nowrap"
+                        disabled={awaitingPayment}
+                        className={`px-4 py-2 rounded-lg flex items-center space-x-2 whitespace-nowrap transition ${
+                          awaitingPayment
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                       >
                         <User className="w-4 h-4" />
                         <span>Assign to Me</span>
@@ -282,14 +346,36 @@ export default function RadiologistWorklist({
                     )}
 
                     <button
-                      onClick={() => onOpenStudy?.(study)}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center space-x-2"
+                      onClick={() => handleViewStudy(study)}
+                      disabled={awaitingPayment}
+                      className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition ${
+                        awaitingPayment
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
                     >
                       <Eye className="w-4 h-4" />
-                      <span>View Study</span>
+                      <span>{awaitingPayment ? 'Locked' : 'View Study'}</span>
                     </button>
                   </div>
                 </div>
+
+                {awaitingPayment && (
+                  <div className="mt-3 border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm text-amber-700 space-y-1">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Lock className="w-4 h-4" />
+                      Awaiting payment confirmation
+                    </div>
+                    <p>
+                      Finance must release this study before reporting can begin. Notify Accounts if the patient has paid.
+                    </p>
+                    {study.finance_transaction_id && (
+                      <p className="text-xs text-amber-600">
+                        Finance reference: <span className="font-mono">{study.finance_transaction_id}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Urgent Indicator */}
                 {study.priority === 'stat' && (
@@ -299,7 +385,8 @@ export default function RadiologistWorklist({
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       </div>

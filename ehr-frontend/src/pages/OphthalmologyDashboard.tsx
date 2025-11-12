@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Calendar,
+  CreditCard,
   Eye,
   EyeOff,
   LogOut,
@@ -31,6 +32,9 @@ type OphthalmologyEncounter = {
   chief_complaint?: string;
   assessment?: string;
   plan?: string;
+  payment_status?: string | null;
+  fee_amount?: number | null;
+  finance_transaction_id?: string | null;
 };
 
 type OphthalmologyEncounterDetail = {
@@ -55,6 +59,11 @@ type OphthalmologyDashboardSummary = {
   upcomingFollowUps?: any[];
   procedureSummary?: any[];
   visualAcuityTrend?: any[];
+  financeSummary?: {
+    awaiting_payment_encounters?: string;
+    cleared_encounters?: string;
+    total_encounters?: string;
+  };
 };
 
 type ModalState =
@@ -199,9 +208,14 @@ const OphthalmologyDashboard: React.FC = () => {
             chief_complaint: formData.get('chief_complaint') || null,
             assessment: formData.get('assessment') || null,
             plan: formData.get('plan') || null,
+            fee_amount: formData.get('fee_amount')
+              ? Number(formData.get('fee_amount'))
+              : null,
           };
           await ehrApi.createOphthalmologyEncounter(tenantSlug!, token!, payload);
-          showSuccess('Encounter created', 'Ophthalmology encounter has been recorded.');
+          showSuccess(
+            'Encounter captured. Accounts will unlock the chart once payment is confirmed.',
+          );
           await loadEncounters(filters.search, filters.type);
           await loadSummary();
           break;
@@ -315,6 +329,7 @@ const OphthalmologyDashboard: React.FC = () => {
 
   const summaryCards = useMemo(() => {
     const totals = dashboardSummary?.encounterTotals;
+    const finance = dashboardSummary?.financeSummary;
     return [
       {
         title: 'Total Encounters',
@@ -339,6 +354,12 @@ const OphthalmologyDashboard: React.FC = () => {
         value: totals?.past_30_day_encounters ?? '0',
         icon: RefreshCw,
         gradient: 'from-purple-500 to-fuchsia-500',
+      },
+      {
+        title: 'Awaiting Payment',
+        value: finance?.awaiting_payment_encounters ?? '0',
+        icon: CreditCard,
+        gradient: 'from-rose-500 to-amber-500',
       },
     ];
   }, [dashboardSummary]);
@@ -395,6 +416,29 @@ const OphthalmologyDashboard: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Ophthalmologist ID</label>
                       <input name="ophthalmologist_id" className="w-full border rounded-lg px-3 py-2" placeholder="UUID" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Fee (USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="fee_amount"
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="e.g. 65.00"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">Leave blank to use the default specialist tariff.</p>
+                    </div>
+                  </div>
+                  <div className="p-3 border border-amber-200 bg-amber-50 text-amber-800 text-sm rounded-lg flex gap-2">
+                    <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Finance-gated encounter</p>
+                      <p>
+                        The encounter stays read-only until Accounts confirms payment. Capture the estimated fee so billing
+                        can reconcile quickly.
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -732,6 +776,13 @@ const OphthalmologyDashboard: React.FC = () => {
     }
   };
 
+  const encounterLocked =
+    encounterDetail?.encounter?.payment_status === 'awaiting_payment';
+  const encounterFeeAmount =
+    encounterDetail?.encounter?.fee_amount ??
+    encounterDetail?.encounter?.feeAmount ??
+    null;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-gradient-to-r from-sky-600 via-indigo-600 to-blue-600 border-b border-sky-400 shadow">
@@ -777,7 +828,7 @@ const OphthalmologyDashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
         <section>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             {summaryCards.map((card) => (
               <div
                 key={card.title}
@@ -922,33 +973,57 @@ const OphthalmologyDashboard: React.FC = () => {
                       </td>
                     </tr>
                   )}
-                  {encounters.map((encounter) => (
-                    <tr
-                      key={encounter.id}
-                      className={`hover:bg-indigo-50/50 cursor-pointer transition ${
-                        selectedEncounterId === encounter.id ? 'bg-indigo-50/80' : ''
-                      }`}
-                      onClick={() => handleEncounterSelect(encounter.id)}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{encounter.patient_name ?? 'Unknown patient'}</div>
-                        <div className="text-xs text-slate-400">{encounter.patient_number}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-slate-800">
-                          {ENCOUNTER_TYPE_LABELS[encounter.encounter_type] ?? encounter.encounter_type}
-                        </div>
-                        <div className="text-xs text-slate-400">{encounter.chief_complaint ?? 'No complaint recorded'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {encounter.ophthalmologist_name ?? 'Unassigned'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 truncate max-w-xs">
-                        {encounter.assessment ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{formatDateTime(encounter.encounter_date)}</td>
-                    </tr>
-                  ))}
+                  {encounters.map((encounter) => {
+                    const awaitingPayment = encounter.payment_status === 'awaiting_payment';
+                    const fee =
+                      encounter.fee_amount ?? encounter.feeAmount ?? null;
+                    return (
+                      <tr
+                        key={encounter.id}
+                        className={`hover:bg-indigo-50/50 cursor-pointer transition ${
+                          selectedEncounterId === encounter.id ? 'bg-indigo-50/80' : ''
+                        }`}
+                        onClick={() => handleEncounterSelect(encounter.id)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{encounter.patient_name ?? 'Unknown patient'}</div>
+                          <div className="text-xs text-slate-400">{encounter.patient_number}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-slate-800">
+                            {ENCOUNTER_TYPE_LABELS[encounter.encounter_type] ?? encounter.encounter_type}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {encounter.chief_complaint ?? 'No complaint recorded'}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                                awaitingPayment
+                                  ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                  : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              <CreditCard className="w-3 h-3" />
+                              {String(encounter.payment_status || 'payment_confirmed').replace(/_/g, ' ')}
+                            </span>
+                            {fee !== null && !Number.isNaN(Number(fee)) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 font-medium">
+                                ${Number(fee).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {encounter.ophthalmologist_name ?? 'Unassigned'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 truncate max-w-xs">
+                          {encounter.assessment ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{formatDateTime(encounter.encounter_date)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -961,6 +1036,17 @@ const OphthalmologyDashboard: React.FC = () => {
                 Quick Actions
               </h2>
             </div>
+            {encounterLocked && (
+              <div className="p-3 border border-amber-200 bg-amber-50 text-amber-800 text-sm rounded-lg flex gap-2">
+                <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold">Awaiting payment</p>
+                  <p>
+                    Accounts must confirm payment before charting can continue for this encounter.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3">
               <button
                 onClick={() => setModalState({ type: 'createEncounter' })}
@@ -972,29 +1058,55 @@ const OphthalmologyDashboard: React.FC = () => {
               {selectedEncounterId && encounterDetail ? (
                 <>
                   <button
-                    onClick={() => setModalState({ type: 'visualAcuity', encounterId: selectedEncounterId })}
-                    className="p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/60 text-left"
+                    onClick={() =>
+                      !encounterLocked && setModalState({ type: 'visualAcuity', encounterId: selectedEncounterId })
+                    }
+                    disabled={encounterLocked}
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-blue-300 hover:bg-blue-50/60'
+                    }`}
                   >
                     <p className="text-sm font-semibold text-slate-800">Visual acuity</p>
                     <p className="text-xs text-slate-500 mt-1">Capture unaided/aided vision.</p>
                   </button>
                   <button
-                    onClick={() => setModalState({ type: 'refraction', encounterId: selectedEncounterId })}
-                    className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/60 text-left"
+                    onClick={() =>
+                      !encounterLocked && setModalState({ type: 'refraction', encounterId: selectedEncounterId })
+                    }
+                    disabled={encounterLocked}
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-emerald-300 hover:bg-emerald-50/60'
+                    }`}
                   >
                     <p className="text-sm font-semibold text-slate-800">Refraction</p>
                     <p className="text-xs text-slate-500 mt-1">Record sphere, cylinder, axis, add.</p>
                   </button>
                   <button
-                    onClick={() => setModalState({ type: 'slitLamp', encounterId: selectedEncounterId })}
-                    className="p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/60 text-left"
+                    onClick={() =>
+                      !encounterLocked && setModalState({ type: 'slitLamp', encounterId: selectedEncounterId })
+                    }
+                    disabled={encounterLocked}
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-amber-300 hover:bg-amber-50/60'
+                    }`}
                   >
                     <p className="text-sm font-semibold text-slate-800">Slit-lamp finding</p>
                     <p className="text-xs text-slate-500 mt-1">Document anterior/posterior segment.</p>
                   </button>
                   <button
-                    onClick={() => setModalState({ type: 'oct', encounterId: selectedEncounterId })}
-                    className="p-4 rounded-xl border border-slate-200 hover:border-purple-300 hover:bg-purple-50/60 text-left"
+                    onClick={() => !encounterLocked && setModalState({ type: 'oct', encounterId: selectedEncounterId })}
+                    disabled={encounterLocked}
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-purple-300 hover:bg-purple-50/60'
+                    }`}
                   >
                     <p className="text-sm font-semibold text-slate-800">Link OCT imaging</p>
                     <p className="text-xs text-slate-500 mt-1">Attach macula/RNFL studies.</p>
@@ -1007,7 +1119,12 @@ const OphthalmologyDashboard: React.FC = () => {
                         patientId: encounterDetail.encounter.patient_id,
                       })
                     }
-                    className="p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/60 text-left"
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-indigo-300 hover:bg-indigo-50/60'
+                    }`}
+                    disabled={encounterLocked}
                   >
                     <p className="text-sm font-semibold text-slate-800">Schedule follow-up</p>
                     <p className="text-xs text-slate-500 mt-1">Ensure continuity and monitoring.</p>
@@ -1020,7 +1137,12 @@ const OphthalmologyDashboard: React.FC = () => {
                         patientId: encounterDetail.encounter.patient_id,
                       })
                     }
-                    className="p-4 rounded-xl border border-slate-200 hover:border-rose-300 hover:bg-rose-50/60 text-left"
+                    className={`p-4 rounded-xl border border-slate-200 text-left ${
+                      encounterLocked
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-rose-300 hover:bg-rose-50/60'
+                    }`}
+                    disabled={encounterLocked}
                   >
                     <p className="text-sm font-semibold text-slate-800">Record procedure</p>
                     <p className="text-xs text-slate-500 mt-1">Document surgeries, lasers, injections.</p>
@@ -1061,6 +1183,28 @@ const OphthalmologyDashboard: React.FC = () => {
 
           {selectedEncounterId && encounterDetail && !detailLoading && (
             <div className="space-y-6">
+              {encounterLocked && (
+                <div className="p-3 border border-amber-200 bg-amber-50 text-amber-800 text-sm rounded-lg flex gap-2">
+                  <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold">Payment pending</p>
+                    <p>
+                      Clinical charting is locked until Accounts confirms payment for this encounter.
+                      {encounterFeeAmount
+                        ? ` Outstanding fee: $${Number(encounterFeeAmount).toFixed(2)}.`
+                        : ''}
+                    </p>
+                    {encounterDetail.encounter.finance_transaction_id && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Finance reference:{' '}
+                        <span className="font-mono">
+                          {encounterDetail.encounter.finance_transaction_id}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-700">Patient</h3>
@@ -1081,6 +1225,23 @@ const OphthalmologyDashboard: React.FC = () => {
                     Ophthalmologist: {encounterDetail.encounter.ophthalmologist_name ?? 'Unassigned'}
                   </p>
                   <p className="text-xs text-slate-500 mt-1">Date: {formatDateTime(encounterDetail.encounter.encounter_date)}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                        encounterLocked
+                          ? 'bg-amber-100 text-amber-700 border-amber-200'
+                          : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      <CreditCard className="w-3 h-3" />
+                      {String(encounterDetail.encounter.payment_status || 'payment_confirmed').replace(/_/g, ' ')}
+                    </span>
+                    {encounterFeeAmount !== null && !Number.isNaN(Number(encounterFeeAmount)) && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 font-medium">
+                        ${Number(encounterFeeAmount).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {encounterDetail.encounter.chief_complaint && (
                   <div className="md:col-span-2">
@@ -1108,8 +1269,11 @@ const OphthalmologyDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-slate-700">Visual Acuity</h3>
                     <button
-                      onClick={() => setModalState({ type: 'visualAcuity', encounterId: selectedEncounterId })}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      onClick={() =>
+                        !encounterLocked && setModalState({ type: 'visualAcuity', encounterId: selectedEncounterId })
+                      }
+                      disabled={encounterLocked}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add
@@ -1143,8 +1307,11 @@ const OphthalmologyDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-slate-700">Refraction</h3>
                     <button
-                      onClick={() => setModalState({ type: 'refraction', encounterId: selectedEncounterId })}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      onClick={() =>
+                        !encounterLocked && setModalState({ type: 'refraction', encounterId: selectedEncounterId })
+                      }
+                      disabled={encounterLocked}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add
@@ -1175,8 +1342,11 @@ const OphthalmologyDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-slate-700">Slit-Lamp Findings</h3>
                     <button
-                      onClick={() => setModalState({ type: 'slitLamp', encounterId: selectedEncounterId })}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      onClick={() =>
+                        !encounterLocked && setModalState({ type: 'slitLamp', encounterId: selectedEncounterId })
+                      }
+                      disabled={encounterLocked}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add
@@ -1204,8 +1374,9 @@ const OphthalmologyDashboard: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-slate-700">OCT Imaging</h3>
                     <button
-                      onClick={() => setModalState({ type: 'oct', encounterId: selectedEncounterId })}
-                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      onClick={() => !encounterLocked && setModalState({ type: 'oct', encounterId: selectedEncounterId })}
+                      disabled={encounterLocked}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add
@@ -1240,13 +1411,15 @@ const OphthalmologyDashboard: React.FC = () => {
                   <h3 className="text-sm font-semibold text-slate-700">Follow-Ups</h3>
                   <button
                     onClick={() =>
+                      !encounterLocked &&
                       setModalState({
                         type: 'followUp',
                         encounterId: selectedEncounterId,
                         patientId: encounterDetail.encounter.patient_id,
                       })
                     }
-                    className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                    disabled={encounterLocked}
+                    className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Schedule

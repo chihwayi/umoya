@@ -2022,7 +2022,10 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                                 scheduledDateTime: form.viralLoadSampleCollectedDate ? new Date(form.viralLoadSampleCollectedDate).toISOString() : new Date().toISOString()
                               }, token, tenantSlug);
                               setLabOrderCreated(true);
-                              showSuccess('Success', 'Lab order created. Lab technician can now find this order by patient ID/name and enter results.');
+                              showSuccess(
+                                'Success',
+                                'Lab order created. Lab technician can now find this order by patient ID/name and enter results. Please send the patient to Accounts so payment can be confirmed before processing.',
+                              );
                             } catch (error: any) {
                               console.error('Failed to create lab order:', error);
                               showError('Error', error?.response?.data?.message || 'Failed to create lab order');

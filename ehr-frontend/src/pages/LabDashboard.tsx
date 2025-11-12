@@ -28,6 +28,7 @@ import {
   FlaskConical,
   Droplet,
   ClipboardCheck,
+  CreditCard,
   Loader2,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
@@ -58,7 +59,10 @@ interface LabOrder {
     instructions?: string;
   }>;
   priority: 'routine' | 'urgent' | 'stat';
-  status: 'ordered' | 'collected' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'awaiting_payment' | 'ordered' | 'collected' | 'in_progress' | 'completed' | 'cancelled';
+  paymentStatus?: 'awaiting_payment' | 'payment_confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  feeAmount?: number | null;
+  financeTransactionId?: string | null;
   clinicalInfo?: string;
   specialInstructions?: string;
   scheduledDateTime?: string;
@@ -234,6 +238,26 @@ const NOTIFICATION_CHANNELS: Array<LabNotificationEntry['channel']> = [
   'push',
 ];
 
+type LabActionField = {
+  name: string;
+  label: string;
+  placeholder?: string;
+  type?: 'text' | 'textarea' | 'select' | 'number' | 'date';
+  required?: boolean;
+  options?: Array<{ value: string; label: string }>;
+  helperText?: string;
+  rows?: number;
+};
+
+type LabActionModalState = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  fields: LabActionField[];
+  initialValues?: Record<string, string>;
+  onSubmit: (values: Record<string, string>) => Promise<void> | void;
+};
+
 const LabDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -261,6 +285,10 @@ const LabDashboard: React.FC = () => {
   const [qcLoading, setQcLoading] = useState(false);
   const [inventoryLoading, setInventoryLoading] = useState(false);
 
+  const [actionModal, setActionModal] = useState<LabActionModalState | null>(null);
+  const [actionModalValues, setActionModalValues] = useState<Record<string, string>>({});
+  const [actionModalSubmitting, setActionModalSubmitting] = useState(false);
+
   // Results form state
   const [results, setResults] = useState<LabResult[]>([]);
   const [interpretation, setInterpretation] = useState('');
@@ -278,6 +306,52 @@ const LabDashboard: React.FC = () => {
       setStatusFilter('all');
     }
   }, [activeTab, statusFilter]);
+
+  useEffect(() => {
+    if (actionModal) {
+      const nextValues: Record<string, string> = {};
+      actionModal.fields.forEach((field) => {
+        const initialValue = actionModal.initialValues?.[field.name] ?? '';
+        nextValues[field.name] = initialValue ?? '';
+      });
+      setActionModalValues(nextValues);
+    } else {
+      setActionModalValues({});
+    }
+  }, [actionModal]);
+
+  const handleActionFieldChange = (name: string, value: string) => {
+    setActionModalValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleActionModalCancel = () => {
+    if (actionModalSubmitting) return;
+    setActionModal(null);
+  };
+
+  const handleActionModalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!actionModal) return;
+
+    const missingField = actionModal.fields.find(
+      (field) => field.required && !(actionModalValues[field.name]?.trim()),
+    );
+
+    if (missingField) {
+      showError('Missing information', `${missingField.label} is required`);
+      return;
+    }
+
+    try {
+      setActionModalSubmitting(true);
+      await actionModal.onSubmit(actionModalValues);
+      setActionModal(null);
+    } catch (error) {
+      console.error('Lab action modal submission failed', error);
+    } finally {
+      setActionModalSubmitting(false);
+    }
+  };
 
   const fetchPendingOrders = useCallback(async () => {
     try {
@@ -485,6 +559,9 @@ const LabDashboard: React.FC = () => {
     const statCount = snapshot.filter((order) => order.priority === 'stat').length;
     const urgentCount = snapshot.filter((order) => order.priority === 'urgent').length;
     const unassignedAnalyzer = snapshot.filter((order) => !order.processingContext?.analyzer?.id).length;
+    const awaitingPaymentCount = pendingOrders.filter(
+      (order) => order.status === 'awaiting_payment' || order.paymentStatus === 'awaiting_payment',
+    ).length;
     const avgAgeHours =
       snapshot.length === 0
         ? 0
@@ -496,6 +573,7 @@ const LabDashboard: React.FC = () => {
       statCount,
       urgentCount,
       unassignedAnalyzer,
+      awaitingPaymentCount,
       avgAgeHours,
     };
   }, [pendingOrders, inProgressOrders]);
@@ -534,7 +612,8 @@ const LabDashboard: React.FC = () => {
       // Switch to in-progress tab so user sees the collected order
       setActiveTab('in-progress');
     } catch (error: any) {
-      showError('Error', 'Failed to collect sample');
+      const message = error?.response?.data?.message || 'Failed to collect sample';
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -555,7 +634,8 @@ const LabDashboard: React.FC = () => {
         fetchInProgressOrders()
       ]);
     } catch (error: any) {
-      showError('Error', 'Failed to start processing');
+      const message = error?.response?.data?.message || 'Failed to start processing';
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -613,51 +693,69 @@ const LabDashboard: React.FC = () => {
     }
   };
 
-  const handleSetBatch = async (order: LabOrder) => {
+  const handleSetBatch = (order: LabOrder) => {
     const currentBatch = order.processingContext?.batchId || order.processingContext?.queue || '';
-    const batchId = window.prompt('Enter batch identifier', currentBatch);
-    if (batchId === null) return;
-    const trimmed = batchId.trim();
-    if (!tenantSlug || !trimmed) {
-      if (!trimmed) {
-        showError('Invalid batch', 'Please provide a batch identifier');
-      }
-      return;
-    }
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
-
-    try {
-      setUpdatingOrderId(order.id);
-      await ehrApi.updateLabProcessingContext(
-        order.id,
+    setActionModal({
+      title: 'Assign Batch',
+      description: `Route order ${order.orderNumber} to a processing batch or analyzer queue.`,
+      confirmLabel: 'Assign Batch',
+      fields: [
         {
-          processingContext: {
-            ...(order.processingContext || {}),
-            batchId: trimmed,
-            batchName: trimmed,
-            queue: order.processingContext?.queue || trimmed,
-          },
-          appendEvent: {
-            type: 'batch_updated',
-            description: `Assigned to batch ${trimmed}`,
-            metadata: { batchId: trimmed },
-          },
+          name: 'batchId',
+          label: 'Batch Identifier',
+          placeholder: 'e.g. HEMA-2025-03',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      await refreshActiveTab();
-      showSuccess('Batch updated', `Order assigned to batch ${trimmed}`);
-    } catch (error) {
-      console.error('Failed to update batch', error);
-      showError('Error', 'Failed to update batch information');
-    } finally {
-      setUpdatingOrderId(null);
-    }
+      ],
+      initialValues: {
+        batchId: currentBatch,
+      },
+      onSubmit: async ({ batchId }) => {
+        const trimmed = (batchId || '').trim();
+        if (!tenantSlug || !trimmed) {
+          if (!trimmed) {
+            showError('Invalid batch', 'Please provide a batch identifier');
+          }
+          throw new Error('Validation failed');
+        }
+
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        try {
+          setUpdatingOrderId(order.id);
+          await ehrApi.updateLabProcessingContext(
+            order.id,
+            {
+              processingContext: {
+                ...(order.processingContext || {}),
+                batchId: trimmed,
+                batchName: trimmed,
+                queue: order.processingContext?.queue || trimmed,
+              },
+              appendEvent: {
+                type: 'batch_updated',
+                description: `Assigned to batch ${trimmed}`,
+                metadata: { batchId: trimmed },
+              },
+            },
+            token,
+            tenantSlug,
+          );
+          await refreshActiveTab();
+          showSuccess('Batch updated', `Order assigned to batch ${trimmed}`);
+        } catch (error) {
+          console.error('Failed to update batch', error);
+          showError('Error', 'Failed to update batch information');
+          throw error;
+        } finally {
+          setUpdatingOrderId(null);
+        }
+      },
+    });
   };
 
   const handleStageChange = async (order: LabOrder, stage: string) => {
@@ -696,37 +794,59 @@ const LabDashboard: React.FC = () => {
     }
   };
 
-  const handleAddWorkflowNote = async (order: LabOrder) => {
+  const handleAddWorkflowNote = (order: LabOrder) => {
     if (!tenantSlug) return;
-    const note = window.prompt('Add workflow note');
-    if (!note || !note.trim()) return;
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
-
-    try {
-      setUpdatingOrderId(order.id);
-      await ehrApi.updateLabProcessingContext(
-        order.id,
+    setActionModal({
+      title: 'Add Workflow Note',
+      description: `Capture an internal update for order ${order.orderNumber}.`,
+      confirmLabel: 'Add Note',
+      fields: [
         {
-          appendEvent: {
-            type: 'note',
-            description: note.trim(),
-          },
+          name: 'note',
+          label: 'Workflow Note',
+          type: 'textarea',
+          rows: 4,
+          placeholder: 'Document analyzer steps, specimen handling, or troubleshooting...',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      await refreshActiveTab();
-      showSuccess('Note added', 'Workflow note recorded');
-    } catch (error) {
-      console.error('Failed to add workflow note', error);
-      showError('Error', 'Failed to record workflow note');
-    } finally {
-      setUpdatingOrderId(null);
-    }
+      ],
+      onSubmit: async ({ note }) => {
+        const content = (note || '').trim();
+        if (!content) {
+          showError('Missing information', 'Please enter a workflow note');
+          throw new Error('Validation failed');
+        }
+
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        try {
+          setUpdatingOrderId(order.id);
+          await ehrApi.updateLabProcessingContext(
+            order.id,
+            {
+              appendEvent: {
+                type: 'note',
+                description: content,
+              },
+            },
+            token,
+            tenantSlug,
+          );
+          await refreshActiveTab();
+          showSuccess('Note added', 'Workflow note recorded');
+        } catch (error) {
+          console.error('Failed to add workflow note', error);
+          showError('Error', 'Failed to record workflow note');
+          throw error;
+        } finally {
+          setUpdatingOrderId(null);
+        }
+      },
+    });
   };
 
   const handleResetFilters = () => {
@@ -820,273 +940,480 @@ const LabDashboard: React.FC = () => {
     }
   };
 
-  const handleLogQualityControl = async (defaults?: { analyzer?: string }) => {
+  const handleLogQualityControl = (defaults?: { analyzer?: string }) => {
     if (!tenantSlug) return;
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
 
-    const analyzer =
-      window.prompt('Analyzer / instrument name', defaults?.analyzer || '')?.trim() || '';
-    if (!analyzer) return;
-
-    const testCode = window.prompt('Test code (optional)')?.trim() || undefined;
-    const level = window.prompt('Control level (e.g. L1, Normal)', 'L1')?.trim() || undefined;
-    const resultValue = window.prompt('Result value / reading (optional)')?.trim() || undefined;
-    const statusInput = window.prompt('Outcome (pass / fail / review)', 'pass') || 'pass';
-    const statusNormalized = statusInput.toLowerCase();
-    const statusOptions = ['pass', 'fail', 'review', 'pending'];
-    const status = statusOptions.includes(statusNormalized) ? statusNormalized : 'pass';
-    const comments = window.prompt('Comments / notes (optional)')?.trim() || undefined;
-
-    try {
-      setQcLoading(true);
-      await ehrApi.createLabQualityControl(
+    setActionModal({
+      title: 'Record Quality Control Run',
+      description: 'Track control results for analyzer performance and audit readiness.',
+      confirmLabel: 'Log QC Run',
+      fields: [
         {
-          analyzer_name: analyzer,
-          test_code: testCode,
-          level,
-          result_value: resultValue,
-          status: status as 'pass' | 'fail' | 'review' | 'pending',
-          comments,
+          name: 'analyzer_name',
+          label: 'Analyzer / Instrument',
+          placeholder: 'e.g. Sysmex XN-1000',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      showSuccess('Logged', 'Quality control recorded');
-      await fetchQualityControls();
-    } catch (error) {
-      console.error('Failed to log quality control', error);
-      showError('Error', 'Failed to record quality control run');
-    } finally {
-      setQcLoading(false);
-    }
+        {
+          name: 'test_code',
+          label: 'Test Code',
+          placeholder: 'Optional test identifier',
+        },
+        {
+          name: 'level',
+          label: 'Control Level',
+          placeholder: 'e.g. L1, Normal',
+        },
+        {
+          name: 'result_value',
+          label: 'Result Value / Reading',
+          placeholder: 'Optional numeric or qualitative value',
+        },
+        {
+          name: 'status',
+          label: 'Outcome',
+          type: 'select',
+          options: [
+            { value: 'pass', label: 'Pass' },
+            { value: 'fail', label: 'Fail' },
+            { value: 'review', label: 'Review' },
+            { value: 'pending', label: 'Pending' },
+          ],
+          required: true,
+        },
+        {
+          name: 'comments',
+          label: 'Comments / Notes',
+          type: 'textarea',
+          rows: 3,
+          placeholder: 'Optional observations or follow-up actions',
+        },
+      ],
+      initialValues: {
+        analyzer_name: defaults?.analyzer || '',
+        level: 'L1',
+        status: 'pass',
+      },
+      onSubmit: async (values) => {
+        const analyzer = (values.analyzer_name || '').trim();
+        if (!analyzer) {
+          showError('Missing information', 'Analyzer / Instrument is required');
+          throw new Error('Validation failed');
+        }
+
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        const statusOptions = ['pass', 'fail', 'review', 'pending'];
+        const statusNormalized = (values.status || 'pass').toLowerCase();
+        const status = statusOptions.includes(statusNormalized) ? statusNormalized : 'pass';
+
+        try {
+          setQcLoading(true);
+          await ehrApi.createLabQualityControl(
+            {
+              analyzer_name: analyzer,
+              test_code: values.test_code?.trim() || undefined,
+              level: values.level?.trim() || undefined,
+              result_value: values.result_value?.trim() || undefined,
+              status: status as 'pass' | 'fail' | 'review' | 'pending',
+              comments: values.comments?.trim() || undefined,
+            },
+            token,
+            tenantSlug,
+          );
+          showSuccess('Logged', 'Quality control recorded');
+          await fetchQualityControls();
+        } catch (error) {
+          console.error('Failed to log quality control', error);
+          showError('Error', 'Failed to record quality control run');
+          throw error;
+        } finally {
+          setQcLoading(false);
+        }
+      },
+    });
   };
 
-  const handleAddOrEditInventoryItem = async (existing?: any) => {
+  const handleAddOrEditInventoryItem = (existing?: any) => {
     if (!tenantSlug) return;
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
 
-    const reagentName =
-      window.prompt('Reagent / supply name', existing?.reagent_name || '')?.trim() || '';
-    if (!reagentName) return;
+    const statusOptions = [
+      { value: 'ok', label: 'OK' },
+      { value: 'warning', label: 'Warning' },
+      { value: 'critical', label: 'Critical' },
+      { value: 'expired', label: 'Expired' },
+    ];
 
-    const analyzerName = window.prompt('Analyzer (optional)', existing?.analyzer_name || '')?.trim() || undefined;
-    const lotNumber = window.prompt('Lot number (optional)', existing?.lot_number || '')?.trim() || undefined;
-
-    const quantityInput = window.prompt(
-      'Quantity on hand',
-      existing ? String(existing.quantity_available ?? 0) : '0',
-    );
-    if (quantityInput === null) return;
-    const quantity = Number(quantityInput);
-    if (Number.isNaN(quantity)) {
-      showError('Invalid quantity', 'Please provide a numeric quantity');
-      return;
-    }
-
-    const thresholdInput = window.prompt(
-      'Minimum threshold',
-      existing ? String(existing.minimum_threshold ?? 0) : '0',
-    );
-    if (thresholdInput === null) return;
-    const threshold = Number(thresholdInput);
-    if (Number.isNaN(threshold)) {
-      showError('Invalid threshold', 'Please provide a numeric threshold');
-      return;
-    }
-
-    const expiresOn = window.prompt('Expiry date (YYYY-MM-DD, optional)', existing?.expires_on || '')?.trim() || undefined;
-    const statusInput = window.prompt(
-      'Status (ok / warning / critical / expired)',
-      existing?.status || 'ok',
-    );
-    const statusNormalized = statusInput ? statusInput.toLowerCase() : 'ok';
-    const statusOptions = ['ok', 'warning', 'critical', 'expired'];
-    const status = statusOptions.includes(statusNormalized) ? statusNormalized : 'ok';
-    const notes = window.prompt('Notes (optional)', existing?.notes || '')?.trim() || undefined;
-
-    try {
-      setInventoryLoading(true);
-      await ehrApi.upsertLabReagentInventory(
+    setActionModal({
+      title: existing ? 'Update Reagent Inventory' : 'Add Reagent Inventory',
+      description:
+        'Keep reagent and supply stock levels current so technologists can plan upcoming batches.',
+      confirmLabel: existing ? 'Save Changes' : 'Add Item',
+      fields: [
         {
-          id: existing?.id,
-          reagent_name: reagentName,
-          analyzer_name: analyzerName,
-          lot_number: lotNumber,
-          quantity_available: quantity,
-          unit: existing?.unit || 'units',
-          minimum_threshold: threshold,
-          expires_on: expiresOn,
-          status,
-          notes,
+          name: 'reagent_name',
+          label: 'Reagent / Supply Name',
+          placeholder: 'e.g. Hematology Control Lot A',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      showSuccess(existing ? 'Updated' : 'Added', 'Reagent inventory saved');
-      await fetchReagentInventory();
-    } catch (error) {
-      console.error('Failed to upsert reagent inventory', error);
-      showError('Error', 'Failed to save reagent inventory');
-    } finally {
-      setInventoryLoading(false);
-    }
+        {
+          name: 'analyzer_name',
+          label: 'Analyzer / Instrument',
+          placeholder: 'Optional analyzer tied to this reagent',
+        },
+        {
+          name: 'lot_number',
+          label: 'Lot Number',
+          placeholder: 'Optional lot identifier',
+        },
+        {
+          name: 'quantity_available',
+          label: 'Quantity on Hand',
+          type: 'number',
+          required: true,
+          placeholder: 'Enter numeric quantity',
+        },
+        {
+          name: 'unit',
+          label: 'Unit of Measure',
+          placeholder: 'e.g. bottles, cartridges, strips',
+        },
+        {
+          name: 'minimum_threshold',
+          label: 'Minimum Threshold',
+          type: 'number',
+          required: true,
+          placeholder: 'Alert when stock falls below this number',
+        },
+        {
+          name: 'expires_on',
+          label: 'Expiry Date',
+          type: 'date',
+          helperText: 'Leave blank if not applicable',
+        },
+        {
+          name: 'status',
+          label: 'Status',
+          type: 'select',
+          options: statusOptions,
+          required: true,
+        },
+        {
+          name: 'notes',
+          label: 'Notes',
+          type: 'textarea',
+          rows: 3,
+          placeholder: 'Storage instructions, vendor info, etc.',
+        },
+      ],
+      initialValues: {
+        reagent_name: existing?.reagent_name || '',
+        analyzer_name: existing?.analyzer_name || '',
+        lot_number: existing?.lot_number || '',
+        quantity_available:
+          existing?.quantity_available !== undefined ? String(existing.quantity_available) : '0',
+        unit: existing?.unit || 'units',
+        minimum_threshold:
+          existing?.minimum_threshold !== undefined ? String(existing.minimum_threshold) : '0',
+        expires_on: existing?.expires_on ? existing.expires_on.substring(0, 10) : '',
+        status: existing?.status || 'ok',
+        notes: existing?.notes || '',
+      },
+      onSubmit: async (values) => {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        const quantity = Number(values.quantity_available);
+        if (Number.isNaN(quantity)) {
+          showError('Invalid quantity', 'Please provide a numeric quantity');
+          throw new Error('Validation failed');
+        }
+
+        const threshold = Number(values.minimum_threshold);
+        if (Number.isNaN(threshold)) {
+          showError('Invalid threshold', 'Please provide a numeric threshold');
+          throw new Error('Validation failed');
+        }
+
+        const status = values.status && statusOptions.find((opt) => opt.value === values.status)
+          ? values.status
+          : 'ok';
+
+        try {
+          setInventoryLoading(true);
+          await ehrApi.upsertLabReagentInventory(
+            {
+              id: existing?.id,
+              reagent_name: (values.reagent_name || '').trim(),
+              analyzer_name: values.analyzer_name?.trim() || undefined,
+              lot_number: values.lot_number?.trim() || undefined,
+              quantity_available: quantity,
+              unit: values.unit?.trim() || 'units',
+              minimum_threshold: threshold,
+              expires_on: values.expires_on ? values.expires_on : undefined,
+              status,
+              notes: values.notes?.trim() || undefined,
+            },
+            token,
+            tenantSlug,
+          );
+          showSuccess(existing ? 'Updated' : 'Added', 'Reagent inventory saved');
+          await fetchReagentInventory();
+        } catch (error) {
+          console.error('Failed to upsert reagent inventory', error);
+          showError('Error', 'Failed to save reagent inventory');
+          throw error;
+        } finally {
+          setInventoryLoading(false);
+        }
+      },
+    });
   };
 
-  const handleAdjustInventoryQuantity = async (item: any) => {
+  const handleAdjustInventoryQuantity = (item: any) => {
     if (!tenantSlug) return;
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
 
-    const quantityInput = window.prompt(
-      `Adjust quantity for ${item.reagent_name}`,
-      String(item.quantity_available ?? 0),
-    );
-    if (quantityInput === null) return;
-    const quantity = Number(quantityInput);
-    if (Number.isNaN(quantity)) {
-      showError('Invalid quantity', 'Please provide a numeric quantity');
-      return;
-    }
+    const statusOptions = [
+      { value: 'ok', label: 'OK' },
+      { value: 'warning', label: 'Warning' },
+      { value: 'critical', label: 'Critical' },
+      { value: 'expired', label: 'Expired' },
+    ];
 
-    const statusInput = window.prompt(
-      'Status (ok / warning / critical / expired)',
-      item.status || 'ok',
-    );
-    const statusOptions = ['ok', 'warning', 'critical', 'expired'];
-    const statusNormalized = statusInput ? statusInput.toLowerCase() : item.status || 'ok';
-    const status = statusOptions.includes(statusNormalized) ? statusNormalized : item.status || 'ok';
+    setActionModal({
+      title: `Adjust Quantity • ${item.reagent_name}`,
+      description: 'Update on-hand stock levels and flag reagents that need replenishment.',
+      confirmLabel: 'Update Quantity',
+      fields: [
+        {
+          name: 'quantity_available',
+          label: 'Quantity on Hand',
+          type: 'number',
+          required: true,
+          placeholder: 'Enter numeric quantity',
+        },
+        {
+          name: 'status',
+          label: 'Status',
+          type: 'select',
+          options: statusOptions,
+          required: true,
+        },
+      ],
+      initialValues: {
+        quantity_available: String(item.quantity_available ?? 0),
+        status: item.status || 'ok',
+      },
+      onSubmit: async (values) => {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
 
-    try {
-      setInventoryLoading(true);
-      await ehrApi.updateLabReagentQuantity(
-        item.id,
-        { quantity_available: quantity, status },
-        token,
-        tenantSlug,
-      );
-      showSuccess('Updated', 'Inventory quantity updated');
-      await fetchReagentInventory();
-    } catch (error) {
-      console.error('Failed to update reagent quantity', error);
-      showError('Error', 'Failed to update quantity');
-    } finally {
-      setInventoryLoading(false);
-    }
+        const quantity = Number(values.quantity_available);
+        if (Number.isNaN(quantity)) {
+          showError('Invalid quantity', 'Please provide a numeric quantity');
+          throw new Error('Validation failed');
+        }
+
+        const status = statusOptions.some((option) => option.value === values.status)
+          ? values.status
+          : item.status || 'ok';
+
+        try {
+          setInventoryLoading(true);
+          await ehrApi.updateLabReagentQuantity(
+            item.id,
+            { quantity_available: quantity, status },
+            token,
+            tenantSlug,
+          );
+          showSuccess('Updated', 'Inventory quantity updated');
+          await fetchReagentInventory();
+        } catch (error) {
+          console.error('Failed to update reagent quantity', error);
+          showError('Error', 'Failed to update quantity');
+          throw error;
+        } finally {
+          setInventoryLoading(false);
+        }
+      },
+    });
   };
 
-  const handleAddHandoffNote = async (order: LabOrder) => {
+  const handleAddHandoffNote = (order: LabOrder) => {
     if (!tenantSlug) return;
-    const note = window.prompt('Add hand-off note');
-    if (!note || !note.trim()) return;
 
-    const shift = window.prompt(
-      'Shift or team (optional). Examples: day, evening, night, weekend',
-      'day',
-    );
-
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
-
-    try {
-      setUpdatingOrderId(order.id);
-      await ehrApi.updateLabProcessingContext(
-        order.id,
+    setActionModal({
+      title: 'Record Hand-off Note',
+      description: 'Share context with the next technologist or shift before you sign off.',
+      confirmLabel: 'Add Hand-off Note',
+      fields: [
         {
-          handoffNote: {
-            note: note.trim(),
-            shift: shift?.trim() || undefined,
-          },
-          appendEvent: {
-            type: 'handoff_note',
-            description: `Hand-off note recorded${shift ? ` (${shift})` : ''}`,
-          },
+          name: 'note',
+          label: 'Hand-off Note',
+          type: 'textarea',
+          rows: 4,
+          placeholder: 'Summarise remaining steps, outstanding checks, or special handling...',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      await refreshActiveTab();
-      showSuccess('Note added', 'Hand-off note recorded successfully');
-    } catch (error) {
-      console.error('Failed to add handoff note', error);
-      showError('Error', 'Failed to add hand-off note');
-    } finally {
-      setUpdatingOrderId(null);
-    }
+        {
+          name: 'shift',
+          label: 'Shift / Team',
+          placeholder: 'e.g. day, evening, night, weekend',
+        },
+      ],
+      onSubmit: async (values) => {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        const note = (values.note || '').trim();
+        if (!note) {
+          showError('Missing information', 'Please enter a hand-off note');
+          throw new Error('Validation failed');
+        }
+
+        const shift = values.shift?.trim() || undefined;
+
+        try {
+          setUpdatingOrderId(order.id);
+          await ehrApi.updateLabProcessingContext(
+            order.id,
+            {
+              handoffNote: {
+                note,
+                shift,
+              },
+              appendEvent: {
+                type: 'handoff_note',
+                description: `Hand-off note recorded${shift ? ` (${shift})` : ''}`,
+              },
+            },
+            token,
+            tenantSlug,
+          );
+          await refreshActiveTab();
+          showSuccess('Note added', 'Hand-off note recorded successfully');
+        } catch (error) {
+          console.error('Failed to add handoff note', error);
+          showError('Error', 'Failed to add hand-off note');
+          throw error;
+        } finally {
+          setUpdatingOrderId(null);
+        }
+      },
+    });
   };
 
-  const handleLogNotification = async (order: LabOrder) => {
+  const handleLogNotification = (order: LabOrder) => {
     if (!tenantSlug) return;
-    const message = window.prompt('Notification message');
-    if (!message || !message.trim()) return;
 
-    const channel = window.prompt(
-      'Channel (system/email/sms/push)',
-      'system',
-    ) as LabNotificationEntry['channel'] | null;
-
-    const recipientsInput = window.prompt(
-      'Recipients (comma-separated user IDs or emails)',
-      order.orderingProvider?.id || '',
-    );
-    const recipients = recipientsInput
-      ? recipientsInput
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : [];
-
-    if (!channel || !NOTIFICATION_CHANNELS.includes(channel)) {
-      showError('Error', 'Invalid channel');
-      return;
-    }
-
-    const token = localStorage.getItem('ehr_token');
-    if (!token) {
-      showError('Error', 'Authentication token missing');
-      return;
-    }
-
-    try {
-      setUpdatingOrderId(order.id);
-      await ehrApi.updateLabProcessingContext(
-        order.id,
+    setActionModal({
+      title: 'Log Provider Notification',
+      description: 'Document when ordering providers are alerted about critical updates.',
+      confirmLabel: 'Log Notification',
+      fields: [
         {
-          notify: {
-            channel,
-            recipients,
-            message: message.trim(),
-          },
-          appendEvent: {
-            type: 'notification',
-            description: `Notification sent via ${channel}`,
-            metadata: { channel, recipients },
-          },
+          name: 'message',
+          label: 'Notification Message',
+          type: 'textarea',
+          rows: 4,
+          placeholder: 'Summarise what was communicated to the provider...',
+          required: true,
         },
-        token,
-        tenantSlug,
-      );
-      await refreshActiveTab();
-      showSuccess('Notification logged', 'Provider notification recorded');
-    } catch (error) {
-      console.error('Failed to log notification', error);
-      showError('Error', 'Failed to log provider notification');
-    } finally {
-      setUpdatingOrderId(null);
-    }
+        {
+          name: 'channel',
+          label: 'Channel',
+          type: 'select',
+          required: true,
+          options: NOTIFICATION_CHANNELS.map((channel) => ({
+            value: channel,
+            label: channel.toUpperCase(),
+          })),
+        },
+        {
+          name: 'recipients',
+          label: 'Recipients',
+          placeholder: 'Comma-separated user IDs or emails',
+          helperText: 'Defaults to the ordering provider if left blank',
+        },
+      ],
+      initialValues: {
+        message: '',
+        channel: 'system',
+        recipients: order.orderingProvider?.id || '',
+      },
+      onSubmit: async (values) => {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) {
+          showError('Error', 'Authentication token missing');
+          throw new Error('Authentication missing');
+        }
+
+        const message = (values.message || '').trim();
+        if (!message) {
+          showError('Missing information', 'Notification message is required');
+          throw new Error('Validation failed');
+        }
+
+        const channel = values.channel as LabNotificationEntry['channel'];
+        if (!channel || !NOTIFICATION_CHANNELS.includes(channel)) {
+          showError('Error', 'Invalid notification channel');
+          throw new Error('Validation failed');
+        }
+
+        const recipients = values.recipients
+          ? values.recipients
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : [];
+
+        const resolvedRecipients = recipients.length > 0
+          ? recipients
+          : (order.orderingProvider?.id ? [order.orderingProvider.id] : []);
+
+        try {
+          setUpdatingOrderId(order.id);
+          await ehrApi.updateLabProcessingContext(
+            order.id,
+            {
+              notify: {
+                channel,
+                recipients: resolvedRecipients,
+                message,
+              },
+              appendEvent: {
+                type: 'notification',
+                description: `Notification sent via ${channel}`,
+                metadata: { channel, recipients: resolvedRecipients },
+              },
+            },
+            token,
+            tenantSlug,
+          );
+          await refreshActiveTab();
+          showSuccess('Notification logged', 'Provider notification recorded');
+        } catch (error) {
+          console.error('Failed to log notification', error);
+          showError('Error', 'Failed to log provider notification');
+          throw error;
+        } finally {
+          setUpdatingOrderId(null);
+        }
+      },
+    });
   };
 
   const openResultsModal = (order: LabOrder) => {
@@ -1161,6 +1488,7 @@ const LabDashboard: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const badges = {
+      awaiting_payment: 'bg-amber-100 text-amber-800 border border-amber-200',
       ordered: 'bg-blue-100 text-blue-800',
       collected: 'bg-yellow-100 text-yellow-800',
       in_progress: 'bg-orange-100 text-orange-800',
@@ -1380,7 +1708,7 @@ const LabDashboard: React.FC = () => {
         </div>
 
         {/* Queue Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -1407,6 +1735,23 @@ const LabDashboard: React.FC = () => {
               <AlertCircle className="w-8 h-8 text-amber-500" />
             </div>
             <p className="mt-2 text-xs text-amber-600">Prioritize before routine workload</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">
+                  Awaiting Payment
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  {queueMetrics.awaitingPaymentCount}
+                </p>
+              </div>
+              <CreditCard className="w-8 h-8 text-amber-500" />
+            </div>
+            <p className="mt-2 text-xs text-amber-600">
+              Orders pending Accounts clearance before lab processing
+            </p>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
@@ -1718,6 +2063,10 @@ const LabDashboard: React.FC = () => {
                       ? formatDateTimeToDDMMYYYYHHMM(context.expectedCompletion)
                       : null;
                     const isUpdating = updatingOrderId === order.id;
+                    const isAwaitingPayment =
+                      order.status === 'awaiting_payment' || order.paymentStatus === 'awaiting_payment';
+                    const outstandingFee =
+                      typeof order.feeAmount === 'number' && order.feeAmount > 0 ? order.feeAmount : null;
 
                     return (
                       <div
@@ -1742,6 +2091,12 @@ const LabDashboard: React.FC = () => {
                                 <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
                                   {getStageLabel(context.stage)}
                                 </span>
+                                {isAwaitingPayment && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                    <CreditCard className="w-3 h-3" />
+                                    Payment Pending
+                                  </span>
+                                )}
                               </div>
                               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                                 <span className="font-semibold text-slate-800">
@@ -1766,7 +2121,8 @@ const LabDashboard: React.FC = () => {
                                 <>
                                   <button
                                     onClick={() => handleCollectSample(order.id)}
-                                    disabled={loading}
+                                    disabled={loading || isAwaitingPayment}
+                                    title={isAwaitingPayment ? 'Awaiting payment clearance' : undefined}
                                     className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                   >
                                     <Upload className="w-4 h-4" />
@@ -1774,7 +2130,8 @@ const LabDashboard: React.FC = () => {
                                   </button>
                                   <button
                                     onClick={() => handleStartProcessing(order.id)}
-                                    disabled={loading}
+                                    disabled={loading || isAwaitingPayment}
+                                    title={isAwaitingPayment ? 'Awaiting payment clearance' : undefined}
                                     className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                   >
                                     <Play className="w-4 h-4" />
@@ -1814,8 +2171,30 @@ const LabDashboard: React.FC = () => {
                                 Open Workspace
                               </button>
                             </div>
+                        </div>
+                        {isAwaitingPayment && (
+                          <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex gap-2">
+                            <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="font-semibold">Awaiting payment confirmation</p>
+                              <p>
+                                Please direct this patient to Accounts to settle the laboratory fee before sample collection or processing.
+                              </p>
+                              {outstandingFee !== null && (
+                                <p className="mt-1">
+                                  Outstanding fee:{' '}
+                                  <span className="font-semibold">${outstandingFee.toFixed(2)}</span>
+                                </p>
+                              )}
+                              {order.financeTransactionId && (
+                                <p className="mt-1 text-xs text-amber-700">
+                                  Finance transaction ID:{' '}
+                                  <span className="font-mono">{order.financeTransactionId}</span>
+                                </p>
+                              )}
+                            </div>
                           </div>
-
+                        )}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
                             <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-2">
                               <div className="flex items-center gap-2 mb-1">
@@ -2408,8 +2787,8 @@ const LabDashboard: React.FC = () => {
                     <div className="space-y-2">
                       {(workspaceOrder.handoffNotes || []).slice(0, 6).map((note, idx) => (
                         <div key={`${note.timestamp}-${idx}`} className="border border-slate-200 rounded-lg p-3 bg-slate-50 text-xs text-slate-600">
-                          <div className="flex items-center justify-between mb-1 text-slate-500">
-                            <span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-slate-700 capitalize">
                               {note.shift ? note.shift.charAt(0).toUpperCase() + note.shift.slice(1) : 'Shift note'}
                             </span>
                             <span>{formatDateTimeToDDMMYYYYHHMM(note.timestamp)}</span>
@@ -2468,6 +2847,112 @@ const LabDashboard: React.FC = () => {
           </section>
         )}
       </main>
+
+      {actionModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
+            <div className="w-full max-w-xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-slate-200/70 flex flex-col">
+              <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 to-white">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold text-slate-900">{actionModal.title}</h3>
+                  {actionModal.description && (
+                    <p className="text-sm text-slate-500 leading-relaxed">{actionModal.description}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleActionModalCancel}
+                  disabled={actionModalSubmitting}
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form
+                id="lab-action-modal-form"
+                onSubmit={handleActionModalSubmit}
+                className="flex-1 overflow-y-auto px-6 py-5 space-y-5"
+              >
+                {actionModal.fields.map((field) => {
+                  const value = actionModalValues[field.name] ?? '';
+                  const fieldId = `lab-action-${field.name}`;
+
+                  return (
+                    <div key={field.name} className="space-y-2">
+                      <label htmlFor={fieldId} className="block text-sm font-medium text-slate-700">
+                        {field.label}
+                        {field.required && <span className="text-rose-600">*</span>}
+                      </label>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          id={fieldId}
+                          rows={field.rows ?? 4}
+                          value={value}
+                          onChange={(event) => handleActionFieldChange(field.name, event.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          required={field.required}
+                          disabled={actionModalSubmitting}
+                        />
+                      ) : field.type === 'select' ? (
+                        <select
+                          id={fieldId}
+                          value={value}
+                          onChange={(event) => handleActionFieldChange(field.name, event.target.value)}
+                          className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm capitalize"
+                          required={field.required}
+                          disabled={actionModalSubmitting}
+                        >
+                          {(field.options || []).map((option) => (
+                            <option key={option.value} value={option.value} className="capitalize">
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          id={fieldId}
+                          type={field.type === 'number' || field.type === 'date' ? field.type : 'text'}
+                          value={value}
+                          onChange={(event) => handleActionFieldChange(field.name, event.target.value)}
+                          placeholder={field.placeholder}
+                          className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          required={field.required}
+                          disabled={actionModalSubmitting}
+                        />
+                      )}
+                      {field.helperText && (
+                        <p className="text-xs text-slate-500">{field.helperText}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </form>
+
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleActionModalCancel}
+                  disabled={actionModalSubmitting}
+                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="lab-action-modal-form"
+                  disabled={actionModalSubmitting}
+                  className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {actionModalSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {actionModal.confirmLabel || 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {/* Results Modal */}
       {showResultsModal && selectedOrder && (

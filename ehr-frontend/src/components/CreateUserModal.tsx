@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, User, Mail, Phone, Briefcase, Award, FileText } from 'lucide-react';
-import { useNotification } from './GlobalNotification.tsx';
-import { ehrApi } from '../services/api.ts';
-import PasswordDisplayModal from './PasswordDisplayModal.tsx';
+import { useNotification } from './GlobalNotification';
+import { ehrApi } from '../services/api';
+import PasswordDisplayModal from './PasswordDisplayModal';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -33,7 +33,8 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onUs
     { value: 'radiologist', label: 'Radiologist' },
     { value: 'lab_tech', label: 'Lab Technician' },
     { value: 'pharmacist', label: 'Pharmacist' },
-    { value: 'receptionist', label: 'Receptionist' }
+    { value: 'receptionist', label: 'Receptionist' },
+    { value: 'accounts', label: 'Accounts' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {

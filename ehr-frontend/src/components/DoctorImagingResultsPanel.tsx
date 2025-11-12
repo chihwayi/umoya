@@ -4,6 +4,7 @@ import {
   Camera,
   CheckCircle2,
   Clock,
+  CreditCard,
   FileText,
   Loader2,
   Sparkles,
@@ -35,6 +36,7 @@ interface StructuredFindingSummary {
 }
 
 type WorkflowStatus =
+  | 'awaiting_payment'
   | 'awaiting_study'
   | 'scheduled'
   | 'in_progress'
@@ -50,6 +52,9 @@ interface DoctorImagingResult {
     number: string;
     priority: string;
     status: string;
+    payment_status?: string;
+    finance_transaction_id?: string | null;
+    fee_amount?: number | null;
     ordered_at: string;
     clinical_indication?: string;
     clinical_history?: string;
@@ -108,6 +113,7 @@ interface DoctorImagingResultsResponse {
   results: DoctorImagingResult[];
   counts: {
     total: number;
+    awaiting_payment: number;
     pending: number;
     awaiting_ack: number;
     completed: number;
@@ -116,7 +122,7 @@ interface DoctorImagingResultsResponse {
   };
 }
 
-type FilterValue = 'pending' | 'awaiting_ack' | 'completed' | 'critical' | 'all';
+type FilterValue = 'pending' | 'awaiting_payment' | 'awaiting_ack' | 'completed' | 'critical' | 'all';
 
 interface DoctorImagingResultsPanelProps {
   tenantSlug: string;
@@ -133,6 +139,10 @@ const STATUS_META: Record<
   WorkflowStatus,
   { label: string; className: string }
 > = {
+  awaiting_payment: {
+    label: 'Awaiting Payment',
+    className: 'bg-amber-100 text-amber-700 border-amber-200',
+  },
   awaiting_study: {
     label: 'Awaiting Study',
     className: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -186,6 +196,7 @@ const PRIORITY_META: Record<
 };
 
 const FILTER_OPTIONS: { key: FilterValue; label: string }[] = [
+  { key: 'awaiting_payment', label: 'Awaiting Payment' },
   { key: 'pending', label: 'In Progress' },
   { key: 'awaiting_ack', label: 'Needs Acknowledgement' },
   { key: 'critical', label: 'Critical' },
@@ -208,6 +219,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
   const [results, setResults] = useState<DoctorImagingResult[]>([]);
   const [counts, setCounts] = useState<DoctorImagingResultsResponse['counts']>({
     total: 0,
+    awaiting_payment: 0,
     pending: 0,
     awaiting_ack: 0,
     completed: 0,
@@ -288,6 +300,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
       setCounts(
         data?.counts || {
           total: 0,
+          awaiting_payment: 0,
           pending: 0,
           awaiting_ack: 0,
           completed: 0,
@@ -335,6 +348,13 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
         icon: Camera,
         color: 'text-slate-700',
         border: 'border-slate-300',
+      },
+      {
+        label: 'Awaiting Payment',
+        value: counts.awaiting_payment,
+        icon: CreditCard,
+        color: 'text-amber-600',
+        border: 'border-amber-300',
       },
       {
         label: 'In Progress',
@@ -461,6 +481,11 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
                 disabled={!!statusFilter}
               >
                 {label}
+                {key === 'awaiting_payment' && counts.awaiting_payment > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px]">
+                    {counts.awaiting_payment}
+                  </span>
+                )}
                 {key === 'awaiting_ack' && counts.awaiting_ack > 0 && (
                   <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600 text-white text-[10px]">
                     {counts.awaiting_ack}
@@ -478,7 +503,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
       </div>
 
       {!compact && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
           {summaryCards.map((card, index) => (
             <div
               key={index}
@@ -589,6 +614,26 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
                     )}
                   </div>
                 </div>
+
+                {result.workflow_status === 'awaiting_payment' && (
+                  <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex gap-2">
+                    <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Awaiting payment confirmation</p>
+                      <p>
+                        Please direct the patient to Accounts to settle this imaging order before it can be scheduled or performed.
+                      </p>
+                      {typeof result.order.fee_amount === 'number' && result.order.fee_amount > 0 && (
+                        <p className="mt-1">
+                          Estimated charge:{' '}
+                          <span className="font-semibold">
+                            ${result.order.fee_amount.toFixed(2)}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600">
                   <div className="space-y-1">

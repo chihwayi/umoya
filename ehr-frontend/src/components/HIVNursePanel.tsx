@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X } from 'lucide-react';
 import { ehrApi } from '../services/api';
+import { useNotification } from './GlobalNotification';
 
 interface HIVNursePanelProps {
   appointmentId: string;
@@ -13,6 +14,7 @@ interface HIVNursePanelProps {
 
 const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId, tenantSlug, token, onClose, onSaved }) => {
   const [loading, setLoading] = useState(false);
+  const { showSuccess, showError } = useNotification();
   const [form, setForm] = useState({
     hivStatus: 'known_positive', // known_positive | newly_diagnosed | unknown
     onART: true,
@@ -68,8 +70,10 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
         priority: 'routine',
         clinicalInfo: 'HIV care - Viral Load monitoring',
       }, token, tenantSlug);
+      showSuccess('Viral load order submitted. Accounts will release the test once payment is confirmed.');
     } catch (e) {
       console.error('Failed to order VL:', e);
+      showError('Failed to submit viral load order');
     } finally {
       setLoading(false);
     }

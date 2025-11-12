@@ -47,14 +47,23 @@ const EHRLogin: React.FC = () => {
         showSuccess('Login Successful', `Welcome back, ${response.data.user.firstName}!`);
         
         // Redirect based on user role
-        if (response.data.user.role === 'doctor') {
-          navigate(`/ehr/${tenantSlug}/doctor`);
-        } else if (response.data.user.role === 'radiologist') {
-          navigate(`/ehr/${tenantSlug}/radiologist`);
-        } else if (response.data.user.role === 'lab_tech' || response.data.user.role === 'lab_technician') {
-          navigate(`/ehr/${tenantSlug}/lab`);
-        } else {
-          navigate(`/ehr/${tenantSlug}/dashboard`);
+        const role = response.data.user.role;
+        switch (role) {
+          case 'doctor':
+            navigate(`/ehr/${tenantSlug}/doctor`);
+            break;
+          case 'radiologist':
+            navigate(`/ehr/${tenantSlug}/radiologist`);
+            break;
+          case 'lab_tech':
+          case 'lab_technician':
+            navigate(`/ehr/${tenantSlug}/lab`);
+            break;
+          case 'accounts':
+            navigate(`/ehr/${tenantSlug}/accounts`);
+            break;
+          default:
+            navigate(`/ehr/${tenantSlug}/dashboard`);
         }
       }
     } catch (error: any) {

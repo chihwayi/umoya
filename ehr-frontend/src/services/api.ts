@@ -1445,6 +1445,66 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // ===== FINANCE & ACCOUNTS =====
+  getFinanceSummary: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/finance/dashboard/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getFinancialTransactions: async (
+    tenantSlug: string,
+    token: string,
+    params: {
+      status?: string;
+      module?: string;
+      payerType?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const response = await ehrAxios.get('/finance/transactions', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getFinancialTransactionDetail: async (tenantSlug: string, token: string, transactionId: string) => {
+    const response = await ehrAxios.get(`/finance/transactions/${transactionId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordFinancialPayment: async (
+    tenantSlug: string,
+    token: string,
+    transactionId: string,
+    payload: { amount: number; paymentMethod: string; paymentReference?: string; gatewayReference?: string; note?: string },
+  ) => {
+    const response = await ehrAxios.post(`/finance/transactions/${transactionId}/payments`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   // ===== ENHANCED LIS - CRITICAL ALERTS =====
   getCriticalAlertStats: async (tenantSlug: string, token: string) => {
     const response = await ehrAxios.get('/lab/critical-alerts/stats/summary', {
@@ -2159,6 +2219,49 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  // ===== CARDIOLOGY API =====
+
+  getCardiologyEncounters: async (tenantSlug: string, token: string, params: any = {}) => {
+    const response = await ehrAxios.get('/cardiology/encounters', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  createCardiologyEncounter: async (tenantSlug: string, token: string, payload: any) => {
+    const response = await ehrAxios.post('/cardiology/encounters', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateCardiologyEncounter: async (tenantSlug: string, token: string, encounterId: string, payload: any) => {
+    const response = await ehrAxios.patch(`/cardiology/encounters/${encounterId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCardiologyDashboardSummary: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/cardiology/dashboard/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },

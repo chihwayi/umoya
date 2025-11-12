@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
   Heart, Thermometer, Droplets, Plus, Search, Filter,
-  ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList
+  ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList,
+  CreditCard, Lock
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { ehrApi } from '../services/api';
+import { useNotification } from './GlobalNotification';
 
 interface Patient {
   id: string;
@@ -36,6 +38,9 @@ interface Appointment {
     firstName: string;
     lastName: string;
   };
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
   vitals?: {
     bloodPressure: string;
     heartRate: number;
@@ -52,8 +57,8 @@ interface Appointment {
 
 interface TriageQueueProps {
   appointments: Appointment[];
-  onRecordVitals: (patient: Patient) => void;
-  onTriageAssessment: (patient: Patient) => void;
+  onRecordVitals: (appointment: Appointment) => void;
+  onTriageAssessment: (appointment: Appointment) => void;
 }
 
 const TriageQueue: React.FC<TriageQueueProps> = ({ 
@@ -67,6 +72,43 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [sortBy, setSortBy] = useState('priority');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [vitalsData, setVitalsData] = useState<Record<string, any[]>>({});
+  const { showError, showSuccess } = useNotification();
+
+  const formatCurrency = (value?: number | string | null) => {
+    if (value === null || value === undefined) return null;
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return null;
+    return `$${numeric.toFixed(2)}`;
+  };
+
+  const buildFinanceDetails = (appointment: Appointment) => {
+    const details: string[] = [];
+    const formattedFee = formatCurrency(appointment.feeAmount ?? null);
+    if (formattedFee) {
+      details.push(`Fee amount: ${formattedFee}`);
+    }
+    if (appointment.financeTransactionId) {
+      details.push(`Finance reference: ${appointment.financeTransactionId}`);
+    }
+    return details.join(' • ');
+  };
+
+  const notifyPaymentBlocked = (appointment: Appointment, context: string) => {
+    const financeDetails = buildFinanceDetails(appointment);
+    const suffix = financeDetails ? ` ${financeDetails}` : '';
+    showError(
+      'Awaiting payment',
+      `${context}. Accounts must confirm payment before continuing.${suffix}`
+    );
+  };
+
+  const ensurePaymentCleared = (appointment: Appointment, context: string) => {
+    if (appointment.paymentStatus === 'awaiting_payment') {
+      notifyPaymentBlocked(appointment, context);
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     if (appointments && appointments.length > 0) {
@@ -154,8 +196,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     const inProgress = appointments.filter(apt => apt.status === 'in-progress').length;
     const urgent = appointments.filter(apt => apt.priorityLevel === 'urgent' || apt.priorityLevel === 'high').length;
     const vitalsRecorded = appointments.filter(apt => vitalsData[apt.patient.id] && vitalsData[apt.patient.id].length > 0).length;
+    const awaitingPayment = appointments.filter(apt => apt.paymentStatus === 'awaiting_payment').length;
 
-    return { waiting, inProgress, urgent, vitalsRecorded };
+    return { waiting, inProgress, urgent, vitalsRecorded, awaitingPayment };
   };
 
   const getPriorityColor = (priority: string) => {
@@ -178,26 +221,42 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     }
   };
 
-  const handleStatusChange = async (appointmentId: string, newStatus: string) => {
+  const handleStatusChange = async (appointment: Appointment, newStatus: string) => {
+    if (!ensurePaymentCleared(appointment, 'Cannot update appointment status while payment is pending')) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('ehr_token');
       const tenantSlug = localStorage.getItem('ehr_tenant_slug');
       
       if (!token || !tenantSlug) {
-        console.error('Authentication required');
+        showError('Authentication required');
         return;
       }
 
-      // Import the API function
       const { ehrApi } = await import('../services/api');
-      
-      await ehrApi.updateAppointmentStatus(appointmentId, newStatus, token, tenantSlug);
-      
-      // Refresh the page to show updated status
+      await ehrApi.updateAppointmentStatus(appointment.id, newStatus, token, tenantSlug);
+      showSuccess('Status updated', `Appointment marked as ${newStatus}`);
       window.location.reload();
     } catch (error) {
       console.error('Error updating appointment status:', error);
+      showError('Error', 'Failed to update appointment status');
     }
+  };
+
+  const handleRecordVitalsClick = (appointment: Appointment) => {
+    if (!ensurePaymentCleared(appointment, 'Vitals cannot be recorded while payment is pending')) {
+      return;
+    }
+    onRecordVitals(appointment);
+  };
+
+  const handleTriageClick = (appointment: Appointment) => {
+    if (!ensurePaymentCleared(appointment, 'Triage assessment is locked until payment is confirmed')) {
+      return;
+    }
+    onTriageAssessment(appointment);
   };
 
   const stats = getQueueStats();
@@ -205,7 +264,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   return (
     <div className="space-y-8">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-lg border border-blue-200/50 p-6 hover:shadow-xl transition-all duration-300">
           <div className="flex items-center justify-between mb-3">
             <div className="p-2 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl">
@@ -244,6 +303,16 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
             <div className="text-3xl font-bold text-green-600">{stats.vitalsRecorded}</div>
           </div>
           <div className="text-sm font-semibold text-slate-600">Vitals Recorded</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-white to-amber-50 rounded-2xl shadow-lg border border-amber-200/50 p-6 hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-3">
+            <div className="p-2 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl">
+              <CreditCard className="w-5 h-5 text-white" />
+            </div>
+            <div className={`text-3xl font-bold ${stats.awaitingPayment > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{stats.awaitingPayment}</div>
+          </div>
+          <div className="text-sm font-semibold text-slate-600">Awaiting Payment</div>
         </div>
       </div>
 
@@ -340,119 +409,172 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
         </div>
         
         <div className="divide-y divide-slate-200/50">
-          {filteredAppointments.map((appointment) => (
-            <div key={appointment.id} className="p-8 hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30 transition-all duration-300 group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-pink-500 via-rose-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    {appointment.patient.firstName.charAt(0)}{appointment.patient.lastName.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-xl font-bold text-slate-900 group-hover:text-pink-900 transition-colors mb-2">
-                      {appointment.patient.firstName} {appointment.patient.lastName}
-                    </h4>
-                    <p className="text-slate-600 font-medium mb-3">
-                      ID: {appointment.patient.patientNumber} • {appointment.appointmentType}
-                    </p>
-                    <div className="flex items-center gap-4 mb-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(appointment.priorityLevel)}`}>
-                        {appointment.priorityLevel}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appointment.status)}`}>
-                        {appointment.status}
-                      </span>
-                      <span className="text-sm text-slate-500">
-                        {formatDateTimeToDDMMYYYYHHMM(appointment.appointmentDate)}
-                      </span>
+          {filteredAppointments.map((appointment) => {
+            const awaitingPayment = appointment.paymentStatus === 'awaiting_payment';
+            const feeEstimate = formatCurrency(appointment.feeAmount ?? null);
+            const financeReference = appointment.financeTransactionId;
+            const latestVitals = vitalsData[appointment.patient.id]?.[0];
+
+            return (
+              <div key={appointment.id} className={`p-8 transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-6 flex-1">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all duration-300 ${awaitingPayment ? 'bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700' : 'bg-gradient-to-br from-pink-500 via-rose-600 to-purple-600'}`}>
+                      {appointment.patient.firstName.charAt(0)}{appointment.patient.lastName.charAt(0)}
                     </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <h4 className={`text-xl font-bold ${awaitingPayment ? 'text-amber-800' : 'text-slate-900 group-hover:text-pink-900 transition-colors'}`}>
+                          {appointment.patient.firstName} {appointment.patient.lastName}
+                        </h4>
+                        {awaitingPayment && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                            <CreditCard className="w-3 h-3" /> Awaiting Payment
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-600 font-medium mb-3">
+                        ID: {appointment.patient.patientNumber} • {appointment.appointmentType}
+                      </p>
+                      <div className="flex items-center gap-4 mb-3 flex-wrap">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(appointment.priorityLevel)}`}>
+                          {appointment.priorityLevel}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appointment.status)}`}>
+                          {appointment.status}
+                        </span>
+                        <span className="text-sm text-slate-500">
+                          {formatDateTimeToDDMMYYYYHHMM(appointment.appointmentDate)}
+                        </span>
+                        {feeEstimate && (
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold border border-slate-200 text-slate-600 bg-slate-50">
+                            Fee: {feeEstimate}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Vitals Status */}
+                      <div className="flex flex-wrap items-center gap-4">
+                        {latestVitals ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="w-4 h-4" />
+                            <span className="text-sm font-semibold">Vitals Recorded</span>
+                          </div>
+                        ) : (
+                          <div className={`flex items-center gap-2 ${awaitingPayment ? 'text-amber-600' : 'text-orange-600'}`}>
+                            <AlertTriangle className="w-4 h-4" />
+                            <span className="text-sm font-semibold">Vitals Pending</span>
+                          </div>
+                        )}
+                        
+                        {latestVitals && (
+                          <div className="flex items-center gap-4 text-sm text-slate-600">
+                            <div className="flex items-center gap-1">
+                              <Heart className="w-3 h-3" />
+                              <span>{latestVitals.heartRate} bpm</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Thermometer className="w-3 h-3" />
+                              <span>{latestVitals.temperature}°C</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Droplets className="w-3 h-3" />
+                              <span>{latestVitals.oxygenSaturation}%</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {awaitingPayment && (
+                        <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex flex-col gap-1">
+                          <span className="flex items-center gap-2 font-medium">
+                            <Lock className="w-4 h-4" /> Payment required before nursing actions
+                          </span>
+                          <span>
+                            Coordinate with Accounts to unlock vitals, triage, and status updates.
+                          </span>
+                          {financeReference && (
+                            <span className="text-xs text-amber-600">Finance reference: <span className="font-mono">{financeReference}</span></span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {((vitalsData[appointment.patient.id] || []).length === 0) ? (
+                      <button
+                        onClick={() => handleRecordVitalsClick(appointment)}
+                        disabled={awaitingPayment}
+                        className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700'
+                        }`}
+                      >
+                        <Activity className="w-4 h-4" />
+                        {awaitingPayment ? 'Locked' : 'Record Vitals'}
+                      </button>
+                    ) : (
+                      <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
+                    )}
+                    <button
+                      onClick={() => handleTriageClick(appointment)}
+                      disabled={awaitingPayment}
+                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment
+                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-orange-500 to-yellow-600 text-white hover:from-orange-600 hover:to-yellow-700'
+                      }`}
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      {awaitingPayment ? 'Locked' : 'Triage'}
+                    </button>
+                    {/* Status Change Buttons */}
+                    {appointment.status === 'scheduled' && (
+                      <button
+                        onClick={() => handleStatusChange(appointment, 'confirmed')}
+                        disabled={awaitingPayment}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
+                        }`}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Confirm
+                      </button>
+                    )}
                     
-                    {/* Vitals Status */}
-                    <div className="flex items-center gap-4">
-                      {vitalsData[appointment.patient.id] && vitalsData[appointment.patient.id].length > 0 ? (
-                        <div className="flex items-center gap-2 text-green-600">
-                          <CheckCircle className="w-4 h-4" />
-                          <span className="text-sm font-semibold">Vitals Recorded</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-orange-600">
-                          <AlertTriangle className="w-4 h-4" />
-                          <span className="text-sm font-semibold">Vitals Pending</span>
-                        </div>
-                      )}
-                      
-                      {vitalsData[appointment.patient.id] && vitalsData[appointment.patient.id].length > 0 && (
-                        <div className="flex items-center gap-4 text-sm text-slate-600">
-                          <div className="flex items-center gap-1">
-                            <Heart className="w-3 h-3" />
-                            <span>{vitalsData[appointment.patient.id][0].heartRate} bpm</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Thermometer className="w-3 h-3" />
-                            <span>{vitalsData[appointment.patient.id][0].temperature}°C</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Droplets className="w-3 h-3" />
-                            <span>{vitalsData[appointment.patient.id][0].oxygenSaturation}%</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {appointment.status === 'confirmed' && (
+                      <button
+                        onClick={() => handleStatusChange(appointment, 'in-progress')}
+                        disabled={awaitingPayment}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700'
+                        }`}
+                      >
+                        <Activity className="w-4 h-4" />
+                        Start
+                      </button>
+                    )}
+                    
+                    {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
+                      <button
+                        onClick={() => handleStatusChange(appointment, 'completed')}
+                        disabled={awaitingPayment}
+                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700'
+                        }`}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Complete
+                      </button>
+                    )}
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {((vitalsData[appointment.patient.id] || []).length === 0) ? (
-                    <button
-                      onClick={() => onRecordVitals(appointment.patient)}
-                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-xl hover:from-red-600 hover:to-pink-700 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
-                    >
-                      <Activity className="w-4 h-4" />
-                      Record Vitals
-                    </button>
-                  ) : (
-                    <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
-                  )}
-                  <button
-                    onClick={() => onTriageAssessment(appointment.patient)}
-                    className="px-4 py-2 bg-gradient-to-r from-orange-500 to-yellow-600 text-white rounded-xl hover:from-orange-600 hover:to-yellow-700 transition-all duration-200 font-semibold text-sm flex items-center gap-2"
-                  >
-                    <ClipboardList className="w-4 h-4" />
-                    Triage
-                  </button>
-                  {/* Status Change Buttons */}
-                  {appointment.status === 'scheduled' && (
-                    <button
-                      onClick={() => handleStatusChange(appointment.id, 'confirmed')}
-                      className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Confirm
-                    </button>
-                  )}
-                  
-                  {appointment.status === 'confirmed' && (
-                    <button
-                      onClick={() => handleStatusChange(appointment.id, 'in-progress')}
-                      className="px-3 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
-                    >
-                      <Activity className="w-4 h-4" />
-                      Start
-                    </button>
-                  )}
-                  
-                  {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
-                    <button
-                      onClick={() => handleStatusChange(appointment.id, 'completed')}
-                      className="px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Complete
-                    </button>
-                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

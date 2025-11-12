@@ -5,7 +5,8 @@ import {
   Eye, Stethoscope, FileText, Clock, AlertTriangle, CheckCircle,
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
-  ChevronDown, Settings, Shield, UserCircle, Menu, X, Package
+  ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
+  CreditCard, Lock
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -57,6 +58,9 @@ interface Appointment {
     firstName: string;
     lastName: string;
   };
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
   vitals?: {
     bloodPressure: string;
     heartRate: number;
@@ -70,6 +74,25 @@ interface Appointment {
     recordedBy: string;
   };
 }
+
+const formatCurrency = (value?: number | null) => {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return null;
+  return `$${numeric.toFixed(2)}`;
+};
+
+const buildFinanceDetails = (appointment: Appointment) => {
+  const details: string[] = [];
+  const formattedFee = formatCurrency(appointment.feeAmount ?? null);
+  if (formattedFee) {
+    details.push(`Fee amount: ${formattedFee}`);
+  }
+  if (appointment.financeTransactionId) {
+    details.push(`Finance reference: ${appointment.financeTransactionId}`);
+  }
+  return details.join(' • ');
+};
 
 const NurseDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -110,6 +133,15 @@ const NurseDashboard: React.FC = () => {
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [ltfuDays, setLtfuDays] = useState(90);
+
+  const notifyPaymentBlocked = (appointment: Appointment, context: string) => {
+    const financeDetails = buildFinanceDetails(appointment);
+    const detailSuffix = financeDetails ? ` ${financeDetails}` : '';
+    showError(
+      'Awaiting payment',
+      `${context}. Accounts must confirm payment before continuing.${detailSuffix}`
+    );
+  };
 
   // Calculate task counts from appointments directly
   const calculateTaskCountsFromAppointments = useCallback((appointments: any[]) => {
@@ -463,8 +495,9 @@ const NurseDashboard: React.FC = () => {
     const completed = appointments.filter(apt => apt.status === 'completed').length;
     const urgent = appointments.filter(apt => apt.priorityLevel === 'urgent' || apt.priorityLevel === 'high').length;
     const vitalsRecorded = appointments.filter(apt => apt.vitals !== null && apt.vitals !== undefined).length;
+    const awaitingPayment = appointments.filter(apt => apt.paymentStatus === 'awaiting_payment').length;
 
-    return { waiting, inProgress, completed, urgent, vitalsRecorded };
+    return { waiting, inProgress, completed, urgent, vitalsRecorded, awaitingPayment };
   };
 
   const getNurseActions = () => {
@@ -482,12 +515,15 @@ const NurseDashboard: React.FC = () => {
     ];
   };
 
+  const queueStats = getQueueStats();
+
   const quickStats = [
-    { label: 'Patients Waiting', value: getQueueStats().waiting.toString(), icon: Clock, color: 'text-blue-600' },
-    { label: 'In Progress', value: getQueueStats().inProgress.toString(), icon: Activity, color: 'text-yellow-600' },
-    { label: 'Vitals Recorded', value: getQueueStats().vitalsRecorded.toString(), icon: Heart, color: 'text-purple-600' },
-    { label: 'Urgent Cases', value: getQueueStats().urgent.toString(), icon: AlertTriangle, color: 'text-red-600' },
-    { label: 'Completed Today', value: getQueueStats().completed.toString(), icon: CheckCircle, color: 'text-green-600' },
+    { label: 'Patients Waiting', value: queueStats.waiting.toString(), icon: Clock, color: 'text-blue-600' },
+    { label: 'In Progress', value: queueStats.inProgress.toString(), icon: Activity, color: 'text-yellow-600' },
+    { label: 'Vitals Recorded', value: queueStats.vitalsRecorded.toString(), icon: Heart, color: 'text-purple-600' },
+    { label: 'Urgent Cases', value: queueStats.urgent.toString(), icon: AlertTriangle, color: 'text-red-600' },
+    { label: 'Completed Today', value: queueStats.completed.toString(), icon: CheckCircle, color: 'text-green-600' },
+    { label: 'Awaiting Payment', value: queueStats.awaitingPayment.toString(), icon: CreditCard, color: 'text-amber-600' },
   ];
 
   const handleExecuteOrder = (orderId: string) => {
@@ -539,13 +575,21 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
-  const handleRecordVitals = (patient: Patient) => {
-    setSelectedPatient(patient);
+  const handleRecordVitals = (appointment: Appointment) => {
+    if (appointment.paymentStatus === 'awaiting_payment') {
+      notifyPaymentBlocked(appointment, 'Vitals cannot be recorded while payment is pending');
+      return;
+    }
+    setSelectedPatient(appointment.patient);
     setShowVitalsModal(true);
   };
 
-  const handleTriageAssessment = (patient: Patient) => {
-    setSelectedPatient(patient);
+  const handleTriageAssessment = (appointment: Appointment) => {
+    if (appointment.paymentStatus === 'awaiting_payment') {
+      notifyPaymentBlocked(appointment, 'Triage assessment is locked until payment is confirmed');
+      return;
+    }
+    setSelectedPatient(appointment.patient);
     setShowAssessmentModal(true);
   };
 
@@ -571,31 +615,49 @@ const NurseDashboard: React.FC = () => {
     return Math.ceil(filteredPatients.length / patientsPerPage);
   };
 
-  // Check if patient has scheduled appointments (today or future only)
-  const hasScheduledAppointments = (patientId: string) => {
+  const getUpcomingAppointmentsForPatient = (patientId: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    return appointments.some(apt => {
+
+    return appointments.filter(apt => {
       if (apt.patient.id !== patientId) return false;
-      
-      // Only count appointments that are today or in the future
       const appointmentDate = new Date(apt.appointmentDate);
       appointmentDate.setHours(0, 0, 0, 0);
-      
-      // Check if appointment is today or future, and status is scheduled/confirmed
-      return appointmentDate >= today && 
-             (apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'in-progress');
+      return appointmentDate >= today && (
+        apt.status === 'scheduled' ||
+        apt.status === 'confirmed' ||
+        apt.status === 'in-progress' ||
+        apt.status === 'in_progress'
+      );
     });
   };
 
+  const hasScheduledAppointments = (patientId: string) => {
+    return getUpcomingAppointmentsForPatient(patientId).length > 0;
+  };
+
+  const getAwaitingPaymentAppointment = (patientId: string) => {
+    return getUpcomingAppointmentsForPatient(patientId).find(
+      apt => apt.paymentStatus === 'awaiting_payment'
+    );
+  };
+
   const handleVitalsForScheduledPatient = (patient: Patient) => {
-    if (hasScheduledAppointments(patient.id)) {
-      setSelectedPatient(patient);
-      setShowVitalsModal(true);
-    } else {
+    const upcomingAppointments = getUpcomingAppointmentsForPatient(patient.id);
+
+    if (upcomingAppointments.length === 0) {
       showError('No Scheduled Appointments', 'This patient has no scheduled appointments. Vitals can only be recorded for patients with appointments.');
+      return;
     }
+
+    const awaitingAppointment = upcomingAppointments.find(apt => apt.paymentStatus === 'awaiting_payment');
+    if (awaitingAppointment) {
+      notifyPaymentBlocked(awaitingAppointment, 'Vitals cannot be recorded until payment is confirmed');
+      return;
+    }
+
+    setSelectedPatient(patient);
+    setShowVitalsModal(true);
   };
 
   // Calendar helper functions
@@ -693,52 +755,80 @@ const NurseDashboard: React.FC = () => {
   const renderDayView = (appointments: Appointment[]) => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {appointments.map((appointment) => (
-          <div key={appointment.id} draggable onDragStart={() => handleDragStart(appointment.id)} className="bg-gradient-to-br from-white to-slate-50 rounded-xl p-4 border border-slate-200/50 hover:shadow-md transition-all duration-200">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-slate-900 truncate">
-                  {appointment.patient.firstName} {appointment.patient.lastName}
-                </h4>
-                <p className="text-sm text-slate-600">
-                  {new Date(appointment.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {appointment.durationMinutes} min
-                </p>
-                <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gradient-to-r ${getTypeColorClass(appointment.appointmentType)} mb-1`}>
-                  {appointment.appointmentType || 'Appointment'}
+        {appointments.map((appointment) => {
+          const awaitingPayment = appointment.paymentStatus === 'awaiting_payment';
+          const feeEstimate = formatCurrency(appointment.feeAmount ?? null);
+
+          return (
+            <div
+              key={appointment.id}
+              draggable
+              onDragStart={() => handleDragStart(appointment.id)}
+              className={`bg-gradient-to-br from-white to-slate-50 rounded-xl p-4 border ${awaitingPayment ? 'border-amber-300' : 'border-slate-200/50'} ${awaitingPayment ? 'opacity-90 ring-1 ring-amber-200' : ''} hover:shadow-md transition-all duration-200`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${awaitingPayment ? 'bg-gradient-to-r from-amber-500 to-orange-600' : 'bg-gradient-to-r from-blue-500 to-indigo-600'}`}>
+                  <Clock className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-xs text-slate-500">
-                  Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    appointment.priorityLevel === 'urgent' ? 'bg-red-100 text-red-800' :
-                    appointment.priorityLevel === 'high' ? 'bg-orange-100 text-orange-800' :
-                    appointment.priorityLevel === 'normal' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {appointment.priorityLevel}
-                  </span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                    appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                    appointment.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {appointment.status}
-                  </span>
-                </div>
-                {appointment.reason && (
-                  <p className="text-xs text-slate-500 mt-1 truncate">
-                    {appointment.reason}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-slate-900 truncate">
+                      {appointment.patient.firstName} {appointment.patient.lastName}
+                    </h4>
+                    {awaitingPayment && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-300">
+                        <CreditCard className="w-3 h-3" /> Awaiting Payment
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    {new Date(appointment.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {appointment.durationMinutes} min
                   </p>
-                )}
+                  <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gradient-to-r ${getTypeColorClass(appointment.appointmentType)} mb-1`}>
+                    {appointment.appointmentType || 'Appointment'}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      appointment.priorityLevel === 'urgent' ? 'bg-red-100 text-red-800' :
+                      appointment.priorityLevel === 'high' ? 'bg-orange-100 text-orange-800' :
+                      appointment.priorityLevel === 'normal' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {appointment.priorityLevel}
+                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      appointment.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                      appointment.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                      appointment.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {appointment.status}
+                    </span>
+                    {feeEstimate && (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                        Fee: {feeEstimate}
+                      </span>
+                    )}
+                  </div>
+                  {appointment.reason && (
+                    <p className="text-xs text-slate-500 mt-1 truncate">
+                      {appointment.reason}
+                    </p>
+                  )}
+                  {awaitingPayment && (
+                    <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center gap-2">
+                      <Lock className="w-3 h-3" />
+                      Accounts must confirm payment before vitals or triage can begin.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -1408,41 +1498,56 @@ const NurseDashboard: React.FC = () => {
 
               {/* Patients Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {getPaginatedPatients().map((p) => (
-                  <div key={p.id} className="bg-white/60 rounded-xl p-4 border border-slate-200/60 hover:shadow-md transition-all duration-200">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg text-white font-bold flex items-center justify-center">
-                        {p.firstName.charAt(0)}{p.lastName.charAt(0)}
+                {getPaginatedPatients().map((p) => {
+                  const hasUpcoming = hasScheduledAppointments(p.id);
+                  const awaitingAppointment = getAwaitingPaymentAppointment(p.id);
+
+                  return (
+                    <div key={p.id} className="bg-white/60 rounded-xl p-4 border border-slate-200/60 hover:shadow-md transition-all duration-200">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg text-white font-bold flex items-center justify-center">
+                          {p.firstName.charAt(0)}{p.lastName.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-bold text-slate-900">{p.firstName} {p.lastName}</div>
+                          <div className="text-sm text-slate-600">ID: {p.patientNumber}</div>
+                          {hasUpcoming && (
+                            <div className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Has Appointments
+                            </div>
+                          )}
+                          {awaitingAppointment && (
+                            <div className="mt-1 text-xs text-amber-600 font-medium flex items-center gap-1">
+                              <CreditCard className="w-3 h-3" />
+                              Awaiting payment confirmation
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-slate-900">{p.firstName} {p.lastName}</div>
-                        <div className="text-sm text-slate-600">ID: {p.patientNumber}</div>
-                        {hasScheduledAppointments(p.id) && (
-                          <div className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            Has Appointments
-                          </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => { setSelectedPatient(p); setShowCreateAppointmentModal(true); }}
+                          className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                        >
+                          Schedule
+                        </button>
+                        {hasUpcoming && (
+                          <button
+                            onClick={() => handleVitalsForScheduledPatient(p)}
+                            disabled={Boolean(awaitingAppointment)}
+                            className={`px-3 py-2 rounded-lg text-sm transition-all duration-200 ${awaitingAppointment
+                              ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700'
+                            }`}
+                          >
+                            {awaitingAppointment ? 'Locked' : 'Vitals'}
+                          </button>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => { setSelectedPatient(p); setShowCreateAppointmentModal(true); }}
-                        className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg text-sm hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
-                      >
-                        Schedule
-                      </button>
-                      {hasScheduledAppointments(p.id) && (
-                        <button
-                          onClick={() => handleVitalsForScheduledPatient(p)}
-                          className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-sm hover:from-emerald-600 hover:to-teal-700 transition-all duration-200"
-                        >
-                          Vitals
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Pagination */}

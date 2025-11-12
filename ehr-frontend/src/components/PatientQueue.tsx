@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Clock, User, Phone, Mail, Calendar,
   CheckCircle, AlertCircle, AlertTriangle, Play, Pause, Square, XCircle,
-  RefreshCw, Search, Filter, Bell, Activity, Heart, Thermometer, Droplets, Eye, Weight, Ruler
+  RefreshCw, Search, Filter, Bell, Activity, Heart, Thermometer, Droplets, Eye, Weight, Ruler, CreditCard
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -36,6 +36,9 @@ interface Appointment {
   checkInTime?: string;
   actualStartTime?: string;
   actualEndTime?: string;
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
 }
 
 interface PatientVitals {
@@ -234,6 +237,30 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
     }
   };
 
+  const formatStatusLabel = (status: string) => {
+    const normalizedStatus = status.replace('_', '-');
+    switch (normalizedStatus) {
+      case 'scheduled':
+        return 'Scheduled';
+      case 'confirmed':
+        return 'Waiting';
+      case 'in-progress':
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'no-show':
+      case 'no_show':
+        return 'No Show';
+      case 'awaiting-payment':
+        return 'Awaiting Payment';
+      default:
+        return normalizedStatus.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const normalizedStatus = status.replace('_', '-');
     switch (normalizedStatus) {
@@ -243,6 +270,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
       case 'completed': return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
       case 'no-show': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'awaiting-payment': return 'bg-amber-100 text-amber-800 border-amber-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -256,6 +284,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
       case 'completed': return <Square className="w-4 h-4" />;
       case 'cancelled': return <AlertCircle className="w-4 h-4" />;
       case 'no-show': return <XCircle className="w-4 h-4" />;
+      case 'awaiting-payment': return <AlertTriangle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
   };
@@ -396,6 +425,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
             <option value="no-show">No Show</option>
+            <option value="awaiting_payment">Awaiting Payment</option>
           </select>
         </div>
       </div>
@@ -439,7 +469,7 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                         </h3>
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(appointment.status)}`}>
                           {getStatusIcon(appointment.status)}
-                          {appointment.status}
+                          {formatStatusLabel(appointment.status)}
                         </span>
                         {(appointment.status === 'completed' || appointment.status === 'Completed') && (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200">
@@ -485,6 +515,14 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                     {/* Primary status control first (Check In / Start / Complete) */}
                     {(() => {
                       const normalizedStatus = appointment.status.replace('_', '-');
+                      if (normalizedStatus === 'awaiting-payment') {
+                        return (
+                          <span className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-sm flex items-center gap-1">
+                            <CreditCard className="w-4 h-4" />
+                            Awaiting Payment
+                          </span>
+                        );
+                      }
                       if (normalizedStatus === 'scheduled') {
                         return (
                           <button
@@ -527,6 +565,22 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                     </button>
                   </div>
                 </div>
+                {appointment.paymentStatus === 'awaiting_payment' && (
+                  <div className="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex gap-2">
+                    <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Payment required</p>
+                      <p>
+                        Please direct the patient to the Accounts desk to confirm payment before starting this consultation.
+                      </p>
+                      {typeof appointment.feeAmount === 'number' && (
+                        <p className="mt-1">
+                          Outstanding fee: <span className="font-semibold">${appointment.feeAmount.toFixed(2)}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

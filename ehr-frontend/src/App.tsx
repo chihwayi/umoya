@@ -25,7 +25,36 @@ import NursePatientSummary from './pages/NursePatientSummary.tsx';
 import LabDashboard from './pages/LabDashboard.tsx';
 import OncologyDashboard from './pages/OncologyDashboard.tsx';
 import OphthalmologyDashboard from './pages/OphthalmologyDashboard.tsx';
+import AccountsDashboard from './pages/AccountsDashboard.tsx';
+import CardiologyDashboard from './pages/CardiologyDashboard.tsx';
 
+const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const storedUser = React.useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = localStorage.getItem('ehr_user');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  if (!tenantSlug) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!storedUser) {
+    return <Navigate to={`/ehr/${tenantSlug}`} replace />;
+  }
+
+  if (!allowedRoles.includes(storedUser.role)) {
+    return <Navigate to={`/ehr/${tenantSlug}/dashboard`} replace />;
+  }
+
+  return children;
+};
 
 function App() {
   const TenantRedirect: React.FC = () => {
@@ -51,30 +80,208 @@ function App() {
             <Route path="/ehr/:tenantSlug/patients" element={<PatientManagement />} />
             <Route path="/ehr/:tenantSlug/patients/:patientId" element={<PatientDetail />} />
             <Route path="/ehr/:tenantSlug/appointments" element={<AppointmentManagement />} />
-            <Route path="/ehr/:tenantSlug/doctor" element={<DoctorDashboard />} />
-            <Route path="/ehr/:tenantSlug/doctor/patients" element={<DoctorPatientsList />} />
-            <Route path="/ehr/:tenantSlug/doctor/patients/:patientId" element={<DoctorPatientDetail />} />
-            <Route path="/ehr/:tenantSlug/doctor/appointments" element={<DoctorAppointmentManagement />} />
-            <Route path="/ehr/:tenantSlug/doctor/treatments" element={<DoctorTreatmentHistory />} />
-            <Route path="/ehr/:tenantSlug/doctor/treatments/:patientId" element={<DoctorTreatmentHistoryDetail />} />
-            <Route path="/ehr/:tenantSlug/doctor/hiv" element={<HIVDoctorDashboard />} />
-            <Route path="/ehr/:tenantSlug/doctor/maternity" element={<MaternityDoctorDashboard />} />
-            <Route path="/ehr/:tenantSlug/doctor/oncology" element={<OncologyDashboard />} />
-            <Route path="/ehr/:tenantSlug/doctor/ophthalmology" element={<OphthalmologyDashboard />} />
-            <Route path="/ehr/:tenantSlug/radiologist" element={<RadiologistDashboard />} />
+            <Route
+              path="/ehr/:tenantSlug/doctor"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/patients"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorPatientsList />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/patients/:patientId"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorPatientDetail />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/appointments"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorAppointmentManagement />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/treatments"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorTreatmentHistory />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/treatments/:patientId"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorTreatmentHistoryDetail />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/hiv"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <HIVDoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/maternity"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <MaternityDoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/cardiology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <CardiologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/oncology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <OncologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/ophthalmology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <OphthalmologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/radiologist"
+              element={
+                <RoleProtectedRoute allowedRoles={['radiologist']}>
+                  <RadiologistDashboard />
+                </RoleProtectedRoute>
+              }
+            />
             {/* Nurse routes */}
-            <Route path="/ehr/:tenantSlug/nurse" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/queue" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/vitals" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/triage" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/notes" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/care-plans" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/medications" element={<NurseDashboard />} />
-            <Route path="/ehr/:tenantSlug/nurse/patients/:patientId" element={<NursePatientSummary />} />
+            <Route
+              path="/ehr/:tenantSlug/nurse"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/queue"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/vitals"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/triage"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/notes"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/care-plans"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/medications"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse/patients/:patientId"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse']}>
+                  <NursePatientSummary />
+                </RoleProtectedRoute>
+              }
+            />
             {/* Lab Technician routes */}
-            <Route path="/ehr/:tenantSlug/lab" element={<LabDashboard />} />
-            <Route path="/ehr/:tenantSlug/oncology" element={<OncologyDashboard />} />
-            <Route path="/ehr/:tenantSlug/ophthalmology" element={<OphthalmologyDashboard />} />
+            <Route
+              path="/ehr/:tenantSlug/lab"
+              element={
+                <RoleProtectedRoute allowedRoles={['lab_tech', 'lab_technician']}>
+                  <LabDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/oncology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <OncologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/ophthalmology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <OphthalmologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/accounts"
+              element={
+                <RoleProtectedRoute allowedRoles={['accounts']}>
+                  <AccountsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/accounts/analytics"
+              element={
+                <RoleProtectedRoute allowedRoles={['accounts']}>
+                  <AccountsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="/ehr/:tenantSlug/settings" element={<ProfileSettings />} />
           </Routes>
         </Router>

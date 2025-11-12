@@ -25,6 +25,9 @@ interface AppointmentLite {
   reason: string;
   status: string;
   patient: Patient;
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
 }
 
 interface PatientAssessmentProps {

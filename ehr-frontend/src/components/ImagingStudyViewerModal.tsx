@@ -13,12 +13,15 @@ import {
   Loader2,
   MessageSquare,
   Sparkles,
+  CreditCard,
+  Lock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ImagingDicomViewport from './ImagingDicomViewport';
 import ImagingReportComposer from './ImagingReportComposer';
+import ModalPortal from './ModalPortal';
 
 interface ImagingStudyViewerModalProps {
   isOpen: boolean;
@@ -92,6 +95,13 @@ const getImageDataUrl = (file: ImagingFile) => {
   return file.file_path;
 };
 
+const formatCurrency = (value?: number | string | null) => {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return null;
+  return `$${numeric.toFixed(2)}`;
+};
+
 const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
   isOpen,
   onClose,
@@ -112,6 +122,8 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
   const annotationLoadIdRef = useRef<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ imageId: string; fileName: string } | null>(null);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
 
   const images: ImagingFile[] = useMemo(() => study?.images || [], [study]);
   const selectedImage = useMemo(() => {
@@ -128,7 +140,14 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
     return dicomImages.findIndex((img) => img.id === selectedImage.id);
   }, [dicomImages, selectedImage]);
 
-  const canAnnotate = currentUser?.role === 'radiologist';
+  const awaitingPayment =
+    study?.payment_status === 'awaiting_payment' || study?.order_status === 'awaiting_payment';
+  const financeReference = study?.finance_transaction_id || null;
+  const feeEstimate = formatCurrency(study?.fee_amount);
+
+  const canAnnotate = currentUser?.role === 'radiologist' && !awaitingPayment;
+  const uploadDisabled =
+    uploading || awaitingPayment || (currentUser?.role && currentUser.role !== 'radiologist');
 
   const safeNormalizeAnnotations = useCallback((raw: any[] = []) => {
     return raw.map((annotation) => {
@@ -284,6 +303,12 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       const file = event.target.files?.[0];
       if (!file) return;
 
+      if (awaitingPayment) {
+        showError('Payment confirmation required before uploading images.');
+        event.target.value = '';
+        return;
+      }
+
       if (file.size > 75 * 1024 * 1024) {
         showError('File size exceeds 75MB limit');
         return;
@@ -317,29 +342,53 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
         event.target.value = '';
       }
     },
-    [images.length, onRefresh, showError, showSuccess, study?.id, tenantSlug, token],
+    [awaitingPayment, images.length, onRefresh, showError, showSuccess, study?.id, tenantSlug, token],
   );
 
-  const handleDelete = useCallback(
+  const performDeleteImage = useCallback(
     async (imageId: string) => {
-      if (!study?.id) return;
-
-      const confirmed = window.confirm('Delete this image from the study?');
-      if (!confirmed) return;
+      if (!study?.id) return false;
 
       try {
+        setDeletingImageId(imageId);
         await ehrApi.deleteImagingStudyImage(tenantSlug, token, study.id, imageId);
         showSuccess('Image deleted');
         if (onRefresh) {
           await onRefresh();
         }
+        return true;
       } catch (error) {
         console.error('Failed to delete image', error);
         showError('Failed to delete image');
+        return false;
+      } finally {
+        setDeletingImageId((current) => (current === imageId ? null : current));
       }
     },
     [onRefresh, showError, showSuccess, study?.id, tenantSlug, token],
   );
+
+  const requestDeleteImage = useCallback(
+    (image: ImagingFile) => {
+      if (!study?.id) return;
+
+      if (awaitingPayment) {
+        showError('Payment confirmation required before modifying study images.');
+        return;
+      }
+
+      setDeleteConfirm({ imageId: image.id, fileName: image.file_name });
+    },
+    [awaitingPayment, showError, study?.id],
+  );
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const success = await performDeleteImage(deleteConfirm.imageId);
+    if (success) {
+      setDeleteConfirm(null);
+    }
+  }, [deleteConfirm, performDeleteImage]);
 
   if (!isOpen) {
     return null;
@@ -429,6 +478,26 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
 
         <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
           <div className="w-full lg:w-2/3 border-r bg-slate-50 flex flex-col">
+            {awaitingPayment && (
+              <div className="px-4 py-3 border-b border-amber-200 bg-amber-50 text-amber-700 flex items-start gap-3">
+                <Lock className="w-4 h-4 flex-shrink-0 mt-1" />
+                <div className="space-y-1 text-sm">
+                  <p className="font-semibold">Awaiting payment confirmation</p>
+                  <p>
+                    Finance must confirm payment before reporting, annotations, or image uploads are permitted for this
+                    study.
+                  </p>
+                  <div className="flex flex-wrap gap-4 text-xs text-amber-600">
+                    {feeEstimate && <span className="font-medium">Estimated fee: {feeEstimate}</span>}
+                    {financeReference && (
+                      <span>
+                        Finance reference: <span className="font-mono">{financeReference}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 px-4 py-3 border-b bg-white">
               <button
                 onClick={() => setTab('images')}
@@ -577,7 +646,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                             Download
                           </a>
                           <button
-                            onClick={() => handleDelete(selectedImage.id)}
+                            onClick={() => requestDeleteImage(selectedImage)}
                             className="px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -592,13 +661,26 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
               {tab === 'report' && study && (
                 <div className="p-8 overflow-auto h-full bg-white">
                   <div className="max-w-4xl mx-auto">
-                    <ImagingReportComposer
-                      tenantSlug={tenantSlug}
-                      token={token}
-                      study={study}
-                      currentUser={currentUser}
-                      onRefresh={onRefresh}
-                    />
+                    {awaitingPayment ? (
+                      <div className="border border-amber-200 bg-amber-50 text-amber-700 rounded-2xl p-6 flex items-start gap-3">
+                        <CreditCard className="w-6 h-6 mt-1 flex-shrink-0" />
+                        <div className="space-y-2">
+                          <p className="text-sm font-semibold">Reporting locked</p>
+                          <p className="text-sm">
+                            This study cannot be drafted or signed until Accounts confirms payment. Refresh the study
+                            once the payment status updates to continue.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <ImagingReportComposer
+                        tenantSlug={tenantSlug}
+                        token={token}
+                        study={study}
+                        currentUser={currentUser}
+                        onRefresh={onRefresh}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -665,11 +747,13 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                   <p className="text-xs uppercase tracking-wide text-slate-500">Upload / Attachments</p>
                   <h3 className="text-lg font-semibold text-slate-800">Additional Images</h3>
                 </div>
-                <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                  uploading
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
-                }`}>
+                <label
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                    uploadDisabled
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
+                  }`}
+                >
                   <Upload className="w-4 h-4" />
                   {uploading ? 'Uploading…' : 'Add Image'}
                   <input
@@ -677,10 +761,15 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                     accept=".dcm,.dicom,.jpg,.jpeg,.png,.tiff,.tif,.pdf,image/*,application/pdf"
                     className="hidden"
                     onChange={handleUpload}
-                    disabled={uploading}
+                    disabled={uploadDisabled}
                   />
                 </label>
               </div>
+              {awaitingPayment && (
+                <div className="mt-3 border border-amber-200 bg-amber-50 text-amber-700 rounded-xl p-3 text-xs">
+                  Uploading and editing study files is paused until Accounts clears the payment.
+                </div>
+              )}
               <p className="text-xs text-slate-500 mt-2">
                 Supports DICOM, JPEG, PNG, TIFF, PDF (up to 75MB). Uploaded files are stored securely for audit purposes.
               </p>
@@ -706,6 +795,16 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                   <div className="flex justify-between">
                     <dt>Status</dt>
                     <dd className="font-medium capitalize">{study.study_status?.replace(/_/g, ' ') || 'Pending'}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Payment</dt>
+                    <dd
+                      className={`font-medium ${
+                        awaitingPayment ? 'text-amber-600' : 'text-emerald-600'
+                      } capitalize`}
+                    >
+                      {study.payment_status ? study.payment_status.replace(/_/g, ' ') : 'Not required'}
+                    </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Report</dt>
@@ -816,6 +915,33 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
           </div>
         </div>
       </div>
+      {deleteConfirm && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-10 text-center space-y-4">
+              <ShieldAlert className="w-12 h-12 mx-auto text-red-400" />
+              <p className="text-base font-semibold text-slate-800">Confirm Deletion</p>
+              <p className="text-sm text-slate-600">
+                Are you sure you want to delete "{deleteConfirm.fileName}"? This action cannot be undone.
+              </p>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 };

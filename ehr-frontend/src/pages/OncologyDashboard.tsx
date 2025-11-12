@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Stethoscope,
+  CreditCard,
   Users2,
   X,
   Zap,
@@ -62,6 +63,11 @@ type OncologyDashboardSummary = {
   statusBreakdown?: Array<{ status: string; count: string }>;
   upcomingInfusions?: any[];
   adverseEventSummary?: any[];
+  financeSummary?: {
+    awaiting_payment_sessions?: string;
+    cleared_sessions?: string;
+    total_sessions?: string;
+  };
 };
 
 type ModalState =
@@ -282,9 +288,14 @@ const OncologyDashboard: React.FC = () => {
               : null,
             status: formData.get('status') || 'scheduled',
             notes: formData.get('notes') || null,
+            fee_amount: formData.get('fee_amount')
+              ? Number(formData.get('fee_amount'))
+              : null,
           };
           await ehrApi.createOncologyInfusionSession(tenantSlug!, token!, modalState.regimenId, payload);
-          showSuccess('Infusion session added', 'Infusion has been captured successfully.');
+          showSuccess(
+            'Infusion session captured. Accounts will unlock the session once payment is confirmed.',
+          );
           if (selectedCaseId) {
             await loadCaseDetail(selectedCaseId);
           }
@@ -358,6 +369,7 @@ const OncologyDashboard: React.FC = () => {
 
   const summaryCards = useMemo(() => {
     const totals = dashboardSummary?.caseTotals;
+    const finance = dashboardSummary?.financeSummary;
     return [
       {
         title: 'Total Cases',
@@ -382,6 +394,12 @@ const OncologyDashboard: React.FC = () => {
         value: totals?.follow_up_cases ?? '0',
         icon: RefreshCw,
         gradient: 'from-amber-500 to-orange-500',
+      },
+      {
+        title: 'Awaiting Payment',
+        value: finance?.awaiting_payment_sessions ?? '0',
+        icon: CreditCard,
+        gradient: 'from-rose-500 to-amber-500',
       },
     ];
   }, [dashboardSummary]);
@@ -640,6 +658,19 @@ const OncologyDashboard: React.FC = () => {
                         <option value="cancelled">Cancelled</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Fee (USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="fee_amount"
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="e.g. 120.00"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Leave blank to use the default infusion tariff.
+                      </p>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -689,6 +720,15 @@ const OncologyDashboard: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Document infusion tolerance, delays, hydration, patient education..."
                     />
+                  </div>
+                  <div className="mt-4 p-3 border border-amber-200 bg-amber-50 text-amber-800 text-sm rounded-lg flex gap-2">
+                    <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold">Finance clearance required</p>
+                      <p>
+                        Infusion sessions remain locked in the oncology worklist until Accounts confirms payment. Capture the estimated session fee so billing can reconcile quickly.
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
@@ -956,7 +996,7 @@ const OncologyDashboard: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         <section>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             {summaryCards.map((card) => (
               <div
                 key={card.title}
@@ -1309,19 +1349,68 @@ const OncologyDashboard: React.FC = () => {
                           <div className="p-3 space-y-2 max-h-40 overflow-y-auto">
                             {caseDetail.infusionSessions
                               ?.filter((session) => session.regimen_id === regimen.id)
-                              .map((session) => (
-                                <div key={session.id} className="flex items-center justify-between text-sm">
-                                  <div>
-                                    <p className="font-medium text-slate-700">
-                                      Cycle {session.cycle_number ?? '—'} • {formatDateTime(session.session_date)}
-                                    </p>
-                                    {session.notes && (
-                                      <p className="text-xs text-slate-500 truncate max-w-xs">{session.notes}</p>
+                              .map((session) => {
+                                const awaitingPayment = session.payment_status === 'awaiting_payment';
+                                const rawFee =
+                                  session.fee_amount ??
+                                  session.feeAmount ??
+                                  session.estimated_fee ??
+                                  session.estimatedFee ??
+                                  null;
+                                const sessionFee =
+                                  rawFee !== null && rawFee !== undefined && !Number.isNaN(Number(rawFee))
+                                    ? Number(rawFee)
+                                    : null;
+
+                                return (
+                                  <div
+                                    key={session.id}
+                                    className="flex flex-col gap-2 border border-slate-200 rounded-lg p-3 bg-white"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-medium text-slate-700">
+                                          Cycle {session.cycle_number ?? '—'} • {formatDateTime(session.session_date)}
+                                        </p>
+                                        {session.notes && (
+                                          <p className="text-xs text-slate-500 truncate max-w-sm">{session.notes}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 justify-end">
+                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                          {String(session.status || 'scheduled').replace(/_/g, ' ')}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-1 text-xs font-semibold rounded-full border ${
+                                            awaitingPayment
+                                              ? 'bg-amber-100 text-amber-700 border-amber-200'
+                                              : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                          }`}
+                                        >
+                                          {String(session.payment_status || 'payment_confirmed').replace(/_/g, ' ')}
+                                        </span>
+                                        {sessionFee !== null && (
+                                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                            ${sessionFee.toFixed(2)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {awaitingPayment && (
+                                      <div className="flex items-start gap-2 p-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs">
+                                        <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                          <p className="font-semibold">Awaiting payment confirmation</p>
+                                          <p>
+                                            Accounts must confirm payment before this infusion session can proceed in the
+                                            oncology worklist.
+                                          </p>
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
-                                  <span className="text-xs text-slate-500 capitalize">{session.status}</span>
-                                </div>
-                              ))}
+                                );
+                              })}
                             {!caseDetail.infusionSessions?.some((session) => session.regimen_id === regimen.id) && (
                               <p className="text-xs text-slate-400">No infusion sessions recorded for this regimen.</p>
                             )}

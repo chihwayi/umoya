@@ -32,7 +32,7 @@ const UserManagement: React.FC = () => {
   const [resetUser, setResetUser] = useState<any>(null);
   const { showSuccess, showError, showInfo } = useNotification();
 
-  const roles = ['admin', 'doctor', 'nurse', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist'];
+  const roles = ['admin', 'doctor', 'nurse', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist', 'accounts'];
 
   useEffect(() => {
     fetchUsers();
@@ -110,6 +110,7 @@ const UserManagement: React.FC = () => {
       case 'lab_technician':
         return 'bg-cyan-100 text-cyan-800';
       case 'radiologist': return 'bg-rose-100 text-rose-700';
+      case 'accounts': return 'bg-amber-100 text-amber-700';
       default: return 'bg-gray-100 text-gray-800';
     }
   };

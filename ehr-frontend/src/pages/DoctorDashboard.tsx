@@ -4,7 +4,7 @@ import {
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
   Play, Pause, Square, FileText, Pill, TestTube, Bell, 
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
-  Activity, Heart, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
+  Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
   Camera, TrendingUp, Baby, FlaskConical
 } from 'lucide-react';
@@ -61,6 +61,9 @@ interface Appointment {
   checkInTime?: string;
   actualStartTime?: string;
   actualEndTime?: string;
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
 }
 
 interface PatientVitals {
@@ -144,6 +147,110 @@ const DoctorDashboard: React.FC = () => {
   const [showEnhancedLabOrderModal, setShowEnhancedLabOrderModal] = useState(false);
   const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
+  const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
+  const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
+  const appointmentFee =
+    currentAppointment?.feeAmount !== undefined && currentAppointment?.feeAmount !== null
+      ? Number(currentAppointment.feeAmount)
+      : null;
+
+  const notifyAppointmentPaymentBlocked = (context: string) => {
+    if (!currentAppointment) return;
+    const financeDetails = [
+      appointmentFinanceReference ? `Finance reference: ${appointmentFinanceReference}` : null,
+      appointmentFee && !Number.isNaN(appointmentFee) ? `Fee amount: $${appointmentFee.toFixed(2)}` : null,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+    showError(
+      'Awaiting payment',
+      `${context}. Accounts must clear payment before continuing.${
+        financeDetails ? ` ${financeDetails}` : ''
+      }`,
+    );
+  };
+
+  const openClinicalNotesModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Clinical notes are locked until payment clears');
+      return;
+    }
+    setShowClinicalNotesModal(true);
+  };
+
+  const openPrescriptionsModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Prescriptions are locked until payment clears');
+      return;
+    }
+    setShowPrescriptionsModal(true);
+  };
+
+  const openEnhancedLabOrderModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Lab orders are locked until payment clears');
+      return;
+    }
+    setShowEnhancedLabOrderModal(true);
+  };
+
+  const openImagingOrderModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Imaging orders are locked until payment clears');
+      return;
+    }
+    setShowImagingOrderModal(true);
+  };
+
+  const openResultComparisonModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Result trends are locked until payment clears');
+      return;
+    }
+    setShowResultComparisonModal(true);
+  };
+
+  const openVitalsModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Vital capture is locked until payment clears');
+      return;
+    }
+    setShowVitalsModal(true);
+  };
+
+  const openProblemsModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Problem list edits are locked until payment clears');
+      return;
+    }
+    setShowProblemsModal(true);
+  };
+
+  const openAllergiesModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Allergy updates are locked until payment clears');
+      return;
+    }
+    setShowAllergiesModal(true);
+  };
+
+  const openReferralModal = () => {
+    if (!currentAppointment) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Referral handoff is locked until payment clears');
+      return;
+    }
+    setCurrentReferralAppointment(currentAppointment);
+    setShowReferralModal(true);
+  };
 
   const specialistModules = useMemo(() => {
     const tenantPath = (path: string) => (tenantSlug ? `/ehr/${tenantSlug}${path}` : '#');
@@ -159,6 +266,8 @@ const DoctorDashboard: React.FC = () => {
         buttonTextColor: 'text-red-600',
         buttonHover: 'hover:bg-red-50',
         route: tenantPath('/doctor/hiv'),
+        requiresPaymentClearance: true,
+        paymentLockedMessage: 'HIV specialist workflows are locked until payment clears.',
       },
       {
         title: 'Maternity & Obstetrics',
@@ -171,6 +280,8 @@ const DoctorDashboard: React.FC = () => {
         buttonTextColor: 'text-pink-600',
         buttonHover: 'hover:bg-pink-50',
         route: tenantPath('/doctor/maternity'),
+        requiresPaymentClearance: true,
+        paymentLockedMessage: 'Maternity workflows are locked until payment clears.',
       },
       {
         title: 'Oncology Care Navigator',
@@ -183,6 +294,22 @@ const DoctorDashboard: React.FC = () => {
         buttonTextColor: 'text-fuchsia-600',
         buttonHover: 'hover:bg-fuchsia-50',
         route: tenantPath('/doctor/oncology'),
+        requiresPaymentClearance: true,
+        paymentLockedMessage: 'Oncology workflows are locked until payment clears.',
+      },
+      {
+        title: 'Cardiology Command Center',
+        description: 'Risk stratification, diagnostic orchestration, and payment-gated cath lab workflows.',
+        gradient: 'from-red-600 via-rose-600 to-amber-500',
+        border: 'border-rose-500',
+        icon: HeartPulse,
+        chips: ['Risk Scores', 'Diagnostic Workups', 'Finance Locks', 'Follow-Up Planning'],
+        buttonLabel: 'Open Cardiology Hub',
+        buttonTextColor: 'text-rose-600',
+        buttonHover: 'hover:bg-rose-50',
+        route: tenantPath('/doctor/cardiology'),
+        requiresPaymentClearance: true,
+        paymentLockedMessage: 'Cardiology workflows are locked until payment clears.',
       },
       {
         title: 'Ophthalmology Clinic',
@@ -195,6 +322,8 @@ const DoctorDashboard: React.FC = () => {
         buttonTextColor: 'text-sky-600',
         buttonHover: 'hover:bg-sky-50',
         route: tenantPath('/doctor/ophthalmology'),
+        requiresPaymentClearance: true,
+        paymentLockedMessage: 'Ophthalmology workflows are locked until payment clears.',
       },
     ];
   }, [tenantSlug]);
@@ -540,6 +669,10 @@ const DoctorDashboard: React.FC = () => {
   };
 
   const handleAppointmentAction = async (appointmentId: string, action: string) => {
+    if (appointmentAwaitingPayment && currentAppointment?.id === appointmentId && action !== 'cancel') {
+      notifyAppointmentPaymentBlocked('Appointment workflow actions are locked until payment clears');
+      return;
+    }
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -1113,7 +1246,17 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                       <div className="mt-auto">
                         <button
-                          onClick={() => module.route !== '#' && navigate(module.route)}
+                          onClick={() => {
+                            if (module.requiresPaymentClearance && appointmentAwaitingPayment) {
+                              notifyAppointmentPaymentBlocked(
+                                module.paymentLockedMessage || 'This specialist workflow is locked until payment clears.',
+                              );
+                              return;
+                            }
+                            if (module.route !== '#') {
+                              navigate(module.route);
+                            }
+                          }}
                           className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-white rounded-xl font-semibold shadow hover:shadow-lg transition ${module.buttonTextColor} ${module.buttonHover}`}
                         >
                           <Icon className={`w-4 h-4 ${module.buttonTextColor}`} />
@@ -1439,19 +1582,35 @@ const DoctorDashboard: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => setShowClinicalNotesModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openClinicalNotesModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <FileText className="w-4 h-4" />
                           Notes
                         </button>
-                        <button onClick={() => setShowPrescriptionsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openPrescriptionsModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <Pill className="w-4 h-4" />
                           Rx
                         </button>
-                        <button onClick={() => setShowEnhancedLabOrderModal(true)} className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
+                        <button
+                          onClick={openEnhancedLabOrderModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-60 disabled:hover:from-blue-500 disabled:hover:to-indigo-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
                           <TestTube className="w-4 h-4" />
                           Order Labs
                         </button>
-                        <button onClick={() => setShowImagingOrderModal(true)} className="px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
+                        <button
+                          onClick={openImagingOrderModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-60 disabled:hover:from-purple-500 disabled:hover:to-pink-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
                           <Camera className="w-4 h-4" />
                           🆕 Order Imaging
                         </button>
@@ -1459,27 +1618,51 @@ const DoctorDashboard: React.FC = () => {
                           <TestTube className="w-4 h-4" />
                           Lab Results
                         </button>
-                        <button onClick={() => setShowResultComparisonModal(true)} className="px-3 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md">
+                        <button
+                          onClick={openResultComparisonModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:opacity-60 disabled:hover:from-teal-500 disabled:hover:to-cyan-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
                           <TrendingUp className="w-4 h-4" />
                           🆕 Result Trends
                         </button>
-                        <button onClick={() => setShowVitalsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openVitalsModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <Activity className="w-4 h-4" />
                           Vitals
                         </button>
-                        <button onClick={() => setShowProblemsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openProblemsModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <Stethoscope className="w-4 h-4" />
                           Problems
                         </button>
-                        <button onClick={() => setShowAllergiesModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openAllergiesModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <AlertTriangle className="w-4 h-4" />
                           Allergies
                         </button>
-                        <button onClick={() => { setCurrentReferralAppointment(currentAppointment); setShowReferralModal(true); }} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
+                        <button
+                          onClick={openReferralModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
+                        >
                           <Stethoscope className="w-4 h-4" />
                           Refer
                         </button>
-                        <button onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')} className="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium">
+                        <button
+                          onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-60 disabled:hover:bg-green-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+                        >
                           <CheckCircle className="w-4 h-4" />
                           Complete
                         </button>
@@ -1762,7 +1945,13 @@ const DoctorDashboard: React.FC = () => {
                           <AlertTriangle className="w-4 h-4 text-rose-600" />
                           <h3 className="text-base font-bold text-slate-900">Allergies</h3>
                         </div>
-                        <button onClick={()=>setShowAllergiesModal(true)} className="text-xs text-rose-600 hover:text-rose-800 font-medium">Manage</button>
+                        <button
+                          onClick={openAllergiesModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="text-xs text-rose-600 hover:text-rose-800 disabled:hover:text-rose-600 disabled:opacity-60 disabled:cursor-not-allowed font-medium"
+                        >
+                          Manage
+                        </button>
                       </div>
                       {allergies.length === 0 ? (
                         <p className="text-xs text-slate-500">No known allergies</p>

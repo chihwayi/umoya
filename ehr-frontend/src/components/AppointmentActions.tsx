@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
-import { 
-  CheckCircle, Play, Square, XCircle, Calendar, Clock, 
-  Edit, Trash2, AlertCircle, User, Phone, Video, FileText, X, Pill, TestTube 
+import {
+  CheckCircle,
+  Play,
+  Square,
+  XCircle,
+  Calendar,
+  Clock,
+  Edit,
+  Trash2,
+  AlertCircle,
+  User,
+  Phone,
+  Video,
+  FileText,
+  X,
+  Pill,
+  TestTube,
+  Lock,
 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -33,6 +48,9 @@ interface Appointment {
   status: string;
   reason: string;
   notes: string;
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
 }
 
 interface AppointmentActionsProps {
@@ -68,6 +86,35 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   const [appointmentNotes, setAppointmentNotes] = useState(appointment.notes || '');
   const [cancelNotes, setCancelNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const awaitingPayment = appointment.paymentStatus === 'awaiting_payment';
+  const financeReference = appointment.financeTransactionId || null;
+  const feeEstimate =
+    appointment.feeAmount !== undefined && appointment.feeAmount !== null
+      ? Number(appointment.feeAmount)
+      : null;
+
+  const notifyPaymentBlocked = (context: string) => {
+    const financeDetails = [
+      financeReference ? `Finance reference: ${financeReference}` : null,
+      feeEstimate && !Number.isNaN(feeEstimate) ? `Fee amount: $${feeEstimate.toFixed(2)}` : null,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+    showError(
+      'Awaiting payment',
+      `${context}. Accounts must clear payment before continuing.${
+        financeDetails ? ` ${financeDetails}` : ''
+      }`,
+    );
+  };
+
+  const ensurePaymentCleared = (context: string) => {
+    if (awaitingPayment) {
+      notifyPaymentBlocked(context);
+      return false;
+    }
+    return true;
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -94,6 +141,10 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (awaitingPayment && newStatus !== 'cancelled') {
+      notifyPaymentBlocked('Cannot change appointment status while payment is pending');
+      return;
+    }
     try {
       setLoading(true);
       await ehrApi.updateAppointmentStatus(appointment.id, newStatus, token, tenantSlug);
@@ -108,6 +159,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   };
 
   const handleStartAppointment = async () => {
+    if (!ensurePaymentCleared('Cannot start the appointment while payment is pending')) {
+      return;
+    }
     try {
       setLoading(true);
       await ehrApi.startAppointment(appointment.id, token, tenantSlug);
@@ -122,6 +176,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   };
 
   const handleCompleteAppointment = async () => {
+    if (!ensurePaymentCleared('Cannot complete the appointment while payment is pending')) {
+      return;
+    }
     try {
       setLoading(true);
       await ehrApi.completeAppointment(appointment.id, token, tenantSlug);
@@ -194,6 +251,21 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
     }
   };
 
+  const handleOpenClinicalNotes = () => {
+    if (!ensurePaymentCleared('Clinical notes are locked until payment clears')) return;
+    setShowClinicalNotes(true);
+  };
+
+  const handleOpenPrescriptions = () => {
+    if (!ensurePaymentCleared('Prescriptions are locked until payment clears')) return;
+    setShowPrescriptions(true);
+  };
+
+  const handleOpenLabOrders = () => {
+    if (!ensurePaymentCleared('Lab orders are locked until payment clears')) return;
+    setShowLabOrders(true);
+  };
+
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -212,8 +284,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           <button
             key="check-in"
             onClick={() => handleStatusChange('confirmed')}
-            disabled={loading}
-            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+            disabled={loading || awaitingPayment}
+            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            title={awaitingPayment ? 'Awaiting payment confirmation' : 'Check-in patient'}
           >
             <CheckCircle className="w-4 h-4" />
             Check In
@@ -226,8 +299,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           <button
             key="start"
             onClick={handleStartAppointment}
-            disabled={loading}
-            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
+            disabled={loading || awaitingPayment}
+            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            title={awaitingPayment ? 'Awaiting payment confirmation' : 'Start appointment'}
           >
             <Play className="w-4 h-4" />
             Start
@@ -240,8 +314,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           <button
             key="complete"
             onClick={handleCompleteAppointment}
-            disabled={loading}
-            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
+            disabled={loading || awaitingPayment}
+            className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            title={awaitingPayment ? 'Awaiting payment confirmation' : 'Complete appointment'}
           >
             <Square className="w-4 h-4" />
             Complete
@@ -254,24 +329,30 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
     actions.push(
       <button
         key="clinical-notes"
-        onClick={() => setShowClinicalNotes(true)}
-        className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1"
+        onClick={handleOpenClinicalNotes}
+        disabled={awaitingPayment}
+        className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        title={awaitingPayment ? 'Awaiting payment confirmation' : 'Open clinical notes'}
       >
         <FileText className="w-4 h-4" />
         Clinical Notes
       </button>,
       <button
         key="prescriptions"
-        onClick={() => setShowPrescriptions(true)}
-        className="px-3 py-1 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm flex items-center gap-1"
+        onClick={handleOpenPrescriptions}
+        disabled={awaitingPayment}
+        className="px-3 py-1 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        title={awaitingPayment ? 'Awaiting payment confirmation' : 'Create prescriptions'}
       >
         <Pill className="w-4 h-4" />
         Prescriptions
       </button>,
       <button
         key="lab-orders"
-        onClick={() => setShowLabOrders(true)}
-        className="px-3 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm flex items-center gap-1"
+        onClick={handleOpenLabOrders}
+        disabled={awaitingPayment}
+        className="px-3 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        title={awaitingPayment ? 'Awaiting payment confirmation' : 'Create lab orders'}
       >
         <TestTube className="w-4 h-4" />
         Lab Orders
@@ -284,6 +365,30 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
 
   return (
     <>
+      {awaitingPayment && (
+        <div className="mb-3 border border-amber-200 bg-amber-50 text-amber-800 rounded-xl p-4 text-sm">
+          <div className="flex items-start gap-2">
+            <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div className="space-y-1">
+              <p className="font-semibold">Awaiting payment confirmation</p>
+              <p>
+                Clinical actions for this encounter are locked until Accounts confirms payment. Please refresh once the
+                status updates.
+              </p>
+              <div className="flex flex-wrap gap-4 text-xs text-amber-700">
+                {feeEstimate !== null && !Number.isNaN(feeEstimate) && (
+                  <span className="font-medium">Fee amount: ${feeEstimate.toFixed(2)}</span>
+                )}
+                {financeReference && (
+                  <span>
+                    Finance reference: <span className="font-mono">{financeReference}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         {getAvailableActions()}
       </div>

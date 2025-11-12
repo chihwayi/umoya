@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader } from 'lucide-react';
+import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
@@ -20,6 +20,9 @@ interface PrescriptionsModalProps {
   appointment: Appointment;
   tenantSlug: string;
   token: string;
+  paymentStatus?: string;
+  financeTransactionId?: string | null;
+  feeAmount?: number | null;
 }
 
 interface Allergy {
@@ -96,6 +99,13 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [items, setItems] = useState<Rx[]>([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
   const [loadingFood, setLoadingFood] = useState(false);
   const [foodInteractions, setFoodInteractions] = useState<any | null>(null);
+
+  const awaitingPayment = appointment?.paymentStatus === 'awaiting_payment';
+  const financeReference = appointment?.financeTransactionId || null;
+  const feeEstimate =
+    appointment?.feeAmount !== undefined && appointment?.feeAmount !== null
+      ? Number(appointment.feeAmount)
+      : null;
 
   // Load allergies from structured table
   useEffect(() => {
@@ -316,37 +326,76 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setItems(prev => [...prev, { name: '', dosage: '', frequency: '', duration: '', instructions: '' }])}
-                className="p-2 rounded-lg hover:bg-pink-50 text-pink-600 border border-pink-200"
-                title="Add medication"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
-              {items.some(rx => rx.name && rx.name.trim().length > 0) && (
-                <button
-                  onClick={runFoodInteractions}
-                  disabled={loadingFood}
-                  className="px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  title="Check drug-food interactions"
-                >
-                  {loadingFood ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      Checking...
-                    </>
-                  ) : (
-                    <>
-                      <AlertTriangle className="w-4 h-4" />
-                      Food Interactions
-                    </>
+              {awaitingPayment ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-medium">
+                  <Lock className="w-4 h-4" />
+                  Awaiting payment confirmation
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() =>
+                      setItems((prev) => [
+                        ...prev,
+                        { name: '', dosage: '', frequency: '', duration: '', instructions: '' },
+                      ])
+                    }
+                    className="p-2 rounded-lg hover:bg-pink-50 text-pink-600 border border-pink-200"
+                    title="Add medication"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                  {items.some((rx) => rx.name && rx.name.trim().length > 0) && (
+                    <button
+                      onClick={runFoodInteractions}
+                      disabled={loadingFood}
+                      className="px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      title="Check drug-food interactions"
+                    >
+                      {loadingFood ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          Checking...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-4 h-4" />
+                          Food Interactions
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+                </>
               )}
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
+              <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100">
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {awaitingPayment ? (
+              <div className="border border-amber-200 bg-amber-50 text-amber-800 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5" />
+                  <h4 className="text-sm font-semibold">Finance confirmation required</h4>
+                </div>
+                <p className="text-sm">
+                  Prescriptions for this encounter are locked until Accounts clears the payment. Please refresh once the
+                  status changes to continue charting.
+                </p>
+                <div className="flex flex-wrap gap-4 text-xs text-amber-700">
+                  {feeEstimate !== null && !Number.isNaN(feeEstimate) && (
+                    <span className="font-medium">Fee amount: ${feeEstimate.toFixed(2)}</span>
+                  )}
+                  {financeReference && (
+                    <span>
+                      Finance reference: <span className="font-mono">{financeReference}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Display patient allergies at top */}
             {allergies.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
@@ -643,10 +692,22 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                 </div>
               );
             })}
+              </>
+            )}
           </div>
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3 sticky bottom-0 bg-white">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
-            <button onClick={handleSave} disabled={loading} className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white">{loading ? 'Saving...' : 'Save Prescription'}</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300">
+              {awaitingPayment ? 'Close' : 'Cancel'}
+            </button>
+            {!awaitingPayment && (
+              <button
+                onClick={handleSave}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Saving...' : 'Save Prescription'}
+              </button>
+            )}
           </div>
         </div>
       </div>

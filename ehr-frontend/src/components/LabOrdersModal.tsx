@@ -187,6 +187,8 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       const currentUser = userData ? JSON.parse(userData) : null;
       if (!currentUser) throw new Error('User not found');
 
+      const totalCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
+
       const labOrderData = {
         patientId: appointment.patient.id,
         medicalRecordId: null,
@@ -205,7 +207,11 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
 
       await ehrApi.createLabOrder(labOrderData, token, tenantSlug);
 
-      showSuccess('Success', `Lab order created with ${selectedTests.length} test(s)`);
+      const paymentNote =
+        totalCost > 0
+          ? ` Please route the patient through Accounts to confirm payment of $${totalCost.toFixed(2)} before the lab proceeds.`
+          : ' Please route the patient through Accounts to confirm payment before the lab proceeds.';
+      showSuccess('Success', `Lab order created with ${selectedTests.length} test(s).${paymentNote}`);
       onSaved();
       onClose();
     } catch (error: any) {

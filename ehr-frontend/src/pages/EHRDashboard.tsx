@@ -8,7 +8,7 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle, Camera, FlaskConical
+  CheckCircle, Camera, FlaskConical, HeartPulse
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -86,6 +86,7 @@ const EHRDashboard: React.FC = () => {
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
           { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500' },
           { icon: FlaskConical, label: 'Oncology Center', desc: 'Regimens, tumor board, adverse events', color: 'from-rose-500 to-purple-500', route: 'doctor/oncology' },
+          { icon: HeartPulse, label: 'Cardiology Hub', desc: 'Risk stratification & finance locks', color: 'from-red-500 to-rose-500', route: 'doctor/cardiology' },
           { icon: Eye, label: 'Ophthalmology Suite', desc: 'Eye exams, imaging, follow-ups', color: 'from-sky-500 to-cyan-500', route: 'doctor/ophthalmology' },
         ];
       case 'nurse':
@@ -121,6 +122,14 @@ const EHRDashboard: React.FC = () => {
           { icon: Activity, label: 'In Progress', desc: 'Orders being processed', color: 'from-purple-500 to-indigo-500' },
           { icon: CheckCircle, label: 'Completed', desc: 'Finished orders', color: 'from-green-500 to-emerald-500' },
         ];
+      case 'accounts':
+        return [
+          { icon: Users, label: 'Patient Directory', desc: 'Lookup patient accounts & balances', color: 'from-blue-500 to-cyan-500', route: 'patients' },
+          { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
+          { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
+          { icon: FileText, label: 'Billing Queue', desc: 'Manage outstanding invoices', color: 'from-indigo-500 to-slate-500', route: 'accounts' },
+          { icon: Shield, label: 'Medical Aid Claims', desc: 'File and reconcile remittances', color: 'from-emerald-500 to-teal-500', route: 'accounts' },
+        ];
       case 'admin':
         return [
           { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff & roles', color: 'from-slate-500 to-gray-500', route: 'users' },
@@ -152,6 +161,14 @@ const EHRDashboard: React.FC = () => {
         { label: 'My Queue', value: '6', icon: Users, color: 'text-indigo-600' },
         { label: 'Draft Reports', value: '2', icon: FileText, color: 'text-amber-600' },
         { label: 'Critical Findings', value: '1', icon: AlertTriangle, color: 'text-red-600' },
+      ];
+    }
+    if (role === 'accounts') {
+      return [
+        { label: 'Today\'s Receipts', value: '$7,820', icon: CreditCard, color: 'text-amber-600' },
+        { label: 'Outstanding Balance', value: '$18,450', icon: BarChart3, color: 'text-purple-600' },
+        { label: 'Medical Aid Pending', value: '$9,120', icon: Shield, color: 'text-emerald-600' },
+        { label: 'Refund Requests', value: '3', icon: FileText, color: 'text-blue-600' },
       ];
     }
     return [
@@ -225,7 +242,7 @@ const EHRDashboard: React.FC = () => {
               </button>
             )}
             
-            {user?.role !== 'admin' && (
+            {['doctor', 'nurse', 'receptionist'].includes(user?.role ?? '') && (
               <button 
                 onClick={() => navigate(`/ehr/${tenantSlug}/appointments`)}
                 className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
@@ -279,7 +296,13 @@ const EHRDashboard: React.FC = () => {
                 <h1 className="text-2xl font-bold text-white">
                   Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, {user.firstName}
                 </h1>
-                <p className="text-blue-100">{user.role === 'admin' ? 'System operations and configuration' : 'Ready to provide excellent patient care?'}</p>
+                <p className="text-blue-100">
+                  {user.role === 'admin'
+                    ? 'System operations and configuration'
+                    : user.role === 'accounts'
+                    ? 'Monitor financial performance and keep revenue flowing'
+                    : 'Ready to provide excellent patient care?'}
+                </p>
               </div>
             </div>
             

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Camera, AlertCircle, Calendar } from 'lucide-react';
+import { X, Search, Camera, AlertCircle, Calendar, CreditCard } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
@@ -107,7 +107,13 @@ export default function ImagingOrderModal({
         priority,
       });
 
-      showSuccess(`${selectedStudyType.study_name} ordered successfully`);
+      const costMessage =
+        selectedStudyType.cost != null && Number(selectedStudyType.cost) > 0
+          ? ` Please send the patient to Accounts to confirm payment of $${Number(selectedStudyType.cost).toFixed(
+              2,
+            )}.`
+          : '';
+      showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`);
       onSuccess?.();
       onClose();
     } catch (error) {
@@ -206,6 +212,21 @@ export default function ImagingOrderModal({
                     )}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {selectedStudyType && Number(selectedStudyType.cost ?? 0) > 0 && (
+            <div className="mb-6 p-4 border border-amber-200 bg-amber-50 text-amber-800 rounded-lg flex items-start gap-3">
+              <CreditCard className="w-5 h-5 mt-1 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">Payment required before imaging</p>
+                <p className="text-sm">
+                  Please direct the patient to the Accounts desk to settle the imaging fee prior to scheduling.
+                </p>
+                <p className="mt-1 text-sm font-semibold">
+                  Estimated fee: ${Number(selectedStudyType.cost).toFixed(2)}
+                </p>
               </div>
             </div>
           )}

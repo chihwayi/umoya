@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, Trash2, Package, Clock, TestTube2 } from 'lucide-react';
+import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
@@ -52,6 +52,8 @@ export default function EnhancedLabOrderModal({
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'order-sets'>('order-sets');
   const { showSuccess, showError } = useNotification();
+
+  const totalEstimatedCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
 
   useEffect(() => {
     loadOrderSets();
@@ -115,7 +117,9 @@ export default function EnhancedLabOrderModal({
         clinical_indication: clinicalIndication || `Ordered via ${orderSet.set_name}`,
       });
 
-      showSuccess(`Ordered ${orderSet.set_name} successfully (${orderSet.test_count} tests)`);
+      showSuccess(
+        `Ordered ${orderSet.set_name} successfully (${orderSet.test_count} tests). Please route the patient through Accounts to confirm any outstanding laboratory fees.`,
+      );
       onSuccess?.();
       onClose();
     } catch (error) {
@@ -159,7 +163,11 @@ export default function EnhancedLabOrderModal({
         );
       }
 
-      showSuccess(`Ordered ${selectedTests.length} test(s) successfully`);
+      const paymentNote =
+        totalEstimatedCost > 0
+          ? ` Please direct the patient to Accounts to confirm payment of $${totalEstimatedCost.toFixed(2)}.`
+          : '';
+      showSuccess(`Ordered ${selectedTests.length} test(s) successfully.${paymentNote}`);
       onSuccess?.();
       onClose();
     } catch (error) {
@@ -387,9 +395,25 @@ export default function EnhancedLabOrderModal({
                   <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-700">Estimated Total Cost</span>
                     <span className="text-lg font-bold text-gray-900">
-                      ${selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0).toFixed(2)}
+                      ${totalEstimatedCost.toFixed(2)}
                     </span>
                   </div>
+
+                  {totalEstimatedCost > 0 && (
+                    <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex gap-2">
+                      <CreditCard className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-semibold">Payment required before processing</p>
+                        <p>
+                          Submitting this order will place it in an awaiting payment state. Accounts must confirm payment before the lab can collect the specimen.
+                        </p>
+                        <p className="mt-1">
+                          Estimated lab fee:{' '}
+                          <span className="font-semibold">${totalEstimatedCost.toFixed(2)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
