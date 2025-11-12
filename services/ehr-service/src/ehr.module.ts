@@ -38,6 +38,8 @@ import { ImagingController } from './controllers/imaging.controller';
 import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
 import { OphthalmologyController } from './controllers/ophthalmology.controller';
+import { FinanceController } from './controllers/finance.controller';
+import { CardiologyController } from './controllers/cardiology.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -82,6 +84,8 @@ import { ImagingService } from './services/imaging.service';
 import { MaternityService } from './services/maternity.service';
 import { OncologyService } from './services/oncology.service';
 import { OphthalmologyService } from './services/ophthalmology.service';
+import { FinanceService } from './services/finance.service';
+import { CardiologyService } from './services/cardiology.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -131,6 +135,8 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     MaternityController,
     OncologyController,
     OphthalmologyController,
+    CardiologyController,
+    FinanceController,
   ],
   providers: [
     AuthService,
@@ -175,6 +181,8 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     MaternityService,
     OncologyService,
     OphthalmologyService,
+    CardiologyService,
+    FinanceService,
     JwtStrategy,
   ],
 })

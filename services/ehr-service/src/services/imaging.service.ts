@@ -1,9 +1,13 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { FinanceService } from './finance.service';
+import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
 export class ImagingService {
   private readonly logger = new Logger(ImagingService.name);
+
+  constructor(private readonly financeService: FinanceService) {}
 
   // ===== MODALITIES & STUDY TYPES =====
 
@@ -78,17 +82,72 @@ export class ImagingService {
       priority,
     } = orderData;
 
-    // Generate order number
     const orderNumber = `IMG-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
+
+    const [studyInfo] = await tenantDb.query(
+      `
+      SELECT study_name, study_code, cost
+      FROM imaging_study_types
+      WHERE id = $1
+      `,
+      [study_type_id],
+    );
+
+    const studyName = studyInfo?.study_name || 'Imaging Study';
+    const studyCode = studyInfo?.study_code || 'IMAGING';
+    const studyCost =
+      studyInfo && studyInfo.cost !== null && studyInfo.cost !== undefined
+        ? Number(studyInfo.cost)
+        : Number.NaN;
+
+    const defaultImagingFee =
+      process.env.DEFAULT_IMAGING_FEE !== undefined
+        ? Number(process.env.DEFAULT_IMAGING_FEE)
+        : 0;
+
+    const amountCandidate =
+      Number.isFinite(studyCost) && studyCost > 0 ? studyCost : defaultImagingFee;
+    const feeAmount = Number.isFinite(amountCandidate) && amountCandidate > 0 ? Number(amountCandidate) : 0;
+
+    let orderStatus = 'ordered';
+    let paymentStatus = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    let financeTransactionId: string | null = null;
+
+    if (feeAmount > 0) {
+      const transaction = await this.financeService.createTransaction(
+        tenantDb,
+        {
+          sourceModule: 'imaging_orders',
+          patientId: patient_id,
+          amount: feeAmount,
+          currency: 'USD',
+          notes: studyName,
+          payerType: 'self',
+          lineItems: [
+            {
+              description: studyName,
+              billingCode: studyCode,
+              unitPrice: feeAmount,
+              quantity: 1,
+            },
+          ],
+        },
+        userId,
+      );
+      financeTransactionId = transaction.id;
+      paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
+      orderStatus = 'awaiting_payment';
+    }
 
     const result = await tenantDb.query(
       `
       INSERT INTO imaging_orders (
         patient_id, order_number, study_type_id, ordering_provider,
         clinical_indication, clinical_history, suspected_diagnosis,
-        icd10_codes, priority, order_status, ordered_at, created_by
+        icd10_codes, priority, order_status, ordered_at, created_by,
+        fee_amount, finance_transaction_id, payment_status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ordered', NOW(), $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13, $14)
       RETURNING *
       `,
       [
@@ -101,12 +160,31 @@ export class ImagingService {
         suspected_diagnosis,
         icd10_codes,
         priority || 'routine',
+        orderStatus,
         userId,
+        feeAmount > 0 ? feeAmount : null,
+        financeTransactionId,
+        paymentStatus,
       ],
     );
 
-    this.logger.log(`Created imaging order ${orderNumber} for patient ${patient_id}`);
-    return result[0];
+    const order = result[0];
+
+    if (financeTransactionId) {
+      await tenantDb.query(
+        `
+        UPDATE financial_transactions
+        SET source_reference_id = $1
+        WHERE id = $2
+      `,
+        [order.id, financeTransactionId],
+      );
+    }
+
+    this.logger.log(
+      `Created imaging order ${orderNumber} for patient ${patient_id} (${paymentStatus})`,
+    );
+    return order;
   }
 
   async getOrders(tenantDb: DataSource, filters: { status?: string; priority?: string } = {}) {
@@ -205,6 +283,8 @@ export class ImagingService {
   }
 
   async scheduleOrder(tenantDb: DataSource, orderId: string, scheduledDate: string) {
+    await this.ensureOrderPaymentCleared(tenantDb, orderId);
+
     const result = await tenantDb.query(
       `
       UPDATE imaging_orders
@@ -269,6 +349,8 @@ export class ImagingService {
 
     // Generate accession number
     const accessionNumber = `ACC-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
+
+    await this.ensureOrderPaymentCleared(tenantDb, imaging_order_id);
 
     // Update order status to in_progress
     await tenantDb.query(
@@ -373,7 +455,11 @@ export class ImagingService {
         rad.first_name || ' ' || rad.last_name as radiologist_name,
         io.clinical_indication,
         io.clinical_history,
-        io.suspected_diagnosis
+        io.suspected_diagnosis,
+        io.payment_status,
+        io.order_status,
+        io.finance_transaction_id,
+        io.fee_amount
       FROM imaging_studies s
       INNER JOIN patients p ON p.id = s.patient_id
       INNER JOIN imaging_study_types st ON st.id = s.study_type_id
@@ -845,6 +931,13 @@ export class ImagingService {
   // ===== DOCTOR RESULT REVIEW =====
 
   private resolveDoctorWorkflowStatus(row: any) {
+    if (
+      row.payment_status === PAYMENT_STATUS.AWAITING_PAYMENT ||
+      row.order_status === 'awaiting_payment'
+    ) {
+      return 'awaiting_payment';
+    }
+
     if (row.order_status === 'cancelled') {
       return 'cancelled';
     }
@@ -890,6 +983,9 @@ export class ImagingService {
         io.order_number,
         io.priority,
         io.order_status,
+        io.payment_status,
+        io.finance_transaction_id,
+        io.fee_amount,
         io.ordered_at,
         io.study_type_id,
         io.clinical_indication,
@@ -988,6 +1084,12 @@ export class ImagingService {
           number: row.order_number,
           priority: row.priority,
           status: row.order_status,
+          payment_status: row.payment_status,
+          finance_transaction_id: row.finance_transaction_id,
+          fee_amount:
+            row.fee_amount !== null && row.fee_amount !== undefined
+              ? Number(row.fee_amount)
+              : null,
           ordered_at: row.ordered_at,
           clinical_indication: row.clinical_indication,
           clinical_history: row.clinical_history,
@@ -1051,6 +1153,9 @@ export class ImagingService {
 
     const counts = {
       total: mapped.length,
+      awaiting_payment: mapped.filter(
+        (item) => item.workflow_status === 'awaiting_payment',
+      ).length,
       pending: mapped.filter(
         (item) =>
           !['acknowledged', 'cancelled'].includes(item.workflow_status),
@@ -1077,6 +1182,9 @@ export class ImagingService {
         break;
       case 'awaiting_ack':
         filtered = mapped.filter((item) => item.workflow_status === 'awaiting_acknowledgement');
+        break;
+      case 'awaiting_payment':
+        filtered = mapped.filter((item) => item.workflow_status === 'awaiting_payment');
         break;
       case 'cancelled':
         filtered = mapped.filter((item) => item.workflow_status === 'cancelled');
@@ -1161,6 +1269,10 @@ export class ImagingService {
         m.modality_code,
         io.clinical_indication,
         io.priority,
+        io.order_status,
+        io.payment_status,
+        io.finance_transaction_id,
+        io.fee_amount,
         EXTRACT(EPOCH FROM (NOW() - s.created_at))/3600 as hours_pending
       FROM imaging_studies s
       INNER JOIN patients p ON p.id = s.patient_id
@@ -1198,6 +1310,10 @@ export class ImagingService {
         m.modality_code,
         io.clinical_indication,
         io.priority,
+        io.order_status,
+        io.payment_status,
+        io.finance_transaction_id,
+        io.fee_amount,
         r.report_status,
         r.id as report_id
       FROM imaging_studies s
@@ -1228,7 +1344,7 @@ export class ImagingService {
     const stats = await tenantDb.query(
       `
       SELECT 
-        COUNT(DISTINCT io.id) FILTER (WHERE io.order_status = 'ordered') as ordered_count,
+        COUNT(DISTINCT io.id) FILTER (WHERE io.order_status IN ('awaiting_payment','ordered')) as ordered_count,
         COUNT(DISTINCT io.id) FILTER (WHERE io.order_status = 'scheduled') as scheduled_count,
         COUNT(DISTINCT io.id) FILTER (WHERE io.order_status = 'in_progress') as in_progress_count,
         COUNT(DISTINCT io.id) FILTER (WHERE io.order_status = 'completed') as completed_count,
@@ -1245,6 +1361,27 @@ export class ImagingService {
     );
 
     return stats[0];
+  }
+
+  private async ensureOrderPaymentCleared(tenantDb: DataSource, orderId: string) {
+    const [order] = await tenantDb.query(
+      `
+      SELECT payment_status
+      FROM imaging_orders
+      WHERE id = $1
+      `,
+      [orderId],
+    );
+
+    if (!order) {
+      throw new NotFoundException(`Imaging order ${orderId} not found`);
+    }
+
+    if (order.payment_status === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException(
+        'Payment confirmation required before continuing this imaging order',
+      );
+    }
   }
 }
 
