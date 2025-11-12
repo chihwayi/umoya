@@ -402,3 +402,31 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
 
 CREATE TRIGGER update_problems_updated_at BEFORE UPDATE ON problems
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Cardiology module
+CREATE TABLE IF NOT EXISTS cardiology_encounters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    encounter_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    encounter_type VARCHAR(50) CHECK (encounter_type IN ('clinic_visit','diagnostic_test','heart_failure_review','telecardiology','rehabilitation','other')),
+    cardiologist_id UUID REFERENCES users(id),
+    visit_reason TEXT,
+    presenting_symptoms TEXT,
+    hemodynamics JSONB DEFAULT '{}'::jsonb,
+    diagnostic_tests JSONB DEFAULT '[]'::jsonb,
+    care_plan TEXT,
+    follow_up_plan TEXT,
+    risk_score VARCHAR(20) CHECK (risk_score IN ('low','moderate','high','critical')),
+    care_status VARCHAR(30) DEFAULT 'scheduled' CHECK (care_status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')),
+    fee_amount NUMERIC(12,2),
+    finance_transaction_id UUID,
+    payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_patient_id ON cardiology_encounters(patient_id);
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_date ON cardiology_encounters(encounter_date);
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_payment_status ON cardiology_encounters(payment_status);
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_care_status ON cardiology_encounters(care_status);
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_risk_score ON cardiology_encounters(risk_score);

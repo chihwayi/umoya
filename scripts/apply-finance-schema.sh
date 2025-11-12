@@ -5,7 +5,7 @@ set -e
 echo "💰 Applying finance schema to tenant databases..."
 
 DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5433}"
+DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-medicore}"
 DB_PASSWORD="${DB_PASSWORD:-medicore_password}"
 
