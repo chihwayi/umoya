@@ -97,7 +97,7 @@ export class DatabaseProvisioningService {
         `);
         await tenantDataSource.query(`
           ALTER TABLE users ADD CONSTRAINT users_role_check 
-          CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist'));
+          CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
         `);
       } catch (e) {
         this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
@@ -128,7 +128,7 @@ export class DatabaseProvisioningService {
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts')),
           license_number VARCHAR(100),
           specialization VARCHAR(100),
           phone VARCHAR(50),
@@ -172,9 +172,12 @@ export class DatabaseProvisioningService {
           appointment_date TIMESTAMP WITH TIME ZONE NOT NULL,
           duration_minutes INTEGER DEFAULT 30,
           appointment_type VARCHAR(100) NOT NULL,
-          status VARCHAR(50) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'confirmed', 'in-progress', 'completed', 'cancelled', 'no-show')),
+          status VARCHAR(50) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('awaiting_payment', 'scheduled', 'confirmed', 'in_progress', 'in-progress', 'completed', 'cancelled', 'no_show', 'no-show')),
           reason TEXT,
           notes TEXT,
+          fee_amount NUMERIC(12,2),
+          finance_transaction_id UUID,
+          payment_status VARCHAR(50) NOT NULL DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment', 'payment_confirmed', 'in_progress', 'completed', 'cancelled')),
           patient_instructions TEXT,
           priority_level VARCHAR(50) DEFAULT 'normal' CHECK (priority_level IN ('low', 'normal', 'high', 'urgent')),
           virtual_meeting_url VARCHAR(500),
@@ -385,6 +388,7 @@ export class DatabaseProvisioningService {
       CREATE INDEX idx_appointments_doctor_id ON appointments(doctor_id);
       CREATE INDEX idx_appointments_date ON appointments(appointment_date);
       CREATE INDEX idx_appointments_status ON appointments(status);
+      CREATE INDEX idx_appointments_payment_status ON appointments(payment_status);
       CREATE INDEX idx_appointments_parent_id ON appointments(parent_appointment_id);
       CREATE INDEX idx_appointments_priority ON appointments(priority_level);
       CREATE INDEX idx_appointments_telehealth ON appointments(is_telehealth);
@@ -445,11 +449,12 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id)`);
     
     // Add lab_orders table
-    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, processing_context JSONB DEFAULT '{}'::jsonb, workflow_events JSONB DEFAULT '[]'::jsonb, handoff_notes JSONB DEFAULT '[]'::jsonb, notification_log JSONB DEFAULT '[]'::jsonb, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, processing_context JSONB DEFAULT '{}'::jsonb, workflow_events JSONB DEFAULT '[]'::jsonb, handoff_notes JSONB DEFAULT '[]'::jsonb, notification_log JSONB DEFAULT '[]'::jsonb, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_patient_id ON lab_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_status ON lab_orders(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_ordering_provider_id ON lab_orders(ordering_provider_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_number ON lab_orders(order_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_payment_status ON lab_orders(payment_status)`);
     
     // Add lab_tests table (test catalog)
     statements.push(`CREATE TABLE IF NOT EXISTS lab_tests (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), loinc_code VARCHAR(50) UNIQUE, test_name VARCHAR(255) NOT NULL, test_code VARCHAR(50), category VARCHAR(100) NOT NULL, specimen_type VARCHAR(100) NOT NULL, unit VARCHAR(50), reference_range_male VARCHAR(100), reference_range_female VARCHAR(100), reference_range_general VARCHAR(100), critical_high DECIMAL(10,2), critical_low DECIMAL(10,2), description TEXT, instructions TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -519,6 +524,13 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS workflow_events JSONB DEFAULT '[]'::jsonb`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS handoff_notes JSONB DEFAULT '[]'::jsonb`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS notification_log JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'payment_confirmed'`);
+    statements.push(`ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_status_check`);
+    statements.push(`ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_status_check CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled'))`);
+    statements.push(`ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_payment_status_check`);
+    statements.push(`ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
     statements.push(`CREATE TABLE IF NOT EXISTS lab_quality_controls (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), analyzer_name VARCHAR(100) NOT NULL, test_code VARCHAR(50), level VARCHAR(50), lot_number VARCHAR(50), run_datetime TIMESTAMP WITH TIME ZONE DEFAULT NOW(), result_value VARCHAR(100), status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','pass','fail','review')), comments TEXT, recorded_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_analyzer_name ON lab_quality_controls(analyzer_name)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_run_datetime ON lab_quality_controls(run_datetime)`);
@@ -563,12 +575,13 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_is_active ON imaging_study_types(is_active)`);
     
     // Imaging Orders
-    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('ordered','scheduled','in_progress','awaiting_report','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('awaiting_payment','ordered','scheduled','in_progress','awaiting_report','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_patient_id ON imaging_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_number ON imaging_orders(order_number)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(study_type_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordering_provider ON imaging_orders(ordering_provider)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_status ON imaging_orders(order_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_payment_status ON imaging_orders(payment_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordered_at ON imaging_orders(ordered_at)`);
     
     // Imaging Studies (actual imaging session)
@@ -690,9 +703,18 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_case_id ON oncology_regimens(oncology_case_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_status ON oncology_regimens(status)`);
     
-    statements.push(`CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), regimen_id UUID NOT NULL REFERENCES oncology_regimens(id) ON DELETE CASCADE, cycle_number INTEGER, session_date TIMESTAMP WITH TIME ZONE NOT NULL, location VARCHAR(100), administered_by UUID REFERENCES users(id), vitals JSONB DEFAULT '{}'::jsonb, drugs_administered JSONB DEFAULT '[]'::jsonb, premedications JSONB DEFAULT '[]'::jsonb, toxicities JSONB DEFAULT '[]'::jsonb, status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled','in_progress','completed','cancelled')), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), regimen_id UUID NOT NULL REFERENCES oncology_regimens(id) ON DELETE CASCADE, cycle_number INTEGER, session_date TIMESTAMP WITH TIME ZONE NOT NULL, location VARCHAR(100), administered_by UUID REFERENCES users(id), vitals JSONB DEFAULT '{}'::jsonb, drugs_administered JSONB DEFAULT '[]'::jsonb, premedications JSONB DEFAULT '[]'::jsonb, toxicities JSONB DEFAULT '[]'::jsonb, status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')), notes TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_regimen_id ON oncology_infusion_sessions(regimen_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_session_date ON oncology_infusion_sessions(session_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_payment_status ON oncology_infusion_sessions(payment_status)`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'payment_confirmed'`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(30)`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions DROP CONSTRAINT IF EXISTS oncology_infusion_sessions_status_check`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD CONSTRAINT oncology_infusion_sessions_status_check CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled'))`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions DROP CONSTRAINT IF EXISTS oncology_infusion_sessions_payment_status_check`);
+    statements.push(`ALTER TABLE oncology_infusion_sessions ADD CONSTRAINT oncology_infusion_sessions_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS oncology_adverse_events (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, regimen_id UUID REFERENCES oncology_regimens(id) ON DELETE SET NULL, event_date TIMESTAMP WITH TIME ZONE NOT NULL, event_type VARCHAR(255) NOT NULL, grade VARCHAR(10), related_to VARCHAR(50), action_taken TEXT, outcome VARCHAR(100), resolved_date DATE, notes TEXT, reported_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_case_id ON oncology_adverse_events(oncology_case_id)`);
@@ -707,9 +729,15 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_recommendations_status ON tumor_board_recommendations(status)`);
     
     // Ophthalmology module
-    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_encounters (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, encounter_date TIMESTAMP WITH TIME ZONE NOT NULL, encounter_type VARCHAR(50) CHECK (encounter_type IN ('comprehensive_exam','follow_up','pre_op','post_op','emergency','other')), ophthalmologist_id UUID REFERENCES users(id), chief_complaint TEXT, assessment TEXT, plan TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_encounters (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, encounter_date TIMESTAMP WITH TIME ZONE NOT NULL, encounter_type VARCHAR(50) CHECK (encounter_type IN ('comprehensive_exam','follow_up','pre_op','post_op','emergency','other')), ophthalmologist_id UUID REFERENCES users(id), chief_complaint TEXT, assessment TEXT, plan TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_patient_id ON ophthalmology_encounters(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_date ON ophthalmology_encounters(encounter_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_payment_status ON ophthalmology_encounters(payment_status)`);
+    statements.push(`ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
+    statements.push(`ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
+    statements.push(`ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'payment_confirmed'`);
+    statements.push(`ALTER TABLE ophthalmology_encounters DROP CONSTRAINT IF EXISTS ophthalmology_encounters_payment_status_check`);
+    statements.push(`ALTER TABLE ophthalmology_encounters ADD CONSTRAINT ophthalmology_encounters_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS ophthalmology_visual_acuity (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), encounter_id UUID NOT NULL REFERENCES ophthalmology_encounters(id) ON DELETE CASCADE, eye VARCHAR(10) CHECK (eye IN ('OD','OS','OU')), distance_unaided VARCHAR(20), distance_aided VARCHAR(20), near_unaided VARCHAR(20), near_aided VARCHAR(20), pinhole VARCHAR(20), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_ophthalmology_visual_acuity_encounter_id ON ophthalmology_visual_acuity(encounter_id)`);
@@ -1715,7 +1743,135 @@ export class DatabaseProvisioningService {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )`);
-    
+
+    // Financial Transactions Core Tables
+    statements.push(\`CREATE TABLE IF NOT EXISTS financial_transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+      payer_type VARCHAR(30) DEFAULT 'self' CHECK (payer_type IN ('self','medical_aid','corporate')),
+      source_module VARCHAR(50),
+      source_reference_id UUID,
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+      currency VARCHAR(10) DEFAULT 'USD',
+      payment_status VARCHAR(30) DEFAULT 'pending' CHECK (payment_status IN ('pending','partially_paid','paid','written_off')),
+      due_date TIMESTAMP WITH TIME ZONE,
+      notes TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_patient ON financial_transactions(patient_id)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_status ON financial_transactions(payment_status)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_module ON financial_transactions(source_module)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_due_date ON financial_transactions(due_date)\`);
+
+    statements.push(\`CREATE TABLE IF NOT EXISTS financial_line_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
+      description TEXT NOT NULL,
+      billing_code VARCHAR(50),
+      unit_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      quantity NUMERIC(10,2) NOT NULL DEFAULT 1,
+      discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      tax NUMERIC(12,2) NOT NULL DEFAULT 0,
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_line_items_transaction ON financial_line_items(transaction_id)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_line_items_code ON financial_line_items(billing_code)\`);
+
+    statements.push(\`CREATE TABLE IF NOT EXISTS financial_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
+      payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('cash','card','mobile_money','bank_transfer','medical_aid','write_off')),
+      payment_reference VARCHAR(100),
+      gateway_reference VARCHAR(150),
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      status VARCHAR(30) DEFAULT 'completed' CHECK (status IN ('pending','completed','failed','refunded')),
+      received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      processed_by UUID REFERENCES users(id),
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_transaction ON financial_payments(transaction_id)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_method ON financial_payments(payment_method)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_status ON financial_payments(status)\`);
+
+    statements.push(\`CREATE TABLE IF NOT EXISTS financial_claims (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
+      claim_number VARCHAR(100),
+      payer_name VARCHAR(255),
+      submission_date TIMESTAMP WITH TIME ZONE,
+      amount_submitted NUMERIC(12,2),
+      amount_approved NUMERIC(12,2),
+      status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','submitted','approved','rejected','paid')),
+      response_code VARCHAR(50),
+      response_message TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_transaction ON financial_claims(transaction_id)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_status ON financial_claims(status)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_number ON financial_claims(claim_number)\`);
+
+    statements.push(\`CREATE TABLE IF NOT EXISTS financial_reconciliation_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID REFERENCES financial_transactions(id) ON DELETE SET NULL,
+      payment_reference VARCHAR(150),
+      payment_method VARCHAR(30),
+      amount NUMERIC(12,2),
+      status VARCHAR(30) DEFAULT 'unmatched' CHECK (status IN ('unmatched','matched','partial','disputed')),
+      reconciliation_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      source_filename VARCHAR(255),
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_status ON financial_reconciliation_logs(status)\`);
+    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_reference ON financial_reconciliation_logs(payment_reference)\`);
+
+    // Cardiology module
+    statements.push(`CREATE TABLE IF NOT EXISTS cardiology_encounters (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      encounter_date TIMESTAMP WITH TIME ZONE NOT NULL,
+      encounter_type VARCHAR(50) CHECK (encounter_type IN ('clinic_visit','diagnostic_test','heart_failure_review','telecardiology','rehabilitation','other')),
+      cardiologist_id UUID REFERENCES users(id),
+      visit_reason TEXT,
+      presenting_symptoms TEXT,
+      hemodynamics JSONB DEFAULT '{}'::jsonb,
+      diagnostic_tests JSONB DEFAULT '[]'::jsonb,
+      care_plan TEXT,
+      follow_up_plan TEXT,
+      risk_score VARCHAR(20) CHECK (risk_score IN ('low','moderate','high','critical')),
+      care_status VARCHAR(30) DEFAULT 'scheduled' CHECK (care_status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')),
+      fee_amount NUMERIC(12,2),
+      finance_transaction_id UUID,
+      payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_patient_id ON cardiology_encounters(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_date ON cardiology_encounters(encounter_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_payment_status ON cardiology_encounters(payment_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_care_status ON cardiology_encounters(care_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_risk_score ON cardiology_encounters(risk_score)`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'payment_confirmed'`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS care_status VARCHAR(30) DEFAULT 'scheduled'`);
+    statements.push(`ALTER TABLE cardiology_encounters DROP CONSTRAINT IF EXISTS cardiology_encounters_payment_status_check`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD CONSTRAINT cardiology_encounters_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
+    statements.push(`ALTER TABLE cardiology_encounters DROP CONSTRAINT IF EXISTS cardiology_encounters_care_status_check`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD CONSTRAINT cardiology_encounters_care_status_check CHECK (care_status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled'))`);
+
     return statements;
   }
 
@@ -1850,6 +2006,16 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_hiv_art_regimens_updated_at BEFORE UPDATE ON hiv_art_regimens
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_precancerous_lesion_treatment_updated_at BEFORE UPDATE ON hiv_precancerous_lesion_treatment
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_financial_transactions_updated_at BEFORE UPDATE ON financial_transactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_financial_line_items_updated_at BEFORE UPDATE ON financial_line_items
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_financial_payments_updated_at BEFORE UPDATE ON financial_payments
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_financial_claims_updated_at BEFORE UPDATE ON financial_claims
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_financial_reconciliation_logs_updated_at BEFORE UPDATE ON financial_reconciliation_logs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
   }
@@ -2383,7 +2549,8 @@ export class DatabaseProvisioningService {
       VALUES
         ('doctor@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Doctor', 'Bulawayo', 'doctor', 'MD-0001', 'Internal Medicine', '+263 77 555 1000', false),
         ('nurse@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Nurse', 'Dube', 'nurse', 'RN-0008', 'Maternal & Child Health', '+263 77 555 2000', false),
-        ('radiologist@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Rudo', 'Munyoro', 'radiologist', 'RAD-001234', 'Diagnostic Radiology', '+263 77 555 1212', false)
+        ('radiologist@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Rudo', 'Munyoro', 'radiologist', 'RAD-001234', 'Diagnostic Radiology', '+263 77 555 1212', false),
+        ('accounts@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Finance', 'Officer', 'accounts', NULL, 'Revenue Management', '+263 77 555 4500', false)
       ON CONFLICT (email) DO NOTHING;
     `);
   }

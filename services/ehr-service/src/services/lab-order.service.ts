@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
 import { LabTest } from '../entities/lab-test.entity';
 import { CriticalAlertService } from './critical-alert.service';
 import { Patient } from '../entities/patient.entity';
+import { FinanceService } from './finance.service';
+import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
 export class LabOrderService {
-  constructor(private criticalAlertService: CriticalAlertService) {}
+  constructor(
+    private criticalAlertService: CriticalAlertService,
+    private financeService: FinanceService,
+  ) {}
   
   private appendWorkflowEvent(
     labOrder: LabOrder,
@@ -68,18 +73,93 @@ export class LabOrderService {
 
   async create(createDto: any, tenantDb: DataSource, orderingProviderId: string): Promise<LabOrder> {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
-    
+
     const orderCount = await labOrderRepository.count();
     const orderNumber = `LAB${String(orderCount + 1).padStart(8, '0')}`;
-    
+
+    const tests: Array<any> = Array.isArray(createDto.tests) ? createDto.tests : [];
+    const catalogHints: string[] = [];
+    if (createDto.testCatalogId) {
+      catalogHints.push(createDto.testCatalogId);
+    }
+
+    const { totalCost, lineItems } = await this.calculateLabOrderCost(
+      tenantDb,
+      tests,
+      catalogHints,
+    );
+
+    const defaultLabFee =
+      process.env.DEFAULT_LAB_FEE !== undefined ? Number(process.env.DEFAULT_LAB_FEE) : 0;
+    const initialFeeCandidate =
+      Number.isFinite(totalCost) && totalCost > 0 ? totalCost : defaultLabFee;
+
+    const feeAmount =
+      Number.isFinite(initialFeeCandidate) && initialFeeCandidate > 0
+        ? Number(initialFeeCandidate)
+        : 0;
+
+    let financeTransactionId: string | null = null;
+    let paymentStatus = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    let status = LabOrderStatus.ORDERED;
+
+    if (feeAmount > 0) {
+      const transaction = await this.financeService.createTransaction(
+        tenantDb,
+        {
+          sourceModule: 'lab_orders',
+          patientId: createDto.patientId,
+          amount: feeAmount,
+          currency: 'USD',
+          notes:
+            tests.length > 0
+              ? tests.map((test) => test.testName || 'Lab Test').join(', ')
+              : 'Laboratory Order',
+          payerType: 'self',
+          lineItems:
+            lineItems.length > 0
+              ? lineItems
+              : [
+                  {
+                    description: 'Laboratory services',
+                    billingCode: 'LAB',
+                    unitPrice: feeAmount,
+                    quantity: 1,
+                  },
+                ],
+        },
+        orderingProviderId,
+      );
+      financeTransactionId = transaction.id;
+      paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
+      status = LabOrderStatus.AWAITING_PAYMENT;
+    }
+
     const labOrder = labOrderRepository.create({
       ...createDto,
       orderNumber,
       orderingProviderId,
-      scheduledDateTime: createDto.scheduledDateTime ? new Date(createDto.scheduledDateTime) : null
+      scheduledDateTime: createDto.scheduledDateTime ? new Date(createDto.scheduledDateTime) : null,
+      feeAmount: feeAmount > 0 ? feeAmount : null,
+      financeTransactionId,
+      paymentStatus,
+      status,
     });
-    
-    return labOrderRepository.save(labOrder);
+
+    const saved = await labOrderRepository.save(labOrder);
+
+    if (financeTransactionId) {
+      await tenantDb.query(
+        `
+        UPDATE financial_transactions
+        SET source_reference_id = $1
+        WHERE id = $2
+      `,
+        [saved.id, financeTransactionId],
+      );
+    }
+
+    return saved;
   }
 
   async getQualityControls(
@@ -160,6 +240,138 @@ export class LabOrderService {
     );
 
     return result[0];
+  }
+
+  private async calculateLabOrderCost(
+    tenantDb: DataSource,
+    tests: Array<any>,
+    catalogHints: string[],
+  ): Promise<{
+    totalCost: number;
+    lineItems: Array<{ description: string; billingCode: string; unitPrice: number; quantity: number }>;
+  }> {
+    const catalogIds = new Set<string>();
+    const testCodes = new Set<string>();
+
+    for (const hint of catalogHints) {
+      if (hint) {
+        catalogIds.add(hint);
+      }
+    }
+
+    for (const test of tests) {
+      if (test?.testCatalogId) {
+        catalogIds.add(test.testCatalogId);
+      }
+      if (test?.test_catalog_id) {
+        catalogIds.add(test.test_catalog_id);
+      }
+      if (test?.testCode) {
+        testCodes.add(test.testCode);
+      }
+      if (test?.test_code) {
+        testCodes.add(test.test_code);
+      }
+    }
+
+    const catalogMap = new Map<
+      string,
+      { cost: number; testName: string | null; testCode: string | null }
+    >();
+    const codeMap = new Map<string, { cost: number; testName: string | null }>();
+
+    if (catalogIds.size > 0) {
+      const rows = await tenantDb.query(
+        `
+        SELECT id, cost, test_name, test_code
+        FROM lab_test_catalog
+        WHERE id = ANY($1::uuid[])
+      `,
+        [Array.from(catalogIds)],
+      );
+      for (const row of rows) {
+        catalogMap.set(row.id, {
+          cost: row.cost != null ? Number(row.cost) : 0,
+          testName: row.test_name ?? null,
+          testCode: row.test_code ?? null,
+        });
+      }
+    }
+
+    if (testCodes.size > 0) {
+      const rows = await tenantDb.query(
+        `
+        SELECT test_code, cost, test_name
+        FROM lab_test_catalog
+        WHERE test_code = ANY($1)
+      `,
+        [Array.from(testCodes)],
+      );
+      for (const row of rows) {
+        codeMap.set(row.test_code, {
+          cost: row.cost != null ? Number(row.cost) : 0,
+          testName: row.test_name ?? null,
+        });
+      }
+    }
+
+    let totalCost = 0;
+    const lineItems: Array<{ description: string; billingCode: string; unitPrice: number; quantity: number }> = [];
+
+    const resolvedTests = tests.length === 0 && catalogHints.length > 0
+      ? catalogHints.map((id) => ({ testCatalogId: id }))
+      : tests;
+
+    for (const rawTest of resolvedTests) {
+      const test = rawTest || {};
+      let unitPrice = 0;
+      let description = test.testName || test.test_name || 'Laboratory Test';
+      let billingCode = test.testCode || test.test_code || 'LAB';
+
+      if (test.testCatalogId && catalogMap.has(test.testCatalogId)) {
+        const ref = catalogMap.get(test.testCatalogId)!;
+        unitPrice = ref.cost || 0;
+        if (ref.testName && !description) {
+          description = ref.testName;
+        }
+        if (ref.testCode) {
+          billingCode = ref.testCode;
+        }
+      } else if (test.test_catalog_id && catalogMap.has(test.test_catalog_id)) {
+        const ref = catalogMap.get(test.test_catalog_id)!;
+        unitPrice = ref.cost || 0;
+        if (ref.testName && !description) {
+          description = ref.testName;
+        }
+        if (ref.testCode) {
+          billingCode = ref.testCode;
+        }
+      } else if (test.testCode && codeMap.has(test.testCode)) {
+        const ref = codeMap.get(test.testCode)!;
+        unitPrice = ref.cost || 0;
+        if (ref.testName && !description) {
+          description = ref.testName;
+        }
+      } else if (test.test_code && codeMap.has(test.test_code)) {
+        const ref = codeMap.get(test.test_code)!;
+        unitPrice = ref.cost || 0;
+        if (ref.testName && !description) {
+          description = ref.testName;
+        }
+      }
+
+      if (unitPrice > 0) {
+        totalCost += unitPrice;
+        lineItems.push({
+          description,
+          billingCode,
+          unitPrice,
+          quantity: 1,
+        });
+      }
+    }
+
+    return { totalCost, lineItems };
   }
 
   async getReagentInventory(tenantDb: DataSource): Promise<any[]> {
@@ -405,6 +617,10 @@ export class LabOrderService {
     if (!labOrder) {
       throw new NotFoundException('Lab order not found');
     }
+
+    if (labOrder.paymentStatus === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException('Payment confirmation required before collecting this sample');
+    }
     
     labOrder.status = LabOrderStatus.COLLECTED;
     labOrder.collectedAt = new Date();
@@ -431,6 +647,10 @@ export class LabOrderService {
     if (!labOrder) {
       throw new NotFoundException('Lab order not found');
     }
+
+    if (labOrder.paymentStatus === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException('Payment confirmation required before starting processing');
+    }
     
     if (labOrder.status !== LabOrderStatus.COLLECTED && labOrder.status !== LabOrderStatus.ORDERED) {
       throw new Error('Can only process collected or ordered lab orders');
@@ -452,18 +672,22 @@ export class LabOrderService {
     return labOrderRepository.save(labOrder);
   }
 
-    async submitResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string): Promise<LabOrder> {
-      const labOrderRepository = tenantDb.getRepository(LabOrder);
-      const testRepository = tenantDb.getRepository(LabTest);
-      const patientRepository = tenantDb.getRepository(Patient);
-      
-      const labOrder = await labOrderRepository.findOne({ 
-        where: { id },
-        relations: ['patient']
-      });
-      if (!labOrder) {
-        throw new NotFoundException('Lab order not found');
-      }
+  async submitResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string): Promise<LabOrder> {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const testRepository = tenantDb.getRepository(LabTest);
+    const patientRepository = tenantDb.getRepository(Patient);
+    
+    const labOrder = await labOrderRepository.findOne({ 
+      where: { id },
+      relations: ['patient']
+    });
+    if (!labOrder) {
+      throw new NotFoundException('Lab order not found');
+    }
+
+    if (labOrder.paymentStatus === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException('Payment confirmation required before releasing results');
+    }
 
       const patient = await patientRepository.findOne({ where: { id: labOrder.patientId } });
       const results = resultsDto.results || labOrder.results;
@@ -521,20 +745,20 @@ export class LabOrderService {
         statusAfter: LabOrderStatus.COMPLETED,
       });
       
-      return labOrderRepository.save(labOrder);
-    }
+    return labOrderRepository.save(labOrder);
+  }
 
-    private async checkCriticalValue(test: LabTest, value: number): Promise<{ isCritical: boolean; type: 'high' | 'low' | null }> {
-      if (test.criticalHigh && value > test.criticalHigh) {
-        return { isCritical: true, type: 'high' };
-      }
-      
-      if (test.criticalLow && value < test.criticalLow) {
-        return { isCritical: true, type: 'low' };
-      }
-      
-      return { isCritical: false, type: null };
+  private async checkCriticalValue(test: LabTest, value: number): Promise<{ isCritical: boolean; type: 'high' | 'low' | null }> {
+    if (test.criticalHigh && value > test.criticalHigh) {
+      return { isCritical: true, type: 'high' };
     }
+    
+    if (test.criticalLow && value < test.criticalLow) {
+      return { isCritical: true, type: 'low' };
+    }
+    
+    return { isCritical: false, type: null };
+  }
 
   async updateStatus(id: string, status: LabOrderStatus, tenantDb: DataSource): Promise<LabOrder> {
     const labOrderRepository = tenantDb.getRepository(LabOrder);

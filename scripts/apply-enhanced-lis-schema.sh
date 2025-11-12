@@ -151,10 +151,20 @@ ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS processing_context JSONB DEFAULT
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS workflow_events JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS handoff_notes JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS notification_log JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS finance_transaction_id UUID;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50);
+UPDATE lab_orders SET payment_status = 'payment_confirmed' WHERE payment_status IS NULL OR payment_status = '';
+ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_status_check;
+ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_status_check CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled'));
+ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_payment_status_check;
+ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'));
+ALTER TABLE lab_orders ALTER COLUMN payment_status SET DEFAULT 'payment_confirmed';
 
 CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged);
+CREATE INDEX IF NOT EXISTS idx_lab_orders_payment_status ON lab_orders(payment_status);
 
 -- Lab Quality Controls
 CREATE TABLE IF NOT EXISTS lab_quality_controls (

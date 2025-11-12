@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { FinanceService } from './finance.service';
+import { PAYMENT_STATUS } from '../constants/payment-status';
 
 interface EncounterFilters {
   patientId?: string;
@@ -12,6 +14,8 @@ interface EncounterFilters {
 @Injectable()
 export class OphthalmologyService {
   private readonly logger = new Logger(OphthalmologyService.name);
+
+  constructor(private readonly financeService: FinanceService) {}
 
   async listEncounters(tenantDb: DataSource, filters: EncounterFilters = {}) {
     const conditions: string[] = [];
@@ -72,10 +76,57 @@ export class OphthalmologyService {
   }
 
   async createEncounter(tenantDb: DataSource, payload: any, userId?: string) {
-    const { patient_id, encounter_date, encounter_type, ophthalmologist_id, chief_complaint, assessment, plan } = payload;
+    const {
+      patient_id,
+      encounter_date,
+      encounter_type,
+      ophthalmologist_id,
+      chief_complaint,
+      assessment,
+      plan,
+      fee_amount,
+      feeAmount,
+    } = payload;
 
     if (!patient_id || !encounter_date) {
       throw new BadRequestException('patient_id and encounter_date are required');
+    }
+
+    const rawFee = fee_amount ?? feeAmount ?? payload.estimated_fee ?? payload.estimatedFee ?? null;
+    const parsedFee = rawFee !== null && rawFee !== undefined ? Number(rawFee) : Number.NaN;
+    const defaultFee =
+      process.env.DEFAULT_OPHTHALMOLOGY_FEE !== undefined
+        ? Number(process.env.DEFAULT_OPHTHALMOLOGY_FEE)
+        : 0;
+    const feeValue = Number.isFinite(parsedFee) ? parsedFee : defaultFee;
+    const feeAmountValue = Number.isFinite(feeValue) && feeValue > 0 ? feeValue : 0;
+
+    let financeTransactionId: string | null = null;
+    let paymentStatus: PAYMENT_STATUS = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+
+    if (feeAmountValue > 0) {
+      const transaction = await this.financeService.createTransaction(
+        tenantDb,
+        {
+          sourceModule: 'ophthalmology_encounters',
+          patientId: patient_id,
+          amount: feeAmountValue,
+          currency: 'USD',
+          notes: `Ophthalmology encounter (${encounter_type || 'exam'})`,
+          payerType: 'self',
+          lineItems: [
+            {
+              description: encounter_type ? `Encounter - ${encounter_type}` : 'Ophthalmology encounter',
+              billingCode: 'OPHTH_ENC',
+              unitPrice: feeAmountValue,
+              quantity: 1,
+            },
+          ],
+        },
+        userId,
+      );
+      financeTransactionId = transaction.id;
+      paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
     }
 
     const [encounter] = await tenantDb.query(
@@ -88,10 +139,13 @@ export class OphthalmologyService {
         chief_complaint,
         assessment,
         plan,
+        fee_amount,
+        finance_transaction_id,
+        payment_status,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,COALESCE($4,$5),$6,$7,$8,NOW(),NOW())
+      VALUES ($1,$2,$3,COALESCE($4,$5),$6,$7,$8,$9,$10,$11,NOW(),NOW())
       RETURNING *
       `,
       [
@@ -103,10 +157,26 @@ export class OphthalmologyService {
         chief_complaint,
         assessment,
         plan,
+        feeAmountValue > 0 ? feeAmountValue : null,
+        financeTransactionId,
+        paymentStatus,
       ],
     );
 
-    this.logger.log(`Created ophthalmology encounter ${encounter.id} for patient ${patient_id}`);
+    if (financeTransactionId) {
+      await tenantDb.query(
+        `
+        UPDATE financial_transactions
+        SET source_reference_id = $1
+        WHERE id = $2
+      `,
+        [encounter.id, financeTransactionId],
+      );
+    }
+
+    this.logger.log(
+      `Created ophthalmology encounter ${encounter.id} for patient ${patient_id} (${paymentStatus})`,
+    );
     return encounter;
   }
 
@@ -231,6 +301,8 @@ export class OphthalmologyService {
       throw new BadRequestException('eye is required');
     }
 
+    await this.ensureEncounterPaymentCleared(tenantDb, encounterId);
+
     const [entry] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_visual_acuity (
@@ -260,6 +332,8 @@ export class OphthalmologyService {
     if (!eye) {
       throw new BadRequestException('eye is required');
     }
+
+    await this.ensureEncounterPaymentCleared(tenantDb, encounterId);
 
     const [entry] = await tenantDb.query(
       `
@@ -291,6 +365,8 @@ export class OphthalmologyService {
       throw new BadRequestException('structure and observation are required');
     }
 
+    await this.ensureEncounterPaymentCleared(tenantDb, encounterId);
+
     const [entry] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_slit_lamp_findings (
@@ -316,6 +392,8 @@ export class OphthalmologyService {
     if (!eye) {
       throw new BadRequestException('eye is required');
     }
+
+    await this.ensureEncounterPaymentCleared(tenantDb, encounterId);
 
     const [entry] = await tenantDb.query(
       `
@@ -343,6 +421,10 @@ export class OphthalmologyService {
 
     if (!patient_id || !scheduled_date) {
       throw new BadRequestException('patient_id and scheduled_date are required');
+    }
+
+    if (related_encounter_id) {
+      await this.ensureEncounterPaymentCleared(tenantDb, related_encounter_id);
     }
 
     const [followUp] = await tenantDb.query(
@@ -417,6 +499,10 @@ export class OphthalmologyService {
       throw new BadRequestException('patient_id, procedure_name and procedure_date are required');
     }
 
+    if (encounter_id) {
+      await this.ensureEncounterPaymentCleared(tenantDb, encounter_id);
+    }
+
     const [procedure] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_procedures (
@@ -456,6 +542,27 @@ export class OphthalmologyService {
     );
 
     return { procedures: rows, total: rows.length };
+  }
+
+  private async ensureEncounterPaymentCleared(tenantDb: DataSource, encounterId: string) {
+    const [encounter] = await tenantDb.query(
+      `
+      SELECT payment_status
+      FROM ophthalmology_encounters
+      WHERE id = $1
+      `,
+      [encounterId],
+    );
+
+    if (!encounter) {
+      throw new NotFoundException(`Ophthalmology encounter ${encounterId} not found`);
+    }
+
+    if (encounter.payment_status === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException(
+        'Payment confirmation required before documenting findings for this encounter',
+      );
+    }
   }
 
   async getDashboardSummary(tenantDb: DataSource) {
@@ -512,11 +619,22 @@ export class OphthalmologyService {
       `,
     );
 
+    const [financeSummary] = await tenantDb.query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE payment_status = 'awaiting_payment') AS awaiting_payment_encounters,
+        COUNT(*) FILTER (WHERE payment_status = 'payment_confirmed') AS cleared_encounters,
+        COUNT(*) AS total_encounters
+      FROM ophthalmology_encounters
+      `,
+    );
+
     return {
       encounterTotals,
       upcomingFollowUps,
       procedureSummary,
       visualAcuityTrend,
+      financeSummary,
     };
   }
 }

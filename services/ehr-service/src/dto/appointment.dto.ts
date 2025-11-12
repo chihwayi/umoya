@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, IsOptional, IsDateString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsDateString, IsUUID, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateAppointmentDto {
   @IsUUID()
@@ -27,6 +28,11 @@ export class CreateAppointmentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  feeAmount?: number;
 }
 
 export class UpdateAppointmentDto {
@@ -56,6 +62,11 @@ export class UpdateAppointmentDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  feeAmount?: number;
 }
 
 export class AppointmentQueryDto {

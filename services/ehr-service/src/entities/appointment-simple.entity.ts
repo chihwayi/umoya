@@ -39,6 +39,9 @@ export class AppointmentSimple {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+@Column({ name: 'fee_amount', type: 'numeric', nullable: true })
+feeAmount: number | null;
+
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy: string;
 
@@ -51,4 +54,10 @@ export class AppointmentSimple {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+@Column({ name: 'finance_transaction_id', type: 'uuid', nullable: true })
+financeTransactionId: string | null;
+
+@Column({ name: 'payment_status', length: 50, default: 'payment_confirmed' })
+paymentStatus: string;
 }

@@ -4,12 +4,20 @@ import { User } from './user.entity';
 import { MedicalRecord } from './medical-record.entity';
 
 export enum LabOrderStatus {
+  AWAITING_PAYMENT = 'awaiting_payment',
   ORDERED = 'ordered',
   COLLECTED = 'collected',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled'
 }
+
+export type LabOrderPaymentStatus =
+  | 'awaiting_payment'
+  | 'payment_confirmed'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
 
 export enum LabTestCategory {
   HEMATOLOGY = 'hematology',
@@ -154,6 +162,15 @@ export class LabOrder {
     default: () => `'[]'::jsonb`,
   })
   notificationLog: Array<Record<string, any>>;
+
+  @Column({ name: 'fee_amount', type: 'numeric', precision: 12, scale: 2, nullable: true })
+  feeAmount: number | null;
+
+  @Column({ name: 'finance_transaction_id', nullable: true })
+  financeTransactionId: string | null;
+
+  @Column({ name: 'payment_status', type: 'varchar', default: 'payment_confirmed' })
+  paymentStatus: LabOrderPaymentStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -3,11 +3,14 @@ import { Repository, Between, Not } from 'typeorm';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { TenantService } from './tenant.service';
+import { FinanceService } from './finance.service';
+import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
 export class AppointmentService {
   constructor(
     private tenantService: TenantService,
+    private financeService: FinanceService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -19,7 +22,11 @@ export class AppointmentService {
   }
 
   async create(createAppointmentDto: CreateAppointmentDto, userId: string, tenantId: string): Promise<AppointmentSimple> {
-    const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+    const appointmentRepository = connection.getRepository(AppointmentSimple);
     
     // Check for conflicts
     await this.checkForConflicts(
@@ -29,14 +36,67 @@ export class AppointmentService {
       tenantId
     );
 
+    const defaultConsultationFee =
+      process.env.DEFAULT_CONSULTATION_FEE !== undefined
+        ? Number(process.env.DEFAULT_CONSULTATION_FEE)
+        : 20;
+    const amountCandidate =
+      typeof createAppointmentDto.feeAmount === 'number'
+        ? createAppointmentDto.feeAmount
+        : defaultConsultationFee;
+    const amount = Number.isFinite(Number(amountCandidate)) ? Number(amountCandidate) : 0;
+    let paymentStatus = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    let status = 'scheduled';
+    let financeTransactionId: string | null = null;
+
+    if (amount > 0) {
+      const transaction = await this.financeService.createTransaction(
+        connection,
+        {
+          sourceModule: 'appointments',
+          patientId: createAppointmentDto.patientId,
+          amount,
+          currency: 'USD',
+          notes: createAppointmentDto.reason || 'Consultation fee',
+          payerType: 'self',
+          lineItems: [
+            {
+              description: createAppointmentDto.appointmentType || 'Consultation',
+              billingCode: 'CONSULT',
+              unitPrice: amount,
+              quantity: 1,
+            },
+          ],
+        },
+        userId,
+      );
+      financeTransactionId = transaction.id;
+      paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
+      status = 'awaiting_payment';
+      // Update transaction with reference once appointment id is generated later
+    }
+
     const appointment = appointmentRepository.create({
       ...createAppointmentDto,
       appointmentType: createAppointmentDto.appointmentType || 'consultation',
       durationMinutes: createAppointmentDto.durationMinutes || 30,
       createdBy: userId,
+      status,
+      feeAmount: amount || null,
+      financeTransactionId,
+      paymentStatus,
     });
 
-    return appointmentRepository.save(appointment);
+    const savedAppointment = await appointmentRepository.save(appointment);
+
+    if (financeTransactionId) {
+      await connection.query(
+        `UPDATE financial_transactions SET source_reference_id = $1 WHERE id = $2`,
+        [savedAppointment.id, financeTransactionId],
+      );
+    }
+
+    return savedAppointment;
   }
 
   async findAll(query: AppointmentQueryDto, tenantId: string): Promise<{ appointments: any[]; total: number }> {
@@ -104,6 +164,9 @@ export class AppointmentService {
         reason: apt.reason,
         durationMinutes: apt.durationMinutes,
         notes: apt.notes,
+        feeAmount: apt.feeAmount !== null && apt.feeAmount !== undefined ? Number(apt.feeAmount) : null,
+        paymentStatus: apt.paymentStatus,
+        financeTransactionId: apt.financeTransactionId,
         createdBy: apt.createdBy,
         createdAt: apt.createdAt,
         updatedAt: apt.updatedAt
@@ -140,6 +203,9 @@ export class AppointmentService {
     }
 
     Object.assign(appointment, updateAppointmentDto);
+    if (typeof updateAppointmentDto.feeAmount !== 'undefined') {
+      appointment.feeAmount = Number(updateAppointmentDto.feeAmount);
+    }
     return appointmentRepository.save(appointment);
   }
 
@@ -154,8 +220,14 @@ export class AppointmentService {
   async updateStatus(id: string, status: string, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
+
+    const normalizedStatus = this.normalizeStatus(status);
+
+    if (normalizedStatus !== PAYMENT_STATUS.AWAITING_PAYMENT) {
+      this.ensurePaymentCleared(appointment);
+    }
     
-    appointment.status = status;
+    appointment.status = normalizedStatus;
     return appointmentRepository.save(appointment);
   }
 
@@ -163,6 +235,8 @@ export class AppointmentService {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     
+    this.ensurePaymentCleared(appointment);
+
     appointment.status = 'confirmed';
     return appointmentRepository.save(appointment);
   }
@@ -171,6 +245,8 @@ export class AppointmentService {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     
+    this.ensurePaymentCleared(appointment);
+
     appointment.status = 'in_progress';
     return appointmentRepository.save(appointment);
   }
@@ -179,6 +255,8 @@ export class AppointmentService {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     
+    this.ensurePaymentCleared(appointment);
+
     appointment.status = 'completed';
     return appointmentRepository.save(appointment);
   }
@@ -307,6 +385,19 @@ export class AppointmentService {
     }
 
     return slots;
+  }
+
+  private ensurePaymentCleared(appointment: AppointmentSimple) {
+    if (appointment.paymentStatus === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException('Payment confirmation required before continuing this appointment');
+    }
+  }
+
+  private normalizeStatus(status: string): string {
+    if (!status) {
+      return status;
+    }
+    return status.replace('-', '_');
   }
 
   async getCalendarView(date: string, tenantId: string): Promise<any[]> {

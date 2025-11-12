@@ -7,7 +7,8 @@ export enum UserRole {
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
   LAB_TECH = 'lab_tech',
-  RADIOLOGIST = 'radiologist'
+  RADIOLOGIST = 'radiologist',
+  ACCOUNTS = 'accounts'
 }
 
 @Entity('users')

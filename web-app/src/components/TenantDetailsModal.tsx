@@ -218,7 +218,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                     <option value="lab_technician">🧪 Lab Technician</option>
                     <option value="pharmacist">💊 Pharmacist</option>
                     <option value="receptionist">👩💻 Receptionist</option>
-                    <option value="accountant">📊 Accountant</option>
+                    <option value="accounts">📊 Accounts</option>
                   </select>
                   <input
                     type="password"

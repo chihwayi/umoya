@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { FinanceService } from './finance.service';
+import { PAYMENT_STATUS } from '../constants/payment-status';
 
 interface CaseFilter {
   status?: string;
@@ -10,6 +12,8 @@ interface CaseFilter {
 @Injectable()
 export class OncologyService {
   private readonly logger = new Logger(OncologyService.name);
+
+  constructor(private readonly financeService: FinanceService) {}
 
   async listCases(tenantDb: DataSource, filters: CaseFilter = {}) {
     const conditions: string[] = [];
@@ -375,10 +379,86 @@ export class OncologyService {
   }
 
   async createInfusionSession(tenantDb: DataSource, regimenId: string, payload: any, userId?: string) {
-    const { cycle_number, session_date, location, vitals, drugs_administered, premedications, toxicities, status, notes } = payload;
+    const {
+      cycle_number,
+      session_date,
+      location,
+      vitals,
+      drugs_administered,
+      premedications,
+      toxicities,
+      status,
+      notes,
+      fee_amount,
+      feeAmount,
+    } = payload;
 
     if (!session_date) {
       throw new BadRequestException('session_date is required');
+    }
+
+    const [regimen] = await tenantDb.query(
+      `
+      SELECT orr.id, orr.regimen_name, oc.patient_id
+      FROM oncology_regimens orr
+      INNER JOIN oncology_cases oc ON oc.id = orr.oncology_case_id
+      WHERE orr.id = $1
+      `,
+      [regimenId],
+    );
+
+    if (!regimen) {
+      throw new NotFoundException(`Oncology regimen ${regimenId} not found`);
+    }
+
+    const rawFee =
+      fee_amount ??
+      feeAmount ??
+      payload.estimated_fee ??
+      payload.estimatedFee ??
+      payload.cost ??
+      null;
+    const parsedFee = rawFee !== null && rawFee !== undefined ? Number(rawFee) : Number.NaN;
+    const defaultFee =
+      process.env.DEFAULT_ONCO_INFUSION_FEE !== undefined
+        ? Number(process.env.DEFAULT_ONCO_INFUSION_FEE)
+        : 0;
+    const feeAmountNumber = Number.isFinite(parsedFee) ? parsedFee : defaultFee;
+    const feeAmountValue = Number.isFinite(feeAmountNumber) && feeAmountNumber > 0 ? feeAmountNumber : 0;
+
+    let financeTransactionId: string | null = null;
+    let paymentStatus: PAYMENT_STATUS = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    const requestedStatus: string = status || 'scheduled';
+    let effectiveStatus: string = requestedStatus;
+
+    if (feeAmountValue > 0) {
+      const transaction = await this.financeService.createTransaction(
+        tenantDb,
+        {
+          sourceModule: 'oncology_infusion_sessions',
+          patientId: regimen.patient_id,
+          amount: feeAmountValue,
+          currency: 'USD',
+          notes: `Oncology infusion${cycle_number ? ` (cycle ${cycle_number})` : ''} - ${regimen.regimen_name ?? 'Therapy'}`,
+          payerType: 'self',
+          lineItems: [
+            {
+              description: `Infusion session${cycle_number ? ` cycle ${cycle_number}` : ''}`,
+              billingCode: 'ONCO_INFUSION',
+              unitPrice: feeAmountValue,
+              quantity: 1,
+            },
+          ],
+        },
+        userId,
+      );
+      financeTransactionId = transaction.id;
+      paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
+      effectiveStatus = 'awaiting_payment';
+    }
+
+    if (!['awaiting_payment', 'scheduled', 'in_progress', 'completed', 'cancelled'].includes(effectiveStatus)) {
+      throw new BadRequestException(`Invalid infusion session status: ${effectiveStatus}`);
     }
 
     const [session] = await tenantDb.query(
@@ -395,10 +475,26 @@ export class OncologyService {
         toxicities,
         status,
         notes,
+        fee_amount,
+        finance_transaction_id,
+        payment_status,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,COALESCE($6,'{}'::jsonb),COALESCE($7,'[]'::jsonb),COALESCE($8,'[]'::jsonb),COALESCE($9,'[]'::jsonb),COALESCE($10,'scheduled'),$11,NOW(),NOW())
+      VALUES (
+        $1,$2,$3,$4,$5,
+        COALESCE($6,'{}'::jsonb),
+        COALESCE($7,'[]'::jsonb),
+        COALESCE($8,'[]'::jsonb),
+        COALESCE($9,'[]'::jsonb),
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        NOW(),
+        NOW()
+      )
       RETURNING *
       `,
       [
@@ -411,12 +507,28 @@ export class OncologyService {
         drugs_administered,
         premedications,
         toxicities,
-        status,
+        effectiveStatus,
         notes,
+        feeAmountValue > 0 ? feeAmountValue : null,
+        financeTransactionId,
+        paymentStatus,
       ],
     );
 
-    this.logger.log(`Created infusion session ${session.id} for regimen ${regimenId}`);
+    if (financeTransactionId) {
+      await tenantDb.query(
+        `
+        UPDATE financial_transactions
+        SET source_reference_id = $1
+        WHERE id = $2
+      `,
+        [session.id, financeTransactionId],
+      );
+    }
+
+    this.logger.log(
+      `Created infusion session ${session.id} for regimen ${regimenId} (${paymentStatus})`,
+    );
     return session;
   }
 
@@ -424,6 +536,10 @@ export class OncologyService {
     const fields = Object.keys(payload).filter((key) => payload[key] !== undefined);
     if (!fields.length) {
       throw new BadRequestException('No fields provided for update');
+    }
+
+    if (payload.status && ['in_progress', 'completed'].includes(payload.status)) {
+      await this.ensureInfusionPaymentCleared(tenantDb, sessionId);
     }
 
     const setClause = fields.map((field, idx) => `${field} = $${idx + 1}`).join(', ') + ', updated_at = NOW()';
@@ -611,6 +727,27 @@ export class OncologyService {
     return result[0];
   }
 
+  private async ensureInfusionPaymentCleared(tenantDb: DataSource, sessionId: string) {
+    const [session] = await tenantDb.query(
+      `
+      SELECT payment_status
+      FROM oncology_infusion_sessions
+      WHERE id = $1
+      `,
+      [sessionId],
+    );
+
+    if (!session) {
+      throw new NotFoundException(`Infusion session ${sessionId} not found`);
+    }
+
+    if (session.payment_status === PAYMENT_STATUS.AWAITING_PAYMENT) {
+      throw new BadRequestException(
+        'Payment confirmation required before updating this infusion session',
+      );
+    }
+  }
+
   async getDashboardSummary(tenantDb: DataSource) {
     const [caseTotals] = await tenantDb.query(
       `
@@ -666,11 +803,22 @@ export class OncologyService {
       `,
     );
 
+    const [financeSummary] = await tenantDb.query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE payment_status = 'awaiting_payment') AS awaiting_payment_sessions,
+        COUNT(*) FILTER (WHERE payment_status = 'payment_confirmed') AS cleared_sessions,
+        COUNT(*) AS total_sessions
+      FROM oncology_infusion_sessions
+      `,
+    );
+
     return {
       caseTotals,
       statusBreakdown,
       upcomingInfusions,
       adverseEventSummary,
+      financeSummary,
     };
   }
 }

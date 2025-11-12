@@ -92,14 +92,27 @@ CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (
   drugs_administered JSONB DEFAULT '[]'::jsonb,
   premedications JSONB DEFAULT '[]'::jsonb,
   toxicities JSONB DEFAULT '[]'::jsonb,
-  status VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled','in_progress','completed','cancelled')),
+  status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')),
   notes TEXT,
+  fee_amount NUMERIC(12,2),
+  finance_transaction_id UUID,
+  payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_oncology_infusion_regimen_id ON oncology_infusion_sessions(regimen_id);
 CREATE INDEX IF NOT EXISTS idx_oncology_infusion_session_date ON oncology_infusion_sessions(session_date);
+ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2);
+ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS finance_transaction_id UUID;
+ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50);
+UPDATE oncology_infusion_sessions SET payment_status = 'payment_confirmed' WHERE payment_status IS NULL OR payment_status = '';
+ALTER TABLE oncology_infusion_sessions DROP CONSTRAINT IF EXISTS oncology_infusion_sessions_status_check;
+ALTER TABLE oncology_infusion_sessions ADD CONSTRAINT oncology_infusion_sessions_status_check CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled'));
+ALTER TABLE oncology_infusion_sessions DROP CONSTRAINT IF EXISTS oncology_infusion_sessions_payment_status_check;
+ALTER TABLE oncology_infusion_sessions ADD CONSTRAINT oncology_infusion_sessions_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'));
+ALTER TABLE oncology_infusion_sessions ALTER COLUMN payment_status SET DEFAULT 'payment_confirmed';
+CREATE INDEX IF NOT EXISTS idx_oncology_infusion_payment_status ON oncology_infusion_sessions(payment_status);
 
 CREATE TABLE IF NOT EXISTS oncology_adverse_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

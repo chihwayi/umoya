@@ -33,12 +33,23 @@ CREATE TABLE IF NOT EXISTS ophthalmology_encounters (
   chief_complaint TEXT,
   assessment TEXT,
   plan TEXT,
+  fee_amount NUMERIC(12,2),
+  finance_transaction_id UUID,
+  payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_patient_id ON ophthalmology_encounters(patient_id);
 CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_date ON ophthalmology_encounters(encounter_date);
+CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_payment_status ON ophthalmology_encounters(payment_status);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS finance_transaction_id UUID;
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50);
+UPDATE ophthalmology_encounters SET payment_status = 'payment_confirmed' WHERE payment_status IS NULL OR payment_status = '';
+ALTER TABLE ophthalmology_encounters DROP CONSTRAINT IF EXISTS ophthalmology_encounters_payment_status_check;
+ALTER TABLE ophthalmology_encounters ADD CONSTRAINT ophthalmology_encounters_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'));
+ALTER TABLE ophthalmology_encounters ALTER COLUMN payment_status SET DEFAULT 'payment_confirmed';
 
 CREATE TABLE IF NOT EXISTS ophthalmology_visual_acuity (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
