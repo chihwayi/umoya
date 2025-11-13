@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
   Heart, Thermometer, Droplets, Plus, Search, Filter,
@@ -6,7 +6,6 @@ import {
   CreditCard, Lock
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
-import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 interface Patient {
@@ -71,7 +70,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy] = useState('priority');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [vitalsData, setVitalsData] = useState<Record<string, any[]>>({});
   const { showError, showSuccess } = useNotification();
 
   const formatCurrency = (value?: number | string | null) => {
@@ -109,29 +107,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     }
     return true;
   };
-
-  useEffect(() => {
-    if (appointments && appointments.length > 0) {
-      (async () => {
-        try {
-          const token = localStorage.getItem('ehr_token') || '';
-          const tenantSlug = localStorage.getItem('ehr_tenant_slug') || '';
-          const promises = appointments.map(async (apt: any) => {
-            try {
-              const res = await ehrApi.getVitals(apt.patient.id, token, tenantSlug);
-              return { patientId: apt.patient.id, vitals: res.data.vitals || [] };
-            } catch {
-              return { patientId: apt.patient.id, vitals: [] };
-            }
-          });
-          const results = await Promise.all(promises);
-          const map: Record<string, any[]> = {};
-          results.forEach(r => { map[r.patientId] = r.vitals; });
-          setVitalsData(map);
-        } catch {}
-      })();
-    }
-  }, [appointments]);
 
   const getPriorityOrder = (priority: string) => {
     switch (priority) {
@@ -195,7 +170,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     const waiting = appointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length;
     const inProgress = appointments.filter(apt => apt.status === 'in-progress').length;
     const urgent = appointments.filter(apt => apt.priorityLevel === 'urgent' || apt.priorityLevel === 'high').length;
-    const vitalsRecorded = appointments.filter(apt => vitalsData[apt.patient.id] && vitalsData[apt.patient.id].length > 0).length;
+    const vitalsRecorded = appointments.filter(apt => !!apt.vitals).length;
     const awaitingPayment = appointments.filter(apt => apt.paymentStatus === 'awaiting_payment').length;
 
     return { waiting, inProgress, urgent, vitalsRecorded, awaitingPayment };
@@ -413,7 +388,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
             const awaitingPayment = appointment.paymentStatus === 'awaiting_payment';
             const feeEstimate = formatCurrency(appointment.feeAmount ?? null);
             const financeReference = appointment.financeTransactionId;
-            const latestVitals = vitalsData[appointment.patient.id]?.[0];
+            const latestVitals = appointment.vitals || null;
 
             return (
               <div key={appointment.id} className={`p-8 transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
@@ -502,7 +477,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {((vitalsData[appointment.patient.id] || []).length === 0) ? (
+                    {latestVitals ? (
+                      <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
+                    ) : (
                       <button
                         onClick={() => handleRecordVitalsClick(appointment)}
                         disabled={awaitingPayment}
@@ -514,8 +491,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         <Activity className="w-4 h-4" />
                         {awaitingPayment ? 'Locked' : 'Record Vitals'}
                       </button>
-                    ) : (
-                      <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
                     )}
                     <button
                       onClick={() => handleTriageClick(appointment)}

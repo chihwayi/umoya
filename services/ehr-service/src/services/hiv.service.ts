@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import axios from 'axios';
 import { LabResultsMatchingService } from './lab-results-matching.service';
@@ -26,6 +26,161 @@ export class HivService {
     private appointmentService: AppointmentService,
     private tenantService: TenantService
   ) {}
+
+  private hydrateNurseIntake(row: any) {
+    if (!row) {
+      return null;
+    }
+
+    let form = row.form ?? {};
+    if (typeof form === 'string') {
+      try {
+        form = JSON.parse(form);
+      } catch {
+        form = {};
+      }
+    }
+
+    let vitals = row.vitals ?? {};
+    if (typeof vitals === 'string') {
+      try {
+        vitals = JSON.parse(vitals);
+      } catch {
+        vitals = {};
+      }
+    }
+
+    return {
+      ...row,
+      form,
+      vitals,
+    };
+  }
+
+  async saveNurseIntake(body: any, tenantDb: DataSource, userId?: string) {
+    const { patientId, appointmentId, intakeDate, form, vitals, adherencePercentage, regimen } = body;
+
+    if (!patientId) {
+      throw new BadRequestException('patientId is required');
+    }
+
+    const normalizedForm = typeof form === 'string' ? (() => {
+      try {
+        return JSON.parse(form);
+      } catch {
+        return {};
+      }
+    })() : form ?? {};
+
+    const normalizedVitals = typeof vitals === 'string' ? (() => {
+      try {
+        return JSON.parse(vitals);
+      } catch {
+        return {};
+      }
+    })() : vitals ?? {};
+
+    const intakeDateValue = intakeDate ? new Date(intakeDate) : null;
+    const adherenceValue = typeof adherencePercentage === 'number' ? adherencePercentage : null;
+
+    let existing: any = null;
+    if (appointmentId) {
+      const rows = await tenantDb.query(
+        `SELECT * FROM hiv_nurse_intakes WHERE appointment_id = $1 LIMIT 1`,
+        [appointmentId],
+      );
+      existing = rows[0] || null;
+    }
+
+    if (existing) {
+      const [updated] = await tenantDb.query(
+        `
+        UPDATE hiv_nurse_intakes
+        SET form = $1::jsonb,
+            vitals = $2::jsonb,
+            adherence_percentage = $3,
+            regimen = $4,
+            intake_date = COALESCE($5::date, intake_date),
+            recorded_by = COALESCE($6::uuid, recorded_by),
+            updated_at = NOW()
+        WHERE id = $7
+        RETURNING *
+      `,
+        [
+          JSON.stringify(normalizedForm),
+          JSON.stringify(normalizedVitals),
+          adherenceValue,
+          regimen || null,
+          intakeDateValue ? intakeDateValue.toISOString() : null,
+          userId || null,
+          existing.id,
+        ],
+      );
+      return this.hydrateNurseIntake(updated);
+    }
+
+    const [inserted] = await tenantDb.query(
+      `
+      INSERT INTO hiv_nurse_intakes (
+        patient_id,
+        appointment_id,
+        recorded_by,
+        intake_date,
+        form,
+        vitals,
+        adherence_percentage,
+        regimen
+      )
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
+      RETURNING *
+    `,
+      [
+        patientId,
+        appointmentId || null,
+        userId || null,
+        intakeDateValue ? intakeDateValue.toISOString() : null,
+        JSON.stringify(normalizedForm),
+        JSON.stringify(normalizedVitals),
+        adherenceValue,
+        regimen || null,
+      ],
+    );
+
+    return this.hydrateNurseIntake(inserted);
+  }
+
+  async getNurseIntakesByPatient(patientId: string, tenantDb: DataSource) {
+    const rows = await tenantDb.query(
+      `
+      SELECT *
+      FROM hiv_nurse_intakes
+      WHERE patient_id = $1
+      ORDER BY recorded_at DESC
+    `,
+      [patientId],
+    );
+
+    return {
+      intakes: rows.map((row: any) => this.hydrateNurseIntake(row)),
+    };
+  }
+
+  async getNurseIntakeByAppointment(appointmentId: string, tenantDb: DataSource) {
+    const rows = await tenantDb.query(
+      `
+      SELECT *
+      FROM hiv_nurse_intakes
+      WHERE appointment_id = $1
+      ORDER BY recorded_at DESC
+      LIMIT 1
+    `,
+      [appointmentId],
+    );
+
+    return {
+      intake: this.hydrateNurseIntake(rows[0]),
+    };
+  }
 
   async createHivTest(body: any, tenantDb: DataSource) {
     const { patientId, testKitName, testResult, testKitLot, testKitExpiry, notes, testedBy } = body;

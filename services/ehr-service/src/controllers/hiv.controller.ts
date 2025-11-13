@@ -36,6 +36,28 @@ export class HivController {
     return this.hivService.processTestingAlgorithm(testId, req.tenantDb);
   }
 
+  @Post('nurse-intakes')
+  @ApiOperation({ summary: 'Capture or update HIV nurse intake' })
+  @ApiResponse({ status: 201, description: 'Nurse intake saved successfully' })
+  async saveNurseIntake(@Body() body: any, @Request() req: RequestWithTenant) {
+    const userId = (req as any).user?.id;
+    return this.hivService.saveNurseIntake(body, req.tenantDb, userId);
+  }
+
+  @Get('nurse-intakes/patient/:patientId')
+  @ApiOperation({ summary: 'Fetch HIV nurse intakes for a patient' })
+  @ApiResponse({ status: 200, description: 'Nurse intakes retrieved' })
+  async getPatientNurseIntakes(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getNurseIntakesByPatient(patientId, req.tenantDb);
+  }
+
+  @Get('nurse-intakes/appointment/:appointmentId')
+  @ApiOperation({ summary: 'Fetch HIV nurse intake linked to an appointment' })
+  @ApiResponse({ status: 200, description: 'Nurse intake retrieved' })
+  async getNurseIntakeByAppointment(@Param('appointmentId') appointmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getNurseIntakeByAppointment(appointmentId, req.tenantDb);
+  }
+
   @Post('enrollments')
   @ApiOperation({ summary: 'Enroll patient in HIV care' })
   @ApiResponse({ status: 201, description: 'Patient enrolled successfully' })

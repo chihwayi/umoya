@@ -1,63 +1,123 @@
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X, Loader2 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
-interface HIVNursePanelProps {
+type HIVNursePanelProps = {
   appointmentId: string;
   patientId: string;
   tenantSlug: string;
   token: string;
   onClose: () => void;
   onSaved?: () => void;
-}
+};
+
+const createInitialFormState = () => ({
+  hivStatus: 'known_positive', // known_positive | newly_diagnosed | unknown
+  onART: true,
+  regimen: 'TLD',
+  startDate: '',
+  adherence: 100,
+  sideEffects: '',
+  tbScreen: 'no_cough', // no_cough | cough | night_sweats | weight_loss | fever
+  pregnantBreastfeeding: 'no', // no | pregnant | breastfeeding
+  lastVLDate: '',
+  lastVLResult: '', // copies/mL
+  lastCD4: '',
+  oiProphylaxis: 'cotrimoxazole',
+});
 
 const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId, tenantSlug, token, onClose, onSaved }) => {
   const [loading, setLoading] = useState(false);
   const { showSuccess, showError } = useNotification();
-  const [form, setForm] = useState({
-    hivStatus: 'known_positive', // known_positive | newly_diagnosed | unknown
-    onART: true,
-    regimen: 'TLD',
-    startDate: '',
-    adherence: 100,
-    sideEffects: '',
-    tbScreen: 'no_cough', // no_cough | cough | night_sweats | weight_loss | fever
-    pregnantBreastfeeding: 'no', // no | pregnant | breastfeeding
-    lastVLDate: '',
-    lastVLResult: '', // copies/mL
-    lastCD4: '',
-    oiProphylaxis: 'cotrimoxazole',
-  });
+  const [form, setForm] = useState(createInitialFormState);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(false);
 
   const cdssInputs = useMemo(() => ({
     diagnoses: ['HIV'],
     medications: [form.regimen],
   }), [form.regimen]);
 
-  const save = async () => {
-    try {
-      setLoading(true);
-      // Merge HIV data into appointment notes
-      let payload: any = {};
+  useEffect(() => {
+    if (!tenantSlug || !token) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadExistingIntake = async () => {
       try {
-        const apptResp = await ehrApi.getAppointments(token, tenantSlug, { appointmentId });
-        const appt = Array.isArray(apptResp.data?.appointments) ? apptResp.data.appointments.find((a: any) => a.id === appointmentId) : null;
-        payload = appt?.notes ? JSON.parse(appt.notes) : {};
-      } catch {
-        payload = {};
+        setLoadingExisting(true);
+        setForm(createInitialFormState());
+
+        const appointmentResponse = await ehrApi.getHivNurseIntakeForAppointment(appointmentId, token, tenantSlug);
+        const intake = appointmentResponse.data?.intake;
+
+        if (!cancelled && intake?.form) {
+          setForm((prev) => ({ ...prev, ...intake.form }));
+          return;
+        }
+
+        const patientResponse = await ehrApi.getHivNurseIntakesByPatient(patientId, token, tenantSlug);
+        const latest = Array.isArray(patientResponse.data?.intakes)
+          ? patientResponse.data.intakes[0]
+          : null;
+        if (!cancelled && latest?.form) {
+          setForm((prev) => ({ ...prev, ...latest.form }));
+        }
+      } catch (error) {
+        console.error('Failed to load HIV nurse intake', error);
+      } finally {
+        if (!cancelled) {
+          setLoadingExisting(false);
+        }
       }
-      payload.hiv = {
-        ...form,
-        savedAt: new Date().toISOString(),
-      };
-      await ehrApi.updateAppointment(appointmentId, { notes: JSON.stringify(payload) }, token, tenantSlug);
+    };
+
+    loadExistingIntake();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appointmentId, patientId, tenantSlug, token]);
+
+  const save = async () => {
+    if (!tenantSlug || !token) {
+      showError('Session expired', 'Please sign in again to continue.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const adherenceValue =
+        typeof form.adherence === 'number' ? form.adherence : Number(form.adherence);
+
+      await ehrApi.saveHivNurseIntake(
+        {
+          patientId,
+          appointmentId,
+          intakeDate: new Date().toISOString(),
+          form,
+          adherencePercentage:
+            Number.isFinite(adherenceValue) && !Number.isNaN(adherenceValue)
+              ? adherenceValue
+              : undefined,
+          regimen: form.regimen,
+        },
+        token,
+        tenantSlug,
+      );
+
+      showSuccess('HIV intake saved', 'Nursing intake has been recorded successfully.');
       onSaved && onSaved();
       onClose();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to save HIV intake:', e);
+      const message = e?.response?.data?.message || 'Failed to save HIV intake';
+      showError('Save failed', message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -90,6 +150,13 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
       </div>
 
       <div className="p-5 space-y-5">
+        {loadingExisting && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Loading previous intake details…</span>
+          </div>
+        )}
+
         {/* Status & ART */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -164,8 +231,8 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
           <button onClick={orderVL} disabled={loading} className="px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 text-sm flex items-center gap-2">
             <TestTube className="w-4 h-4" /> Order Viral Load
           </button>
-          <button onClick={save} disabled={loading} className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm flex items-center gap-2">
-            <Save className="w-4 h-4" /> {loading ? 'Saving…' : 'Save HIV Intake'}
+          <button onClick={save} disabled={submitting || loadingExisting} className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+            <Save className="w-4 h-4" /> {submitting ? 'Saving…' : 'Save HIV Intake'}
           </button>
         </div>
 

@@ -27,6 +27,26 @@ for database in $databases; do
   echo "=========================================="
   
   docker exec -i $CONTAINER_NAME psql -U $DB_USERNAME -d "$database" <<EOF
+-- HIV Nurse Intake records captured by nursing staff
+CREATE TABLE IF NOT EXISTS hiv_nurse_intakes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+  recorded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  intake_date DATE,
+  recorded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  form JSONB NOT NULL DEFAULT '{}'::jsonb,
+  vitals JSONB DEFAULT '{}'::jsonb,
+  adherence_percentage INTEGER CHECK (adherence_percentage >= 0 AND adherence_percentage <= 100),
+  regimen TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_patient_id ON hiv_nurse_intakes(patient_id);
+CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_appointment_id ON hiv_nurse_intakes(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_recorded_at ON hiv_nurse_intakes(recorded_at);
+
 -- HIV Monitoring Schedules & Alerts
 CREATE TABLE IF NOT EXISTS hiv_monitoring_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

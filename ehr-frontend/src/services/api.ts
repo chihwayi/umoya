@@ -2265,4 +2265,34 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  saveHivNurseIntake: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/nurse-intakes', body, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getHivNurseIntakesByPatient: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/nurse-intakes/patient/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getHivNurseIntakeForAppointment: async (appointmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/nurse-intakes/appointment/${appointmentId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
 };

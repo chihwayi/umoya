@@ -94,12 +94,44 @@ const paymentMethods = [
 
 const moduleColors: Record<string, string> = {
   consultation: 'from-blue-500 to-cyan-500',
+  appointments: 'from-blue-500 to-cyan-500',
   lab: 'from-purple-500 to-indigo-500',
+  lab_orders: 'from-purple-500 to-indigo-500',
   imaging: 'from-rose-500 to-pink-500',
+  imaging_orders: 'from-rose-500 to-pink-500',
   oncology: 'from-fuchsia-500 to-purple-500',
+  oncology_cases: 'from-fuchsia-500 to-purple-500',
   ophthalmology: 'from-sky-500 to-blue-500',
   pharmacy: 'from-teal-500 to-emerald-500',
+  cardiology_encounters: 'from-red-500 to-rose-600',
   default: 'from-slate-500 to-gray-600',
+};
+
+const moduleLabels: Record<string, string> = {
+  consultation: 'Consultations',
+  appointments: 'Consultations',
+  lab: 'Laboratory',
+  lab_orders: 'Laboratory',
+  imaging: 'Imaging',
+  imaging_orders: 'Imaging',
+  oncology: 'Oncology',
+  oncology_cases: 'Oncology',
+  ophthalmology: 'Ophthalmology',
+  pharmacy: 'Pharmacy',
+  cardiology_encounters: 'Cardiology',
+};
+
+const renderPayerTag = (payer: string) => {
+  const map: Record<string, string> = {
+    self: 'bg-blue-100 text-blue-700',
+    medical_aid: 'bg-purple-100 text-purple-700',
+    corporate: 'bg-emerald-100 text-emerald-700',
+  };
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${map[payer] || 'bg-slate-100 text-slate-600'}`}>
+      {payer.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+    </span>
+  );
 };
 
 const AccountsDashboard: React.FC = () => {
@@ -337,10 +369,11 @@ const AccountsDashboard: React.FC = () => {
   const renderModuleTag = (module?: string | null) => {
     if (!module) return null;
     const gradient = moduleColors[module] || moduleColors.default;
+    const label = moduleLabels[module] || module.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     return (
       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r ${gradient}`}>
         <TrendingUp className="w-3 h-3" />
-        {module.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+        {label}
       </span>
     );
   };
@@ -452,10 +485,15 @@ const AccountsDashboard: React.FC = () => {
                 className="w-full py-2 px-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
               >
                 <option value="">All Modules</option>
-                <option value="consultation">Consultation</option>
-                <option value="lab">Laboratory</option>
-                <option value="imaging">Radiology</option>
-                <option value="oncology">Oncology</option>
+                <option value="appointments">Consultation</option>
+                <option value="consultation">Consultation (Legacy)</option>
+                <option value="lab_orders">Laboratory</option>
+                <option value="lab">Laboratory (Legacy)</option>
+                <option value="imaging_orders">Radiology</option>
+                <option value="imaging">Radiology (Legacy)</option>
+                <option value="cardiology_encounters">Cardiology</option>
+                <option value="oncology_cases">Oncology</option>
+                <option value="oncology">Oncology (Legacy)</option>
                 <option value="ophthalmology">Ophthalmology</option>
                 <option value="pharmacy">Pharmacy</option>
               </select>
