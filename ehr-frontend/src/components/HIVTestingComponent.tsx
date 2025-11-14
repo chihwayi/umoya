@@ -16,6 +16,7 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import HIVEnrollmentModal from './HIVEnrollmentModal';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface HIVTestingComponentProps {
@@ -35,6 +36,8 @@ interface StiPanel {
   treatmentRegimen: string;
   treatmentDate: string;
   notes: string;
+  infectionConcept?: SnomedConcept | null;
+  testConcept?: SnomedConcept | null;
 }
 
 const testKits = [
@@ -224,6 +227,8 @@ const defaultStiPanel: StiPanel = {
   treatmentRegimen: '',
   treatmentDate: '',
   notes: '',
+  infectionConcept: null,
+  testConcept: null,
 };
 
 const parseJsonArray = (value: any): any[] => {
@@ -285,6 +290,11 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
   const [testHistory, setTestHistory] = useState<any[]>([]);
   const [algorithmResult, setAlgorithmResult] = useState<any>(null);
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
+  const [testConceptSelection, setTestConceptSelection] = useState<SnomedConcept | null>(null);
+  const [specimenConceptSelection, setSpecimenConceptSelection] = useState<SnomedConcept | null>(null);
+
+  const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
+  const snomedReady = Boolean(snomedToken && tenantSlug);
 
   useEffect(() => {
     if (selectedPatient) {
@@ -300,6 +310,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
     setTestingContext(defaultTestingContext);
     setFollowUpActions([]);
     setStiPanels([defaultStiPanel]);
+    setTestConceptSelection(null);
+    setSpecimenConceptSelection(null);
   };
 
   const loadTestHistory = async () => {
@@ -364,6 +376,16 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
     );
   };
 
+  const handleStiConceptChange = (
+    index: number,
+    field: 'infectionConcept' | 'testConcept',
+    concept: SnomedConcept | null,
+  ) => {
+    setStiPanels((prev) =>
+      prev.map((panel, idx) => (idx === index ? { ...panel, [field]: concept } : panel)),
+    );
+  };
+
   const addStiPanel = () => {
     setStiPanels((prev) => [...prev, { ...defaultStiPanel }]);
   };
@@ -424,6 +446,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
         notes: testForm.notes || null,
         followUpActions,
         testingContext,
+        testConcept: testConceptSelection,
+        specimenConcept: specimenConceptSelection,
         stis: stiPanels
           .filter((panel) => panel.infectionType)
           .map((panel) => ({
@@ -439,6 +463,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
             treatmentRegimen: panel.treatmentRegimen || null,
             treatmentDate: panel.treatmentDate || null,
             notes: panel.notes || null,
+            infectionConcept: panel.infectionConcept || null,
+            testConcept: panel.testConcept || null,
           })),
       };
 
@@ -672,6 +698,30 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
               placeholder="e.g., copies/mL"
             />
           </div>
+          {snomedReady && (
+            <>
+              <div className="md:col-span-2">
+                <SnomedConceptPicker
+                  value={testConceptSelection}
+                  onChange={setTestConceptSelection}
+                  token={snomedToken}
+                  tenantSlug={tenantSlug}
+                  label="HIV test SNOMED concept"
+                  helperText="Select the exact analyte/procedure performed for interoperability."
+                />
+              </div>
+              <div className="md:col-span-2">
+                <SnomedConceptPicker
+                  value={specimenConceptSelection}
+                  onChange={setSpecimenConceptSelection}
+                  token={snomedToken}
+                  tenantSlug={tenantSlug}
+                  label="Specimen SNOMED concept"
+                  helperText="Optional structured specimen description (finger prick, plasma, etc.)."
+                />
+              </div>
+            </>
+          )}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
             <textarea
@@ -890,6 +940,18 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                       </option>
                     ))}
                   </select>
+                  {snomedReady && (
+                    <div className="mt-2">
+                      <SnomedConceptPicker
+                        value={panel.infectionConcept ?? null}
+                        onChange={(concept) => handleStiConceptChange(index, 'infectionConcept', concept)}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Infection SNOMED concept"
+                        helperText="Optional — capture the coded pathogen or syndrome."
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Test method</label>
@@ -900,6 +962,18 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
                     placeholder="e.g., NAAT"
                   />
+                  {snomedReady && (
+                    <div className="mt-2">
+                      <SnomedConceptPicker
+                        value={panel.testConcept ?? null}
+                        onChange={(concept) => handleStiConceptChange(index, 'testConcept', concept)}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Test SNOMED concept"
+                        helperText="Optional coded lab/imaging procedure."
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Specimen/site</label>

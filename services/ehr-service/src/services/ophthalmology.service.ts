@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
+import { TerminologyService } from './terminology.service';
 
 interface EncounterFilters {
   patientId?: string;
@@ -11,11 +12,89 @@ interface EncounterFilters {
   encounterType?: string;
 }
 
+interface StoredConceptSummary {
+  conceptId: string;
+  term: string;
+  moduleId?: string;
+  definitionStatus?: string;
+}
+
 @Injectable()
 export class OphthalmologyService {
   private readonly logger = new Logger(OphthalmologyService.name);
 
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly terminologyService: TerminologyService,
+  ) {}
+
+  private extractConceptId(candidate: any): string | null {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.trim();
+    }
+    return (
+      candidate?.conceptId ??
+      candidate?.snomedConceptId ??
+      candidate?.snomedCode ??
+      candidate?.code ??
+      null
+    );
+  }
+
+  private async resolveConcept(tenantDb: DataSource, raw: any): Promise<StoredConceptSummary | null> {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const conceptIdCandidate = this.extractConceptId(raw);
+    if (!conceptIdCandidate) {
+      return null;
+    }
+
+    const conceptId = String(conceptIdCandidate).trim();
+    let validated:
+      | {
+          conceptId: string;
+          preferredTerm?: string;
+          term?: string;
+          moduleId?: string;
+          definitionStatus?: string;
+        }
+      | null = null;
+
+    if (/^\d+$/.test(conceptId)) {
+      try {
+        validated = await this.terminologyService.validateConcept(tenantDb, conceptId);
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for concept "${conceptId}": ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`Received non-numeric SNOMED concept "${conceptId}" for ophthalmology payload.`);
+      return null;
+    }
+
+    const rawTerm =
+      (typeof raw === 'object' && (raw.preferredTerm || raw.term || raw.fullySpecifiedName)) || null;
+    const term = rawTerm ?? validated?.preferredTerm ?? validated?.term ?? null;
+
+    if (!term && !validated) {
+      return null;
+    }
+
+    return {
+      conceptId: validated?.conceptId ?? conceptId,
+      term: term ?? '',
+      moduleId: validated?.moduleId ?? raw?.moduleId,
+      definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
+    };
+  }
 
   async listEncounters(tenantDb: DataSource, filters: EncounterFilters = {}) {
     const conditions: string[] = [];
@@ -82,7 +161,11 @@ export class OphthalmologyService {
       encounter_type,
       ophthalmologist_id,
       chief_complaint,
+      chief_complaint_concept,
+      chiefComplaintConcept,
       assessment,
+      assessment_concept,
+      assessmentConcept,
       plan,
       fee_amount,
       feeAmount,
@@ -103,6 +186,16 @@ export class OphthalmologyService {
 
     let financeTransactionId: string | null = null;
     let paymentStatus: PAYMENT_STATUS = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+
+    const complaintConceptInput = chief_complaint_concept ?? chiefComplaintConcept;
+    const assessmentConceptInput = assessment_concept ?? assessmentConcept;
+    const [resolvedComplaintConcept, resolvedAssessmentConcept] = await Promise.all([
+      this.resolveConcept(tenantDb, complaintConceptInput),
+      this.resolveConcept(tenantDb, assessmentConceptInput),
+    ]);
+
+    const complaintValue = chief_complaint || resolvedComplaintConcept?.term || null;
+    const assessmentValue = assessment || resolvedAssessmentConcept?.term || null;
 
     if (feeAmountValue > 0) {
       const transaction = await this.financeService.createTransaction(
@@ -137,7 +230,15 @@ export class OphthalmologyService {
         encounter_type,
         ophthalmologist_id,
         chief_complaint,
+        chief_complaint_snomed_code,
+        chief_complaint_snomed_term,
+        chief_complaint_snomed_module_id,
+        chief_complaint_snomed_definition_status,
         assessment,
+        assessment_snomed_code,
+        assessment_snomed_term,
+        assessment_snomed_module_id,
+        assessment_snomed_definition_status,
         plan,
         fee_amount,
         finance_transaction_id,
@@ -145,7 +246,12 @@ export class OphthalmologyService {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,COALESCE($4,$5),$6,$7,$8,$9,$10,$11,NOW(),NOW())
+      VALUES (
+        $1,$2,$3,COALESCE($4::uuid,$5::uuid),
+        $6,$7,$8,$9,$10,
+        $11,$12,$13,$14,$15,
+        $16,$17,$18,$19,NOW(),NOW()
+      )
       RETURNING *
       `,
       [
@@ -154,8 +260,16 @@ export class OphthalmologyService {
         encounter_type,
         ophthalmologist_id,
         userId,
-        chief_complaint,
-        assessment,
+        complaintValue,
+        resolvedComplaintConcept?.conceptId ?? null,
+        resolvedComplaintConcept?.term ?? null,
+        resolvedComplaintConcept?.moduleId ?? null,
+        resolvedComplaintConcept?.definitionStatus ?? null,
+        assessmentValue,
+        resolvedAssessmentConcept?.conceptId ?? null,
+        resolvedAssessmentConcept?.term ?? null,
+        resolvedAssessmentConcept?.moduleId ?? null,
+        resolvedAssessmentConcept?.definitionStatus ?? null,
         plan,
         feeAmountValue > 0 ? feeAmountValue : null,
         financeTransactionId,
@@ -359,7 +473,15 @@ export class OphthalmologyService {
   }
 
   async addSlitLampFinding(tenantDb: DataSource, encounterId: string, payload: any) {
-    const { structure, observation, severity } = payload;
+    const {
+      structure,
+      observation,
+      severity,
+      structure_concept,
+      structureConcept,
+      observation_concept,
+      observationConcept,
+    } = payload;
 
     if (!structure || !observation) {
       throw new BadRequestException('structure and observation are required');
@@ -367,19 +489,37 @@ export class OphthalmologyService {
 
     await this.ensureEncounterPaymentCleared(tenantDb, encounterId);
 
+    const [resolvedStructureConcept, resolvedObservationConcept] = await Promise.all([
+      this.resolveConcept(tenantDb, structure_concept ?? structureConcept),
+      this.resolveConcept(tenantDb, observation_concept ?? observationConcept),
+    ]);
+
     const [entry] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_slit_lamp_findings (
         encounter_id,
         structure,
+        structure_snomed_code,
+        structure_snomed_term,
         observation,
+        observation_snomed_code,
+        observation_snomed_term,
         severity,
         created_at
       )
-      VALUES ($1,$2,$3,$4,NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
       RETURNING *
       `,
-      [encounterId, structure, observation, severity],
+      [
+        encounterId,
+        structure || resolvedStructureConcept?.term,
+        resolvedStructureConcept?.conceptId ?? null,
+        resolvedStructureConcept?.term ?? null,
+        observation || resolvedObservationConcept?.term,
+        resolvedObservationConcept?.conceptId ?? null,
+        resolvedObservationConcept?.term ?? null,
+        severity,
+      ],
     );
 
     this.logger.log(`Recorded slit lamp finding ${entry.id} for encounter ${encounterId}`);
@@ -417,7 +557,16 @@ export class OphthalmologyService {
   }
 
   async scheduleFollowUp(tenantDb: DataSource, payload: any, userId?: string) {
-    const { patient_id, scheduled_date, reason, priority, status, related_encounter_id } = payload;
+    const {
+      patient_id,
+      scheduled_date,
+      reason,
+      priority,
+      status,
+      related_encounter_id,
+      reason_concept,
+      reasonConcept,
+    } = payload;
 
     if (!patient_id || !scheduled_date) {
       throw new BadRequestException('patient_id and scheduled_date are required');
@@ -427,12 +576,17 @@ export class OphthalmologyService {
       await this.ensureEncounterPaymentCleared(tenantDb, related_encounter_id);
     }
 
+    const resolvedReasonConcept = await this.resolveConcept(tenantDb, reason_concept ?? reasonConcept);
+    const reasonValue = reason || resolvedReasonConcept?.term || null;
+
     const [followUp] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_follow_ups (
         patient_id,
         scheduled_date,
         reason,
+        reason_snomed_code,
+        reason_snomed_term,
         priority,
         status,
         related_encounter_id,
@@ -441,10 +595,25 @@ export class OphthalmologyService {
         updated_at,
         created_by
       )
-      VALUES ($1,$2,$3,COALESCE($4,'routine'),COALESCE($5,'scheduled'),$6,'[]'::jsonb,NOW(),NOW(),$7)
+      VALUES (
+        $1,$2,$3,$4,$5,
+        COALESCE($6,'routine'),
+        COALESCE($7,'scheduled'),
+        $8,'[]'::jsonb,NOW(),NOW(),$9
+      )
       RETURNING *
       `,
-      [patient_id, scheduled_date, reason, priority, status, related_encounter_id, userId],
+      [
+        patient_id,
+        scheduled_date,
+        reasonValue,
+        resolvedReasonConcept?.conceptId ?? null,
+        resolvedReasonConcept?.term ?? null,
+        priority,
+        status,
+        related_encounter_id,
+        userId,
+      ],
     );
 
     this.logger.log(`Scheduled follow-up ${followUp.id} for patient ${patient_id}`);
@@ -493,7 +662,18 @@ export class OphthalmologyService {
   }
 
   async recordProcedure(tenantDb: DataSource, payload: any) {
-    const { patient_id, procedure_name, procedure_date, eye, outcome, complications, surgeon_id, encounter_id } = payload;
+    const {
+      patient_id,
+      procedure_name,
+      procedure_date,
+      eye,
+      outcome,
+      complications,
+      surgeon_id,
+      encounter_id,
+      procedure_concept,
+      procedureConcept,
+    } = payload;
 
     if (!patient_id || !procedure_name || !procedure_date) {
       throw new BadRequestException('patient_id, procedure_name and procedure_date are required');
@@ -503,12 +683,20 @@ export class OphthalmologyService {
       await this.ensureEncounterPaymentCleared(tenantDb, encounter_id);
     }
 
+    const resolvedProcedureConcept = await this.resolveConcept(
+      tenantDb,
+      procedure_concept ?? procedureConcept,
+    );
+    const procedureNameValue = procedure_name || resolvedProcedureConcept?.term || null;
+
     const [procedure] = await tenantDb.query(
       `
       INSERT INTO ophthalmology_procedures (
         patient_id,
         encounter_id,
         procedure_name,
+        procedure_snomed_code,
+        procedure_snomed_term,
         procedure_date,
         eye,
         outcome,
@@ -517,10 +705,23 @@ export class OphthalmologyService {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW()
+      )
       RETURNING *
       `,
-      [patient_id, encounter_id, procedure_name, procedure_date, eye, outcome, complications, surgeon_id],
+      [
+        patient_id,
+        encounter_id,
+        procedureNameValue,
+        resolvedProcedureConcept?.conceptId ?? null,
+        resolvedProcedureConcept?.term ?? null,
+        procedure_date,
+        eye,
+        outcome,
+        complications,
+        surgeon_id,
+      ],
     );
 
     this.logger.log(`Recorded ophthalmology procedure ${procedure.id} for patient ${patient_id}`);

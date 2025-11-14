@@ -130,6 +130,41 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_codes JSONB DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_orders_snomed_concept ON orders(snomed_concept_id);
 
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_term TEXT;
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_module_id VARCHAR(50);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_definition_status VARCHAR(50);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_term TEXT;
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_module_id VARCHAR(50);
+ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_definition_status VARCHAR(50);
+CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_complaint_snomed ON ophthalmology_encounters(chief_complaint_snomed_code);
+CREATE INDEX IF NOT EXISTS idx_ophthalmology_encounters_assessment_snomed ON ophthalmology_encounters(assessment_snomed_code);
+
+ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS structure_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS structure_snomed_term TEXT;
+ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS observation_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS observation_snomed_term TEXT;
+
+ALTER TABLE ophthalmology_procedures ADD COLUMN IF NOT EXISTS procedure_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_procedures ADD COLUMN IF NOT EXISTS procedure_snomed_term TEXT;
+
+ALTER TABLE ophthalmology_follow_ups ADD COLUMN IF NOT EXISTS reason_snomed_code VARCHAR(50);
+ALTER TABLE ophthalmology_follow_ups ADD COLUMN IF NOT EXISTS reason_snomed_term TEXT;
+
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50);
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT;
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_module_id VARCHAR(50);
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_definition_status VARCHAR(50);
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_code VARCHAR(50);
+ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_term TEXT;
+
+ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_code VARCHAR(50);
+ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_term TEXT;
+ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50);
+ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT;
+CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_snomed ON sti_tests(infection_snomed_code);
+
 SELECT '✅ SNOMED CT tables created/updated successfully for $DB_NAME' as status;
 EOF
 

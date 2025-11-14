@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 
 type OphthalmologyEncounter = {
   id: string;
@@ -101,8 +102,29 @@ const OphthalmologyDashboard: React.FC = () => {
   const [dashboardSummary, setDashboardSummary] = useState<OphthalmologyDashboardSummary | null>(null);
   const [modalState, setModalState] = useState<ModalState>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [chiefComplaintConcept, setChiefComplaintConcept] = useState<SnomedConcept | null>(null);
+  const [assessmentConcept, setAssessmentConcept] = useState<SnomedConcept | null>(null);
+  const [slitStructureConcept, setSlitStructureConcept] = useState<SnomedConcept | null>(null);
+  const [slitObservationConcept, setSlitObservationConcept] = useState<SnomedConcept | null>(null);
+  const [followUpReasonConcept, setFollowUpReasonConcept] = useState<SnomedConcept | null>(null);
+  const [procedureConcept, setProcedureConcept] = useState<SnomedConcept | null>(null);
 
   const token = useMemo(() => localStorage.getItem('ehr_token'), []);
+
+  const resetSnomedSelections = () => {
+    setChiefComplaintConcept(null);
+    setAssessmentConcept(null);
+    setSlitStructureConcept(null);
+    setSlitObservationConcept(null);
+    setFollowUpReasonConcept(null);
+    setProcedureConcept(null);
+  };
+
+  useEffect(() => {
+    if (!modalState) {
+      resetSnomedSelections();
+    }
+  }, [modalState]);
 
   const ensureAuth = useCallback(() => {
     if (!token || !tenantSlug) {
@@ -211,6 +233,8 @@ const OphthalmologyDashboard: React.FC = () => {
             fee_amount: formData.get('fee_amount')
               ? Number(formData.get('fee_amount'))
               : null,
+            chiefComplaintConcept: chiefComplaintConcept,
+            assessmentConcept: assessmentConcept,
           };
           await ehrApi.createOphthalmologyEncounter(tenantSlug!, token!, payload);
           showSuccess(
@@ -259,6 +283,8 @@ const OphthalmologyDashboard: React.FC = () => {
             structure: formData.get('structure'),
             observation: formData.get('observation'),
             severity: formData.get('severity') || null,
+            structureConcept: slitStructureConcept,
+            observationConcept: slitObservationConcept,
           };
           await ehrApi.addOphthalmologySlitLampFinding(tenantSlug!, token!, modalState.encounterId, payload);
           showSuccess('Slit-lamp finding saved', 'Anterior segment findings captured.');
@@ -290,6 +316,7 @@ const OphthalmologyDashboard: React.FC = () => {
             priority: formData.get('priority') || 'routine',
             status: formData.get('status') || 'scheduled',
             related_encounter_id: modalState.encounterId || formData.get('related_encounter_id') || null,
+            reasonConcept: followUpReasonConcept,
           };
           await ehrApi.scheduleOphthalmologyFollowUp(tenantSlug!, token!, payload);
           showSuccess('Follow-up scheduled', 'Patient follow-up added to queue.');
@@ -309,6 +336,7 @@ const OphthalmologyDashboard: React.FC = () => {
             outcome: formData.get('outcome') || null,
             complications: formData.get('complications') || null,
             surgeon_id: formData.get('surgeon_id') || null,
+            procedureConcept,
           };
           await ehrApi.recordOphthalmologyProcedure(tenantSlug!, token!, payload);
           showSuccess('Procedure recorded', 'Ophthalmology procedure saved.');
@@ -449,6 +477,18 @@ const OphthalmologyDashboard: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Patient-reported symptoms, duration, associated features"
                     />
+                {token && tenantSlug && (
+                  <div className="mt-3">
+                    <SnomedConceptPicker
+                      value={chiefComplaintConcept}
+                      onChange={setChiefComplaintConcept}
+                      token={token!}
+                      tenantSlug={tenantSlug!}
+                      label="Chief complaint SNOMED concept"
+                      helperText="Optional structured code to standardize presenting symptoms."
+                    />
+                  </div>
+                )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Assessment & Plan</label>
@@ -458,6 +498,18 @@ const OphthalmologyDashboard: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-2 mb-3"
                       placeholder="Assessment summary"
                     />
+                {token && tenantSlug && (
+                  <div className="mt-3">
+                    <SnomedConceptPicker
+                      value={assessmentConcept}
+                      onChange={setAssessmentConcept}
+                      token={token!}
+                      tenantSlug={tenantSlug!}
+                      label="Assessment SNOMED concept"
+                      helperText="Add a coded diagnosis to keep downstream reporting aligned."
+                    />
+                  </div>
+                )}
                     <textarea
                       name="plan"
                       rows={3}
@@ -570,6 +622,18 @@ const OphthalmologyDashboard: React.FC = () => {
                         className="w-full border rounded-lg px-3 py-2"
                         placeholder="e.g. Cornea, Conjunctiva, Lens"
                       />
+                      {token && tenantSlug && (
+                        <div className="mt-2">
+                          <SnomedConceptPicker
+                            value={slitStructureConcept}
+                            onChange={setSlitStructureConcept}
+                            token={token!}
+                            tenantSlug={tenantSlug!}
+                            label="Structure SNOMED concept"
+                            helperText="Optional structured code for the anatomical structure examined."
+                          />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Severity</label>
@@ -585,6 +649,18 @@ const OphthalmologyDashboard: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Detail the findings, staining, infiltrates, cells/flare..."
                     />
+                    {token && tenantSlug && (
+                      <div className="mt-2">
+                        <SnomedConceptPicker
+                          value={slitObservationConcept}
+                          onChange={setSlitObservationConcept}
+                          token={token!}
+                          tenantSlug={tenantSlug!}
+                          label="Observation SNOMED concept"
+                          helperText="Capture a coded description for analytics and interoperability."
+                        />
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -666,6 +742,18 @@ const OphthalmologyDashboard: React.FC = () => {
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Planned review, post-op check, diagnostic follow-up..."
                     />
+                    {token && tenantSlug && (
+                      <div className="mt-2">
+                        <SnomedConceptPicker
+                          value={followUpReasonConcept}
+                          onChange={setFollowUpReasonConcept}
+                          token={token!}
+                          tenantSlug={tenantSlug!}
+                          label="Follow-up reason SNOMED concept"
+                          helperText="Optional — pick a coded reason to keep the follow-up queue structured."
+                        />
+                      </div>
+                    )}
                   </div>
                   {!modalState.encounterId && (
                     <div>
@@ -688,6 +776,18 @@ const OphthalmologyDashboard: React.FC = () => {
                         className="w-full border rounded-lg px-3 py-2"
                         placeholder="e.g. Cataract extraction"
                       />
+                      {token && tenantSlug && (
+                        <div className="mt-2">
+                          <SnomedConceptPicker
+                            value={procedureConcept}
+                            onChange={setProcedureConcept}
+                            token={token!}
+                            tenantSlug={tenantSlug!}
+                            label="Procedure SNOMED concept"
+                            helperText="Save a coded intervention to power analytics and billing alignment."
+                          />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Procedure Date</label>

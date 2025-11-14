@@ -9,6 +9,14 @@ import { HivTptTrackerService } from './hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './hiv-pediatric-dosing.service';
 import { AppointmentService } from './appointment.service';
 import { TenantService } from './tenant.service';
+import { TerminologyService } from './terminology.service';
+
+interface StoredConceptSummary {
+  conceptId: string;
+  term: string;
+  moduleId?: string;
+  definitionStatus?: string;
+}
 
 @Injectable()
 export class HivService {
@@ -24,8 +32,77 @@ export class HivService {
     private pediatricDosingService: HivPediatricDosingService,
     @Inject(forwardRef(() => AppointmentService))
     private appointmentService: AppointmentService,
-    private tenantService: TenantService
+    private tenantService: TenantService,
+    private readonly terminologyService: TerminologyService,
   ) {}
+
+  private extractConceptId(candidate: any): string | null {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.trim();
+    }
+    return (
+      candidate?.conceptId ??
+      candidate?.snomedConceptId ??
+      candidate?.snomedCode ??
+      candidate?.code ??
+      null
+    );
+  }
+
+  private async resolveConcept(tenantDb: DataSource, raw: any): Promise<StoredConceptSummary | null> {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const conceptIdCandidate = this.extractConceptId(raw);
+    if (!conceptIdCandidate) {
+      return null;
+    }
+
+    const conceptId = String(conceptIdCandidate).trim();
+    let validated:
+      | {
+          conceptId: string;
+          preferredTerm?: string;
+          term?: string;
+          moduleId?: string;
+          definitionStatus?: string;
+        }
+      | null = null;
+
+    if (/^\d+$/.test(conceptId)) {
+      try {
+        validated = await this.terminologyService.validateConcept(tenantDb, conceptId);
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for concept "${conceptId}": ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`Received non-numeric SNOMED concept "${conceptId}" for HIV payload.`);
+      return null;
+    }
+
+    const rawTerm =
+      (typeof raw === 'object' && (raw.preferredTerm || raw.term || raw.fullySpecifiedName)) || null;
+    const term = rawTerm ?? validated?.preferredTerm ?? validated?.term ?? null;
+
+    if (!term && !validated) {
+      return null;
+    }
+
+    return {
+      conceptId: validated?.conceptId ?? conceptId,
+      term: term ?? '',
+      moduleId: validated?.moduleId ?? raw?.moduleId,
+      definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
+    };
+  }
 
   private hydrateNurseIntake(row: any) {
     if (!row) {
@@ -215,6 +292,10 @@ export class HivService {
       followUpActions = [],
       testingContext = {},
       stis = [],
+      testConcept,
+      test_concept,
+      specimenConcept,
+      specimen_concept,
     } = body;
 
     if (!patientId || !testedBy) {
@@ -244,24 +325,45 @@ export class HivService {
     const normalizedContext =
       testingContext && typeof testingContext === 'object' ? testingContext : {};
 
+    const [resolvedTestConcept, resolvedSpecimenConcept] = await Promise.all([
+      this.resolveConcept(tenantDb, test_concept ?? testConcept),
+      this.resolveConcept(tenantDb, specimen_concept ?? specimenConcept),
+    ]);
+
     const normalizedStiPayload = Array.isArray(stis)
-      ? stis
-          .filter((item) => item && item.infectionType)
-          .map((item) => ({
-            infectionType: item.infectionType,
-            testType: item.testType || null,
-            testMethod: item.testMethod || null,
-            specimenType: item.specimenType || null,
-            anatomicSite: item.anatomicSite || null,
-            result: item.result || 'pending',
-            resultValue: item.resultValue || null,
-            resultUnit: item.resultUnit || null,
-            treatmentProvided:
-              typeof item.treatmentProvided === 'boolean' ? item.treatmentProvided : false,
-            treatmentRegimen: item.treatmentRegimen || null,
-            treatmentDate: item.treatmentDate || null,
-            notes: item.notes || null,
-          }))
+      ? (
+          await Promise.all(
+            stis
+              .filter((item) => item && item.infectionType)
+              .map(async (item) => {
+                const infectionConcept = await this.resolveConcept(
+                  tenantDb,
+                  item.infection_concept ?? item.infectionConcept,
+                );
+                const stiTestConcept = await this.resolveConcept(
+                  tenantDb,
+                  item.test_concept ?? item.testConcept,
+                );
+                return {
+                  infectionType: item.infectionType,
+                  testType: item.testType || null,
+                  testMethod: item.testMethod || null,
+                  specimenType: item.specimenType || null,
+                  anatomicSite: item.anatomicSite || null,
+                  result: item.result || 'pending',
+                  resultValue: item.resultValue || null,
+                  resultUnit: item.resultUnit || null,
+                  treatmentProvided:
+                    typeof item.treatmentProvided === 'boolean' ? item.treatmentProvided : false,
+                  treatmentRegimen: item.treatmentRegimen || null,
+                  treatmentDate: item.treatmentDate || null,
+                  notes: item.notes || null,
+                  infectionConcept,
+                  testConcept: stiTestConcept,
+                };
+              }),
+          )
+        ).filter(Boolean)
       : [];
 
     const stisScreened = normalizedStiPayload.map((item) => item.infectionType);
@@ -279,6 +381,12 @@ export class HivService {
         testing_location,
         testing_cadre,
         specimen_type,
+        test_snomed_code,
+        test_snomed_term,
+        test_snomed_module_id,
+        test_snomed_definition_status,
+        specimen_snomed_code,
+        specimen_snomed_term,
         kit_type,
         test_kit_name,
         test_kit_lot,
@@ -314,10 +422,11 @@ export class HivService {
         next_test_due_date
       )
       VALUES (
-        $1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, false, NULL, $18, NULL, $19, NULL, NULL, $20,
-        false, false, NULL, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-        $30::jsonb, $31::jsonb, $32::jsonb, $33::jsonb, $34
+        $1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9,
+        $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, false, NULL, $24, NULL, $25, NULL, NULL, $26,
+        false, false, NULL, $27, $28, $29, $30, $31, $32, $33, $34, $35,
+        $36::jsonb, $37::jsonb, $38::jsonb, $39::jsonb, $40
       )
       RETURNING *
     `,
@@ -331,6 +440,12 @@ export class HivService {
         testingLocation || null,
         testingCadre || null,
         specimenType || null,
+        resolvedTestConcept?.conceptId ?? null,
+        resolvedTestConcept?.term ?? null,
+        resolvedTestConcept?.moduleId ?? null,
+        resolvedTestConcept?.definitionStatus ?? null,
+        resolvedSpecimenConcept?.conceptId ?? null,
+        resolvedSpecimenConcept?.term ?? null,
         kitType || null,
         testKitName,
         testKitLot || null,
@@ -369,8 +484,12 @@ export class HivService {
             patient_id,
             hiv_test_id,
             infection_type,
+            infection_snomed_code,
+            infection_snomed_term,
             test_type,
             test_method,
+            test_snomed_code,
+            test_snomed_term,
             specimen_type,
             anatomic_site,
             result,
@@ -383,15 +502,19 @@ export class HivService {
             ordered_by
           )
           VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
           )
         `,
           [
             patientId,
             createdTest.id,
             sti.infectionType,
+            sti.infectionConcept?.conceptId ?? null,
+            sti.infectionConcept?.term ?? null,
             sti.testType,
             sti.testMethod,
+            sti.testConcept?.conceptId ?? null,
+            sti.testConcept?.term ?? null,
             sti.specimenType,
             sti.anatomicSite,
             sti.result,

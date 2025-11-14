@@ -2389,7 +2389,7 @@ export class DatabaseProvisioningService {
     )`);
 
     // Financial Transactions Core Tables
-    statements.push(\`CREATE TABLE IF NOT EXISTS financial_transactions (
+    statements.push(`CREATE TABLE IF NOT EXISTS financial_transactions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
       payer_type VARCHAR(30) DEFAULT 'self' CHECK (payer_type IN ('self','medical_aid','corporate')),
@@ -2405,13 +2405,13 @@ export class DatabaseProvisioningService {
       created_by UUID REFERENCES users(id),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_patient ON financial_transactions(patient_id)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_status ON financial_transactions(payment_status)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_module ON financial_transactions(source_module)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_transactions_due_date ON financial_transactions(due_date)\`);
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_transactions_patient ON financial_transactions(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_transactions_status ON financial_transactions(payment_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_transactions_module ON financial_transactions(source_module)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_transactions_due_date ON financial_transactions(due_date)`);
 
-    statements.push(\`CREATE TABLE IF NOT EXISTS financial_line_items (
+    statements.push(`CREATE TABLE IF NOT EXISTS financial_line_items (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
       description TEXT NOT NULL,
@@ -2424,11 +2424,11 @@ export class DatabaseProvisioningService {
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_line_items_transaction ON financial_line_items(transaction_id)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_line_items_code ON financial_line_items(billing_code)\`);
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_line_items_transaction ON financial_line_items(transaction_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_line_items_code ON financial_line_items(billing_code)`);
 
-    statements.push(\`CREATE TABLE IF NOT EXISTS financial_payments (
+    statements.push(`CREATE TABLE IF NOT EXISTS financial_payments (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
       payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('cash','card','mobile_money','bank_transfer','medical_aid','write_off')),
@@ -2441,12 +2441,12 @@ export class DatabaseProvisioningService {
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_transaction ON financial_payments(transaction_id)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_method ON financial_payments(payment_method)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_payments_status ON financial_payments(status)\`);
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_payments_transaction ON financial_payments(transaction_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_payments_method ON financial_payments(payment_method)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_payments_status ON financial_payments(status)`);
 
-    statements.push(\`CREATE TABLE IF NOT EXISTS financial_claims (
+    statements.push(`CREATE TABLE IF NOT EXISTS financial_claims (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       transaction_id UUID NOT NULL REFERENCES financial_transactions(id) ON DELETE CASCADE,
       claim_number VARCHAR(100),
@@ -2460,12 +2460,12 @@ export class DatabaseProvisioningService {
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_transaction ON financial_claims(transaction_id)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_status ON financial_claims(status)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_claims_number ON financial_claims(claim_number)\`);
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_claims_transaction ON financial_claims(transaction_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_claims_status ON financial_claims(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_claims_number ON financial_claims(claim_number)`);
 
-    statements.push(\`CREATE TABLE IF NOT EXISTS financial_reconciliation_logs (
+    statements.push(`CREATE TABLE IF NOT EXISTS financial_reconciliation_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       transaction_id UUID REFERENCES financial_transactions(id) ON DELETE SET NULL,
       payment_reference VARCHAR(150),
@@ -2477,9 +2477,9 @@ export class DatabaseProvisioningService {
       metadata JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_status ON financial_reconciliation_logs(status)\`);
-    statements.push(\`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_reference ON financial_reconciliation_logs(payment_reference)\`);
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_status ON financial_reconciliation_logs(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_financial_reconciliation_reference ON financial_reconciliation_logs(payment_reference)`);
 
     // Cardiology module
     statements.push(`CREATE TABLE IF NOT EXISTS cardiology_encounters (
@@ -2794,7 +2794,23 @@ export class DatabaseProvisioningService {
       `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_term TEXT`,
       `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_module_id VARCHAR(50)`,
       `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_definition_status VARCHAR(50)`,
-      `CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_snomed ON oncology_adverse_events(event_snomed_code)`
+      `CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_snomed ON oncology_adverse_events(event_snomed_code)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_term TEXT`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS chief_complaint_snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_term TEXT`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_encounters ADD COLUMN IF NOT EXISTS assessment_snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS structure_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS structure_snomed_term TEXT`,
+      `ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS observation_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_slit_lamp_findings ADD COLUMN IF NOT EXISTS observation_snomed_term TEXT`,
+      `ALTER TABLE ophthalmology_procedures ADD COLUMN IF NOT EXISTS procedure_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_procedures ADD COLUMN IF NOT EXISTS procedure_snomed_term TEXT`,
+      `ALTER TABLE ophthalmology_follow_ups ADD COLUMN IF NOT EXISTS reason_snomed_code VARCHAR(50)`,
+      `ALTER TABLE ophthalmology_follow_ups ADD COLUMN IF NOT EXISTS reason_snomed_term TEXT`
     ];
   }
 
@@ -3615,13 +3631,13 @@ export class DatabaseProvisioningService {
       { modality: 'XR', code: 'CXR-PA', name: 'Chest X-Ray (PA)', body: 'Chest', views: '{PA}', images: 1, contrast: false, cost: 25.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
       { modality: 'XR', code: 'CXR-PA-LAT', name: 'Chest X-Ray (PA & Lateral)', body: 'Chest', views: '{PA,Lateral}', images: 2, contrast: false, cost: 35.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
       { modality: 'XR', code: 'SPINE-L', name: 'Lumbar Spine X-Ray', body: 'Lumbar Spine', views: '{AP,Lateral}', images: 2, contrast: false, cost: 45.00, prep: 'Remove metal objects. Stand still during imaging.' },
-      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: NULL, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
-      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: NULL, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
-      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: NULL, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: NULL, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: NULL, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
-      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: NULL, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
-      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: NULL, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
+      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: null, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
+      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: null, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
+      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: null, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
+      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: null, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
+      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: null, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
+      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: null, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
+      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: null, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
       { modality: 'MG', code: 'MG-SCREENING', name: 'Screening Mammogram', body: 'Breast', views: '{CC,MLO}', images: 4, contrast: false, cost: 120.00, prep: 'Avoid deodorant/powder on exam day. Wear two-piece clothing.' }
     ];
 
@@ -3677,4 +3693,10 @@ export class DatabaseProvisioningService {
       // Drop database
       await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
       
-      this.logger.log(`
+      this.logger.log(`Database ${databaseName} deleted successfully`);
+    } catch (error) {
+      this.logger.error(`Failed to delete database ${databaseName}:`, error);
+      throw error;
+    }
+  }
+}
