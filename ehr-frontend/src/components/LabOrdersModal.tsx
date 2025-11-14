@@ -4,6 +4,7 @@ import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Appointment {
   id: string;
@@ -40,6 +41,8 @@ interface SelectedTest {
   category: string;
   specimenType: string;
   instructions?: string;
+  loincCode?: string;
+  cost?: number;
 }
 
 interface LabOrdersModalProps {
@@ -64,6 +67,7 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
   const [clinicalInfo, setClinicalInfo] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [loadingTests, setLoadingTests] = useState(false);
+  const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -74,6 +78,7 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       setPriority('routine');
       setClinicalInfo('');
       setSpecialInstructions('');
+      setOrderConcept(null);
       return;
     }
     loadTests();
@@ -137,7 +142,9 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
         testCode: test.testCode || '',
         category: test.category,
         specimenType: test.specimenType,
-        instructions: `Part of ${orderSet.setName} panel`
+        instructions: `Part of ${orderSet.setName} panel`,
+        loincCode: test.loincCode,
+        cost: (test as any).cost,
       }));
 
       // Merge with existing, avoiding duplicates
@@ -165,7 +172,9 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       testName: test.testName,
       testCode: test.testCode || '',
       category: test.category,
-      specimenType: test.specimenType
+      specimenType: test.specimenType,
+      loincCode: test.loincCode,
+      cost: (test as any).cost,
     }]);
     setShowTestSearch(false);
     setSearchTerm('');
@@ -181,6 +190,11 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       return;
     }
 
+    if (!orderConcept) {
+      showError('SNOMED Required', 'Please select the SNOMED CT concept for this lab order.');
+      return;
+    }
+
     try {
       setLoading(true);
       const userData = localStorage.getItem('ehr_user');
@@ -188,6 +202,7 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       if (!currentUser) throw new Error('User not found');
 
       const totalCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
+      const representativeTest = selectedTests[0];
 
       const labOrderData = {
         patientId: appointment.patient.id,
@@ -197,12 +212,19 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
           testName: t.testName,
           category: t.category,
           specimenType: t.specimenType,
-          instructions: t.instructions
+          instructions: t.instructions,
+          loincCode: t.loincCode,
         })),
         priority: priority,
         clinicalInfo: clinicalInfo || null,
         specialInstructions: specialInstructions || null,
-        scheduledDateTime: new Date().toISOString()
+        scheduledDateTime: new Date().toISOString(),
+        snomedConceptId: orderConcept.conceptId,
+        snomedTerm: orderConcept.preferredTerm || orderConcept.term,
+        snomedModuleId: orderConcept.moduleId,
+        snomedDefinitionStatus: orderConcept.definitionStatus,
+        loincCode:
+          selectedTests.length === 1 ? representativeTest.loincCode : undefined,
       };
 
       await ehrApi.createLabOrder(labOrderData, token, tenantSlug);
@@ -273,6 +295,18 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
 
           {/* Content - Scrollable */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+              <SnomedConceptPicker
+                value={orderConcept}
+                onChange={setOrderConcept}
+                token={token}
+                tenantSlug={tenantSlug}
+                label="SNOMED CT Order Concept"
+                placeholder="Search SNOMED CT (e.g., Complete blood count)"
+                helperText="Select the standardized SNOMED CT concept for this laboratory order."
+                required
+              />
+            </div>
             {/* Order Sets Section */}
             {orderSets.length > 0 && (
               <div>

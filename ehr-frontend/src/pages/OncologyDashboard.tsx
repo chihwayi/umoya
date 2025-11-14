@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Activity,
@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 
 type OncologyCase = {
   id: string;
@@ -29,6 +30,8 @@ type OncologyCase = {
   patient_name?: string;
   patient_number?: string;
   primary_diagnosis: string;
+  primary_diagnosis_snomed_code?: string | null;
+  primary_diagnosis_snomed_term?: string | null;
   diagnosis_date?: string;
   overall_stage?: string;
   stage_at_diagnosis?: string;
@@ -108,6 +111,12 @@ const OncologyDashboard: React.FC = () => {
   const [tumorBoardMeetings, setTumorBoardMeetings] = useState<any[]>([]);
 
   const token = useMemo(() => localStorage.getItem('ehr_token'), []);
+  const [primaryDiagnosisConcept, setPrimaryDiagnosisConcept] = useState<SnomedConcept | null>(null);
+  const [regimenConcept, setRegimenConcept] = useState<SnomedConcept | null>(null);
+  const [adverseEventConcept, setAdverseEventConcept] = useState<SnomedConcept | null>(null);
+  const primaryDiagnosisInputRef = useRef<HTMLInputElement | null>(null);
+  const regimenNameInputRef = useRef<HTMLInputElement | null>(null);
+  const adverseEventInputRef = useRef<HTMLInputElement | null>(null);
 
   const ensureAuth = useCallback(() => {
     if (!token || !tenantSlug) {
@@ -185,6 +194,14 @@ const OncologyDashboard: React.FC = () => {
   }, [navigate, tenantSlug]);
 
   useEffect(() => {
+    if (!modalState) {
+      setPrimaryDiagnosisConcept(null);
+      setRegimenConcept(null);
+      setAdverseEventConcept(null);
+    }
+  }, [modalState]);
+
+  useEffect(() => {
     const initialize = async () => {
       setLoading(true);
       await Promise.all([loadSummary(), loadCases(filters.status), loadTumorBoardMeetings()]);
@@ -227,6 +244,9 @@ const OncologyDashboard: React.FC = () => {
             status: formData.get('status') || 'active',
             care_plan: formData.get('care_plan') || null,
           };
+          if (primaryDiagnosisConcept) {
+            payload.primary_diagnosis_concept = primaryDiagnosisConcept;
+          }
           await ehrApi.createOncologyCase(tenantSlug!, token!, payload);
           showSuccess('Oncology case created', 'Case has been added to the registry.');
           await loadCases(filters.status);
@@ -264,6 +284,9 @@ const OncologyDashboard: React.FC = () => {
               ? JSON.parse(formData.get('regimen_details') as string)
               : null,
           };
+          if (regimenConcept) {
+            payload.regimen_concept = regimenConcept;
+          }
           await ehrApi.createOncologyRegimen(tenantSlug!, token!, modalState.caseId, payload);
           showSuccess('Regimen created', 'Therapy regimen has been recorded.');
           if (selectedCaseId) {
@@ -313,6 +336,9 @@ const OncologyDashboard: React.FC = () => {
             resolved_date: formData.get('resolved_date') || null,
             notes: formData.get('notes') || null,
           };
+          if (adverseEventConcept) {
+            payload.event_concept = adverseEventConcept;
+          }
           await ehrApi.recordOncologyAdverseEvent(tenantSlug!, token!, modalState.caseId, payload);
           showSuccess('Adverse event recorded', 'Event has been captured.');
           if (selectedCaseId) {
@@ -452,9 +478,29 @@ const OncologyDashboard: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis</label>
+                      {token && (
+                        <div className="mb-2">
+                          <SnomedConceptPicker
+                            value={primaryDiagnosisConcept}
+                            onChange={(concept) => {
+                              setPrimaryDiagnosisConcept(concept);
+                              if (concept && primaryDiagnosisInputRef.current) {
+                                primaryDiagnosisInputRef.current.value =
+                                  concept.preferredTerm || concept.term || '';
+                              }
+                            }}
+                            token={token}
+                            tenantSlug={tenantSlug!}
+                            label=""
+                            placeholder="Search SNOMED CT (e.g., Invasive ductal carcinoma)"
+                            helperText="Adds a coded primary diagnosis"
+                          />
+                        </div>
+                      )}
                       <input
                         name="primary_diagnosis"
                         required
+                        ref={primaryDiagnosisInputRef}
                         className="w-full border rounded-lg px-3 py-2"
                         placeholder="e.g. Breast carcinoma"
                       />
@@ -574,9 +620,29 @@ const OncologyDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Regimen Name</label>
+                      {token && (
+                        <div className="mb-2">
+                          <SnomedConceptPicker
+                            value={regimenConcept}
+                            onChange={(concept) => {
+                              setRegimenConcept(concept);
+                              if (concept && regimenNameInputRef.current) {
+                                regimenNameInputRef.current.value =
+                                  concept.preferredTerm || concept.term || '';
+                              }
+                            }}
+                            token={token}
+                            tenantSlug={tenantSlug!}
+                            label=""
+                            placeholder="Search SNOMED CT (e.g., Chemotherapy regimen)"
+                            helperText="Optional SNOMED coding for regimen"
+                          />
+                        </div>
+                      )}
                       <input
                         name="regimen_name"
                         required
+                        ref={regimenNameInputRef}
                         className="w-full border rounded-lg px-3 py-2"
                         placeholder="e.g. FOLFOX"
                       />
@@ -747,9 +813,29 @@ const OncologyDashboard: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Event Type</label>
+                      {token && (
+                        <div className="mb-2">
+                          <SnomedConceptPicker
+                            value={adverseEventConcept}
+                            onChange={(concept) => {
+                              setAdverseEventConcept(concept);
+                              if (concept && adverseEventInputRef.current) {
+                                adverseEventInputRef.current.value =
+                                  concept.preferredTerm || concept.term || '';
+                              }
+                            }}
+                            token={token}
+                            tenantSlug={tenantSlug!}
+                            label=""
+                            placeholder="Search SNOMED CT (e.g., Neutropenic sepsis)"
+                            helperText="Capture structured adverse event codes"
+                          />
+                        </div>
+                      )}
                       <input
                         name="event_type"
                         required
+                        ref={adverseEventInputRef}
                         className="w-full border rounded-lg px-3 py-2"
                         placeholder="e.g. Febrile neutropenia"
                       />
@@ -1265,6 +1351,14 @@ const OncologyDashboard: React.FC = () => {
                   <div>
                     <h3 className="text-sm font-semibold text-slate-700">Diagnosis</h3>
                     <p className="text-slate-900 font-medium mt-1">{caseDetail.case.primary_diagnosis}</p>
+                    {caseDetail.case.primary_diagnosis_snomed_term && (
+                      <p className="text-xs text-rose-600 mt-1">
+                        SNOMED: {caseDetail.case.primary_diagnosis_snomed_term}
+                        {caseDetail.case.primary_diagnosis_snomed_code
+                          ? ` (${caseDetail.case.primary_diagnosis_snomed_code})`
+                          : ''}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-400 mt-1">
                       Oncologist: {caseDetail.case.oncologist_name ?? 'Unassigned'}
                     </p>
@@ -1328,6 +1422,12 @@ const OncologyDashboard: React.FC = () => {
                           <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                             <div>
                               <p className="font-medium text-slate-800">{regimen.regimen_name}</p>
+                              {regimen.regimen_snomed_term && (
+                                <p className="text-[11px] text-indigo-600">
+                                  SNOMED: {regimen.regimen_snomed_term}
+                                  {regimen.regimen_snomed_code ? ` (${regimen.regimen_snomed_code})` : ''}
+                                </p>
+                              )}
                               <p className="text-xs text-slate-500">
                                 {regimen.intent ? `${regimen.intent} • ` : ''}
                                 Cycles planned: {regimen.cycles_planned ?? '—'}
@@ -1437,6 +1537,12 @@ const OncologyDashboard: React.FC = () => {
                             <span className="font-medium capitalize">{event.event_type}</span>
                             <span className="text-xs">{formatDateTime(event.event_date)}</span>
                           </div>
+                          {event.event_snomed_term && (
+                            <p className="text-[11px] text-rose-700">
+                              SNOMED: {event.event_snomed_term}
+                              {event.event_snomed_code ? ` (${event.event_snomed_code})` : ''}
+                            </p>
+                          )}
                           <p className="text-xs text-rose-600 mt-1">
                             Grade {event.grade ?? '—'} • Outcome: {event.outcome ?? '—'}
                           </p>

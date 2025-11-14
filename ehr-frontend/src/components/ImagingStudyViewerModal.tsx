@@ -706,6 +706,15 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                           <div className="flex justify-between"><dt className="text-slate-500">Modality</dt><dd className="font-medium">{study.modality_name}</dd></div>
                           <div className="flex justify-between"><dt className="text-slate-500">Technologist</dt><dd className="font-medium">{study.technologist_name || 'Not recorded'}</dd></div>
                           <div className="flex justify-between"><dt className="text-slate-500">Assigned Radiologist</dt><dd className="font-medium">{study.radiologist_name || 'Unassigned'}</dd></div>
+                          {study.snomed_concept_id && (
+                            <>
+                              <div className="flex justify-between border-t pt-2 mt-2"><dt className="text-slate-500">SNOMED Code</dt><dd className="font-medium font-mono text-xs">{study.snomed_concept_id}</dd></div>
+                              <div className="flex justify-between"><dt className="text-slate-500">SNOMED Term</dt><dd className="font-medium">{study.snomed_term || 'N/A'}</dd></div>
+                              {study.cpt_code && (
+                                <div className="flex justify-between"><dt className="text-slate-500">CPT Code</dt><dd className="font-medium font-mono text-xs">{study.cpt_code}</dd></div>
+                              )}
+                            </>
+                          )}
                         </dl>
                       </div>
                     </div>

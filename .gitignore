@@ -127,3 +127,8 @@ coverage/
 # Local development
 .local/
 local/
+# Terminology assets
+snowstorm/
+
+# Local downloads
+downloads/

@@ -2014,12 +2014,15 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                                   testName: 'HIV Viral Load',
                                   category: 'immunology',
                                   specimenType: 'plasma',
-                                  instructions: 'HIV care - Viral Load monitoring'
+                                  instructions: 'HIV care - Viral Load monitoring',
+                                  loincCode: '25836-8'
                                 }],
                                 priority: 'routine',
                                 clinicalInfo: `HIV Clinical Visit - Visit #${form.visitNumber}`,
                                 specialInstructions: `Sample collected on ${form.viralLoadSampleCollectedDate}. Patient: ${enrollment.first_name} ${enrollment.last_name} (${enrollment.enrollment_number})`,
-                                scheduledDateTime: form.viralLoadSampleCollectedDate ? new Date(form.viralLoadSampleCollectedDate).toISOString() : new Date().toISOString()
+                                scheduledDateTime: form.viralLoadSampleCollectedDate ? new Date(form.viralLoadSampleCollectedDate).toISOString() : new Date().toISOString(),
+                                snomedConceptId: '315124006',
+                                snomedTerm: 'Measurement of viral load (procedure)',
                               }, token, tenantSlug);
                               setLabOrderCreated(true);
                               showSuccess(

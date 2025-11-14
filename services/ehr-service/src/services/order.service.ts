@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Order, OrderType, OrderStatus, OrderPriority } from '../entities/order.entity';
 import { TenantService } from './tenant.service';
+import { TerminologyService, SnomedMapping } from './terminology.service';
 
 export interface CreateOrderDto {
   patientId: string;
@@ -15,6 +16,11 @@ export interface CreateOrderDto {
   duration?: string;
   priority?: OrderPriority;
   drugId?: string; // Optional link to drug database
+  snomedConceptId?: string;
+  snomedTerm?: string;
+  snomedModuleId?: string;
+  snomedDefinitionStatus?: string;
+  externalCodes?: Record<string, any>;
 }
 
 export interface UpdateOrderDto {
@@ -24,7 +30,12 @@ export interface UpdateOrderDto {
 
 @Injectable()
 export class OrderService {
-  constructor(private tenantService: TenantService) {}
+  private readonly logger = new Logger(OrderService.name);
+
+  constructor(
+    private tenantService: TenantService,
+    private terminologyService: TerminologyService,
+  ) {}
 
   private async getRepository(tenantId: string): Promise<Repository<Order>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -34,11 +45,72 @@ export class OrderService {
   async createOrder(data: CreateOrderDto, doctorId: string, tenantId: string): Promise<Order> {
     try {
       const repo = await this.getRepository(tenantId);
+      const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+
+      const conceptCandidate =
+        data.snomedConceptId ??
+        (data as any)?.conceptId ??
+        (data as any)?.snomed?.conceptId ??
+        null;
+
+      let snomedConceptId: string | null = null;
+      let snomedTerm: string | null = null;
+      let snomedModuleId: string | null = null;
+      let snomedDefinitionStatus: string | null = null;
+      const externalCodes: Record<string, any> =
+        data.externalCodes && typeof data.externalCodes === 'object'
+          ? { ...data.externalCodes }
+          : {};
+
+      if (conceptCandidate) {
+        if (/^\d+$/.test(String(conceptCandidate))) {
+          try {
+            const concept = await this.terminologyService.validateConcept(
+              tenantDb,
+              String(conceptCandidate),
+            );
+            snomedConceptId = concept?.conceptId ?? null;
+            snomedTerm =
+              data.snomedTerm ??
+              concept?.preferredTerm ??
+              concept?.term ??
+              concept?.fullySpecifiedName ??
+              data.orderName;
+            snomedModuleId = concept?.moduleId ?? null;
+            snomedDefinitionStatus = concept?.definitionStatus ?? null;
+
+            const mappingTargets: Array<'LOINC' | 'CPT'> = ['LOINC', 'CPT'];
+            for (const target of mappingTargets) {
+              if (!externalCodes[target]) {
+                const mappings: SnomedMapping[] = await this.terminologyService
+                  .mapConcept(tenantDb, concept.conceptId, target)
+                  .catch(() => []);
+                if (mappings.length > 0) {
+                  externalCodes[target] = mappings;
+                }
+              }
+            }
+          } catch (error: any) {
+            this.logger.warn(
+              `SNOMED validation failed for order concept "${conceptCandidate}": ${error?.message || error}`,
+            );
+          }
+        } else {
+          this.logger.warn(
+            `Received non-numeric SNOMED concept "${conceptCandidate}" for order – storing as free text.`,
+          );
+        }
+      }
 
       const order = repo.create({
         ...data,
         doctorId,
-        status: OrderStatus.PENDING
+        status: OrderStatus.PENDING,
+        snomedConceptId: snomedConceptId ?? null,
+        snomedTerm: snomedTerm ?? data.orderName,
+        snomedModuleId: snomedModuleId ?? null,
+        snomedDefinitionStatus: snomedDefinitionStatus ?? null,
+        externalCodes: Object.keys(externalCodes).length > 0 ? externalCodes : {},
       });
 
       return await repo.save(order);

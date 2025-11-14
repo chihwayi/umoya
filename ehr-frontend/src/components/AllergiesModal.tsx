@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { chartApi } from '../services/api';
-import { ShieldAlert, X, Save, Plus } from 'lucide-react';
+import { ShieldAlert, X, Plus, Loader2, Info } from 'lucide-react';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface AllergiesModalProps {
   open: boolean;
@@ -14,12 +15,17 @@ interface AllergiesModalProps {
   token: string;
 }
 
-type Allergy = { allergen: string; reaction?: string; severity?: 'mild'|'moderate'|'severe' };
+type AllergyEntry = {
+  allergen: SnomedConcept | null;
+  reaction: SnomedConcept | null;
+  severity: 'mild' | 'moderate' | 'severe';
+};
 
 const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved, appointment, patientId, tenantSlug, token }) => {
   const { showError, showSuccess } = useNotification();
-  const [allergies, setAllergies] = useState<Allergy[]>([{ allergen: '', reaction: '', severity: 'mild' }]);
-  const [loading, setLoading] = useState(false);
+  const [allergies, setAllergies] = useState<AllergyEntry[]>([{ allergen: null, reaction: null, severity: 'mild' }]);
+  const [saving, setSaving] = useState(false);
+  const [loadingAllergies, setLoadingAllergies] = useState(false);
 
   // Get patient ID from either appointment or direct prop
   const actualPatientId = patientId || appointment?.patient?.id;
@@ -29,27 +35,45 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
     
     // Load allergies from structured table
     const loadAllergies = async () => {
+      setLoadingAllergies(true);
       try {
         const response = await chartApi.getAllergies(actualPatientId, token, tenantSlug);
         const existingAllergies = response.data || [];
         
         if (existingAllergies.length > 0) {
           setAllergies(existingAllergies.map((a: any) => ({
-            allergen: a.allergen || '',
-            reaction: a.reaction || '',
-            severity: a.severity || 'mild'
+            allergen: a.allergenSnomedCode || a.code || a.allergen
+              ? {
+                  conceptId: String(a.allergenSnomedCode || a.snomedConceptId || a.code || ''),
+                  term: a.allergenSnomedTerm || a.allergen || '',
+                  preferredTerm: a.allergenSnomedTerm || a.allergen || '',
+                  moduleId: a.allergenSnomedModuleId,
+                }
+              : null,
+            reaction: a.reactionSnomedCode
+              ? {
+                  conceptId: String(a.reactionSnomedCode),
+                  term: a.reactionSnomedTerm || a.reaction || '',
+                  preferredTerm: a.reactionSnomedTerm || a.reaction || '',
+                }
+              : null,
+            severity: (a.severity as 'mild' | 'moderate' | 'severe') || 'mild'
           })));
         } else {
-          setAllergies([{ allergen: '', reaction: '', severity: 'mild' }]);
+          setAllergies([{ allergen: null, reaction: null, severity: 'mild' }]);
         }
       } catch (e) {
         console.error('Failed to load allergies:', e);
-        setAllergies([{ allergen: '', reaction: '', severity: 'mild' }]);
+        setAllergies([{ allergen: null, reaction: null, severity: 'mild' }]);
+        const raw = (e as any)?.response?.data;
+        const msg = raw?.message || raw?.error || raw || 'Unable to load allergies';
+        showError('Allergies', typeof msg === 'string' ? msg : JSON.stringify(msg));
       }
+      setLoadingAllergies(false);
     };
 
     loadAllergies();
-  }, [open, actualPatientId, token, tenantSlug]);
+  }, [open, actualPatientId, token, tenantSlug, showError]);
 
   const handleSave = async () => {
     if (!actualPatientId) {
@@ -57,17 +81,30 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
       return;
     }
     try {
-      setLoading(true);
-      const valid = allergies.filter(a => a.allergen.trim());
+      setSaving(true);
+      const valid = allergies
+        .filter((entry) => entry.allergen && entry.allergen.conceptId)
+        .map((entry) => ({
+          allergenSnomedConceptId: entry.allergen!.conceptId,
+          allergenTerm: entry.allergen!.preferredTerm || entry.allergen!.term,
+          reactionSnomedConceptId: entry.reaction?.conceptId || null,
+          reactionTerm: entry.reaction?.preferredTerm || entry.reaction?.term || null,
+          severity: entry.severity,
+        }));
+
+      if (valid.length === 0) {
+        throw new Error('Please capture at least one SNOMED-coded allergy');
+      }
+
       await chartApi.replaceAllergies(actualPatientId, valid, token, tenantSlug);
-      showSuccess('Saved', 'Allergies updated');
+      showSuccess('Allergies Saved', 'Structured allergies updated successfully');
       onSaved();
       onClose();
     } catch (e: any) {
       const raw = e?.response?.data; const msg = raw?.message || raw?.error || raw || 'Failed to save allergies';
       showError('Error', typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -85,31 +122,105 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {allergies.map((a, idx) => (
-              <div key={idx} className="p-4 bg-white/70 rounded-xl border border-slate-200/60 space-y-3">
-                <input className="w-full border border-slate-300 rounded-xl p-3" placeholder="Allergen (e.g., Penicillin)" value={a.allergen} onChange={(e)=>setAllergies(prev=>prev.map((it,i)=>i===idx?{...it,allergen:e.target.value}:it))} />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                  <input className="border border-slate-300 rounded-xl p-2" placeholder="Reaction" value={a.reaction||''} onChange={(e)=>setAllergies(prev=>prev.map((it,i)=>i===idx?{...it,reaction:e.target.value}:it))} />
-                  <select className="border border-slate-300 rounded-xl p-2" value={a.severity||'mild'} onChange={(e)=>setAllergies(prev=>prev.map((it,i)=>i===idx?{...it,severity:e.target.value as any}:it))}>
-                    <option value="mild">Mild</option>
-                    <option value="moderate">Moderate</option>
-                    <option value="severe">Severe</option>
-                  </select>
-                </div>
-                <div className="flex justify-end">
-                  {allergies.length>1 && (
-                    <button onClick={()=>setAllergies(prev=>prev.filter((_,i)=>i!==idx))} className="text-red-600 text-xs px-3 py-1 border border-red-200 rounded-lg">Remove</button>
-                  )}
-                </div>
+            {loadingAllergies ? (
+              <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200/60 bg-slate-50 py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
+                <p className="text-sm text-slate-600">Loading allergy profile…</p>
               </div>
-            ))}
-            <button onClick={()=>setAllergies(prev=>[...prev,{ allergen:'', reaction:'', severity:'mild' }])} className="px-3 py-2 rounded-lg border border-slate-300 text-slate-700 flex items-center gap-2 w-full justify-center">
-              <Plus className="w-4 h-4" /> Add Allergy
-            </button>
+            ) : (
+              <>
+                {allergies.map((entry, idx) => (
+                  <div key={idx} className="space-y-4 rounded-2xl border border-slate-200/60 bg-white/70 p-4">
+                    <SnomedConceptPicker
+                      value={entry.allergen}
+                      onChange={(concept) =>
+                        setAllergies((prev) =>
+                          prev.map((item, itemIdx) =>
+                            itemIdx === idx ? { ...item, allergen: concept } : item,
+                          ),
+                        )
+                      }
+                      token={token}
+                      tenantSlug={tenantSlug}
+                      label="Allergen"
+                      placeholder="Search SNOMED CT (e.g., Penicillin)"
+                      helperText="Use SNOMED CT agent/allergen concepts"
+                      required
+                    />
+                    <SnomedConceptPicker
+                      value={entry.reaction}
+                      onChange={(concept) =>
+                        setAllergies((prev) =>
+                          prev.map((item, itemIdx) =>
+                            itemIdx === idx ? { ...item, reaction: concept } : item,
+                          ),
+                        )
+                      }
+                      token={token}
+                      tenantSlug={tenantSlug}
+                      label="Reaction (optional)"
+                      placeholder="Search reaction (e.g., Anaphylaxis)"
+                      helperText="Optional: capture SNOMED-coded reaction outcome"
+                      required={false}
+                    />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold text-slate-600">Severity</label>
+                      <select
+                        className="rounded-xl border border-slate-300 p-2 text-sm"
+                        value={entry.severity}
+                        onChange={(event) =>
+                          setAllergies((prev) =>
+                            prev.map((item, itemIdx) =>
+                              itemIdx === idx ? { ...item, severity: event.target.value as 'mild' | 'moderate' | 'severe' } : item,
+                            ),
+                          )
+                        }
+                      >
+                        <option value="mild">Mild</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="severe">Severe</option>
+                      </select>
+                    </div>
+                    {allergies.length > 1 && (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() =>
+                            setAllergies((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
+                          }
+                          className="text-xs text-rose-600 border border-rose-200 px-3 py-1 rounded-lg"
+                        >
+                          Remove Allergy
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setAllergies((prev) => [...prev, { allergen: null, reaction: null, severity: 'mild' }])}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-slate-700"
+                >
+                  <Plus className="h-4 w-4" /> Add Allergy
+                </button>
+              </>
+            )}
+            <div className="flex items-start gap-3 rounded-2xl bg-rose-50/80 px-4 py-3 text-sm text-rose-900">
+              <Info className="h-5 w-5 text-rose-500" />
+              <div>
+                Coding allergens with SNOMED improves interaction checking and keeps the allergy list interoperable.
+                Reactions are optional but useful for CDS and clinical summaries.
+              </div>
+            </div>
           </div>
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
             <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
-            <button onClick={handleSave} disabled={loading} className="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-600 to-red-600 text-white">{loading?'Saving...':'Save Allergies'}</button>
+            <button
+              onClick={handleSave}
+              disabled={saving || loadingAllergies}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-rose-600 to-red-600 px-4 py-2 text-white"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {saving ? 'Saving…' : 'Save Allergies'}
+            </button>
           </div>
         </div>
       </div>

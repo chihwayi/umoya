@@ -2,12 +2,16 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
+import { TerminologyService, SnomedMapping } from './terminology.service';
 
 @Injectable()
 export class ImagingService {
   private readonly logger = new Logger(ImagingService.name);
 
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly terminologyService: TerminologyService,
+  ) {}
 
   // ===== MODALITIES & STUDY TYPES =====
 
@@ -139,15 +143,74 @@ export class ImagingService {
       orderStatus = 'awaiting_payment';
     }
 
+    const conceptCandidate =
+      orderData.snomedConceptId ??
+      orderData.conceptId ??
+      orderData?.snomed?.conceptId ??
+      suspected_diagnosis ??
+      null;
+
+    let snomedConceptId: string | null = null;
+    let snomedTerm: string | null = orderData.snomedTerm ?? null;
+    let snomedModuleId: string | null = orderData.snomedModuleId ?? null;
+    let snomedDefinitionStatus: string | null = orderData.snomedDefinitionStatus ?? null;
+    let cptCode: string | null = orderData.cptCode ?? null;
+
+    if (conceptCandidate && /^\d+$/.test(String(conceptCandidate))) {
+      try {
+        const concept = await this.terminologyService.validateConcept(
+          tenantDb,
+          String(conceptCandidate),
+        );
+        snomedConceptId = concept?.conceptId ?? null;
+        snomedTerm =
+          snomedTerm ??
+          concept?.preferredTerm ??
+          concept?.term ??
+          concept?.fullySpecifiedName ??
+          studyName;
+        snomedModuleId = snomedModuleId ?? concept?.moduleId ?? null;
+        snomedDefinitionStatus = snomedDefinitionStatus ?? concept?.definitionStatus ?? null;
+
+        if (!cptCode) {
+          const cptMappings: SnomedMapping[] = await this.terminologyService
+            .mapConcept(tenantDb, concept.conceptId, 'CPT')
+            .catch(() => []);
+          if (cptMappings.length > 0) {
+            cptCode = cptMappings[0].targetCode || null;
+          }
+        }
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for imaging order concept "${conceptCandidate}": ${error?.message || error}`,
+        );
+      }
+    } else if (conceptCandidate) {
+      this.logger.warn(
+        `Received non-numeric SNOMED concept "${conceptCandidate}" for imaging order – storing as free text.`,
+      );
+    }
+
+    if (!snomedTerm) {
+      snomedTerm = studyName;
+    }
+
+    if (!snomedConceptId && conceptCandidate) {
+      snomedConceptId = String(conceptCandidate);
+      snomedTerm = snomedTerm ?? studyName;
+    }
+
     const result = await tenantDb.query(
       `
       INSERT INTO imaging_orders (
         patient_id, order_number, study_type_id, ordering_provider,
         clinical_indication, clinical_history, suspected_diagnosis,
         icd10_codes, priority, order_status, ordered_at, created_by,
-        fee_amount, finance_transaction_id, payment_status
+        fee_amount, finance_transaction_id, payment_status,
+        snomed_concept_id, snomed_term, snomed_module_id,
+        snomed_definition_status, cpt_code
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
       `,
       [
@@ -165,6 +228,11 @@ export class ImagingService {
         feeAmount > 0 ? feeAmount : null,
         financeTransactionId,
         paymentStatus,
+        snomedConceptId,
+        snomedTerm,
+        snomedModuleId,
+        snomedDefinitionStatus,
+        cptCode,
       ],
     );
 
@@ -459,7 +527,12 @@ export class ImagingService {
         io.payment_status,
         io.order_status,
         io.finance_transaction_id,
-        io.fee_amount
+        io.fee_amount,
+        io.snomed_concept_id,
+        io.snomed_term,
+        io.snomed_module_id,
+        io.snomed_definition_status,
+        io.cpt_code
       FROM imaging_studies s
       INNER JOIN patients p ON p.id = s.patient_id
       INNER JOIN imaging_study_types st ON st.id = s.study_type_id

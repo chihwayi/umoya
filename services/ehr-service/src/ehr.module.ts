@@ -40,6 +40,7 @@ import { OncologyController } from './controllers/oncology.controller';
 import { OphthalmologyController } from './controllers/ophthalmology.controller';
 import { FinanceController } from './controllers/finance.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
+import { TerminologyController } from './controllers/terminology.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -86,6 +87,7 @@ import { OncologyService } from './services/oncology.service';
 import { OphthalmologyService } from './services/ophthalmology.service';
 import { FinanceService } from './services/finance.service';
 import { CardiologyService } from './services/cardiology.service';
+import { TerminologyService } from './services/terminology.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -137,6 +139,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     OphthalmologyController,
     CardiologyController,
     FinanceController,
+    TerminologyController,
   ],
   providers: [
     AuthService,
@@ -183,6 +186,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     OphthalmologyService,
     CardiologyService,
     FinanceService,
+    TerminologyService,
     JwtStrategy,
   ],
 })

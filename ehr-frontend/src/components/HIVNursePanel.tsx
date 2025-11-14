@@ -126,9 +126,17 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
       setLoading(true);
       await ehrApi.createLabOrder({
         patientId,
-        tests: [{ testCode: 'VL', testName: 'HIV Viral Load', category: 'virology', specimenType: 'plasma' }],
+        tests: [{
+          testCode: 'VL',
+          testName: 'HIV Viral Load',
+          category: 'virology',
+          specimenType: 'plasma',
+          loincCode: '25836-8'
+        }],
         priority: 'routine',
         clinicalInfo: 'HIV care - Viral Load monitoring',
+        snomedConceptId: '315124006',
+        snomedTerm: 'Measurement of viral load (procedure)',
       }, token, tenantSlug);
       showSuccess('Viral load order submitted. Accounts will release the test once payment is confirmed.');
     } catch (e) {

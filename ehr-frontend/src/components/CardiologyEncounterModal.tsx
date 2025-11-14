@@ -4,6 +4,7 @@ import { X, HeartPulse, Calendar, Search, CreditCard } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 type CardiologyEncounterModalProps = {
   isOpen: boolean;
@@ -48,6 +49,41 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
   const [diagnosticTests, setDiagnosticTests] = useState('');
   const [feeAmount, setFeeAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [reasonConcept, setReasonConcept] = useState<SnomedConcept | null>(null);
+  const [symptomConcepts, setSymptomConcepts] = useState<SnomedConcept[]>([]);
+  const [diagnosticConcepts, setDiagnosticConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingSymptomConcept, setPendingSymptomConcept] = useState<SnomedConcept | null>(null);
+  const [pendingDiagnosticConcept, setPendingDiagnosticConcept] = useState<SnomedConcept | null>(null);
+
+  const handleAddSymptomConcept = () => {
+    if (!pendingSymptomConcept) return;
+    setSymptomConcepts((prev) => {
+      if (prev.some((concept) => concept.conceptId === pendingSymptomConcept.conceptId)) {
+        return prev;
+      }
+      return [...prev, pendingSymptomConcept];
+    });
+    setPendingSymptomConcept(null);
+  };
+
+  const handleRemoveSymptomConcept = (conceptId: string) => {
+    setSymptomConcepts((prev) => prev.filter((concept) => concept.conceptId !== conceptId));
+  };
+
+  const handleAddDiagnosticConcept = () => {
+    if (!pendingDiagnosticConcept) return;
+    setDiagnosticConcepts((prev) => {
+      if (prev.some((concept) => concept.conceptId === pendingDiagnosticConcept.conceptId)) {
+        return prev;
+      }
+      return [...prev, pendingDiagnosticConcept];
+    });
+    setPendingDiagnosticConcept(null);
+  };
+
+  const handleRemoveDiagnosticConcept = (conceptId: string) => {
+    setDiagnosticConcepts((prev) => prev.filter((concept) => concept.conceptId !== conceptId));
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -95,6 +131,11 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
       setDiagnosticTests('');
       setFeeAmount('');
       setSubmitting(false);
+      setReasonConcept(null);
+      setSymptomConcepts([]);
+      setDiagnosticConcepts([]);
+      setPendingSymptomConcept(null);
+      setPendingDiagnosticConcept(null);
     }
   }, [isOpen]);
 
@@ -140,12 +181,15 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
           .filter(Boolean)
       : [];
 
+    const derivedVisitReason =
+      visitReason || reasonConcept?.preferredTerm || reasonConcept?.term || null;
+
     const payload: Record<string, any> = {
       patient_id: selectedPatientId,
       encounter_date: encounterDateTime.toISOString(),
       encounter_type: encounterType,
       cardiologist_id: currentUserId || null,
-      visit_reason: visitReason || null,
+      visit_reason: derivedVisitReason,
       presenting_symptoms: symptoms || null,
       hemodynamics,
       diagnostic_tests: diagnosticsArray,
@@ -153,6 +197,16 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
       follow_up_plan: followUpPlan || null,
       risk_score: riskScore || null,
     };
+
+    if (reasonConcept) {
+      payload.reason_concept = reasonConcept;
+    }
+    if (symptomConcepts.length > 0) {
+      payload.symptom_concepts = symptomConcepts;
+    }
+    if (diagnosticConcepts.length > 0) {
+      payload.diagnostic_concepts = diagnosticConcepts;
+    }
 
     if (feeAmount) {
       const numericFee = Number(feeAmount);
@@ -304,6 +358,28 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                       <option value="critical">Critical</option>
                     </select>
                   </label>
+                  {token && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        SNOMED CT Problem
+                      </p>
+                      <SnomedConceptPicker
+                        value={reasonConcept}
+                        onChange={(concept) => {
+                          setReasonConcept(concept);
+                          if (concept && !visitReason) {
+                            setVisitReason(concept.preferredTerm || concept.term || '');
+                          }
+                        }}
+                        token={token}
+                        tenantSlug={tenantSlug}
+                        label=""
+                        placeholder="Search SNOMED CT (e.g., Angina pectoris)"
+                        helperText="Adds a coded reason for this encounter"
+                        required={false}
+                      />
+                    </div>
+                  )}
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Visit reason
                     <input
@@ -324,6 +400,62 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                       placeholder="Summarize patient symptoms or ECG findings"
                     />
                   </label>
+                  {token && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        SNOMED CT Symptoms
+                      </p>
+                      <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 space-y-3">
+                        <SnomedConceptPicker
+                          value={pendingSymptomConcept}
+                          onChange={setPendingSymptomConcept}
+                          token={token}
+                          tenantSlug={tenantSlug}
+                          label=""
+                          placeholder="Search SNOMED CT (e.g., Chest pain)"
+                          helperText="Add structured symptom codes"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                            onClick={handleAddSymptomConcept}
+                            disabled={!pendingSymptomConcept}
+                          >
+                            Add Symptom Concept
+                          </button>
+                          {symptomConcepts.length > 0 && (
+                            <button
+                              type="button"
+                              className="rounded-full border border-rose-100 bg-white px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                              onClick={() => setSymptomConcepts([])}
+                            >
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                        {symptomConcepts.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {symptomConcepts.map((concept) => (
+                              <span
+                                key={concept.conceptId}
+                                className="flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-xs text-rose-700"
+                              >
+                                {concept.preferredTerm || concept.term}
+                                <button
+                                  type="button"
+                                  className="text-rose-500 hover:text-rose-700"
+                                  onClick={() => handleRemoveSymptomConcept(concept.conceptId)}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -374,6 +506,62 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                     />
                   </label>
                 </div>
+                {token && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      SNOMED CT Diagnostics
+                    </p>
+                    <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 space-y-3">
+                      <SnomedConceptPicker
+                        value={pendingDiagnosticConcept}
+                        onChange={setPendingDiagnosticConcept}
+                        token={token}
+                        tenantSlug={tenantSlug}
+                        label=""
+                        placeholder="Search SNOMED CT (e.g., Echocardiography)"
+                        helperText="Document ordered procedures with SNOMED CT"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                          onClick={handleAddDiagnosticConcept}
+                          disabled={!pendingDiagnosticConcept}
+                        >
+                          Add Diagnostic Concept
+                        </button>
+                        {diagnosticConcepts.length > 0 && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-indigo-100 bg-white px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50"
+                            onClick={() => setDiagnosticConcepts([])}
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      {diagnosticConcepts.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {diagnosticConcepts.map((concept) => (
+                            <span
+                              key={concept.conceptId}
+                              className="flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-700"
+                            >
+                              {concept.preferredTerm || concept.term}
+                              <button
+                                type="button"
+                                className="text-indigo-500 hover:text-indigo-700"
+                                onClick={() => handleRemoveDiagnosticConcept(concept.conceptId)}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-4 space-y-3">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Care plan

@@ -183,23 +183,239 @@ export class HivService {
   }
 
   async createHivTest(body: any, tenantDb: DataSource) {
-    const { patientId, testKitName, testResult, testKitLot, testKitExpiry, notes, testedBy } = body;
-    
-    // Generate test number
+    const {
+      patientId,
+      testedBy,
+      testKitName,
+      testResult,
+      testKitLot,
+      testKitExpiry,
+      notes,
+      testStage = 'screening',
+      testType = 'rapid_antibody',
+      testingReason,
+      testingApproach,
+      testingLocation,
+      testingCadre,
+      specimenType,
+      kitType,
+      dualKitUsed = false,
+      resultValue,
+      resultUnit,
+      selfTestReported = false,
+      selfTestConfirmed = false,
+      recencyTestPerformed = false,
+      recencyResult,
+      recencyKitLot,
+      recencyKitExpiry,
+      partnerNotificationStatus,
+      linkageAction,
+      linkageCompleted = false,
+      nextTestDueDate,
+      followUpActions = [],
+      testingContext = {},
+      stis = [],
+    } = body;
+
+    if (!patientId || !testedBy) {
+      throw new BadRequestException('patientId and testedBy are required');
+    }
+    if (!testKitName) {
+      throw new BadRequestException('testKitName is required');
+    }
+    if (!testResult) {
+      throw new BadRequestException('testResult is required');
+    }
+
     const testNumber = `HIV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const result = await tenantDb.query(`
+    const kitExpiryValue = testKitExpiry ? testKitExpiry : null;
+    const recencyExpiryValue = recencyKitExpiry ? recencyKitExpiry : null;
+    const nextTestDateValue = nextTestDueDate ? nextTestDueDate : null;
+    const algorithmStep =
+      testStage === 'screening'
+        ? 1
+        : testStage === 'confirmatory'
+        ? 2
+        : testStage === 'tie_breaker'
+        ? 3
+        : 1;
+
+    const serializedFollowUps = Array.isArray(followUpActions) ? followUpActions : [];
+    const normalizedContext =
+      testingContext && typeof testingContext === 'object' ? testingContext : {};
+
+    const normalizedStiPayload = Array.isArray(stis)
+      ? stis
+          .filter((item) => item && item.infectionType)
+          .map((item) => ({
+            infectionType: item.infectionType,
+            testType: item.testType || null,
+            testMethod: item.testMethod || null,
+            specimenType: item.specimenType || null,
+            anatomicSite: item.anatomicSite || null,
+            result: item.result || 'pending',
+            resultValue: item.resultValue || null,
+            resultUnit: item.resultUnit || null,
+            treatmentProvided:
+              typeof item.treatmentProvided === 'boolean' ? item.treatmentProvided : false,
+            treatmentRegimen: item.treatmentRegimen || null,
+            treatmentDate: item.treatmentDate || null,
+            notes: item.notes || null,
+          }))
+      : [];
+
+    const stisScreened = normalizedStiPayload.map((item) => item.infectionType);
+
+    const insertResult = await tenantDb.query(
+      `
       INSERT INTO hiv_tests (
-        patient_id, test_number, test_date, test_type, test_kit_name, 
-        test_kit_lot, test_kit_expiry, test_result, tested_by, notes, testing_algorithm_step
-      ) VALUES ($1, $2, NOW(), 'rapid_antibody', $3, $4, $5, $6, $7, $8, 1)
+        patient_id,
+        test_number,
+        test_date,
+        test_type,
+        test_stage,
+        testing_reason,
+        testing_approach,
+        testing_location,
+        testing_cadre,
+        specimen_type,
+        kit_type,
+        test_kit_name,
+        test_kit_lot,
+        test_kit_expiry,
+        dual_kit_used,
+        test_result,
+        result_value,
+        result_unit,
+        is_confirmatory,
+        confirmatory_test_id,
+        testing_algorithm_step,
+        algorithm_result,
+        tested_by,
+        reviewed_by,
+        reviewed_at,
+        notes,
+        enrolled_in_care,
+        enrollment_declined,
+        enrollment_declined_reason,
+        self_test_reported,
+        self_test_confirmed,
+        recency_test_performed,
+        recency_result,
+        recency_kit_lot,
+        recency_kit_expiry,
+        partner_notification_status,
+        linkage_action,
+        linkage_completed,
+        stis_screened,
+        stis_results,
+        follow_up_actions,
+        testing_context,
+        next_test_due_date
+      )
+      VALUES (
+        $1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, false, NULL, $18, NULL, $19, NULL, NULL, $20,
+        false, false, NULL, $21, $22, $23, $24, $25, $26, $27, $28, $29,
+        $30::jsonb, $31::jsonb, $32::jsonb, $33::jsonb, $34
+      )
       RETURNING *
-    `, [patientId, testNumber, testKitName, testKitLot, testKitExpiry, testResult, testedBy, notes]);
-    
-    // Process algorithm
-    const algorithmResult = await this.processTestingAlgorithm(result[0].id, tenantDb);
-    
-    return { test: result[0], algorithm: algorithmResult };
+    `,
+      [
+        patientId,
+        testNumber,
+        testType,
+        testStage,
+        testingReason || null,
+        testingApproach || null,
+        testingLocation || null,
+        testingCadre || null,
+        specimenType || null,
+        kitType || null,
+        testKitName,
+        testKitLot || null,
+        kitExpiryValue,
+        dualKitUsed,
+        testResult,
+        resultValue || null,
+        resultUnit || null,
+        algorithmStep,
+        testedBy,
+        notes || null,
+        selfTestReported,
+        selfTestConfirmed,
+        recencyTestPerformed,
+        recencyResult || null,
+        recencyKitLot || null,
+        recencyExpiryValue,
+        partnerNotificationStatus || null,
+        linkageAction || null,
+        linkageCompleted,
+        JSON.stringify(stisScreened),
+        JSON.stringify(normalizedStiPayload),
+        JSON.stringify(serializedFollowUps),
+        JSON.stringify(normalizedContext),
+        nextTestDateValue,
+      ],
+    );
+
+    const createdTest = insertResult[0];
+
+    if (normalizedStiPayload.length > 0) {
+      for (const sti of normalizedStiPayload) {
+        await tenantDb.query(
+          `
+          INSERT INTO sti_tests (
+            patient_id,
+            hiv_test_id,
+            infection_type,
+            test_type,
+            test_method,
+            specimen_type,
+            anatomic_site,
+            result,
+            result_value,
+            result_unit,
+            treatment_provided,
+            treatment_regimen,
+            treatment_date,
+            notes,
+            ordered_by
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+          )
+        `,
+          [
+            patientId,
+            createdTest.id,
+            sti.infectionType,
+            sti.testType,
+            sti.testMethod,
+            sti.specimenType,
+            sti.anatomicSite,
+            sti.result,
+            sti.resultValue,
+            sti.resultUnit,
+            sti.treatmentProvided,
+            sti.treatmentRegimen,
+            sti.treatmentDate,
+            sti.notes,
+            testedBy,
+          ],
+        );
+      }
+    }
+
+    const algorithmResult = await this.processTestingAlgorithm(createdTest.id, tenantDb);
+
+    return {
+      test: {
+        ...createdTest,
+        sti_tests: normalizedStiPayload,
+      },
+      algorithm: algorithmResult,
+    };
   }
 
   async processTestingAlgorithm(testId: string, tenantDb: DataSource) {
@@ -259,9 +475,41 @@ export class HivService {
   async getPatientHivTests(patientId: string, tenantDb: DataSource) {
     const tests = await tenantDb.query(
       'SELECT * FROM hiv_tests WHERE patient_id = $1 ORDER BY test_date DESC',
-      [patientId]
+      [patientId],
     );
-    return { tests };
+
+    if (tests.length === 0) {
+      return { tests: [] };
+    }
+
+    const testIds = tests.map((test: any) => test.id);
+    const stiTests = await tenantDb.query(
+      `
+      SELECT *
+      FROM sti_tests
+      WHERE hiv_test_id = ANY($1::uuid[])
+      ORDER BY test_date DESC
+    `,
+      [testIds],
+    );
+
+    const grouped: Record<string, any[]> = stiTests.reduce((acc: Record<string, any[]>, row: any) => {
+      if (!row.hiv_test_id) {
+        return acc;
+      }
+      if (!acc[row.hiv_test_id]) {
+        acc[row.hiv_test_id] = [];
+      }
+      acc[row.hiv_test_id].push(row);
+      return acc;
+    }, {});
+
+    const enriched = tests.map((test: any) => ({
+      ...test,
+      sti_tests: grouped[test.id] || [],
+    }));
+
+    return { tests: enriched };
   }
 
   async enrollInCare(body: any, tenantDb: DataSource) {

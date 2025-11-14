@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
 import { LabTest } from '../entities/lab-test.entity';
@@ -6,12 +6,16 @@ import { CriticalAlertService } from './critical-alert.service';
 import { Patient } from '../entities/patient.entity';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
+import { TerminologyService, SnomedMapping } from './terminology.service';
 
 @Injectable()
 export class LabOrderService {
+  private readonly logger = new Logger(LabOrderService.name);
+
   constructor(
     private criticalAlertService: CriticalAlertService,
     private financeService: FinanceService,
+    private terminologyService: TerminologyService,
   ) {}
   
   private appendWorkflowEvent(
@@ -135,6 +139,89 @@ export class LabOrderService {
       status = LabOrderStatus.AWAITING_PAYMENT;
     }
 
+    const conceptCandidate =
+      createDto.snomedConceptId ??
+      createDto.conceptId ??
+      createDto?.snomed?.conceptId ??
+      null;
+
+    let snomedConceptId: string | null = null;
+    let snomedTerm: string | null = null;
+    let snomedModuleId: string | null = null;
+    let snomedDefinitionStatus: string | null = null;
+    let loincCode: string | null = createDto.loincCode ?? null;
+    let loincLongName: string | null = createDto.loincLongName ?? null;
+    let cptCode: string | null = createDto.cptCode ?? null;
+
+    if (conceptCandidate) {
+      if (/^\d+$/.test(String(conceptCandidate))) {
+        try {
+          const concept = await this.terminologyService.validateConcept(
+            tenantDb,
+            String(conceptCandidate),
+          );
+
+          snomedConceptId = concept?.conceptId ?? null;
+          snomedTerm =
+            createDto.snomedTerm ??
+            createDto.term ??
+            concept?.preferredTerm ??
+            concept?.term ??
+            concept?.fullySpecifiedName ??
+            snomedTerm;
+          snomedModuleId = concept?.moduleId ?? null;
+          snomedDefinitionStatus = concept?.definitionStatus ?? null;
+
+          if (!loincCode) {
+            const loincMappings: SnomedMapping[] = await this.terminologyService
+              .mapConcept(tenantDb, concept.conceptId, 'LOINC')
+              .catch(() => []);
+            if (loincMappings.length > 0) {
+              loincCode = loincMappings[0].targetCode || null;
+            }
+          }
+
+          if (!cptCode) {
+            const cptMappings: SnomedMapping[] = await this.terminologyService
+              .mapConcept(tenantDb, concept.conceptId, 'CPT')
+              .catch(() => []);
+            if (cptMappings.length > 0) {
+              cptCode = cptMappings[0].targetCode || null;
+            }
+          }
+        } catch (error: any) {
+          this.logger.warn(
+            `SNOMED validation failed for lab order concept "${conceptCandidate}": ${error?.message || error}`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          `Received non-numeric SNOMED concept "${conceptCandidate}" for lab order – storing as free text.`,
+        );
+      }
+    }
+
+    if (!snomedConceptId && conceptCandidate) {
+      snomedConceptId = String(conceptCandidate);
+      snomedTerm =
+        snomedTerm ??
+        createDto.snomedTerm ??
+        createDto.term ??
+        (Array.isArray(tests) && tests.length > 0 ? tests[0]?.testName : null);
+    }
+
+    if (!loincCode && Array.isArray(tests) && tests.length === 1) {
+      const firstTest = tests[0];
+      if (firstTest?.loincCode) {
+        loincCode = String(firstTest.loincCode);
+      }
+    }
+
+    if (!snomedTerm && Array.isArray(tests) && tests.length > 0) {
+      const firstTest = tests[0];
+      snomedTerm = firstTest?.testName ?? null;
+    }
+
     const labOrder = labOrderRepository.create({
       ...createDto,
       orderNumber,
@@ -144,6 +231,13 @@ export class LabOrderService {
       financeTransactionId,
       paymentStatus,
       status,
+      snomedConceptId: snomedConceptId ?? null,
+      snomedTerm: snomedTerm ?? createDto.orderName ?? null,
+      snomedModuleId: snomedModuleId ?? null,
+      snomedDefinitionStatus: snomedDefinitionStatus ?? null,
+      loincCode: loincCode ?? null,
+      loincLongName: loincLongName ?? null,
+      cptCode: cptCode ?? null,
     });
 
     const saved = await labOrderRepository.save(labOrder);

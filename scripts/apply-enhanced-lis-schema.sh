@@ -155,6 +155,13 @@ ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2);
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS finance_transaction_id UUID;
 ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50);
 UPDATE lab_orders SET payment_status = 'payment_confirmed' WHERE payment_status IS NULL OR payment_status = '';
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_code VARCHAR(50);
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_long_name TEXT;
+ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50);
 ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_status_check;
 ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_status_check CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled'));
 ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_payment_status_check;
@@ -165,6 +172,8 @@ CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_i
 CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged);
 CREATE INDEX IF NOT EXISTS idx_lab_orders_payment_status ON lab_orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id);
+CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code);
 
 -- Lab Quality Controls
 CREATE TABLE IF NOT EXISTS lab_quality_controls (

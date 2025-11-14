@@ -32,12 +32,26 @@ interface CardiologyEncounter {
   encounter_date: string;
   encounter_type: string;
   visit_reason?: string | null;
+  reason_snomed_code?: string | null;
+  reason_snomed_term?: string | null;
   presenting_symptoms?: string | null;
+  symptom_snomed_codes?: Array<{
+    conceptId: string;
+    term?: string;
+    moduleId?: string;
+    definitionStatus?: string;
+  }> | null;
   risk_score?: string | null;
   care_status?: string;
   payment_status?: string;
   fee_amount?: number | null;
   finance_transaction_id?: string | null;
+  diagnostic_snomed_codes?: Array<{
+    conceptId: string;
+    term?: string;
+    moduleId?: string;
+    definitionStatus?: string;
+  }> | null;
 }
 
 interface CardiologyDashboardSummary {
@@ -486,6 +500,38 @@ const CardiologyDashboard: React.FC = () => {
                         {encounter.visit_reason && (
                           <div className="mt-1 text-xs text-slate-400">Reason: {encounter.visit_reason}</div>
                         )}
+                        {encounter.reason_snomed_term && (
+                          <div className="mt-1 text-xs text-rose-600">
+                            SNOMED: {encounter.reason_snomed_term}
+                            {encounter.reason_snomed_code ? ` (${encounter.reason_snomed_code})` : ''}
+                          </div>
+                        )}
+                        {Array.isArray(encounter.symptom_snomed_codes) &&
+                          encounter.symptom_snomed_codes.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {encounter.symptom_snomed_codes.map((concept) => (
+                                <span
+                                  key={concept.conceptId}
+                                  className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700"
+                                >
+                                  {concept.term || concept.conceptId}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        {Array.isArray(encounter.diagnostic_snomed_codes) &&
+                          encounter.diagnostic_snomed_codes.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {encounter.diagnostic_snomed_codes.map((concept) => (
+                                <span
+                                  key={`diag-${concept.conceptId}`}
+                                  className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700"
+                                >
+                                  {concept.term || concept.conceptId}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-slate-200">{encounterTypeLabels[encounter.encounter_type] || encounter.encounter_type}</div>

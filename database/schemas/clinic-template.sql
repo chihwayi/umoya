@@ -283,6 +283,11 @@ CREATE TABLE orders (
     duration VARCHAR(100),
     priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'authorized', 'in_progress', 'completed', 'cancelled', 'rejected')),
+    snomed_concept_id VARCHAR(50),
+    snomed_term TEXT,
+    snomed_module_id VARCHAR(50),
+    snomed_definition_status VARCHAR(50),
+    external_codes JSONB DEFAULT '{}'::jsonb,
     authorized_by UUID REFERENCES users(id),
     authorized_at TIMESTAMP WITH TIME ZONE,
     executed_by UUID REFERENCES users(id),
@@ -337,12 +342,18 @@ CREATE INDEX idx_orders_type ON orders(order_type);
 CREATE INDEX idx_orders_authorized_by ON orders(authorized_by);
 CREATE INDEX idx_orders_executed_by ON orders(executed_by);
 CREATE INDEX idx_orders_created_at ON orders(created_at);
+CREATE INDEX idx_orders_snomed_concept ON orders(snomed_concept_id);
 
 -- Problems list (structured diagnoses)
 CREATE TABLE IF NOT EXISTS problems (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    code VARCHAR(50), -- ICD-10 or SNOMED
+    code VARCHAR(50), -- Legacy field for backwards compatibility (stores SNOMED concept ID)
+    code_system VARCHAR(50) NOT NULL DEFAULT 'SNOMED_CT',
+    snomed_concept_id VARCHAR(50),
+    snomed_term TEXT,
+    snomed_module_id VARCHAR(50),
+    snomed_definition_status VARCHAR(50),
     description TEXT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved')),
     onset_date DATE,
@@ -357,16 +368,28 @@ CREATE TABLE IF NOT EXISTS allergies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     allergen VARCHAR(255) NOT NULL,
+    allergen_snomed_code VARCHAR(50),
+    allergen_snomed_term TEXT,
+    allergen_snomed_module_id VARCHAR(50),
     reaction TEXT,
+    reaction_snomed_code VARCHAR(50),
+    reaction_snomed_term TEXT,
     severity VARCHAR(20) CHECK (severity IN ('mild','moderate','severe')),
+    severity_snomed_code VARCHAR(50),
+    severity_snomed_term TEXT,
     recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    recorded_by UUID REFERENCES users(id)
+    recorded_by UUID REFERENCES users(id),
+    verification_status VARCHAR(50),
+    clinical_status VARCHAR(50)
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_problems_patient_id ON problems(patient_id);
+CREATE INDEX IF NOT EXISTS idx_problems_snomed_concept ON problems(snomed_concept_id);
 CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status);
 CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id);
+CREATE INDEX IF NOT EXISTS idx_allergies_snomed_allergen ON allergies(allergen_snomed_code);
+CREATE INDEX IF NOT EXISTS idx_allergies_reaction_snomed ON allergies(reaction_snomed_code);
 
 -- Trigger to update updated_at timestamp
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
@@ -411,9 +434,15 @@ CREATE TABLE IF NOT EXISTS cardiology_encounters (
     encounter_type VARCHAR(50) CHECK (encounter_type IN ('clinic_visit','diagnostic_test','heart_failure_review','telecardiology','rehabilitation','other')),
     cardiologist_id UUID REFERENCES users(id),
     visit_reason TEXT,
+    reason_snomed_code VARCHAR(50),
+    reason_snomed_term TEXT,
+    reason_snomed_module_id VARCHAR(50),
+    reason_snomed_definition_status VARCHAR(50),
     presenting_symptoms TEXT,
+    symptom_snomed_codes JSONB DEFAULT '[]'::jsonb,
     hemodynamics JSONB DEFAULT '{}'::jsonb,
     diagnostic_tests JSONB DEFAULT '[]'::jsonb,
+    diagnostic_snomed_codes JSONB DEFAULT '[]'::jsonb,
     care_plan TEXT,
     follow_up_plan TEXT,
     risk_score VARCHAR(20) CHECK (risk_score IN ('low','moderate','high','critical')),
@@ -429,4 +458,5 @@ CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_patient_id ON cardiology_en
 CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_date ON cardiology_encounters(encounter_date);
 CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_payment_status ON cardiology_encounters(payment_status);
 CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_care_status ON cardiology_encounters(care_status);
+CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_reason_snomed ON cardiology_encounters(reason_snomed_code);
 CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_risk_score ON cardiology_encounters(risk_score);

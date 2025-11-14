@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
+import { TerminologyService } from './terminology.service';
 
 interface CaseFilter {
   status?: string;
@@ -9,11 +10,92 @@ interface CaseFilter {
   oncologistId?: string;
 }
 
+interface StoredConceptSummary {
+  conceptId: string;
+  term: string;
+  moduleId?: string;
+  definitionStatus?: string;
+}
+
 @Injectable()
 export class OncologyService {
   private readonly logger = new Logger(OncologyService.name);
 
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly terminologyService: TerminologyService,
+  ) {}
+
+  private extractConceptId(candidate: any): string | null {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.trim();
+    }
+    return (
+      candidate?.conceptId ??
+      candidate?.snomedConceptId ??
+      candidate?.snomedCode ??
+      candidate?.code ??
+      null
+    );
+  }
+
+  private async resolveConcept(
+    tenantDb: DataSource,
+    raw: any,
+  ): Promise<StoredConceptSummary | null> {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const conceptIdCandidate = this.extractConceptId(raw);
+    if (!conceptIdCandidate) {
+      return null;
+    }
+
+    const conceptId = String(conceptIdCandidate).trim();
+    let validated:
+      | {
+          conceptId: string;
+          preferredTerm?: string;
+          term?: string;
+          moduleId?: string;
+          definitionStatus?: string;
+        }
+      | null = null;
+
+    if (/^\d+$/.test(conceptId)) {
+      try {
+        validated = await this.terminologyService.validateConcept(tenantDb, conceptId);
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for oncology concept "${conceptId}": ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`Received non-numeric SNOMED concept "${conceptId}" for oncology payload.`);
+      return null;
+    }
+
+    const rawTerm =
+      (typeof raw === 'object' && (raw.preferredTerm || raw.term || raw.fullySpecifiedName)) || null;
+    const term = rawTerm ?? validated?.preferredTerm ?? validated?.term ?? null;
+
+    if (!term && !validated) {
+      return null;
+    }
+
+    return {
+      conceptId: validated?.conceptId ?? conceptId,
+      term: term ?? '',
+      moduleId: validated?.moduleId ?? raw?.moduleId,
+      definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
+    };
+  }
 
   async listCases(tenantDb: DataSource, filters: CaseFilter = {}) {
     const conditions: string[] = [];
@@ -179,6 +261,8 @@ export class OncologyService {
     const {
       patient_id,
       primary_diagnosis,
+      primary_diagnosis_concept,
+      primaryDiagnosisConcept,
       staging_system,
       overall_stage,
       stage_at_diagnosis,
@@ -190,7 +274,16 @@ export class OncologyService {
       care_plan,
     } = payload;
 
-    if (!patient_id || !primary_diagnosis) {
+    const resolvedPrimaryConcept =
+      (primary_diagnosis_concept === null || primaryDiagnosisConcept === null)
+        ? null
+        : await this.resolveConcept(
+            tenantDb,
+            primary_diagnosis_concept ?? primaryDiagnosisConcept,
+          );
+    const primaryDiagnosisValue = primary_diagnosis ?? resolvedPrimaryConcept?.term ?? null;
+
+    if (!patient_id || !primaryDiagnosisValue) {
       throw new BadRequestException('patient_id and primary_diagnosis are required');
     }
 
@@ -199,6 +292,10 @@ export class OncologyService {
       INSERT INTO oncology_cases (
         patient_id,
         primary_diagnosis,
+        primary_diagnosis_snomed_code,
+        primary_diagnosis_snomed_term,
+        primary_diagnosis_snomed_module_id,
+        primary_diagnosis_snomed_definition_status,
         staging_system,
         overall_stage,
         stage_at_diagnosis,
@@ -211,12 +308,34 @@ export class OncologyService {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,'active'),$11,NOW(),NOW())
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        COALESCE($14,'active'),
+        $15,
+        NOW(),
+        NOW()
+      )
       RETURNING *
       `,
       [
         patient_id,
-        primary_diagnosis,
+        primaryDiagnosisValue,
+        resolvedPrimaryConcept?.conceptId ?? null,
+        resolvedPrimaryConcept?.term ?? null,
+        resolvedPrimaryConcept?.moduleId ?? null,
+        resolvedPrimaryConcept?.definitionStatus ?? null,
         staging_system,
         overall_stage,
         stage_at_diagnosis,
@@ -234,19 +353,85 @@ export class OncologyService {
   }
 
   async updateCase(tenantDb: DataSource, caseId: string, payload: any) {
-    const fields = Object.keys(payload).filter((key) => payload[key] !== undefined);
-    if (!fields.length) {
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('Payload required');
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    const textFields: string[] = [
+      'primary_diagnosis',
+      'staging_system',
+      'overall_stage',
+      'stage_at_diagnosis',
+      'primary_site',
+      'histology',
+      'status',
+      'care_plan',
+    ];
+
+    textFields.forEach((field) => {
+      if (payload[field] !== undefined) {
+        updates.push(`${field} = $${params.length + 1}::text`);
+        params.push(payload[field]);
+      }
+    });
+
+    if (payload.diagnosis_date !== undefined) {
+      updates.push(`diagnosis_date = $${params.length + 1}::date`);
+      params.push(payload.diagnosis_date);
+    }
+
+    if (payload.oncologist_id !== undefined) {
+      const normalized =
+        typeof payload.oncologist_id === 'string' && payload.oncologist_id.trim().length > 0
+          ? payload.oncologist_id.trim()
+          : null;
+      updates.push(`oncologist_id = $${params.length + 1}::uuid`);
+      params.push(normalized);
+    }
+
+    if ('primary_diagnosis_concept' in payload || 'primaryDiagnosisConcept' in payload) {
+      const resolvedConcept =
+        payload.primary_diagnosis_concept === null || payload.primaryDiagnosisConcept === null
+          ? null
+          : await this.resolveConcept(
+              tenantDb,
+              payload.primary_diagnosis_concept ?? payload.primaryDiagnosisConcept,
+            );
+      updates.push(`primary_diagnosis_snomed_code = $${params.length + 1}`);
+      params.push(resolvedConcept?.conceptId ?? null);
+      updates.push(`primary_diagnosis_snomed_term = $${params.length + 1}`);
+      params.push(resolvedConcept?.term ?? null);
+      updates.push(`primary_diagnosis_snomed_module_id = $${params.length + 1}`);
+      params.push(resolvedConcept?.moduleId ?? null);
+      updates.push(`primary_diagnosis_snomed_definition_status = $${params.length + 1}`);
+      params.push(resolvedConcept?.definitionStatus ?? null);
+
+      if (
+        resolvedConcept?.term &&
+        (payload.primary_diagnosis === undefined || payload.primary_diagnosis === null)
+      ) {
+        updates.push(`primary_diagnosis = $${params.length + 1}::text`);
+        params.push(resolvedConcept.term);
+      }
+    }
+
+    if (!updates.length) {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, idx) => `${field} = $${idx + 1}`).join(', ') + ', updated_at = NOW()';
-    const values = fields.map((field) => payload[field]);
-    values.push(caseId);
+    updates.push(`updated_at = NOW()`);
+    const query = `
+      UPDATE oncology_cases
+      SET ${updates.join(', ')}
+      WHERE id = $${params.length + 1}
+      RETURNING *
+    `;
+    params.push(caseId);
 
-    const result = await tenantDb.query(
-      `UPDATE oncology_cases SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values,
-    );
+    const result = await tenantDb.query(query, params);
 
     if (!result.length) {
       throw new NotFoundException(`Oncology case ${caseId} not found`);
@@ -305,9 +490,26 @@ export class OncologyService {
   }
 
   async createRegimen(tenantDb: DataSource, caseId: string, payload: any) {
-    const { regimen_name, line_of_therapy, intent, cycles_planned, start_date, end_date, status, regimen_details } = payload;
+    const {
+      regimen_name,
+      regimen_concept,
+      regimenConcept,
+      line_of_therapy,
+      intent,
+      cycles_planned,
+      start_date,
+      end_date,
+      status,
+      regimen_details,
+    } = payload;
 
-    if (!regimen_name) {
+    const resolvedRegimenConcept =
+      (regimen_concept === null || regimenConcept === null)
+        ? null
+        : await this.resolveConcept(tenantDb, regimen_concept ?? regimenConcept);
+    const regimenNameValue = regimen_name ?? resolvedRegimenConcept?.term ?? null;
+
+    if (!regimenNameValue) {
       throw new BadRequestException('regimen_name is required');
     }
 
@@ -316,6 +518,10 @@ export class OncologyService {
       INSERT INTO oncology_regimens (
         oncology_case_id,
         regimen_name,
+        regimen_snomed_code,
+        regimen_snomed_term,
+        regimen_snomed_module_id,
+        regimen_snomed_definition_status,
         line_of_therapy,
         intent,
         cycles_planned,
@@ -326,10 +532,40 @@ export class OncologyService {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'planned'),COALESCE($9,'{}'::jsonb),NOW(),NOW())
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        COALESCE($12,'planned'),
+        COALESCE($13,'{}'::jsonb),
+        NOW(),
+        NOW()
+      )
       RETURNING *
       `,
-      [caseId, regimen_name, line_of_therapy, intent, cycles_planned, start_date, end_date, status, regimen_details],
+      [
+        caseId,
+        regimenNameValue,
+        resolvedRegimenConcept?.conceptId ?? null,
+        resolvedRegimenConcept?.term ?? null,
+        resolvedRegimenConcept?.moduleId ?? null,
+        resolvedRegimenConcept?.definitionStatus ?? null,
+        line_of_therapy,
+        intent,
+        cycles_planned,
+        start_date,
+        end_date,
+        status,
+        regimen_details,
+      ],
     );
 
     this.logger.log(`Created regimen ${regimen.id} for oncology case ${caseId}`);
@@ -337,19 +573,78 @@ export class OncologyService {
   }
 
   async updateRegimen(tenantDb: DataSource, regimenId: string, payload: any) {
-    const fields = Object.keys(payload).filter((key) => payload[key] !== undefined);
-    if (!fields.length) {
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('Payload required');
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    const textFields = ['regimen_name', 'line_of_therapy', 'intent', 'status'];
+    textFields.forEach((field) => {
+      if (payload[field] !== undefined) {
+        updates.push(`${field} = $${params.length + 1}::text`);
+        params.push(payload[field]);
+      }
+    });
+
+    if (payload.cycles_planned !== undefined) {
+      updates.push(`cycles_planned = $${params.length + 1}::int`);
+      params.push(payload.cycles_planned);
+    }
+
+    if (payload.start_date !== undefined) {
+      updates.push(`start_date = $${params.length + 1}::date`);
+      params.push(payload.start_date);
+    }
+
+    if (payload.end_date !== undefined) {
+      updates.push(`end_date = $${params.length + 1}::date`);
+      params.push(payload.end_date);
+    }
+
+    if (payload.regimen_details !== undefined) {
+      updates.push(`regimen_details = $${params.length + 1}::jsonb`);
+      params.push(JSON.stringify(payload.regimen_details ?? {}));
+    }
+
+    if ('regimen_concept' in payload || 'regimenConcept' in payload) {
+      const resolvedConcept =
+        payload.regimen_concept === null || payload.regimenConcept === null
+          ? null
+          : await this.resolveConcept(tenantDb, payload.regimen_concept ?? payload.regimenConcept);
+      updates.push(`regimen_snomed_code = $${params.length + 1}`);
+      params.push(resolvedConcept?.conceptId ?? null);
+      updates.push(`regimen_snomed_term = $${params.length + 1}`);
+      params.push(resolvedConcept?.term ?? null);
+      updates.push(`regimen_snomed_module_id = $${params.length + 1}`);
+      params.push(resolvedConcept?.moduleId ?? null);
+      updates.push(`regimen_snomed_definition_status = $${params.length + 1}`);
+      params.push(resolvedConcept?.definitionStatus ?? null);
+
+      if (
+        resolvedConcept?.term &&
+        (payload.regimen_name === undefined || payload.regimen_name === null)
+      ) {
+        updates.push(`regimen_name = $${params.length + 1}::text`);
+        params.push(resolvedConcept.term);
+      }
+    }
+
+    if (!updates.length) {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, idx) => `${field} = $${idx + 1}`).join(', ') + ', updated_at = NOW()';
-    const values = fields.map((field) => payload[field]);
-    values.push(regimenId);
+    updates.push('updated_at = NOW()');
+    const query = `
+      UPDATE oncology_regimens
+      SET ${updates.join(', ')}
+      WHERE id = $${params.length + 1}
+      RETURNING *
+    `;
+    params.push(regimenId);
 
-    const result = await tenantDb.query(
-      `UPDATE oncology_regimens SET ${setClause} WHERE id = $${values.length} RETURNING *`,
-      values,
-    );
+    const result = await tenantDb.query(query, params);
 
     if (!result.length) {
       throw new NotFoundException(`Oncology regimen ${regimenId} not found`);
@@ -577,9 +872,27 @@ export class OncologyService {
   }
 
   async recordAdverseEvent(tenantDb: DataSource, caseId: string, payload: any, userId?: string) {
-    const { regimen_id, event_date, event_type, grade, related_to, action_taken, outcome, resolved_date, notes } = payload;
+    const {
+      regimen_id,
+      event_date,
+      event_type,
+      event_concept,
+      eventConcept,
+      grade,
+      related_to,
+      action_taken,
+      outcome,
+      resolved_date,
+      notes,
+    } = payload;
 
-    if (!event_date || !event_type) {
+    const resolvedEventConcept =
+      (event_concept === null || eventConcept === null)
+        ? null
+        : await this.resolveConcept(tenantDb, event_concept ?? eventConcept);
+    const eventTypeValue = event_type ?? resolvedEventConcept?.term ?? null;
+
+    if (!event_date || !eventTypeValue) {
       throw new BadRequestException('event_date and event_type are required');
     }
 
@@ -590,6 +903,10 @@ export class OncologyService {
         regimen_id,
         event_date,
         event_type,
+        event_snomed_code,
+        event_snomed_term,
+        event_snomed_module_id,
+        event_snomed_definition_status,
         grade,
         related_to,
         action_taken,
@@ -600,10 +917,44 @@ export class OncologyService {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW())
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        $15,
+        NOW(),
+        NOW()
+      )
       RETURNING *
       `,
-      [caseId, regimen_id, event_date, event_type, grade, related_to, action_taken, outcome, resolved_date, notes, userId],
+      [
+        caseId,
+        regimen_id,
+        event_date,
+        eventTypeValue,
+        resolvedEventConcept?.conceptId ?? null,
+        resolvedEventConcept?.term ?? null,
+        resolvedEventConcept?.moduleId ?? null,
+        resolvedEventConcept?.definitionStatus ?? null,
+        grade,
+        related_to,
+        action_taken,
+        outcome,
+        resolved_date,
+        notes,
+        userId,
+      ],
     );
 
     this.logger.log(`Recorded adverse event ${event.id} for oncology case ${caseId}`);

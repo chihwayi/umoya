@@ -65,6 +65,18 @@ export class Order {
   @Column({ name: 'order_name' })
   orderName: string;
 
+  @Column({ name: 'snomed_concept_id', nullable: true })
+  snomedConceptId?: string;
+
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
+  snomedTerm?: string;
+
+  @Column({ name: 'snomed_module_id', nullable: true })
+  snomedModuleId?: string;
+
+  @Column({ name: 'snomed_definition_status', nullable: true })
+  snomedDefinitionStatus?: string;
+
   @Column({ type: 'text', nullable: true })
   description?: string;
 
@@ -117,6 +129,14 @@ export class Order {
 
   @Column({ name: 'execution_notes', type: 'text', nullable: true })
   executionNotes?: string;
+
+  @Column({
+    name: 'external_codes',
+    type: 'jsonb',
+    nullable: true,
+    default: () => `'{}'::jsonb`,
+  })
+  externalCodes?: Record<string, any>;
 
   @Column({ name: 'drug_id', nullable: true })
   drugId?: string;

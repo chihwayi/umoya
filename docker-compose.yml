@@ -240,6 +240,9 @@ services:
       - DB_USERNAME=medicore
       - DB_PASSWORD=medicore_password
       - JWT_SECRET=ehr-super-secret-key
+      # SNOMED CT Configuration (points to local Snowstorm service)
+      - SNOMED_BASE_URL=http://snowstorm:8080
+      - SNOMED_USE_CACHE=true
       - CDSS_SERVICE_URL=http://cdss-service:8000
     volumes:
       - ./services/ehr-service/src:/app/src
@@ -247,6 +250,55 @@ services:
     depends_on:
       - postgres-master
       - cdss-service
+      - elasticsearch
+      - snowstorm
+    networks:
+      - medicore-network
+
+  snowstorm:
+    image: snomedinternational/snowstorm:latest
+    container_name: medicore-snowstorm
+    environment:
+      - JAVA_OPTS=-Xms2g -Xmx4g --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.math=ALL-UNNAMED
+      - JAVA_TOOL_OPTIONS=--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.math=ALL-UNNAMED
+      - ELASTICSEARCH_EMBEDDED=false
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_URLS=http://elasticsearch:9200
+      - SPRING_ELASTICSEARCH_URIS=http://elasticsearch:9200
+      - SPRING_PROFILES_ACTIVE=standalone
+      - SNOMED_SERVER_START_SCRIPT=/opt/snowstorm/docker-start.sh
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./snowstorm/data:/opt/snowstorm/data
+      - ./snowstorm/import:/opt/snowstorm/import
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      - elasticsearch
+    networks:
+      - medicore-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.16
+    container_name: medicore-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+      - xpack.security.enabled=false
+    volumes:
+      - ./snowstorm/es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
     networks:
       - medicore-network
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { HivService } from '../services/hiv.service';
@@ -18,6 +18,7 @@ export class HivController {
   @Post('tests')
   @ApiOperation({ summary: 'Record HIV test result' })
   @ApiResponse({ status: 201, description: 'HIV test recorded successfully' })
+  @UsePipes(new ValidationPipe({ whitelist: false, transform: true }))
   async createHivTest(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.hivService.createHivTest(body, req.tenantDb);
   }

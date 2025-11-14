@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Test {
   id: string;
@@ -21,6 +22,10 @@ interface OrderSet {
   category: string;
   description?: string;
   test_count: number;
+}
+
+interface SelectedTest extends Test {
+  concept?: SnomedConcept | null;
 }
 
 interface EnhancedLabOrderModalProps {
@@ -44,7 +49,7 @@ export default function EnhancedLabOrderModal({
 }: EnhancedLabOrderModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Test[]>([]);
-  const [selectedTests, setSelectedTests] = useState<Test[]>([]);
+  const [selectedTests, setSelectedTests] = useState<SelectedTest[]>([]);
   const [orderSets, setOrderSets] = useState<OrderSet[]>([]);
   const [priority, setPriority] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [clinicalIndication, setClinicalIndication] = useState('');
@@ -96,7 +101,7 @@ export default function EnhancedLabOrderModal({
 
   const addTest = (test: Test) => {
     if (!selectedTests.find((t) => t.id === test.id)) {
-      setSelectedTests([...selectedTests, test]);
+      setSelectedTests([...selectedTests, { ...test, concept: null }]);
       setSearchQuery('');
       setSearchResults([]);
     }
@@ -138,6 +143,12 @@ export default function EnhancedLabOrderModal({
       return;
     }
 
+    const missingConcept = selectedTests.find((test) => !test.concept);
+    if (missingConcept) {
+      showError('SNOMED Required', `Please select a SNOMED CT concept for ${missingConcept.test_name}.`);
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -152,11 +163,16 @@ export default function EnhancedLabOrderModal({
                 testCode: test.test_code,
                 testName: test.test_name,
                 category: test.category,
+                loincCode: (test as any).loinc_code,
               },
             ],
             priority,
             clinicalInfo: clinicalIndication,
             testCatalogId: test.id,
+            snomedConceptId: test.concept?.conceptId,
+            snomedTerm: test.concept?.preferredTerm || test.concept?.term,
+            snomedModuleId: test.concept?.moduleId,
+            snomedDefinitionStatus: test.concept?.definitionStatus,
           },
           token,
           tenantSlug,
@@ -370,23 +386,41 @@ export default function EnhancedLabOrderModal({
                 <div className="space-y-2">
                   <h4 className="font-semibold text-gray-900">Selected Tests ({selectedTests.length})</h4>
                   <div className="border border-gray-200 rounded-lg divide-y">
-                    {selectedTests.map((test) => (
-                      <div key={test.id} className="p-3 flex items-center justify-between bg-blue-50">
-                        <div className="flex items-center space-x-3">
-                          <TestTube2 className="w-5 h-5 text-blue-600" />
-                          <div>
-                            <p className="font-medium text-gray-900">{test.test_name}</p>
-                            <p className="text-sm text-gray-600">
-                              {test.test_code} • {test.specimen_type}
-                            </p>
+                    {selectedTests.map((test, index) => (
+                      <div key={test.id} className="p-4 bg-blue-50 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <TestTube2 className="w-5 h-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium text-gray-900">{test.test_name}</p>
+                              <p className="text-sm text-gray-600">
+                                {test.test_code} • {test.specimen_type}
+                              </p>
+                            </div>
                           </div>
+                          <button
+                            onClick={() => removeTest(test.id)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => removeTest(test.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <SnomedConceptPicker
+                          value={test.concept || null}
+                          onChange={(concept) =>
+                            setSelectedTests((prev) =>
+                              prev.map((item, itemIdx) =>
+                                itemIdx === index ? { ...item, concept } : item,
+                              ),
+                            )
+                          }
+                          token={token}
+                          tenantSlug={tenantSlug}
+                          label="SNOMED CT Concept"
+                          placeholder={`Search SNOMED CT (e.g., ${test.test_name})`}
+                          helperText="Select the appropriate SNOMED CT concept for this test order."
+                          required
+                        />
                       </div>
                     ))}
                   </div>

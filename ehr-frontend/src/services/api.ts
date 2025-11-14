@@ -61,6 +61,47 @@ export const chartApi = {
   }
 };
 
+export const terminologyApi = {
+  searchSnomed: async (
+    term: string,
+    token: string,
+    tenantSlug: string,
+    options?: { limit?: number; offset?: number; activeOnly?: boolean }
+  ) => {
+    if (!term || term.trim().length < 2) {
+      return { data: { concepts: [], total: 0, limit: options?.limit ?? 20, offset: options?.offset ?? 0 } };
+    }
+
+    const params: Record<string, any> = {
+      term,
+      limit: options?.limit ?? 20,
+      offset: options?.offset ?? 0,
+    };
+    if (typeof options?.activeOnly !== 'undefined') {
+      params.activeOnly = options.activeOnly;
+    }
+
+    const response = await ehrAxios.get('/terminology/snomed/search', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  validateConcept: async (conceptId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/terminology/snomed/validate/${conceptId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+};
+
 export const ehrApi = {
   login: async (email: string, password: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/auth/login', { email, password }, {

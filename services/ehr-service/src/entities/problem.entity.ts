@@ -16,6 +16,21 @@ export class Problem {
   @Column({ nullable: true })
   code: string;
 
+  @Column({ name: 'code_system', length: 50, default: 'SNOMED_CT' })
+  codeSystem: string;
+
+  @Column({ name: 'snomed_concept_id', nullable: true })
+  snomedConceptId: string;
+
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
+  snomedTerm: string;
+
+  @Column({ name: 'snomed_module_id', nullable: true })
+  snomedModuleId: string;
+
+  @Column({ name: 'snomed_definition_status', nullable: true })
+  snomedDefinitionStatus: string;
+
   @Column({ type: 'text' })
   description: string;
 

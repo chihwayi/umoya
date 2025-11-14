@@ -85,6 +85,27 @@ export class LabOrder {
   @Column({ type: 'text', name: 'special_instructions', nullable: true })
   specialInstructions: string;
 
+  @Column({ name: 'snomed_concept_id', nullable: true })
+  snomedConceptId?: string;
+
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
+  snomedTerm?: string;
+
+  @Column({ name: 'snomed_module_id', nullable: true })
+  snomedModuleId?: string;
+
+  @Column({ name: 'snomed_definition_status', nullable: true })
+  snomedDefinitionStatus?: string;
+
+  @Column({ name: 'loinc_code', nullable: true })
+  loincCode?: string;
+
+  @Column({ name: 'loinc_long_name', type: 'text', nullable: true })
+  loincLongName?: string;
+
+  @Column({ name: 'cpt_code', nullable: true })
+  cptCode?: string;
+
   @Column({ type: 'timestamp', name: 'scheduled_date_time', nullable: true })
   scheduledDateTime: Date;
 

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
+import { TerminologyService } from './terminology.service';
 
 interface CardiologyFilters {
   patientId?: string;
@@ -14,11 +15,113 @@ interface CardiologyFilters {
   searchTerm?: string;
 }
 
+interface StoredConceptSummary {
+  conceptId: string;
+  term: string;
+  moduleId?: string;
+  definitionStatus?: string;
+}
+
 @Injectable()
 export class CardiologyService {
   private readonly logger = new Logger(CardiologyService.name);
 
-  constructor(private readonly financeService: FinanceService) {}
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly terminologyService: TerminologyService,
+  ) {}
+
+  private extractConceptId(candidate: any): string | null {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.trim();
+    }
+    return (
+      candidate?.conceptId ??
+      candidate?.snomedConceptId ??
+      candidate?.snomedCode ??
+      candidate?.code ??
+      null
+    );
+  }
+
+  private async resolveConcept(
+    tenantDb: DataSource,
+    raw: any,
+  ): Promise<StoredConceptSummary | null> {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const conceptIdCandidate = this.extractConceptId(raw);
+    if (!conceptIdCandidate) {
+      return null;
+    }
+
+    const conceptId = String(conceptIdCandidate).trim();
+    let validated:
+      | {
+          conceptId: string;
+          preferredTerm?: string;
+          term?: string;
+          moduleId?: string;
+          definitionStatus?: string;
+        }
+      | null = null;
+
+    if (/^\d+$/.test(conceptId)) {
+      try {
+        validated = await this.terminologyService.validateConcept(tenantDb, conceptId);
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for concept "${conceptId}": ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`Received non-numeric SNOMED concept "${conceptId}" for cardiology payload.`);
+      return null;
+    }
+
+    const rawTerm =
+      (typeof raw === 'object' && (raw.preferredTerm || raw.term || raw.fullySpecifiedName)) || null;
+    const term = rawTerm ?? validated?.preferredTerm ?? validated?.term ?? null;
+
+    if (!term && !validated) {
+      return null;
+    }
+
+    return {
+      conceptId: validated?.conceptId ?? conceptId,
+      term: term ?? '',
+      moduleId: validated?.moduleId ?? raw?.moduleId,
+      definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
+    };
+  }
+
+  private async normalizeConceptArray(
+    tenantDb: DataSource,
+    rawList: any,
+  ): Promise<StoredConceptSummary[]> {
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      return [];
+    }
+
+    const normalized: StoredConceptSummary[] = [];
+    for (const entry of rawList) {
+      const concept = await this.resolveConcept(tenantDb, entry);
+      if (concept) {
+        const exists = normalized.find((item) => item.conceptId === concept.conceptId);
+        if (!exists) {
+          normalized.push(concept);
+        }
+      }
+    }
+    return normalized;
+  }
 
   async listEncounters(tenantDb: DataSource, filters: CardiologyFilters = {}) {
     const conditions: string[] = [];
@@ -107,6 +210,12 @@ export class CardiologyService {
       fee_amount,
       feeAmount,
       care_status,
+      reason_concept,
+      reasonConcept,
+      symptom_concepts,
+      symptomConcepts,
+      diagnostic_concepts,
+      diagnosticConcepts,
     } = payload;
 
     if (!patient_id || !encounter_date) {
@@ -151,9 +260,23 @@ export class CardiologyService {
 
     const hemodynamicsJson = hemodynamics ? JSON.stringify(hemodynamics) : '{}';
     const diagnosticTestsJson = diagnostic_tests ? JSON.stringify(diagnostic_tests) : '[]';
-    const normalizedCardiologistId = typeof cardiologist_id === 'string' && cardiologist_id.trim().length > 0 ? cardiologist_id : null;
+    const normalizedCardiologistId =
+      typeof cardiologist_id === 'string' && cardiologist_id.trim().length > 0 ? cardiologist_id : null;
     const normalizedUserId = typeof userId === 'string' && userId.trim().length > 0 ? userId : null;
     const cardiologistIdValue = normalizedCardiologistId ?? normalizedUserId ?? null;
+
+    const resolvedReasonConcept =
+      (reason_concept === null || reasonConcept === null)
+        ? null
+        : await this.resolveConcept(tenantDb, reason_concept ?? reasonConcept);
+    const symptomConceptList = await this.normalizeConceptArray(
+      tenantDb,
+      symptom_concepts ?? symptomConcepts,
+    );
+    const diagnosticConceptList = await this.normalizeConceptArray(
+      tenantDb,
+      diagnostic_concepts ?? diagnosticConcepts,
+    );
 
     const [encounter] = await tenantDb.query(
       `
@@ -163,9 +286,15 @@ export class CardiologyService {
         encounter_type,
         cardiologist_id,
         visit_reason,
+        reason_snomed_code,
+        reason_snomed_term,
+        reason_snomed_module_id,
+        reason_snomed_definition_status,
         presenting_symptoms,
+        symptom_snomed_codes,
         hemodynamics,
         diagnostic_tests,
+        diagnostic_snomed_codes,
         care_plan,
         follow_up_plan,
         risk_score,
@@ -176,7 +305,31 @@ export class CardiologyService {
         created_at,
         updated_at
       )
-      VALUES ($1::uuid,$2::timestamptz,$3::text,$4::uuid,$5::text,$6::text,$7::jsonb,$8::jsonb,$9::text,$10::text,$11::text,$12::text,$13::numeric,$14::uuid,$15::text,NOW(),NOW())
+      VALUES (
+        $1::uuid,
+        $2::timestamptz,
+        $3::text,
+        $4::uuid,
+        $5::text,
+        $6::varchar,
+        $7::text,
+        $8::text,
+        $9::text,
+        $10::text,
+        $11::jsonb,
+        $12::jsonb,
+        $13::jsonb,
+        $14::jsonb,
+        $15::text,
+        $16::text,
+        $17::text,
+        $18::text,
+        $19::numeric,
+        $20::uuid,
+        $21::text,
+        NOW(),
+        NOW()
+      )
       RETURNING *
       `,
       [
@@ -184,10 +337,16 @@ export class CardiologyService {
         encounter_date,
         encounter_type,
         cardiologistIdValue,
-        visit_reason || null,
+        visit_reason || resolvedReasonConcept?.term || null,
+        resolvedReasonConcept?.conceptId ?? null,
+        resolvedReasonConcept?.term ?? null,
+        resolvedReasonConcept?.moduleId ?? null,
+        resolvedReasonConcept?.definitionStatus ?? null,
         presenting_symptoms || null,
+        JSON.stringify(symptomConceptList ?? []),
         hemodynamicsJson,
         diagnosticTestsJson,
+        JSON.stringify(diagnosticConceptList ?? []),
         care_plan || null,
         follow_up_plan || null,
         risk_score || null,
@@ -268,6 +427,53 @@ export class CardiologyService {
         }
       }
     });
+
+    if ('reason_concept' in payload || 'reasonConcept' in payload) {
+      const reasonConceptValue =
+        payload.reason_concept === null || payload.reasonConcept === null
+          ? null
+          : await this.resolveConcept(tenantDb, payload.reason_concept ?? payload.reasonConcept);
+      updates.push(`reason_snomed_code = $${params.length + 1}`);
+      params.push(reasonConceptValue?.conceptId ?? null);
+      updates.push(`reason_snomed_term = $${params.length + 1}`);
+      params.push(reasonConceptValue?.term ?? null);
+      updates.push(`reason_snomed_module_id = $${params.length + 1}`);
+      params.push(reasonConceptValue?.moduleId ?? null);
+      updates.push(`reason_snomed_definition_status = $${params.length + 1}`);
+      params.push(reasonConceptValue?.definitionStatus ?? null);
+
+      if (
+        reasonConceptValue?.term &&
+        (payload.visit_reason === undefined || payload.visit_reason === null)
+      ) {
+        updates.push(`visit_reason = $${params.length + 1}::text`);
+        params.push(reasonConceptValue.term);
+      }
+    }
+
+    if ('symptom_concepts' in payload || 'symptomConcepts' in payload) {
+      const symptomConceptList =
+        payload.symptom_concepts === null || payload.symptomConcepts === null
+          ? []
+          : await this.normalizeConceptArray(
+              tenantDb,
+              payload.symptom_concepts ?? payload.symptomConcepts,
+            );
+      updates.push(`symptom_snomed_codes = $${params.length + 1}::jsonb`);
+      params.push(JSON.stringify(symptomConceptList));
+    }
+
+    if ('diagnostic_concepts' in payload || 'diagnosticConcepts' in payload) {
+      const diagnosticConceptList =
+        payload.diagnostic_concepts === null || payload.diagnosticConcepts === null
+          ? []
+          : await this.normalizeConceptArray(
+              tenantDb,
+              payload.diagnostic_concepts ?? payload.diagnosticConcepts,
+            );
+      updates.push(`diagnostic_snomed_codes = $${params.length + 1}::jsonb`);
+      params.push(JSON.stringify(diagnosticConceptList));
+    }
 
     if (payload.care_status !== undefined) {
       const newStatus = String(payload.care_status);

@@ -110,6 +110,8 @@ export class DatabaseProvisioningService {
       
       // Seed lookup tables with initial data (HIV, maternity, etc.)
       await this.seedLookupTables(tenantDataSource);
+      await this.applySnomedUpgrades(tenantDataSource);
+      await this.applyHivTestingUpgrades(tenantDataSource);
       
       this.logger.log('Schema migration completed');
       
@@ -268,6 +270,11 @@ export class DatabaseProvisioningService {
           priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
           status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'authorized', 'in_progress', 'completed', 'cancelled', 'rejected')),
           drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL,
+          snomed_concept_id VARCHAR(50),
+          snomed_term TEXT,
+          snomed_module_id VARCHAR(50),
+          snomed_definition_status VARCHAR(50),
+          external_codes JSONB DEFAULT '{}'::jsonb,
           authorized_by UUID REFERENCES users(id),
           authorized_at TIMESTAMP WITH TIME ZONE,
           executed_by UUID REFERENCES users(id),
@@ -442,19 +449,432 @@ export class DatabaseProvisioningService {
     let statements = schema.split(';').filter(stmt => stmt.trim());
     
     // Add problems and allergies tables as separate statements (after split)
-    statements.push(`CREATE TABLE IF NOT EXISTS problems (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, code VARCHAR(50), description TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved')), onset_date DATE, resolved_date DATE, notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
-    statements.push(`CREATE TABLE IF NOT EXISTS allergies (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, allergen VARCHAR(255) NOT NULL, reaction TEXT, severity VARCHAR(20) CHECK (severity IN ('mild','moderate','severe')), recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), recorded_by UUID REFERENCES users(id))`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS problems (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        code VARCHAR(50),
+        code_system VARCHAR(50) NOT NULL DEFAULT 'SNOMED_CT',
+        snomed_concept_id VARCHAR(50),
+        snomed_term TEXT,
+        snomed_module_id VARCHAR(50),
+        snomed_definition_status VARCHAR(50),
+        description TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','resolved')),
+        onset_date DATE,
+        resolved_date DATE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS allergies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        allergen VARCHAR(255) NOT NULL,
+        allergen_snomed_code VARCHAR(50),
+        allergen_snomed_term TEXT,
+        allergen_snomed_module_id VARCHAR(50),
+        reaction TEXT,
+        reaction_snomed_code VARCHAR(50),
+        reaction_snomed_term TEXT,
+        severity VARCHAR(20) CHECK (severity IN ('mild','moderate','severe')),
+        severity_snomed_code VARCHAR(50),
+        severity_snomed_term TEXT,
+        recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        recorded_by UUID REFERENCES users(id),
+        verification_status VARCHAR(50),
+        clinical_status VARCHAR(50)
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_problems_patient_id ON problems(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_problems_snomed_concept ON problems(snomed_concept_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_problems_status ON problems(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_patient_id ON allergies(patient_id)`);
-    
-    // Add lab_orders table
-    statements.push(`CREATE TABLE IF NOT EXISTS lab_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), order_number VARCHAR(255) NOT NULL, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, ordering_provider_id UUID NOT NULL REFERENCES users(id), medical_record_id UUID REFERENCES medical_records(id), tests JSONB NOT NULL, priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled')), clinical_info TEXT, special_instructions TEXT, scheduled_date_time TIMESTAMP WITH TIME ZONE, collected_at TIMESTAMP WITH TIME ZONE, collected_by_id UUID REFERENCES users(id), results JSONB, interpretation TEXT, reviewed_by_id UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, attachments JSONB, processing_context JSONB DEFAULT '{}'::jsonb, workflow_events JSONB DEFAULT '[]'::jsonb, handoff_notes JSONB DEFAULT '[]'::jsonb, notification_log JSONB DEFAULT '[]'::jsonb, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_snomed_allergen ON allergies(allergen_snomed_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_allergies_reaction_snomed ON allergies(reaction_snomed_code)`);
+
+    // Laboratory module
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_number VARCHAR(255) NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        ordering_provider_id UUID NOT NULL REFERENCES users(id),
+        medical_record_id UUID REFERENCES medical_records(id),
+        tests JSONB NOT NULL,
+        priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')),
+        status VARCHAR(20) DEFAULT 'ordered' CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled')),
+        clinical_info TEXT,
+        special_instructions TEXT,
+        snomed_concept_id VARCHAR(50),
+        snomed_term TEXT,
+        snomed_module_id VARCHAR(50),
+        snomed_definition_status VARCHAR(50),
+        loinc_code VARCHAR(50),
+        loinc_long_name TEXT,
+        cpt_code VARCHAR(50),
+        scheduled_date_time TIMESTAMP WITH TIME ZONE,
+        collected_at TIMESTAMP WITH TIME ZONE,
+        collected_by_id UUID REFERENCES users(id),
+        results JSONB,
+        interpretation TEXT,
+        reviewed_by_id UUID REFERENCES users(id),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        attachments JSONB,
+        processing_context JSONB DEFAULT '{}'::jsonb,
+        workflow_events JSONB DEFAULT '[]'::jsonb,
+        handoff_notes JSONB DEFAULT '[]'::jsonb,
+        notification_log JSONB DEFAULT '[]'::jsonb,
+        fee_amount NUMERIC(12,2),
+        finance_transaction_id UUID,
+        payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_patient_id ON lab_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_status ON lab_orders(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_ordering_provider_id ON lab_orders(ordering_provider_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_number ON lab_orders(order_number)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_payment_status ON lab_orders(payment_status)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_tests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        loinc_code VARCHAR(50) UNIQUE,
+        test_name VARCHAR(255) NOT NULL,
+        test_code VARCHAR(50),
+        category VARCHAR(100) NOT NULL,
+        specimen_type VARCHAR(100) NOT NULL,
+        unit VARCHAR(50),
+        reference_range_male VARCHAR(100),
+        reference_range_female VARCHAR(100),
+        reference_range_general VARCHAR(100),
+        critical_high DECIMAL(10,2),
+        critical_low DECIMAL(10,2),
+        description TEXT,
+        instructions TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_loinc_code ON lab_tests(loinc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_category ON lab_tests(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_test_code ON lab_tests(test_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_tests_is_active ON lab_tests(is_active)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_order_sets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        set_name VARCHAR(255) NOT NULL,
+        set_code VARCHAR(50) UNIQUE,
+        description TEXT,
+        test_ids JSONB NOT NULL,
+        category VARCHAR(100),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_set_code ON lab_order_sets(set_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_category ON lab_order_sets(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_sets_is_active ON lab_order_sets(is_active)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS critical_result_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lab_order_id UUID NOT NULL REFERENCES lab_orders(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        ordering_provider_id UUID NOT NULL REFERENCES users(id),
+        test_code VARCHAR(50) NOT NULL,
+        test_name VARCHAR(255) NOT NULL,
+        result_value VARCHAR(255) NOT NULL,
+        critical_value_type VARCHAR(20) CHECK (critical_value_type IN ('high','low','critical')),
+        alert_message TEXT NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','acknowledged','dismissed')),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        acknowledgment_notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_lab_order_id ON critical_result_alerts(lab_order_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_patient_id ON critical_result_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_ordering_provider_id ON critical_result_alerts(ordering_provider_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_status ON critical_result_alerts(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_critical_alerts_created_at ON critical_result_alerts(created_at)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_test_catalog (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        test_code VARCHAR(50) UNIQUE NOT NULL,
+        loinc_code VARCHAR(50),
+        test_name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL CHECK (category IN ('Hematology','Chemistry','Microbiology','Immunology','Serology','Toxicology','Urinalysis','Cytology','Molecular','Other')),
+        specimen_type VARCHAR(100) NOT NULL,
+        specimen_volume VARCHAR(50),
+        container_type VARCHAR(100),
+        turnaround_time INTEGER,
+        cost DECIMAL(10,2),
+        description TEXT,
+        clinical_significance TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_test_code ON lab_test_catalog(test_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_loinc_code ON lab_test_catalog(loinc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_category ON lab_test_catalog(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_catalog_is_active ON lab_test_catalog(is_active)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_test_components (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        test_catalog_id UUID NOT NULL REFERENCES lab_test_catalog(id) ON DELETE CASCADE,
+        component_name VARCHAR(255) NOT NULL,
+        component_code VARCHAR(50),
+        loinc_code VARCHAR(50),
+        unit VARCHAR(50),
+        reference_range_min DECIMAL(10,4),
+        reference_range_max DECIMAL(10,4),
+        reference_range_text TEXT,
+        critical_low DECIMAL(10,4),
+        critical_high DECIMAL(10,4),
+        age_specific BOOLEAN DEFAULT false,
+        gender_specific BOOLEAN DEFAULT false,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_test_catalog_id ON lab_test_components(test_catalog_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_component_code ON lab_test_components(component_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_test_components_sort_order ON lab_test_components(sort_order)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_reference_ranges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        component_id UUID NOT NULL REFERENCES lab_test_components(id) ON DELETE CASCADE,
+        age_min INTEGER,
+        age_max INTEGER,
+        gender VARCHAR(10) CHECK (gender IN ('male','female','all')),
+        range_min DECIMAL(10,4),
+        range_max DECIMAL(10,4),
+        range_text TEXT,
+        unit VARCHAR(50),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reference_ranges_component_id ON lab_reference_ranges(component_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reference_ranges_gender ON lab_reference_ranges(gender)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_order_set_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_set_id UUID NOT NULL REFERENCES lab_order_sets(id) ON DELETE CASCADE,
+        test_catalog_id UUID NOT NULL REFERENCES lab_test_catalog(id) ON DELETE CASCADE,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_set_items_order_set_id ON lab_order_set_items(order_set_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_order_set_items_test_catalog_id ON lab_order_set_items(test_catalog_id)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_critical_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        lab_order_id UUID REFERENCES lab_orders(id) ON DELETE CASCADE,
+        component_name VARCHAR(255) NOT NULL,
+        result_value VARCHAR(100) NOT NULL,
+        critical_range VARCHAR(100),
+        severity VARCHAR(20) CHECK (severity IN ('critical','panic')) DEFAULT 'critical',
+        alert_status VARCHAR(20) CHECK (alert_status IN ('pending','acknowledged','escalated')) DEFAULT 'pending',
+        alerted_to UUID REFERENCES users(id),
+        alerted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        acknowledgment_notes TEXT,
+        escalated_to UUID REFERENCES users(id),
+        escalated_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_patient_id ON lab_critical_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_lab_order_id ON lab_critical_alerts(lab_order_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_alert_status ON lab_critical_alerts(alert_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_alerted_to ON lab_critical_alerts(alerted_to)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_critical_alerts_created_at ON lab_critical_alerts(created_at)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_quality_controls (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        analyzer_name VARCHAR(100) NOT NULL,
+        test_code VARCHAR(50),
+        level VARCHAR(50),
+        lot_number VARCHAR(50),
+        run_datetime TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        result_value VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','pass','fail','review')),
+        comments TEXT,
+        recorded_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_analyzer_name ON lab_quality_controls(analyzer_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_run_datetime ON lab_quality_controls(run_datetime)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_quality_controls_status ON lab_quality_controls(status)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS lab_reagent_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reagent_name VARCHAR(150) NOT NULL,
+        analyzer_name VARCHAR(100),
+        lot_number VARCHAR(50),
+        quantity_available NUMERIC(10,2) DEFAULT 0,
+        unit VARCHAR(20) DEFAULT 'units',
+        minimum_threshold NUMERIC(10,2) DEFAULT 0,
+        expires_on DATE,
+        status VARCHAR(20) DEFAULT 'ok' CHECK (status IN ('ok','warning','critical','expired')),
+        notes TEXT,
+        updated_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_reagent_name ON lab_reagent_inventory(reagent_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_status ON lab_reagent_inventory(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_reagent_inventory_expires_on ON lab_reagent_inventory(expires_on)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code)`);
+
+    // Medication catalog
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS drugs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        generic_name VARCHAR(255) NOT NULL,
+        brand_names TEXT[],
+        atc_code VARCHAR(20),
+        drug_class VARCHAR(100),
+        active_ingredients TEXT[],
+        dosage_forms TEXT[],
+        route_of_administration TEXT[],
+        description TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS drug_interactions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        drug1_id UUID NOT NULL REFERENCES drugs(id) ON DELETE CASCADE,
+        drug2_id UUID NOT NULL REFERENCES drugs(id) ON DELETE CASCADE,
+        severity VARCHAR(20) NOT NULL CHECK (severity IN ('minor','moderate','major','contraindicated')),
+        description TEXT NOT NULL,
+        mechanism TEXT,
+        management TEXT,
+        evidence_level VARCHAR(20),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(drug1_id, drug2_id)
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug1_id ON drug_interactions(drug1_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug2_id ON drug_interactions(drug2_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drug_interactions_severity ON drug_interactions(severity)`);
+
+    // Imaging module
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS imaging_modalities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        modality_code VARCHAR(20) UNIQUE NOT NULL CHECK (modality_code IN ('XR','CT','MRI','US','MG','FL','NM','PET')),
+        modality_name VARCHAR(100) NOT NULL,
+        description TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_modalities_modality_code ON imaging_modalities(modality_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_modalities_is_active ON imaging_modalities(is_active)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS imaging_study_types (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        modality_id UUID NOT NULL REFERENCES imaging_modalities(id) ON DELETE CASCADE,
+        study_code VARCHAR(50) UNIQUE NOT NULL,
+        study_name VARCHAR(255) NOT NULL,
+        body_part VARCHAR(100),
+        views TEXT[],
+        typical_images INTEGER DEFAULT 1,
+        contrast_required BOOLEAN DEFAULT false,
+        cost DECIMAL(10,2),
+        description TEXT,
+        preparation_instructions TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_modality_id ON imaging_study_types(modality_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_study_code ON imaging_study_types(study_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_body_part ON imaging_study_types(body_part)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_is_active ON imaging_study_types(is_active)`);
+
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS imaging_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        order_number VARCHAR(50) UNIQUE NOT NULL,
+        study_type_id UUID NOT NULL REFERENCES imaging_study_types(id),
+        ordering_provider UUID NOT NULL REFERENCES users(id),
+        clinical_indication TEXT,
+        clinical_history TEXT,
+        suspected_diagnosis TEXT,
+        icd10_codes TEXT[],
+        priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')),
+        order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('awaiting_payment','ordered','scheduled','in_progress','awaiting_report','completed','cancelled')),
+        snomed_concept_id VARCHAR(50),
+        snomed_term TEXT,
+        snomed_module_id VARCHAR(50),
+        snomed_definition_status VARCHAR(50),
+        cpt_code VARCHAR(50),
+        ordered_at TIMESTAMP WITH TIME Zone DEFAULT NOW(),
+        scheduled_date TIMESTAMP WITH TIME Zone,
+        performed_at TIMESTAMP WITH TIME Zone,
+        cancelled_at TIMESTAMP WITH TIME Zone,
+        cancellation_reason TEXT,
+        fee_amount NUMERIC(12,2),
+        finance_transaction_id UUID,
+        payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME Zone DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME Zone DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_patient_id ON imaging_orders(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_number ON imaging_orders(order_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(study_type_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordering_provider ON imaging_orders(ordering_provider)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_status ON imaging_orders(order_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_payment_status ON imaging_orders(payment_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordered_at ON imaging_orders(ordered_at)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_snomed_concept ON imaging_orders(snomed_concept_id)`);
     
     // Add lab_tests table (test catalog)
     statements.push(`CREATE TABLE IF NOT EXISTS lab_tests (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), loinc_code VARCHAR(50) UNIQUE, test_name VARCHAR(255) NOT NULL, test_code VARCHAR(50), category VARCHAR(100) NOT NULL, specimen_type VARCHAR(100) NOT NULL, unit VARCHAR(50), reference_range_male VARCHAR(100), reference_range_female VARCHAR(100), reference_range_general VARCHAR(100), critical_high DECIMAL(10,2), critical_low DECIMAL(10,2), description TEXT, instructions TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -527,6 +947,13 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
     statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'payment_confirmed'`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_long_name TEXT`);
+    statements.push(`ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50)`);
     statements.push(`ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_status_check`);
     statements.push(`ALTER TABLE lab_orders ADD CONSTRAINT lab_orders_status_check CHECK (status IN ('awaiting_payment','ordered','collected','in_progress','completed','cancelled'))`);
     statements.push(`ALTER TABLE lab_orders DROP CONSTRAINT IF EXISTS lab_orders_payment_status_check`);
@@ -542,6 +969,8 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_order_set_id ON lab_orders(order_set_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_test_catalog_id ON lab_orders(test_catalog_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code)`);
     
     // Add drugs table (medication catalog)
     statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -559,7 +988,13 @@ export class DatabaseProvisioningService {
     
     // Add drug_id column to orders table (for linking prescriptions to drugs)
     statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL`);
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`);
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_codes JSONB DEFAULT '{}'::jsonb`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_orders_drug_id ON orders(drug_id) WHERE drug_id IS NOT NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_orders_snomed_concept ON orders(snomed_concept_id)`);
     
     // Radiology & Medical Imaging Module
     // Imaging Modalities (X-Ray, CT, MRI, Ultrasound, etc.)
@@ -575,7 +1010,37 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_study_types_is_active ON imaging_study_types(is_active)`);
     
     // Imaging Orders
-    statements.push(`CREATE TABLE IF NOT EXISTS imaging_orders (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, order_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), ordering_provider UUID NOT NULL REFERENCES users(id), clinical_indication TEXT, clinical_history TEXT, suspected_diagnosis TEXT, icd10_codes TEXT[], priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')), order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('awaiting_payment','ordered','scheduled','in_progress','awaiting_report','completed','cancelled')), ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), scheduled_date TIMESTAMP WITH TIME ZONE, performed_at TIMESTAMP WITH TIME ZONE, cancelled_at TIMESTAMP WITH TIME ZONE, cancellation_reason TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS imaging_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        order_number VARCHAR(50) UNIQUE NOT NULL,
+        study_type_id UUID NOT NULL REFERENCES imaging_study_types(id),
+        ordering_provider UUID NOT NULL REFERENCES users(id),
+        clinical_indication TEXT,
+        clinical_history TEXT,
+        suspected_diagnosis TEXT,
+        icd10_codes TEXT[],
+        priority VARCHAR(20) DEFAULT 'routine' CHECK (priority IN ('routine','urgent','stat')),
+        order_status VARCHAR(30) DEFAULT 'ordered' CHECK (order_status IN ('awaiting_payment','ordered','scheduled','in_progress','awaiting_report','completed','cancelled')),
+        snomed_concept_id VARCHAR(50),
+        snomed_term TEXT,
+        snomed_module_id VARCHAR(50),
+        snomed_definition_status VARCHAR(50),
+        cpt_code VARCHAR(50),
+        ordered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        scheduled_date TIMESTAMP WITH TIME ZONE,
+        performed_at TIMESTAMP WITH TIME ZONE,
+        cancelled_at TIMESTAMP WITH TIME ZONE,
+        cancellation_reason TEXT,
+        fee_amount NUMERIC(12,2),
+        finance_transaction_id UUID,
+        payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_patient_id ON imaging_orders(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_number ON imaging_orders(order_number)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(study_type_id)`);
@@ -583,6 +1048,12 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_status ON imaging_orders(order_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_payment_status ON imaging_orders(payment_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordered_at ON imaging_orders(ordered_at)`);
+    statements.push(`ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`);
+    statements.push(`ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_orders_snomed_concept ON imaging_orders(snomed_concept_id)`);
     
     // Imaging Studies (actual imaging session)
     statements.push(`CREATE TABLE IF NOT EXISTS imaging_studies (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, accession_number VARCHAR(50) UNIQUE NOT NULL, study_type_id UUID NOT NULL REFERENCES imaging_study_types(id), study_date DATE NOT NULL, study_time TIME NOT NULL, technologist UUID REFERENCES users(id), radiologist_assigned UUID REFERENCES users(id), study_status VARCHAR(30) DEFAULT 'in_progress' CHECK (study_status IN ('in_progress','awaiting_report','reported','signed','amended')), number_of_images INTEGER DEFAULT 0, study_description TEXT, technique TEXT, contrast_used BOOLEAN DEFAULT false, contrast_type VARCHAR(100), contrast_volume VARCHAR(50), radiation_dose VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -684,24 +1155,171 @@ export class DatabaseProvisioningService {
     
     // HIV/AIDS/TB/Cervical Cancer Tables
     // HIV Test Results Table
-    statements.push(`CREATE TABLE IF NOT EXISTS hiv_tests (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, test_number VARCHAR(100) UNIQUE NOT NULL, test_date TIMESTAMP WITH TIME ZONE NOT NULL, test_type VARCHAR(50) NOT NULL CHECK (test_type IN ('rapid_antibody', 'elisa', 'pcr', 'viral_load', 'cd4')), test_kit_name VARCHAR(100), test_kit_lot VARCHAR(100), test_kit_expiry DATE, test_result VARCHAR(50) NOT NULL CHECK (test_result IN ('reactive', 'non_reactive', 'invalid', 'indeterminate', 'positive', 'negative', 'pending')), result_value VARCHAR(255), result_unit VARCHAR(50), is_confirmatory BOOLEAN DEFAULT false, confirmatory_test_id UUID REFERENCES hiv_tests(id), testing_algorithm_step INTEGER DEFAULT 1, algorithm_result VARCHAR(50) CHECK (algorithm_result IN ('positive', 'negative', 'indeterminate', 'incomplete')), tested_by UUID NOT NULL REFERENCES users(id), reviewed_by UUID REFERENCES users(id), reviewed_at TIMESTAMP WITH TIME ZONE, notes TEXT, enrolled_in_care BOOLEAN DEFAULT false, enrollment_declined BOOLEAN DEFAULT false, enrollment_declined_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS hiv_tests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        test_number VARCHAR(100) UNIQUE NOT NULL,
+        test_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        test_type VARCHAR(50) NOT NULL CHECK (test_type IN ('rapid_antibody','elisa','pcr','viral_load','cd4')),
+        test_stage VARCHAR(50) DEFAULT 'screening' CHECK (test_stage IN ('screening','confirmatory','tie_breaker','retest_before_art','self_test_verification','recency')),
+        testing_reason VARCHAR(100),
+        testing_approach VARCHAR(50) CHECK (testing_approach IN ('facility','community','self_test','provider_initiated','client_initiated','lay_provider','pharmacy')),
+        testing_location VARCHAR(100),
+        testing_cadre VARCHAR(100),
+        specimen_type VARCHAR(50),
+        kit_type VARCHAR(100),
+        test_kit_name VARCHAR(100),
+        test_kit_lot VARCHAR(100),
+        test_kit_expiry DATE,
+        dual_kit_used BOOLEAN DEFAULT false,
+        test_result VARCHAR(50) NOT NULL CHECK (test_result IN ('reactive','non_reactive','invalid','indeterminate','positive','negative','pending')),
+        result_value VARCHAR(255),
+        result_unit VARCHAR(50),
+        is_confirmatory BOOLEAN DEFAULT false,
+        confirmatory_test_id UUID REFERENCES hiv_tests(id),
+        testing_algorithm_step INTEGER DEFAULT 1,
+        algorithm_result VARCHAR(50) CHECK (algorithm_result IN ('positive','negative','indeterminate','incomplete')),
+        self_test_reported BOOLEAN DEFAULT false,
+        self_test_confirmed BOOLEAN DEFAULT false,
+        recency_test_performed BOOLEAN DEFAULT false,
+        recency_result VARCHAR(50),
+        recency_kit_lot VARCHAR(100),
+        recency_kit_expiry DATE,
+        partner_notification_status VARCHAR(50),
+        linkage_action VARCHAR(100),
+        linkage_completed BOOLEAN DEFAULT false,
+        stis_screened JSONB DEFAULT '[]'::jsonb,
+        stis_results JSONB DEFAULT '[]'::jsonb,
+        follow_up_actions JSONB DEFAULT '[]'::jsonb,
+        testing_context JSONB DEFAULT '{}'::jsonb,
+        next_test_due_date DATE,
+        tested_by UUID NOT NULL REFERENCES users(id),
+        reviewed_by UUID REFERENCES users(id),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        enrolled_in_care BOOLEAN DEFAULT false,
+        enrollment_declined BOOLEAN DEFAULT false,
+        enrollment_declined_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_location VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_cadre VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_type VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS kit_type VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS dual_kit_used BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS self_test_reported BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS self_test_confirmed BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_test_performed BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_result VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_kit_lot VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_kit_expiry DATE`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS partner_notification_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS linkage_action VARCHAR(100)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS linkage_completed BOOLEAN DEFAULT false`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS stis_screened JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS stis_results JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS follow_up_actions JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_context JSONB DEFAULT '{}'::jsonb`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS next_test_due_date DATE`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_patient_id ON hiv_tests(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_date ON hiv_tests(test_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_test_result ON hiv_tests(test_result)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_tests_enrolled_in_care ON hiv_tests(enrolled_in_care)`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS sti_tests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        hiv_test_id UUID REFERENCES hiv_tests(id) ON DELETE SET NULL,
+        test_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        infection_type VARCHAR(50) NOT NULL,
+        test_type VARCHAR(100),
+        test_method VARCHAR(100),
+        specimen_type VARCHAR(100),
+        anatomic_site VARCHAR(100),
+        result VARCHAR(50) CHECK (result IN ('positive','negative','reactive','non_reactive','indeterminate','pending','invalid')),
+        result_value VARCHAR(255),
+        result_unit VARCHAR(50),
+        treatment_provided BOOLEAN DEFAULT false,
+        treatment_regimen TEXT,
+        treatment_date DATE,
+        notes TEXT,
+        ordered_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sti_tests_patient_id ON sti_tests(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_type ON sti_tests(infection_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sti_tests_result ON sti_tests(result)`);
     
     // Oncology module
-    statements.push(`CREATE TABLE IF NOT EXISTS oncology_cases (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, primary_diagnosis VARCHAR(255) NOT NULL, staging_system VARCHAR(50), overall_stage VARCHAR(20), stage_at_diagnosis VARCHAR(20), diagnosis_date DATE, primary_site VARCHAR(100), histology VARCHAR(100), oncologist_id UUID REFERENCES users(id), status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active','in_remission','completed_therapy','follow_up','deceased','transferred_out')), care_plan TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS oncology_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        primary_diagnosis VARCHAR(255) NOT NULL,
+        primary_diagnosis_snomed_code VARCHAR(50),
+        primary_diagnosis_snomed_term TEXT,
+        primary_diagnosis_snomed_module_id VARCHAR(50),
+        primary_diagnosis_snomed_definition_status VARCHAR(50),
+        staging_system VARCHAR(50),
+        overall_stage VARCHAR(20),
+        stage_at_diagnosis VARCHAR(20),
+        diagnosis_date DATE,
+        primary_site VARCHAR(100),
+        histology VARCHAR(100),
+        oncologist_id UUID REFERENCES users(id),
+        status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active','in_remission','completed_therapy','follow_up','deceased','transferred_out')),
+        care_plan TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_cases_patient_id ON oncology_cases(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_cases_status ON oncology_cases(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_cases_primary_dx_snomed ON oncology_cases(primary_diagnosis_snomed_code)`);
+    statements.push(`ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_term TEXT`);
+    statements.push(`ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_definition_status VARCHAR(50)`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS oncology_staging_entries (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, staging_system VARCHAR(50) NOT NULL, t_stage VARCHAR(10), n_stage VARCHAR(10), m_stage VARCHAR(10), overall_stage VARCHAR(20), stage_date DATE NOT NULL, performance_status VARCHAR(20), notes TEXT, recorded_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_staging_case_id ON oncology_staging_entries(oncology_case_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_staging_stage_date ON oncology_staging_entries(stage_date)`);
     
-    statements.push(`CREATE TABLE IF NOT EXISTS oncology_regimens (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, regimen_name VARCHAR(255) NOT NULL, line_of_therapy VARCHAR(50), intent VARCHAR(50) CHECK (intent IN ('curative','adjuvant','neoadjuvant','palliative','maintenance','other')), cycles_planned INTEGER, start_date DATE, end_date DATE, status VARCHAR(30) DEFAULT 'planned' CHECK (status IN ('planned','active','completed','paused','cancelled')), regimen_details JSONB DEFAULT '{}'::jsonb, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS oncology_regimens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+        regimen_name VARCHAR(255) NOT NULL,
+        regimen_snomed_code VARCHAR(50),
+        regimen_snomed_term TEXT,
+        regimen_snomed_module_id VARCHAR(50),
+        regimen_snomed_definition_status VARCHAR(50),
+        line_of_therapy VARCHAR(50),
+        intent VARCHAR(50) CHECK (intent IN ('curative','adjuvant','neoadjuvant','palliative','maintenance','other')),
+        cycles_planned INTEGER,
+        start_date DATE,
+        end_date DATE,
+        status VARCHAR(30) DEFAULT 'planned' CHECK (status IN ('planned','active','completed','paused','cancelled')),
+        regimen_details JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_case_id ON oncology_regimens(oncology_case_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_status ON oncology_regimens(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_regimens_snomed ON oncology_regimens(regimen_snomed_code)`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_term TEXT`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_definition_status VARCHAR(50)`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS oncology_infusion_sessions (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), regimen_id UUID NOT NULL REFERENCES oncology_regimens(id) ON DELETE CASCADE, cycle_number INTEGER, session_date TIMESTAMP WITH TIME ZONE NOT NULL, location VARCHAR(100), administered_by UUID REFERENCES users(id), vitals JSONB DEFAULT '{}'::jsonb, drugs_administered JSONB DEFAULT '[]'::jsonb, premedications JSONB DEFAULT '[]'::jsonb, toxicities JSONB DEFAULT '[]'::jsonb, status VARCHAR(30) DEFAULT 'scheduled' CHECK (status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled')), notes TEXT, fee_amount NUMERIC(12,2), finance_transaction_id UUID, payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_infusion_regimen_id ON oncology_infusion_sessions(regimen_id)`);
@@ -716,9 +1334,35 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE oncology_infusion_sessions DROP CONSTRAINT IF EXISTS oncology_infusion_sessions_payment_status_check`);
     statements.push(`ALTER TABLE oncology_infusion_sessions ADD CONSTRAINT oncology_infusion_sessions_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
     
-    statements.push(`CREATE TABLE IF NOT EXISTS oncology_adverse_events (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE, regimen_id UUID REFERENCES oncology_regimens(id) ON DELETE SET NULL, event_date TIMESTAMP WITH TIME ZONE NOT NULL, event_type VARCHAR(255) NOT NULL, grade VARCHAR(10), related_to VARCHAR(50), action_taken TEXT, outcome VARCHAR(100), resolved_date DATE, notes TEXT, reported_by UUID REFERENCES users(id), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS oncology_adverse_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+        regimen_id UUID REFERENCES oncology_regimens(id) ON DELETE SET NULL,
+        event_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        event_type VARCHAR(255) NOT NULL,
+        event_snomed_code VARCHAR(50),
+        event_snomed_term TEXT,
+        event_snomed_module_id VARCHAR(50),
+        event_snomed_definition_status VARCHAR(50),
+        grade VARCHAR(10),
+        related_to VARCHAR(50),
+        action_taken TEXT,
+        outcome VARCHAR(100),
+        resolved_date DATE,
+        notes TEXT,
+        reported_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_case_id ON oncology_adverse_events(oncology_case_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_event_date ON oncology_adverse_events(event_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_snomed ON oncology_adverse_events(event_snomed_code)`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_term TEXT`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_definition_status VARCHAR(50)`);
     
     statements.push(`CREATE TABLE IF NOT EXISTS tumor_board_meetings (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), meeting_date TIMESTAMP WITH TIME ZONE NOT NULL, facilitator UUID REFERENCES users(id), location VARCHAR(100), agenda TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_tumor_board_meetings_date ON tumor_board_meetings(meeting_date)`);
@@ -1845,9 +2489,15 @@ export class DatabaseProvisioningService {
       encounter_type VARCHAR(50) CHECK (encounter_type IN ('clinic_visit','diagnostic_test','heart_failure_review','telecardiology','rehabilitation','other')),
       cardiologist_id UUID REFERENCES users(id),
       visit_reason TEXT,
+      reason_snomed_code VARCHAR(50),
+      reason_snomed_term TEXT,
+      reason_snomed_module_id VARCHAR(50),
+      reason_snomed_definition_status VARCHAR(50),
       presenting_symptoms TEXT,
+      symptom_snomed_codes JSONB DEFAULT '[]'::jsonb,
       hemodynamics JSONB DEFAULT '{}'::jsonb,
       diagnostic_tests JSONB DEFAULT '[]'::jsonb,
+      diagnostic_snomed_codes JSONB DEFAULT '[]'::jsonb,
       care_plan TEXT,
       follow_up_plan TEXT,
       risk_score VARCHAR(20) CHECK (risk_score IN ('low','moderate','high','critical')),
@@ -1862,6 +2512,7 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_date ON cardiology_encounters(encounter_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_payment_status ON cardiology_encounters(payment_status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_care_status ON cardiology_encounters(care_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_reason_snomed ON cardiology_encounters(reason_snomed_code)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_risk_score ON cardiology_encounters(risk_score)`);
     statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS fee_amount NUMERIC(12,2)`);
     statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS finance_transaction_id UUID`);
@@ -1871,6 +2522,12 @@ export class DatabaseProvisioningService {
     statements.push(`ALTER TABLE cardiology_encounters ADD CONSTRAINT cardiology_encounters_payment_status_check CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled'))`);
     statements.push(`ALTER TABLE cardiology_encounters DROP CONSTRAINT IF EXISTS cardiology_encounters_care_status_check`);
     statements.push(`ALTER TABLE cardiology_encounters ADD CONSTRAINT cardiology_encounters_care_status_check CHECK (care_status IN ('awaiting_payment','scheduled','in_progress','completed','cancelled'))`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_term TEXT`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS symptom_snomed_codes JSONB DEFAULT '[]'::jsonb`);
+    statements.push(`ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS diagnostic_snomed_codes JSONB DEFAULT '[]'::jsonb`);
 
     statements.push(`CREATE TABLE IF NOT EXISTS hiv_nurse_intakes (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1889,6 +2546,59 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_patient_id ON hiv_nurse_intakes(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_appointment_id ON hiv_nurse_intakes(appointment_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_hiv_nurse_intakes_recorded_at ON hiv_nurse_intakes(recorded_at)`);
+
+    // SNOMED CT Terminology Service Tables
+    statements.push(`CREATE TABLE IF NOT EXISTS snomed_search_cache (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      search_term VARCHAR(255) NOT NULL,
+      result_limit INTEGER NOT NULL,
+      result_offset INTEGER NOT NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      UNIQUE(search_term, result_limit, result_offset)
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_search_cache_term ON snomed_search_cache(search_term)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_search_cache_created ON snomed_search_cache(created_at)`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS snomed_concept_cache (
+      concept_id VARCHAR(50) PRIMARY KEY,
+      concept_data JSONB NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_concept_cache_created ON snomed_concept_cache(created_at)`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS snomed_mapping_cache (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_code VARCHAR(50) NOT NULL,
+      target_code VARCHAR(50) NOT NULL,
+      target_system VARCHAR(20) NOT NULL CHECK (target_system IN ('ICD10', 'ICD11', 'LOINC', 'CPT')),
+      map_category VARCHAR(100),
+      active BOOLEAN NOT NULL DEFAULT true,
+      mapping_data JSONB NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      UNIQUE(source_code, target_code, target_system)
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_mapping_source ON snomed_mapping_cache(source_code, target_system)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_mapping_target ON snomed_mapping_cache(target_code, target_system)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_mapping_active ON snomed_mapping_cache(active)`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS snomed_manual_mappings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_code VARCHAR(50) NOT NULL,
+      target_code VARCHAR(50) NOT NULL,
+      target_system VARCHAR(20) NOT NULL CHECK (target_system IN ('ICD10', 'ICD11', 'LOINC', 'CPT')),
+      map_category VARCHAR(100),
+      description TEXT,
+      created_by UUID REFERENCES users(id),
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      UNIQUE(source_code, target_code, target_system)
+    )`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_manual_mapping_source ON snomed_manual_mappings(source_code, target_system)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_manual_mapping_active ON snomed_manual_mappings(active)`);
 
     return statements;
   }
@@ -1960,6 +2670,8 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_postnatal_visits_updated_at BEFORE UPDATE ON postnatal_visits
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_tests_updated_at BEFORE UPDATE ON hiv_tests
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
       `CREATE TRIGGER update_hiv_care_enrollments_updated_at BEFORE UPDATE ON hiv_care_enrollments
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
@@ -2036,6 +2748,192 @@ export class DatabaseProvisioningService {
       `CREATE TRIGGER update_financial_reconciliation_logs_updated_at BEFORE UPDATE ON financial_reconciliation_logs
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
     ];
+  }
+
+  private getSnomedUpgradeStatements(): string[] {
+    return [
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_code VARCHAR(50)`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS loinc_long_name TEXT`,
+      `ALTER TABLE lab_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50)`,
+      `CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code)`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_codes JSONB DEFAULT '{}'::jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_orders_snomed_concept ON orders(snomed_concept_id)`,
+      `ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50)`,
+      `ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT`,
+      `ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50)`,
+      `CREATE INDEX IF NOT EXISTS idx_imaging_orders_snomed_concept ON imaging_orders(snomed_concept_id)`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_code VARCHAR(50)`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_term TEXT`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS reason_snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS symptom_snomed_codes JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE cardiology_encounters ADD COLUMN IF NOT EXISTS diagnostic_snomed_codes JSONB DEFAULT '[]'::jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_cardiology_encounters_reason_snomed ON cardiology_encounters(reason_snomed_code)`,
+      `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_code VARCHAR(50)`,
+      `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_term TEXT`,
+      `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS primary_diagnosis_snomed_definition_status VARCHAR(50)`,
+      `CREATE INDEX IF NOT EXISTS idx_oncology_cases_primary_dx_snomed ON oncology_cases(primary_diagnosis_snomed_code)`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_code VARCHAR(50)`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_term TEXT`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE oncology_regimens ADD COLUMN IF NOT EXISTS regimen_snomed_definition_status VARCHAR(50)`,
+      `CREATE INDEX IF NOT EXISTS idx_oncology_regimens_snomed ON oncology_regimens(regimen_snomed_code)`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_code VARCHAR(50)`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_term TEXT`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE oncology_adverse_events ADD COLUMN IF NOT EXISTS event_snomed_definition_status VARCHAR(50)`,
+      `CREATE INDEX IF NOT EXISTS idx_oncology_adverse_events_snomed ON oncology_adverse_events(event_snomed_code)`
+    ];
+  }
+
+  private getHivTestingUpgradeStatements(): string[] {
+    return [
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_location VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_cadre VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_type VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS kit_type VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS dual_kit_used BOOLEAN DEFAULT false`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS self_test_reported BOOLEAN DEFAULT false`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS self_test_confirmed BOOLEAN DEFAULT false`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_test_performed BOOLEAN DEFAULT false`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_result VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_kit_lot VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS recency_kit_expiry DATE`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS partner_notification_status VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS linkage_action VARCHAR(100)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS linkage_completed BOOLEAN DEFAULT false`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS stis_screened JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS stis_results JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS follow_up_actions JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_context JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS next_test_due_date DATE`,
+      `
+        CREATE TABLE IF NOT EXISTS sti_tests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          hiv_test_id UUID REFERENCES hiv_tests(id) ON DELETE SET NULL,
+          test_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          infection_type VARCHAR(50) NOT NULL,
+          test_type VARCHAR(100),
+          test_method VARCHAR(100),
+          specimen_type VARCHAR(100),
+          anatomic_site VARCHAR(100),
+          result VARCHAR(50) CHECK (result IN ('positive','negative','reactive','non_reactive','indeterminate','pending','invalid')),
+          result_value VARCHAR(255),
+          result_unit VARCHAR(50),
+          treatment_provided BOOLEAN DEFAULT false,
+          treatment_regimen TEXT,
+          treatment_date DATE,
+          notes TEXT,
+          ordered_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `,
+      `CREATE INDEX IF NOT EXISTS idx_sti_tests_patient_id ON sti_tests(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_type ON sti_tests(infection_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_sti_tests_result ON sti_tests(result)`,
+      `CREATE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
+    ];
+  }
+
+  private async applySnomedUpgrades(tenantDb: DataSource): Promise<void> {
+    for (const statement of this.getSnomedUpgradeStatements()) {
+      const sql = statement.trim();
+      if (!sql) {
+        continue;
+      }
+      try {
+        await tenantDb.query(sql);
+      } catch (error) {
+        this.logger.warn(
+          `SNOMED schema statement failed (${sql.substring(0, 80)}…): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
+  public async applySnomedUpgradesToTenant(databaseName: string): Promise<void> {
+    const connectionString = this.generateConnectionString(databaseName);
+    const tenantDataSource = new DataSource({
+      type: 'postgres',
+      url: connectionString,
+    });
+
+    try {
+      await tenantDataSource.initialize();
+      await this.applySnomedUpgrades(tenantDataSource);
+      await this.applyHivTestingUpgrades(tenantDataSource);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to ensure SNOMED schema for database ${databaseName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      if (tenantDataSource.isInitialized) {
+        await tenantDataSource.destroy();
+      }
+    }
+  }
+
+  private async applyHivTestingUpgrades(tenantDb: DataSource): Promise<void> {
+    for (const statement of this.getHivTestingUpgradeStatements()) {
+      const sql = statement.trim();
+      if (!sql) {
+        continue;
+      }
+      try {
+        await tenantDb.query(sql);
+      } catch (error) {
+        this.logger.warn(
+          `HIV/STI schema statement failed (${sql.substring(0, 80)}…): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
+  public async applyHivTestingUpgradesToTenant(databaseName: string): Promise<void> {
+    const connectionString = this.generateConnectionString(databaseName);
+    const tenantDataSource = new DataSource({
+      type: 'postgres',
+      url: connectionString,
+    });
+
+    try {
+      await tenantDataSource.initialize();
+      await this.applyHivTestingUpgrades(tenantDataSource);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to ensure HIV/STI schema for database ${databaseName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      if (tenantDataSource.isInitialized) {
+        await tenantDataSource.destroy();
+      }
+    }
   }
 
   private async seedLookupTables(tenantDataSource: DataSource): Promise<void> {

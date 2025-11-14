@@ -208,9 +208,24 @@ docker-compose down
 - `GET /api/health/system` - System health overview
 - `GET /api/health/tenants` - All tenant health status
 
-### 69+ Additional EHR APIs Ready
+### Finance & Payment APIs
+- `POST /api/finance/transactions` - Create finance transaction
+- `POST /api/finance/transactions/:id/payments` - Record payment
+- `GET /api/finance/transactions` - List transactions with filters
+- `GET /api/finance/dashboard/summary` - Finance dashboard summary
+- `GET /api/finance/transactions/:id` - Get transaction details
+
+### HIV Module APIs
+- `POST /api/hiv/nurse-intakes` - Create/update HIV nurse intake
+- `GET /api/hiv/nurse-intakes/patient/:patientId` - Get intakes by patient
+- `GET /api/hiv/nurse-intakes/appointment/:appointmentId` - Get intake by appointment
+- `GET /api/hiv/enrollments` - List HIV enrollments
+- Additional HIV management endpoints available
+
+### 70+ Additional EHR APIs Ready
 - Patient Management, Appointments, Medical Records
 - Prescriptions, Lab Orders, Billing, Claims
+- Finance Gating (Appointments, Lab, Imaging, Cardiology)
 - FHIR, HL7, CDSS, DHIS2, Reports, Notifications
 - SMS, Mobile Money, and more...
 

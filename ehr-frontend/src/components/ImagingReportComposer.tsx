@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface ImagingReportComposerProps {
   tenantSlug: string;
@@ -55,7 +56,7 @@ type ReportState = {
   severity: ReportSeverity | '';
   follow_up_recommended: boolean;
   follow_up_interval: string;
-  coded_diagnoses: string[];
+  coded_diagnoses: SnomedConcept[];
   structured_findings: StructuredFinding[];
 };
 
@@ -112,22 +113,40 @@ const parseStructuredFindings = (value: any): StructuredFinding[] => {
   return [];
 };
 
-const parseCodedDiagnoses = (value: any): string[] => {
+const parseCodedDiagnoses = (value: any): SnomedConcept[] => {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
+    return value.map((item) => {
+      if (typeof item === 'object' && item.conceptId) {
+        return item as SnomedConcept;
+      }
+      if (typeof item === 'string') {
+        return { conceptId: item, term: item, preferredTerm: item } as SnomedConcept;
+      }
+      return null;
+    }).filter((item): item is SnomedConcept => item !== null);
   }
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) {
-        return parsed.map((item) => String(item).trim()).filter(Boolean);
+        return parsed.map((item) => {
+          if (typeof item === 'object' && item.conceptId) {
+            return item as SnomedConcept;
+          }
+          if (typeof item === 'string') {
+            return { conceptId: item, term: item, preferredTerm: item } as SnomedConcept;
+          }
+          return null;
+        }).filter((item): item is SnomedConcept => item !== null);
       }
     } catch (error) {
+      // Legacy format: comma-separated codes
       return value
         .split(',')
         .map((item) => item.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((code) => ({ conceptId: code, term: code, preferredTerm: code } as SnomedConcept));
     }
   }
   return [];
@@ -155,7 +174,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   study,
   currentUser,
   onRefresh,
-}) => {
+}: ImagingReportComposerProps) => {
   const { showError, showSuccess } = useNotification();
   const [reportState, setReportState] = useState<ReportState>(defaultReportState);
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
@@ -163,7 +182,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
-  const [diagnosisDraft, setDiagnosisDraft] = useState('');
+  const [currentDiagnosisConcept, setCurrentDiagnosisConcept] = useState<SnomedConcept | null>(null);
 
   const existingReport = study?.report || null;
   const isAssignedRadiologist = useMemo(() => {
@@ -228,23 +247,23 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
     }));
   };
 
-  const addDiagnosisCode = () => {
-    if (readOnly) return;
-    const code = diagnosisDraft.trim().toUpperCase();
-    if (!code) return;
-
-    setReportState((prev) => ({
-      ...prev,
-      coded_diagnoses: prev.coded_diagnoses.includes(code) ? prev.coded_diagnoses : [...prev.coded_diagnoses, code],
-    }));
-    setDiagnosisDraft('');
+  const handleDiagnosisAdd = (concept: SnomedConcept | null) => {
+    if (readOnly || !concept) return;
+    const exists = reportState.coded_diagnoses.some((d) => d.conceptId === concept.conceptId);
+    if (!exists) {
+      setReportState((prev) => ({
+        ...prev,
+        coded_diagnoses: [...prev.coded_diagnoses, concept],
+      }));
+    }
+    setCurrentDiagnosisConcept(null);
   };
 
-  const removeDiagnosisCode = (code: string) => {
+  const removeDiagnosisCode = (conceptId: string) => {
     if (readOnly) return;
     setReportState((prev) => ({
       ...prev,
-      coded_diagnoses: prev.coded_diagnoses.filter((item) => item !== code),
+      coded_diagnoses: prev.coded_diagnoses.filter((item) => item.conceptId !== conceptId),
     }));
   };
 
@@ -274,7 +293,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
         technique: study?.technique || '',
       });
     }
-    setDiagnosisDraft('');
+    setCurrentDiagnosisConcept(null);
   }, [existingReport, study]);
 
   useEffect(() => {
@@ -347,7 +366,13 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
           recommendation: recommendation?.trim() || undefined,
         }));
 
-      const filteredDiagnoses = reportState.coded_diagnoses.map((code) => code.trim()).filter(Boolean);
+      const filteredDiagnoses = reportState.coded_diagnoses.map((concept) => ({
+        conceptId: concept.conceptId,
+        term: concept.term || concept.preferredTerm || concept.conceptId,
+        preferredTerm: concept.preferredTerm || concept.term,
+        moduleId: concept.moduleId,
+        definitionStatus: concept.definitionStatus,
+      }));
 
       const payload = {
         imaging_study_id: study.id,
@@ -645,23 +670,24 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
 
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
-              Coded Diagnoses / Flags
+              SNOMED CT Coded Diagnoses
             </label>
             <div className="rounded-lg border border-slate-200 px-3 py-2 bg-slate-50">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 {reportState.coded_diagnoses.length === 0 && (
                   <span className="text-xs text-slate-400">No coded diagnoses captured</span>
                 )}
-                {reportState.coded_diagnoses.map((code) => (
+                {reportState.coded_diagnoses.map((concept) => (
                   <span
-                    key={code}
+                    key={concept.conceptId}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200"
                   >
-                    {code}
+                    {concept.preferredTerm || concept.term || concept.conceptId}
+                    <span className="text-indigo-500">({concept.conceptId})</span>
                     {!readOnly && (
                       <button
                         type="button"
-                        onClick={() => removeDiagnosisCode(code)}
+                        onClick={() => removeDiagnosisCode(concept.conceptId)}
                         className="text-indigo-500 hover:text-indigo-700 transition-colors"
                       >
                         <X className="w-3 h-3" />
@@ -671,29 +697,21 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
                 ))}
               </div>
               {!readOnly && (
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={diagnosisDraft}
-                    onChange={(e) => setDiagnosisDraft(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addDiagnosisCode();
-                      }
-                    }}
-                    placeholder="Enter ICD / SNOMED code"
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={addDiagnosisCode}
-                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow hover:bg-indigo-700"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add
-                  </button>
-                </div>
+                <SnomedConceptPicker
+                  value={currentDiagnosisConcept}
+                  onChange={(concept) => {
+                    if (concept) {
+                      handleDiagnosisAdd(concept);
+                    } else {
+                      setCurrentDiagnosisConcept(null);
+                    }
+                  }}
+                  token={token}
+                  tenantSlug={tenantSlug}
+                  label=""
+                  placeholder="Search SNOMED CT diagnosis (e.g., Pneumonia, Fracture)"
+                  helperText="Add SNOMED CT coded diagnoses from the imaging findings"
+                />
               )}
             </div>
           </div>

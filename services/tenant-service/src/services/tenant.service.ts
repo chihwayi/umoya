@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tenant, TenantStatus, SubscriptionTier } from '../entities/tenant.entity';
@@ -6,7 +6,7 @@ import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { DatabaseProvisioningService } from './database-provisioning.service';
 
 @Injectable()
-export class TenantService {
+export class TenantService implements OnModuleInit {
   private readonly logger = new Logger(TenantService.name);
 
   constructor(
@@ -14,6 +14,25 @@ export class TenantService {
     private tenantRepository: Repository<Tenant>,
     private databaseProvisioningService: DatabaseProvisioningService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const tenants = await this.tenantRepository.find();
+    for (const tenant of tenants) {
+      if (!tenant.databaseName) {
+        continue;
+      }
+
+      try {
+        await this.databaseProvisioningService.applySnomedUpgradesToTenant(tenant.databaseName);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to auto-apply SNOMED schema for tenant ${tenant.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
 
   async createTenant(createTenantDto: CreateTenantDto): Promise<Tenant> {
     // Check if subdomain already exists

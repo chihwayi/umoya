@@ -100,6 +100,12 @@ CREATE INDEX IF NOT EXISTS idx_imaging_orders_study_type_id ON imaging_orders(st
 CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordering_provider ON imaging_orders(ordering_provider);
 CREATE INDEX IF NOT EXISTS idx_imaging_orders_order_status ON imaging_orders(order_status);
 CREATE INDEX IF NOT EXISTS idx_imaging_orders_ordered_at ON imaging_orders(ordered_at);
+ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_concept_id VARCHAR(50);
+ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_term TEXT;
+ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_module_id VARCHAR(50);
+ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS snomed_definition_status VARCHAR(50);
+ALTER TABLE imaging_orders ADD COLUMN IF NOT EXISTS cpt_code VARCHAR(50);
+CREATE INDEX IF NOT EXISTS idx_imaging_orders_snomed_concept ON imaging_orders(snomed_concept_id);
 
 -- Imaging Studies
 CREATE TABLE IF NOT EXISTS imaging_studies (

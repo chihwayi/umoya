@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, Camera, AlertCircle, Calendar, CreditCard } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Modality {
   id: string;
@@ -49,6 +50,7 @@ export default function ImagingOrderModal({
   const [suspectedDiagnosis, setSuspectedDiagnosis] = useState('');
   const [priority, setPriority] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [loading, setLoading] = useState(false);
+  const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
   const { showSuccess, showError } = useNotification();
 
   useEffect(() => {
@@ -94,6 +96,11 @@ export default function ImagingOrderModal({
       return;
     }
 
+    if (!orderConcept) {
+      showError('SNOMED Required', 'Please select the SNOMED CT concept for this imaging order.');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -105,6 +112,10 @@ export default function ImagingOrderModal({
         clinical_history: clinicalHistory,
         suspected_diagnosis: suspectedDiagnosis,
         priority,
+        snomedConceptId: orderConcept.conceptId,
+        snomedTerm: orderConcept.preferredTerm || orderConcept.term,
+        snomedModuleId: orderConcept.moduleId,
+        snomedDefinitionStatus: orderConcept.definitionStatus,
       });
 
       const costMessage =
@@ -154,6 +165,7 @@ export default function ImagingOrderModal({
                   onClick={() => {
                     setSelectedModality(modality.modality_code);
                     setSelectedStudyType(null);
+                    setOrderConcept(null);
                   }}
                   className={`p-4 rounded-lg border-2 transition-all text-center ${
                     selectedModality === modality.modality_code
@@ -183,7 +195,10 @@ export default function ImagingOrderModal({
                   <button
                     key={study.id}
                     type="button"
-                    onClick={() => setSelectedStudyType(study)}
+                    onClick={() => {
+                      setSelectedStudyType(study);
+                      setOrderConcept(null);
+                    }}
                     className={`w-full text-left p-3 rounded-lg border transition-all ${
                       selectedStudyType?.id === study.id
                         ? 'border-purple-600 bg-purple-50'
@@ -228,6 +243,21 @@ export default function ImagingOrderModal({
                   Estimated fee: ${Number(selectedStudyType.cost).toFixed(2)}
                 </p>
               </div>
+            </div>
+          )}
+
+          {selectedStudyType && (
+            <div className="mb-6">
+              <SnomedConceptPicker
+                value={orderConcept}
+                onChange={setOrderConcept}
+                token={token}
+                tenantSlug={tenantSlug}
+                label="SNOMED CT Imaging Concept"
+                placeholder={`Search SNOMED CT (e.g., ${selectedStudyType.study_name})`}
+                helperText="Select the standardized SNOMED CT concept that represents this imaging order."
+                required
+              />
             </div>
           )}
 
