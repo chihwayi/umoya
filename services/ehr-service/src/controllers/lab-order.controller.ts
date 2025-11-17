@@ -16,7 +16,7 @@ export class LabOrderController {
   @Post()
   @ApiOperation({ summary: 'Create lab order' })
   async createLabOrder(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.labOrderService.create(createDto, req.tenantDb, (req.user as any).id);
+    return this.labOrderService.create(createDto, req.tenantDb, (req.user as any).id, req.tenantId);
   }
 
   @Get()

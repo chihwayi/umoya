@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Activity, Save, User, X, AlertCircle } from 'lucide-react';
+import { Activity, Save, User, X, AlertCircle, Plus } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface CervicalCancerScreeningComponentProps {
   tenantSlug: string;
@@ -21,8 +22,27 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
     viaResult: '',
     papResult: '',
     hpvResult: '',
+    colposcopyResult: '',
+    biopsyRequired: false,
+    biopsyResult: '',
+    treatmentProvided: '',
+    treatmentDate: '',
+    nextScreeningDate: '',
     notes: ''
   });
+  const [screeningMethodConcept, setScreeningMethodConcept] = useState<SnomedConcept | null>(null);
+  const [screeningResultConcept, setScreeningResultConcept] = useState<SnomedConcept | null>(null);
+  const [viaResultConcepts, setViaResultConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingViaResultConcept, setPendingViaResultConcept] = useState<SnomedConcept | null>(null);
+  const [papResultConcepts, setPapResultConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingPapResultConcept, setPendingPapResultConcept] = useState<SnomedConcept | null>(null);
+  const [hpvResultConcepts, setHpvResultConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingHpvResultConcept, setPendingHpvResultConcept] = useState<SnomedConcept | null>(null);
+  const [colposcopyResultConcepts, setColposcopyResultConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingColposcopyResultConcept, setPendingColposcopyResultConcept] = useState<SnomedConcept | null>(null);
+  const [biopsyResultConcept, setBiopsyResultConcept] = useState<SnomedConcept | null>(null);
+  const [treatmentProvidedConcepts, setTreatmentProvidedConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingTreatmentProvidedConcept, setPendingTreatmentProvidedConcept] = useState<SnomedConcept | null>(null);
 
   const searchPatients = async () => {
     if (!searchTerm.trim()) {
@@ -73,8 +93,23 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
         viaResult: form.screeningMethod === 'via' ? form.viaResult : null,
         papResult: form.screeningMethod === 'pap_smear' ? form.papResult : null,
         hpvResult: form.screeningMethod === 'hpv_test' ? form.hpvResult : null,
+        colposcopyResult: form.screeningMethod === 'colposcopy' ? form.colposcopyResult : null,
+        biopsyRequired: form.biopsyRequired,
+        biopsyResult: form.biopsyResult || null,
+        treatmentProvided: form.treatmentProvided || null,
+        treatmentDate: form.treatmentDate || null,
+        nextScreeningDate: form.nextScreeningDate || null,
         screenedBy: currentUser.id,
-        notes: form.notes
+        notes: form.notes,
+        // SNOMED fields
+        screening_method_snomed: screeningMethodConcept,
+        screening_result_snomed: screeningResultConcept,
+        via_result_snomed: viaResultConcepts,
+        pap_result_snomed: papResultConcepts,
+        hpv_result_snomed: hpvResultConcepts,
+        colposcopy_result_snomed: colposcopyResultConcepts,
+        biopsy_result_snomed: biopsyResultConcept,
+        treatment_provided_snomed: treatmentProvidedConcepts,
       }, token, tenantSlug);
 
       showSuccess('Success', 'Cervical cancer screening recorded');
@@ -87,8 +122,27 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
         viaResult: '',
         papResult: '',
         hpvResult: '',
+        colposcopyResult: '',
+        biopsyRequired: false,
+        biopsyResult: '',
+        treatmentProvided: '',
+        treatmentDate: '',
+        nextScreeningDate: '',
         notes: ''
       });
+      setScreeningMethodConcept(null);
+      setScreeningResultConcept(null);
+      setViaResultConcepts([]);
+      setPendingViaResultConcept(null);
+      setPapResultConcepts([]);
+      setPendingPapResultConcept(null);
+      setHpvResultConcepts([]);
+      setPendingHpvResultConcept(null);
+      setColposcopyResultConcepts([]);
+      setPendingColposcopyResultConcept(null);
+      setBiopsyResultConcept(null);
+      setTreatmentProvidedConcepts([]);
+      setPendingTreatmentProvidedConcept(null);
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to record screening');
     } finally {
@@ -234,6 +288,18 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                 <option value="hpv_test">HPV Test</option>
                 <option value="colposcopy">Colposcopy</option>
               </select>
+              <div className="mt-2">
+                <SnomedConceptPicker
+                  value={screeningMethodConcept}
+                  onChange={setScreeningMethodConcept}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                  label="SNOMED CT Method (Optional)"
+                  placeholder="Search for screening method concept..."
+                  context="procedure"
+                  helperText="Select SNOMED CT concept for structured coding"
+                />
+              </div>
             </div>
 
             {form.screeningMethod === 'via' && (
@@ -249,6 +315,50 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                   <option value="abnormal">Abnormal</option>
                   <option value="suspicious">Suspicious</option>
                 </select>
+                <div className="mt-2">
+                  <SnomedConceptPicker
+                    value={pendingViaResultConcept}
+                    onChange={setPendingViaResultConcept}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    tenantSlug={tenantSlug}
+                    label="SNOMED CT VIA Results (Optional)"
+                    placeholder="Search for finding concept..."
+                    context="finding"
+                    helperText="Add SNOMED CT concepts for structured coding"
+                  />
+                  {pendingViaResultConcept && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViaResultConcepts([...viaResultConcepts, pendingViaResultConcept]);
+                        setPendingViaResultConcept(null);
+                      }}
+                      className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Concept
+                    </button>
+                  )}
+                  {viaResultConcepts.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {viaResultConcepts.map((concept, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                          <span className="text-sm text-slate-700">
+                            <span className="font-medium">{concept.term}</span>
+                            <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setViaResultConcepts(viaResultConcepts.filter((_, i) => i !== idx))}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -267,6 +377,50 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                   <option value="hsil">HSIL</option>
                   <option value="cancer">Cancer</option>
                 </select>
+                <div className="mt-2">
+                  <SnomedConceptPicker
+                    value={pendingPapResultConcept}
+                    onChange={setPendingPapResultConcept}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    tenantSlug={tenantSlug}
+                    label="SNOMED CT Pap Results (Optional)"
+                    placeholder="Search for finding concept..."
+                    context="finding"
+                    helperText="Add SNOMED CT concepts for structured coding"
+                  />
+                  {pendingPapResultConcept && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPapResultConcepts([...papResultConcepts, pendingPapResultConcept]);
+                        setPendingPapResultConcept(null);
+                      }}
+                      className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Concept
+                    </button>
+                  )}
+                  {papResultConcepts.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {papResultConcepts.map((concept, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                          <span className="text-sm text-slate-700">
+                            <span className="font-medium">{concept.term}</span>
+                            <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPapResultConcepts(papResultConcepts.filter((_, i) => i !== idx))}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -283,6 +437,107 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                   <option value="positive">Positive</option>
                   <option value="positive_hr">Positive (High Risk)</option>
                 </select>
+                <div className="mt-2">
+                  <SnomedConceptPicker
+                    value={pendingHpvResultConcept}
+                    onChange={setPendingHpvResultConcept}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    tenantSlug={tenantSlug}
+                    label="SNOMED CT HPV Results (Optional)"
+                    placeholder="Search for finding concept..."
+                    context="finding"
+                    helperText="Add SNOMED CT concepts for structured coding"
+                  />
+                  {pendingHpvResultConcept && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHpvResultConcepts([...hpvResultConcepts, pendingHpvResultConcept]);
+                        setPendingHpvResultConcept(null);
+                      }}
+                      className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Concept
+                    </button>
+                  )}
+                  {hpvResultConcepts.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {hpvResultConcepts.map((concept, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                          <span className="text-sm text-slate-700">
+                            <span className="font-medium">{concept.term}</span>
+                            <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setHpvResultConcepts(hpvResultConcepts.filter((_, i) => i !== idx))}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {form.screeningMethod === 'colposcopy' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Colposcopy Result</label>
+                <input
+                  type="text"
+                  value={form.colposcopyResult}
+                  onChange={(e) => setForm({ ...form, colposcopyResult: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Enter colposcopy findings..."
+                />
+                <div className="mt-2">
+                  <SnomedConceptPicker
+                    value={pendingColposcopyResultConcept}
+                    onChange={setPendingColposcopyResultConcept}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    tenantSlug={tenantSlug}
+                    label="SNOMED CT Colposcopy Results (Optional)"
+                    placeholder="Search for finding concept..."
+                    context="finding"
+                    helperText="Add SNOMED CT concepts for structured coding"
+                  />
+                  {pendingColposcopyResultConcept && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColposcopyResultConcepts([...colposcopyResultConcepts, pendingColposcopyResultConcept]);
+                        setPendingColposcopyResultConcept(null);
+                      }}
+                      className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Concept
+                    </button>
+                  )}
+                  {colposcopyResultConcepts.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {colposcopyResultConcepts.map((concept, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                          <span className="text-sm text-slate-700">
+                            <span className="font-medium">{concept.term}</span>
+                            <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setColposcopyResultConcepts(colposcopyResultConcepts.filter((_, i) => i !== idx))}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -300,6 +555,130 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                 <option value="suspicious">Suspicious</option>
                 <option value="pending">Pending</option>
               </select>
+              <div className="mt-2">
+                <SnomedConceptPicker
+                  value={screeningResultConcept}
+                  onChange={setScreeningResultConcept}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                  label="SNOMED CT Result (Optional)"
+                  placeholder="Search for finding concept..."
+                  context="finding"
+                  helperText="Select SNOMED CT concept for structured coding"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="biopsyRequired"
+                checked={form.biopsyRequired}
+                onChange={(e) => setForm({ ...form, biopsyRequired: e.target.checked })}
+                className="w-4 h-4 text-pink-600 rounded focus:ring-pink-500"
+              />
+              <label htmlFor="biopsyRequired" className="text-sm font-medium">Biopsy Required</label>
+            </div>
+
+            {form.biopsyRequired && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Biopsy Result</label>
+                <input
+                  type="text"
+                  value={form.biopsyResult}
+                  onChange={(e) => setForm({ ...form, biopsyResult: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Enter biopsy result..."
+                />
+                <div className="mt-2">
+                  <SnomedConceptPicker
+                    value={biopsyResultConcept}
+                    onChange={setBiopsyResultConcept}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    tenantSlug={tenantSlug}
+                    label="SNOMED CT Biopsy Result (Optional)"
+                    placeholder="Search for finding concept..."
+                    context="finding"
+                    helperText="Select SNOMED CT concept for structured coding"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Treatment Provided</label>
+              <textarea
+                value={form.treatmentProvided}
+                onChange={(e) => setForm({ ...form, treatmentProvided: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                rows={2}
+                placeholder="Enter treatment details..."
+              />
+              <div className="mt-2">
+                <SnomedConceptPicker
+                  value={pendingTreatmentProvidedConcept}
+                  onChange={setPendingTreatmentProvidedConcept}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug}
+                  label="SNOMED CT Treatment (Optional)"
+                  placeholder="Search for procedure concept..."
+                  context="procedure"
+                  helperText="Add SNOMED CT concepts for structured coding"
+                />
+                {pendingTreatmentProvidedConcept && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTreatmentProvidedConcepts([...treatmentProvidedConcepts, pendingTreatmentProvidedConcept]);
+                      setPendingTreatmentProvidedConcept(null);
+                    }}
+                    className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Concept
+                  </button>
+                )}
+                {treatmentProvidedConcepts.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {treatmentProvidedConcepts.map((concept, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                        <span className="text-sm text-slate-700">
+                          <span className="font-medium">{concept.term}</span>
+                          <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTreatmentProvidedConcepts(treatmentProvidedConcepts.filter((_, i) => i !== idx))}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Treatment Date</label>
+                <input
+                  type="date"
+                  value={form.treatmentDate}
+                  onChange={(e) => setForm({ ...form, treatmentDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Next Screening Date</label>
+                <input
+                  type="date"
+                  value={form.nextScreeningDate}
+                  onChange={(e) => setForm({ ...form, nextScreeningDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+              </div>
             </div>
 
             <div>
@@ -329,4 +708,3 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
 };
 
 export default CervicalCancerScreeningComponent;
-

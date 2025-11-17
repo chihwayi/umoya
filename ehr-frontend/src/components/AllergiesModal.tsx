@@ -146,6 +146,7 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
                       placeholder="Search SNOMED CT (e.g., Penicillin)"
                       helperText="Use SNOMED CT agent/allergen concepts"
                       required
+                      context="substance"
                     />
                     <SnomedConceptPicker
                       value={entry.reaction}
@@ -162,6 +163,7 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
                       placeholder="Search reaction (e.g., Anaphylaxis)"
                       helperText="Optional: capture SNOMED-coded reaction outcome"
                       required={false}
+                      context="condition"
                     />
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-semibold text-slate-600">Severity</label>

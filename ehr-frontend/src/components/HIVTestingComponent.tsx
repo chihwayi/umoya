@@ -708,6 +708,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                   tenantSlug={tenantSlug}
                   label="HIV test SNOMED concept"
                   helperText="Select the exact analyte/procedure performed for interoperability."
+                context="procedure"
                 />
               </div>
               <div className="md:col-span-2">
@@ -718,6 +719,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                   tenantSlug={tenantSlug}
                   label="Specimen SNOMED concept"
                   helperText="Optional structured specimen description (finger prick, plasma, etc.)."
+                context="specimen"
                 />
               </div>
             </>
@@ -949,6 +951,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                         tenantSlug={tenantSlug}
                         label="Infection SNOMED concept"
                         helperText="Optional — capture the coded pathogen or syndrome."
+                    context="condition"
                       />
                     </div>
                   )}
@@ -971,6 +974,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
                         tenantSlug={tenantSlug}
                         label="Test SNOMED concept"
                         helperText="Optional coded lab/imaging procedure."
+                    context="procedure"
                       />
                     </div>
                   )}

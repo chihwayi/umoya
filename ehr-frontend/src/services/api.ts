@@ -66,7 +66,7 @@ export const terminologyApi = {
     term: string,
     token: string,
     tenantSlug: string,
-    options?: { limit?: number; offset?: number; activeOnly?: boolean }
+    options?: { limit?: number; offset?: number; activeOnly?: boolean; semanticTags?: string[]; ecl?: string }
   ) => {
     if (!term || term.trim().length < 2) {
       return { data: { concepts: [], total: 0, limit: options?.limit ?? 20, offset: options?.offset ?? 0 } };
@@ -79,6 +79,12 @@ export const terminologyApi = {
     };
     if (typeof options?.activeOnly !== 'undefined') {
       params.activeOnly = options.activeOnly;
+    }
+    if (options?.semanticTags?.length) {
+      params.semanticTags = options.semanticTags.join(',');
+    }
+    if (options?.ecl) {
+      params.ecl = options.ecl;
     }
 
     const response = await ehrAxios.get('/terminology/snomed/search', {
@@ -93,6 +99,43 @@ export const terminologyApi = {
 
   validateConcept: async (conceptId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/terminology/snomed/validate/${conceptId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getIcd10Mappings: async (
+    conceptId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { primaryOnly?: boolean; includeInactive?: boolean; limit?: number }
+  ) => {
+    const params: Record<string, any> = {};
+    if (typeof options?.primaryOnly !== 'undefined') {
+      params.primaryOnly = options.primaryOnly;
+    }
+    if (typeof options?.includeInactive !== 'undefined') {
+      params.includeInactive = options.includeInactive;
+    }
+    if (options?.limit) {
+      params.limit = options.limit;
+    }
+
+    const response = await ehrAxios.get(`/terminology/snomed/map/${conceptId}/ICD10`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getIcd10MappingMetadata: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/terminology/snomed/icd10/metadata', {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,

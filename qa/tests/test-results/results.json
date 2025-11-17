@@ -1,0 +1,78 @@
+{
+  "config": {
+    "configFile": "/Users/devoop/Dev/personal/medicore/qa/tests/playwright.config.ts",
+    "rootDir": "/Users/devoop/Dev/personal/medicore/qa/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/devoop/Dev/personal/medicore/qa/tests/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "api-tests",
+        "name": "api-tests",
+        "testDir": "/Users/devoop/Dev/personal/medicore/qa/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.1",
+    "workers": 5,
+    "webServer": {
+      "command": "echo \"Ensure EHR service is running on port 3001\"",
+      "url": "http://localhost:3001",
+      "reuseExistingServer": true
+    }
+  },
+  "suites": [],
+  "errors": [
+    {
+      "message": "Error: Process from config.webServer exited early.",
+      "stack": "Error: Process from config.webServer exited early."
+    }
+  ],
+  "stats": {
+    "startTime": "2025-11-17T23:09:52.128Z",
+    "duration": 331.28499999999985,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

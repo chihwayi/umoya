@@ -486,6 +486,7 @@ const OphthalmologyDashboard: React.FC = () => {
                       tenantSlug={tenantSlug!}
                       label="Chief complaint SNOMED concept"
                       helperText="Optional structured code to standardize presenting symptoms."
+                      context="condition"
                     />
                   </div>
                 )}
@@ -507,6 +508,7 @@ const OphthalmologyDashboard: React.FC = () => {
                       tenantSlug={tenantSlug!}
                       label="Assessment SNOMED concept"
                       helperText="Add a coded diagnosis to keep downstream reporting aligned."
+                      context="condition"
                     />
                   </div>
                 )}
@@ -631,6 +633,7 @@ const OphthalmologyDashboard: React.FC = () => {
                             tenantSlug={tenantSlug!}
                             label="Structure SNOMED concept"
                             helperText="Optional structured code for the anatomical structure examined."
+                          context="anatomy"
                           />
                         </div>
                       )}
@@ -658,6 +661,7 @@ const OphthalmologyDashboard: React.FC = () => {
                           tenantSlug={tenantSlug!}
                           label="Observation SNOMED concept"
                           helperText="Capture a coded description for analytics and interoperability."
+                          context="observable"
                         />
                       </div>
                     )}
@@ -751,6 +755,7 @@ const OphthalmologyDashboard: React.FC = () => {
                           tenantSlug={tenantSlug!}
                           label="Follow-up reason SNOMED concept"
                           helperText="Optional — pick a coded reason to keep the follow-up queue structured."
+                        context="condition"
                         />
                       </div>
                     )}
@@ -785,6 +790,7 @@ const OphthalmologyDashboard: React.FC = () => {
                             tenantSlug={tenantSlug!}
                             label="Procedure SNOMED concept"
                             helperText="Save a coded intervention to power analytics and billing alignment."
+                            context="procedure"
                           />
                         </div>
                       )}

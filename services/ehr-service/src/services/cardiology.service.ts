@@ -578,6 +578,53 @@ export class CardiologyService {
     `,
     );
 
+    const chiefComplaintMix = await tenantDb.query(
+      `
+      SELECT
+        reason_snomed_code AS concept_id,
+        COALESCE(reason_snomed_term, visit_reason) AS term,
+        COUNT(*)::int AS count
+      FROM cardiology_encounters
+      WHERE reason_snomed_code IS NOT NULL
+      GROUP BY reason_snomed_code, COALESCE(reason_snomed_term, visit_reason)
+      ORDER BY count DESC
+      LIMIT 10
+      `,
+    );
+
+    const symptomMix = await tenantDb.query(
+      `
+      SELECT
+        elem->>'conceptId' AS concept_id,
+        elem->>'term' AS term,
+        COUNT(*)::int AS count
+      FROM cardiology_encounters
+      CROSS JOIN LATERAL jsonb_array_elements(symptom_snomed_codes) AS elem
+      WHERE symptom_snomed_codes IS NOT NULL
+        AND elem->>'conceptId' IS NOT NULL
+      GROUP BY elem->>'conceptId', elem->>'term'
+      ORDER BY count DESC
+      LIMIT 15
+      `,
+    );
+
+    const diagnosticBacklog = await tenantDb.query(
+      `
+      SELECT
+        elem->>'conceptId' AS concept_id,
+        elem->>'term' AS term,
+        COUNT(*)::int AS count
+      FROM cardiology_encounters ce
+      CROSS JOIN LATERAL jsonb_array_elements(diagnostic_snomed_codes) AS elem
+      WHERE diagnostic_snomed_codes IS NOT NULL
+        AND elem->>'conceptId' IS NOT NULL
+        AND COALESCE(ce.care_status, '') <> 'completed'
+      GROUP BY elem->>'conceptId', elem->>'term'
+      ORDER BY count DESC
+      LIMIT 15
+      `,
+    );
+
     return {
       totals: {
         totalEncounters: Number(totals?.total_encounters || 0),
@@ -592,6 +639,9 @@ export class CardiologyService {
       riskMix,
       upcomingFollowUps,
       recentEncounters,
+      chiefComplaintMix,
+      symptomMix,
+      diagnosticBacklog,
     };
   }
 }

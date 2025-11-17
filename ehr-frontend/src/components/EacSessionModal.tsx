@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Calendar, Activity, User, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ModalPortal from './ModalPortal';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface EacSessionModalProps {
   open: boolean;
@@ -84,6 +85,39 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
       // Notes
       sessionNotes: ''
   });
+  const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
+  const snomedReady = Boolean(snomedToken && tenantSlug);
+  const [barrierConcepts, setBarrierConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingBarrierConcept, setPendingBarrierConcept] = useState<SnomedConcept | null>(null);
+  const [interventionConcepts, setInterventionConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingInterventionConcept, setPendingInterventionConcept] = useState<SnomedConcept | null>(null);
+  const [adherenceToolConcepts, setAdherenceToolConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingToolConcept, setPendingToolConcept] = useState<SnomedConcept | null>(null);
+  const [supportConcepts, setSupportConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingSupportConcept, setPendingSupportConcept] = useState<SnomedConcept | null>(null);
+  const [followUpConcepts, setFollowUpConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingFollowConcept, setPendingFollowConcept] = useState<SnomedConcept | null>(null);
+  const [sessionOutcomeConcept, setSessionOutcomeConcept] = useState<SnomedConcept | null>(null);
+
+  const addConceptToCollection = (
+    concept: SnomedConcept | null,
+    collection: SnomedConcept[],
+    setter: (value: SnomedConcept[]) => void,
+    reset: (value: SnomedConcept | null) => void,
+  ) => {
+    if (concept && !collection.some((item) => item.conceptId === concept.conceptId)) {
+      setter([...collection, concept]);
+    }
+    reset(null);
+  };
+
+  const removeConceptFromCollection = (
+    conceptId: string,
+    collection: SnomedConcept[],
+    setter: (value: SnomedConcept[]) => void,
+  ) => {
+    setter(collection.filter((item) => item.conceptId !== conceptId));
+  };
 
   useEffect(() => {
     if (open) {
@@ -200,13 +234,19 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
         medicationSimplification: form.medicationSimplification,
         adherenceToolsProvided: form.adherenceToolsProvided,
         supportSystemsIdentified: form.supportSystemsIdentified,
+        adherenceBarrierConcepts: barrierConcepts,
+        interventionConcepts,
+        adherenceToolConcepts,
+        supportSystemConcepts: supportConcepts,
         patientFeedback: form.patientFeedback || null,
         patientConcerns: form.patientConcerns || null,
         patientCommitmentLevel: form.patientCommitmentLevel || null,
         nextSessionDate: form.nextSessionDate || null,
         followUpActions: form.followUpActions,
+        followUpActionConcepts,
         followUpResponsiblePerson: form.followUpResponsiblePerson || null,
         sessionOutcome: form.sessionOutcome,
+        sessionOutcomeConcept,
         outcomeNotes: form.outcomeNotes || null,
         adherenceImprovementObserved: form.adherenceImprovementObserved,
         eacProgramStatus: form.eacProgramStatus,
@@ -310,6 +350,337 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
               </button>
             </div>
           </div>
+
+          {snomedReady && (
+            <div className="bg-white rounded-xl p-6 border border-emerald-200 space-y-6">
+              <h4 className="text-lg font-semibold text-emerald-900 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                SNOMED Structured Coding
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <SnomedConceptPicker
+                    value={pendingBarrierConcept}
+                    onChange={setPendingBarrierConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Adherence barrier concept"
+                    placeholder="Search SNOMED CT (e.g., Transportation barrier)"
+                  context="situation"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                      onClick={() =>
+                        addConceptToCollection(
+                          pendingBarrierConcept,
+                          barrierConcepts,
+                          setBarrierConcepts,
+                          setPendingBarrierConcept,
+                        )
+                      }
+                      disabled={!pendingBarrierConcept}
+                    >
+                      Add barrier
+                    </button>
+                    {barrierConcepts.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700"
+                        onClick={() => setBarrierConcepts([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {barrierConcepts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {barrierConcepts.map((concept) => (
+                        <span
+                          key={concept.conceptId}
+                          className="flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-800"
+                        >
+                          {concept.preferredTerm || concept.term}
+                          <button
+                            type="button"
+                            className="text-emerald-500 hover:text-emerald-700"
+                            onClick={() =>
+                              removeConceptFromCollection(concept.conceptId, barrierConcepts, setBarrierConcepts)
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <SnomedConceptPicker
+                    value={pendingInterventionConcept}
+                    onChange={setPendingInterventionConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Intervention concept"
+                    placeholder="Search SNOMED CT (e.g., Observed therapy for adherence)"
+                  context="procedure"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                      onClick={() =>
+                        addConceptToCollection(
+                          pendingInterventionConcept,
+                          interventionConcepts,
+                          setInterventionConcepts,
+                          setPendingInterventionConcept,
+                        )
+                      }
+                      disabled={!pendingInterventionConcept}
+                    >
+                      Add intervention
+                    </button>
+                    {interventionConcepts.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded-full border border-sky-200 px-3 py-1 text-xs font-semibold text-sky-700"
+                        onClick={() => setInterventionConcepts([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {interventionConcepts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {interventionConcepts.map((concept) => (
+                        <span
+                          key={concept.conceptId}
+                          className="flex items-center gap-1 rounded-full bg-sky-50 px-3 py-1 text-xs text-sky-800"
+                        >
+                          {concept.preferredTerm || concept.term}
+                          <button
+                            type="button"
+                            className="text-sky-500 hover:text-sky-700"
+                            onClick={() =>
+                              removeConceptFromCollection(
+                                concept.conceptId,
+                                interventionConcepts,
+                                setInterventionConcepts,
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <SnomedConceptPicker
+                    value={pendingToolConcept}
+                    onChange={setPendingToolConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Adherence tool concept"
+                    placeholder="Search SNOMED CT (e.g., Medication reminder application)"
+                  context="procedure"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                      onClick={() =>
+                        addConceptToCollection(
+                          pendingToolConcept,
+                          adherenceToolConcepts,
+                          setAdherenceToolConcepts,
+                          setPendingToolConcept,
+                        )
+                      }
+                      disabled={!pendingToolConcept}
+                    >
+                      Add tool
+                    </button>
+                    {adherenceToolConcepts.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded-full border border-indigo-200 px-3 py-1 text-xs font-semibold text-indigo-700"
+                        onClick={() => setAdherenceToolConcepts([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {adherenceToolConcepts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {adherenceToolConcepts.map((concept) => (
+                        <span
+                          key={concept.conceptId}
+                          className="flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs text-indigo-800"
+                        >
+                          {concept.preferredTerm || concept.term}
+                          <button
+                            type="button"
+                            className="text-indigo-500 hover:text-indigo-700"
+                            onClick={() =>
+                              removeConceptFromCollection(
+                                concept.conceptId,
+                                adherenceToolConcepts,
+                                setAdherenceToolConcepts,
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <SnomedConceptPicker
+                    value={pendingSupportConcept}
+                    onChange={setPendingSupportConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Support system concept"
+                    placeholder="Search SNOMED CT (e.g., Community health worker)"
+                  context="situation"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                      onClick={() =>
+                        addConceptToCollection(
+                          pendingSupportConcept,
+                          supportConcepts,
+                          setSupportConcepts,
+                          setPendingSupportConcept,
+                        )
+                      }
+                      disabled={!pendingSupportConcept}
+                    >
+                      Add support
+                    </button>
+                    {supportConcepts.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700"
+                        onClick={() => setSupportConcepts([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {supportConcepts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {supportConcepts.map((concept) => (
+                        <span
+                          key={concept.conceptId}
+                          className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800"
+                        >
+                          {concept.preferredTerm || concept.term}
+                          <button
+                            type="button"
+                            className="text-amber-500 hover:text-amber-700"
+                            onClick={() =>
+                              removeConceptFromCollection(
+                                concept.conceptId,
+                                supportConcepts,
+                                setSupportConcepts,
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <SnomedConceptPicker
+                    value={pendingFollowConcept}
+                    onChange={setPendingFollowConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Follow-up action concept"
+                    placeholder="Search SNOMED CT (e.g., Home visit)"
+                  context="procedure"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                      onClick={() =>
+                        addConceptToCollection(
+                          pendingFollowConcept,
+                          followUpConcepts,
+                          setFollowUpConcepts,
+                          setPendingFollowConcept,
+                        )
+                      }
+                      disabled={!pendingFollowConcept}
+                    >
+                      Add follow-up
+                    </button>
+                    {followUpConcepts.length > 0 && (
+                      <button
+                        type="button"
+                        className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                        onClick={() => setFollowUpConcepts([])}
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  {followUpConcepts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {followUpConcepts.map((concept) => (
+                        <span
+                          key={concept.conceptId}
+                          className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700"
+                        >
+                          {concept.preferredTerm || concept.term}
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-slate-700"
+                            onClick={() =>
+                              removeConceptFromCollection(
+                                concept.conceptId,
+                                followUpConcepts,
+                                setFollowUpConcepts,
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <SnomedConceptPicker
+                  value={sessionOutcomeConcept}
+                  onChange={setSessionOutcomeConcept}
+                  token={snomedToken}
+                  tenantSlug={tenantSlug}
+                  label="Session outcome concept"
+                  placeholder="Search SNOMED CT (e.g., Improved adherence)"
+                context="situation"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-6">

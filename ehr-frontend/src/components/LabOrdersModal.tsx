@@ -305,6 +305,7 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
                 placeholder="Search SNOMED CT (e.g., Complete blood count)"
                 helperText="Select the standardized SNOMED CT concept for this laboratory order."
                 required
+                context="procedure"
               />
             </div>
             {/* Order Sets Section */}

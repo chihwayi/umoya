@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { formatDateForAPI } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
@@ -36,6 +37,7 @@ const DoctorAppointmentManagement: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +111,18 @@ const DoctorAppointmentManagement: React.FC = () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
+
+      // Show confirmation for cancel action
+      if (action === 'cancel') {
+        const confirmed = await confirm({
+          title: 'Cancel Appointment',
+          message: 'Are you sure you want to cancel this appointment? This action will notify the patient.',
+          type: 'warning',
+          confirmText: 'Yes, Cancel',
+          cancelText: 'Keep Appointment',
+        });
+        if (!confirmed) return;
+      }
 
       switch (action) {
         case 'start':
@@ -413,6 +427,7 @@ const DoctorAppointmentManagement: React.FC = () => {
           </div>
         </div>
       </div>
+      {Dialog}
     </div>
   );
 };

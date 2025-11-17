@@ -9,7 +9,7 @@ export class VitalsController {
   async record(@Body() body: any, @Req() req: any) {
     const tenantId = req.tenantId;
     const saved = await this.vitalsService.recordVitals(body, tenantId);
-    return { success: true, vitals: saved };
+    return { success: true, vitals: saved, cdssInsights: saved.cdssInsights ?? null };
   }
 
   @Get('patient/:patientId')

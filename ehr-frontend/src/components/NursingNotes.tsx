@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   FileText, Save, X, Plus, Search, Filter, Clock, User,
-  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye
+  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye, Brain
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Patient {
   id: string;
@@ -65,6 +66,13 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
     outcomes: '',
     patientId: ''
   });
+  const [observationsConcepts, setObservationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingObservationConcept, setPendingObservationConcept] = useState<SnomedConcept | null>(null);
+  const [interventionsConcepts, setInterventionsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingInterventionConcept, setPendingInterventionConcept] = useState<SnomedConcept | null>(null);
+  const [outcomesConcepts, setOutcomesConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingOutcomeConcept, setPendingOutcomeConcept] = useState<SnomedConcept | null>(null);
+  const [cdssInsights, setCdssInsights] = useState<any | null>(null);
 
   // Apply preset behaviors
   useEffect(() => {
@@ -87,6 +95,10 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
       fetchAllNotes();
     }
   }, [selectedPatient]);
+
+  useEffect(() => {
+    setCdssInsights(null);
+  }, [selectedPatient?.id]);
 
   // Filter patients based on search term
   useEffect(() => {
@@ -197,14 +209,19 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
         vitalSigns: newNote.vitalSigns,
         medications: newNote.medications,
         observations: newNote.observations,
+        observations_snomed: observationsConcepts,
         interventions: newNote.interventions,
+        interventions_snomed: interventionsConcepts,
         outcomes: newNote.outcomes,
+        outcomes_snomed: outcomesConcepts,
         recordedAt: new Date().toISOString(),
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id
       };
 
-      await ehrApi.recordNursingNote(noteData, token, tenantSlug);
+      const response = await ehrApi.recordNursingNote(noteData, token, tenantSlug);
+      const insights = response.data?.cdssInsights ?? response.data?.cdss_insights ?? null;
       showSuccess('Success', 'Nursing note saved successfully');
+      setCdssInsights(insights);
       setShowNewNote(false);
       setNewNote({
         noteType: 'general',
@@ -216,6 +233,12 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
         outcomes: '',
         patientId: ''
       });
+      setObservationsConcepts([]);
+      setPendingObservationConcept(null);
+      setInterventionsConcepts([]);
+      setPendingInterventionConcept(null);
+      setOutcomesConcepts([]);
+      setPendingOutcomeConcept(null);
       
       // Refresh notes based on current view
       if (selectedPatient) {
@@ -394,6 +417,50 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                         rows={3}
                         placeholder="Record patient observations..."
                       />
+                      <div className="mt-2">
+                        <SnomedConceptPicker
+                          value={pendingObservationConcept}
+                          onChange={setPendingObservationConcept}
+                          token={localStorage.getItem('ehr_token') || ''}
+                          tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                          label="SNOMED CT Observations (Optional)"
+                          placeholder="Search for observation concept..."
+                          context="condition"
+                          helperText="Add SNOMED CT concepts for structured coding"
+                        />
+                        {pendingObservationConcept && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setObservationsConcepts([...observationsConcepts, pendingObservationConcept]);
+                              setPendingObservationConcept(null);
+                            }}
+                            className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Concept
+                          </button>
+                        )}
+                        {observationsConcepts.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {observationsConcepts.map((concept, idx) => (
+                              <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                                <span className="text-sm text-slate-700">
+                                  <span className="font-medium">{concept.term}</span>
+                                  <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setObservationsConcepts(observationsConcepts.filter((_, i) => i !== idx))}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -405,6 +472,50 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                         rows={3}
                         placeholder="Record nursing interventions..."
                       />
+                      <div className="mt-2">
+                        <SnomedConceptPicker
+                          value={pendingInterventionConcept}
+                          onChange={setPendingInterventionConcept}
+                          token={localStorage.getItem('ehr_token') || ''}
+                          tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                          label="SNOMED CT Interventions (Optional)"
+                          placeholder="Search for intervention concept..."
+                          context="procedure"
+                          helperText="Add SNOMED CT concepts for structured coding"
+                        />
+                        {pendingInterventionConcept && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInterventionsConcepts([...interventionsConcepts, pendingInterventionConcept]);
+                              setPendingInterventionConcept(null);
+                            }}
+                            className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Concept
+                          </button>
+                        )}
+                        {interventionsConcepts.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {interventionsConcepts.map((concept, idx) => (
+                              <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                                <span className="text-sm text-slate-700">
+                                  <span className="font-medium">{concept.term}</span>
+                                  <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setInterventionsConcepts(interventionsConcepts.filter((_, i) => i !== idx))}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -416,6 +527,50 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                         rows={3}
                         placeholder="Record patient outcomes..."
                       />
+                      <div className="mt-2">
+                        <SnomedConceptPicker
+                          value={pendingOutcomeConcept}
+                          onChange={setPendingOutcomeConcept}
+                          token={localStorage.getItem('ehr_token') || ''}
+                          tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                          label="SNOMED CT Outcomes (Optional)"
+                          placeholder="Search for outcome concept..."
+                          context="condition"
+                          helperText="Add SNOMED CT concepts for structured coding"
+                        />
+                        {pendingOutcomeConcept && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOutcomesConcepts([...outcomesConcepts, pendingOutcomeConcept]);
+                              setPendingOutcomeConcept(null);
+                            }}
+                            className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Concept
+                          </button>
+                        )}
+                        {outcomesConcepts.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {outcomesConcepts.map((concept, idx) => (
+                              <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                                <span className="text-sm text-slate-700">
+                                  <span className="font-medium">{concept.term}</span>
+                                  <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setOutcomesConcepts(outcomesConcepts.filter((_, i) => i !== idx))}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -734,6 +889,51 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
 
   return (
     <div className="space-y-6">
+      {cdssInsights && (
+        <div className="rounded-2xl border border-indigo-200 bg-white shadow-sm p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-600 rounded-xl">
+              <Brain className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">CDSS Insights</p>
+              <p className="text-xs text-slate-500">Based on the most recent nursing note.</p>
+            </div>
+          </div>
+          {Array.isArray(cdssInsights?.diagnosis?.suggested_diagnoses) && cdssInsights.diagnosis.suggested_diagnoses.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-600 mb-1">Likely Diagnoses</p>
+              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                {cdssInsights.diagnosis.suggested_diagnoses.slice(0, 3).map((diag: any, idx: number) => (
+                  <li key={`diag-${idx}`}>
+                    {diag.diagnosis || diag.condition}
+                    {diag.probability && ` (${Math.round(diag.probability * 100)}%)`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {Array.isArray(cdssInsights?.careGaps?.gaps) && cdssInsights.careGaps.gaps.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-amber-600 mb-1">Care Gaps</p>
+              <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                {cdssInsights.careGaps.gaps.slice(0, 3).map((gap: any, idx: number) => (
+                  <li key={`gap-${idx}`}>{gap?.description || gap}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {Array.isArray(cdssInsights?.recommendedInterventions) && cdssInsights.recommendedInterventions.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-600 mb-1">Documented Interventions</p>
+              <p className="text-xs text-slate-500">
+                {cdssInsights.recommendedInterventions.join(' · ')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {renderContent()}
       
       {patient && onClose && (

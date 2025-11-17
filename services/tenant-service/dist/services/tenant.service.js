@@ -25,6 +25,20 @@ let TenantService = TenantService_1 = class TenantService {
         this.databaseProvisioningService = databaseProvisioningService;
         this.logger = new common_1.Logger(TenantService_1.name);
     }
+    async onModuleInit() {
+        const tenants = await this.tenantRepository.find();
+        for (const tenant of tenants) {
+            if (!tenant.databaseName) {
+                continue;
+            }
+            try {
+                await this.databaseProvisioningService.applySnomedUpgradesToTenant(tenant.databaseName);
+            }
+            catch (error) {
+                this.logger.warn(`Failed to auto-apply SNOMED schema for tenant ${tenant.id}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
     async createTenant(createTenantDto) {
         const existingTenant = await this.tenantRepository.findOne({
             where: { subdomain: createTenantDto.subdomain }

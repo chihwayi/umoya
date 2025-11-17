@@ -1,13 +1,15 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from '../components/GlobalNotification';
 import * as Api from '../services/api';
 import AllergiesModal from './AllergiesModal';
 import ModalPortal from './ModalPortal';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import Icd10Suggestions from './Icd10Suggestions';
 
 interface Patient {
   id: string;
@@ -41,18 +43,26 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const { showSuccess, showError } = useNotification();
 
   const [chiefComplaint, setChiefComplaint] = useState('');
+  const [chiefComplaintConcept, setChiefComplaintConcept] = useState<SnomedConcept | null>(null);
   const [onset, setOnset] = useState('');
   const [painScore, setPainScore] = useState<number>(0);
   const [allergies, setAllergies] = useState('');
   const [medications, setMedications] = useState('');
   const [history, setHistory] = useState('');
   const [observations, setObservations] = useState('');
+  const [observationsConcepts, setObservationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingObservationConcept, setPendingObservationConcept] = useState<SnomedConcept | null>(null);
   const [priority, setPriority] = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [loading, setLoading] = useState(false);
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
   const [structuredAllergies, setStructuredAllergies] = useState<any[]>([]);
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
+  const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+
+  useEffect(() => {
+    setCdssInsights(null);
+  }, [patient?.id]);
 
   // Load existing allergies from structured table when patient is selected
   useEffect(() => {
@@ -117,19 +127,22 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
       const triagePayload = {
         patientId: patient.id,
         chiefComplaint,
+        chief_complaint_snomed: chiefComplaintConcept,
         onset,
         painScore,
         allergies,
         medications,
         history,
         observations,
+        observations_snomed: observationsConcepts,
         priority,
         severityScore,
         recordedAt: new Date().toISOString(),
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id,
       };
 
-      await Api.ehrApi.recordTriageAssessment(triagePayload, token, tenantSlug);
+      const response = await Api.ehrApi.recordTriageAssessment(triagePayload, token, tenantSlug);
+      setCdssInsights(response.data?.cdssInsights ?? null);
       showSuccess('Saved', 'Triage assessment recorded');
       onSave?.();
     } catch (e) {
@@ -184,6 +197,79 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           </div>
         </div>
       </div>
+
+      {cdssInsights && (
+        <div className="p-6 bg-white rounded-2xl border border-indigo-200/80 shadow-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
+              <Brain className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">CDSS Insights</h3>
+              <p className="text-sm text-slate-500">
+                Recommendations generated automatically from triage data. Review before making clinical decisions.
+              </p>
+            </div>
+          </div>
+
+          {cdssInsights.risk && (
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-800">Risk Assessment</p>
+                <span className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-slate-900 text-white capitalize">
+                  {cdssInsights.risk.risk_level || 'unknown'} · Score {cdssInsights.risk.overall_score ?? '—'}
+                </span>
+              </div>
+              {Array.isArray(cdssInsights.risk.factors) && cdssInsights.risk.factors.length > 0 && (
+                <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
+                  {cdssInsights.risk.factors.slice(0, 4).map((factor: any, idx: number) => (
+                    <li key={`factor-${idx}`}>{factor?.description || factor}</li>
+                  ))}
+                </ul>
+              )}
+              {Array.isArray(cdssInsights.risk.recommendations) && cdssInsights.risk.recommendations.length > 0 && (
+                <div className="text-xs text-slate-500">
+                  <span className="font-semibold text-slate-600">Recommendations:</span>{' '}
+                  {cdssInsights.risk.recommendations.slice(0, 3).join(' · ')}
+                </div>
+              )}
+            </div>
+          )}
+
+          {cdssInsights.diagnosis && (
+            <div className="rounded-xl border border-slate-200 p-4 bg-white space-y-2">
+              <p className="text-sm font-semibold text-slate-800">Likely Diagnoses</p>
+              <div className="grid gap-2">
+                {Array.isArray(cdssInsights.diagnosis.suggested_diagnoses) &&
+                  cdssInsights.diagnosis.suggested_diagnoses.slice(0, 3).map((diag: any, idx: number) => (
+                    <div
+                      key={`diag-${idx}`}
+                      className="flex items-center justify-between text-sm py-2 px-3 rounded-lg border border-slate-100 bg-slate-50"
+                    >
+                      <div>
+                        <p className="font-medium text-slate-800">{diag.diagnosis || diag.condition}</p>
+                        {diag.matching_symptoms && (
+                          <p className="text-xs text-slate-500">
+                            Matches: {Array.isArray(diag.matching_symptoms) ? diag.matching_symptoms.join(', ') : diag.matching_symptoms}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {(diag.probability ? Math.round(diag.probability * 100) : 0)}%
+                      </span>
+                    </div>
+                  ))}
+              </div>
+              {Array.isArray(cdssInsights.diagnosis.recommendedTests) && cdssInsights.diagnosis.recommendedTests.length > 0 && (
+                <div className="text-xs text-slate-500">
+                  <span className="font-semibold text-slate-600">Suggested tests:</span>{' '}
+                  {cdssInsights.diagnosis.recommendedTests.slice(0, 3).join(', ')}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Triage Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -273,6 +359,28 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               rows={3}
               placeholder="Patient's primary concern in their own words"
             />
+            <div className="mt-2">
+              <SnomedConceptPicker
+                value={chiefComplaintConcept}
+                onChange={setChiefComplaintConcept}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                label="SNOMED CT Code (Optional)"
+                placeholder="Search for SNOMED concept..."
+                context="condition"
+                helperText="Select a SNOMED CT concept to code the chief complaint"
+              />
+            </div>
+            
+            {chiefComplaintConcept && (
+              <Icd10Suggestions
+                snomedConceptId={chiefComplaintConcept.conceptId}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                className="mt-3"
+              />
+            )}
+            
             {diagnosisSuggestions && (
               <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <h5 className="text-xs font-semibold text-blue-900 mb-2 flex items-center gap-1">
@@ -428,6 +536,50 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               rows={4}
               placeholder="General appearance, orientation, distress, etc."
             />
+            <div className="mt-2">
+              <SnomedConceptPicker
+                value={pendingObservationConcept}
+                onChange={setPendingObservationConcept}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                label="SNOMED CT Observations (Optional)"
+                placeholder="Search for observation concept..."
+                context="condition"
+                helperText="Add SNOMED CT concepts for structured coding"
+              />
+              {pendingObservationConcept && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setObservationsConcepts([...observationsConcepts, pendingObservationConcept]);
+                    setPendingObservationConcept(null);
+                  }}
+                  className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Concept
+                </button>
+              )}
+              {observationsConcepts.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {observationsConcepts.map((concept, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                      <span className="text-sm text-slate-700">
+                        <span className="font-medium">{concept.term}</span>
+                        <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setObservationsConcepts(observationsConcepts.filter((_, i) => i !== idx))}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

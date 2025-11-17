@@ -2,6 +2,7 @@ import { Module, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -41,6 +42,7 @@ import { OphthalmologyController } from './controllers/ophthalmology.controller'
 import { FinanceController } from './controllers/finance.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
 import { TerminologyController } from './controllers/terminology.controller';
+import { MetricsController } from './controllers/metrics.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -88,6 +90,9 @@ import { OphthalmologyService } from './services/ophthalmology.service';
 import { FinanceService } from './services/finance.service';
 import { CardiologyService } from './services/cardiology.service';
 import { TerminologyService } from './services/terminology.service';
+import { CdssHookService } from './services/cdss-hook.service';
+import { SpecialtyAutomationService } from './services/specialty-automation.service';
+import { MetricsService } from './services/metrics.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -96,6 +101,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ScheduleModule.forRoot(),
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'ehr-super-secret-key',
@@ -140,6 +146,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     CardiologyController,
     FinanceController,
     TerminologyController,
+    MetricsController,
   ],
   providers: [
     AuthService,
@@ -187,6 +194,9 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     CardiologyService,
     FinanceService,
     TerminologyService,
+    CdssHookService,
+    SpecialtyAutomationService,
+    MetricsService,
     JwtStrategy,
   ],
 })

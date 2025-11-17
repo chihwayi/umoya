@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard } from 'lucide-react';
+import { X, Search, Plus, Trash2, Package, Clock, TestTube2, CreditCard, Brain } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
@@ -56,6 +56,7 @@ export default function EnhancedLabOrderModal({
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'order-sets'>('order-sets');
+  const [cdssInsights, setCdssInsights] = useState<Array<{ testName: string; insights: any }>>([]);
   const { showSuccess, showError } = useNotification();
 
   const totalEstimatedCost = selectedTests.reduce((sum, test) => sum + (test.cost || 0), 0);
@@ -151,10 +152,13 @@ export default function EnhancedLabOrderModal({
 
     try {
       setLoading(true);
+      setCdssInsights([]);
+
+      const insightSummary: Array<{ testName: string; insights: any }> = [];
 
       // Create separate order for each test
       for (const test of selectedTests) {
-        await ehrApi.createLabOrder(
+        const response = await ehrApi.createLabOrder(
           {
             patientId,
             orderingProviderId,
@@ -177,6 +181,13 @@ export default function EnhancedLabOrderModal({
           token,
           tenantSlug,
         );
+        const insights =
+          response.data?.cdssInsights ??
+          response.data?.cdss_insights ??
+          null;
+        if (insights) {
+          insightSummary.push({ testName: test.test_name, insights });
+        }
       }
 
       const paymentNote =
@@ -185,7 +196,14 @@ export default function EnhancedLabOrderModal({
           : '';
       showSuccess(`Ordered ${selectedTests.length} test(s) successfully.${paymentNote}`);
       onSuccess?.();
-      onClose();
+      setSelectedTests([]);
+      setClinicalIndication('');
+
+      if (insightSummary.length > 0) {
+        setCdssInsights(insightSummary);
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error('Failed to create lab orders:', error);
       showError('Failed to create lab orders');
@@ -223,6 +241,54 @@ export default function EnhancedLabOrderModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {cdssInsights.length > 0 && (
+            <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-600 rounded-xl">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">CDSS Insights</p>
+                  <p className="text-xs text-slate-600">
+                    Review guideline hints before closing this modal.
+                  </p>
+                </div>
+              </div>
+              {cdssInsights.map(({ testName, insights }, idx) => (
+                <div key={`${testName}-${idx}`} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">{testName}</p>
+                    {insights?.guidelines?.matched_condition && (
+                      <span className="text-xs text-slate-500">
+                        Matched: {insights.guidelines.matched_condition}
+                      </span>
+                    )}
+                  </div>
+                  {Array.isArray(insights?.guidelines?.recommendations) && insights.guidelines.recommendations.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-600 mb-1">Guideline Recommendations</p>
+                      <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                        {insights.guidelines.recommendations.slice(0, 3).map((rec: string, recIdx: number) => (
+                          <li key={`rec-${idx}-${recIdx}`}>{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {Array.isArray(insights?.careGaps?.gaps) && insights.careGaps.gaps.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-amber-600 mb-1">Potential Care Gaps</p>
+                      <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                        {insights.careGaps.gaps.slice(0, 3).map((gap: any, gapIdx: number) => (
+                          <li key={`gap-${idx}-${gapIdx}`}>{gap?.description || gap}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Tabs */}
           <div className="flex space-x-2 mb-6 border-b">
             <button
@@ -420,6 +486,7 @@ export default function EnhancedLabOrderModal({
                           placeholder={`Search SNOMED CT (e.g., ${test.test_name})`}
                           helperText="Select the appropriate SNOMED CT concept for this test order."
                           required
+                          context="procedure"
                         />
                       </div>
                     ))}

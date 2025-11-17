@@ -153,6 +153,7 @@ const ProblemListModal: React.FC<ProblemListModalProps> = ({ open, onClose, onSa
                       placeholder="Search SNOMED CT (e.g., Type 2 diabetes mellitus)"
                       helperText="Use SNOMED CT for structured diagnoses"
                       required
+                      context="condition"
                     />
                     <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
                       <div className="flex flex-col gap-1">

@@ -7,6 +7,7 @@ import { Patient } from '../entities/patient.entity';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
+import { CdssHookService } from './cdss-hook.service';
 
 @Injectable()
 export class LabOrderService {
@@ -16,6 +17,7 @@ export class LabOrderService {
     private criticalAlertService: CriticalAlertService,
     private financeService: FinanceService,
     private terminologyService: TerminologyService,
+    private readonly cdssHookService: CdssHookService,
   ) {}
   
   private appendWorkflowEvent(
@@ -75,7 +77,12 @@ export class LabOrderService {
     ].slice(0, 100);
   }
 
-  async create(createDto: any, tenantDb: DataSource, orderingProviderId: string): Promise<LabOrder> {
+  async create(
+    createDto: any,
+    tenantDb: DataSource,
+    orderingProviderId: string,
+    tenantId?: string,
+  ): Promise<LabOrder & { cdssInsights?: any }> {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
 
     const orderCount = await labOrderRepository.count();
@@ -253,7 +260,21 @@ export class LabOrderService {
       );
     }
 
-    return saved;
+    let cdssInsights: any = null;
+    try {
+      cdssInsights = await this.cdssHookService.handleLabOrderCreated({
+        tenantId,
+        tenantDb,
+        labOrder: saved,
+      });
+    } catch (error) {
+      this.logger.warn(`CDSS hook failed for lab order ${saved.id}: ${error instanceof Error ? error.message : error}`);
+    }
+
+    return {
+      ...saved,
+      cdssInsights,
+    };
   }
 
   async getQualityControls(

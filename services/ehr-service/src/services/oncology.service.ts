@@ -1164,13 +1164,59 @@ export class OncologyService {
       `,
     );
 
+    const diagnosisDistribution = await tenantDb.query(
+      `
+      SELECT
+        primary_diagnosis_snomed_code AS concept_id,
+        COALESCE(primary_diagnosis_snomed_term, primary_diagnosis) AS term,
+        COUNT(*)::int AS count
+      FROM oncology_cases
+      WHERE primary_diagnosis_snomed_code IS NOT NULL
+      GROUP BY primary_diagnosis_snomed_code, COALESCE(primary_diagnosis_snomed_term, primary_diagnosis)
+      ORDER BY count DESC
+      LIMIT 10
+      `,
+    );
+
+    const regimenMix = await tenantDb.query(
+      `
+      SELECT
+        regimen_snomed_code AS concept_id,
+        COALESCE(regimen_snomed_term, regimen_name) AS term,
+        COUNT(*)::int AS count
+      FROM oncology_regimens
+      WHERE regimen_snomed_code IS NOT NULL
+      GROUP BY regimen_snomed_code, COALESCE(regimen_snomed_term, regimen_name)
+      ORDER BY count DESC
+      LIMIT 10
+      `,
+    );
+
+    const snomedAdverseEvents = await tenantDb.query(
+      `
+      SELECT
+        event_snomed_code AS concept_id,
+        COALESCE(event_snomed_term, event_type) AS term,
+        grade,
+        COUNT(*)::int AS count
+      FROM oncology_adverse_events
+      WHERE event_snomed_code IS NOT NULL
+        AND event_date >= NOW() - INTERVAL '180 days'
+      GROUP BY event_snomed_code, COALESCE(event_snomed_term, event_type), grade
+      ORDER BY count DESC
+      LIMIT 20
+      `,
+    );
+
     return {
       caseTotals,
       statusBreakdown,
       upcomingInfusions,
       adverseEventSummary,
       financeSummary,
+      diagnosisDistribution,
+      regimenMix,
+      snomedAdverseEvents,
     };
   }
 }
-

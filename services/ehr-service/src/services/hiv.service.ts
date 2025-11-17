@@ -104,6 +104,24 @@ export class HivService {
     };
   }
 
+  private async normalizeConceptArray(
+    tenantDb: DataSource,
+    raw: any,
+  ): Promise<StoredConceptSummary[]> {
+    if (!raw) {
+      return [];
+    }
+    const list = Array.isArray(raw) ? raw : [raw];
+    const resolved: StoredConceptSummary[] = [];
+    for (const candidate of list) {
+      const concept = await this.resolveConcept(tenantDb, candidate);
+      if (concept) {
+        resolved.push(concept);
+      }
+    }
+    return resolved;
+  }
+
   private hydrateNurseIntake(row: any) {
     if (!row) {
       return null;
@@ -944,6 +962,17 @@ export class HivService {
       arvStatus, arvReason, arvRegimenCode, arvRegimenName,
       arvQuantityPrescribed, arvQuantityDispensed, arvAdherencePercentage,
       regimenChanged, regimenChangeApprovedBy,
+      visitReasonConcept,
+      opportunisticInfectionConcepts,
+      tbScreeningConcept,
+      tbInvestigationConcepts,
+      arvReasonConcept,
+      arvRegimenConcept,
+      mentalHealthResultConcept,
+      mentalHealthManagementConcept,
+      adverseEventConcepts,
+      followUpActionConcepts,
+      referralReasonConcept,
       // Lab Results
       cd4Count, cd4Percentage, cd4TestDate,
       viralLoad, viralLoadUnit, viralLoadTestDate, viralLoadSuppressed,
@@ -1028,6 +1057,51 @@ export class HivService {
     }
     const sanitizedVisitType = visitType;
 
+    const resolvedVisitReasonConcept = await this.resolveConcept(
+      tenantDb,
+      visitReasonConcept ?? body?.visit_reason_concept,
+    );
+    const opportunisticInfectionConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      opportunisticInfectionConcepts ?? body?.opportunistic_infection_concepts,
+    );
+    const resolvedTbScreeningConcept = await this.resolveConcept(
+      tenantDb,
+      tbScreeningConcept ?? body?.tb_screening_concept,
+    );
+    const tbInvestigationConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      tbInvestigationConcepts ?? body?.tb_investigation_concepts,
+    );
+    const resolvedArvReasonConcept = await this.resolveConcept(
+      tenantDb,
+      arvReasonConcept ?? body?.arv_reason_concept,
+    );
+    const resolvedArvRegimenConcept = await this.resolveConcept(
+      tenantDb,
+      arvRegimenConcept ?? body?.arv_regimen_concept,
+    );
+    const resolvedMentalHealthResultConcept = await this.resolveConcept(
+      tenantDb,
+      mentalHealthResultConcept ?? body?.mental_health_result_concept,
+    );
+    const resolvedMentalHealthManagementConcept = await this.resolveConcept(
+      tenantDb,
+      mentalHealthManagementConcept ?? body?.mental_health_management_concept,
+    );
+    const adverseEventConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      adverseEventConcepts ?? body?.adverse_event_concepts,
+    );
+    const followUpActionConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      followUpActionConcepts ?? body?.follow_up_action_concepts,
+    );
+    const resolvedReferralReasonConcept = await this.resolveConcept(
+      tenantDb,
+      referralReasonConcept ?? body?.referral_reason_concept,
+    );
+
     const result = await tenantDb.query(`
       INSERT INTO hiv_clinical_visits (
         enrollment_id, visit_number, visit_date, visit_type, provider_id, provider_role,
@@ -1047,7 +1121,18 @@ export class HivService {
         adverse_events_status,
         referred_to, referred_to_details, next_review_date,
         visit_status, follow_up_status, follow_up_details,
-        visit_notes, clinician_initials, pharmacy_dispenser_initials
+        visit_notes, clinician_initials, pharmacy_dispenser_initials,
+        visit_reason_snomed_code, visit_reason_snomed_term, visit_reason_snomed_module_id, visit_reason_snomed_definition_status,
+        opportunistic_infections_snomed,
+        tb_screening_snomed_code, tb_screening_snomed_term, tb_screening_snomed_module_id, tb_screening_snomed_definition_status,
+        tb_investigation_snomed,
+        arv_reason_snomed_code, arv_reason_snomed_term,
+        arv_regimen_snomed_code, arv_regimen_snomed_term, arv_regimen_snomed_module_id, arv_regimen_snomed_definition_status,
+        mental_health_result_snomed_code, mental_health_result_snomed_term,
+        mental_health_management_snomed_code, mental_health_management_snomed_term,
+        adverse_events_snomed,
+        referral_reason_snomed_code, referral_reason_snomed_term,
+        follow_up_actions_snomed
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -1066,7 +1151,18 @@ export class HivService {
         $52,
         $53, $54, $55,
         $56, $57, $58,
-        $59, $60, $61
+        $59, $60, $61,
+        $62, $63, $64, $65,
+        $66,
+        $67, $68, $69, $70,
+        $71,
+        $72, $73,
+        $74, $75, $76, $77,
+        $78, $79,
+        $80, $81,
+        $82,
+        $83, $84,
+        $85
       )
       RETURNING *
     `, [
@@ -1087,7 +1183,31 @@ export class HivService {
       adverseEventsStatus || null,
       referredTo || null, referredToDetails || null, nextReviewDate || null,
       sanitizedVisitStatus, followUpStatus || null, followUpDetails || null,
-      visitNotes || null, clinicianInitials || null, pharmacyDispenserInitials || null
+      visitNotes || null, clinicianInitials || null, pharmacyDispenserInitials || null,
+      resolvedVisitReasonConcept?.conceptId ?? null,
+      resolvedVisitReasonConcept?.term ?? null,
+      resolvedVisitReasonConcept?.moduleId ?? null,
+      resolvedVisitReasonConcept?.definitionStatus ?? null,
+      JSON.stringify(opportunisticInfectionConceptsResolved ?? []),
+      resolvedTbScreeningConcept?.conceptId ?? null,
+      resolvedTbScreeningConcept?.term ?? null,
+      resolvedTbScreeningConcept?.moduleId ?? null,
+      resolvedTbScreeningConcept?.definitionStatus ?? null,
+      JSON.stringify(tbInvestigationConceptsResolved ?? []),
+      resolvedArvReasonConcept?.conceptId ?? null,
+      resolvedArvReasonConcept?.term ?? null,
+      resolvedArvRegimenConcept?.conceptId ?? null,
+      resolvedArvRegimenConcept?.term ?? null,
+      resolvedArvRegimenConcept?.moduleId ?? null,
+      resolvedArvRegimenConcept?.definitionStatus ?? null,
+      resolvedMentalHealthResultConcept?.conceptId ?? null,
+      resolvedMentalHealthResultConcept?.term ?? null,
+      resolvedMentalHealthManagementConcept?.conceptId ?? null,
+      resolvedMentalHealthManagementConcept?.term ?? null,
+      JSON.stringify(adverseEventConceptsResolved ?? []),
+      resolvedReferralReasonConcept?.conceptId ?? null,
+      resolvedReferralReasonConcept?.term ?? null,
+      JSON.stringify(followUpActionConceptsResolved ?? []),
     ]);
 
     // Update enrollment with latest regimen if changed
@@ -1514,33 +1634,209 @@ export class HivService {
   }
 
   async createTbScreening(body: any, tenantDb: DataSource) {
-    const { patientId, screeningDate, screeningType, screeningResult, symptoms, screenedBy, notes } = body;
-    
-    const result = await tenantDb.query(`
+    const {
+      patientId,
+      screeningDate,
+      screeningType,
+      screeningResult,
+      symptoms,
+      symptomDurationWeeks,
+      screenedBy,
+      notes,
+      screeningReasonConcept,
+      screeningResultConcept,
+      symptomConcepts,
+      diagnosisConcept,
+      treatmentConcept,
+    } = body;
+
+    const resolvedScreeningReasonConcept = await this.resolveConcept(
+      tenantDb,
+      screeningReasonConcept ?? body?.screening_reason_concept,
+    );
+    const resolvedScreeningResultConcept = await this.resolveConcept(
+      tenantDb,
+      screeningResultConcept ?? body?.screening_result_concept,
+    );
+    const symptomConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      symptomConcepts ?? body?.symptom_concepts,
+    );
+    const resolvedDiagnosisConcept = await this.resolveConcept(
+      tenantDb,
+      diagnosisConcept ?? body?.diagnosis_concept,
+    );
+    const resolvedTreatmentConcept = await this.resolveConcept(
+      tenantDb,
+      treatmentConcept ?? body?.treatment_concept,
+    );
+
+    const result = await tenantDb.query(
+      `
       INSERT INTO tb_screenings (
-        patient_id, screening_date, screening_type, screening_result,
-        symptom_cough, symptom_fever, symptom_night_sweats, symptom_weight_loss,
-        screened_by, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        patient_id,
+        screening_date,
+        screening_type,
+        screening_result,
+        symptom_cough,
+        symptom_fever,
+        symptom_night_sweats,
+        symptom_weight_loss,
+        symptom_duration_weeks,
+        screened_by,
+        notes,
+        screening_reason_snomed_code,
+        screening_reason_snomed_term,
+        screening_result_snomed_code,
+        screening_result_snomed_term,
+        symptom_snomed_codes,
+        diagnosis_snomed_code,
+        diagnosis_snomed_term,
+        treatment_snomed_code,
+        treatment_snomed_term
+      ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10, $11,
+        $12, $13, $14, $15,
+        $16, $17, $18, $19, $20
+      )
       RETURNING *
-    `, [patientId, screeningDate, screeningType, screeningResult,
-        symptoms?.cough || false, symptoms?.fever || false, 
-        symptoms?.nightSweats || false, symptoms?.weightLoss || false,
-        screenedBy, notes]);
-    
+    `,
+      [
+        patientId,
+        screeningDate,
+        screeningType,
+        screeningResult,
+        symptoms?.cough || false,
+        symptoms?.fever || false,
+        symptoms?.nightSweats || false,
+        symptoms?.weightLoss || false,
+        symptomDurationWeeks ?? null,
+        screenedBy,
+        notes,
+        resolvedScreeningReasonConcept?.conceptId ?? null,
+        resolvedScreeningReasonConcept?.term ?? null,
+        resolvedScreeningResultConcept?.conceptId ?? null,
+        resolvedScreeningResultConcept?.term ?? null,
+        JSON.stringify(symptomConceptsResolved ?? []),
+        resolvedDiagnosisConcept?.conceptId ?? null,
+        resolvedDiagnosisConcept?.term ?? null,
+        resolvedTreatmentConcept?.conceptId ?? null,
+        resolvedTreatmentConcept?.term ?? null,
+      ],
+    );
+
     return result[0];
   }
 
   async createCervicalCancerScreening(body: any, tenantDb: DataSource) {
-    const { patientId, screeningDate, screeningMethod, screeningResult, screenedBy, notes } = body;
-    
-    const result = await tenantDb.query(`
+    const {
+      patientId,
+      screeningDate,
+      screeningMethod,
+      screeningResult,
+      viaResult,
+      papResult,
+      hpvResult,
+      hpvTypes,
+      colposcopyResult,
+      biopsyRequired,
+      biopsyResult,
+      treatmentProvided,
+      treatmentDate,
+      nextScreeningDate,
+      screenedBy,
+      reviewedBy,
+      notes,
+      // SNOMED fields
+      screening_method_snomed,
+      screening_result_snomed,
+      via_result_snomed,
+      pap_result_snomed,
+      hpv_result_snomed,
+      colposcopy_result_snomed,
+      biopsy_result_snomed,
+      treatment_provided_snomed,
+    } = body;
+
+    // Resolve SNOMED concepts
+    const screeningMethodConcept = await this.resolveConcept(tenantDb, screening_method_snomed);
+    const screeningResultConcept = await this.resolveConcept(tenantDb, screening_result_snomed);
+    const biopsyResultConcept = await this.resolveConcept(tenantDb, biopsy_result_snomed);
+    const viaResultList = await this.normalizeConceptArray(tenantDb, via_result_snomed);
+    const papResultList = await this.normalizeConceptArray(tenantDb, pap_result_snomed);
+    const hpvResultList = await this.normalizeConceptArray(tenantDb, hpv_result_snomed);
+    const colposcopyResultList = await this.normalizeConceptArray(tenantDb, colposcopy_result_snomed);
+    const treatmentProvidedList = await this.normalizeConceptArray(tenantDb, treatment_provided_snomed);
+
+    const result = await tenantDb.query(
+      `
       INSERT INTO cervical_cancer_screenings (
-        patient_id, screening_date, screening_method, screening_result, screened_by, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        patient_id, screening_date, screening_method,
+        screening_method_snomed_code, screening_method_snomed_term,
+        screening_method_snomed_module_id, screening_method_snomed_definition_status,
+        screening_result,
+        screening_result_snomed_code, screening_result_snomed_term,
+        screening_result_snomed_module_id, screening_result_snomed_definition_status,
+        via_result, via_result_snomed,
+        pap_result, pap_result_snomed,
+        hpv_result, hpv_result_snomed, hpv_types,
+        colposcopy_result, colposcopy_result_snomed,
+        biopsy_required, biopsy_result,
+        biopsy_result_snomed_code, biopsy_result_snomed_term,
+        biopsy_result_snomed_module_id, biopsy_result_snomed_definition_status,
+        treatment_provided, treatment_provided_snomed,
+        treatment_date, next_screening_date,
+        screened_by, reviewed_by, notes
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+        $13, $14::jsonb, $15, $16::jsonb, $17, $18::jsonb, $19,
+        $20, $21::jsonb, $22, $23, $24, $25, $26, $27,
+        $28, $29::jsonb, $30, $31, $32, $33, $34
+      )
       RETURNING *
-    `, [patientId, screeningDate, screeningMethod, screeningResult, screenedBy, notes]);
-    
+      `,
+      [
+        patientId,
+        screeningDate,
+        screeningMethod,
+        screeningMethodConcept?.conceptId ?? null,
+        screeningMethodConcept?.term ?? null,
+        screeningMethodConcept?.moduleId ?? null,
+        screeningMethodConcept?.definitionStatus ?? null,
+        screeningResult ?? null,
+        screeningResultConcept?.conceptId ?? null,
+        screeningResultConcept?.term ?? null,
+        screeningResultConcept?.moduleId ?? null,
+        screeningResultConcept?.definitionStatus ?? null,
+        viaResult ?? null,
+        JSON.stringify(viaResultList),
+        papResult ?? null,
+        JSON.stringify(papResultList),
+        hpvResult ?? null,
+        JSON.stringify(hpvResultList),
+        hpvTypes ?? null,
+        colposcopyResult ?? null,
+        JSON.stringify(colposcopyResultList),
+        biopsyRequired ?? false,
+        biopsyResult ?? null,
+        biopsyResultConcept?.conceptId ?? null,
+        biopsyResultConcept?.term ?? null,
+        biopsyResultConcept?.moduleId ?? null,
+        biopsyResultConcept?.definitionStatus ?? null,
+        treatmentProvided ?? null,
+        JSON.stringify(treatmentProvidedList),
+        treatmentDate ?? null,
+        nextScreeningDate ?? null,
+        screenedBy,
+        reviewedBy ?? null,
+        notes ?? null,
+      ],
+    );
+
+    this.logger.log(`Created cervical cancer screening for patient ${patientId}`);
     return result[0];
   }
 
@@ -1635,8 +1931,39 @@ export class HivService {
       sessionOutcome, outcomeNotes, adherenceImprovementObserved,
       eacProgramStatus, eacCompletionDate, returnToConventionalCareDate,
       viralLoad, viralLoadUnit, viralLoadTestDate, viralLoadSuppressed, viralLoadImproved,
-      sessionNotes
+      sessionNotes,
+      adherenceBarrierConcepts,
+      interventionConcepts,
+      adherenceToolConcepts,
+      supportSystemConcepts,
+      followUpActionConcepts,
+      sessionOutcomeConcept
     } = body;
+
+    const barrierConcepts = await this.normalizeConceptArray(
+      tenantDb,
+      adherenceBarrierConcepts ?? body?.adherence_barrier_concepts,
+    );
+    const interventionConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      interventionConcepts ?? body?.intervention_concepts,
+    );
+    const adherenceToolConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      adherenceToolConcepts ?? body?.adherence_tool_concepts,
+    );
+    const supportSystemConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      supportSystemConcepts ?? body?.support_system_concepts,
+    );
+    const followUpActionConceptsResolved = await this.normalizeConceptArray(
+      tenantDb,
+      followUpActionConcepts ?? body?.follow_up_action_concepts,
+    );
+    const sessionOutcomeConceptResolved = await this.resolveConcept(
+      tenantDb,
+      sessionOutcomeConcept ?? body?.session_outcome_concept,
+    );
 
     const result = await tenantDb.query(`
       INSERT INTO hiv_eac_sessions (
@@ -1649,10 +1976,14 @@ export class HivService {
         session_outcome, outcome_notes, adherence_improvement_observed,
         eac_program_status, eac_completion_date, return_to_conventional_care_date,
         viral_load, viral_load_unit, viral_load_test_date, viral_load_suppressed, viral_load_improved,
-        session_notes
+        session_notes,
+        adherence_barriers_snomed, interventions_snomed, adherence_tools_snomed,
+        support_systems_snomed, follow_up_actions_snomed,
+        session_outcome_snomed_code, session_outcome_snomed_term
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+        $34, $35, $36, $37, $38, $39, $40
       )
       RETURNING *
     `, [
@@ -1666,7 +1997,14 @@ export class HivService {
       eacProgramStatus || 'Active', eacCompletionDate || null, returnToConventionalCareDate || null,
       viralLoad || null, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'), 
       viralLoadTestDate || null, viralLoadSuppressed || null, viralLoadImproved || false,
-      sessionNotes || null
+      sessionNotes || null,
+      JSON.stringify(barrierConcepts ?? []),
+      JSON.stringify(interventionConceptsResolved ?? []),
+      JSON.stringify(adherenceToolConceptsResolved ?? []),
+      JSON.stringify(supportSystemConceptsResolved ?? []),
+      JSON.stringify(followUpActionConceptsResolved ?? []),
+      sessionOutcomeConceptResolved?.conceptId ?? null,
+      sessionOutcomeConceptResolved?.term ?? null
     ]);
 
     return result[0];

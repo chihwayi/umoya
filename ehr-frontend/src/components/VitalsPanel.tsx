@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Save, Activity, Heart, Thermometer, Droplets, Eye, 
-  Weight, Ruler, Calculator, AlertTriangle, CheckCircle
+  Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -57,6 +57,15 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
   const [loading, setLoading] = useState(false);
   const [bmi, setBmi] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
+  const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+
+  useEffect(() => {
+    setSelectedPatient(patient || null);
+  }, [patient]);
+
+  useEffect(() => {
+    setCdssInsights(null);
+  }, [selectedPatient?.id]);
 
   useEffect(() => {
     if (vitals.weight > 0 && vitals.height > 0) {
@@ -135,7 +144,12 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id
       };
 
-      await ehrApi.recordVitals(vitalsData, token, tenantSlug);
+      const response = await ehrApi.recordVitals(vitalsData, token, tenantSlug);
+      const insights =
+        response.data?.cdssInsights ??
+        response.data?.vitals?.cdssInsights ??
+        null;
+      setCdssInsights(insights);
       showSuccess('Success', 'Vitals recorded successfully');
       onSave?.();
     } catch (error) {
@@ -213,6 +227,44 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
               </div>
             </div>
           </div>
+
+          {cdssInsights?.risk && (
+            <div className="p-5 rounded-2xl border border-indigo-200 bg-white shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">CDSS Risk Insight</p>
+                  <p className="text-xs text-slate-500">Automatically generated from the latest vitals</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase text-slate-500 tracking-wide">Risk Level</p>
+                  <p className="text-lg font-bold text-slate-900 capitalize">
+                    {cdssInsights.risk.risk_level || 'unknown'}
+                  </p>
+                  {typeof cdssInsights.risk.overall_score === 'number' && (
+                    <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
+                  )}
+                </div>
+                {Array.isArray(cdssInsights.risk.recommendations) && cdssInsights.risk.recommendations.length > 0 && (
+                  <div className="flex-1 ml-4">
+                    <p className="text-xs font-semibold text-slate-600 mb-1">Recommendations</p>
+                    <ul className="text-xs text-slate-600 space-y-1">
+                      {cdssInsights.risk.recommendations.slice(0, 3).map((rec: string, idx: number) => (
+                        <li key={`rec-${idx}`} className="flex items-start gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
+                          <span>{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Vitals Form */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

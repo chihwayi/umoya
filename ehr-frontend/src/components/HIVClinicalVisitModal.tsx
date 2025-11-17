@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle, Book } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import HIVQuickReferenceGuide from './HIVQuickReferenceGuide';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface HIVClinicalVisitModalProps {
   enrollment: any;
@@ -41,6 +42,23 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [monitoringSchedules, setMonitoringSchedules] = useState<any[]>([]);
   const [tptEligibilityStatus, setTptEligibilityStatus] = useState<any>(null);
   const [tptCompletionStatus, setTptCompletionStatus] = useState<any>(null);
+  const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
+  const snomedReady = Boolean(snomedToken && tenantSlug);
+  const [visitReasonConceptSelection, setVisitReasonConceptSelection] = useState<SnomedConcept | null>(null);
+  const [opportunisticConcepts, setOpportunisticConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingOpportunisticConcept, setPendingOpportunisticConcept] = useState<SnomedConcept | null>(null);
+  const [tbScreeningConceptSelection, setTbScreeningConceptSelection] = useState<SnomedConcept | null>(null);
+  const [pendingTbInvestigationConcept, setPendingTbInvestigationConcept] = useState<SnomedConcept | null>(null);
+  const [tbInvestigationConcepts, setTbInvestigationConcepts] = useState<SnomedConcept[]>([]);
+  const [arvReasonConceptSelection, setArvReasonConceptSelection] = useState<SnomedConcept | null>(null);
+  const [arvRegimenConceptSelection, setArvRegimenConceptSelection] = useState<SnomedConcept | null>(null);
+  const [pendingAdverseEventConcept, setPendingAdverseEventConcept] = useState<SnomedConcept | null>(null);
+  const [adverseEventConcepts, setAdverseEventConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingFollowUpConcept, setPendingFollowUpConcept] = useState<SnomedConcept | null>(null);
+  const [followUpConcepts, setFollowUpConcepts] = useState<SnomedConcept[]>([]);
+  const [mentalHealthResultConcept, setMentalHealthResultConcept] = useState<SnomedConcept | null>(null);
+  const [mentalHealthManagementConcept, setMentalHealthManagementConcept] = useState<SnomedConcept | null>(null);
+  const [referralReasonConceptSelection, setReferralReasonConceptSelection] = useState<SnomedConcept | null>(null);
   
   // Determine if patient is female (for reproductive health step)
   const isFemale = enrollment?.gender?.toLowerCase() === 'female';
@@ -61,6 +79,26 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const patientAge = calculateAge(enrollment?.date_of_birth);
   const isChild = patientAge !== null && patientAge <= 15;
   
+  const addConceptToCollection = (
+    concept: SnomedConcept | null,
+    collection: SnomedConcept[],
+    setter: (value: SnomedConcept[]) => void,
+    reset: (value: SnomedConcept | null) => void,
+  ) => {
+    if (concept && !collection.some((item) => item.conceptId === concept.conceptId)) {
+      setter([...collection, concept]);
+    }
+    reset(null);
+  };
+
+  const removeConceptFromCollection = (
+    conceptId: string,
+    collection: SnomedConcept[],
+    setter: (value: SnomedConcept[]) => void,
+  ) => {
+    setter(collection.filter((item) => item.conceptId !== conceptId));
+  };
+
   // Filter regimens based on age
   const filteredRegimens = lookups.artRegimens?.filter((regimen: any) => {
     if (isChild) {
@@ -454,6 +492,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         visitDate: form.visitDate,
         visitType: form.visitType,
         providerId: currentUser.id,
+        visitReasonConcept: visitReasonConceptSelection,
         
         // Vitals
         weightKg: form.weightKg ? parseFloat(form.weightKg) : null,
@@ -471,6 +510,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         functionalStatus: form.functionalStatus || null,
         whoClinicalStage: form.whoClinicalStage ? parseInt(form.whoClinicalStage) : null,
         opportunisticInfections: form.opportunisticInfections,
+        opportunisticInfectionConcepts: opportunisticConcepts,
         
         // TB
         tbScreening: form.tbScreening || null,
@@ -478,6 +518,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         tbInvestigationXpertMtbRif: form.tbInvestigationXpertMtbRif || null,
         tbInvestigationUltraLfLam: form.tbInvestigationUltraLfLam || null,
         tbInvestigationTstChildren: form.tbInvestigationTstChildren || null,
+        tbScreeningConcept: tbScreeningConceptSelection,
+        tbInvestigationConcepts,
         
         // TPT
         tptEligibility: form.tptEligibility || null,
@@ -499,11 +541,14 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         arvChangeStopReasonCode: form.arvChangeStopReason || null,
         arvRegimenCode: form.arvRegimenCode || null,
         arvRegimenName: form.arvRegimenName || null,
+        arvReasonConcept: arvReasonConceptSelection,
+        arvRegimenConcept: arvRegimenConceptSelection,
         arvDurationPrescribed: form.arvDurationPrescribed || null,
         arvQuantityPrescribed: form.arvQuantityPrescribed ? parseInt(form.arvQuantityPrescribed) : null,
         arvQuantityDispensed: form.arvQuantityDispensed ? parseInt(form.arvQuantityDispensed) : null,
         arvAdherencePercentage: form.arvAdherencePercentage ? parseInt(form.arvAdherencePercentage) : null,
         adverseEventsStatus: form.adverseEventsStatus,
+        adverseEventConcepts,
         
         // Lab Results
         cd4Count: form.cd4Count ? parseInt(form.cd4Count) : null,
@@ -530,6 +575,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         // Mental Health
         mentalHealthResultCode: form.mentalHealthResult || null,
         mentalHealthManagementCode: form.mentalHealthManagement || null,
+        mentalHealthResultConcept,
+        mentalHealthManagementConcept,
         
         // Follow-up
         nextReviewDate: form.nextReviewDate || null,
@@ -537,7 +584,9 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         finalOutcome: form.finalOutcome || null,
         visitNotes: form.visitNotes || null,
         clinicianInitials: form.clinicianInitials || null,
-        pharmacyDispenserInitials: form.pharmacyDispenserInitials || null
+        pharmacyDispenserInitials: form.pharmacyDispenserInitials || null,
+        followUpActionConcepts: followUpConcepts,
+        referralReasonConcept: referralReasonConceptSelection
       };
 
       await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
@@ -996,6 +1045,23 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                   </select>
                 </div>
               </div>
+              {snomedReady && (
+                <div className="rounded-2xl border border-emerald-100 bg-white/70 p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-emerald-900 mb-3">
+                    SNOMED Context
+                  </p>
+                  <SnomedConceptPicker
+                    value={visitReasonConceptSelection}
+                    onChange={setVisitReasonConceptSelection}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Structured visit reason"
+                    placeholder="Search SNOMED CT (e.g., Routine HIV follow-up)"
+                    helperText="Optional coded reason improves interoperability and CDSS triggers."
+                  context="encounter"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -1074,6 +1140,96 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                   />
                 </div>
               </div>
+              {snomedReady && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4 space-y-4">
+                  <p className="text-sm font-semibold text-emerald-900">SNOMED Clinical Coding</p>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <SnomedConceptPicker
+                        value={pendingOpportunisticConcept}
+                        onChange={setPendingOpportunisticConcept}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Opportunistic infection concept"
+                        placeholder="Search SNOMED CT (e.g., Oral candidiasis)"
+                        helperText="Add precise codes for each recorded opportunistic infection."
+                      context="condition"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                          onClick={() =>
+                            addConceptToCollection(
+                              pendingOpportunisticConcept,
+                              opportunisticConcepts,
+                              setOpportunisticConcepts,
+                              setPendingOpportunisticConcept,
+                            )
+                          }
+                          disabled={!pendingOpportunisticConcept}
+                        >
+                          Add concept
+                        </button>
+                        {opportunisticConcepts.length > 0 && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700"
+                            onClick={() => setOpportunisticConcepts([])}
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                      {opportunisticConcepts.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {opportunisticConcepts.map((concept) => (
+                            <span
+                              key={concept.conceptId}
+                              className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-emerald-800 shadow-sm"
+                            >
+                              {concept.preferredTerm || concept.term}
+                              <button
+                                type="button"
+                                className="text-emerald-500 hover:text-emerald-700"
+                                onClick={() =>
+                                  removeConceptFromCollection(
+                                    concept.conceptId,
+                                    opportunisticConcepts,
+                                    setOpportunisticConcepts,
+                                  )
+                                }
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-4">
+                      <SnomedConceptPicker
+                        value={mentalHealthResultConcept}
+                        onChange={setMentalHealthResultConcept}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Mental health result concept"
+                        placeholder="Search SNOMED CT (e.g., Anxiety disorder)"
+                      context="condition"
+                      />
+                      <SnomedConceptPicker
+                        value={mentalHealthManagementConcept}
+                        onChange={setMentalHealthManagementConcept}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Mental health management concept"
+                        placeholder="Search SNOMED CT (e.g., Cognitive behavioral therapy)"
+                      context="procedure"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1366,6 +1522,84 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                   </div>
                 </div>
               </div>
+              {snomedReady && (
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 space-y-4">
+                  <p className="text-sm font-semibold text-blue-900">SNOMED TB Coding</p>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SnomedConceptPicker
+                      value={tbScreeningConceptSelection}
+                      onChange={setTbScreeningConceptSelection}
+                      token={snomedToken}
+                      tenantSlug={tenantSlug}
+                      label="TB screening concept"
+                      placeholder="Search SNOMED CT (e.g., Tuberculosis symptom screening)"
+                      context="procedure"
+                    />
+                    <div className="space-y-2">
+                      <SnomedConceptPicker
+                        value={pendingTbInvestigationConcept}
+                        onChange={setPendingTbInvestigationConcept}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="TB investigation concept"
+                        placeholder="Search SNOMED CT (e.g., GeneXpert MTB/RIF assay)"
+                      context="procedure"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                          onClick={() =>
+                            addConceptToCollection(
+                              pendingTbInvestigationConcept,
+                              tbInvestigationConcepts,
+                              setTbInvestigationConcepts,
+                              setPendingTbInvestigationConcept,
+                            )
+                          }
+                          disabled={!pendingTbInvestigationConcept}
+                        >
+                          Add investigation
+                        </button>
+                        {tbInvestigationConcepts.length > 0 && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700"
+                            onClick={() => setTbInvestigationConcepts([])}
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                      {tbInvestigationConcepts.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {tbInvestigationConcepts.map((concept) => (
+                            <span
+                              key={concept.conceptId}
+                              className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-blue-800 shadow-sm"
+                            >
+                              {concept.preferredTerm || concept.term}
+                              <button
+                                type="button"
+                                className="text-blue-500 hover:text-blue-700"
+                                onClick={() =>
+                                  removeConceptFromCollection(
+                                    concept.conceptId,
+                                    tbInvestigationConcepts,
+                                    setTbInvestigationConcepts,
+                                  )
+                                }
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1913,6 +2147,172 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                     ))}
                   </div>
                 </div>
+                {snomedReady && (
+                  <div className="rounded-2xl border border-emerald-200 bg-white/70 p-4 space-y-4 mt-4">
+                    <p className="text-sm font-semibold text-emerald-900">SNOMED ARV & Follow-up Coding</p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <SnomedConceptPicker
+                        value={arvReasonConceptSelection}
+                        onChange={setArvReasonConceptSelection}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Structured ARV reason"
+                        placeholder="Search SNOMED CT (e.g., Antiretroviral therapy started)"
+                      context="situation"
+                      />
+                      <SnomedConceptPicker
+                        value={arvRegimenConceptSelection}
+                        onChange={(concept) => {
+                          setArvRegimenConceptSelection(concept);
+                          if (concept && !form.arvRegimenName) {
+                            setForm((prev) => ({
+                              ...prev,
+                              arvRegimenName: concept.preferredTerm || concept.term || prev.arvRegimenName,
+                            }));
+                          }
+                        }}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Structured ARV regimen concept"
+                        placeholder="Search SNOMED CT (e.g., Tenofovir/lamivudine/dolutegravir)"
+                      context="medication"
+                      />
+                      <div className="space-y-2">
+                        <SnomedConceptPicker
+                          value={pendingAdverseEventConcept}
+                          onChange={setPendingAdverseEventConcept}
+                          token={snomedToken}
+                          tenantSlug={tenantSlug}
+                          label="Adverse event concept"
+                          placeholder="Search SNOMED CT (e.g., Drug-induced anemia)"
+                        context="condition"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                            onClick={() =>
+                              addConceptToCollection(
+                                pendingAdverseEventConcept,
+                                adverseEventConcepts,
+                                setAdverseEventConcepts,
+                                setPendingAdverseEventConcept,
+                              )
+                            }
+                            disabled={!pendingAdverseEventConcept}
+                          >
+                            Add adverse event
+                          </button>
+                          {adverseEventConcepts.length > 0 && (
+                            <button
+                              type="button"
+                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700"
+                              onClick={() => setAdverseEventConcepts([])}
+                            >
+                              Clear all
+                            </button>
+                          )}
+                        </div>
+                        {adverseEventConcepts.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {adverseEventConcepts.map((concept) => (
+                              <span
+                                key={concept.conceptId}
+                                className="flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-xs text-rose-700"
+                              >
+                                {concept.preferredTerm || concept.term}
+                                <button
+                                  type="button"
+                                  className="text-rose-500 hover:text-rose-700"
+                                  onClick={() =>
+                                    removeConceptFromCollection(
+                                      concept.conceptId,
+                                      adverseEventConcepts,
+                                      setAdverseEventConcepts,
+                                    )
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <SnomedConceptPicker
+                          value={pendingFollowUpConcept}
+                          onChange={setPendingFollowUpConcept}
+                          token={snomedToken}
+                          tenantSlug={tenantSlug}
+                          label="Follow-up action concept"
+                          placeholder="Search SNOMED CT (e.g., Referral to adherence counselling)"
+                      context="procedure"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                            onClick={() =>
+                              addConceptToCollection(
+                                pendingFollowUpConcept,
+                                followUpConcepts,
+                                setFollowUpConcepts,
+                                setPendingFollowUpConcept,
+                              )
+                            }
+                            disabled={!pendingFollowUpConcept}
+                          >
+                            Add follow-up
+                          </button>
+                          {followUpConcepts.length > 0 && (
+                            <button
+                              type="button"
+                              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                              onClick={() => setFollowUpConcepts([])}
+                            >
+                              Clear all
+                            </button>
+                          )}
+                        </div>
+                        {followUpConcepts.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {followUpConcepts.map((concept) => (
+                              <span
+                                key={concept.conceptId}
+                                className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700"
+                              >
+                                {concept.preferredTerm || concept.term}
+                                <button
+                                  type="button"
+                                  className="text-slate-500 hover:text-slate-700"
+                                  onClick={() =>
+                                    removeConceptFromCollection(
+                                      concept.conceptId,
+                                      followUpConcepts,
+                                      setFollowUpConcepts,
+                                    )
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <SnomedConceptPicker
+                        value={referralReasonConceptSelection}
+                        onChange={setReferralReasonConceptSelection}
+                        token={snomedToken}
+                        tenantSlug={tenantSlug}
+                        label="Referral reason concept"
+                        placeholder="Search SNOMED CT (e.g., Suspected treatment failure)"
+                      context="condition"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Lab Results Section - Hidden for drug collection visits */}

@@ -116,6 +116,36 @@ button {
   100% { transform: rotate(360deg); }
 }
 
+/* Notification progress bar animation */
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-shrink {
+  animation: shrink linear forwards;
+}
+
+/* Enhanced zoom and fade animations */
+@keyframes zoom-in-95 {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.zoom-in-95 {
+  animation: zoom-in-95 0.2s ease-out;
+}
+
 /* Mobile responsive utilities */
 @media (max-width: 640px) {
   .mobile-padding {

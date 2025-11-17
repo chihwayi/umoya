@@ -1,0 +1,283 @@
+[
+  {
+    "id": "S1",
+    "title": "Triage → Prescription → Nursing Note",
+    "modules": ["triage", "pharmacy", "nursing", "cdss"],
+    "prerequisites": {
+      "patientId": "QA-TRIAGE-001",
+      "doctorUser": "qa.doctor@medi-core.local",
+      "nurseUser": "qa.nurse@medi-core.local",
+      "allergies": ["Penicillin"],
+      "snomed": {
+        "chiefComplaint": "162718002",
+        "observationCodes": ["162214009"],
+        "medication": "372729009"
+      }
+    },
+    "steps": [
+      "POST /triage with SNOMED-coded chief complaint & observations",
+      "POST /prescriptions with medicationName + medication_name_snomed",
+      "POST /nursing-notes with observations/interventions/outcomes"
+    ],
+    "expected": [
+      "triage_assessments row contains cdssInsights.risk & diagnosis",
+      "prescription response includes cdssInsights.interactions",
+      "nursing_notes.observations_snomed length matches selections"
+   ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "QA automation squad"
+    }
+  },
+  {
+    "id": "S2",
+    "title": "Maternity ANC → Ultrasound → Delivery → Postnatal",
+    "modules": ["maternity", "cdss"],
+    "prerequisites": {
+      "patientId": "QA-MAT-ANC-01",
+      "midwifeUser": "qa.midwife@medi-core.local",
+      "snomed": {
+        "complication": ["199225006"],
+        "ultrasoundFinding": ["43959009"],
+        "deliveryComplication": ["70290006"],
+        "newbornComplication": ["302157001"]
+      }
+    },
+    "steps": [
+      "POST /maternity/enrollments (include previous/current complications)",
+      "POST /maternity/anc-visits with SNOMED complications/interventions",
+      "POST /maternity/ultrasound-scans with findings_snomed",
+      "POST /maternity/deliveries + POST /maternity/postnatal-visits"
+    ],
+    "expected": [
+      "Each phase stores SNOMED arrays (complications, interventions, outcomes)",
+      "Maternity dashboard shows risk badge for high-risk pregnancy",
+      "CDSS hook returns risk advisory after each encounter"
+    ],
+    "automation": {
+      "type": "hybrid",
+      "status": "planned",
+      "owner": "Clinical QA"
+    }
+  },
+  {
+    "id": "S3",
+    "title": "Oncology Case Lifecycle",
+    "modules": ["oncology"],
+    "prerequisites": {
+      "patientId": "QA-ONC-001",
+      "oncologistUser": "qa.onc@medi-core.local",
+      "snomed": {
+        "diagnosis": "254837009",
+        "regimen": "703357002",
+        "adverseEvent": "281398003"
+      }
+    },
+    "steps": [
+      "POST /oncology/cases with primary_diagnosis_snomed",
+      "POST /oncology/cases/:id/regimens",
+      "POST /oncology/regimens/:id/infusions",
+      "POST /oncology/adverse-events with SNOMED event"
+    ],
+    "expected": [
+      "Case/regimen tables have SNOMED terms",
+      "Oncology dashboard topDiagnosesSnomed includes new entry",
+      "Adverse event surfaces in adverseEventSnomedSummary widget"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "QA automation squad"
+    }
+  },
+  {
+    "id": "S4",
+    "title": "Cardiology Encounter + Diagnostics SLA",
+    "modules": ["cardiology"],
+    "prerequisites": {
+      "patientId": "QA-CARD-001",
+      "cardiologistUser": "qa.cardio@medi-core.local",
+      "snomed": {
+        "symptom": ["29857009"],
+        "diagnostic": ["43764008"]
+      }
+    },
+    "steps": [
+      "POST /cardiology/encounters with symptom + diagnostic SNOMED arrays",
+      "PATCH /cardiology/encounters/:id to progress care_status",
+      "Verify SLA tracker via /cardiology/dashboard"
+    ],
+    "expected": [
+      "Encounter stores symptom_snomed_codes & diagnostic_snomed_codes",
+      "Dashboard topChiefComplaintsSnomed list includes new symptom",
+      "Pending diagnostics card reflects outstanding work orders"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "QA automation squad"
+    }
+  },
+  {
+    "id": "S5",
+    "title": "Lab Order + Critical Alert Escalation",
+    "modules": ["lab", "critical-alerts"],
+    "prerequisites": {
+      "labTechUser": "qa.lab@medi-core.local",
+      "patientId": "QA-LAB-CRIT-01",
+      "testCode": "BMP",
+      "criticalComponent": "K"
+    },
+    "steps": [
+      "POST /lab-orders with BMP test for patient",
+      "PUT /lab-orders/:id/collect and /start-processing",
+      "PUT /lab-orders/:id/submit-results with critical potassium value",
+      "POST /critical-alerts/:id/acknowledge"
+    ],
+    "expected": [
+      "critical_result_alerts row created with status `open`",
+      "Alert visible in lab dashboard, email/webhook fired",
+      "Acknowledgement closes alert with auditor + timestamp"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "Lab QA"
+    }
+  },
+  {
+    "id": "S6",
+    "title": "Imaging Order → Report Sign-off with CDSS",
+    "modules": ["imaging", "cdss"],
+    "prerequisites": {
+      "radiologistUser": "qa.rad@medi-core.local",
+      "patientId": "QA-IMG-CT-01",
+      "studyTypeId": "CT-ABDO",
+      "snomed": {
+        "indication": "427461000",
+        "finding": "39607008"
+      }
+    },
+    "steps": [
+      "POST /imaging/orders with CT Abdomen and SNOMED indication",
+      "PATCH /imaging/orders/:id/schedule + assign radiologist",
+      "POST /imaging/reports (template + findings)",
+      "POST /imaging/reports/:id/sign",
+      "Verify CDSS guidance on order response"
+    ],
+    "expected": [
+      "imaging_orders.snomed_term set",
+      "imaging_reports entries with structured findings",
+      "cdssInsights.guidelines present when anxiety/chest pain flagged"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "Imaging QA"
+    }
+  },
+  {
+    "id": "S7",
+    "title": "CDSS Hook Validation – Mental Health Pathway",
+    "modules": ["cdss", "triage", "prescriptions"],
+    "prerequisites": {
+      "patientId": "QA-PSY-001",
+      "doctorUser": "qa.behavioral@medi-core.local",
+      "snomed": {
+        "complaint": "197480006",
+        "medication": "372756007"
+      }
+    },
+    "steps": [
+      "Trigger triage with anxiety SNOMED code",
+      "Review cdssInsights payload for risk + recommended tests",
+      "Create prescription for SSRI to observe drug-drug check"
+    ],
+    "expected": [
+      "cdssHookService logs riskAssessment + diagnosisAssist",
+      "UI shows CDSS Insights panel in triage modal",
+      "Prescription response includes high-risk medication warnings if any"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "pending",
+      "owner": "CDSS team"
+    }
+  },
+  {
+    "id": "S8",
+    "title": "Tenant Provisioning Regression",
+    "modules": ["tenant-service"],
+    "prerequisites": {
+      "adminDb": "TENANT_SERVICE_DATABASE_URL",
+      "bundles": ["core", "snomed", "hiv_testing"]
+    },
+    "steps": [
+      "Run npx ts-node scripts/provisioning-smoke-test.ts --bundles core snomed hiv_testing",
+      "Verify tenant_schema_versions contains all bundles",
+      "Run npx ts-node scripts/schema-drift-tests against new DB"
+    ],
+    "expected": [
+      "Smoke test completes without error",
+      "No drift detected",
+      "Log events present for bundle.apply.start/success"
+    ],
+    "automation": {
+      "type": "cli",
+      "status": "in-progress",
+      "owner": "Platform QA"
+    }
+  },
+  {
+    "id": "S9",
+    "title": "HIV Monthly Return & Reporting Extract",
+    "modules": ["hiv", "reporting"],
+    "prerequisites": {
+      "patientIds": ["QA-HIV-001", "QA-HIV-002"],
+      "period": "2025-02",
+      "dataSeeder": "qa/scripts/seed-hiv-data.sql"
+    },
+    "steps": [
+      "Execute seed script to create visits/testing records in period",
+      "GET /hiv/monthly-return?start=2025-02-01&end=2025-02-29",
+      "Trigger reporting export endpoint"
+    ],
+    "expected": [
+      "Monthly return response contains correct counts",
+      "Export file stored in S3 or downloadable via API",
+      "KPIs reflect SNOMED-coded regimens/tests"
+    ],
+    "automation": {
+      "type": "api",
+      "status": "planned",
+      "owner": "HIV QA"
+    }
+  },
+  {
+    "id": "S10",
+    "title": "QA Automation Harness Sanity",
+    "modules": ["qa"],
+    "prerequisites": {
+      "EHR_QA_TENANT": "qa-shared",
+      "EHR_QA_TOKEN": "bearer token",
+      "fixtures": "qa/fixtures/scenarios.json"
+    },
+    "steps": [
+      "Run npx ts-node qa/tests/run-scenarios.ts --tenant qa-shared --token $EHR_QA_TOKEN",
+      "Review console output/log file",
+      "Archive report for leadership"
+    ],
+    "expected": [
+      "Script completes with exit code 0",
+      "All scenarios enumerated with status `pending/ planned`",
+      "Report artifact generated (future enhancement)"
+    ],
+    "automation": {
+      "type": "cli",
+      "status": "in-progress",
+      "owner": "QA automation squad"
+    }
+  }
+]
+

@@ -94,27 +94,50 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     <NotificationContext.Provider value={{ showNotification, showSuccess, showError, showWarning, showInfo }}>
       {children}
       
-      {/* Notification Container */}
-      <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
-        {notifications.map((notification) => (
+      {/* Notification Container - Enhanced with animations */}
+      <div className="fixed top-4 right-4 z-[9998] space-y-3 max-w-md w-full pointer-events-none">
+        {notifications.map((notification, index) => (
           <div
             key={notification.id}
-            className={`${getStyles(notification.type)} border rounded-lg p-4 shadow-lg backdrop-blur-sm animate-in slide-in-from-right duration-300`}
+            className={`${getStyles(notification.type)} border-2 rounded-2xl p-5 shadow-2xl backdrop-blur-md pointer-events-auto transform transition-all duration-300 ease-out animate-in slide-in-from-right fade-in`}
+            style={{
+              animationDelay: `${index * 50}ms`,
+            }}
           >
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                {getIcon(notification.type)}
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 p-2 rounded-xl bg-white/50 backdrop-blur-sm">
+                <div className={notification.type === 'success' ? 'text-emerald-600' : notification.type === 'error' ? 'text-red-600' : notification.type === 'warning' ? 'text-amber-600' : 'text-blue-600'}>
+                  {getIcon(notification.type)}
+                </div>
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-sm">{notification.title}</h4>
-                <p className="text-sm opacity-90 mt-1">{notification.message}</p>
+                <h4 className="font-bold text-base text-slate-900">{notification.title}</h4>
+                <p className="text-sm text-slate-700 mt-1.5 leading-relaxed">{notification.message}</p>
               </div>
               <button
                 onClick={() => removeNotification(notification.id)}
-                className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                className="flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-lg transition-all duration-200"
+                aria-label="Dismiss notification"
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+            {/* Progress bar for auto-dismiss */}
+            <div className="mt-3 h-1 bg-white/30 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${
+                  notification.type === 'success'
+                    ? 'bg-emerald-600'
+                    : notification.type === 'error'
+                    ? 'bg-red-600'
+                    : notification.type === 'warning'
+                    ? 'bg-amber-600'
+                    : 'bg-blue-600'
+                } animate-shrink`}
+                style={{
+                  animation: `shrink ${notification.duration || 5000}ms linear forwards`,
+                }}
+              />
             </div>
           </div>
         ))}

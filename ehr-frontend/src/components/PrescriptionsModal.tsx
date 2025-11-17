@@ -4,6 +4,7 @@ import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Appointment {
   id: string;
@@ -95,6 +96,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
     instructions: string;
     drugId?: string;
     foundDrug?: Drug;
+    medicationSnomed?: SnomedConcept | null;
   };
   const [items, setItems] = useState<Rx[]>([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
   const [loadingFood, setLoadingFood] = useState(false);
@@ -269,6 +271,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
       }
       if (valid.length === 0) throw new Error('Enter at least one prescription with name, dosage, and frequency');
       for (const rx of valid) {
+        // Create order
         const created = await ehrApi.createOrder({
           patientId: appointment.patient.id,
           appointmentId: appointment.id,
@@ -284,6 +287,31 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
         }, token, tenantSlug);
         const orderId = created?.data?.order?.id;
         if (orderId) { await ehrApi.authorizeOrder(orderId, token, tenantSlug); }
+
+        // Also create prescription record with SNOMED
+        try {
+          await ehrApi.createPrescription({
+            patientId: appointment.patient.id,
+            prescriberId: currentUser.id,
+            medicationName: rx.name,
+            medication_name_snomed: rx.medicationSnomed,
+            genericName: rx.foundDrug?.genericName || rx.name,
+            strength: rx.foundDrug?.strength || '',
+            form: rx.foundDrug?.form || 'tablet',
+            dosage: rx.dosage,
+            frequency: rx.frequency,
+            route: 'oral', // Default, can be enhanced
+            quantity: 30, // Default, can be calculated from duration
+            refills: 0,
+            startDate: new Date().toISOString().split('T')[0],
+            instructions: rx.instructions || `Dosage: ${rx.dosage}, Frequency: ${rx.frequency}, Duration: ${rx.duration}`,
+            indication: '',
+            status: 'active'
+          }, token, tenantSlug);
+        } catch (prescriptionError) {
+          console.warn('Failed to create prescription record:', prescriptionError);
+          // Don't fail the whole operation if prescription creation fails
+        }
       }
 
       // Merge into appointment notes JSON for historical context
@@ -603,7 +631,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                           </div>
                           <button
                             type="button"
-                            onClick={() => setItems(prev => prev.map((it, i) => i===idx ? { ...it, name: '', drugId: undefined, foundDrug: undefined } : it))}
+                            onClick={() => setItems(prev => prev.map((it, i) => i===idx ? { ...it, name: '', drugId: undefined, foundDrug: undefined, medicationSnomed: null } : it))}
                             className="text-blue-600 hover:text-blue-800 text-xs"
                           >
                             Clear
@@ -611,6 +639,20 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                         </div>
                       </div>
                     )}
+                    
+                    {/* SNOMED CT Picker for Medication */}
+                    <div className="mt-2">
+                      <SnomedConceptPicker
+                        value={rx.medicationSnomed || null}
+                        onChange={(concept) => setItems(prev => prev.map((it, i) => i===idx ? { ...it, medicationSnomed: concept } : it))}
+                        token={token}
+                        tenantSlug={tenantSlug}
+                        label="SNOMED CT Code (Optional)"
+                        placeholder="Search for clinical drug concept..."
+                        context="medication"
+                        helperText="Select SNOMED CT concept for structured medication coding"
+                      />
+                    </div>
                     
                     {/* Drug-Drug Interaction Warnings */}
                     {drugInteractions
@@ -716,5 +758,3 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
 };
 
 export default PrescriptionsModal;
-
-

@@ -11,6 +11,18 @@ export class TriageAssessment {
   @Column({ name: 'chief_complaint', type: 'text' })
   chiefComplaint: string;
 
+  @Column({ name: 'chief_complaint_snomed_code', type: 'varchar', length: 50, nullable: true })
+  chiefComplaintSnomedCode?: string;
+
+  @Column({ name: 'chief_complaint_snomed_term', type: 'text', nullable: true })
+  chiefComplaintSnomedTerm?: string;
+
+  @Column({ name: 'chief_complaint_snomed_module_id', type: 'varchar', length: 50, nullable: true })
+  chiefComplaintSnomedModuleId?: string;
+
+  @Column({ name: 'chief_complaint_snomed_definition_status', type: 'varchar', length: 50, nullable: true })
+  chiefComplaintSnomedDefinitionStatus?: string;
+
   @Column({ type: 'text', nullable: true })
   onset?: string;
 
@@ -28,6 +40,9 @@ export class TriageAssessment {
 
   @Column({ type: 'text', nullable: true })
   observations?: string;
+
+  @Column({ name: 'observations_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  observationsSnomed?: any[];
 
   @Column({ type: 'varchar', length: 20 })
   priority: 'low' | 'normal' | 'high' | 'urgent';

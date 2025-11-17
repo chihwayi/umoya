@@ -9,6 +9,7 @@ import {
   Filter,
   HeartPulse,
   LogOut,
+  Microscope,
   Plus,
   RefreshCw,
   Search,
@@ -83,6 +84,9 @@ interface CardiologyDashboardSummary {
     patient_name?: string;
     patient_number?: string;
   }>;
+  chiefComplaintMix?: Array<{ term: string; concept_id?: string | null; count: number }>;
+  symptomMix?: Array<{ term: string; concept_id?: string | null; count: number }>;
+  diagnosticBacklog?: Array<{ term: string; concept_id?: string | null; count: number }>;
 }
 
 type FiltersState = {
@@ -142,7 +146,12 @@ const CardiologyDashboard: React.FC = () => {
   });
   const [showEncounterModal, setShowEncounterModal] = useState(false);
 
-  const token = useMemo(() => localStorage.getItem('ehr_token'), []);
+  const token = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return localStorage.getItem('ehr_token');
+  }, []);
 
   const ensureAuth = useCallback(() => {
     if (!tenantSlug || !token) {
@@ -166,6 +175,16 @@ const CardiologyDashboard: React.FC = () => {
             count: Number(item?.count ?? 0),
           }))
         : [];
+      const normalizeConceptList = (array: any[]): Array<{ term: string; concept_id?: string | null; count: number }> =>
+        Array.isArray(array)
+          ? array
+              .map((item: any) => ({
+                term: item?.term ?? 'Unlabeled concept',
+                concept_id: item?.concept_id ?? null,
+                count: Number(item?.count ?? 0),
+              }))
+              .filter((item) => item.count > 0)
+          : [];
 
       setSummary({
         totals: {
@@ -181,6 +200,9 @@ const CardiologyDashboard: React.FC = () => {
         riskMix,
         upcomingFollowUps: Array.isArray(data.upcomingFollowUps) ? data.upcomingFollowUps : [],
         recentEncounters: Array.isArray(data.recentEncounters) ? data.recentEncounters : [],
+        chiefComplaintMix: normalizeConceptList(data.chiefComplaintMix),
+        symptomMix: normalizeConceptList(data.symptomMix),
+        diagnosticBacklog: normalizeConceptList(data.diagnosticBacklog),
       });
     } catch (error) {
       console.error('Failed to load cardiology summary', error);
@@ -357,6 +379,82 @@ const CardiologyDashboard: React.FC = () => {
             </div>
             <p className="mt-4 text-3xl font-bold text-emerald-100">{completed}</p>
             <p className="text-xs text-emerald-200/70">Care pathways wrapped with outcomes documented</p>
+          </div>
+        </section>
+
+        {/* SNOMED-driven insights */}
+        <section className="mt-6 grid gap-5 lg:grid-cols-3">
+          <div className="rounded-3xl border border-slate-700/60 bg-slate-900/80 p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <HeartPulse className="h-5 w-5 text-rose-300" />
+                Top SNOMED complaints
+              </h3>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(summary?.chiefComplaintMix ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${index}`} className="flex items-center justify-between text-sm text-slate-200">
+                  <div>
+                    <p className="font-medium text-white">{item.term}</p>
+                    <p className="text-xs text-slate-400">{item.concept_id ?? 'Uncoded'}</p>
+                  </div>
+                  <span className="inline-flex items-center justify-center rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200 border border-rose-500/40">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+              {!summary?.chiefComplaintMix?.length && (
+                <p className="text-sm text-slate-400">SNOMED-coded chief complaints will appear here.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-700/60 bg-slate-900/80 p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-sky-300" />
+                Symptom clusters
+              </h3>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(summary?.symptomMix ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${index}`} className="flex items-center justify-between text-sm text-slate-200">
+                  <div>
+                    <p className="font-medium text-white">{item.term}</p>
+                    <p className="text-xs text-slate-400">{item.concept_id ?? 'Uncoded'}</p>
+                  </div>
+                  <span className="inline-flex items-center justify-center rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-200 border border-sky-500/40">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+              {!summary?.symptomMix?.length && <p className="text-sm text-slate-400">Capture SNOMED-coded symptoms to populate this view.</p>}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-700/60 bg-slate-900/80 p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <Microscope className="h-5 w-5 text-indigo-300" />
+                Pending diagnostics
+              </h3>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(summary?.diagnosticBacklog ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${index}`} className="flex items-center justify-between text-sm text-slate-200">
+                  <div>
+                    <p className="font-medium text-white">{item.term}</p>
+                    <p className="text-xs text-slate-400">{item.concept_id ?? 'Uncoded'}</p>
+                  </div>
+                  <span className="inline-flex items-center justify-center rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-200 border border-indigo-500/40">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+              {!summary?.diagnosticBacklog?.length && (
+                <p className="text-sm text-slate-400">Outstanding SNOMED-coded diagnostics will surface here.</p>
+              )}
+            </div>
           </div>
         </section>
 

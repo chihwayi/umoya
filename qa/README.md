@@ -1,0 +1,52 @@
+## QA & Clinical Validation Toolkit
+
+This folder holds the artifacts that power Sprint 4 QA sign-off.
+
+### Structure
+```
+qa/
+├── README.md                 ← you are here
+├── fixtures/
+│   └── scenarios.json        ← canonical data for the 10 workflows
+└── tests/
+    └── run-scenarios.ts      ← script that enumerates scenarios & prerequisites
+```
+
+### Prerequisites
+- Node 18+
+- `npm install` at repo root (provides axios, ts-node if needed)
+- Access to QA tenant(s) plus an API token (`EHR_QA_TOKEN`) and tenant slug (`EHR_QA_TENANT`)
+
+### Running the scenario enumerator
+```
+npx ts-node qa/tests/run-scenarios.ts --tenant qa-shared --token $EHR_QA_TOKEN
+```
+
+What it does today:
+- Loads `fixtures/scenarios.json`
+- Validates required env/config values
+- Prints a checklist for each scenario, including endpoints and data dependencies
+- (Future) will exercise real API flows and assert DB state
+
+### Seeding data
+1. Provision a fresh tenant with all bundles:
+   ```
+   npx ts-node scripts/provisioning-smoke-test.ts --bundles core snomed hiv_testing --keepDb
+   ```
+2. Load fixture patients/users using the admin API or SQL snippets embedded in the scenario file.
+3. Log into the QA UI with the seeded accounts (see scenario fixture `actors` array).
+
+### Adding new scenarios
+1. Duplicate an entry inside `fixtures/scenarios.json`.
+2. Provide metadata: `modules`, `steps`, `expected`, `automation`.
+3. Run the script; it will automatically include the new entry.
+
+### Troubleshooting
+- If the script reports missing prerequisites, consult the `prerequisites` section in each scenario and seed the referenced patient/appointment IDs.
+- To inspect drift before testing, run `npx ts-node scripts/schema-drift-detector.ts --connection <tenant-url>`.
+
+### Contact
+- QA lead: qa@medicore.health
+- Automation channel: `#qa-automation`
+
+

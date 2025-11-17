@@ -1,0 +1,163 @@
+{
+  "dashboard": {
+    "title": "MediCore EHR - Overview Dashboard",
+    "tags": ["medicore", "ehr", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "CDSS Hooks - Total Requests",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(cdss_hooks_total[5m]))",
+            "legendFormat": "Hooks/sec",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "CDSS Hook Duration",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 9, "x": 6, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(cdss_hook_duration_seconds_bucket[5m])) by (le, event_type))",
+            "legendFormat": "{{event_type}} - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(cdss_hook_duration_seconds_bucket[5m])) by (le, event_type))",
+            "legendFormat": "{{event_type}} - p50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Duration" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "CDSS Hook Errors",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 9, "x": 15, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(cdss_hook_errors_total[5m])) by (event_type, error_type)",
+            "legendFormat": "{{event_type}} - {{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Errors/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Provisioning Operations",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(provisioning_operations_total) by (bundle_id, status)",
+            "legendFormat": "{{bundle_id}} - {{status}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Provisioning Duration",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 9, "x": 6, "y": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(provisioning_duration_seconds_bucket[5m])) by (le, bundle_id))",
+            "legendFormat": "{{bundle_id}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Duration" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Automation Jobs",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 9, "x": 15, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(automation_jobs_total[5m])) by (job_type, status)",
+            "legendFormat": "{{job_type}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Jobs/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "SNOMED Searches",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(snomed_searches_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "ICD-10 Mappings",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 6, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(icd10_mappings_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "System Health",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "up{job=\"ehr-service\"}",
+            "legendFormat": "Service Up",
+            "refId": "A"
+          }
+        ],
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "value": 0, "color": "red" },
+            { "value": 1, "color": "green" }
+          ]
+        }
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}
+

@@ -94,4 +94,16 @@ export class TenantService {
       this.tenantConnections.delete(tenantId);
     }
   }
+
+  async getAllActiveTenants(): Promise<Array<{ id: string; subdomain: string; databaseName: string }>> {
+    try {
+      const result = await this.masterDb.query(
+        `SELECT id, subdomain, "databaseName" FROM tenants WHERE status = 'active'`,
+      );
+      return result || [];
+    } catch (error) {
+      console.error('Failed to get active tenants:', error);
+      return [];
+    }
+  }
 }

@@ -1,0 +1,21 @@
+{
+  "name": "@medicore/qa-tests",
+  "version": "1.0.0",
+  "description": "MediCore QA test suite",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:ui": "playwright test --ui",
+    "test:s1": "playwright test scenario-s1-triage-prescription",
+    "test:s3": "playwright test scenario-s3-oncology-lifecycle",
+    "test:s4": "playwright test scenario-s4-cardiology-sla",
+    "test:s5": "playwright test scenario-s5-lab-critical-alert",
+    "test:s7": "playwright test scenario-s7-cdss-hooks",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
+

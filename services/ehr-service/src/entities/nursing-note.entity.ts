@@ -23,11 +23,20 @@ export class NursingNote {
   @Column({ type: 'text', nullable: true })
   observations?: string;
 
+  @Column({ name: 'observations_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  observationsSnomed?: any[];
+
   @Column({ type: 'text', nullable: true })
   interventions?: string;
 
+  @Column({ name: 'interventions_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  interventionsSnomed?: any[];
+
   @Column({ type: 'text', nullable: true })
   outcomes?: string;
+
+  @Column({ name: 'outcomes_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  outcomesSnomed?: any[];
 
   @Column({ name: 'recorded_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   recordedAt: Date;
@@ -41,5 +50,3 @@ export class NursingNote {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
-
-

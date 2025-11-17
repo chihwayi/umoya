@@ -377,6 +377,7 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                         placeholder="Search SNOMED CT (e.g., Angina pectoris)"
                         helperText="Adds a coded reason for this encounter"
                         required={false}
+                      context="condition"
                       />
                     </div>
                   )}
@@ -414,6 +415,7 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                           label=""
                           placeholder="Search SNOMED CT (e.g., Chest pain)"
                           helperText="Add structured symptom codes"
+                        context="symptom"
                         />
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -520,6 +522,7 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                         label=""
                         placeholder="Search SNOMED CT (e.g., Echocardiography)"
                         helperText="Document ordered procedures with SNOMED CT"
+                        context="procedure"
                       />
                       <div className="flex flex-wrap gap-2">
                         <button

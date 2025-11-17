@@ -9,7 +9,40 @@ export interface SnomedConcept {
   fullySpecifiedName?: string;
   moduleId?: string;
   definitionStatus?: string;
+  semanticTag?: string;
 }
+
+export type SnomedSearchContext =
+  | 'condition'
+  | 'symptom'
+  | 'encounter'
+  | 'procedure'
+  | 'medication'
+  | 'substance'
+  | 'specimen'
+  | 'observable'
+  | 'organism'
+  | 'situation'
+  | 'anatomy'
+  | 'finding';
+
+const CONTEXT_CONFIG: Record<
+  SnomedSearchContext,
+  { semanticTags?: string[]; ecl?: string }
+> = {
+  condition: { ecl: '<< 404684003' }, // Clinical finding
+  symptom: { ecl: '<< 404684003' },
+  encounter: { ecl: '<< 308335008' }, // Patient encounter/procedure
+  procedure: { ecl: '<< 71388002' },
+  medication: { ecl: '<< 763158003' }, // Medicinal product
+  substance: { ecl: '<< 105590001' },
+  specimen: { ecl: '<< 123038009' },
+  observable: { ecl: '<< 363787002' },
+  organism: { ecl: '<< 410607006' },
+  situation: { ecl: '<< 243796009' },
+  anatomy: { ecl: '<< 123037004' },
+  finding: { ecl: '<< 404684003' },
+};
 
 interface SnomedConceptPickerProps {
   value: SnomedConcept | null;
@@ -23,6 +56,9 @@ interface SnomedConceptPickerProps {
   autoFocus?: boolean;
   activeOnly?: boolean;
   required?: boolean;
+  semanticTags?: string[];
+  ecl?: string;
+  context?: SnomedSearchContext;
 }
 
 const searchDelayMs = 300;
@@ -39,6 +75,9 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
   autoFocus,
   activeOnly = true,
   required = false,
+  semanticTags,
+  ecl,
+  context,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>(value?.term ?? '');
@@ -64,6 +103,9 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const effectiveSemanticTags = semanticTags ?? (context ? CONTEXT_CONFIG[context]?.semanticTags : undefined);
+  const effectiveEcl = ecl ?? (context ? CONTEXT_CONFIG[context]?.ecl : undefined);
+
   const performSearch = async (term: string) => {
     if (!term || term.trim().length < 2) {
       setResults([]);
@@ -78,6 +120,8 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
       const { data } = await terminologyApi.searchSnomed(term, token, tenantSlug, {
         limit: 20,
         activeOnly,
+        semanticTags: effectiveSemanticTags,
+        ecl: effectiveEcl,
       });
       setResults(data.concepts || []);
       setHasSearched(true);
@@ -105,8 +149,7 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
         window.clearTimeout(debounceRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]);
+  }, [searchTerm, disabled, token, tenantSlug, activeOnly, effectiveSemanticTags, effectiveEcl]);
 
   const handleSelect = (concept: SnomedConcept) => {
     onChange(concept);
@@ -215,4 +258,8 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
 };
 
 export default SnomedConceptPicker;
+
+
+
+
 

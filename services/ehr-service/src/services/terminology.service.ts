@@ -10,6 +10,7 @@ export interface SnomedConcept {
   active: boolean;
   moduleId?: string;
   definitionStatus?: string;
+  semanticTag?: string;
 }
 
 export interface SnomedSearchResult {
@@ -25,6 +26,29 @@ export interface SnomedMapping {
   targetSystem: 'ICD10' | 'ICD11' | 'LOINC' | 'CPT';
   mapCategory: string;
   active: boolean;
+  mapGroup?: number;
+  mapPriority?: number;
+  mapRule?: string;
+  mapAdvice?: string;
+  mapStatus?: string;
+  mapSource?: string;
+  effectiveTime?: string;
+}
+
+export interface Icd10MappingRecord {
+  conceptId: string;
+  targetCode: string;
+  targetDisplay?: string;
+  mapGroup: number;
+  mapPriority: number;
+  mapRule?: string;
+  mapAdvice?: string;
+  mapStatus?: string;
+  mapCategoryId?: string;
+  moduleId?: string;
+  effectiveTime?: string;
+  active: boolean;
+  mapSource?: string;
 }
 
 @Injectable()
@@ -33,6 +57,9 @@ export class TerminologyService {
   private snomedApiClient: AxiosInstance;
   private snomedBaseUrl: string;
   private useLocalCache: boolean = true;
+  private strictEclFiltering: boolean = process.env.SNOMED_STRICT_ECL === 'true';
+  private ancestorCache = new Map<string, { ids: string[]; fetchedAt: number }>();
+  private ancestorCacheTtlMs = 1000 * 60 * 60 * 24 * 7; // 7 days
 
   constructor() {
     // Initialize SNOMED CT API client
@@ -65,15 +92,24 @@ export class TerminologyService {
     limit: number = 50,
     offset: number = 0,
     activeOnly: boolean = true,
+    semanticTags?: string[],
+    ecl?: string,
   ): Promise<SnomedSearchResult> {
     if (!term || term.trim().length < 2) {
       throw new BadRequestException('Search term must be at least 2 characters');
     }
 
+    const normalizedTags =
+      semanticTags
+        ?.map((tag) => tag.trim().toLowerCase())
+        .filter((tag) => tag.length > 0) || undefined;
+    const normalizedEcl = ecl?.trim() || undefined;
+    const cacheKey = this.buildSearchCacheKey(term, activeOnly, normalizedTags, normalizedEcl);
+
     try {
       // Check cache first if enabled
       if (this.useLocalCache) {
-        const cached = await this.getCachedSearch(tenantDb, term, limit, offset);
+        const cached = await this.getCachedSearch(tenantDb, cacheKey, limit, offset);
         if (cached) {
           this.logger.debug(`Returning cached search results for: ${term}`);
           return cached;
@@ -87,29 +123,69 @@ export class TerminologyService {
           limit: Math.min(limit, 100), // Cap at 100
           offset,
           activeFilter: activeOnly,
+          groupByConcept: true,
+          semanticTags: normalizedTags?.join(',') || undefined,
+          ecl: normalizedEcl,
         },
       });
 
       const concepts: SnomedConcept[] = (response.data.items || []).map((item: any) => ({
         conceptId: item.conceptId || item.id,
-        term: item.fsn?.term || item.pt?.term || item.term || '',
+        term: item.pt?.term || item.fsn?.term || item.term || '',
         preferredTerm: item.pt?.term,
         fullySpecifiedName: item.fsn?.term,
         active: item.active !== false,
         moduleId: item.moduleId,
         definitionStatus: item.definitionStatus,
+        semanticTag: this.extractSemanticTag(item.fsn?.term),
       }));
 
+      let filteredConcepts = concepts;
+      if (activeOnly) {
+        filteredConcepts = filteredConcepts.filter((concept) => concept.active);
+      }
+
+      if (normalizedTags?.length) {
+        filteredConcepts = filteredConcepts.filter((concept) =>
+          concept.semanticTag ? normalizedTags.includes(concept.semanticTag) : false,
+        );
+      }
+
+      if (this.strictEclFiltering && normalizedEcl) {
+        const eclRoots = this.extractEclRoots(normalizedEcl);
+        if (eclRoots.length > 0) {
+          const conceptChecks = await Promise.all(
+            filteredConcepts.map(async (concept) => {
+              if (eclRoots.includes(concept.conceptId)) {
+                return true;
+              }
+              const ancestors = await this.getAncestorIds(concept.conceptId);
+              return ancestors.some((ancestorId) => eclRoots.includes(ancestorId));
+            }),
+          );
+          const hasAnyMatch = conceptChecks.some(Boolean);
+          if (hasAnyMatch) {
+            filteredConcepts = filteredConcepts.filter((_, idx) => conceptChecks[idx]);
+          } else {
+            this.logger.warn(
+              `ECL filter "${normalizedEcl}" returned no matches for term "${term}". Falling back to semantic filtering only.`,
+            );
+          }
+        }
+      }
+
+      const pagedConcepts = filteredConcepts.slice(offset, offset + limit);
+
       const result: SnomedSearchResult = {
-        concepts,
-        total: response.data.total || concepts.length,
+        concepts: pagedConcepts,
+        total: filteredConcepts.length,
         limit,
         offset,
       };
 
       // Cache results if enabled
       if (this.useLocalCache) {
-        await this.cacheSearch(tenantDb, term, result);
+        await this.cacheSearch(tenantDb, cacheKey, result);
       }
 
       return result;
@@ -118,7 +194,7 @@ export class TerminologyService {
       
       // Fallback to database cache if API fails
       if (this.useLocalCache) {
-        const cached = await this.getCachedSearch(tenantDb, term, limit, offset);
+        const cached = await this.getCachedSearch(tenantDb, cacheKey, limit, offset);
         if (cached) {
           this.logger.warn('Using cached results due to API failure');
           return cached;
@@ -231,6 +307,89 @@ export class TerminologyService {
    * @param conceptId SNOMED CT concept ID
    * @param targetSystem Target terminology system (ICD10, ICD11, LOINC, CPT)
    */
+  async getIcd10Mappings(
+    tenantDb: DataSource,
+    conceptId: string,
+    options?: { primaryOnly?: boolean; includeInactive?: boolean; limit?: number },
+  ): Promise<Icd10MappingRecord[]> {
+    if (!conceptId || !/^\d+$/.test(conceptId)) {
+      throw new BadRequestException('Invalid SNOMED CT concept ID format');
+    }
+
+    const includeInactive = options?.includeInactive ?? false;
+    const limit = options?.limit ?? 50;
+    const params: any[] = [conceptId];
+    let query = `
+      SELECT concept_id,
+             target_code,
+             target_display,
+             map_group,
+             map_priority,
+             map_rule,
+             map_advice,
+             map_status,
+             map_category_id,
+             module_id,
+             effective_time,
+             active,
+             map_source
+        FROM snomed_icd10_mappings
+       WHERE concept_id = $1
+    `;
+
+    if (!includeInactive) {
+      query += ' AND active = true';
+    }
+
+    query += ' ORDER BY map_group ASC, map_priority ASC';
+
+    if (limit > 0) {
+      params.push(limit);
+      query += ` LIMIT $${params.length}`;
+    }
+
+    try {
+      const rows = await tenantDb.query(query, params);
+      const results = rows.map((row: any) => this.mapIcd10Row(row));
+      if (options?.primaryOnly) {
+        return this.collapseToPrimary(results);
+      }
+      return results;
+    } catch (error: any) {
+      if (error?.code === '42P01') {
+        throw new NotFoundException(
+          'ICD-10 mapping tables are not provisioned for this tenant. Apply the icd10_mapping bundle first.',
+        );
+      }
+      this.logger.error(`Failed to fetch ICD-10 mappings: ${error.message}`, error.stack);
+      throw new BadRequestException('Unable to fetch ICD-10 mappings at this time');
+    }
+  }
+
+  async getIcd10MappingMetadata(tenantDb: DataSource) {
+    try {
+      const [row] = await tenantDb.query(`
+        SELECT release_label,
+               effective_time,
+               source_zip,
+               total_rows,
+               import_started_at,
+               import_completed_at
+          FROM icd10_mapping_metadata
+         ORDER BY import_completed_at DESC NULLS LAST, import_started_at DESC
+         LIMIT 1
+      `);
+      return row || null;
+    } catch (error: any) {
+      if (error?.code === '42P01') {
+        this.logger.warn('ICD-10 mapping metadata table missing; bundle likely not applied yet.');
+        return null;
+      }
+      this.logger.warn(`Failed to fetch ICD-10 mapping metadata: ${error.message}`);
+      return null;
+    }
+  }
+
   async mapConcept(
     tenantDb: DataSource,
     conceptId: string,
@@ -238,18 +397,38 @@ export class TerminologyService {
   ): Promise<SnomedMapping[]> {
     await this.validateConcept(tenantDb, conceptId);
 
+    if (targetSystem === 'ICD10') {
+      const mappings = await this.getIcd10Mappings(tenantDb, conceptId, {
+        includeInactive: false,
+        primaryOnly: false,
+      });
+      if (!mappings.length) {
+        throw new NotFoundException(`No ICD-10 mappings found for SNOMED concept ${conceptId}`);
+      }
+      return mappings.map((row) => ({
+        sourceCode: conceptId,
+        targetCode: row.targetCode,
+        targetSystem: 'ICD10',
+        mapCategory: row.mapCategoryId || row.mapStatus || 'UNSPECIFIED',
+        active: row.active,
+        mapGroup: row.mapGroup,
+        mapPriority: row.mapPriority,
+        mapRule: row.mapRule,
+        mapAdvice: row.mapAdvice,
+        mapStatus: row.mapStatus,
+        mapSource: row.mapSource,
+        effectiveTime: row.effectiveTime,
+      }));
+    }
+
     try {
-      // Check database cache first
       const cachedMappings = await this.getCachedMappings(tenantDb, conceptId, targetSystem);
       if (cachedMappings.length > 0) {
         return cachedMappings;
       }
 
-      // Query SNOMED CT mapping API or use reference set
-      // Note: Actual implementation depends on available mapping resources
       const mappings: SnomedMapping[] = await this.querySnomedMappings(conceptId, targetSystem);
 
-      // Cache mappings
       if (mappings.length > 0) {
         await this.cacheMappings(tenantDb, conceptId, mappings);
       }
@@ -257,8 +436,7 @@ export class TerminologyService {
       return mappings;
     } catch (error: any) {
       this.logger.error(`SNOMED CT mapping failed: ${error.message}`, error.stack);
-      
-      // Return cached mappings if available
+
       const cachedMappings = await this.getCachedMappings(tenantDb, conceptId, targetSystem);
       if (cachedMappings.length > 0) {
         return cachedMappings;
@@ -287,7 +465,7 @@ export class TerminologyService {
 
   private async getCachedSearch(
     tenantDb: DataSource,
-    term: string,
+    cacheKey: string,
     limit: number,
     offset: number,
   ): Promise<SnomedSearchResult | null> {
@@ -297,7 +475,7 @@ export class TerminologyService {
          WHERE search_term = $1 AND result_limit = $2 AND result_offset = $3 
          AND created_at > NOW() - INTERVAL '24 hours'
          LIMIT 1`,
-        [term.toLowerCase(), limit, offset],
+        [cacheKey, limit, offset],
       );
 
       return result ? result.data : null;
@@ -307,17 +485,66 @@ export class TerminologyService {
     }
   }
 
-  private async cacheSearch(tenantDb: DataSource, term: string, result: SnomedSearchResult): Promise<void> {
+  private async cacheSearch(tenantDb: DataSource, cacheKey: string, result: SnomedSearchResult): Promise<void> {
     try {
       await tenantDb.query(
         `INSERT INTO snomed_search_cache (search_term, result_limit, result_offset, data, created_at)
          VALUES ($1, $2, $3, $4, NOW())
          ON CONFLICT (search_term, result_limit, result_offset) 
          DO UPDATE SET data = $4, created_at = NOW()`,
-        [term.toLowerCase(), result.limit, result.offset, JSON.stringify(result)],
+        [cacheKey, result.limit, result.offset, JSON.stringify(result)],
       );
     } catch (error) {
       this.logger.warn('Cache insert failed, table may not exist yet');
+    }
+  }
+
+  private buildSearchCacheKey(
+    term: string,
+    activeOnly: boolean,
+    semanticTags?: string[],
+    ecl?: string,
+  ): string {
+    const normalizedTerm = term.trim().toLowerCase();
+    const tagKey = semanticTags && semanticTags.length > 0 ? semanticTags.sort().join('|') : 'all';
+    const eclKey = ecl ? ecl.trim().toLowerCase() : 'none';
+    const activeKey = activeOnly ? 'active' : 'all';
+    return `${normalizedTerm}::${activeKey}::${tagKey}::${eclKey}`;
+  }
+
+  private extractSemanticTag(fsn?: string): string | undefined {
+    if (!fsn) {
+      return undefined;
+    }
+    const match = fsn.match(/\(([^)]+)\)\s*$/);
+    return match ? match[1].trim().toLowerCase() : undefined;
+  }
+
+  private extractEclRoots(ecl: string): string[] {
+    if (!ecl) {
+      return [];
+    }
+    const matches = ecl.match(/\d{3,}/g);
+    return matches ? Array.from(new Set(matches)) : [];
+  }
+
+  private async getAncestorIds(conceptId: string): Promise<string[]> {
+    const cached = this.ancestorCache.get(conceptId);
+    const now = Date.now();
+    if (cached && now - cached.fetchedAt < this.ancestorCacheTtlMs) {
+      return cached.ids;
+    }
+
+    try {
+      const response = await this.snomedApiClient.get(`/browser/MAIN/concepts/${conceptId}/ancestors`, {
+        params: { form: 'inferred' },
+      });
+      const ids: string[] = (response.data.items || []).map((item: any) => item.conceptId);
+      this.ancestorCache.set(conceptId, { ids, fetchedAt: now });
+      return ids;
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch ancestors for concept ${conceptId}: ${error.message}`);
+      return [];
     }
   }
 
@@ -391,6 +618,34 @@ export class TerminologyService {
     } catch (error) {
       // Ignore cache errors
     }
+  }
+
+  private mapIcd10Row(row: any): Icd10MappingRecord {
+    return {
+      conceptId: row.concept_id,
+      targetCode: row.target_code,
+      targetDisplay: row.target_display ?? undefined,
+      mapGroup: Number(row.map_group) || 1,
+      mapPriority: Number(row.map_priority) || 1,
+      mapRule: row.map_rule ?? undefined,
+      mapAdvice: row.map_advice ?? undefined,
+      mapStatus: row.map_status ?? undefined,
+      mapCategoryId: row.map_category_id ?? undefined,
+      moduleId: row.module_id ?? undefined,
+      effectiveTime: row.effective_time ?? undefined,
+      active: row.active ?? false,
+      mapSource: row.map_source ?? undefined,
+    };
+  }
+
+  private collapseToPrimary(rows: Icd10MappingRecord[]): Icd10MappingRecord[] {
+    const byGroup = new Map<number, Icd10MappingRecord>();
+    for (const row of rows) {
+      if (!byGroup.has(row.mapGroup)) {
+        byGroup.set(row.mapGroup, row);
+      }
+    }
+    return Array.from(byGroup.values()).sort((a, b) => a.mapGroup - b.mapGroup);
   }
 }
 

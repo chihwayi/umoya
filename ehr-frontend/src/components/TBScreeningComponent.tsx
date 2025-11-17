@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Stethoscope, Save, User, AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface TBScreeningComponentProps {
   tenantSlug: string;
@@ -25,6 +26,28 @@ const TBScreeningComponent: React.FC<TBScreeningComponentProps> = ({ tenantSlug 
     screeningResult: '',
     notes: ''
   });
+  const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
+  const snomedReady = Boolean(snomedToken && tenantSlug);
+  const [screeningReasonConcept, setScreeningReasonConcept] = useState<SnomedConcept | null>(null);
+  const [screeningResultConcept, setScreeningResultConcept] = useState<SnomedConcept | null>(null);
+  const [pendingSymptomConcept, setPendingSymptomConcept] = useState<SnomedConcept | null>(null);
+  const [symptomConcepts, setSymptomConcepts] = useState<SnomedConcept[]>([]);
+  const [diagnosisConcept, setDiagnosisConcept] = useState<SnomedConcept | null>(null);
+  const [treatmentConcept, setTreatmentConcept] = useState<SnomedConcept | null>(null);
+
+  const addSymptomConcept = () => {
+    if (
+      pendingSymptomConcept &&
+      !symptomConcepts.some((concept) => concept.conceptId === pendingSymptomConcept.conceptId)
+    ) {
+      setSymptomConcepts((prev) => [...prev, pendingSymptomConcept]);
+    }
+    setPendingSymptomConcept(null);
+  };
+
+  const removeSymptomConcept = (conceptId: string) => {
+    setSymptomConcepts((prev) => prev.filter((concept) => concept.conceptId !== conceptId));
+  };
 
   const searchPatients = async () => {
     if (!searchTerm.trim()) {
@@ -64,12 +87,17 @@ const TBScreeningComponent: React.FC<TBScreeningComponentProps> = ({ tenantSlug 
         screeningDate: form.screeningDate,
         screeningType: form.screeningType,
         screeningResult: form.screeningResult || null,
+        screeningReasonConcept,
+        screeningResultConcept,
         symptoms: {
           cough: form.symptomCough,
           fever: form.symptomFever,
           nightSweats: form.symptomNightSweats,
           weightLoss: form.symptomWeightLoss
         },
+        symptomConcepts,
+        diagnosisConcept,
+        treatmentConcept,
         symptomDurationWeeks: form.symptomDurationWeeks ? parseInt(form.symptomDurationWeeks) : null,
         screenedBy: currentUser.id,
         notes: form.notes
@@ -89,6 +117,12 @@ const TBScreeningComponent: React.FC<TBScreeningComponentProps> = ({ tenantSlug 
         screeningResult: '',
         notes: ''
       });
+      setScreeningReasonConcept(null);
+      setScreeningResultConcept(null);
+      setPendingSymptomConcept(null);
+      setSymptomConcepts([]);
+      setDiagnosisConcept(null);
+      setTreatmentConcept(null);
     } catch (error: any) {
       showError('Error', error.response?.data?.message || 'Failed to record screening');
     } finally {
@@ -250,6 +284,99 @@ const TBScreeningComponent: React.FC<TBScreeningComponentProps> = ({ tenantSlug 
                 <option value="pending">Pending</option>
               </select>
             </div>
+
+            {snomedReady && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 space-y-4">
+                <p className="text-sm font-semibold text-amber-900">SNOMED Structured Fields</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <SnomedConceptPicker
+                    value={screeningReasonConcept}
+                    onChange={setScreeningReasonConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Screening reason concept"
+                    placeholder="Search SNOMED CT (e.g., TB symptom screen)"
+                  context="procedure"
+                  />
+                  <SnomedConceptPicker
+                    value={screeningResultConcept}
+                    onChange={setScreeningResultConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Screening result concept"
+                    placeholder="Search SNOMED CT (e.g., Pulmonary tuberculosis confirmed)"
+                  context="condition"
+                  />
+                  <div className="space-y-2">
+                    <SnomedConceptPicker
+                      value={pendingSymptomConcept}
+                      onChange={setPendingSymptomConcept}
+                      token={snomedToken}
+                      tenantSlug={tenantSlug}
+                      label="Symptom concept"
+                      placeholder="Search SNOMED CT (e.g., Night sweats)"
+                  context="condition"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                        onClick={addSymptomConcept}
+                        disabled={!pendingSymptomConcept}
+                      >
+                        Add symptom
+                      </button>
+                      {symptomConcepts.length > 0 && (
+                        <button
+                          type="button"
+                          className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-800"
+                          onClick={() => setSymptomConcepts([])}
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    {symptomConcepts.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {symptomConcepts.map((concept) => (
+                          <span
+                            key={concept.conceptId}
+                            className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-amber-900 shadow-sm"
+                          >
+                            {concept.preferredTerm || concept.term}
+                            <button
+                              type="button"
+                              className="text-amber-600 hover:text-amber-800"
+                              onClick={() => removeSymptomConcept(concept.conceptId)}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <SnomedConceptPicker
+                    value={diagnosisConcept}
+                    onChange={setDiagnosisConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Diagnosis concept"
+                    placeholder="Search SNOMED CT (e.g., Pulmonary tuberculosis)"
+                  context="condition"
+                  />
+                  <SnomedConceptPicker
+                    value={treatmentConcept}
+                    onChange={setTreatmentConcept}
+                    token={snomedToken}
+                    tenantSlug={tenantSlug}
+                    label="Treatment concept"
+                    placeholder="Search SNOMED CT (e.g., Isoniazid preventive therapy)"
+                  context="procedure"
+                  />
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium mb-2">Notes</label>

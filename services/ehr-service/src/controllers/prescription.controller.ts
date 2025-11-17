@@ -15,7 +15,7 @@ export class PrescriptionController {
   @Post()
   @ApiOperation({ summary: 'Create prescription' })
   async createPrescription(@Body() createDto: any, @Request() req: RequestWithTenant) {
-    return this.prescriptionService.create(createDto, req.tenantDb, (req.user as any).id);
+    return this.prescriptionService.create(createDto, req.tenantDb, (req.user as any).id, req.tenantId);
   }
 
   @Get('patient/:patientId')

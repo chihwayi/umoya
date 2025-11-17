@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
+import { CdssHookService } from './cdss-hook.service';
 
 @Injectable()
 export class ImagingService {
@@ -11,6 +12,7 @@ export class ImagingService {
   constructor(
     private readonly financeService: FinanceService,
     private readonly terminologyService: TerminologyService,
+    private readonly cdssHookService: CdssHookService,
   ) {}
 
   // ===== MODALITIES & STUDY TYPES =====
@@ -74,7 +76,7 @@ export class ImagingService {
 
   // ===== ORDERS =====
 
-  async createOrder(tenantDb: DataSource, orderData: any, userId?: string) {
+  async createOrder(tenantDb: DataSource, orderData: any, userId?: string, tenantId?: string) {
     const {
       patient_id,
       study_type_id,
@@ -249,10 +251,24 @@ export class ImagingService {
       );
     }
 
+    let cdssInsights: any = null;
+    try {
+      cdssInsights = await this.cdssHookService.handleImagingOrderCreated({
+        tenantId,
+        tenantDb,
+        imagingOrder: order,
+      });
+    } catch (error) {
+      this.logger.warn(`CDSS hook failed for imaging order ${order.id}: ${error instanceof Error ? error.message : error}`);
+    }
+
     this.logger.log(
       `Created imaging order ${orderNumber} for patient ${patient_id} (${paymentStatus})`,
     );
-    return order;
+    return {
+      ...order,
+      cdssInsights,
+    };
   }
 
   async getOrders(tenantDb: DataSource, filters: { status?: string; priority?: string } = {}) {

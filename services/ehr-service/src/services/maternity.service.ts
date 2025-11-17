@@ -1,9 +1,113 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { TerminologyService } from './terminology.service';
+
+interface StoredConceptSummary {
+  conceptId: string;
+  term: string;
+  moduleId?: string;
+  definitionStatus?: string;
+}
 
 @Injectable()
 export class MaternityService {
   private readonly logger = new Logger(MaternityService.name);
+
+  constructor(private readonly terminologyService: TerminologyService) {}
+
+  private extractConceptId(candidate: any): string | null {
+    if (!candidate) {
+      return null;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.trim();
+    }
+    return (
+      candidate?.conceptId ??
+      candidate?.snomedConceptId ??
+      candidate?.snomed_code ??
+      candidate?.snomedCode ??
+      candidate?.code ??
+      null
+    );
+  }
+
+  private async resolveConcept(
+    tenantDb: DataSource,
+    raw: any,
+  ): Promise<StoredConceptSummary | null> {
+    if (raw === undefined || raw === null) {
+      return null;
+    }
+
+    const conceptIdCandidate = this.extractConceptId(raw);
+    if (!conceptIdCandidate) {
+      return null;
+    }
+
+    const conceptId = String(conceptIdCandidate).trim();
+    let validated:
+      | {
+          conceptId: string;
+          preferredTerm?: string;
+          term?: string;
+          moduleId?: string;
+          definitionStatus?: string;
+        }
+      | null = null;
+
+    if (/^\d+$/.test(conceptId)) {
+      try {
+        validated = await this.terminologyService.validateConcept(tenantDb, conceptId);
+      } catch (error: any) {
+        this.logger.warn(
+          `SNOMED validation failed for concept "${conceptId}": ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      this.logger.warn(`Received non-numeric SNOMED concept "${conceptId}" for maternity payload.`);
+      return null;
+    }
+
+    const rawTerm =
+      (typeof raw === 'object' && (raw.preferredTerm || raw.term || raw.fullySpecifiedName)) ||
+      null;
+    const term = rawTerm ?? validated?.preferredTerm ?? validated?.term ?? null;
+
+    if (!term && !validated) {
+      return null;
+    }
+
+    return {
+      conceptId: validated?.conceptId ?? conceptId,
+      term: term ?? '',
+      moduleId: validated?.moduleId ?? raw?.moduleId,
+      definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
+    };
+  }
+
+  private async normalizeConceptArray(
+    tenantDb: DataSource,
+    rawList: any,
+  ): Promise<StoredConceptSummary[]> {
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      return [];
+    }
+
+    const normalized: StoredConceptSummary[] = [];
+    for (const entry of rawList) {
+      const concept = await this.resolveConcept(tenantDb, entry);
+      if (concept) {
+        const exists = normalized.find((item) => item.conceptId === concept.conceptId);
+        if (!exists) {
+          normalized.push(concept);
+        }
+      }
+    }
+    return normalized;
+  }
 
   // ===== ENROLLMENTS =====
 
@@ -20,6 +124,9 @@ export class MaternityService {
       parity_living,
       previous_cesarean,
       previous_complications,
+      current_pregnancy_complications,
+      previous_complications_snomed,
+      current_complications_snomed,
     } = enrollmentData;
 
     // Calculate EDD from LMP (LMP + 280 days)
@@ -49,16 +156,63 @@ export class MaternityService {
     // Generate enrollment number
     const enrollmentNumber = `MAT-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
 
+    const previousComplicationsList = await this.normalizeConceptArray(
+      tenantDb,
+      previous_complications_snomed,
+    );
+    const currentComplicationsList = await this.normalizeConceptArray(
+      tenantDb,
+      current_complications_snomed,
+    );
+
     const result = await tenantDb.query(
       `
       INSERT INTO maternity_enrollments (
-        patient_id, enrollment_number, enrollment_date, expected_delivery_date,
-        edd_method, lmp_date, gestational_age_at_enrollment, gravida, para,
-        parity_term, parity_preterm, parity_abortions, parity_living,
-        previous_cesarean, previous_complications, risk_category,
-        enrollment_status, enrolled_by
+        patient_id,
+        enrollment_number,
+        enrollment_date,
+        expected_delivery_date,
+        edd_method,
+        lmp_date,
+        gestational_age_at_enrollment,
+        gravida,
+        para,
+        parity_term,
+        parity_preterm,
+        parity_abortions,
+        parity_living,
+        previous_cesarean,
+        previous_complications,
+        previous_complications_snomed,
+        current_pregnancy_complications,
+        current_complications_snomed,
+        risk_category,
+        enrollment_status,
+        enrolled_by
       )
-      VALUES ($1, $2, $3, $4, 'LMP', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active', $16)
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        'LMP',
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        $15::jsonb,
+        $16,
+        $17::jsonb,
+        $18,
+        'active',
+        $19
+      )
       RETURNING *
       `,
       [
@@ -75,9 +229,12 @@ export class MaternityService {
         parity_abortions,
         parity_living,
         previous_cesarean || false,
-        previous_complications,
+        previous_complications || null,
+        JSON.stringify(previousComplicationsList ?? []),
+        current_pregnancy_complications || null,
+        JSON.stringify(currentComplicationsList ?? []),
         riskCategory,
-        userId,
+        userId ?? null,
       ],
     );
 
@@ -197,7 +354,21 @@ export class MaternityService {
       current_pregnancy_complications,
       risk_category,
       enrollment_status,
+      previous_complications,
+      previous_complications_snomed,
+      current_complications_snomed,
     } = enrollmentData;
+
+    const previousComplicationsSnomedJson =
+      previous_complications_snomed === undefined
+        ? null
+        : JSON.stringify(
+            await this.normalizeConceptArray(tenantDb, previous_complications_snomed),
+          );
+    const currentComplicationsSnomedJson =
+      current_complications_snomed === undefined
+        ? null
+        : JSON.stringify(await this.normalizeConceptArray(tenantDb, current_complications_snomed));
 
     const result = await tenantDb.query(
       `
@@ -208,11 +379,24 @@ export class MaternityService {
         current_pregnancy_complications = COALESCE($3, current_pregnancy_complications),
         risk_category = COALESCE($4, risk_category),
         enrollment_status = COALESCE($5, enrollment_status),
+        previous_complications = COALESCE($6, previous_complications),
+        previous_complications_snomed = COALESCE($7::jsonb, previous_complications_snomed),
+        current_complications_snomed = COALESCE($8::jsonb, current_complications_snomed),
         updated_at = NOW()
-      WHERE id = $6
+      WHERE id = $9
       RETURNING *
       `,
-      [expected_delivery_date, edd_method, current_pregnancy_complications, risk_category, enrollment_status, enrollmentId],
+      [
+        expected_delivery_date ?? null,
+        edd_method ?? null,
+        current_pregnancy_complications ?? null,
+        risk_category ?? null,
+        enrollment_status ?? null,
+        previous_complications ?? null,
+        previousComplicationsSnomedJson,
+        currentComplicationsSnomedJson,
+        enrollmentId,
+      ],
     );
 
     if (result.length === 0) {
@@ -226,7 +410,16 @@ export class MaternityService {
   // ===== ANC VISITS =====
 
   async createANCVisit(tenantDb: DataSource, visitData: any, userId?: string) {
-    const { maternity_enrollment_id, patient_id, visit_number, visit_date, ...vitalFields } = visitData;
+    const {
+      maternity_enrollment_id,
+      patient_id,
+      visit_number,
+      visit_date,
+      complications_snomed,
+      interventions_snomed,
+      referral_reason_snomed,
+      ...vitalFields
+    } = visitData;
 
     // Calculate gestational age from LMP
     const enrollment = await tenantDb.query(
@@ -253,6 +446,10 @@ export class MaternityService {
       bmi = (vitalFields.weight / (heightMeters * heightMeters)).toFixed(2);
     }
 
+    const complicationsList = await this.normalizeConceptArray(tenantDb, complications_snomed);
+    const interventionsList = await this.normalizeConceptArray(tenantDb, interventions_snomed);
+    const referralConcept = await this.resolveConcept(tenantDb, referral_reason_snomed);
+
     const result = await tenantDb.query(
       `
       INSERT INTO anc_visits (
@@ -265,13 +462,16 @@ export class MaternityService {
         vdrl_syphilis, hiv_status, hep_b_status, tetanus_immunization,
         ipt_malaria, iron_folate, deworming, insecticide_treated_net,
         danger_signs_discussed, birth_plan_discussed, complications_identified,
-        interventions, referral_needed, referral_reason, referral_facility,
-        next_visit_date, provider, notes
+        complications_snomed, interventions, interventions_snomed, referral_needed,
+        referral_reason, referral_reason_snomed_code, referral_reason_snomed_term,
+        referral_reason_snomed_module_id, referral_reason_snomed_definition_status,
+        referral_facility, next_visit_date, provider, notes
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-        $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43
+        $31, $32, $33, $34, $35, $36, $37, $38, $39::jsonb, $40, $41::jsonb,
+        $42, $43, $44, $45, $46, $47, $48
       )
       RETURNING *
       `,
@@ -312,9 +512,15 @@ export class MaternityService {
         vitalFields.danger_signs_discussed,
         vitalFields.birth_plan_discussed,
         vitalFields.complications_identified,
+        JSON.stringify(complicationsList ?? []),
         vitalFields.interventions,
+        JSON.stringify(interventionsList ?? []),
         vitalFields.referral_needed,
-        vitalFields.referral_reason,
+        vitalFields.referral_reason || referralConcept?.term || null,
+        referralConcept?.conceptId ?? null,
+        referralConcept?.term ?? null,
+        referralConcept?.moduleId ?? null,
+        referralConcept?.definitionStatus ?? null,
         vitalFields.referral_facility,
         vitalFields.next_visit_date,
         userId,
@@ -374,7 +580,56 @@ export class MaternityService {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    if (visitData.complications_snomed !== undefined) {
+      visitData.complications_snomed =
+        visitData.complications_snomed === null
+          ? null
+          : JSON.stringify(
+              await this.normalizeConceptArray(tenantDb, visitData.complications_snomed),
+            );
+    }
+    if (visitData.interventions_snomed !== undefined) {
+      visitData.interventions_snomed =
+        visitData.interventions_snomed === null
+          ? null
+          : JSON.stringify(
+              await this.normalizeConceptArray(tenantDb, visitData.interventions_snomed),
+            );
+    }
+    if (visitData.referral_reason_snomed !== undefined) {
+      const resolvedReferral = await this.resolveConcept(tenantDb, visitData.referral_reason_snomed);
+      visitData.referral_reason_snomed_code = resolvedReferral?.conceptId ?? null;
+      visitData.referral_reason_snomed_term = resolvedReferral?.term ?? null;
+      visitData.referral_reason_snomed_module_id = resolvedReferral?.moduleId ?? null;
+      visitData.referral_reason_snomed_definition_status = resolvedReferral?.definitionStatus ?? null;
+      if (resolvedReferral?.term) {
+        visitData.referral_reason = visitData.referral_reason ?? resolvedReferral.term;
+      }
+      delete visitData.referral_reason_snomed;
+      if (
+        !fields.includes('referral_reason_snomed_code')
+      ) {
+        fields.push('referral_reason_snomed_code');
+      }
+      if (!fields.includes('referral_reason_snomed_term')) {
+        fields.push('referral_reason_snomed_term');
+      }
+      if (!fields.includes('referral_reason_snomed_module_id')) {
+        fields.push('referral_reason_snomed_module_id');
+      }
+      if (!fields.includes('referral_reason_snomed_definition_status')) {
+        fields.push('referral_reason_snomed_definition_status');
+      }
+      if (!fields.includes('referral_reason') && resolvedReferral?.term) {
+        fields.push('referral_reason');
+      }
+    }
+
+    const jsonFields = new Set(['complications_snomed', 'interventions_snomed']);
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}${jsonFields.has(field) ? '::jsonb' : ''}`)
+      .join(', ');
     const values = fields.map((field) => visitData[field]);
     values.push(visitId); // For WHERE clause
 
@@ -419,6 +674,8 @@ export class MaternityService {
       femur_length,
       anomalies_detected,
       findings,
+      anomalies_snomed,
+      findings_snomed,
       image_path,
     } = scanData;
 
@@ -432,6 +689,9 @@ export class MaternityService {
       eddByUltrasound.setDate(eddByUltrasound.getDate() + (280 - estimatedGA * 7));
     }
 
+    const anomaliesList = await this.normalizeConceptArray(tenantDb, anomalies_snomed);
+    const findingsList = await this.normalizeConceptArray(tenantDb, findings_snomed);
+
     const result = await tenantDb.query(
       `
       INSERT INTO ultrasound_scans (
@@ -440,11 +700,12 @@ export class MaternityService {
         fetal_presentation, placenta_position, amniotic_fluid, afi,
         estimated_fetal_weight, biparietal_diameter, head_circumference,
         abdominal_circumference, femur_length, anomalies_detected,
-        edd_by_ultrasound, findings, performed_by, image_path
+        anomalies_snomed, edd_by_ultrasound, findings, findings_snomed,
+        performed_by, image_path
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21, $22
+        $16, $17, $18, $19::jsonb, $20, $21, $22::jsonb, $23, $24
       )
       RETURNING *
       `,
@@ -467,8 +728,10 @@ export class MaternityService {
         abdominal_circumference,
         femur_length,
         anomalies_detected,
+        JSON.stringify(anomaliesList ?? []),
         eddByUltrasound,
         findings,
+        JSON.stringify(findingsList ?? []),
         userId,
         image_path,
       ],
@@ -514,7 +777,24 @@ export class MaternityService {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    if (scanData.anomalies_snomed !== undefined) {
+      scanData.anomalies_snomed =
+        scanData.anomalies_snomed === null
+          ? null
+          : JSON.stringify(await this.normalizeConceptArray(tenantDb, scanData.anomalies_snomed));
+    }
+    if (scanData.findings_snomed !== undefined) {
+      scanData.findings_snomed =
+        scanData.findings_snomed === null
+          ? null
+          : JSON.stringify(await this.normalizeConceptArray(tenantDb, scanData.findings_snomed));
+    }
+
+    const jsonFields = new Set(['anomalies_snomed', 'findings_snomed']);
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}${jsonFields.has(field) ? '::jsonb' : ''}`)
+      .join(', ');
     const values = fields.map((field) => scanData[field]);
     values.push(scanId);
 
@@ -539,7 +819,15 @@ export class MaternityService {
   // ===== DELIVERIES =====
 
   async createDelivery(tenantDb: DataSource, deliveryData: any, userId?: string) {
-    const { maternity_enrollment_id, patient_id, delivery_date, delivery_time, ...deliveryFields } = deliveryData;
+    const {
+      maternity_enrollment_id,
+      patient_id,
+      delivery_date,
+      delivery_time,
+      indication_snomed,
+      maternal_complications_snomed,
+      ...deliveryFields
+    } = deliveryData;
 
     // Calculate gestational age at delivery
     const enrollment = await tenantDb.query(
@@ -559,21 +847,31 @@ export class MaternityService {
       gestationalAgeDays = diffDays % 7;
     }
 
+    const indicationConcept = await this.resolveConcept(tenantDb, indication_snomed);
+    const maternalComplicationsList = await this.normalizeConceptArray(
+      tenantDb,
+      maternal_complications_snomed,
+    );
+
     const result = await tenantDb.query(
       `
       INSERT INTO deliveries (
         maternity_enrollment_id, patient_id, delivery_date, delivery_time,
         gestational_age_at_delivery, gestational_age_days, admission_date,
         delivery_type, delivery_method, indication_for_intervention,
-        labor_onset, induction_method, duration_of_labor_hours,
-        rupture_of_membranes, membrane_rupture_type, anesthesia_type,
-        episiotomy, perineal_tear_degree, blood_loss, placenta_delivery,
-        placenta_complete, maternal_complications, maternal_outcome,
+        indication_snomed_code, indication_snomed_term, indication_snomed_module_id,
+        indication_snomed_definition_status, labor_onset, induction_method,
+        duration_of_labor_hours, rupture_of_membranes, membrane_rupture_type,
+        anesthesia_type, episiotomy, perineal_tear_degree, blood_loss,
+        placenta_delivery, placenta_complete, maternal_complications,
+        maternal_complications_snomed, maternal_outcome,
         attending_provider, assistant_provider, notes
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22, $23, $24, $25, $26,
+        $27::jsonb, $28, $29, $30
       )
       RETURNING *
       `,
@@ -587,7 +885,11 @@ export class MaternityService {
         deliveryFields.admission_date,
         deliveryFields.delivery_type,
         deliveryFields.delivery_method,
-        deliveryFields.indication_for_intervention,
+        deliveryFields.indication_for_intervention || indicationConcept?.term || null,
+        indicationConcept?.conceptId ?? null,
+        indicationConcept?.term ?? null,
+        indicationConcept?.moduleId ?? null,
+        indicationConcept?.definitionStatus ?? null,
         deliveryFields.labor_onset,
         deliveryFields.induction_method,
         deliveryFields.duration_of_labor_hours,
@@ -600,6 +902,7 @@ export class MaternityService {
         deliveryFields.placenta_delivery,
         deliveryFields.placenta_complete,
         deliveryFields.maternal_complications,
+        JSON.stringify(maternalComplicationsList ?? []),
         deliveryFields.maternal_outcome || 'alive_well',
         deliveryFields.attending_provider || userId,
         deliveryFields.assistant_provider,
@@ -680,7 +983,48 @@ export class MaternityService {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    if (deliveryData.maternal_complications_snomed !== undefined) {
+      deliveryData.maternal_complications_snomed =
+        deliveryData.maternal_complications_snomed === null
+          ? null
+          : JSON.stringify(
+              await this.normalizeConceptArray(tenantDb, deliveryData.maternal_complications_snomed),
+            );
+    }
+
+    if (deliveryData.indication_snomed !== undefined) {
+      const resolvedIndication = await this.resolveConcept(tenantDb, deliveryData.indication_snomed);
+      deliveryData.indication_snomed_code = resolvedIndication?.conceptId ?? null;
+      deliveryData.indication_snomed_term = resolvedIndication?.term ?? null;
+      deliveryData.indication_snomed_module_id = resolvedIndication?.moduleId ?? null;
+      deliveryData.indication_snomed_definition_status = resolvedIndication?.definitionStatus ?? null;
+      if (resolvedIndication?.term) {
+        deliveryData.indication_for_intervention =
+          deliveryData.indication_for_intervention ?? resolvedIndication.term;
+      }
+      delete deliveryData.indication_snomed;
+      if (!fields.includes('indication_snomed_code')) {
+        fields.push('indication_snomed_code');
+      }
+      if (!fields.includes('indication_snomed_term')) {
+        fields.push('indication_snomed_term');
+      }
+      if (!fields.includes('indication_snomed_module_id')) {
+        fields.push('indication_snomed_module_id');
+      }
+      if (!fields.includes('indication_snomed_definition_status')) {
+        fields.push('indication_snomed_definition_status');
+      }
+      if (!fields.includes('indication_for_intervention') && resolvedIndication?.term) {
+        fields.push('indication_for_intervention');
+      }
+    }
+
+    const jsonFields = new Set(['maternal_complications_snomed']);
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}${jsonFields.has(field) ? '::jsonb' : ''}`)
+      .join(', ');
     const values = fields.map((field) => deliveryData[field]);
     values.push(deliveryId);
 
@@ -717,6 +1061,8 @@ export class MaternityService {
       resuscitation_type,
       congenital_anomalies,
       neonatal_complications,
+      congenital_anomalies_snomed,
+      neonatal_complications_snomed,
       breastfeeding_initiated,
       breastfeeding_within_1hour,
       vitamin_k_given,
@@ -724,7 +1070,18 @@ export class MaternityService {
       newborn_outcome,
       time_of_death,
       cause_of_death,
+      cause_of_death_snomed,
     } = birthData;
+
+    const congenitalConcepts = await this.normalizeConceptArray(
+      tenantDb,
+      congenital_anomalies_snomed,
+    );
+    const neonatalComplicationConcepts = await this.normalizeConceptArray(
+      tenantDb,
+      neonatal_complications_snomed,
+    );
+    const causeOfDeathConcept = await this.resolveConcept(tenantDb, cause_of_death_snomed);
 
     const result = await tenantDb.query(
       `
@@ -732,13 +1089,16 @@ export class MaternityService {
         delivery_id, birth_order, birth_outcome, sex, birth_weight,
         birth_length, head_circumference, apgar_1min, apgar_5min, apgar_10min,
         resuscitation_required, resuscitation_type, congenital_anomalies,
-        neonatal_complications, breastfeeding_initiated, breastfeeding_within_1hour,
+        congenital_anomalies_snomed, neonatal_complications, neonatal_complications_snomed,
+        breastfeeding_initiated, breastfeeding_within_1hour,
         vitamin_k_given, eye_prophylaxis_given, newborn_outcome,
-        time_of_death, cause_of_death
+        time_of_death, cause_of_death, cause_of_death_snomed_code,
+        cause_of_death_snomed_term, cause_of_death_snomed_module_id,
+        cause_of_death_snomed_definition_status
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb,
+        $15, $16::jsonb, $17, $18, $19, $20, $21, $22, $23, $24, $25
       )
       RETURNING *
       `,
@@ -756,14 +1116,20 @@ export class MaternityService {
         resuscitation_required,
         resuscitation_type,
         congenital_anomalies,
+        JSON.stringify(congenitalConcepts ?? []),
         neonatal_complications,
+        JSON.stringify(neonatalComplicationConcepts ?? []),
         breastfeeding_initiated,
         breastfeeding_within_1hour,
         vitamin_k_given,
         eye_prophylaxis_given,
         newborn_outcome || 'alive_well',
         time_of_death,
-        cause_of_death,
+        cause_of_death || causeOfDeathConcept?.term || null,
+        causeOfDeathConcept?.conceptId ?? null,
+        causeOfDeathConcept?.term ?? null,
+        causeOfDeathConcept?.moduleId ?? null,
+        causeOfDeathConcept?.definitionStatus ?? null,
       ],
     );
 
@@ -774,7 +1140,16 @@ export class MaternityService {
   // ===== POSTNATAL VISITS =====
 
   async createPostnatalVisit(tenantDb: DataSource, visitData: any, userId?: string) {
-    const { maternity_enrollment_id, delivery_id, patient_id, visit_date, ...vitalFields } = visitData;
+    const {
+      maternity_enrollment_id,
+      delivery_id,
+      patient_id,
+      visit_date,
+      danger_signs_snomed,
+      family_planning_method_snomed,
+      newborn_complications_snomed,
+      ...vitalFields
+    } = visitData;
 
     // Calculate days postpartum
     let daysPostpartum = null;
@@ -792,6 +1167,16 @@ export class MaternityService {
       }
     }
 
+    const dangerSignsList = await this.normalizeConceptArray(tenantDb, danger_signs_snomed);
+    const newbornCompConcepts = await this.normalizeConceptArray(
+      tenantDb,
+      newborn_complications_snomed,
+    );
+    const familyPlanningConcept = await this.resolveConcept(
+      tenantDb,
+      family_planning_method_snomed,
+    );
+
     const result = await tenantDb.query(
       `
       INSERT INTO postnatal_visits (
@@ -800,12 +1185,16 @@ export class MaternityService {
         temperature, pulse, general_condition, uterine_involution, lochia,
         perineum_condition, breast_condition, breastfeeding_status,
         breastfeeding_problems, emotional_status, danger_signs,
-        family_planning_discussed, family_planning_method, newborn_status,
-        newborn_complications, provider, notes, next_visit_date
+        danger_signs_snomed, family_planning_discussed, family_planning_method,
+        family_planning_method_snomed_code, family_planning_method_snomed_term,
+        family_planning_method_snomed_module_id, family_planning_method_snomed_definition_status,
+        newborn_status, newborn_complications, newborn_complications_snomed,
+        provider, notes, next_visit_date
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $16, $17, $18, $19::jsonb, $20, $21, $22, $23, $24, $25, $26,
+        $27::jsonb, $28, $29
       )
       RETURNING *
       `,
@@ -829,10 +1218,16 @@ export class MaternityService {
         vitalFields.breastfeeding_problems,
         vitalFields.emotional_status,
         vitalFields.danger_signs,
+        JSON.stringify(dangerSignsList ?? []),
         vitalFields.family_planning_discussed,
-        vitalFields.family_planning_method,
+        vitalFields.family_planning_method || familyPlanningConcept?.term || null,
+        familyPlanningConcept?.conceptId ?? null,
+        familyPlanningConcept?.term ?? null,
+        familyPlanningConcept?.moduleId ?? null,
+        familyPlanningConcept?.definitionStatus ?? null,
         vitalFields.newborn_status,
         vitalFields.newborn_complications,
+        JSON.stringify(newbornCompConcepts ?? []),
         userId,
         vitalFields.notes,
         vitalFields.next_visit_date,
@@ -867,7 +1262,55 @@ export class MaternityService {
       throw new BadRequestException('No fields provided for update');
     }
 
-    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    if (visitData.danger_signs_snomed !== undefined) {
+      visitData.danger_signs_snomed =
+        visitData.danger_signs_snomed === null
+          ? null
+          : JSON.stringify(await this.normalizeConceptArray(tenantDb, visitData.danger_signs_snomed));
+    }
+
+    if (visitData.newborn_complications_snomed !== undefined) {
+      visitData.newborn_complications_snomed =
+        visitData.newborn_complications_snomed === null
+          ? null
+          : JSON.stringify(
+              await this.normalizeConceptArray(tenantDb, visitData.newborn_complications_snomed),
+            );
+    }
+
+    if (visitData.family_planning_method_snomed !== undefined) {
+      const resolvedFp = await this.resolveConcept(tenantDb, visitData.family_planning_method_snomed);
+      visitData.family_planning_method_snomed_code = resolvedFp?.conceptId ?? null;
+      visitData.family_planning_method_snomed_term = resolvedFp?.term ?? null;
+      visitData.family_planning_method_snomed_module_id = resolvedFp?.moduleId ?? null;
+      visitData.family_planning_method_snomed_definition_status =
+        resolvedFp?.definitionStatus ?? null;
+      if (resolvedFp?.term) {
+        visitData.family_planning_method = visitData.family_planning_method ?? resolvedFp.term;
+      }
+      delete visitData.family_planning_method_snomed;
+      if (!fields.includes('family_planning_method_snomed_code')) {
+        fields.push('family_planning_method_snomed_code');
+      }
+      if (!fields.includes('family_planning_method_snomed_term')) {
+        fields.push('family_planning_method_snomed_term');
+      }
+      if (!fields.includes('family_planning_method_snomed_module_id')) {
+        fields.push('family_planning_method_snomed_module_id');
+      }
+      if (!fields.includes('family_planning_method_snomed_definition_status')) {
+        fields.push('family_planning_method_snomed_definition_status');
+      }
+      if (!fields.includes('family_planning_method') && resolvedFp?.term) {
+        fields.push('family_planning_method');
+      }
+    }
+
+    const jsonFields = new Set(['danger_signs_snomed', 'newborn_complications_snomed']);
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}${jsonFields.has(field) ? '::jsonb' : ''}`)
+      .join(', ');
     const values = fields.map((field) => visitData[field]);
     values.push(visitId);
 
@@ -892,18 +1335,34 @@ export class MaternityService {
   // ===== RISK FACTORS =====
 
   async addRiskFactor(tenantDb: DataSource, enrollmentId: string, riskData: any, userId?: string) {
-    const { risk_factor, risk_category, severity, identified_date, notes } = riskData;
+    const { risk_factor, risk_category, severity, identified_date, notes, risk_factor_snomed } = riskData;
+
+    const riskConcept = await this.resolveConcept(tenantDb, risk_factor_snomed);
 
     const result = await tenantDb.query(
       `
       INSERT INTO maternity_risk_factors (
         maternity_enrollment_id, risk_factor, risk_category, severity,
-        identified_date, notes, created_by
+        identified_date, notes, created_by,
+        risk_factor_snomed_code, risk_factor_snomed_term,
+        risk_factor_snomed_module_id, risk_factor_snomed_definition_status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
       `,
-      [enrollmentId, risk_factor, risk_category, severity, identified_date, notes, userId],
+      [
+        enrollmentId,
+        risk_factor || riskConcept?.term || null,
+        risk_category,
+        severity,
+        identified_date,
+        notes,
+        userId,
+        riskConcept?.conceptId ?? null,
+        riskConcept?.term ?? null,
+        riskConcept?.moduleId ?? null,
+        riskConcept?.definitionStatus ?? null,
+      ],
     );
 
     // Update enrollment risk category if this is high severity
@@ -1183,4 +1642,3 @@ export class MaternityService {
     return { visits, total: visits.length };
   }
 }
-

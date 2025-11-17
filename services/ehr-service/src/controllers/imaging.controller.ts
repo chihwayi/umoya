@@ -50,7 +50,7 @@ export class ImagingController {
     @Body() orderData: any,
   ) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
-    return this.imagingService.createOrder(req.tenantDb, orderData, userId);
+    return this.imagingService.createOrder(req.tenantDb, orderData, userId, req.tenantId);
   }
 
   @Get('orders')

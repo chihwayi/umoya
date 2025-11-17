@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Camera, AlertCircle, Calendar, CreditCard } from 'lucide-react';
+import { X, Search, Camera, AlertCircle, Calendar, CreditCard, Brain } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
@@ -51,6 +51,7 @@ export default function ImagingOrderModal({
   const [priority, setPriority] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [loading, setLoading] = useState(false);
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
+  const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const { showSuccess, showError } = useNotification();
 
   useEffect(() => {
@@ -104,7 +105,7 @@ export default function ImagingOrderModal({
     try {
       setLoading(true);
 
-      await ehrApi.createImagingOrder(tenantSlug, token, {
+      const response = await ehrApi.createImagingOrder(tenantSlug, token, {
         patient_id: patientId,
         study_type_id: selectedStudyType.id,
         ordering_provider: orderingProviderId,
@@ -117,6 +118,7 @@ export default function ImagingOrderModal({
         snomedModuleId: orderConcept.moduleId,
         snomedDefinitionStatus: orderConcept.definitionStatus,
       });
+      const insights = response.data?.cdssInsights ?? response.data?.cdss_insights ?? null;
 
       const costMessage =
         selectedStudyType.cost != null && Number(selectedStudyType.cost) > 0
@@ -126,7 +128,10 @@ export default function ImagingOrderModal({
           : '';
       showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`);
       onSuccess?.();
-      onClose();
+      setCdssInsights(insights);
+      if (!insights) {
+        onClose();
+      }
     } catch (error) {
       console.error('Failed to create imaging order:', error);
       showError('Failed to create imaging order');
@@ -151,9 +156,45 @@ export default function ImagingOrderModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+          {cdssInsights && (
+            <div className="rounded-2xl border border-indigo-200 bg-white shadow-sm p-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-600 rounded-xl">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">CDSS Guidance</p>
+                  <p className="text-xs text-slate-500">
+                    Suggested follow-ups based on the selected imaging study.
+                  </p>
+                </div>
+              </div>
+              {Array.isArray(cdssInsights?.guidelines?.recommendations) && cdssInsights.guidelines.recommendations.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-1">Guideline Recommendations</p>
+                  <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                    {cdssInsights.guidelines.recommendations.slice(0, 3).map((rec: string, idx: number) => (
+                      <li key={`img-guideline-${idx}`}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(cdssInsights?.careGaps?.gaps) && cdssInsights.careGaps.gaps.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 mb-1">Potential Care Gaps</p>
+                  <ul className="text-xs text-slate-600 space-y-1 list-disc list-inside">
+                    {cdssInsights.careGaps.gaps.slice(0, 3).map((gap: any, idx: number) => (
+                      <li key={`img-gap-${idx}`}>{gap?.description || gap}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Modality Selection */}
-          <div className="mb-6">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Imaging Modality <span className="text-red-500">*</span>
             </label>
@@ -257,6 +298,7 @@ export default function ImagingOrderModal({
                 placeholder={`Search SNOMED CT (e.g., ${selectedStudyType.study_name})`}
                 helperText="Select the standardized SNOMED CT concept that represents this imaging order."
                 required
+                context="procedure"
               />
             </div>
           )}

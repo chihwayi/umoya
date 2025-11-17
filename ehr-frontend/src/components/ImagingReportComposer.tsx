@@ -711,6 +711,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
                   label=""
                   placeholder="Search SNOMED CT diagnosis (e.g., Pneumonia, Fracture)"
                   helperText="Add SNOMED CT coded diagnoses from the imaging findings"
+                  context="condition"
                 />
               )}
             </div>

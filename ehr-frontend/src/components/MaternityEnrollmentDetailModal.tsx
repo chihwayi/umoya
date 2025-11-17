@@ -14,6 +14,7 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface MaternityEnrollmentDetailModalProps {
   enrollmentId: string;
@@ -331,6 +332,32 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const [riskFormOpen, setRiskFormOpen] = useState(false);
   const [birthOutcomeFormOpen, setBirthOutcomeFormOpen] = useState(false);
 
+  // SNOMED concept state for ANC visits
+  const [ancComplicationsConcepts, setAncComplicationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingAncComplicationConcept, setPendingAncComplicationConcept] = useState<SnomedConcept | null>(null);
+  const [ancInterventionsConcepts, setAncInterventionsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingAncInterventionConcept, setPendingAncInterventionConcept] = useState<SnomedConcept | null>(null);
+  const [ancReferralReasonConcept, setAncReferralReasonConcept] = useState<SnomedConcept | null>(null);
+
+  // SNOMED concept state for deliveries
+  const [deliveryMaternalComplicationsConcepts, setDeliveryMaternalComplicationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingDeliveryMaternalComplicationConcept, setPendingDeliveryMaternalComplicationConcept] = useState<SnomedConcept | null>(null);
+
+  // SNOMED concept state for birth outcomes
+  const [birthCongenitalAnomaliesConcepts, setBirthCongenitalAnomaliesConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingBirthCongenitalAnomalyConcept, setPendingBirthCongenitalAnomalyConcept] = useState<SnomedConcept | null>(null);
+  const [birthNeonatalComplicationsConcepts, setBirthNeonatalComplicationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingBirthNeonatalComplicationConcept, setPendingBirthNeonatalComplicationConcept] = useState<SnomedConcept | null>(null);
+  const [birthCauseOfDeathConcept, setBirthCauseOfDeathConcept] = useState<SnomedConcept | null>(null);
+
+  // SNOMED concept state for postnatal visits
+  const [postnatalNewbornComplicationsConcepts, setPostnatalNewbornComplicationsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingPostnatalNewbornComplicationConcept, setPendingPostnatalNewbornComplicationConcept] = useState<SnomedConcept | null>(null);
+  const [postnatalFamilyPlanningConcept, setPostnatalFamilyPlanningConcept] = useState<SnomedConcept | null>(null);
+
+  // SNOMED concept state for risk factors
+  const [riskFactorConcept, setRiskFactorConcept] = useState<SnomedConcept | null>(null);
+
   const [ancForm, setAncForm] = useState({
     visit_date: defaultDate(),
     weight: '',
@@ -511,9 +538,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         danger_signs_discussed: ancForm.danger_signs_discussed,
         birth_plan_discussed: ancForm.birth_plan_discussed,
         complications_identified: ancForm.complications_identified,
+        complications_snomed: ancComplicationsConcepts,
         interventions: ancForm.interventions,
+        interventions_snomed: ancInterventionsConcepts,
         referral_needed: ancForm.referral_needed,
         referral_reason: ancForm.referral_reason,
+        referral_reason_snomed: ancReferralReasonConcept,
         referral_facility: ancForm.referral_facility,
         next_visit_date: ancForm.next_visit_date || null,
         notes: ancForm.notes,
@@ -540,6 +570,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         notes: '',
         next_visit_date: '',
       });
+      setAncComplicationsConcepts([]);
+      setAncInterventionsConcepts([]);
+      setAncReferralReasonConcept(null);
       setAncFormOpen(false);
       await refreshData();
       onUpdated?.();
@@ -581,6 +614,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         placenta_delivery: deliveryForm.placenta_delivery || null,
         placenta_complete: deliveryForm.placenta_complete,
         maternal_complications: deliveryForm.maternal_complications || null,
+        maternal_complications_snomed: deliveryMaternalComplicationsConcepts,
         maternal_outcome: deliveryForm.maternal_outcome || 'alive_well',
         assistant_provider: deliveryForm.assistant_provider || null,
         notes: deliveryForm.notes || null,
@@ -625,7 +659,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         resuscitation_required: birthOutcomeForm.resuscitation_required,
         resuscitation_type: birthOutcomeForm.resuscitation_type || null,
         congenital_anomalies: birthOutcomeForm.congenital_anomalies || null,
+        congenital_anomalies_snomed: birthCongenitalAnomaliesConcepts,
         neonatal_complications: birthOutcomeForm.neonatal_complications || null,
+        neonatal_complications_snomed: birthNeonatalComplicationsConcepts,
         breastfeeding_initiated: birthOutcomeForm.breastfeeding_initiated,
         breastfeeding_within_1hour: birthOutcomeForm.breastfeeding_within_1hour,
         vitamin_k_given: birthOutcomeForm.vitamin_k_given,
@@ -633,6 +669,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         newborn_outcome: birthOutcomeForm.newborn_outcome,
         time_of_death: birthOutcomeForm.time_of_death || null,
         cause_of_death: birthOutcomeForm.cause_of_death || null,
+        cause_of_death_snomed: birthCauseOfDeathConcept,
       };
 
       await ehrApi.createBirthOutcome(tenantSlug, token, enrollment.delivery.id, payload);
@@ -697,8 +734,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         danger_signs: postnatalForm.danger_signs || null,
         family_planning_discussed: postnatalForm.family_planning_discussed,
         family_planning_method: postnatalForm.family_planning_method || null,
+        family_planning_method_snomed: postnatalFamilyPlanningConcept,
         newborn_status: postnatalForm.newborn_status || null,
         newborn_complications: postnatalForm.newborn_complications || null,
+        newborn_complications_snomed: postnatalNewbornComplicationsConcepts,
         notes: postnatalForm.notes || null,
         next_visit_date: postnatalForm.next_visit_date || null,
       };
@@ -725,7 +764,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
     try {
       setSubmitting(true);
-      await ehrApi.addMaternityRiskFactor(tenantSlug, token, enrollment.id, riskForm);
+      await ehrApi.addMaternityRiskFactor(tenantSlug, token, enrollment.id, {
+        ...riskForm,
+        risk_factor_snomed: riskFactorConcept,
+      });
       showSuccess('Risk factor added');
       setRiskFormOpen(false);
       setRiskForm({
@@ -1005,11 +1047,24 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
               {ancForm.referral_needed && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <TextInput
-                    label="Referral Reason"
-                    value={ancForm.referral_reason}
-                    onChange={(val) => setAncForm((prev) => ({ ...prev, referral_reason: val }))}
-                  />
+                  <div>
+                    <TextInput
+                      label="Referral Reason"
+                      value={ancForm.referral_reason}
+                      onChange={(val) => setAncForm((prev) => ({ ...prev, referral_reason: val }))}
+                    />
+                    <div className="mt-2">
+                      <SnomedConceptPicker
+                        value={ancReferralReasonConcept}
+                        onChange={setAncReferralReasonConcept}
+                        token={token}
+                        tenantSlug={tenantSlug}
+                        label="SNOMED CT Referral Reason"
+                        placeholder="Search for referral reason"
+                        context="condition"
+                      />
+                    </div>
+                  </div>
                   <TextInput
                     label="Referral Facility"
                     value={ancForm.referral_facility}
@@ -1026,12 +1081,90 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                 onChange={(val) => setAncForm((prev) => ({ ...prev, complications_identified: val }))}
                 rows={2}
               />
+              <div className="space-y-2">
+                <SnomedConceptPicker
+                  value={pendingAncComplicationConcept}
+                  onChange={(concept) => {
+                    if (concept && !ancComplicationsConcepts.find(c => c.conceptId === concept.conceptId)) {
+                      setAncComplicationsConcepts([...ancComplicationsConcepts, concept]);
+                      setPendingAncComplicationConcept(null);
+                    }
+                  }}
+                  token={token}
+                  tenantSlug={tenantSlug}
+                  label="Add SNOMED CT Complication"
+                  placeholder="Search for complication (e.g., pre-eclampsia, gestational diabetes)"
+                  context="condition"
+                />
+                {ancComplicationsConcepts.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {ancComplicationsConcepts.map((concept) => (
+                      <span
+                        key={concept.conceptId}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-pink-100 text-pink-800 rounded-full text-sm"
+                      >
+                        {concept.preferredTerm || concept.term}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAncComplicationsConcepts(
+                              ancComplicationsConcepts.filter(c => c.conceptId !== concept.conceptId)
+                            );
+                          }}
+                          className="ml-1 text-pink-600 hover:text-pink-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <TextAreaInput
                 label="Interventions"
                 value={ancForm.interventions}
                 onChange={(val) => setAncForm((prev) => ({ ...prev, interventions: val }))}
                 rows={2}
               />
+              <div className="space-y-2">
+                <SnomedConceptPicker
+                  value={pendingAncInterventionConcept}
+                  onChange={(concept) => {
+                    if (concept && !ancInterventionsConcepts.find(c => c.conceptId === concept.conceptId)) {
+                      setAncInterventionsConcepts([...ancInterventionsConcepts, concept]);
+                      setPendingAncInterventionConcept(null);
+                    }
+                  }}
+                  token={token}
+                  tenantSlug={tenantSlug}
+                  label="Add SNOMED CT Intervention"
+                  placeholder="Search for intervention (e.g., iron supplementation, tetanus vaccination)"
+                  context="procedure"
+                />
+                {ancInterventionsConcepts.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {ancInterventionsConcepts.map((concept) => (
+                      <span
+                        key={concept.conceptId}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {concept.preferredTerm || concept.term}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAncInterventionsConcepts(
+                              ancInterventionsConcepts.filter(c => c.conceptId !== concept.conceptId)
+                            );
+                          }}
+                          className="ml-1 text-blue-600 hover:text-blue-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <TextAreaInput
                 label="Notes"
                 value={ancForm.notes}

@@ -22,6 +22,7 @@ import { useNotification } from './GlobalNotification';
 import ImagingDicomViewport from './ImagingDicomViewport';
 import ImagingReportComposer from './ImagingReportComposer';
 import ModalPortal from './ModalPortal';
+import ConfirmationDialog from './ConfirmationDialog';
 
 interface ImagingStudyViewerModalProps {
   isOpen: boolean;
@@ -924,33 +925,17 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
           </div>
         </div>
       </div>
-      {deleteConfirm && (
-        <ModalPortal>
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-10 text-center space-y-4">
-              <ShieldAlert className="w-12 h-12 mx-auto text-red-400" />
-              <p className="text-base font-semibold text-slate-800">Confirm Deletion</p>
-              <p className="text-sm text-slate-600">
-                Are you sure you want to delete "{deleteConfirm.fileName}"? This action cannot be undone.
-              </p>
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={handleConfirmDelete}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
+      <ConfirmationDialog
+        isOpen={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Image"
+        message={`Are you sure you want to delete "${deleteConfirm?.fileName}"? This action cannot be undone and the image will be permanently removed from the study.`}
+        type="danger"
+        confirmText="Delete"
+        cancelText="Cancel"
+        isLoading={!!deletingImageId && deletingImageId === deleteConfirm?.imageId}
+      />
     </div>
   );
 };

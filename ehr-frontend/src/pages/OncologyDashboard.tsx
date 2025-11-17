@@ -71,6 +71,9 @@ type OncologyDashboardSummary = {
     cleared_sessions?: string;
     total_sessions?: string;
   };
+  diagnosisDistribution?: Array<{ term: string; concept_id?: string | null; count: number }>;
+  regimenMix?: Array<{ term: string; concept_id?: string | null; count: number }>;
+  snomedAdverseEvents?: Array<{ term: string; concept_id?: string | null; grade?: string | null; count: number }>;
 };
 
 type ModalState =
@@ -110,7 +113,12 @@ const OncologyDashboard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [tumorBoardMeetings, setTumorBoardMeetings] = useState<any[]>([]);
 
-  const token = useMemo(() => localStorage.getItem('ehr_token'), []);
+  const token = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return localStorage.getItem('ehr_token');
+  }, []);
   const [primaryDiagnosisConcept, setPrimaryDiagnosisConcept] = useState<SnomedConcept | null>(null);
   const [regimenConcept, setRegimenConcept] = useState<SnomedConcept | null>(null);
   const [adverseEventConcept, setAdverseEventConcept] = useState<SnomedConcept | null>(null);
@@ -131,7 +139,36 @@ const OncologyDashboard: React.FC = () => {
     if (!ensureAuth()) return;
     try {
       const response = await ehrApi.getOncologyDashboardSummary(tenantSlug!, token!);
-      setDashboardSummary(response.data);
+      const data = response.data || {};
+      const normalizeDistribution = (array: any[]): Array<{ term: string; concept_id?: string | null; count: number }> =>
+        Array.isArray(array)
+          ? array
+              .map((item: any) => ({
+                term: item?.term ?? 'Unlabeled concept',
+                concept_id: item?.concept_id ?? null,
+                count: Number(item?.count ?? 0),
+              }))
+              .filter((item) => item.count > 0)
+          : [];
+      const diagnosisDistribution = normalizeDistribution(data.diagnosisDistribution);
+      const regimenMix = normalizeDistribution(data.regimenMix);
+      const snomedAdverseEvents = Array.isArray(data.snomedAdverseEvents)
+        ? data.snomedAdverseEvents
+            .map((item: any) => ({
+              term: item?.term ?? 'Adverse event',
+              concept_id: item?.concept_id ?? null,
+              grade: item?.grade ?? null,
+              count: Number(item?.count ?? 0),
+            }))
+            .filter((item) => item.count > 0)
+        : [];
+
+      setDashboardSummary({
+        ...data,
+        diagnosisDistribution,
+        regimenMix,
+        snomedAdverseEvents,
+      });
     } catch (error) {
       console.error('Failed to load oncology summary', error);
       showError('Unable to load dashboard insights', 'Please try again later.');
@@ -494,6 +531,7 @@ const OncologyDashboard: React.FC = () => {
                             label=""
                             placeholder="Search SNOMED CT (e.g., Invasive ductal carcinoma)"
                             helperText="Adds a coded primary diagnosis"
+                            context="condition"
                           />
                         </div>
                       )}
@@ -636,6 +674,7 @@ const OncologyDashboard: React.FC = () => {
                             label=""
                             placeholder="Search SNOMED CT (e.g., Chemotherapy regimen)"
                             helperText="Optional SNOMED coding for regimen"
+                            context="procedure"
                           />
                         </div>
                       )}
@@ -829,6 +868,7 @@ const OncologyDashboard: React.FC = () => {
                             label=""
                             placeholder="Search SNOMED CT (e.g., Neutropenic sepsis)"
                             helperText="Capture structured adverse event codes"
+                            context="condition"
                           />
                         </div>
                       )}
@@ -1147,6 +1187,77 @@ const OncologyDashboard: React.FC = () => {
                   <p className="text-sm text-slate-400">No upcoming infusion sessions scheduled.</p>
                 )}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <Stethoscope className="w-4 h-4 text-rose-600" />
+              Top SNOMED Diagnoses
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(dashboardSummary?.diagnosisDistribution ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${index}`} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="font-medium text-slate-800">{item.term}</p>
+                    <p className="text-xs text-slate-400">{item.concept_id ?? 'Uncoded'}</p>
+                  </div>
+                  <span className="inline-flex items-center justify-center rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 border border-rose-100">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+              {!dashboardSummary?.diagnosisDistribution?.length && (
+                <p className="text-sm text-slate-400">SNOMED-coded diagnoses will appear here once captured.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <Activity className="w-4 h-4 text-emerald-600" />
+              Regimen Mix (SNOMED)
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(dashboardSummary?.regimenMix ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${index}`} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="font-medium text-slate-800">{item.term}</p>
+                    <p className="text-xs text-slate-400">{item.concept_id ?? 'Uncoded'}</p>
+                  </div>
+                  <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-100">
+                    {item.count}
+                  </span>
+                </div>
+              ))}
+              {!dashboardSummary?.regimenMix?.length && (
+                <p className="text-sm text-slate-400">Capture SNOMED-coded regimens to populate this panel.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              SNOMED Adverse Events
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(dashboardSummary?.snomedAdverseEvents ?? []).map((item, index) => (
+                <div key={`${item.concept_id ?? item.term}-${item.grade}-${index}`} className="p-3 rounded-xl border border-amber-100 bg-amber-50">
+                  <div className="flex items-center justify-between text-sm text-amber-800">
+                    <span className="font-medium">{item.term}</span>
+                    <span className="text-xs">Grade {item.grade ?? '—'}</span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">
+                    {item.count} occurrence{item.count === 1 ? '' : 's'} in last 6 months · {item.concept_id ?? 'Uncoded'}
+                  </p>
+                </div>
+              ))}
+              {!dashboardSummary?.snomedAdverseEvents?.length && (
+                <p className="text-sm text-slate-400">SNOMED-coded adverse events will be summarized here.</p>
+              )}
             </div>
           </div>
         </section>
@@ -1657,4 +1768,3 @@ const OncologyDashboard: React.FC = () => {
 };
 
 export default OncologyDashboard;
-
