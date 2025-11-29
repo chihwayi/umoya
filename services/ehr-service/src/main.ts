@@ -1,8 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import * as bodyParser from 'body-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
+import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(EhrModule);
@@ -15,6 +17,13 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
     transform: true,
   }));
+
+  // Enable HIPAA audit logging globally for all PHI access
+  // This ensures all patient data access is logged for compliance
+  // Note: The interceptor will automatically detect PHI-related endpoints
+  // and log access accordingly, while skipping non-PHI endpoints
+  const hipaaAuditInterceptor = app.get(HipaaAuditInterceptor);
+  app.useGlobalInterceptors(hipaaAuditInterceptor);
 
   // Enable CORS
   app.enableCors({
