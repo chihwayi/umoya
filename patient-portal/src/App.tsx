@@ -5,6 +5,7 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import LinkAccountPage from './pages/LinkAccountPage';
 import PatientDashboard from './pages/PatientDashboard';
+import AppointmentsPage from './pages/AppointmentsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -38,7 +39,7 @@ function App() {
               path="/appointments"
               element={
                 <ProtectedRoute requireLinked>
-                  <div>Appointments Page</div>
+                  <AppointmentsPage />
                 </ProtectedRoute>
               }
             />
