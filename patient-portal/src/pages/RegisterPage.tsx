@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { UserPlus, Mail, Lock, Calendar, Phone, Hash, Eye, EyeOff, CheckCircle, AlertCircle, Heart, Shield } from 'lucide-react';
