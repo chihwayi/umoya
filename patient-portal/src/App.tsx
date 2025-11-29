@@ -34,6 +34,46 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/appointments"
+              element={
+                <ProtectedRoute requireLinked>
+                  <div>Appointments Page</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/records"
+              element={
+                <ProtectedRoute requireLinked>
+                  <div>Medical Records Page</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/lab-results"
+              element={
+                <ProtectedRoute requireLinked>
+                  <div>Lab Results Page</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/prescriptions"
+              element={
+                <ProtectedRoute requireLinked>
+                  <div>Prescriptions Page</div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bills"
+              element={
+                <ProtectedRoute requireLinked>
+                  <div>Bills Page</div>
+                </ProtectedRoute>
+              }
+            />
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const PatientDashboard: React.FC = () => {
   const { patient, logout } = usePatientAuth();
@@ -99,9 +99,10 @@ const PatientDashboard: React.FC = () => {
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
-              <button
+              <Link
                 key={item.path}
-                className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow text-left group"
+                to={item.path}
+                className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow text-left group block"
               >
                 <div className="flex items-center gap-4">
                   <div className={`${item.color} p-3 rounded-lg group-hover:scale-110 transition-transform`}>
@@ -112,7 +113,7 @@ const PatientDashboard: React.FC = () => {
                     <p className="text-sm text-gray-600 mt-1">View and manage</p>
                   </div>
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>
