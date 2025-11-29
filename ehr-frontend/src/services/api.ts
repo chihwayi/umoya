@@ -3611,7 +3611,8 @@ export const clinicalTemplateApi = {
         Authorization: `Bearer ${token}`,
       },
     });
-    return { data: response.data };
+    // The API returns the content directly as a string
+    return response.data.content || response.data;
   },
 };
 

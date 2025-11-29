@@ -83,16 +83,17 @@ export class ClinicalTemplateController {
   @Post('apply')
   @ApiOperation({ summary: 'Apply template', description: 'Apply a template with variables to generate content' })
   @ApiResponse({ status: 200, description: 'Template applied successfully' })
-  applyTemplate(
+  async applyTemplate(
     @Body() body: { templateId: string; variables?: Record<string, string>; context?: Record<string, any> },
     @Req() req: RequestWithTenant,
   ) {
-    return this.templateService.applyTemplate(
+    const content = await this.templateService.applyTemplate(
       body.templateId,
       body.variables || {},
       req.tenantId,
       body.context,
     );
+    return { content };
   }
 }
 

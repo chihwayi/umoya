@@ -1,0 +1,339 @@
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { DataSource, Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { Patient } from '../entities/patient.entity';
+import { TenantService } from './tenant.service';
+import { EmailService } from './email.service';
+
+export interface PatientRegisterDto {
+  patientNumber: string;
+  email: string;
+  password: string;
+  dateOfBirth: string; // For verification
+  phone?: string;
+}
+
+export interface PatientLoginDto {
+  email: string;
+  password: string;
+}
+
+export interface PatientPasswordResetDto {
+  email: string;
+}
+
+export interface PatientPasswordResetConfirmDto {
+  token: string;
+  newPassword: string;
+}
+
+@Injectable()
+export class PatientAuthService {
+  private readonly logger = new Logger(PatientAuthService.name);
+
+  constructor(
+    private jwtService: JwtService,
+    private tenantService: TenantService,
+    private emailService: EmailService,
+  ) {}
+
+  private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+    return connection.getRepository(Patient);
+  }
+
+  async register(registerDto: PatientRegisterDto, tenantId: string): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    // Find patient by patient number
+    const patient = await patientRepository.findOne({
+      where: { patientNumber: registerDto.patientNumber },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found. Please contact the clinic to register.');
+    }
+
+    // Verify date of birth
+    const dob = new Date(registerDto.dateOfBirth);
+    if (patient.dateOfBirth.getTime() !== dob.getTime()) {
+      throw new BadRequestException('Date of birth does not match our records.');
+    }
+
+    // Check if email matches or update it
+    if (patient.email && patient.email !== registerDto.email) {
+      throw new BadRequestException('Email does not match our records. Please use the email on file or contact the clinic.');
+    }
+
+    // Check if already registered
+    if (patient.portalAccessEnabled) {
+      throw new BadRequestException('Portal access is already enabled for this patient.');
+    }
+
+    // Check if email is already in use
+    const existingPatient = await patientRepository.findOne({
+      where: { email: registerDto.email, portalAccessEnabled: true },
+    });
+
+    if (existingPatient && existingPatient.id !== patient.id) {
+      throw new BadRequestException('This email is already registered to another patient.');
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(registerDto.password, 10);
+
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    // Update patient
+    patient.portalPasswordHash = passwordHash;
+    patient.portalAccessEnabled = true;
+    patient.portalRegisteredAt = new Date();
+    patient.email = registerDto.email;
+    if (registerDto.phone) {
+      patient.phone = registerDto.phone;
+    }
+    patient.portalEmailVerified = false;
+    patient.portalEmailVerificationToken = verificationToken;
+
+    await patientRepository.save(patient);
+
+    // Send verification email
+    try {
+      await this.emailService.sendEmail({
+        to: registerDto.email,
+        subject: 'Verify Your MediCore Patient Portal Account',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Welcome to MediCore Patient Portal</h2>
+            <p>Dear ${patient.firstName} ${patient.lastName},</p>
+            <p>Thank you for registering for the MediCore Patient Portal. Please verify your email address by clicking the link below:</p>
+            <p style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.PORTAL_BASE_URL || 'http://localhost:3000'}/patient/verify-email?token=${verificationToken}" 
+                 style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                Verify Email Address
+              </a>
+            </p>
+            <p>If you did not register for this account, please contact the clinic immediately.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 12px;">This link will expire in 24 hours.</p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error('Failed to send verification email:', error);
+      // Don't fail registration if email fails
+    }
+
+    return {
+      success: true,
+      message: 'Registration successful. Please check your email to verify your account.',
+      patient: {
+        id: patient.id,
+        patientNumber: patient.patientNumber,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        email: patient.email,
+      },
+    };
+  }
+
+  async login(loginDto: PatientLoginDto, tenantId: string): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    const patient = await patientRepository.findOne({
+      where: { email: loginDto.email, portalAccessEnabled: true },
+    });
+
+    if (!patient) {
+      throw new UnauthorizedException('Invalid credentials or portal access not enabled');
+    }
+
+    if (!patient.portalPasswordHash) {
+      throw new UnauthorizedException('Portal access not set up. Please register first.');
+    }
+
+    // Check password
+    const isPasswordValid = await bcrypt.compare(loginDto.password, patient.portalPasswordHash);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if email is verified (optional - can be made required)
+    if (!patient.portalEmailVerified) {
+      return {
+        success: false,
+        requiresVerification: true,
+        message: 'Please verify your email address before logging in.',
+      };
+    }
+
+    // Update last login
+    patient.portalLastLogin = new Date();
+    await patientRepository.save(patient);
+
+    // Generate JWT token
+    const payload = {
+      sub: patient.id,
+      email: patient.email,
+      role: 'patient',
+      patientNumber: patient.patientNumber,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+    };
+
+    return {
+      success: true,
+      token: this.jwtService.sign(payload, { expiresIn: '7d' }), // Longer expiry for patients
+      patient: {
+        id: patient.id,
+        patientNumber: patient.patientNumber,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        email: patient.email,
+        phone: patient.phone,
+        dateOfBirth: patient.dateOfBirth,
+      },
+    };
+  }
+
+  async verifyEmail(token: string, tenantId: string): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    const patient = await patientRepository.findOne({
+      where: { portalEmailVerificationToken: token },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Invalid verification token');
+    }
+
+    patient.portalEmailVerified = true;
+    patient.portalEmailVerificationToken = null;
+    await patientRepository.save(patient);
+
+    return {
+      success: true,
+      message: 'Email verified successfully. You can now log in to the portal.',
+    };
+  }
+
+  async requestPasswordReset(resetDto: PatientPasswordResetDto, tenantId: string): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    const patient = await patientRepository.findOne({
+      where: { email: resetDto.email, portalAccessEnabled: true },
+    });
+
+    if (!patient) {
+      // Don't reveal if email exists for security
+      return {
+        success: true,
+        message: 'If an account exists with this email, a password reset link has been sent.',
+      };
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date();
+    resetExpires.setHours(resetExpires.getHours() + 1); // 1 hour expiry
+
+    patient.portalPasswordResetToken = resetToken;
+    patient.portalPasswordResetExpires = resetExpires;
+    await patientRepository.save(patient);
+
+    // Send reset email
+    try {
+      await this.emailService.sendEmail({
+        to: resetDto.email,
+        subject: 'Reset Your MediCore Patient Portal Password',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Password Reset Request</h2>
+            <p>Dear ${patient.firstName} ${patient.lastName},</p>
+            <p>You requested to reset your password. Click the link below to reset it:</p>
+            <p style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.PORTAL_BASE_URL || 'http://localhost:3000'}/patient/reset-password?token=${resetToken}" 
+                 style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                Reset Password
+              </a>
+            </p>
+            <p>If you did not request this, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 12px;">This link will expire in 1 hour.</p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error('Failed to send password reset email:', error);
+    }
+
+    return {
+      success: true,
+      message: 'If an account exists with this email, a password reset link has been sent.',
+    };
+  }
+
+  async confirmPasswordReset(resetDto: PatientPasswordResetConfirmDto, tenantId: string): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    const patient = await patientRepository.findOne({
+      where: { portalPasswordResetToken: resetDto.token },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Invalid or expired reset token');
+    }
+
+    if (!patient.portalPasswordResetExpires || patient.portalPasswordResetExpires < new Date()) {
+      throw new BadRequestException('Reset token has expired. Please request a new one.');
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(resetDto.newPassword, 10);
+
+    // Update patient
+    patient.portalPasswordHash = passwordHash;
+    patient.portalPasswordResetToken = null;
+    patient.portalPasswordResetExpires = null;
+    await patientRepository.save(patient);
+
+    return {
+      success: true,
+      message: 'Password reset successfully. You can now log in with your new password.',
+    };
+  }
+
+  async getPatientProfile(patientId: string, tenantId: string): Promise<Patient> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+    const patient = await patientRepository.findOne({ where: { id: patientId } });
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    return patient;
+  }
+
+  async updatePatientProfile(patientId: string, updateData: Partial<Patient>, tenantId: string): Promise<Patient> {
+    const patient = await this.getPatientProfile(patientId, tenantId);
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    // Only allow updating certain fields
+    const allowedFields = ['phone', 'email', 'address', 'city', 'emergencyContactName', 'emergencyContactPhone'];
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        patient[field] = updateData[field];
+      }
+    }
+
+    return patientRepository.save(patient);
+  }
+}
+

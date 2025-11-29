@@ -970,62 +970,65 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
       )}
 
       {/* Template Library Modal */}
-      <ClinicalTemplateLibrary
-      open={showTemplateLibrary}
-      onClose={() => setShowTemplateLibrary(false)}
-      onSelect={async (template) => {
-        try {
-          const token = localStorage.getItem('ehr_token') || '';
-          const tenantSlug = localStorage.getItem('ehr_tenant_slug') || '';
-          
-          if (!token || !tenantSlug) {
-            showError('Error', 'Authentication required');
-            return;
-          }
+      {showTemplateLibrary && (
+        <ClinicalTemplateLibrary
+          open={showTemplateLibrary}
+          tenantSlug={tenantSlug || localStorage.getItem('ehr_tenant') || localStorage.getItem('ehr_tenant_slug') || ''}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowTemplateLibrary(false)}
+          onSelect={async (template) => {
+            try {
+              const token = localStorage.getItem('ehr_token') || '';
+              const tenantSlugValue = tenantSlug || localStorage.getItem('ehr_tenant') || localStorage.getItem('ehr_tenant_slug') || '';
+              
+              if (!token || !tenantSlugValue) {
+                showError('Error', 'Authentication required');
+                return;
+              }
 
-          // Get patient context for variable substitution
-          const patientName = selectedPatient 
-            ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
-            : 'Patient';
-          
-          const patientAge = selectedPatient?.dateOfBirth
-            ? Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
-            : undefined;
+              // Get patient context for variable substitution
+              const patientName = selectedPatient 
+                ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+                : 'Patient';
+              
+              const patientAge = selectedPatient?.dateOfBirth
+                ? Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                : undefined;
 
-          const userData = localStorage.getItem('ehr_user');
-          const currentUser = userData ? JSON.parse(userData) : null;
-          const providerName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Provider';
+              const userData = localStorage.getItem('ehr_user');
+              const currentUser = userData ? JSON.parse(userData) : null;
+              const providerName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Provider';
 
-          // Apply template with context variables
-          const variables: Record<string, string> = {
-            patientName: patientName,
-            patientAge: patientAge?.toString() || '',
-            patientGender: selectedPatient?.gender || '',
-            date: new Date().toLocaleDateString(),
-            providerName: providerName,
-            observations: newNote.observations || '',
-            interventions: newNote.interventions || '',
-            outcomes: newNote.outcomes || '',
-          };
+              // Apply template with context variables
+              const variables: Record<string, string> = {
+                patientName: patientName,
+                patientAge: patientAge?.toString() || '',
+                patientGender: selectedPatient?.gender || '',
+                date: new Date().toLocaleDateString(),
+                providerName: providerName,
+                observations: newNote.observations || '',
+                interventions: newNote.interventions || '',
+                outcomes: newNote.outcomes || '',
+              };
 
-          const response = await clinicalTemplateApi.applyTemplate(template.id, variables, token, tenantSlug);
-          
-          // Append template content to notes (or replace if empty)
-          if (newNote.content.trim()) {
-            setNewNote(prev => ({ ...prev, content: prev.content + '\n\n' + response.data.content }));
-          } else {
-            setNewNote(prev => ({ ...prev, content: response.data.content }));
-          }
-          
-          showSuccess('Success', 'Template applied successfully');
-        } catch (error: any) {
-          console.error('Failed to apply template:', error);
-          showError('Error', 'Failed to apply template');
-        }
-      }}
-      tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
-      token={localStorage.getItem('ehr_token') || ''}
-    />
+              const response = await clinicalTemplateApi.applyTemplate(template.id, variables, token, tenantSlugValue);
+              
+              // Append template content to notes (or replace if empty)
+              if (newNote.content.trim()) {
+                setNewNote(prev => ({ ...prev, content: prev.content + '\n\n' + response.data }));
+              } else {
+                setNewNote(prev => ({ ...prev, content: response.data }));
+              }
+              
+              setShowTemplateLibrary(false);
+              showSuccess('Success', 'Template applied successfully');
+            } catch (error: any) {
+              console.error('Failed to apply template:', error);
+              showError('Error', error?.response?.data?.message || 'Failed to apply template');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

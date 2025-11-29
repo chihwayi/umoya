@@ -59,6 +59,30 @@ export class Patient {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({ name: 'portal_password_hash', nullable: true })
+  portalPasswordHash?: string;
+
+  @Column({ name: 'portal_access_enabled', default: false })
+  portalAccessEnabled: boolean;
+
+  @Column({ name: 'portal_registered_at', type: 'timestamptz', nullable: true })
+  portalRegisteredAt?: Date;
+
+  @Column({ name: 'portal_last_login', type: 'timestamptz', nullable: true })
+  portalLastLogin?: Date;
+
+  @Column({ name: 'portal_email_verified', default: false })
+  portalEmailVerified: boolean;
+
+  @Column({ name: 'portal_email_verification_token', nullable: true })
+  portalEmailVerificationToken?: string;
+
+  @Column({ name: 'portal_password_reset_token', nullable: true })
+  portalPasswordResetToken?: string;
+
+  @Column({ name: 'portal_password_reset_expires', type: 'timestamptz', nullable: true })
+  portalPasswordResetExpires?: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
