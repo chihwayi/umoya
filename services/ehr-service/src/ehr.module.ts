@@ -137,6 +137,7 @@ import { FileStorageService } from './services/file-storage.service';
 import { AppointmentResourceService } from './services/appointment-resource.service';
 import { ClinicalTemplateService } from './services/clinical-template.service';
 import { PatientAuthService } from './services/patient-auth.service';
+import { PatientPortalService } from './services/patient-portal.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -294,6 +295,7 @@ import { RolesGuard } from './guards/roles.guard';
     AppointmentResourceService,
     ClinicalTemplateService,
     PatientAuthService,
+    PatientPortalService,
     RolesGuard,
     JwtStrategy,
   ],

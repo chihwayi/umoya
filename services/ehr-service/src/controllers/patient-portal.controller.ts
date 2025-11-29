@@ -1,13 +1,17 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswordResetDto, PatientPasswordResetConfirmDto } from '../services/patient-auth.service';
+import { PatientPortalService } from '../services/patient-portal.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('Patient Portal')
 @Controller('patient-portal')
 export class PatientPortalController {
-  constructor(private readonly patientAuthService: PatientAuthService) {}
+  constructor(
+    private readonly patientAuthService: PatientAuthService,
+    private readonly patientPortalService: PatientPortalService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register for patient portal', description: 'Allow patients to register for portal access' })
@@ -77,6 +81,107 @@ export class PatientPortalController {
   async linkAccount(@Body() linkData: { patientNumber: string; dateOfBirth: string; nationalId?: string; phone?: string }, @Req() req: RequestWithTenant & { user: any }) {
     const patientId = req.user.sub;
     return this.patientAuthService.linkAccount(patientId, linkData, req.tenantId);
+  }
+
+  // Appointments
+  @Get('appointments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient appointments', description: 'Get all appointments for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  async getAppointments(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('status') status?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientAppointments(patientId, req.tenantId, { startDate, endDate, status });
+  }
+
+  @Get('appointments/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get appointment details', description: 'Get details of a specific appointment' })
+  @ApiParam({ name: 'id', description: 'Appointment ID' })
+  async getAppointment(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientAppointment(patientId, id, req.tenantId);
+  }
+
+  @Post('appointments/request')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Request appointment', description: 'Request a new appointment' })
+  async requestAppointment(@Body() appointmentData: any, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.requestAppointment(patientId, appointmentData, req.tenantId);
+  }
+
+  @Delete('appointments/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cancel appointment', description: 'Cancel an appointment' })
+  @ApiParam({ name: 'id', description: 'Appointment ID' })
+  async cancelAppointment(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.cancelAppointment(patientId, id, req.tenantId);
+  }
+
+  // Medical Records
+  @Get('records')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient medical records', description: 'Get medical records for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filter by record type' })
+  async getRecords(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('type') type?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientRecords(patientId, req.tenantId, { startDate, endDate, type });
+  }
+
+  // Lab Results
+  @Get('lab-results')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient lab results', description: 'Get lab results for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  async getLabResults(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientLabResults(patientId, req.tenantId, { startDate, endDate });
+  }
+
+  // Prescriptions
+  @Get('prescriptions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient prescriptions', description: 'Get prescriptions for the logged-in patient' })
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean, description: 'Get only active prescriptions' })
+  async getPrescriptions(@Req() req: RequestWithTenant & { user: any }, @Query('activeOnly') activeOnly?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, { activeOnly: activeOnly === 'true' });
+  }
+
+  // Bills
+  @Get('bills')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient bills', description: 'Get bills for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by payment status' })
+  async getBills(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('status') status?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientBills(patientId, req.tenantId, { startDate, endDate, status });
+  }
+
+  @Get('bills/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get bill details', description: 'Get details of a specific bill' })
+  @ApiParam({ name: 'id', description: 'Bill ID' })
+  async getBill(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientBill(patientId, id, req.tenantId);
   }
 }
 
