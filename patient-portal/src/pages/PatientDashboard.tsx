@@ -1,11 +1,46 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut } from 'lucide-react';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { patientPortalApi } from '../services/api';
+import { format } from 'date-fns';
 
 const PatientDashboard: React.FC = () => {
-  const { patient, logout } = usePatientAuth();
+  const { patient, logout, token } = usePatientAuth();
   const navigate = useNavigate();
+  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const [stats, setStats] = useState({
+    upcomingAppointments: 0,
+    pendingBills: 0,
+    unreadMessages: 0,
+    activePrescriptions: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      const [appointments, bills, prescriptions] = await Promise.all([
+        patientPortalApi.getAppointments(token!, tenantSlug, { status: 'scheduled' }).catch(() => []),
+        patientPortalApi.getBills(token!, tenantSlug, { status: 'pending' }).catch(() => []),
+        patientPortalApi.getPrescriptions(token!, tenantSlug, true).catch(() => []),
+      ]);
+
+      setStats({
+        upcomingAppointments: appointments.length || 0,
+        pendingBills: bills.length || 0,
+        unreadMessages: 0, // TODO: Implement messaging
+        activePrescriptions: prescriptions.length || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -13,30 +48,38 @@ const PatientDashboard: React.FC = () => {
   };
 
   const menuItems = [
-    { icon: Calendar, label: 'Appointments', path: '/appointments', color: 'bg-blue-500' },
-    { icon: FileText, label: 'Medical Records', path: '/records', color: 'bg-green-500' },
-    { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'bg-purple-500' },
-    { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'bg-yellow-500' },
-    { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'bg-indigo-500' },
-    { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'bg-red-500' },
+    { icon: Calendar, label: 'Appointments', path: '/appointments', color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
+    { icon: FileText, label: 'Medical Records', path: '/records', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50', textColor: 'text-green-600' },
+    { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+    { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'from-yellow-500 to-yellow-600', bgColor: 'bg-yellow-50', textColor: 'text-yellow-600' },
+    { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
+    { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'from-red-500 to-red-600', bgColor: 'bg-red-50', textColor: 'text-red-600' },
   ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200/50 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">MediCore Patient Portal</h1>
-              <p className="text-sm text-gray-600">Welcome back, {patient?.firstName}</p>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <span className="text-xl font-bold text-white">
+                  {patient?.firstName?.charAt(0)}
+                  {patient?.lastName?.charAt(0)}
+                </span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Welcome back, {patient?.firstName}</h1>
+                <p className="text-sm text-gray-600">Patient Number: {patient?.patientNumber}</p>
+              </div>
             </div>
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              Sign Out
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
@@ -44,85 +87,99 @@ const PatientDashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Patient Info Card */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-200">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl font-bold text-indigo-600">
-                {patient?.firstName?.charAt(0)}
-                {patient?.lastName?.charAt(0)}
-              </span>
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {patient?.firstName} {patient?.lastName}
-              </h2>
-              <p className="text-sm text-gray-600">Patient Number: {patient?.patientNumber}</p>
-              {patient?.email && <p className="text-sm text-gray-600">{patient.email}</p>}
-            </div>
-          </div>
-        </div>
-
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Upcoming Appointments</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">0</p>
-              </div>
-              <Calendar className="w-8 h-8 text-blue-500" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <Calendar className="w-8 h-8 opacity-90" />
+              <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
+            <p className="text-blue-100 text-sm mb-1">Upcoming Appointments</p>
+            <p className="text-3xl font-bold">{stats.upcomingAppointments}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending Bills</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">0</p>
-              </div>
-              <CreditCard className="w-8 h-8 text-yellow-500" />
+
+          <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <CreditCard className="w-8 h-8 opacity-90" />
+              <Clock className="w-5 h-5 opacity-75" />
             </div>
+            <p className="text-yellow-100 text-sm mb-1">Pending Bills</p>
+            <p className="text-3xl font-bold">{stats.pendingBills}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Unread Messages</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">0</p>
-              </div>
-              <MessageSquare className="w-8 h-8 text-indigo-500" />
+
+          <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <MessageSquare className="w-8 h-8 opacity-90" />
+              <Bell className="w-5 h-5 opacity-75" />
             </div>
+            <p className="text-indigo-100 text-sm mb-1">Unread Messages</p>
+            <p className="text-3xl font-bold">{stats.unreadMessages}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <Pill className="w-8 h-8 opacity-90" />
+              <Activity className="w-5 h-5 opacity-75" />
+            </div>
+            <p className="text-purple-100 text-sm mb-1">Active Prescriptions</p>
+            <p className="text-3xl font-bold">{stats.activePrescriptions}</p>
           </div>
         </div>
 
         {/* Menu Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 hover:shadow-md transition-shadow text-left group block"
+                className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
-                  <div className={`${item.color} p-3 rounded-lg group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                    <Icon className="w-7 h-7 text-white" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{item.label}</h3>
-                    <p className="text-sm text-gray-600 mt-1">View and manage</p>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 text-lg mb-1">{item.label}</h3>
+                    <p className="text-sm text-gray-600">View and manage</p>
                   </div>
+                  <ArrowRight className={`w-5 h-5 ${item.textColor} opacity-0 group-hover:opacity-100 transition-opacity`} />
                 </div>
               </Link>
             );
           })}
         </div>
 
-        {/* Coming Soon Notice */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-center">
-          <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Some features are still under development. Full functionality will be available soon.
-          </p>
+        {/* Quick Actions */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-xl p-8 text-white">
+          <h3 className="text-2xl font-bold mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link
+              to="/appointments"
+              className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
+            >
+              <Calendar className="w-6 h-6 mb-2" />
+              <p className="font-semibold">Book Appointment</p>
+              <p className="text-sm text-white/80">Schedule a visit</p>
+            </Link>
+            <Link
+              to="/bills"
+              className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
+            >
+              <CreditCard className="w-6 h-6 mb-2" />
+              <p className="font-semibold">Pay Bill</p>
+              <p className="text-sm text-white/80">View and pay bills</p>
+            </Link>
+            <Link
+              to="/messages"
+              className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
+            >
+              <MessageSquare className="w-6 h-6 mb-2" />
+              <p className="font-semibold">Send Message</p>
+              <p className="text-sm text-white/80">Contact your clinic</p>
+            </Link>
+          </div>
         </div>
       </main>
     </div>
@@ -130,4 +187,3 @@ const PatientDashboard: React.FC = () => {
 };
 
 export default PatientDashboard;
-
