@@ -238,11 +238,12 @@ export class PatientPortalService {
     }
 
     const prescriptionRepository = connection.getRepository(Prescription);
+    // Note: TypeORM will automatically convert patientId to patient_id in the query
     const queryBuilder = prescriptionRepository
       .createQueryBuilder('prescription')
       .leftJoinAndSelect('prescription.patient', 'patient')
       .leftJoinAndSelect('prescription.prescriber', 'prescriber')
-      .where('prescription.patient_id = :patientId', { patientId });
+      .where('prescription.patientId = :patientId', { patientId });
 
     if (filters?.activeOnly) {
       queryBuilder.andWhere('prescription.status = :status', { status: 'active' });
@@ -282,33 +283,59 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    const billRepository = connection.getRepository(Bill);
-    const queryBuilder = billRepository
-      .createQueryBuilder('bill')
-      .leftJoinAndSelect('bill.patient', 'patient')
-      .where('bill.patientId = :patientId', { patientId });
-
+    // Use raw SQL query to avoid TypeORM column name mapping issues
+    let query = `
+      SELECT 
+        b.id,
+        b.invoice_number as "billNumber",
+        b.invoice_date as "billDate",
+        b.due_date as "dueDate",
+        b.total_amount as "totalAmount",
+        b.status,
+        b.subtotal,
+        b.tax_amount as "taxAmount",
+        b.discount_amount as "discountAmount",
+        b.notes
+      FROM billing b
+      WHERE b.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
     if (filters?.startDate) {
-      queryBuilder.andWhere('bill.billDate >= :startDate', { startDate: filters.startDate });
+      query += ` AND b.invoice_date >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
     }
     if (filters?.endDate) {
-      queryBuilder.andWhere('bill.billDate <= :endDate', { endDate: filters.endDate });
+      query += ` AND b.invoice_date <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
     }
     if (filters?.status) {
-      queryBuilder.andWhere('bill.status = :status', { status: filters.status });
+      query += ` AND b.status = $${paramIndex}`;
+      params.push(filters.status);
+      paramIndex++;
     }
+    
+    query += ` ORDER BY b.invoice_date DESC`;
+    
+    const rawBills = await connection.query(query, params);
 
-    const bills = await queryBuilder.orderBy('bill.billDate', 'DESC').getMany();
-
-    return bills.map((bill) => ({
+    return rawBills.map((bill: any) => ({
       id: bill.id,
-      billNumber: bill.billNumber,
-      billDate: bill.billDate,
-      totalAmount: bill.totalAmount,
+      billNumber: bill.billNumber || bill.invoice_number,
+      billDate: bill.billDate || bill.invoice_date,
+      totalAmount: bill.totalAmount || bill.total_amount,
       status: bill.status,
-      paymentStatus: bill.status,
-      items: bill.items || [],
-      dueDate: bill.dueDate,
+      paymentStatus: bill.status, // Map status to paymentStatus for frontend
+      items: [], // Items are not stored in billing table
+      dueDate: bill.dueDate || bill.due_date,
+      subtotal: bill.subtotal,
+      taxAmount: bill.taxAmount || bill.tax_amount,
+      discountAmount: bill.discountAmount || bill.discount_amount,
+      notes: bill.notes,
     }));
   }
 
