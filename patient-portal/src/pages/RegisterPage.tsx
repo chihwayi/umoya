@@ -36,6 +36,21 @@ const RegisterPage: React.FC = () => {
       return;
     }
 
+    // Validate date format (dd/mm/yyyy)
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    if (!dateRegex.test(formData.dateOfBirth)) {
+      setError('Please enter date of birth in DD/MM/YYYY format');
+      return;
+    }
+
+    // Validate date is valid
+    const [day, month, year] = formData.dateOfBirth.split('/');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    if (date.getDate() !== parseInt(day) || date.getMonth() !== parseInt(month) - 1 || date.getFullYear() !== parseInt(year)) {
+      setError('Please enter a valid date');
+      return;
+    }
+
     setLoading(true);
 
     try {

@@ -60,8 +60,27 @@ export class PatientAuthService {
     }
 
     // Verify date of birth
-    const dob = new Date(registerDto.dateOfBirth);
-    if (patient.dateOfBirth.getTime() !== dob.getTime()) {
+    // Handle both string and Date formats from database
+    const patientDob = patient.dateOfBirth instanceof Date 
+      ? patient.dateOfBirth 
+      : new Date(patient.dateOfBirth);
+    
+    // Parse the incoming date (could be dd/mm/yyyy or yyyy-mm-dd)
+    let dob: Date;
+    if (registerDto.dateOfBirth.includes('/')) {
+      // Handle dd/mm/yyyy format
+      const [day, month, year] = registerDto.dateOfBirth.split('/');
+      dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    } else {
+      // Handle yyyy-mm-dd format
+      dob = new Date(registerDto.dateOfBirth);
+    }
+    
+    // Compare dates (ignore time)
+    const patientDobDate = new Date(patientDob.getFullYear(), patientDob.getMonth(), patientDob.getDate());
+    const inputDobDate = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+    
+    if (patientDobDate.getTime() !== inputDobDate.getTime()) {
       throw new BadRequestException('Date of birth does not match our records.');
     }
 
