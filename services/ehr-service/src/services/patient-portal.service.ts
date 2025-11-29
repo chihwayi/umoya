@@ -237,26 +237,51 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    const prescriptionRepository = connection.getRepository(Prescription);
-    // Note: TypeORM will automatically convert patientId to patient_id in the query
-    const queryBuilder = prescriptionRepository
-      .createQueryBuilder('prescription')
-      .leftJoinAndSelect('prescription.patient', 'patient')
-      .leftJoinAndSelect('prescription.prescriber', 'prescriber')
-      .where('prescription.patientId = :patientId', { patientId });
-
+    // Use raw SQL query to avoid TypeORM column name mapping issues
+    let query = `
+      SELECT 
+        p.id,
+        p.prescribed_date as "prescribedDate",
+        p.created_at as "createdAt",
+        p.status,
+        p.medication_name as "medicationName",
+        p.generic_name as "genericName",
+        p.strength,
+        p.form,
+        p.dosage,
+        p.frequency,
+        p.route,
+        p.quantity,
+        p.refills,
+        p.start_date as "startDate",
+        p.end_date as "endDate",
+        p.instructions,
+        p.indication,
+        u.id as prescriber_id,
+        u.first_name as prescriber_first_name,
+        u.last_name as prescriber_last_name
+      FROM prescriptions p
+      LEFT JOIN users u ON p.doctor_id = u.id
+      WHERE p.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    
     if (filters?.activeOnly) {
-      queryBuilder.andWhere('prescription.status = :status', { status: 'active' });
+      query += ` AND p.status = $2`;
+      params.push('active');
     }
-
-    const prescriptions = await queryBuilder.orderBy('prescription.createdAt', 'DESC').getMany();
-
-    return prescriptions.map((prescription) => ({
+    
+    query += ` ORDER BY p.created_at DESC`;
+    
+    const rawPrescriptions = await connection.query(query, params);
+    
+    return rawPrescriptions.map((prescription: any) => ({
       id: prescription.id,
-      prescribedDate: prescription.createdAt,
+      prescribedDate: prescription.prescribedDate || prescription.prescribed_date || prescription.createdAt || prescription.created_at,
       status: prescription.status,
-      medicationName: prescription.medicationName,
-      genericName: prescription.genericName,
+      medicationName: prescription.medicationName || prescription.medication_name,
+      genericName: prescription.genericName || prescription.generic_name,
       strength: prescription.strength,
       form: prescription.form,
       dosage: prescription.dosage,
@@ -264,14 +289,14 @@ export class PatientPortalService {
       route: prescription.route,
       quantity: prescription.quantity,
       refills: prescription.refills,
-      startDate: prescription.startDate,
-      endDate: prescription.endDate,
+      startDate: prescription.startDate || prescription.start_date,
+      endDate: prescription.endDate || prescription.end_date,
       instructions: prescription.instructions,
       indication: prescription.indication,
-      prescriber: prescription.prescriber ? {
-        id: prescription.prescriber.id,
-        firstName: prescription.prescriber.firstName,
-        lastName: prescription.prescriber.lastName,
+      prescriber: prescription.prescriber_id ? {
+        id: prescription.prescriber_id,
+        firstName: prescription.prescriber_first_name,
+        lastName: prescription.prescriber_last_name,
       } : null,
     }));
   }
