@@ -309,7 +309,7 @@ services:
     networks:
       - medicore-network
 
-  # EHR Frontend Application
+  # EHR Frontend Application (Staff/Admin)
   ehr-frontend:
     build:
       context: ./ehr-frontend
@@ -342,6 +342,41 @@ services:
       - ./ehr-frontend/postcss.config.js:/app/postcss.config.js
     depends_on:
       - tenant-service
+      - ehr-service
+    networks:
+      - medicore-network
+
+  # Patient Portal Application
+  patient-portal:
+    build:
+      context: ./patient-portal
+      dockerfile: Dockerfile.dev
+    container_name: medicore-patient-portal
+    ports:
+      - "3015:3015"
+    environment:
+      - PORT=3015
+      - REACT_APP_EHR_API_URL=http://localhost:3013/api
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
+      - FAST_REFRESH=true
+      - GENERATE_SOURCEMAP=false
+      - DISABLE_ESLINT_PLUGIN=true
+      - TSC_COMPILE_ON_ERROR=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_HOST=0.0.0.0
+      - WDS_SOCKET_PORT=3015
+      - REACT_APP_CHOKIDAR_USEPOLLING=true
+      - BROWSER=none
+    volumes:
+      - ./patient-portal/src:/app/src
+      - ./patient-portal/public:/app/public
+      - ./patient-portal/package.json:/app/package.json
+      - ./patient-portal/package-lock.json:/app/package-lock.json
+      - ./patient-portal/tsconfig.json:/app/tsconfig.json
+      - ./patient-portal/tailwind.config.js:/app/tailwind.config.js
+      - ./patient-portal/postcss.config.js:/app/postcss.config.js
+    depends_on:
       - ehr-service
     networks:
       - medicore-network
