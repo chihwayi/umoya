@@ -10,6 +10,7 @@ import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import LabResultsPage from './pages/LabResultsPage';
 import PrescriptionsPage from './pages/PrescriptionsPage';
 import BillsPage from './pages/BillsPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -21,7 +22,7 @@ function App() {
           <Routes>
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/verify-email" element={<div>Email Verification</div>} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/reset-password" element={<div>Reset Password</div>} />
             <Route
               path="/link-account"
