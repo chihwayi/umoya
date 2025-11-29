@@ -106,9 +106,14 @@ export class HipaaAuditService {
   ): Promise<void> {
     try {
       // Skip logging if userId is 'anonymous' or invalid (not a valid UUID)
-      // This happens for unauthenticated requests
+      // This happens for unauthenticated requests or patient portal users
       if (entry.userId === 'anonymous' || !entry.userId || entry.userId === 'undefined' || entry.userId === 'unknown') {
-        return; // Silently skip anonymous/unauthenticated requests
+        // For patient portal users, we track via patient_id instead of user_id
+        // So we can still log if there's a patient_id
+        if (!entry.patientId) {
+          return; // Skip if no patient_id either
+        }
+        // Continue to log with NULL user_id for patient portal access
       }
 
       // Validate UUID format

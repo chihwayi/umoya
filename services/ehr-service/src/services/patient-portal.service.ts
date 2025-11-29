@@ -161,38 +161,61 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    const recordRepository = connection.getRepository(MedicalRecord);
-    const queryBuilder = recordRepository
-      .createQueryBuilder('record')
-      .leftJoinAndSelect('record.patient', 'patient')
-      .leftJoinAndSelect('record.provider', 'provider')
-      .where('record.patientId = :patientId', { patientId });
-
+    // Use raw SQL query to avoid TypeORM column name mapping issues
+    let query = `
+      SELECT 
+        mr.id,
+        mr.record_date as "recordDate",
+        mr.type,
+        mr.chief_complaint as "chiefComplaint",
+        mr.assessment,
+        mr.plan,
+        mr.diagnoses,
+        u.id as provider_id,
+        u.first_name as provider_first_name,
+        u.last_name as provider_last_name,
+        u.specialization as provider_specialization
+      FROM medical_records mr
+      LEFT JOIN users u ON mr.provider_id = u.id
+      WHERE mr.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
     if (filters?.startDate) {
-      queryBuilder.andWhere('record.recordDate >= :startDate', { startDate: filters.startDate });
+      query += ` AND mr.record_date >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
     }
     if (filters?.endDate) {
-      queryBuilder.andWhere('record.recordDate <= :endDate', { endDate: filters.endDate });
+      query += ` AND mr.record_date <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
     }
     if (filters?.type) {
-      queryBuilder.andWhere('record.type = :type', { type: filters.type });
+      query += ` AND mr.type = $${paramIndex}`;
+      params.push(filters.type);
+      paramIndex++;
     }
+    
+    query += ` ORDER BY mr.record_date DESC`;
+    
+    const rawRecords = await connection.query(query, params);
 
-    const records = await queryBuilder.orderBy('record.recordDate', 'DESC').getMany();
-
-    return records.map((record) => ({
+    return rawRecords.map((record: any) => ({
       id: record.id,
-      recordDate: record.recordDate,
+      recordDate: record.recordDate || record.record_date,
       type: record.type,
-      chiefComplaint: record.chiefComplaint,
+      chiefComplaint: record.chiefComplaint || record.chief_complaint,
       assessment: record.assessment,
       plan: record.plan,
       diagnoses: record.diagnoses || [],
-      provider: record.provider ? {
-        id: record.provider.id,
-        firstName: record.provider.firstName,
-        lastName: record.provider.lastName,
-        specialization: record.provider.specialization,
+      provider: record.provider_id ? {
+        id: record.provider_id,
+        firstName: record.provider_first_name,
+        lastName: record.provider_last_name,
+        specialization: record.provider_specialization,
       } : null,
     }));
   }
@@ -238,6 +261,7 @@ export class PatientPortalService {
     }
 
     // Use raw SQL query to avoid TypeORM column name mapping issues
+    // Note: Only select columns that actually exist in the database
     let query = `
       SELECT 
         p.id,
@@ -245,18 +269,11 @@ export class PatientPortalService {
         p.created_at as "createdAt",
         p.status,
         p.medication_name as "medicationName",
-        p.generic_name as "genericName",
-        p.strength,
-        p.form,
         p.dosage,
         p.frequency,
-        p.route,
+        p.duration,
         p.quantity,
-        p.refills,
-        p.start_date as "startDate",
-        p.end_date as "endDate",
         p.instructions,
-        p.indication,
         u.id as prescriber_id,
         u.first_name as prescriber_first_name,
         u.last_name as prescriber_last_name
@@ -281,18 +298,11 @@ export class PatientPortalService {
       prescribedDate: prescription.prescribedDate || prescription.prescribed_date || prescription.createdAt || prescription.created_at,
       status: prescription.status,
       medicationName: prescription.medicationName || prescription.medication_name,
-      genericName: prescription.genericName || prescription.generic_name,
-      strength: prescription.strength,
-      form: prescription.form,
       dosage: prescription.dosage,
       frequency: prescription.frequency,
-      route: prescription.route,
+      duration: prescription.duration,
       quantity: prescription.quantity,
-      refills: prescription.refills,
-      startDate: prescription.startDate || prescription.start_date,
-      endDate: prescription.endDate || prescription.end_date,
       instructions: prescription.instructions,
-      indication: prescription.indication,
       prescriber: prescription.prescriber_id ? {
         id: prescription.prescriber_id,
         firstName: prescription.prescriber_first_name,
