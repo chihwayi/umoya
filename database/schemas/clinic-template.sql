@@ -548,3 +548,44 @@ CREATE TRIGGER trigger_appointment_resource_bookings_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_appointment_resources_updated_at();
 
+
+-- Clinical Note Templates Table
+CREATE TABLE IF NOT EXISTS clinical_note_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(50) NOT NULL,
+  content TEXT NOT NULL,
+  variables JSONB DEFAULT '[]'::jsonb,
+  specialty VARCHAR(100),
+  is_default BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  usage_count INTEGER DEFAULT 0,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_category ON clinical_note_templates(category);
+CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_is_active ON clinical_note_templates(is_active);
+CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_is_default ON clinical_note_templates(is_default);
+
+-- Trigger to update updated_at for clinical_note_templates
+CREATE OR REPLACE FUNCTION update_clinical_note_templates_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_clinical_note_templates_updated_at
+  BEFORE UPDATE ON clinical_note_templates
+  FOR EACH ROW
+  EXECUTE FUNCTION update_clinical_note_templates_updated_at();
+
+-- Indexes for billing diagnosis codes
+CREATE INDEX IF NOT EXISTS idx_billing_primary_diagnosis_code ON billing(primary_diagnosis_code);
+
+-- Indexes for medical_aid_claims diagnosis codes
+CREATE INDEX IF NOT EXISTS idx_claims_primary_diagnosis_code ON medical_aid_claims(primary_diagnosis_code);
+CREATE INDEX IF NOT EXISTS idx_claims_diagnosis_codes ON medical_aid_claims USING GIN(diagnosis_codes);
