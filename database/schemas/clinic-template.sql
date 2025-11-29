@@ -134,6 +134,9 @@ CREATE TABLE billing (
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'overdue', 'cancelled')),
     payment_method VARCHAR(50),
     payment_date TIMESTAMP WITH TIME ZONE,
+    diagnosis_codes TEXT[], -- ICD-10 diagnosis codes
+    primary_diagnosis_code VARCHAR(50), -- Primary ICD-10 diagnosis code
+    primary_diagnosis_description TEXT, -- Description of primary diagnosis
     notes TEXT,
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -166,6 +169,9 @@ CREATE TABLE medical_aid_claims (
     submission_date TIMESTAMP WITH TIME ZONE,
     response_date TIMESTAMP WITH TIME ZONE,
     rejection_reason TEXT,
+    diagnosis_codes TEXT[], -- ICD-10 diagnosis codes
+    primary_diagnosis_code VARCHAR(50), -- Primary ICD-10 diagnosis code
+    primary_diagnosis_description TEXT, -- Description of primary diagnosis
     claim_data JSONB, -- Store claim details in structured format
     created_by UUID REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
