@@ -75,6 +75,15 @@ export class Bill {
   @Column({ name: 'due_date', type: 'date', nullable: true })
   dueDate: Date;
 
+  @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
+  diagnosisCodes?: string[];
+
+  @Column({ name: 'primary_diagnosis_code', type: 'varchar', length: 50, nullable: true })
+  primaryDiagnosisCode?: string;
+
+  @Column({ name: 'primary_diagnosis_description', type: 'text', nullable: true })
+  primaryDiagnosisDescription?: string;
+
   @Column({ type: 'text', nullable: true })
   notes: string;
 

@@ -65,6 +65,15 @@ export class MedicalAidClaim {
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string;
 
+  @Column({ name: 'diagnosis_codes', type: 'text', array: true, nullable: true })
+  diagnosisCodes?: string[];
+
+  @Column({ name: 'primary_diagnosis_code', type: 'varchar', length: 50, nullable: true })
+  primaryDiagnosisCode?: string;
+
+  @Column({ name: 'primary_diagnosis_description', type: 'text', nullable: true })
+  primaryDiagnosisDescription?: string;
+
   @Column({ name: 'claim_data', type: 'jsonb', nullable: true })
   claimData?: any;
 
