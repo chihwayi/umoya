@@ -6,6 +6,10 @@ import LoginPage from './pages/LoginPage';
 import LinkAccountPage from './pages/LinkAccountPage';
 import PatientDashboard from './pages/PatientDashboard';
 import AppointmentsPage from './pages/AppointmentsPage';
+import MedicalRecordsPage from './pages/MedicalRecordsPage';
+import LabResultsPage from './pages/LabResultsPage';
+import PrescriptionsPage from './pages/PrescriptionsPage';
+import BillsPage from './pages/BillsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -47,7 +51,7 @@ function App() {
               path="/records"
               element={
                 <ProtectedRoute requireLinked>
-                  <div>Medical Records Page</div>
+                  <MedicalRecordsPage />
                 </ProtectedRoute>
               }
             />
@@ -55,7 +59,7 @@ function App() {
               path="/lab-results"
               element={
                 <ProtectedRoute requireLinked>
-                  <div>Lab Results Page</div>
+                  <LabResultsPage />
                 </ProtectedRoute>
               }
             />
@@ -63,7 +67,7 @@ function App() {
               path="/prescriptions"
               element={
                 <ProtectedRoute requireLinked>
-                  <div>Prescriptions Page</div>
+                  <PrescriptionsPage />
                 </ProtectedRoute>
               }
             />
@@ -71,7 +75,7 @@ function App() {
               path="/bills"
               element={
                 <ProtectedRoute requireLinked>
-                  <div>Bills Page</div>
+                  <BillsPage />
                 </ProtectedRoute>
               }
             />
