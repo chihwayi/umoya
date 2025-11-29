@@ -39,6 +39,18 @@ import { DiabetesAlert } from '../entities/diabetes-alert.entity';
 import { DiabetesDeviceIntegration } from '../entities/diabetes-device-integration.entity';
 import { DoctorAvailability } from '../entities/doctor-availability.entity';
 import { MedicalAidClaim } from '../entities/medical-aid-claim.entity';
+import { TelemedicineConsultation } from '../entities/telemedicine-consultation.entity';
+import { TelemedicineDevice } from '../entities/telemedicine-device.entity';
+import { TelemedicineConsent } from '../entities/telemedicine-consent.entity';
+import { TelemedicineTechnicalLog } from '../entities/telemedicine-technical-log.entity';
+import { RemotePatientMonitoring } from '../entities/remote-patient-monitoring.entity';
+import { TelemedicinePrescription } from '../entities/telemedicine-prescription.entity';
+import { ReportTemplate } from '../entities/report-template.entity';
+import { ScheduledReport } from '../entities/scheduled-report.entity';
+import { ReportExecution } from '../entities/report-execution.entity';
+import { ClinicalOutcome } from '../entities/clinical-outcome.entity';
+import { AnalyticsMetric } from '../entities/analytics-metric.entity';
+import { ReportFavorite } from '../entities/report-favorite.entity';
 
 @Injectable()
 export class TenantService {
@@ -165,10 +177,22 @@ export class TenantService {
         DiabetesComplicationScreening,
         DiabetesEducationSession,
         DiabetesAlert,
-               DiabetesDeviceIntegration,
-               DoctorAvailability,
-               MedicalAidClaim,
-             ],
+        DiabetesDeviceIntegration,
+        DoctorAvailability,
+        MedicalAidClaim,
+        TelemedicineConsultation,
+        TelemedicineDevice,
+        TelemedicineConsent,
+        TelemedicineTechnicalLog,
+        RemotePatientMonitoring,
+        TelemedicinePrescription,
+        ReportTemplate,
+        ScheduledReport,
+        ReportExecution,
+        ClinicalOutcome,
+        AnalyticsMetric,
+        ReportFavorite,
+      ],
       synchronize: false,
       logging: false,
     });

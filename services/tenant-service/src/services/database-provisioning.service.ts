@@ -201,6 +201,20 @@ export class DatabaseProvisioningService {
         description: 'Enhanced billing table structure and medical aid claims schema updates',
         statements: () => this.getBillingClaimsEnhancementsStatements(),
       },
+      {
+        id: 'sprint9_telemedicine',
+        label: 'Sprint 9 - Telemedicine Platform',
+        version: '2025.12.01',
+        description: 'Telemedicine consultations, remote patient monitoring, digital prescriptions, and consent management',
+        statements: () => this.getTelemedicineSchemaStatements(),
+      },
+      {
+        id: 'sprint10_analytics',
+        label: 'Sprint 10 - Advanced Analytics & Reporting',
+        version: '2025.12.01',
+        description: 'Custom report builder, scheduled reports, clinical outcomes tracking, and analytics metrics',
+        statements: () => this.getAnalyticsSchemaStatements(),
+      },
     ];
   }
 
@@ -4239,6 +4253,352 @@ export class DatabaseProvisioningService {
           CREATE INDEX idx_claims_billing_id ON medical_aid_claims(billing_id);
         END IF;
       END $$;`);
+
+    return statements;
+  }
+
+  private getTelemedicineSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Telemedicine Consultations Table
+    statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_consultations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consultation_type VARCHAR(20) NOT NULL DEFAULT 'video' CHECK (consultation_type IN ('video', 'audio', 'chat', 'hybrid')),
+      meeting_room_id VARCHAR(255) UNIQUE,
+      meeting_url TEXT,
+      meeting_password VARCHAR(100),
+      scheduled_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+      actual_start_time TIMESTAMP WITH TIME ZONE,
+      actual_end_time TIMESTAMP WITH TIME ZONE,
+      duration_minutes INTEGER,
+      connection_quality VARCHAR(20) CHECK (connection_quality IN ('excellent', 'good', 'fair', 'poor')),
+      doctor_connection_quality VARCHAR(20) CHECK (doctor_connection_quality IN ('excellent', 'good', 'fair', 'poor')),
+      patient_joined BOOLEAN DEFAULT false,
+      patient_join_time TIMESTAMP WITH TIME ZONE,
+      doctor_joined BOOLEAN DEFAULT false,
+      doctor_join_time TIMESTAMP WITH TIME ZONE,
+      status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'waiting', 'in_progress', 'completed', 'cancelled', 'no_show', 'technical_issue')),
+      cancellation_reason TEXT,
+      technical_issues TEXT,
+      patient_consent BOOLEAN DEFAULT false,
+      consent_date TIMESTAMP WITH TIME ZONE,
+      recording_enabled BOOLEAN DEFAULT false,
+      recording_url TEXT,
+      notes TEXT,
+      satisfaction_rating INTEGER CHECK (satisfaction_rating >= 1 AND satisfaction_rating <= 5),
+      satisfaction_feedback TEXT,
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Telemedicine Devices Table
+    statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('smartphone', 'tablet', 'laptop', 'desktop')),
+      device_name VARCHAR(255),
+      operating_system VARCHAR(50),
+      browser VARCHAR(50),
+      browser_version VARCHAR(50),
+      internet_connection_type VARCHAR(20) CHECK (internet_connection_type IN ('wifi', 'mobile_data', 'ethernet', 'unknown')),
+      average_bandwidth INTEGER,
+      last_used TIMESTAMP WITH TIME ZONE,
+      is_primary BOOLEAN DEFAULT false,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Telemedicine Consents Table
+    statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_consents (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      consent_type VARCHAR(30) NOT NULL CHECK (consent_type IN ('general_telehealth', 'video_recording', 'data_sharing', 'research')),
+      consent_status VARCHAR(20) NOT NULL DEFAULT 'granted' CHECK (consent_status IN ('granted', 'denied', 'expired', 'revoked')),
+      consent_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      expiry_date TIMESTAMP WITH TIME ZONE,
+      revoked_date TIMESTAMP WITH TIME ZONE,
+      consent_document_url TEXT,
+      ip_address INET,
+      user_agent TEXT,
+      witnessed_by UUID REFERENCES users(id),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Telemedicine Technical Logs Table
+    statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_technical_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      consultation_id UUID NOT NULL REFERENCES telemedicine_consultations(id) ON DELETE CASCADE,
+      log_type VARCHAR(30) NOT NULL CHECK (log_type IN ('connection_issue', 'audio_issue', 'video_issue', 'bandwidth_issue', 'other')),
+      severity VARCHAR(20) NOT NULL DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+      description TEXT NOT NULL,
+      resolution TEXT,
+      resolved BOOLEAN DEFAULT false,
+      resolved_at TIMESTAMP WITH TIME ZONE,
+      resolved_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Remote Patient Monitoring Table
+    statements.push(`CREATE TABLE IF NOT EXISTS remote_patient_monitoring (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      monitoring_type VARCHAR(30) NOT NULL CHECK (monitoring_type IN ('blood_pressure', 'blood_glucose', 'weight', 'temperature', 'heart_rate', 'oxygen_saturation', 'other')),
+      device_name VARCHAR(255),
+      device_model VARCHAR(255),
+      reading_value DECIMAL(10,2),
+      reading_unit VARCHAR(20),
+      reading_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      uploaded_by UUID REFERENCES users(id),
+      device_synced BOOLEAN DEFAULT false,
+      notes TEXT,
+      alert_triggered BOOLEAN DEFAULT false,
+      alert_severity VARCHAR(20) CHECK (alert_severity IN ('low', 'medium', 'high', 'critical')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Telemedicine Prescriptions Table
+    statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_prescriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      consultation_id UUID NOT NULL REFERENCES telemedicine_consultations(id) ON DELETE CASCADE,
+      prescription_id UUID REFERENCES prescriptions(id) ON DELETE SET NULL,
+      e_signature_patient TEXT,
+      e_signature_doctor TEXT,
+      signed_by_patient_at TIMESTAMP WITH TIME ZONE,
+      signed_by_doctor_at TIMESTAMP WITH TIME ZONE,
+      signature_method VARCHAR(20) CHECK (signature_method IN ('digital_pen', 'touch', 'click_to_sign')),
+      is_valid BOOLEAN DEFAULT false,
+      pdf_url TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_appointment_id ON telemedicine_consultations(appointment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_patient_id ON telemedicine_consultations(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_doctor_id ON telemedicine_consultations(doctor_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_status ON telemedicine_consultations(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_scheduled_start_time ON telemedicine_consultations(scheduled_start_time)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_meeting_room_id ON telemedicine_consultations(meeting_room_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_devices_patient_id ON telemedicine_devices(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consents_patient_id ON telemedicine_consents(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consents_patient_status ON telemedicine_consents(patient_id, consent_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_technical_logs_consultation_id ON telemedicine_technical_logs(consultation_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_patient_id ON remote_patient_monitoring(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_patient_date ON remote_patient_monitoring(patient_id, reading_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_type ON remote_patient_monitoring(monitoring_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_prescriptions_consultation_id ON telemedicine_prescriptions(consultation_id)`);
+
+    // Triggers for updated_at
+    statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consultations_updated_at ON telemedicine_consultations`);
+    statements.push(`CREATE TRIGGER update_telemedicine_consultations_updated_at
+      BEFORE UPDATE ON telemedicine_consultations
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_devices_updated_at ON telemedicine_devices`);
+    statements.push(`CREATE TRIGGER update_telemedicine_devices_updated_at
+      BEFORE UPDATE ON telemedicine_devices
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consents_updated_at ON telemedicine_consents`);
+    statements.push(`CREATE TRIGGER update_telemedicine_consents_updated_at
+      BEFORE UPDATE ON telemedicine_consents
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_technical_logs_updated_at ON telemedicine_technical_logs`);
+    statements.push(`CREATE TRIGGER update_telemedicine_technical_logs_updated_at
+      BEFORE UPDATE ON telemedicine_technical_logs
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_remote_patient_monitoring_updated_at ON remote_patient_monitoring`);
+    statements.push(`CREATE TRIGGER update_remote_patient_monitoring_updated_at
+      BEFORE UPDATE ON remote_patient_monitoring
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_prescriptions_updated_at ON telemedicine_prescriptions`);
+    statements.push(`CREATE TRIGGER update_telemedicine_prescriptions_updated_at
+      BEFORE UPDATE ON telemedicine_prescriptions
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    return statements;
+  }
+
+  private getAnalyticsSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Report Templates Table
+    statements.push(`CREATE TABLE IF NOT EXISTS report_templates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      report_type VARCHAR(50) NOT NULL CHECK (report_type IN ('financial', 'clinical', 'operational', 'custom')),
+      category VARCHAR(100),
+      config JSONB DEFAULT '{}'::jsonb,
+      query_config JSONB DEFAULT '{}'::jsonb,
+      visualization_config JSONB DEFAULT '{}'::jsonb,
+      is_public BOOLEAN DEFAULT false,
+      is_default BOOLEAN DEFAULT false,
+      created_by UUID REFERENCES users(id),
+      shared_with_roles TEXT[] DEFAULT '{}',
+      usage_count INTEGER DEFAULT 0,
+      last_used TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Scheduled Reports Table
+    statements.push(`CREATE TABLE IF NOT EXISTS scheduled_reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      template_id UUID REFERENCES report_templates(id) ON DELETE SET NULL,
+      name VARCHAR(255) NOT NULL,
+      schedule_type VARCHAR(50) NOT NULL CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom')),
+      schedule_config JSONB DEFAULT '{}'::jsonb,
+      recipients TEXT[] DEFAULT '{}',
+      recipient_roles TEXT[] DEFAULT '{}',
+      format VARCHAR(20) NOT NULL DEFAULT 'pdf' CHECK (format IN ('pdf', 'excel', 'csv', 'json')),
+      filters JSONB DEFAULT '{}'::jsonb,
+      is_active BOOLEAN DEFAULT true,
+      last_run TIMESTAMP WITH TIME ZONE,
+      next_run TIMESTAMP WITH TIME ZONE,
+      run_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      last_error TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Report Executions Table
+    statements.push(`CREATE TABLE IF NOT EXISTS report_executions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      report_template_id UUID REFERENCES report_templates(id) ON DELETE SET NULL,
+      scheduled_report_id UUID REFERENCES scheduled_reports(id) ON DELETE SET NULL,
+      execution_type VARCHAR(20) NOT NULL CHECK (execution_type IN ('manual', 'scheduled', 'api')),
+      executed_by UUID REFERENCES users(id),
+      execution_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      duration_ms INTEGER,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+      filters_applied JSONB DEFAULT '{}'::jsonb,
+      result_count INTEGER,
+      file_url TEXT,
+      error_message TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Clinical Outcomes Table
+    statements.push(`CREATE TABLE IF NOT EXISTS clinical_outcomes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      outcome_type VARCHAR(50) NOT NULL CHECK (outcome_type IN ('treatment_response', 'readmission', 'complication', 'mortality', 'quality_of_life', 'other')),
+      condition VARCHAR(255),
+      snomed_code VARCHAR(50),
+      baseline_date DATE,
+      outcome_date DATE,
+      outcome_value DECIMAL(10,2),
+      outcome_unit VARCHAR(50),
+      outcome_status VARCHAR(50) CHECK (outcome_status IN ('improved', 'stable', 'worsened', 'resolved', 'ongoing')),
+      severity VARCHAR(20) CHECK (severity IN ('mild', 'moderate', 'severe', 'critical')),
+      related_appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      related_prescription_id UUID REFERENCES prescriptions(id) ON DELETE SET NULL,
+      related_lab_order_id UUID REFERENCES lab_orders(id) ON DELETE SET NULL,
+      notes TEXT,
+      recorded_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Analytics Metrics Table
+    statements.push(`CREATE TABLE IF NOT EXISTS analytics_metrics (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      metric_name VARCHAR(100) NOT NULL,
+      metric_category VARCHAR(50) CHECK (metric_category IN ('financial', 'clinical', 'operational')),
+      metric_date DATE NOT NULL,
+      metric_value DECIMAL(15,2),
+      metric_unit VARCHAR(50),
+      dimensions JSONB DEFAULT '{}'::jsonb,
+      calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      calculation_method VARCHAR(255),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Report Favorites Table
+    statements.push(`CREATE TABLE IF NOT EXISTS report_favorites (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_template_id UUID NOT NULL REFERENCES report_templates(id) ON DELETE CASCADE,
+      custom_name VARCHAR(255),
+      "order" INTEGER DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(user_id, report_template_id)
+    )`);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_report_type ON report_templates(report_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_category ON report_templates(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_created_by ON report_templates(created_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_is_active ON scheduled_reports(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_next_run ON scheduled_reports(next_run)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_template_id ON scheduled_reports(template_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_executed_by ON report_executions(executed_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_execution_time ON report_executions(execution_time)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_status ON report_executions(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_template_id ON report_executions(report_template_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_scheduled_id ON report_executions(scheduled_report_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_patient_id ON clinical_outcomes(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_outcome_type ON clinical_outcomes(outcome_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_outcome_date ON clinical_outcomes(outcome_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_metric_name ON analytics_metrics(metric_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_metric_date ON analytics_metrics(metric_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_category ON analytics_metrics(metric_category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_report_favorites_user_id ON report_favorites(user_id)`);
+
+    // Triggers for updated_at
+    statements.push(`DROP TRIGGER IF EXISTS update_report_templates_updated_at ON report_templates`);
+    statements.push(`CREATE TRIGGER update_report_templates_updated_at
+      BEFORE UPDATE ON report_templates
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_scheduled_reports_updated_at ON scheduled_reports`);
+    statements.push(`CREATE TRIGGER update_scheduled_reports_updated_at
+      BEFORE UPDATE ON scheduled_reports
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_report_executions_updated_at ON report_executions`);
+    statements.push(`CREATE TRIGGER update_report_executions_updated_at
+      BEFORE UPDATE ON report_executions
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_clinical_outcomes_updated_at ON clinical_outcomes`);
+    statements.push(`CREATE TRIGGER update_clinical_outcomes_updated_at
+      BEFORE UPDATE ON clinical_outcomes
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+
+    statements.push(`DROP TRIGGER IF EXISTS update_analytics_metrics_updated_at ON analytics_metrics`);
+    statements.push(`CREATE TRIGGER update_analytics_metrics_updated_at
+      BEFORE UPDATE ON analytics_metrics
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
 
     return statements;
   }

@@ -40,27 +40,6 @@ export class ClaimsController {
     return this.claimsService.getDashboardSummary(req.tenantDb);
   }
 
-  @Get('dashboard/summary')
-  @ApiOperation({ summary: 'Get claims dashboard summary' })
-  @ApiResponse({ status: 200, description: 'Dashboard summary retrieved' })
-  async getDashboardSummary(@Request() req: RequestWithTenant) {
-    return this.claimsService.getDashboardSummary(req.tenantDb);
-  }
-
-  @Get('analytics')
-  @ApiOperation({ summary: 'Get claims analytics' })
-  @ApiQuery({ name: 'dateFrom', required: false })
-  @ApiQuery({ name: 'dateTo', required: false })
-  @ApiQuery({ name: 'provider', required: false })
-  async getClaimAnalytics(
-    @Query('dateFrom') dateFrom: string,
-    @Query('dateTo') dateTo: string,
-    @Query('provider') provider: string,
-    @Request() req: RequestWithTenant,
-  ) {
-    return this.claimsService.getClaimAnalytics(req.tenantDb, { dateFrom, dateTo, provider });
-  }
-
   @Get()
   @ApiOperation({ summary: 'Get all claims with filtering' })
   @ApiResponse({ status: 200, description: 'Claims retrieved successfully' })

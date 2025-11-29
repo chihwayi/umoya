@@ -33,6 +33,14 @@ export class CreateAppointmentDto {
   @Type(() => Number)
   @IsNumber()
   feeAmount?: number;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  isTelehealth?: boolean;
+
+  @IsString()
+  @IsOptional()
+  virtualMeetingUrl?: string;
 }
 
 export class UpdateAppointmentDto {

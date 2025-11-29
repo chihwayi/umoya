@@ -85,10 +85,9 @@ export class BillingService {
     const paymentAmount = paymentDto.amount || 0;
     
     // For now, just update status if payment covers the full amount
+    // Note: Payment tracking is done through financial_transactions table
     if (paymentAmount >= bill.totalAmount) {
       bill.status = BillStatus.PAID;
-      bill.paymentMethod = paymentDto.method || PaymentMethod.CASH;
-      bill.paymentDate = new Date();
     }
     
     return billRepository.save(bill);

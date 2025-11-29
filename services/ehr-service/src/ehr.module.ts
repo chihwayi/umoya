@@ -53,6 +53,8 @@ import { HipaaAuditController } from './controllers/hipaa-audit.controller';
 import { QualityMeasuresController } from './controllers/quality-measures.controller';
 import { PharmacyController } from './controllers/pharmacy.controller';
 import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
+import { TelemedicineController } from './controllers/telemedicine.controller';
+import { AnalyticsController } from './controllers/analytics.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -117,6 +119,18 @@ import { CcdaService } from './services/ccda.service';
 import { HipaaAuditService } from './services/hipaa-audit.service';
 import { PharmacyService } from './services/pharmacy.service';
 import { DoctorAvailabilityService } from './services/doctor-availability.service';
+import { TelemedicineService } from './services/telemedicine.service';
+import { TelemedicineVideoService } from './services/telemedicine-video.service';
+import { RemoteMonitoringService } from './services/remote-monitoring.service';
+import { TelemedicineConsentService } from './services/telemedicine-consent.service';
+import { DigitalPrescriptionService } from './services/digital-prescription.service';
+import { ReportBuilderService } from './services/report-builder.service';
+import { ScheduledReportsService } from './services/scheduled-reports.service';
+import { ClinicalOutcomesService } from './services/clinical-outcomes.service';
+import { AnalyticsService } from './services/analytics.service';
+import { ReportExportService } from './services/report-export.service';
+import { EmailService } from './services/email.service';
+import { FileStorageService } from './services/file-storage.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -186,6 +200,8 @@ import { RolesGuard } from './guards/roles.guard';
     QualityMeasuresController,
     PharmacyController,
     DoctorAvailabilityController,
+    TelemedicineController,
+    AnalyticsController,
   ],
   providers: [
     AuthService,
@@ -254,6 +270,18 @@ import { RolesGuard } from './guards/roles.guard';
     QualityMeasuresService,
     PharmacyService,
     DoctorAvailabilityService,
+    TelemedicineService,
+    TelemedicineVideoService,
+    RemoteMonitoringService,
+    TelemedicineConsentService,
+    DigitalPrescriptionService,
+    ReportBuilderService,
+    ScheduledReportsService,
+    ClinicalOutcomesService,
+    AnalyticsService,
+    ReportExportService,
+    EmailService,
+    FileStorageService,
     RolesGuard,
     JwtStrategy,
   ],

@@ -1,18 +1,22 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { Repository, Between, Not } from 'typeorm';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { TenantService } from './tenant.service';
 import { FinanceService } from './finance.service';
 import { DoctorAvailabilityService } from './doctor-availability.service';
+import { TelemedicineService } from './telemedicine.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
 export class AppointmentService {
+  private readonly logger = new Logger(AppointmentService.name);
+
   constructor(
     private tenantService: TenantService,
     private financeService: FinanceService,
     private doctorAvailabilityService: DoctorAvailabilityService,
+    private telemedicineService: TelemedicineService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -109,6 +113,40 @@ export class AppointmentService {
         `UPDATE financial_transactions SET source_reference_id = $1 WHERE id = $2`,
         [savedAppointment.id, financeTransactionId],
       );
+    }
+
+    // If this is a telehealth appointment, create a telemedicine consultation
+    if (createAppointmentDto.isTelehealth) {
+      try {
+        const appointmentDate = typeof createAppointmentDto.appointmentDate === 'string' 
+          ? new Date(createAppointmentDto.appointmentDate)
+          : createAppointmentDto.appointmentDate;
+        
+        const consultation = await this.telemedicineService.createConsultation(
+          connection,
+          {
+            appointmentId: savedAppointment.id,
+            patientId: createAppointmentDto.patientId,
+            doctorId: createAppointmentDto.doctorId,
+            consultationType: 'video',
+            scheduledStartTime: appointmentDate.toISOString(),
+            notes: createAppointmentDto.reason || createAppointmentDto.notes,
+          },
+          userId,
+        );
+
+        // Update appointment with meeting URL
+        if (consultation.meetingUrl) {
+          await connection.query(
+            `UPDATE appointments SET virtual_meeting_url = $1 WHERE id = $2`,
+            [consultation.meetingUrl, savedAppointment.id],
+          );
+          savedAppointment.virtualMeetingUrl = consultation.meetingUrl;
+        }
+      } catch (error) {
+        this.logger.error(`Failed to create telemedicine consultation for appointment ${savedAppointment.id}:`, error);
+        // Don't fail the appointment creation if telemedicine setup fails
+      }
     }
 
     return savedAppointment;

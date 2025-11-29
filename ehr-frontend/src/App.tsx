@@ -32,6 +32,8 @@ import DiabetesManagementDashboard from './pages/DiabetesManagementDashboard';
 import PharmacyDashboard from './pages/PharmacyDashboard';
 import BillingDashboard from './pages/BillingDashboard';
 import ClaimsDashboard from './pages/ClaimsDashboard';
+import TelemedicineDashboard from './pages/TelemedicineDashboard';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -324,6 +326,22 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']}>
                   <ClaimsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/telemedicine"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'receptionist']}>
+                  <TelemedicineDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/analytics"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'accounts']}>
+                  <AnalyticsDashboard />
                 </RoleProtectedRoute>
               }
             />

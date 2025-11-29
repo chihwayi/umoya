@@ -30,8 +30,7 @@ export class PharmacyPurchaseOrderItem {
   @Column({ name: 'unit_cost', type: 'decimal', precision: 12, scale: 2 })
   unitCost: number;
 
-  @Column({ name: 'total_cost', type: 'decimal', precision: 12, scale: 2, generatedType: 'STORED', asExpression: 'quantity_ordered * unit_cost' })
-  @Generated('STORED')
+  @Column({ name: 'total_cost', type: 'decimal', precision: 12, scale: 2 })
   totalCost: number;
 
   @Column({ name: 'quantity_received', type: 'int', default: 0 })

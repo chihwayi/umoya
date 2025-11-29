@@ -177,8 +177,8 @@ export class TerminologyController {
   @ApiResponse({ status: 200, description: 'Related RxNorm concepts returned successfully' })
   async getRxNormRelated(
     @Param('rxcui') rxcui: string,
+    @Query('rela') rela: string,
     @Request() req: RequestWithTenant,
-    @Query('rela') rela?: string,
   ) {
     return this.terminologyService.getRxNormRelated(rxcui, rela);
   }

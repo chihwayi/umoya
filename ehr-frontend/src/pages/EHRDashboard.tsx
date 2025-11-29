@@ -8,7 +8,7 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle, Camera, FlaskConical, HeartPulse, Package
+  CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -84,6 +84,7 @@ const EHRDashboard: React.FC = () => {
       case 'doctor':
         return [
           { icon: Stethoscope, label: 'Doctor Dashboard', desc: 'Today\'s schedule & patients', color: 'from-blue-500 to-cyan-500', route: 'doctor' },
+          { icon: Video, label: 'Telemedicine', desc: 'Video consultations & remote monitoring', color: 'from-purple-500 to-pink-500', route: 'telemedicine' },
           { icon: Settings, label: 'Admin Dashboard', desc: 'System administration', color: 'from-gray-500 to-slate-500', route: 'dashboard' },
           ...baseActions,
           { icon: FileText, label: 'Medical Records', desc: 'Patient history & notes', color: 'from-purple-500 to-indigo-500' },
@@ -143,6 +144,7 @@ const EHRDashboard: React.FC = () => {
         return [
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial management', color: 'from-purple-500 to-pink-500', route: 'billing' },
           { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
+          { icon: Video, label: 'Telemedicine', desc: 'Video consultations & remote monitoring', color: 'from-purple-500 to-pink-500', route: 'telemedicine' },
           { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff & roles', color: 'from-slate-500 to-gray-500', route: 'users' },
           { icon: Shield, label: 'Security & Access', desc: 'User permissions & security', color: 'from-red-500 to-rose-500', route: 'security' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & compliance', color: 'from-indigo-500 to-blue-500', route: 'audit' },
