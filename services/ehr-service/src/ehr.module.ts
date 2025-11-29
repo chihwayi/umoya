@@ -57,6 +57,7 @@ import { TelemedicineController } from './controllers/telemedicine.controller';
 import { AnalyticsController } from './controllers/analytics.controller';
 import { AppointmentResourceController } from './controllers/appointment-resource.controller';
 import { ClinicalTemplateController } from './controllers/clinical-template.controller';
+import { PatientPortalController } from './controllers/patient-portal.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -135,6 +136,7 @@ import { EmailService } from './services/email.service';
 import { FileStorageService } from './services/file-storage.service';
 import { AppointmentResourceService } from './services/appointment-resource.service';
 import { ClinicalTemplateService } from './services/clinical-template.service';
+import { PatientAuthService } from './services/patient-auth.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -208,6 +210,7 @@ import { RolesGuard } from './guards/roles.guard';
     AnalyticsController,
     AppointmentResourceController,
     ClinicalTemplateController,
+    PatientPortalController,
   ],
   providers: [
     AuthService,
@@ -290,6 +293,7 @@ import { RolesGuard } from './guards/roles.guard';
     FileStorageService,
     AppointmentResourceService,
     ClinicalTemplateService,
+    PatientAuthService,
     RolesGuard,
     JwtStrategy,
   ],
