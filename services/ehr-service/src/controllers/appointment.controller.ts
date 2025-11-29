@@ -85,6 +85,25 @@ export class AppointmentController {
     return this.appointmentService.getWaitTimes(doctorId, date, req.tenantId);
   }
 
+  @Get('check-availability')
+  @ApiOperation({ summary: 'Check appointment availability', description: 'Check if a doctor is available at a specific time' })
+  @ApiQuery({ name: 'doctorId', description: 'Doctor ID' })
+  @ApiQuery({ name: 'appointmentDate', description: 'Appointment date in ISO format' })
+  @ApiQuery({ name: 'durationMinutes', description: 'Duration in minutes', required: false })
+  checkAvailability(
+    @Query('doctorId') doctorId: string,
+    @Query('appointmentDate') appointmentDate: string,
+    @Query('durationMinutes') durationMinutes: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.appointmentService.checkAvailability(
+      doctorId,
+      appointmentDate,
+      parseInt(durationMinutes || '30'),
+      req.tenantId,
+    );
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Cancel appointment', description: 'Cancel an appointment (soft delete)' })
   remove(@Param('id') id: string, @Req() req: RequestWithTenant) {
@@ -171,10 +190,17 @@ export class AppointmentController {
   @Post('templates')
   @ApiOperation({ summary: 'Create appointment template', description: 'Create a new appointment template for quick booking' })
   createAppointmentTemplate(
-    @Body() template: { name: string; type: string; duration: number; instructions?: string },
+    @Body() template: { name: string; type: string; duration: number; instructions?: string; color?: string },
     @Req() req: RequestWithTenant
   ) {
-    return this.appointmentService.createAppointmentTemplate(template, req.tenantId);
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.appointmentService.createAppointmentTemplate(template, req.tenantId, userId);
+  }
+
+  @Delete('templates/:id')
+  @ApiOperation({ summary: 'Delete appointment template', description: 'Delete an appointment template (soft delete)' })
+  deleteAppointmentTemplate(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.deleteAppointmentTemplate(id, req.tenantId);
   }
 
   @Get('analytics/trends')
@@ -192,9 +218,17 @@ export class AppointmentController {
   }
 
   @Post(':id/reminder')
-  @ApiOperation({ summary: 'Send appointment reminder', description: 'Send reminder notification for an appointment' })
-  sendReminder(@Param('id') id: string, @Req() req: RequestWithTenant) {
-    return this.appointmentService.sendReminder(id, req.tenantId);
+  @ApiOperation({ summary: 'Send appointment reminder', description: 'Send reminder notification for an appointment via SMS and/or Email' })
+  @ApiResponse({ status: 200, description: 'Reminder sent successfully' })
+  sendReminder(
+    @Param('id') id: string,
+    @Body() body: { sendSms?: boolean; sendEmail?: boolean },
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.appointmentService.sendReminder(id, req.tenantId, {
+      sendSms: body.sendSms !== false, // Default to true
+      sendEmail: body.sendEmail || false,
+    });
   }
 
   @Get('conflicts/:doctorId')

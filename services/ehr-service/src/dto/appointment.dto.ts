@@ -83,6 +83,14 @@ export class AppointmentQueryDto {
   date?: string;
 
   @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
   @IsUUID()
   doctorId?: string;
 

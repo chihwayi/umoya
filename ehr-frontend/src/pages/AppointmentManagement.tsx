@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, Plus, Search, Filter, ArrowLeft, BarChart3, Settings, Bell, RefreshCw, Eye, Edit, Trash2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, User, Plus, Search, Filter, ArrowLeft, BarChart3, Settings, Bell, RefreshCw, Eye, Edit, Trash2, CheckCircle, XCircle, AlertCircle, List, CalendarDays, Users, FileText } from 'lucide-react';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
+import AppointmentCalendar from '../components/AppointmentCalendar';
+import AppointmentReminderModal from '../components/AppointmentReminderModal';
+import AppointmentWaitlist from '../components/AppointmentWaitlist';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
@@ -50,11 +53,17 @@ const AppointmentManagement: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'month' | 'week' | 'day'>('list');
+  const [calendarViewMode, setCalendarViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [appointmentStats, setAppointmentStats] = useState<any>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderAppointment, setReminderAppointment] = useState<Appointment | null>(null);
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -66,7 +75,7 @@ const AppointmentManagement: React.FC = () => {
   useEffect(() => {
     fetchAppointments();
     fetchAppointmentStats();
-  }, [selectedDate, statusFilter, currentUser]);
+  }, [selectedDate, statusFilter, currentUser, viewMode]);
 
   // Calculate stats for doctors when appointments change
   useEffect(() => {
@@ -96,10 +105,36 @@ const AppointmentManagement: React.FC = () => {
       }
       
       const params: any = {};
-      if (selectedDate) {
-        // Convert dd/mm/yyyy to yyyy-mm-dd for API
-        params.date = formatDateForAPI(selectedDate);
+      
+      // For calendar views, fetch a date range
+      if (viewMode === 'month') {
+        // Fetch entire month
+        const date = selectedDate ? new Date(formatDateForAPI(selectedDate)) : new Date();
+        const startDate = new Date(date.getFullYear(), date.getMonth(), 1);
+        const endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        params.startDate = startDate.toISOString().split('T')[0];
+        params.endDate = endDate.toISOString().split('T')[0];
+      } else if (viewMode === 'week') {
+        // Fetch week range
+        const date = selectedDate ? new Date(formatDateForAPI(selectedDate)) : new Date();
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - date.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        params.startDate = startOfWeek.toISOString().split('T')[0];
+        params.endDate = endOfWeek.toISOString().split('T')[0];
+      } else if (viewMode === 'day') {
+        // Fetch single day
+        if (selectedDate) {
+          params.date = formatDateForAPI(selectedDate);
+        }
+      } else {
+        // List view - use selected date
+        if (selectedDate) {
+          params.date = formatDateForAPI(selectedDate);
+        }
       }
+      
       if (statusFilter !== 'all') params.status = statusFilter;
       
       console.log('📋 Request params:', params);
@@ -211,9 +246,9 @@ const AppointmentManagement: React.FC = () => {
           endpoint = `/appointments/${appointmentId}/no-show`;
           break;
         case 'reminder':
-          endpoint = `/appointments/${appointmentId}/reminder`;
-          method = 'POST';
-          break;
+          setReminderAppointment(appointments.find(apt => apt.id === appointmentId) || null);
+          setShowReminderModal(true);
+          return; // Don't make API call here, let the modal handle it
         default:
           return;
       }
@@ -240,6 +275,41 @@ const AppointmentManagement: React.FC = () => {
   const handleViewAppointment = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setShowAppointmentDetails(true);
+  };
+
+  const handleCalendarAppointmentClick = (appointment: Appointment) => {
+    handleViewAppointment(appointment);
+  };
+
+  const handleCalendarDateClick = (date: Date) => {
+    setSelectedDate(formatDateForInput(date));
+    setShowCreateModal(true);
+  };
+
+  const checkForConflicts = async (doctorId: string, appointmentDate: string, durationMinutes: number) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return { hasConflict: false };
+
+      const response = await fetch(
+        `http://localhost:3013/api/appointments/check-availability?doctorId=${doctorId}&appointmentDate=${appointmentDate}&durationMinutes=${durationMinutes}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantSlug || '',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        return result;
+      }
+      return { hasConflict: false };
+    } catch (error) {
+      console.error('Error checking conflicts:', error);
+      return { hasConflict: false };
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -320,13 +390,57 @@ const AppointmentManagement: React.FC = () => {
             </div>
           </div>
           
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            New Appointment
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-lg border border-slate-200/50 p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                  viewMode === 'list' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('month')}
+                className={`px-3 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                  viewMode === 'month' ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <CalendarDays className="w-4 h-4" />
+                Calendar
+              </button>
+            </div>
+            <button
+              onClick={() => setShowWaitlist(!showWaitlist)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                showWaitlist 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-white/70 backdrop-blur-sm border border-slate-200/50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Waitlist
+            </button>
+            <button
+              onClick={() => setShowTemplates(!showTemplates)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                showTemplates 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-white/70 backdrop-blur-sm border border-slate-200/50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Templates
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              New Appointment
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -371,7 +485,87 @@ const AppointmentManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Waitlist Panel */}
+      {showWaitlist && (
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl border border-slate-200/50 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Appointment Waitlist
+            </h2>
+            <button
+              onClick={() => setShowWaitlist(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
+          </div>
+          <AppointmentWaitlist
+            tenantSlug={tenantSlug || ''}
+            onScheduled={() => {
+              fetchAppointments();
+              fetchAppointmentStats();
+            }}
+          />
+        </div>
+      )}
+
+      {/* Templates Panel */}
+      {showTemplates && (
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl border border-slate-200/50 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Appointment Templates
+            </h2>
+            <button
+              onClick={() => setShowTemplates(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
+          </div>
+          <AppointmentTemplatesPanel
+            onSelectTemplate={(template) => {
+              setShowTemplates(false);
+              setShowCreateModal(true);
+              // Template data will be passed via preselectedTemplate state
+            }}
+            tenantSlug={tenantSlug || ''}
+          />
+        </div>
+      )}
+
+      {/* Conflict Warning */}
+      {conflictWarning && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 text-yellow-600" />
+          <p className="text-yellow-800">{conflictWarning}</p>
+          <button
+            onClick={() => setConflictWarning(null)}
+            className="ml-auto text-yellow-600 hover:text-yellow-800"
+          >
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Calendar View */}
+      {viewMode !== 'list' && (
+        <AppointmentCalendar
+          appointments={filteredAppointments}
+          onAppointmentClick={handleCalendarAppointmentClick}
+          onDateClick={handleCalendarDateClick}
+          viewMode={viewMode === 'month' ? 'month' : viewMode === 'week' ? 'week' : 'day'}
+          onViewModeChange={(mode) => {
+            setViewMode(mode);
+            setCalendarViewMode(mode);
+          }}
+        />
+      )}
+
       {/* Appointments List */}
+      {viewMode === 'list' && (
       <div className="space-y-4">
         {filteredAppointments.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
@@ -423,7 +617,17 @@ const AppointmentManagement: React.FC = () => {
                   </span>
                   
                   {/* Quick Action Buttons */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <button
+                        onClick={() => handleQuickAction(appointment.id, 'reminder')}
+                        className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm hover:bg-yellow-200 transition-colors flex items-center gap-1"
+                        title="Send reminder"
+                      >
+                        <Bell className="h-3 w-3" />
+                        Remind
+                      </button>
+                    )}
                     {appointment.status === 'scheduled' && (
                       <button
                         onClick={() => handleQuickAction(appointment.id, 'check-in')}
@@ -448,6 +652,12 @@ const AppointmentManagement: React.FC = () => {
                         Complete
                       </button>
                     )}
+                    {(appointment.reminderSentCount && appointment.reminderSentCount > 0) && (
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs flex items-center gap-1" title={`${appointment.reminderSentCount} reminder(s) sent`}>
+                        <Bell className="h-3 w-3" />
+                        {appointment.reminderSentCount}
+                      </span>
+                    )}
                   </div>
                   
                   <select
@@ -468,12 +678,28 @@ const AppointmentManagement: React.FC = () => {
           ))
         )}
       </div>
+      )}
 
         {/* Create Appointment Modal */}
         {showCreateModal && (
           <CreateAppointmentModal
             onClose={() => setShowCreateModal(false)}
             onSuccess={handleCreateAppointment}
+          />
+        )}
+
+        {/* Reminder Modal */}
+        {showReminderModal && reminderAppointment && (
+          <AppointmentReminderModal
+            appointment={reminderAppointment}
+            onClose={() => {
+              setShowReminderModal(false);
+              setReminderAppointment(null);
+            }}
+            onSuccess={() => {
+              fetchAppointments();
+              fetchAppointmentStats();
+            }}
           />
         )}
       </div>

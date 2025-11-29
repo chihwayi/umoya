@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, User, FileText, Search, ChevronDown, Repeat } from 'lucide-react';
+import { X, Calendar, Clock, User, FileText, Search, ChevronDown, Repeat, AlertCircle, Loader2 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
 import DatePicker from './DatePicker';
+import AppointmentResourceSelector from './AppointmentResourceSelector';
 
 interface Patient {
   id: string;
@@ -45,6 +46,10 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringPattern, setRecurringPattern] = useState<'weekly' | 'monthly'>('weekly');
   const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
+  const [selectedResources, setSelectedResources] = useState<string[]>([]);
+  const [showResources, setShowResources] = useState(false);
   
   // Patient search states
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
@@ -103,6 +108,15 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
     }
   }, [formData.doctorId, formData.appointmentDate]);
 
+  // Check for conflicts when time is selected
+  useEffect(() => {
+    if (formData.doctorId && formData.appointmentDate && selectedTime) {
+      checkForConflicts();
+    } else {
+      setConflictWarning(null);
+    }
+  }, [formData.doctorId, formData.appointmentDate, selectedTime, formData.durationMinutes]);
+
   const fetchPatients = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
@@ -134,6 +148,65 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
       setDoctors(response.data || []);
     } catch (error) {
       console.error('Error fetching doctors:', error);
+    }
+  };
+
+  const checkForConflicts = async () => {
+    if (!formData.doctorId || !formData.appointmentDate || !selectedTime) return;
+
+    setCheckingConflict(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant');
+      
+      if (!token || !tenantSlug) return;
+
+      const apiDate = formatDateForAPI(formData.appointmentDate);
+      const [year, month, day] = apiDate.split('-').map(Number);
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      const appointmentDateTime = new Date(year, month - 1, day, hours, minutes);
+
+      const result = await ehrApi.checkAppointmentAvailability(
+        formData.doctorId,
+        appointmentDateTime.toISOString(),
+        Number(formData.durationMinutes) || 30,
+        token,
+        tenantSlug
+      );
+
+      if (result.data?.hasConflict) {
+        setConflictWarning(result.data.message || 'This time slot conflicts with an existing appointment or doctor unavailability');
+      } else {
+        setConflictWarning(null);
+      }
+    } catch (error) {
+      console.error('Error checking conflicts:', error);
+      // Don't show error to user, just silently fail
+    } finally {
+      setCheckingConflict(false);
+    }
+  };
+
+  const bookResourcesForAppointment = async (appointmentId: string, appointmentDateTime: Date, durationMinutes: number, token: string, tenantSlug: string) => {
+    const bookingStart = appointmentDateTime.toISOString();
+    const bookingEnd = new Date(appointmentDateTime.getTime() + durationMinutes * 60 * 1000).toISOString();
+
+    for (const resourceId of selectedResources) {
+      try {
+        await ehrApi.bookAppointmentResource(
+          {
+            appointmentId,
+            resourceId,
+            bookingStart,
+            bookingEnd,
+          },
+          token,
+          tenantSlug
+        );
+      } catch (error) {
+        console.error(`Failed to book resource ${resourceId}:`, error);
+        // Don't fail the appointment creation if resource booking fails
+      }
     }
   };
 
@@ -191,6 +264,12 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
       return;
     }
 
+    // Check for conflicts before submitting
+    if (conflictWarning) {
+      showError('Conflict Detected', 'Please select a different time slot. ' + conflictWarning);
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('ehr_token');
@@ -242,9 +321,35 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         const result = await ehrApi.createRecurringAppointments(payload, recurringPattern, endDateTime.toISOString(), token, tenantSlug);
         const count = Array.isArray(result.data) ? result.data.length : 0;
         showSuccess('Success', `Created ${count} recurring appointment${count !== 1 ? 's' : ''} successfully`);
+        createdAppointment = Array.isArray(result.data) && result.data.length > 0 ? result.data[0] : null;
       } else {
-        await ehrApi.createAppointment(payload, token, tenantSlug);
+        const result = await ehrApi.createAppointment(payload, token, tenantSlug);
+        createdAppointment = result.data;
         showSuccess('Success', 'Appointment scheduled successfully');
+      }
+
+      // Book resources if selected
+      if (createdAppointment && selectedResources.length > 0) {
+        const bookingStart = appointmentDateTime.toISOString();
+        const bookingEnd = new Date(appointmentDateTime.getTime() + (Number(formData.durationMinutes) || 30) * 60 * 1000).toISOString();
+
+        for (const resourceId of selectedResources) {
+          try {
+            await ehrApi.bookAppointmentResource(
+              {
+                appointmentId: createdAppointment.id,
+                resourceId,
+                bookingStart,
+                bookingEnd,
+              },
+              token,
+              tenantSlug
+            );
+          } catch (error) {
+            console.error(`Failed to book resource ${resourceId}:`, error);
+            // Don't fail the appointment creation if resource booking fails
+          }
+        }
       }
 
       onSuccess();
@@ -412,6 +517,20 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
               {availableSlots.length > 0 && (
                 <div className="text-xs text-gray-500 mt-1">
                   {availableSlots.length} time slots available
+                </div>
+              )}
+              {checkingConflict && (
+                <div className="text-xs text-blue-500 mt-1 flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Checking for conflicts...
+                </div>
+              )}
+              {conflictWarning && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-yellow-800">{conflictWarning}</p>
+                  </div>
                 </div>
               )}
             </div>

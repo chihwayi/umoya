@@ -405,6 +405,61 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  checkAppointmentAvailability: async (doctorId: string, appointmentDate: string, durationMinutes: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/appointments/check-availability', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: {
+        doctorId,
+        appointmentDate,
+        durationMinutes
+      }
+    });
+    return { data: response.data };
+  },
+
+  sendAppointmentReminder: async (appointmentId: string, options: { sendSms?: boolean; sendEmail?: boolean }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/appointments/${appointmentId}/reminder`, options, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getAppointmentTemplates: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/appointments/templates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  createAppointmentTemplate: async (template: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/appointments/templates', template, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteAppointmentTemplate: async (templateId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/appointments/templates/${templateId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // Waitlist API
   getWaitlist: async (token: string, tenantSlug: string, params?: any) => {
     const response = await ehrAxios.get('/waitlist', {

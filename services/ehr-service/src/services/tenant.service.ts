@@ -51,6 +51,8 @@ import { ReportExecution } from '../entities/report-execution.entity';
 import { ClinicalOutcome } from '../entities/clinical-outcome.entity';
 import { AnalyticsMetric } from '../entities/analytics-metric.entity';
 import { ReportFavorite } from '../entities/report-favorite.entity';
+import { AppointmentTemplate } from '../entities/appointment-template.entity';
+import { AppointmentResource, AppointmentResourceBooking } from '../entities/appointment-resource.entity';
 
 @Injectable()
 export class TenantService {
@@ -188,6 +190,9 @@ export class TenantService {
         TelemedicinePrescription,
         ReportTemplate,
         ScheduledReport,
+        AppointmentTemplate,
+        AppointmentResource,
+        AppointmentResourceBooking,
         ReportExecution,
         ClinicalOutcome,
         AnalyticsMetric,

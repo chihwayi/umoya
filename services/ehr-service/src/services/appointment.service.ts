@@ -6,6 +6,8 @@ import { TenantService } from './tenant.service';
 import { FinanceService } from './finance.service';
 import { DoctorAvailabilityService } from './doctor-availability.service';
 import { TelemedicineService } from './telemedicine.service';
+import { NotificationsService } from './notifications.service';
+import { EmailService } from './email.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -17,6 +19,8 @@ export class AppointmentService {
     private financeService: FinanceService,
     private doctorAvailabilityService: DoctorAvailabilityService,
     private telemedicineService: TelemedicineService,
+    private notificationsService: NotificationsService,
+    private emailService: EmailService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -163,7 +167,16 @@ export class AppointmentService {
       .leftJoinAndSelect('appointment.createdByUser', 'createdByUser');
 
     // Apply filters
-    if (query.date) {
+    if (query.startDate && query.endDate) {
+      // Date range filter (for calendar views)
+      const startDate = new Date(query.startDate);
+      const endDate = new Date(query.endDate);
+      endDate.setHours(23, 59, 59, 999); // Include the entire end date
+      
+      queryBuilder.andWhere('appointment.appointmentDate >= :startDate', { startDate })
+                  .andWhere('appointment.appointmentDate <= :endDate', { endDate });
+    } else if (query.date) {
+      // Single date filter
       const startDate = new Date(query.date);
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 1);
@@ -774,50 +787,130 @@ export class AppointmentService {
   }
 
   async getAppointmentTemplates(tenantId: string): Promise<any[]> {
-    // Return predefined appointment templates
-    return [
-      {
-        id: 'consultation',
-        name: 'General Consultation',
-        type: 'consultation',
-        duration: 30,
-        instructions: 'Please arrive 10 minutes early',
-        color: '#3B82F6'
-      },
-      {
-        id: 'follow-up',
-        name: 'Follow-up Visit',
-        type: 'follow_up',
-        duration: 20,
-        instructions: 'Bring previous test results',
-        color: '#10B981'
-      },
-      {
-        id: 'procedure',
-        name: 'Minor Procedure',
-        type: 'procedure',
-        duration: 60,
-        instructions: 'Fasting may be required',
-        color: '#F59E0B'
-      },
-      {
-        id: 'telehealth',
-        name: 'Telehealth Consultation',
-        type: 'consultation',
-        duration: 30,
-        instructions: 'Ensure stable internet connection',
-        color: '#8B5CF6'
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    try {
+      const { AppointmentTemplate } = await import('../entities/appointment-template.entity');
+      const templateRepository = connection.getRepository(AppointmentTemplate);
+      const templates = await templateRepository.find({
+        where: { isActive: true },
+        order: { name: 'ASC' },
+      });
+
+      // If no templates exist, return default templates
+      if (templates.length === 0) {
+        return [
+          {
+            id: 'consultation',
+            name: 'General Consultation',
+            type: 'consultation',
+            duration: 30,
+            instructions: 'Please arrive 10 minutes early',
+            color: '#3B82F6'
+          },
+          {
+            id: 'follow-up',
+            name: 'Follow-up Visit',
+            type: 'follow_up',
+            duration: 20,
+            instructions: 'Bring previous test results',
+            color: '#10B981'
+          },
+          {
+            id: 'procedure',
+            name: 'Minor Procedure',
+            type: 'procedure',
+            duration: 60,
+            instructions: 'Fasting may be required',
+            color: '#F59E0B'
+          },
+          {
+            id: 'telehealth',
+            name: 'Telehealth Consultation',
+            type: 'consultation',
+            duration: 30,
+            instructions: 'Ensure stable internet connection',
+            color: '#8B5CF6'
+          }
+        ];
       }
-    ];
+
+      return templates.map(t => ({
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        duration: t.durationMinutes,
+        instructions: t.instructions,
+        color: t.color,
+        createdAt: t.createdAt,
+      }));
+    } catch (error) {
+      this.logger.error('Error fetching appointment templates:', error);
+      // Return default templates on error
+      return [
+        {
+          id: 'consultation',
+          name: 'General Consultation',
+          type: 'consultation',
+          duration: 30,
+          instructions: 'Please arrive 10 minutes early',
+          color: '#3B82F6'
+        }
+      ];
+    }
   }
 
-  async createAppointmentTemplate(template: any, tenantId: string): Promise<any> {
-    // In a real implementation, this would save to database
+  async createAppointmentTemplate(template: any, tenantId: string, userId?: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const { AppointmentTemplate } = await import('../entities/appointment-template.entity');
+    const templateRepository = connection.getRepository(AppointmentTemplate);
+
+    const newTemplate = templateRepository.create({
+      name: template.name,
+      type: template.type,
+      durationMinutes: template.duration || template.durationMinutes || 30,
+      instructions: template.instructions,
+      color: template.color || '#3B82F6',
+      isActive: true,
+      createdBy: userId,
+    });
+
+    const saved = await templateRepository.save(newTemplate);
     return {
-      id: `template_${Date.now()}`,
-      ...template,
-      createdAt: new Date()
+      id: saved.id,
+      name: saved.name,
+      type: saved.type,
+      duration: saved.durationMinutes,
+      instructions: saved.instructions,
+      color: saved.color,
+      createdAt: saved.createdAt,
     };
+  }
+
+  async deleteAppointmentTemplate(templateId: string, tenantId: string): Promise<void> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const { AppointmentTemplate } = await import('../entities/appointment-template.entity');
+    const templateRepository = connection.getRepository(AppointmentTemplate);
+
+    const template = await templateRepository.findOne({ where: { id: templateId } });
+    if (!template) {
+      throw new NotFoundException(`Template with ID ${templateId} not found`);
+    }
+
+    // Soft delete by setting isActive to false
+    template.isActive = false;
+    await templateRepository.save(template);
   }
 
   async getAppointmentTrends(period: string, tenantId: string): Promise<any> {
@@ -937,15 +1030,124 @@ export class AppointmentService {
     return Object.values(doctorStats);
   }
 
-  async sendReminder(appointmentId: string, tenantId: string): Promise<any> {
+  async sendReminder(appointmentId: string, tenantId: string, options?: { sendSms?: boolean; sendEmail?: boolean }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+    
     const appointment = await this.findOne(appointmentId, tenantId);
+    const appointmentRepository = connection.getRepository(AppointmentSimple);
 
-    // In a real implementation, this would trigger actual notifications
-    return {
+    if (!appointment.patient) {
+      throw new NotFoundException('Patient not found for appointment');
+    }
+
+    const sendSms = options?.sendSms !== false; // Default to true
+    const sendEmail = options?.sendEmail || false;
+
+    const appointmentDate = new Date(appointment.appointmentDate);
+    const formattedDate = appointmentDate.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const formattedTime = appointmentDate.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+
+    const results: any = {
       success: true,
-      message: 'Reminder sent successfully',
-      reminderCount: 1
+      smsSent: false,
+      emailSent: false,
+      errors: [],
     };
+
+    // Send SMS reminder
+    if (sendSms && appointment.patient.phone) {
+      try {
+        const smsResult = await this.notificationsService.sendAppointmentReminder(appointmentId, connection);
+        results.smsSent = true;
+        results.smsMessageId = smsResult.messageId;
+      } catch (error: any) {
+        results.errors.push(`SMS failed: ${error.message}`);
+        this.logger.error(`Failed to send SMS reminder for appointment ${appointmentId}:`, error);
+      }
+    }
+
+    // Send Email reminder
+    if (sendEmail && appointment.patient.email) {
+      try {
+        const emailSubject = `Appointment Reminder - ${formattedDate}`;
+        const emailBody = `
+Dear ${appointment.patient.firstName} ${appointment.patient.lastName},
+
+This is a reminder for your upcoming appointment:
+
+Date: ${formattedDate}
+Time: ${formattedTime}
+Doctor: Dr. ${appointment.doctor?.firstName || ''} ${appointment.doctor?.lastName || ''}
+Duration: ${appointment.durationMinutes} minutes
+${appointment.reason ? `Reason: ${appointment.reason}` : ''}
+
+Please arrive 15 minutes early for your appointment.
+
+If you need to reschedule or cancel, please contact us as soon as possible.
+
+Thank you,
+MediCore Clinic
+        `.trim();
+
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Appointment Reminder</h2>
+            <p>Dear ${appointment.patient.firstName} ${appointment.patient.lastName},</p>
+            <p>This is a reminder for your upcoming appointment:</p>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>Date:</strong> ${formattedDate}</p>
+              <p><strong>Time:</strong> ${formattedTime}</p>
+              <p><strong>Doctor:</strong> Dr. ${appointment.doctor?.firstName || ''} ${appointment.doctor?.lastName || ''}</p>
+              <p><strong>Duration:</strong> ${appointment.durationMinutes} minutes</p>
+              ${appointment.reason ? `<p><strong>Reason:</strong> ${appointment.reason}</p>` : ''}
+            </div>
+            <p>Please arrive 15 minutes early for your appointment.</p>
+            <p>If you need to reschedule or cancel, please contact us as soon as possible.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #6b7280; font-size: 12px;">Thank you,<br>MediCore Clinic</p>
+          </div>
+        `;
+
+        const emailResult = await this.emailService.sendEmail({
+          to: appointment.patient.email,
+          subject: emailSubject,
+          text: emailBody,
+          html: htmlBody,
+        });
+
+        if (emailResult.success) {
+          results.emailSent = true;
+          results.emailMessageId = emailResult.messageId;
+        } else {
+          results.errors.push(`Email failed: ${emailResult.error}`);
+        }
+      } catch (error: any) {
+        results.errors.push(`Email failed: ${error.message}`);
+        this.logger.error(`Failed to send email reminder for appointment ${appointmentId}:`, error);
+      }
+    }
+
+    // Update reminder count and timestamp
+    appointment.reminderSentCount = (appointment.reminderSentCount || 0) + 1;
+    appointment.lastReminderSent = new Date();
+    await appointmentRepository.save(appointment);
+
+    results.reminderCount = appointment.reminderSentCount;
+    results.message = `Reminder sent successfully${results.errors.length > 0 ? ' (with some errors)' : ''}`;
+
+    return results;
   }
 
   async checkConflicts(doctorId: string, date: string, time: string, duration: number, tenantId: string): Promise<any> {
@@ -956,6 +1158,15 @@ export class AppointmentService {
       return { hasConflict: false, message: 'No conflicts found' };
     } catch (error) {
       return { hasConflict: true, message: error.message };
+    }
+  }
+
+  async checkAvailability(doctorId: string, appointmentDate: string, durationMinutes: number, tenantId: string): Promise<any> {
+    try {
+      await this.checkForConflicts(doctorId, appointmentDate, durationMinutes, tenantId);
+      return { hasConflict: false, message: 'No conflicts found' };
+    } catch (error: any) {
+      return { hasConflict: true, message: error.message || 'Doctor is not available at this time' };
     }
   }
 }
