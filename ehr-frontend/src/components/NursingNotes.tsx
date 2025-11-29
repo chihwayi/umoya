@@ -1014,10 +1014,11 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
               const response = await clinicalTemplateApi.applyTemplate(template.id, variables, token, tenantSlugValue);
               
               // Append template content to notes (or replace if empty)
+              const templateContent = typeof response === 'string' ? response : (response.data?.content || response.data || response);
               if (newNote.content.trim()) {
-                setNewNote(prev => ({ ...prev, content: prev.content + '\n\n' + response.data }));
+                setNewNote(prev => ({ ...prev, content: prev.content + '\n\n' + templateContent }));
               } else {
-                setNewNote(prev => ({ ...prev, content: response.data }));
+                setNewNote(prev => ({ ...prev, content: templateContent }));
               }
               
               setShowTemplateLibrary(false);
