@@ -162,21 +162,24 @@ export class PatientPortalService {
     }
 
     // Use raw SQL query to avoid TypeORM column name mapping issues
+    // Note: medical_records table uses visit_date, not record_date, and has diagnosis_codes array
     let query = `
       SELECT 
         mr.id,
-        mr.record_date as "recordDate",
-        mr.type,
+        mr.visit_date as "recordDate",
         mr.chief_complaint as "chiefComplaint",
+        mr.history_present_illness as "historyPresentIllness",
+        mr.physical_examination as "physicalExamination",
         mr.assessment,
         mr.plan,
-        mr.diagnoses,
+        mr.diagnosis_codes as "diagnosisCodes",
+        mr.vital_signs as "vitalSigns",
         u.id as provider_id,
         u.first_name as provider_first_name,
         u.last_name as provider_last_name,
         u.specialization as provider_specialization
       FROM medical_records mr
-      LEFT JOIN users u ON mr.provider_id = u.id
+      LEFT JOIN users u ON mr.doctor_id = u.id
       WHERE mr.patient_id = $1
     `;
     
@@ -184,33 +187,32 @@ export class PatientPortalService {
     let paramIndex = 2;
     
     if (filters?.startDate) {
-      query += ` AND mr.record_date >= $${paramIndex}`;
+      query += ` AND mr.visit_date >= $${paramIndex}`;
       params.push(filters.startDate);
       paramIndex++;
     }
     if (filters?.endDate) {
-      query += ` AND mr.record_date <= $${paramIndex}`;
+      query += ` AND mr.visit_date <= $${paramIndex}`;
       params.push(filters.endDate);
       paramIndex++;
     }
-    if (filters?.type) {
-      query += ` AND mr.type = $${paramIndex}`;
-      params.push(filters.type);
-      paramIndex++;
-    }
+    // Note: medical_records table doesn't have a 'type' column, so we skip that filter
     
-    query += ` ORDER BY mr.record_date DESC`;
+    query += ` ORDER BY mr.visit_date DESC`;
     
     const rawRecords = await connection.query(query, params);
 
     return rawRecords.map((record: any) => ({
       id: record.id,
-      recordDate: record.recordDate || record.record_date,
-      type: record.type,
+      recordDate: record.recordDate || record.visit_date,
+      type: 'consultation', // Default type since table doesn't have type column
       chiefComplaint: record.chiefComplaint || record.chief_complaint,
+      historyPresentIllness: record.historyPresentIllness || record.history_present_illness,
+      physicalExamination: record.physicalExamination || record.physical_examination,
       assessment: record.assessment,
       plan: record.plan,
-      diagnoses: record.diagnoses || [],
+      diagnoses: record.diagnosisCodes || record.diagnosis_codes || [],
+      vitalSigns: record.vitalSigns || record.vital_signs,
       provider: record.provider_id ? {
         id: record.provider_id,
         firstName: record.provider_first_name,
