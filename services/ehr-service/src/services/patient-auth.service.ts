@@ -335,5 +335,103 @@ export class PatientAuthService {
 
     return patientRepository.save(patient);
   }
+
+  async linkAccount(
+    patientId: string,
+    linkData: { patientNumber: string; dateOfBirth: string; nationalId?: string; phone?: string },
+    tenantId: string,
+  ): Promise<any> {
+    const patientRepository = await this.getPatientRepository(tenantId);
+
+    // Get the logged-in patient (portal account)
+    const portalPatient = await patientRepository.findOne({ where: { id: patientId } });
+
+    if (!portalPatient) {
+      throw new NotFoundException('Patient account not found');
+    }
+
+    // Check if already linked
+    if (portalPatient.portalAccessEnabled && portalPatient.email) {
+      // Try to find matching patient record
+      const matchingPatient = await patientRepository.findOne({
+        where: { patientNumber: linkData.patientNumber },
+      });
+
+      if (matchingPatient && matchingPatient.id === portalPatient.id) {
+        return {
+          success: true,
+          message: 'Account is already linked',
+          patient: {
+            id: portalPatient.id,
+            patientNumber: portalPatient.patientNumber,
+            firstName: portalPatient.firstName,
+            lastName: portalPatient.lastName,
+          },
+        };
+      }
+    }
+
+    // Find patient record by patient number
+    const patientRecord = await patientRepository.findOne({
+      where: { patientNumber: linkData.patientNumber },
+    });
+
+    if (!patientRecord) {
+      throw new NotFoundException('Patient record not found. Please verify your patient number.');
+    }
+
+    // Verify date of birth
+    const dob = new Date(linkData.dateOfBirth);
+    if (patientRecord.dateOfBirth.getTime() !== dob.getTime()) {
+      throw new BadRequestException('Date of birth does not match our records.');
+    }
+
+    // Optional: Verify national ID if provided
+    if (linkData.nationalId && patientRecord.nationalId) {
+      if (patientRecord.nationalId !== linkData.nationalId) {
+        throw new BadRequestException('National ID does not match our records.');
+      }
+    }
+
+    // Optional: Verify phone if provided
+    if (linkData.phone && patientRecord.phone) {
+      // Normalize phone numbers for comparison
+      const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+      if (normalizePhone(patientRecord.phone) !== normalizePhone(linkData.phone)) {
+        throw new BadRequestException('Phone number does not match our records.');
+      }
+    }
+
+    // Link the accounts: Update patient record with portal credentials
+    patientRecord.portalPasswordHash = portalPatient.portalPasswordHash;
+    patientRecord.portalAccessEnabled = true;
+    patientRecord.portalRegisteredAt = portalPatient.portalRegisteredAt || new Date();
+    patientRecord.email = portalPatient.email;
+    patientRecord.portalEmailVerified = portalPatient.portalEmailVerified || false;
+
+    // If portal patient has different ID, we need to merge or update
+    if (portalPatient.id !== patientRecord.id) {
+      // Update the portal patient to point to the actual patient record
+      // For now, we'll update the actual patient record with portal access
+      await patientRepository.save(patientRecord);
+
+      // Optionally delete the temporary portal patient record
+      // await patientRepository.delete(portalPatient.id);
+    } else {
+      await patientRepository.save(patientRecord);
+    }
+
+    return {
+      success: true,
+      message: 'Account linked successfully! You now have full access to your patient portal.',
+      patient: {
+        id: patientRecord.id,
+        patientNumber: patientRecord.patientNumber,
+        firstName: patientRecord.firstName,
+        lastName: patientRecord.lastName,
+        email: patientRecord.email,
+      },
+    };
+  }
 }
 

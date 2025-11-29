@@ -67,5 +67,16 @@ export class PatientPortalController {
     const patientId = req.user.sub;
     return this.patientAuthService.updatePatientProfile(patientId, updateData, req.tenantId);
   }
+
+  @Post('link-account')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link portal account to patient record', description: 'Verify identity and link portal account to patient record' })
+  @ApiResponse({ status: 200, description: 'Account linked successfully' })
+  @ApiResponse({ status: 400, description: 'Verification failed' })
+  async linkAccount(@Body() linkData: { patientNumber: string; dateOfBirth: string; nationalId?: string; phone?: string }, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientAuthService.linkAccount(patientId, linkData, req.tenantId);
+  }
 }
 
