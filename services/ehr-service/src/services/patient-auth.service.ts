@@ -168,15 +168,27 @@ export class PatientAuthService {
   async login(loginDto: PatientLoginDto, tenantId: string): Promise<any> {
     const patientRepository = await this.getPatientRepository(tenantId);
 
+    // Find patient by email (case-insensitive)
     const patient = await patientRepository.findOne({
-      where: { email: loginDto.email, portalAccessEnabled: true },
+      where: { portalAccessEnabled: true },
     });
 
+    // Try to find by email (case-insensitive search)
+    const allPatients = await patientRepository.find({
+      where: { portalAccessEnabled: true },
+    });
+
+    const patient = allPatients.find(
+      p => p.email && p.email.toLowerCase() === loginDto.email.toLowerCase()
+    );
+
     if (!patient) {
+      this.logger.warn(`Login attempt with email: ${loginDto.email} - Patient not found or portal not enabled`);
       throw new UnauthorizedException('Invalid credentials or portal access not enabled');
     }
 
     if (!patient.portalPasswordHash) {
+      this.logger.warn(`Login attempt for patient ${patient.patientNumber} - No password hash`);
       throw new UnauthorizedException('Portal access not set up. Please register first.');
     }
 
@@ -184,6 +196,7 @@ export class PatientAuthService {
     const isPasswordValid = await bcrypt.compare(loginDto.password, patient.portalPasswordHash);
 
     if (!isPasswordValid) {
+      this.logger.warn(`Login attempt for patient ${patient.patientNumber} - Invalid password`);
       throw new UnauthorizedException('Invalid credentials');
     }
 

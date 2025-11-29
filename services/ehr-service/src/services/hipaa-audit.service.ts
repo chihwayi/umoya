@@ -105,6 +105,19 @@ export class HipaaAuditService {
     entry: HipaaAuditLogEntry,
   ): Promise<void> {
     try {
+      // Skip logging if userId is 'anonymous' (not a valid UUID)
+      // This happens for unauthenticated requests
+      if (entry.userId === 'anonymous' || !entry.userId || entry.userId === 'undefined') {
+        return; // Silently skip anonymous/unauthenticated requests
+      }
+
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(entry.userId)) {
+        this.logger.debug(`Skipping audit log for non-UUID user: ${entry.userId}`);
+        return;
+      }
+
       await tenantDb.query(
         `
         INSERT INTO hipaa_audit_logs (
