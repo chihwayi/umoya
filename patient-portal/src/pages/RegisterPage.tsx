@@ -215,17 +215,26 @@ const RegisterPage: React.FC = () => {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Date of Birth <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">(DD/MM/YYYY)</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Calendar className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="date"
+                    type="text"
                     required
                     value={formData.dateOfBirth}
-                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                    onChange={(e) => {
+                      // Format input to dd/mm/yyyy
+                      let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+                      if (value.length >= 2) value = value.slice(0, 2) + '/' + value.slice(2);
+                      if (value.length >= 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
+                      setFormData({ ...formData, dateOfBirth: value });
+                    }}
                     className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm"
+                    placeholder="DD/MM/YYYY"
+                    maxLength={10}
                   />
                 </div>
                 <p className="mt-1.5 text-xs text-gray-500">Used to verify your identity when linking your account</p>
