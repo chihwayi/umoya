@@ -242,7 +242,7 @@ export class PatientPortalService {
       .createQueryBuilder('prescription')
       .leftJoinAndSelect('prescription.patient', 'patient')
       .leftJoinAndSelect('prescription.prescriber', 'prescriber')
-      .where('prescription.patientId = :patientId', { patientId });
+      .where('prescription.patient_id = :patientId', { patientId });
 
     if (filters?.activeOnly) {
       queryBuilder.andWhere('prescription.status = :status', { status: 'active' });
@@ -295,7 +295,7 @@ export class PatientPortalService {
       queryBuilder.andWhere('bill.billDate <= :endDate', { endDate: filters.endDate });
     }
     if (filters?.status) {
-      queryBuilder.andWhere('bill.paymentStatus = :status', { status: filters.status });
+      queryBuilder.andWhere('bill.status = :status', { status: filters.status });
     }
 
     const bills = await queryBuilder.orderBy('bill.billDate', 'DESC').getMany();

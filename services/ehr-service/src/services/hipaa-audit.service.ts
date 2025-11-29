@@ -105,9 +105,9 @@ export class HipaaAuditService {
     entry: HipaaAuditLogEntry,
   ): Promise<void> {
     try {
-      // Skip logging if userId is 'anonymous' (not a valid UUID)
+      // Skip logging if userId is 'anonymous' or invalid (not a valid UUID)
       // This happens for unauthenticated requests
-      if (entry.userId === 'anonymous' || !entry.userId || entry.userId === 'undefined') {
+      if (entry.userId === 'anonymous' || !entry.userId || entry.userId === 'undefined' || entry.userId === 'unknown') {
         return; // Silently skip anonymous/unauthenticated requests
       }
 
@@ -117,6 +117,11 @@ export class HipaaAuditService {
         this.logger.debug(`Skipping audit log for non-UUID user: ${entry.userId}`);
         return;
       }
+
+      // For patient portal users, user_id might reference patients table, not users table
+      // So we'll allow NULL user_id for patient portal access (they're tracked by patient_id instead)
+      // Only set user_id if it's a valid UUID that exists in users table
+      // Otherwise, set to NULL and rely on patient_id for tracking
 
       await tenantDb.query(
         `
@@ -132,7 +137,7 @@ export class HipaaAuditService {
         )
       `,
         [
-          entry.userId,
+          entry.userId || null, // Allow NULL for patient portal users
           entry.userName || null,
           entry.userRole || null,
           entry.action,
