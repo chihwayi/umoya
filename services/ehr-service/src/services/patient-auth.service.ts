@@ -168,12 +168,8 @@ export class PatientAuthService {
   async login(loginDto: PatientLoginDto, tenantId: string): Promise<any> {
     const patientRepository = await this.getPatientRepository(tenantId);
 
-    // Find patient by email (case-insensitive)
-    const patient = await patientRepository.findOne({
-      where: { portalAccessEnabled: true },
-    });
-
-    // Try to find by email (case-insensitive search)
+    // Find patient by email (case-insensitive search)
+    // TypeORM doesn't support case-insensitive search directly, so we'll get all and filter
     const allPatients = await patientRepository.find({
       where: { portalAccessEnabled: true },
     });
