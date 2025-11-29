@@ -306,7 +306,7 @@ export class PatientPortalService {
       billDate: bill.billDate,
       totalAmount: bill.totalAmount,
       status: bill.status,
-      paymentStatus: bill.paymentStatus,
+      paymentStatus: bill.status,
       items: bill.items || [],
       dueDate: bill.dueDate,
     }));
@@ -336,7 +336,7 @@ export class PatientPortalService {
       billDate: bill.billDate,
       totalAmount: bill.totalAmount,
       status: bill.status,
-      paymentStatus: bill.paymentStatus,
+      paymentStatus: bill.status,
       items: bill.items || [],
       dueDate: bill.dueDate,
       notes: bill.notes,
