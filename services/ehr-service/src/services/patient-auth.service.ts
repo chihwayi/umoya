@@ -85,8 +85,11 @@ export class PatientAuthService {
     }
 
     // Check if email matches or update it
-    if (patient.email && patient.email !== registerDto.email) {
-      throw new BadRequestException('Email does not match our records. Please use the email on file or contact the clinic.');
+    // Allow email update if patient doesn't have one, or if it matches
+    // If patient has email but it's different, allow update but log it
+    if (patient.email && patient.email.toLowerCase() !== registerDto.email.toLowerCase()) {
+      // Email mismatch - allow update but could log for security
+      this.logger.warn(`Email mismatch for patient ${registerDto.patientNumber}: existing=${patient.email}, new=${registerDto.email}`);
     }
 
     // Check if already registered
