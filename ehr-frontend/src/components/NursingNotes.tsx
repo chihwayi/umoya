@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   FileText, Save, X, Plus, Search, Filter, Clock, User,
-  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye, Brain
+  AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye, Brain, FileCode
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, clinicalTemplateApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import ClinicalTemplateLibrary from './ClinicalTemplateLibrary';
 
 interface Patient {
   id: string;
@@ -73,6 +74,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   const [outcomesConcepts, setOutcomesConcepts] = useState<SnomedConcept[]>([]);
   const [pendingOutcomeConcept, setPendingOutcomeConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
 
   // Apply preset behaviors
   useEffect(() => {
@@ -345,7 +347,17 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   // Simple form for quick notes
                   <>
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Quick Note</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-semibold text-slate-700">Quick Note</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplateLibrary(true)}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
+                        >
+                          <FileCode className="w-4 h-4" />
+                          Templates
+                        </button>
+                      </div>
                       <textarea
                         value={newNote.content}
                         onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
@@ -375,7 +387,17 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                     </div>
 
                     <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Note Content</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-semibold text-slate-700">Note Content</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplateLibrary(true)}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
+                        >
+                          <FileCode className="w-4 h-4" />
+                          Templates
+                        </button>
+                      </div>
                       <textarea
                         value={newNote.content}
                         onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
@@ -424,9 +446,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                           token={localStorage.getItem('ehr_token') || ''}
                           tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
                           label="SNOMED CT Observations (Optional)"
-                          placeholder="Search for observation concept..."
-                          context="condition"
-                          helperText="Add SNOMED CT concepts for structured coding"
+                          placeholder="Try: 'body temperature', 'blood pressure', 'heart rate', 'pain', 'wound', 'consciousness'..."
+                          context="observable"
+                          helperText="Search for specific observations. Examples: 'body temperature', 'blood pressure measurement', 'heart rate', 'respiratory rate', 'pain', 'wound', 'skin condition', 'consciousness level'."
                         />
                         {pendingObservationConcept && (
                           <button
@@ -479,9 +501,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                           token={localStorage.getItem('ehr_token') || ''}
                           tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
                           label="SNOMED CT Interventions (Optional)"
-                          placeholder="Search for intervention concept..."
+                          placeholder="Try: 'wound dressing', 'medication administration', 'patient education', 'monitoring'..."
                           context="procedure"
-                          helperText="Add SNOMED CT concepts for structured coding"
+                          helperText="Search for specific interventions. Examples: 'wound dressing', 'medication administration', 'patient education', 'vital signs monitoring', 'positioning', 'catheter care'."
                         />
                         {pendingInterventionConcept && (
                           <button
@@ -534,9 +556,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                           token={localStorage.getItem('ehr_token') || ''}
                           tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
                           label="SNOMED CT Outcomes (Optional)"
-                          placeholder="Search for outcome concept..."
+                          placeholder="Try: 'improved', 'stable', 'resolved', 'healing', 'recovery'..."
                           context="condition"
-                          helperText="Add SNOMED CT concepts for structured coding"
+                          helperText="Search for patient outcomes. Examples: 'improved', 'stable condition', 'resolved', 'healing', 'recovery', 'deteriorated', 'no change'."
                         />
                         {pendingOutcomeConcept && (
                           <button
@@ -946,6 +968,64 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
           </button>
         </div>
       )}
+
+      {/* Template Library Modal */}
+      <ClinicalTemplateLibrary
+      open={showTemplateLibrary}
+      onClose={() => setShowTemplateLibrary(false)}
+      onSelect={async (template) => {
+        try {
+          const token = localStorage.getItem('ehr_token') || '';
+          const tenantSlug = localStorage.getItem('ehr_tenant_slug') || '';
+          
+          if (!token || !tenantSlug) {
+            showError('Error', 'Authentication required');
+            return;
+          }
+
+          // Get patient context for variable substitution
+          const patientName = selectedPatient 
+            ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+            : 'Patient';
+          
+          const patientAge = selectedPatient?.dateOfBirth
+            ? Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+            : undefined;
+
+          const userData = localStorage.getItem('ehr_user');
+          const currentUser = userData ? JSON.parse(userData) : null;
+          const providerName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Provider';
+
+          // Apply template with context variables
+          const variables: Record<string, string> = {
+            patientName: patientName,
+            patientAge: patientAge?.toString() || '',
+            patientGender: selectedPatient?.gender || '',
+            date: new Date().toLocaleDateString(),
+            providerName: providerName,
+            observations: newNote.observations || '',
+            interventions: newNote.interventions || '',
+            outcomes: newNote.outcomes || '',
+          };
+
+          const response = await clinicalTemplateApi.applyTemplate(template.id, variables, token, tenantSlug);
+          
+          // Append template content to notes (or replace if empty)
+          if (newNote.content.trim()) {
+            setNewNote(prev => ({ ...prev, content: prev.content + '\n\n' + response.data.content }));
+          } else {
+            setNewNote(prev => ({ ...prev, content: response.data.content }));
+          }
+          
+          showSuccess('Success', 'Template applied successfully');
+        } catch (error: any) {
+          console.error('Failed to apply template:', error);
+          showError('Error', 'Failed to apply template');
+        }
+      }}
+      tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+      token={localStorage.getItem('ehr_token') || ''}
+    />
     </div>
   );
 };

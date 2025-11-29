@@ -311,7 +311,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
         setTemplates(data.templates || []);
       } catch (error) {
         console.error('Failed to load report templates', error);
-        showError('Failed to load report templates');
+        showError('Failed to load report templates', error instanceof Error ? error.message : 'Unknown error');
       } finally {
         setLoadingTemplates(false);
       }
@@ -329,7 +329,7 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
       findings: template.findings_template || prev.findings,
       impression: template.impression_template || prev.impression,
     }));
-    showSuccess('Template applied');
+    showSuccess('Template applied', 'sucess');
   };
 
   const handleTemplateChange = (templateId: string) => {
@@ -342,11 +342,11 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
 
   const ensureStudyContext = () => {
     if (!study?.id || !study?.imaging_order_id || !study?.patient_id) {
-      showError('Missing study context. Please reload the study.');
+      showError('Missing study context. Please reload the study.', 'Missing study context');
       return false;
     }
     if (!isAssignedRadiologist) {
-      showError('Only the assigned radiologist can modify this report.');
+      showError('Only the assigned radiologist can modify this report.', 'Not assigned radiologist');
       return false;
     }
     return true;
@@ -398,17 +398,17 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
 
       if (existingReport?.id) {
         await ehrApi.updateImagingReport(tenantSlug, token, existingReport.id, payload);
-        showSuccess('Report updated');
+        showSuccess('Report updated', 'success');
       } else {
         await ehrApi.createImagingReport(tenantSlug, token, payload);
-        showSuccess('Report drafted');
+        showSuccess('Report drafted', 'success');
       }
 
       if (onRefresh) await onRefresh();
     } catch (error: any) {
       console.error('Failed to save report', error);
       const message = error?.response?.data?.message || 'Failed to save report';
-      showError(message);
+      showError(message, 'error');
     } finally {
       setSaving(false);
     }
@@ -417,19 +417,19 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   const handleSignReport = async () => {
     if (!ensureStudyContext()) return;
     if (!existingReport?.id) {
-      showError('Save the report before signing.');
+      showError('Save the report before signing.', 'error');
       return;
     }
 
     setSigning(true);
     try {
       await ehrApi.signImagingReport(tenantSlug, token, existingReport.id);
-      showSuccess('Report signed and finalized');
+      showSuccess('Report signed and finalized', 'success');
       if (onRefresh) await onRefresh();
     } catch (error: any) {
       console.error('Failed to sign report', error);
       const message = error?.response?.data?.message || 'Failed to sign report';
-      showError(message);
+      showError(message, 'error');
     } finally {
       setSigning(false);
     }

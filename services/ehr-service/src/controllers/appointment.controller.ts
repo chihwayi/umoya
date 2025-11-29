@@ -17,7 +17,8 @@ export class AppointmentController {
   @ApiResponse({ status: 201, description: 'Appointment created successfully' })
   @ApiResponse({ status: 409, description: 'Appointment conflict detected' })
   create(@Body() createAppointmentDto: CreateAppointmentDto, @Req() req: RequestWithTenant) {
-    return this.appointmentService.create(createAppointmentDto, req.user.userId, req.tenantId);
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.appointmentService.create(createAppointmentDto, userId, req.tenantId);
   }
 
   @Get()
@@ -95,21 +96,47 @@ export class AppointmentController {
   @ApiResponse({ status: 201, description: 'Recurring appointments created successfully' })
   createRecurring(
     @Body() body: { appointment: CreateAppointmentDto; pattern: string; endDate: string },
-    @Req() req: RequestWithTenant
+    @Req() req: RequestWithTenant,
   ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.appointmentService.createRecurringAppointments(
       body.appointment,
       body.pattern,
       new Date(body.endDate),
-      req.tenantId
+      req.tenantId,
+      userId,
     );
   }
 
   @Get('calendar/:date')
-  @ApiOperation({ summary: 'Get calendar view', description: 'Get all appointments for calendar view on a specific date' })
+  @ApiOperation({ summary: 'Get calendar view', description: 'Get all appointments for calendar view (day/week/month)' })
   @ApiParam({ name: 'date', description: 'Date in YYYY-MM-DD format' })
-  getCalendarView(@Param('date') date: string, @Req() req: RequestWithTenant) {
-    return this.appointmentService.getCalendarView(date, req.tenantId);
+  @ApiQuery({ name: 'view', description: 'View type: day, week, or month', required: false })
+  getCalendarView(
+    @Param('date') date: string,
+    @Query('view') view: 'day' | 'week' | 'month' = 'day',
+    @Req() req: RequestWithTenant
+  ) {
+    return this.appointmentService.getCalendarView(date, view, req.tenantId);
+  }
+
+  @Get('calendar/month/:year/:month')
+  @ApiOperation({ summary: 'Get month view', description: 'Get all appointments for a specific month' })
+  @ApiParam({ name: 'year', description: 'Year (e.g., 2025)' })
+  @ApiParam({ name: 'month', description: 'Month (1-12)' })
+  getMonthView(
+    @Param('year') year: string,
+    @Param('month') month: string,
+    @Req() req: RequestWithTenant
+  ) {
+    return this.appointmentService.getMonthView(parseInt(year, 10), parseInt(month, 10), req.tenantId);
+  }
+
+  @Get('calendar/week/:startDate')
+  @ApiOperation({ summary: 'Get week view', description: 'Get all appointments for a week starting from the given date' })
+  @ApiParam({ name: 'startDate', description: 'Start date in YYYY-MM-DD format' })
+  getWeekView(@Param('startDate') startDate: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.getWeekView(startDate, req.tenantId);
   }
 
   @Put(':id/reschedule')

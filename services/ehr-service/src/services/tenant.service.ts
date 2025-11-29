@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
+import { Appointment } from '../entities/appointment.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
@@ -18,9 +19,30 @@ import { Problem } from '../entities/problem.entity';
 import { Allergy } from '../entities/allergy.entity';
 import { Drug } from '../entities/drug.entity';
 import { DrugInteraction } from '../entities/drug-interaction.entity';
+import {
+  PatientMedication,
+  MedicationAdherence,
+  MedicationReconciliationLog,
+} from '../entities/patient-medication.entity';
+import { ClinicalNoteTemplate } from '../entities/clinical-note-template.entity';
+import { PrescriptionTemplate } from '../entities/prescription-template.entity';
+import { AppointmentWaitlist } from '../entities/appointment-waitlist.entity';
+import { DiabetesRegistry } from '../entities/diabetes-registry.entity';
+import { DiabetesCareBundle } from '../entities/diabetes-care-bundle.entity';
+import { GlucoseMonitoring } from '../entities/glucose-monitoring.entity';
+import { CgmSummary } from '../entities/cgm-summary.entity';
+import { DiabetesMedication } from '../entities/diabetes-medication.entity';
+import { InsulinRegimen } from '../entities/insulin-regimen.entity';
+import { DiabetesComplicationScreening } from '../entities/diabetes-complication-screening.entity';
+import { DiabetesEducationSession } from '../entities/diabetes-education-session.entity';
+import { DiabetesAlert } from '../entities/diabetes-alert.entity';
+import { DiabetesDeviceIntegration } from '../entities/diabetes-device-integration.entity';
+import { DoctorAvailability } from '../entities/doctor-availability.entity';
+import { MedicalAidClaim } from '../entities/medical-aid-claim.entity';
 
 @Injectable()
 export class TenantService {
+  private readonly logger = new Logger(TenantService.name);
   private masterDb: DataSource;
   private tenantConnections = new Map<string, DataSource>();
 
@@ -52,7 +74,13 @@ export class TenantService {
       const result = await this.masterDb.query(tenantQuery, [tenantIdentifier]);
       
       if (!result || result.length === 0) {
-        console.error(`Tenant not found or inactive: ${tenantIdentifier}`);
+        this.logger.warn(`Tenant not found in registry: ${tenantIdentifier}. Attempting fallback connection.`);
+        const fallbackConnection = await this.tryFallbackTenantConnection(tenantIdentifier);
+        if (fallbackConnection) {
+          this.tenantConnections.set(tenantIdentifier, fallbackConnection);
+          return fallbackConnection;
+        }
+        this.logger.error(`Unable to resolve tenant "${tenantIdentifier}". Ensure the tenant exists and is active.`);
         return null;
       }
 
@@ -62,27 +90,14 @@ export class TenantService {
       if (this.tenantConnections.has(tenantId)) {
         return this.tenantConnections.get(tenantId);
       }
-
-      // Create new connection for tenant
-      const dataSource = new DataSource({
-        type: 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT) || 5432,
-        username: process.env.DB_USERNAME || 'medicore',
-        password: process.env.DB_PASSWORD || 'medicore_password',
-        database: databaseName,
-        entities: [User, Patient, AppointmentSimple, MedicalRecord, Prescription, LabOrder, Bill, Vitals, TriageAssessment, NursingNote, Order, Problem, Allergy, LabTest, LabOrderSet, CriticalResultAlert, Drug, DrugInteraction],
-        synchronize: false, // Schema already exists
-        logging: false,
-      });
-
-      await dataSource.initialize();
+      
+      const dataSource = await this.createTenantConnection(databaseName);
       this.tenantConnections.set(tenantId, dataSource);
       
-      console.log(`Connected to tenant database: ${databaseName}`);
+      this.logger.log(`Connected to tenant database: ${databaseName}`);
       return dataSource;
     } catch (error) {
-      console.error(`Failed to connect to tenant database: ${tenantIdentifier}`, error);
+      this.logger.error(`Failed to connect to tenant database: ${tenantIdentifier}`, error);
       return null;
     }
   }
@@ -102,8 +117,90 @@ export class TenantService {
       );
       return result || [];
     } catch (error) {
-      console.error('Failed to get active tenants:', error);
+      this.logger.error('Failed to get active tenants:', error);
       return [];
     }
+  }
+
+  private async createTenantConnection(databaseName: string) {
+    const dataSource = new DataSource({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USERNAME || 'medicore',
+      password: process.env.DB_PASSWORD || 'medicore_password',
+      database: databaseName,
+      entities: [
+        User,
+        Patient,
+        AppointmentSimple,
+        Appointment,
+        MedicalRecord,
+        Prescription,
+        LabOrder,
+        Bill,
+        Vitals,
+        TriageAssessment,
+        NursingNote,
+        Order,
+        Problem,
+        Allergy,
+        LabTest,
+        LabOrderSet,
+        CriticalResultAlert,
+        Drug,
+        DrugInteraction,
+        PatientMedication,
+        MedicationAdherence,
+        MedicationReconciliationLog,
+        ClinicalNoteTemplate,
+        PrescriptionTemplate,
+        AppointmentWaitlist,
+        DiabetesRegistry,
+        DiabetesCareBundle,
+        GlucoseMonitoring,
+        CgmSummary,
+        DiabetesMedication,
+        InsulinRegimen,
+        DiabetesComplicationScreening,
+        DiabetesEducationSession,
+        DiabetesAlert,
+               DiabetesDeviceIntegration,
+               DoctorAvailability,
+               MedicalAidClaim,
+             ],
+      synchronize: false,
+      logging: false,
+    });
+
+    await dataSource.initialize();
+    return dataSource;
+  }
+
+  private async tryFallbackTenantConnection(tenantIdentifier: string): Promise<DataSource | null> {
+    const normalized = tenantIdentifier.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const candidates = Array.from(
+      new Set([
+        tenantIdentifier,
+        normalized,
+        `tenant_${normalized}`,
+        `clinic_${normalized}`,
+        `clinic_${normalized}_db`,
+      ]),
+    );
+
+    for (const candidate of candidates) {
+      try {
+        const connection = await this.createTenantConnection(candidate);
+        this.logger.warn(
+          `Connected to fallback tenant database "${candidate}" for identifier "${tenantIdentifier}". Please register this tenant in the master database.`,
+        );
+        return connection;
+      } catch (error) {
+        this.logger.debug(`Fallback connection attempt failed for database "${candidate}": ${error?.message || error}`);
+      }
+    }
+
+    return null;
   }
 }

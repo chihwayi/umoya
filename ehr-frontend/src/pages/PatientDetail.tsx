@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
+import CurrentMedications from '../components/CurrentMedications';
+import MedicationTimeline from '../components/MedicationTimeline';
+import MedicationReconciliation from '../components/MedicationReconciliation';
 
 interface Patient {
   id: string;
@@ -97,6 +100,8 @@ const PatientDetail: React.FC = () => {
       </div>
     );
   }
+
+  const authToken = (typeof window !== 'undefined' && localStorage.getItem('ehr_token')) || '';
 
   return (
     <div className="p-6">
@@ -300,6 +305,25 @@ const PatientDetail: React.FC = () => {
             <span>Patient ID: {patient.id}</span>
           </div>
         </div>
+      </div>
+
+      {/* Current Medications */}
+      <div className="mt-6">
+        <CurrentMedications
+          patientId={patient.id}
+          tenantSlug={tenantSlug!}
+          token={authToken}
+        />
+      </div>
+
+      {/* Medication Timeline */}
+      <div className="mt-6">
+        <MedicationTimeline patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
+      </div>
+
+      {/* Medication Reconciliation */}
+      <div className="mt-6">
+        <MedicationReconciliation patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
       </div>
     </div>
   );

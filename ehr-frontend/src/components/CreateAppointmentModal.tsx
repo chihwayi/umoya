@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, User, FileText, Search, ChevronDown } from 'lucide-react';
+import { X, Calendar, Clock, User, FileText, Search, ChevronDown, Repeat } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, isValidDate } from '../utils/dateUtils';
@@ -26,7 +26,7 @@ interface CreateAppointmentModalProps {
 }
 
 const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose, onSuccess, preselectedPatient }) => {
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const [formData, setFormData] = useState({
     patientId: '',
     doctorId: '',
@@ -35,8 +35,6 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
     durationMinutes: 30,
     reason: '',
     notes: '',
-    priorityLevel: 'normal',
-    status: 'scheduled',
   });
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -44,6 +42,9 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringPattern, setRecurringPattern] = useState<'weekly' | 'monthly'>('weekly');
+  const [recurringEndDate, setRecurringEndDate] = useState('');
   
   // Patient search states
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
@@ -228,7 +229,23 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
 
       console.log('📤 Create appointment payload:', payload);
 
-      await ehrApi.createAppointment(payload, token, tenantSlug);
+      if (isRecurring) {
+        if (!recurringEndDate) {
+          showError('Validation Error', 'Please select an end date for recurring appointments');
+          return;
+        }
+        
+        const endDateApi = formatDateForAPI(recurringEndDate);
+        const [endYear, endMonth, endDay] = endDateApi.split('-').map(Number);
+        const endDateTime = new Date(endYear, endMonth - 1, endDay, 23, 59);
+        
+        const result = await ehrApi.createRecurringAppointments(payload, recurringPattern, endDateTime.toISOString(), token, tenantSlug);
+        const count = Array.isArray(result.data) ? result.data.length : 0;
+        showSuccess('Success', `Created ${count} recurring appointment${count !== 1 ? 's' : ''} successfully`);
+      } else {
+        await ehrApi.createAppointment(payload, token, tenantSlug);
+        showSuccess('Success', 'Appointment scheduled successfully');
+      }
 
       onSuccess();
     } catch (error: any) {
@@ -439,43 +456,6 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
             </div>
           </div>
 
-          {/* Priority and Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Priority Level
-              </label>
-              <select
-                name="priorityLevel"
-                value={formData.priorityLevel}
-                disabled
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-500 cursor-not-allowed"
-              >
-                <option value="normal">Normal</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">Advanced priorities (Low/High/Urgent) will be enabled once backend supports priority on create.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="scheduled">Scheduled</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="no-show">No Show</option>
-              </select>
-            </div>
-          </div>
-
           {/* Reason */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
@@ -508,6 +488,66 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
             />
           </div>
 
+          {/* Recurring Appointment Options */}
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="checkbox"
+                id="isRecurring"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="isRecurring" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                <Repeat className="h-4 w-4" />
+                Make this a recurring appointment
+              </label>
+            </div>
+
+            {isRecurring && (
+              <div className="ml-7 space-y-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Recurrence Pattern
+                    </label>
+                    <select
+                      value={recurringPattern}
+                      onChange={(e) => setRecurringPattern(e.target.value as 'weekly' | 'monthly')}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {recurringPattern === 'weekly' 
+                        ? 'Appointment will repeat every week' 
+                        : 'Appointment will repeat every month'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <DatePicker
+                      label="End Date (dd/mm/yyyy)"
+                      value={recurringEndDate}
+                      onChange={(val) => setRecurringEndDate(val)}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Last date for recurring appointments
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-100 border border-blue-300 rounded-lg p-3">
+                  <p className="text-xs text-blue-800">
+                    <strong>Note:</strong> All recurring appointments will be created with the same details (doctor, duration, type, etc.) 
+                    and will be scheduled on the same day of the week/month until the end date.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <button
@@ -520,9 +560,19 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {loading ? 'Creating...' : 'Schedule Appointment'}
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  {isRecurring ? 'Creating Recurring Appointments...' : 'Creating...'}
+                </>
+              ) : (
+                <>
+                  {isRecurring && <Repeat className="h-4 w-4" />}
+                  {isRecurring ? 'Schedule Recurring Appointments' : 'Schedule Appointment'}
+                </>
+              )}
             </button>
           </div>
         </form>

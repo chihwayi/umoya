@@ -41,10 +41,55 @@ export class VitalsService {
     };
   }
 
-  async getByPatient(patientId: string, tenantId: string): Promise<Vitals[]> {
+  async getByPatient(patientId: string, tenantId: string, limit = 100): Promise<Vitals[]> {
     const repo = await this.getRepository(tenantId);
-    return repo.find({ where: { patientId }, order: { recordedAt: 'DESC' } });
+    return repo.find({
+      where: { patientId },
+      order: { recordedAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async getPatientVitalTrends(patientId: string, tenantId: string, limit = 30) {
+    const vitals = await this.getByPatient(patientId, tenantId, limit);
+    const reverse = [...vitals].reverse();
+
+    const formatTrend = (mapper: (v: Vitals) => number | null) =>
+      reverse
+        .map((vital) => {
+          const value = mapper(vital);
+          if (value === null || typeof value === 'undefined' || Number.isNaN(value)) return null;
+          return {
+            timestamp: vital.recordedAt || vital.createdAt,
+            value: value,
+          };
+        })
+        .filter(Boolean);
+
+    return {
+      patientId,
+      count: vitals.length,
+      latest: vitals[0] || null,
+      trends: {
+        systolic: formatTrend((v) => {
+          if (v.bloodPressure && v.bloodPressure.includes('/')) {
+            return Number(v.bloodPressure.split('/')[0]);
+          }
+          return null;
+        }),
+        diastolic: formatTrend((v) => {
+          if (v.bloodPressure && v.bloodPressure.includes('/')) {
+            return Number(v.bloodPressure.split('/')[1]);
+          }
+          return null;
+        }),
+        heartRate: formatTrend((v) => v.heartRate ?? null),
+        temperature: formatTrend((v) => (typeof v.temperature === 'number' ? v.temperature : null)),
+        oxygenSaturation: formatTrend((v) => v.oxygenSaturation ?? null),
+        respiratoryRate: formatTrend((v) => v.respiratoryRate ?? null),
+        weight: formatTrend((v) => (typeof v.weight === 'number' ? v.weight : null)),
+        bmi: formatTrend((v) => (typeof v.bmi === 'number' ? v.bmi : null)),
+      },
+    };
   }
 }
-
-

@@ -13,6 +13,7 @@ import {
   Brain,
   Clock4,
   ClipboardList,
+  CheckCircle,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -79,7 +80,7 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
       setPostnatalVisits(postnatalRows);
     } catch (error) {
       console.error('Failed to load maternity data:', error);
-      showError('Failed to load maternity data');
+      showError('Failed to load maternity data', 'error');
     } finally {
       setLoading(false);
     }

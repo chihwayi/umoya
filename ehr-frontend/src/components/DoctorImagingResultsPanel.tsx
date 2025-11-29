@@ -310,7 +310,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
       );
     } catch (error) {
       console.error('Failed to load doctor imaging results', error);
-      showError('Failed to load imaging results');
+      showError('Failed to load imaging results', error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -328,13 +328,13 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
       await ehrApi.acknowledgeImagingReport(tenantSlug, token, ackTarget.report.id, {
         acknowledgment_notes: ackNotes || undefined,
       });
-      showSuccess('Report acknowledged');
+      showSuccess('Report acknowledged', 'The imaging report has been acknowledged successfully');
       setAckTarget(null);
       setAckNotes('');
       await loadResults();
     } catch (error) {
       console.error('Failed to acknowledge imaging report', error);
-      showError('Failed to acknowledge imaging report');
+      showError('Failed to acknowledge imaging report', error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setAckSubmitting(false);
     }

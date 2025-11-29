@@ -133,6 +133,10 @@ const NurseDashboard: React.FC = () => {
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [ltfuDays, setLtfuDays] = useState(90);
+  const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const resolveTenantSlug = () =>
+    tenantSlug || localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 
   const notifyPaymentBlocked = (appointment: Appointment, context: string) => {
     const financeDetails = buildFinanceDetails(appointment);
@@ -363,9 +367,13 @@ const NurseDashboard: React.FC = () => {
   const fetchAuthorizedOrders = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
-      if (!token) return;
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        console.warn('fetchAuthorizedOrders skipped - missing token or tenant slug');
+        return;
+      }
 
-      const response = await ehrApi.getAuthorizedOrders(token, tenantSlug!);
+      const response = await ehrApi.getAuthorizedOrders(token, activeTenant);
       setAuthorizedOrders(response.data.orders || []);
       console.log('🔍 NurseDashboard - Fetched authorized orders:', response.data.orders);
     } catch (error: any) {
@@ -383,12 +391,16 @@ const NurseDashboard: React.FC = () => {
   const fetchVitalsForAppointments = async (appointments: Appointment[]) => {
     try {
       const token = localStorage.getItem('ehr_token');
-      if (!token) return appointments;
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        console.warn('fetchVitalsForAppointments skipped - missing token or tenant slug');
+        return appointments;
+      }
 
       const appointmentsWithVitals = await Promise.all(
         appointments.map(async (appointment) => {
           try {
-            const vitalsResponse = await ehrApi.getVitals(appointment.patient.id, token, tenantSlug!);
+            const vitalsResponse = await ehrApi.getVitals(appointment.patient.id, token, activeTenant);
             const vitals = vitalsResponse.data.vitals || [];
             
             // Get the most recent vitals
@@ -419,7 +431,11 @@ const NurseDashboard: React.FC = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
-      if (!token) return;
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        console.warn('fetchTodayAppointments skipped - missing token or tenant slug');
+        return;
+      }
 
       const today = new Date();
       const todayString = today.toISOString().split('T')[0];
@@ -427,11 +443,7 @@ const NurseDashboard: React.FC = () => {
       console.log('🔍 Today object:', today);
       console.log('🔍 Today timezone offset:', today.getTimezoneOffset());
       
-      const response = await ehrApi.getAppointments(
-        token,
-        tenantSlug!,
-        { date: todayString }
-      );
+      const response = await ehrApi.getAppointments(token, activeTenant, { date: todayString });
       console.log('📅 Raw appointments response:', response.data);
       console.log('📊 Total appointments:', response.data.appointments?.length || 0);
 
@@ -456,8 +468,8 @@ const NurseDashboard: React.FC = () => {
           
           // Fetch appointments for yesterday and day before
           const [yesterdayResponse, dayBeforeResponse] = await Promise.all([
-            ehrApi.getAppointments(token, tenantSlug!, { date: yesterdayString }),
-            ehrApi.getAppointments(token, tenantSlug!, { date: dayBeforeString })
+            ehrApi.getAppointments(token, activeTenant, { date: yesterdayString }),
+            ehrApi.getAppointments(token, activeTenant, { date: dayBeforeString }),
           ]);
           
           const recentAppointments = [
@@ -596,8 +608,12 @@ const NurseDashboard: React.FC = () => {
   const fetchPatients = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
-      if (!token) return;
-      const resp = await ehrApi.getPatients(token, tenantSlug!);
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        console.warn('fetchPatients skipped - missing token or tenant slug');
+        return;
+      }
+      const resp = await ehrApi.getPatients(token, activeTenant);
       setPatients(resp.data.patients || []);
     } catch (e) {
       console.error('Error fetching patients:', e);
@@ -690,21 +706,33 @@ const NurseDashboard: React.FC = () => {
     return dates;
   };
 
-  const getAppointmentsForDate = (date: Date) => {
-    return appointments.filter(apt => {
+  const getAppointmentsForDate = (date: Date, appointmentsList: Appointment[] = appointments) => {
+    // Normalize dates to compare only year, month, day (ignore time and timezone)
+    const normalizeDate = (d: Date) => {
+      const normalized = new Date(d);
+      normalized.setHours(0, 0, 0, 0);
+      return normalized;
+    };
+    
+    const targetDate = normalizeDate(date);
+    const targetDateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    
+    return appointmentsList.filter(apt => {
       const aptDate = new Date(apt.appointmentDate);
-      return aptDate.toDateString() === date.toDateString();
+      const normalizedAptDate = normalizeDate(aptDate);
+      const aptDateStr = `${normalizedAptDate.getFullYear()}-${String(normalizedAptDate.getMonth() + 1).padStart(2, '0')}-${String(normalizedAptDate.getDate()).padStart(2, '0')}`;
+      return aptDateStr === targetDateStr;
     });
   };
 
   const getTypeColorClass = (type: string) => {
     const key = (type || '').toLowerCase();
-    if (key.includes('follow')) return 'from-purple-100 to-indigo-100 text-indigo-800';
-    if (key.includes('consult')) return 'from-blue-100 to-cyan-100 text-blue-800';
-    if (key.includes('triage')) return 'from-amber-100 to-yellow-100 text-amber-800';
-    if (key.includes('procedure')) return 'from-rose-100 to-pink-100 text-rose-800';
-    if (key.includes('med')) return 'from-emerald-100 to-teal-100 text-emerald-800';
-    return 'from-slate-100 to-slate-200 text-slate-700';
+    if (key.includes('follow')) return 'from-purple-100 to-indigo-100 text-indigo-800 bg-purple-100';
+    if (key.includes('consult')) return 'from-blue-100 to-cyan-100 text-blue-800 bg-blue-100';
+    if (key.includes('triage')) return 'from-amber-100 to-yellow-100 text-amber-800 bg-amber-100';
+    if (key.includes('procedure')) return 'from-rose-100 to-pink-100 text-rose-800 bg-rose-100';
+    if (key.includes('med')) return 'from-emerald-100 to-teal-100 text-emerald-800 bg-emerald-100';
+    return 'from-slate-100 to-slate-200 text-slate-700 bg-slate-100';
   };
 
   const handlePrev = () => {
@@ -737,12 +765,20 @@ const NurseDashboard: React.FC = () => {
       if (!draggingAppointmentId) return;
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
-      const apt = appointments.find(a => a.id === draggingAppointmentId);
+      
+      // Find appointment in either appointments or calendarAppointments
+      const apt = appointments.find(a => a.id === draggingAppointmentId) || 
+                  calendarAppointments.find(a => a.id === draggingAppointmentId);
       if (!apt) return;
+      
       const old = new Date(apt.appointmentDate);
       const newDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), old.getHours(), old.getMinutes());
       await ehrApi.updateAppointment(apt.id, { appointmentDate: newDate.toISOString() }, token, tenantSlug!);
+      
+      // Update both appointment lists
       setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, appointmentDate: newDate.toISOString() } : a));
+      setCalendarAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, appointmentDate: newDate.toISOString() } : a));
+      
       showSuccess('Rescheduled', 'Appointment moved successfully');
     } catch (e) {
       console.error('Reschedule error', e);
@@ -833,14 +869,14 @@ const NurseDashboard: React.FC = () => {
     );
   };
 
-  const renderWeekView = (appointments: Appointment[]) => {
+  const renderWeekView = (appointmentsList: Appointment[]) => {
     const refDate = calendarDate;
     const weekDates = getWeekDates(refDate);
     
     return (
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-2 bg-white">
         {weekDates.map((date, index) => {
-          const dayAppointments = getAppointmentsForDate(date);
+          const dayAppointments = getAppointmentsForDate(date, appointmentsList);
           const isToday = date.toDateString() === new Date().toDateString();
           
           return (
@@ -849,60 +885,18 @@ const NurseDashboard: React.FC = () => {
                 <div className="text-sm font-semibold">{date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                 <div className="text-lg font-bold">{date.getDate()}</div>
               </button>
-              <div className="p-2 min-h-[120px]">
-                {dayAppointments.map((apt) => (
-                  <div key={apt.id} draggable onDragStart={() => handleDragStart(apt.id)} className={`mb-2 p-2 bg-gradient-to-r ${getTypeColorClass(apt.appointmentType)} rounded text-xs`}>
-                    <div className="font-semibold truncate">{apt.patient.firstName} {apt.patient.lastName}</div>
-                    <div className="text-slate-700">
-                      {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="p-2 min-h-[120px] bg-white">
+                {dayAppointments.length === 0 ? (
+                  <div className="text-xs text-slate-400 text-center py-4 bg-white">No appointments</div>
+                ) : (
+                  dayAppointments.map((apt) => (
+                    <div key={apt.id} draggable onDragStart={() => handleDragStart(apt.id)} className={`mb-2 p-2 bg-gradient-to-r ${getTypeColorClass(apt.appointmentType || 'consultation')} rounded text-xs cursor-move hover:shadow-md transition-shadow`}>
+                      <div className="font-semibold truncate">{apt.patient.firstName} {apt.patient.lastName}</div>
+                      <div className="text-slate-700">
+                        {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderMonthView = (appointments: Appointment[]) => {
-    const today = new Date();
-    const monthDates = getMonthDates(calendarDate);
-    
-    return (
-      <div className="grid grid-cols-7 gap-1">
-        {/* Month header */}
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="p-3 text-center text-sm font-semibold text-slate-600 bg-slate-100 rounded">
-            {day}
-          </div>
-        ))}
-        
-        {/* Calendar days */}
-        {monthDates.map((date, index) => {
-          const dayAppointments = getAppointmentsForDate(date);
-          const isToday = date.toDateString() === today.toDateString();
-          const isCurrentMonth = date.getMonth() === calendarDate.getMonth();
-          
-          return (
-            <div key={index} className={`min-h-[100px] p-2 border border-slate-200 rounded ${isCurrentMonth ? 'bg-white' : 'bg-slate-50'}`} onDragOver={(e) => e.preventDefault()} onDrop={() => handleDayDrop(date)}>
-              <button onClick={() => handleDayClick(date)} className={`text-sm font-semibold mb-1 ${isToday ? 'text-blue-600 bg-blue-100 rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-700'}`}>
-                {date.getDate()}
-              </button>
-              <div className="space-y-1">
-                {dayAppointments.slice(0, 2).map((apt) => (
-                  <div key={apt.id} draggable onDragStart={() => handleDragStart(apt.id)} className={`text-xs p-1 bg-gradient-to-r ${getTypeColorClass(apt.appointmentType)} rounded truncate`}>
-                    <div className="font-medium">{apt.patient.firstName}</div>
-                    <div className="text-slate-700">
-                      {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                ))}
-                {dayAppointments.length > 2 && (
-                  <div className="text-xs text-slate-500 text-center">
-                    +{dayAppointments.length - 2} more
-                  </div>
+                  ))
                 )}
               </div>
             </div>
@@ -912,11 +906,203 @@ const NurseDashboard: React.FC = () => {
     );
   };
 
+  const renderMonthView = (appointmentsList: Appointment[]) => {
+    const today = new Date();
+    const monthDates = getMonthDates(calendarDate);
+    
+    return (
+      <div className="grid grid-cols-7 gap-1 bg-white">
+        {/* Month header */}
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+          <div key={day} className="p-3 text-center text-sm font-semibold text-slate-600 bg-slate-100 rounded">
+            {day}
+          </div>
+        ))}
+        
+        {/* Calendar days */}
+        {monthDates.map((date, index) => {
+          const dayAppointments = getAppointmentsForDate(date, appointmentsList);
+          const isToday = date.toDateString() === today.toDateString();
+          const isCurrentMonth = date.getMonth() === calendarDate.getMonth();
+          
+          return (
+            <div key={index} className={`min-h-[100px] p-2 border border-slate-200 rounded ${isCurrentMonth ? 'bg-white' : 'bg-slate-50'} hover:border-slate-300 transition-colors`} onDragOver={(e) => e.preventDefault()} onDrop={() => handleDayDrop(date)}>
+              <button onClick={() => handleDayClick(date)} className={`text-sm font-semibold mb-1 ${isToday ? 'text-blue-600 bg-blue-100 rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-700'}`}>
+                {date.getDate()}
+              </button>
+              <div className="space-y-1 bg-transparent">
+                {dayAppointments.length === 0 ? (
+                  <div className="text-xs text-slate-300 text-center py-1 bg-transparent">—</div>
+                ) : (
+                  <>
+                    {dayAppointments.slice(0, 2).map((apt) => (
+                      <div key={apt.id} draggable onDragStart={() => handleDragStart(apt.id)} className={`text-xs p-1 bg-gradient-to-r ${getTypeColorClass(apt.appointmentType || 'consultation')} rounded truncate cursor-move hover:shadow-sm transition-shadow`}>
+                        <div className="font-medium">{apt.patient.firstName}</div>
+                        <div className="text-slate-700">
+                          {new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
+                    {dayAppointments.length > 2 && (
+                      <div className="text-xs text-slate-500 text-center font-medium bg-transparent">
+                        +{dayAppointments.length - 2} more
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Enhanced calendar data fetching using new backend APIs
+  const fetchCalendarAppointments = async () => {
+    try {
+      setCalendarLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      let fetchedAppointments: Appointment[] = [];
+
+      if (calendarView === 'month') {
+        // Use enhanced month view API
+        const response = await ehrApi.getMonthView(
+          calendarDate.getFullYear(),
+          calendarDate.getMonth() + 1,
+          token,
+          tenantSlug!
+        );
+        console.log('📅 Month view API response:', response.data);
+        // Flatten appointmentsByDate into array and transform structure
+        const allAppointments: Appointment[] = [];
+        Object.values(response.data.appointmentsByDate || {}).forEach((dayAppointments: any) => {
+          dayAppointments.forEach((apt: any) => {
+            // Transform backend structure to frontend structure
+            // Backend sends: { patient: { name: "First Last", ... }, doctor: { name: "First Last", ... }, type, start, ... }
+            // Frontend expects: { patient: { firstName, lastName, ... }, doctor: { firstName, lastName, ... }, appointmentType, appointmentDate, ... }
+            const patientName = apt.patient?.name || '';
+            const doctorName = apt.doctor?.name || '';
+            const [patientFirstName = '', ...patientLastNameParts] = patientName.split(' ');
+            const [doctorFirstName = '', ...doctorLastNameParts] = doctorName.split(' ');
+            
+            const transformed: Appointment = {
+              id: apt.id,
+              appointmentDate: apt.start || apt.appointmentDate,
+              appointmentType: apt.type || apt.appointmentType || 'consultation',
+              durationMinutes: apt.durationMinutes || 30,
+              status: apt.status || 'scheduled',
+              reason: apt.reason || '',
+              notes: apt.notes || '',
+              priorityLevel: apt.priorityLevel || 'normal',
+              paymentStatus: apt.paymentStatus || null,
+              feeAmount: apt.feeAmount || null,
+              patient: {
+                id: apt.patient?.id || '',
+                firstName: apt.patient?.firstName || patientFirstName,
+                lastName: apt.patient?.lastName || patientLastNameParts.join(' ') || '',
+                patientNumber: apt.patient?.patientNumber || '',
+                phone: apt.patient?.phone || '',
+                email: apt.patient?.email || '',
+              },
+              doctor: {
+                id: apt.doctor?.id || '',
+                firstName: apt.doctor?.firstName || doctorFirstName,
+                lastName: apt.doctor?.lastName || doctorLastNameParts.join(' ') || '',
+              },
+              vitals: null,
+            };
+            allAppointments.push(transformed);
+          });
+        });
+        console.log('📅 Transformed appointments for month view:', allAppointments);
+        fetchedAppointments = allAppointments;
+      } else if (calendarView === 'week') {
+        // Use enhanced week view API
+        const weekStart = new Date(calendarDate);
+        const dayOfWeek = weekStart.getDay();
+        const diff = weekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        weekStart.setDate(diff);
+        const weekStartString = weekStart.toISOString().split('T')[0];
+        
+        const response = await ehrApi.getWeekView(weekStartString, token, tenantSlug!);
+        console.log('📅 Week view API response:', response.data);
+        // Flatten appointmentsByDay into array and transform structure
+        const allAppointments: Appointment[] = [];
+        Object.values(response.data.appointmentsByDay || {}).forEach((dayAppointments: any) => {
+          dayAppointments.forEach((apt: any) => {
+            // Transform backend structure to frontend structure
+            const patientName = apt.patient?.name || '';
+            const doctorName = apt.doctor?.name || '';
+            const [patientFirstName = '', ...patientLastNameParts] = patientName.split(' ');
+            const [doctorFirstName = '', ...doctorLastNameParts] = doctorName.split(' ');
+            
+            const transformed: Appointment = {
+              id: apt.id,
+              appointmentDate: apt.start || apt.appointmentDate,
+              appointmentType: apt.type || apt.appointmentType || 'consultation',
+              durationMinutes: apt.durationMinutes || 30,
+              status: apt.status || 'scheduled',
+              reason: apt.reason || '',
+              notes: apt.notes || '',
+              priorityLevel: apt.priorityLevel || 'normal',
+              paymentStatus: apt.paymentStatus || null,
+              feeAmount: apt.feeAmount || null,
+              patient: {
+                id: apt.patient?.id || '',
+                firstName: apt.patient?.firstName || patientFirstName,
+                lastName: apt.patient?.lastName || patientLastNameParts.join(' ') || '',
+                patientNumber: apt.patient?.patientNumber || '',
+                phone: apt.patient?.phone || '',
+                email: apt.patient?.email || '',
+              },
+              doctor: {
+                id: apt.doctor?.id || '',
+                firstName: apt.doctor?.firstName || doctorFirstName,
+                lastName: apt.doctor?.lastName || doctorLastNameParts.join(' ') || '',
+              },
+              vitals: null,
+            };
+            allAppointments.push(transformed);
+          });
+        });
+        console.log('📅 Transformed appointments for week view:', allAppointments);
+        fetchedAppointments = allAppointments;
+      } else {
+        // Day view - use existing API
+        const dateStr = calendarDate.toISOString().split('T')[0];
+        const response = await ehrApi.getAppointments(token, tenantSlug!, { date: dateStr });
+        fetchedAppointments = response.data.appointments || [];
+      }
+
+      // Fetch vitals for appointments
+      const appointmentsWithVitals = await fetchVitalsForAppointments(fetchedAppointments);
+      setCalendarAppointments(appointmentsWithVitals);
+    } catch (error) {
+      console.error('Error fetching calendar appointments:', error);
+      // Fallback to today's appointments
+      setCalendarAppointments(appointments);
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'calendar') {
+      fetchCalendarAppointments();
+    }
+  }, [calendarDate, calendarView, activeTab]);
+
   const renderCalendar = () => {
     const today = new Date();
-    const dayAppointments = getAppointmentsForDate(calendarDate);
+    // Use calendarAppointments for calendar view, appointments for day view
+    const appointmentsToDisplay = calendarView === 'day' ? appointments : calendarAppointments;
+    const dayAppointments = getAppointmentsForDate(calendarDate, appointmentsToDisplay);
     
-    console.log('📅 Calendar render - Total appointments:', appointments.length);
+    console.log('📅 Calendar render - View:', calendarView);
+    console.log('📅 Calendar render - Total appointments:', appointmentsToDisplay.length);
     console.log('📅 Calendar render - Selected day appointments:', dayAppointments.length);
 
     return (
@@ -925,16 +1111,26 @@ const NurseDashboard: React.FC = () => {
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200/50">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Today's Schedule</h2>
-              <p className="text-slate-600">{formatDateToDDMMYYYY(calendarDate)} • {dayAppointments.length} appointments</p>
+              <h2 className="text-2xl font-bold text-slate-900">
+                {calendarView === 'day' ? "Today's Schedule" : 
+                 calendarView === 'week' ? "Week View" : 
+                 "Month View"}
+              </h2>
+              <p className="text-slate-600">
+                {formatDateToDDMMYYYY(calendarDate)} • {dayAppointments.length} appointments
+                {calendarView !== 'day' && ` • ${appointmentsToDisplay.length} total in view`}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={fetchTodayAppointments}
-                disabled={loading}
+                onClick={() => {
+                  fetchTodayAppointments();
+                  fetchCalendarAppointments();
+                }}
+                disabled={loading || calendarLoading}
                 className="p-2 hover:bg-white/50 rounded-lg transition-all duration-200 disabled:opacity-50"
               >
-                <RefreshCw className={`w-5 h-5 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-5 h-5 text-slate-600 ${loading || calendarLoading ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>
@@ -991,9 +1187,14 @@ const NurseDashboard: React.FC = () => {
           </div>
 
           {/* Calendar Content */}
-          <div className="p-6">
-            {calendarView === 'day' && dayAppointments.length === 0 ? (
-              <div className="text-center py-12">
+          <div className="p-6 bg-white">
+            {calendarLoading ? (
+              <div className="text-center py-12 bg-white">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <p className="mt-2 text-slate-600">Loading calendar...</p>
+              </div>
+            ) : calendarView === 'day' && dayAppointments.length === 0 ? (
+              <div className="text-center py-12 bg-white">
                 <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-slate-600 mb-2">No appointments</h3>
                 <p className="text-slate-500">No appointments for this day.</p>
@@ -1004,9 +1205,9 @@ const NurseDashboard: React.FC = () => {
                   case 'day':
                     return renderDayView(dayAppointments);
                   case 'week':
-                    return renderWeekView(appointments);
+                    return renderWeekView(appointmentsToDisplay);
                   case 'month':
-                    return renderMonthView(appointments);
+                    return renderMonthView(appointmentsToDisplay);
                   default:
                     return renderDayView(dayAppointments);
                 }

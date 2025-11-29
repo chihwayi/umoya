@@ -159,7 +159,7 @@ export class FinanceService {
         financeStatus,
         payload.dueDate ? new Date(payload.dueDate) : null,
         payload.notes || null,
-        userId || null,
+        userId ?? payload.patientId ?? 'system',
       ],
     );
 
@@ -571,6 +571,461 @@ export class FinanceService {
       default:
         break;
     }
+  }
+
+  async getFinancialReports(
+    tenantDb: DataSource,
+    filters: {
+      reportType: 'revenue' | 'profit_loss' | 'cash_flow' | 'aging';
+      dateFrom?: string;
+      dateTo?: string;
+      groupBy?: 'day' | 'week' | 'month' | 'year';
+    },
+  ) {
+    const { reportType, dateFrom, dateTo, groupBy = 'month' } = filters;
+
+    switch (reportType) {
+      case 'revenue':
+        return this.getRevenueReport(tenantDb, dateFrom, dateTo, groupBy);
+      case 'profit_loss':
+        return this.getProfitLossReport(tenantDb, dateFrom, dateTo);
+      case 'cash_flow':
+        return this.getCashFlowReport(tenantDb, dateFrom, dateTo, groupBy);
+      case 'aging':
+        return this.getAgingReport(tenantDb);
+      default:
+        throw new BadRequestException('Invalid report type');
+    }
+  }
+
+  private async getRevenueReport(
+    tenantDb: DataSource,
+    dateFrom?: string,
+    dateTo?: string,
+    groupBy: string = 'month',
+  ) {
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      dateFilter += ` AND fp.received_at >= $${params.length}`;
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      dateFilter += ` AND fp.received_at <= $${params.length}`;
+    }
+
+    let groupByClause = '';
+    switch (groupBy) {
+      case 'day':
+        groupByClause = "DATE_TRUNC('day', fp.received_at)";
+        break;
+      case 'week':
+        groupByClause = "DATE_TRUNC('week', fp.received_at)";
+        break;
+      case 'month':
+        groupByClause = "DATE_TRUNC('month', fp.received_at)";
+        break;
+      case 'year':
+        groupByClause = "DATE_TRUNC('year', fp.received_at)";
+        break;
+    }
+
+    const revenue = await tenantDb.query(
+      `
+      SELECT 
+        ${groupByClause} AS period,
+        COALESCE(SUM(fp.amount), 0) AS total_revenue,
+        COUNT(DISTINCT fp.transaction_id) AS transaction_count,
+        COUNT(DISTINCT ft.patient_id) AS patient_count
+      FROM financial_payments fp
+      INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+      WHERE fp.status = 'completed' ${dateFilter}
+      GROUP BY ${groupByClause}
+      ORDER BY period DESC
+    `,
+      params,
+    );
+
+    const byModule = await tenantDb.query(
+      `
+      SELECT 
+        ft.source_module,
+        COALESCE(SUM(fp.amount), 0) AS total_revenue,
+        COUNT(DISTINCT fp.transaction_id) AS transaction_count
+      FROM financial_payments fp
+      INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+      WHERE fp.status = 'completed' ${dateFilter}
+      GROUP BY ft.source_module
+      ORDER BY total_revenue DESC
+    `,
+      params,
+    );
+
+    const byPayerType = await tenantDb.query(
+      `
+      SELECT 
+        ft.payer_type,
+        COALESCE(SUM(fp.amount), 0) AS total_revenue,
+        COUNT(DISTINCT fp.transaction_id) AS transaction_count
+      FROM financial_payments fp
+      INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+      WHERE fp.status = 'completed' ${dateFilter}
+      GROUP BY ft.payer_type
+      ORDER BY total_revenue DESC
+    `,
+      params,
+    );
+
+    return {
+      reportType: 'revenue',
+      period: { dateFrom, dateTo, groupBy },
+      summary: {
+        totalRevenue: revenue.reduce((sum, r) => sum + Number(r.total_revenue || 0), 0),
+        totalTransactions: revenue.reduce((sum, r) => sum + Number(r.transaction_count || 0), 0),
+        totalPatients: revenue.reduce((sum, r) => sum + Number(r.patient_count || 0), 0),
+      },
+      byPeriod: revenue,
+      byModule,
+      byPayerType,
+    };
+  }
+
+  private async getProfitLossReport(tenantDb: DataSource, dateFrom?: string, dateTo?: string) {
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      dateFilter += ` AND fp.received_at >= $${params.length}`;
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      dateFilter += ` AND fp.received_at <= $${params.length}`;
+    }
+
+    const revenue = await tenantDb.query(
+      `
+      SELECT COALESCE(SUM(fp.amount), 0) AS total_revenue
+      FROM financial_payments fp
+      WHERE fp.status = 'completed' ${dateFilter}
+    `,
+      params,
+    );
+
+    return {
+      reportType: 'profit_loss',
+      period: { dateFrom, dateTo },
+      revenue: {
+        total: Number(revenue[0]?.total_revenue || 0),
+        breakdown: await tenantDb.query(
+          `
+          SELECT 
+            ft.source_module,
+            COALESCE(SUM(fp.amount), 0) AS amount
+          FROM financial_payments fp
+          INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+          WHERE fp.status = 'completed' ${dateFilter}
+          GROUP BY ft.source_module
+        `,
+          params,
+        ),
+      },
+      expenses: {
+        total: 0,
+        note: 'Expense tracking not yet implemented',
+      },
+      profit: {
+        total: Number(revenue[0]?.total_revenue || 0),
+      },
+    };
+  }
+
+  private async getCashFlowReport(
+    tenantDb: DataSource,
+    dateFrom?: string,
+    dateTo?: string,
+    groupBy: string = 'month',
+  ) {
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      dateFilter += ` AND fp.received_at >= $${params.length}`;
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      dateFilter += ` AND fp.received_at <= $${params.length}`;
+    }
+
+    let groupByClause = '';
+    switch (groupBy) {
+      case 'day':
+        groupByClause = "DATE_TRUNC('day', fp.received_at)";
+        break;
+      case 'week':
+        groupByClause = "DATE_TRUNC('week', fp.received_at)";
+        break;
+      case 'month':
+        groupByClause = "DATE_TRUNC('month', fp.received_at)";
+        break;
+      case 'year':
+        groupByClause = "DATE_TRUNC('year', fp.received_at)";
+        break;
+    }
+
+    const cashFlow = await tenantDb.query(
+      `
+      SELECT 
+        ${groupByClause} AS period,
+        COALESCE(SUM(fp.amount), 0) AS cash_inflow
+      FROM financial_payments fp
+      WHERE fp.status = 'completed' ${dateFilter}
+      GROUP BY ${groupByClause}
+      ORDER BY period DESC
+    `,
+      params,
+    );
+
+    return {
+      reportType: 'cash_flow',
+      period: { dateFrom, dateTo, groupBy },
+      cashFlow,
+      summary: {
+        totalInflow: cashFlow.reduce((sum, cf) => sum + Number(cf.cash_inflow || 0), 0),
+        averageDailyInflow: cashFlow.length > 0
+          ? cashFlow.reduce((sum, cf) => sum + Number(cf.cash_inflow || 0), 0) / cashFlow.length
+          : 0,
+      },
+    };
+  }
+
+  private async getAgingReport(tenantDb: DataSource) {
+    const aging = await tenantDb.query(
+      `
+      SELECT
+        COALESCE(SUM(CASE WHEN payment_status != 'paid' AND (due_date IS NULL OR due_date >= CURRENT_DATE) THEN balance ELSE 0 END), 0) AS current,
+        COALESCE(SUM(CASE WHEN payment_status != 'paid' AND due_date < CURRENT_DATE AND due_date >= CURRENT_DATE - INTERVAL '30 days' THEN balance ELSE 0 END), 0) AS bucket_0_30,
+        COALESCE(SUM(CASE WHEN payment_status != 'paid' AND due_date < CURRENT_DATE - INTERVAL '30 days' AND due_date >= CURRENT_DATE - INTERVAL '60 days' THEN balance ELSE 0 END), 0) AS bucket_31_60,
+        COALESCE(SUM(CASE WHEN payment_status != 'paid' AND due_date < CURRENT_DATE - INTERVAL '60 days' AND due_date >= CURRENT_DATE - INTERVAL '90 days' THEN balance ELSE 0 END), 0) AS bucket_61_90,
+        COALESCE(SUM(CASE WHEN payment_status != 'paid' AND due_date < CURRENT_DATE - INTERVAL '90 days' THEN balance ELSE 0 END), 0) AS bucket_over_90
+      FROM financial_transactions
+    `,
+    );
+
+    const byPatient = await tenantDb.query(
+      `
+      SELECT
+        ft.patient_id,
+        p.first_name,
+        p.last_name,
+        p.patient_number,
+        COALESCE(SUM(ft.balance), 0) AS total_balance,
+        COUNT(*) AS transaction_count
+      FROM financial_transactions ft
+      LEFT JOIN patients p ON p.id = ft.patient_id
+      WHERE ft.payment_status != 'paid' AND ft.balance > 0
+      GROUP BY ft.patient_id, p.first_name, p.last_name, p.patient_number
+      HAVING COALESCE(SUM(ft.balance), 0) > 0
+      ORDER BY total_balance DESC
+      LIMIT 50
+    `,
+    );
+
+    return {
+      reportType: 'aging',
+      summary: aging[0] || {
+        current: 0,
+        bucket_0_30: 0,
+        bucket_31_60: 0,
+        bucket_61_90: 0,
+        bucket_over_90: 0,
+      },
+      byPatient,
+    };
+  }
+
+  async calculateTax(amount: number, taxRate: number = 0.15): Promise<{ taxAmount: number; totalWithTax: number }> {
+    // Default 15% VAT for Zimbabwe
+    const taxAmount = amount * taxRate;
+    const totalWithTax = amount + taxAmount;
+    return { taxAmount, totalWithTax };
+  }
+
+  async getTaxSummary(
+    tenantDb: DataSource,
+    dateFrom?: string,
+    dateTo?: string,
+  ): Promise<{ totalRevenue: number; totalTax: number; taxBreakdown: any[] }> {
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      dateFilter += ` AND fp.received_at >= $${params.length}`;
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      dateFilter += ` AND fp.received_at <= $${params.length}`;
+    }
+
+    const taxSummary = await tenantDb.query(
+      `
+      SELECT 
+        COALESCE(SUM(fli.tax), 0) AS total_tax,
+        COALESCE(SUM(fp.amount), 0) AS total_revenue
+      FROM financial_payments fp
+      INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+      LEFT JOIN financial_line_items fli ON fli.transaction_id = ft.id
+      WHERE fp.status = 'completed' ${dateFilter}
+    `,
+      params,
+    );
+
+    const taxBreakdown = await tenantDb.query(
+      `
+      SELECT 
+        DATE_TRUNC('month', fp.received_at) AS period,
+        COALESCE(SUM(fli.tax), 0) AS tax_amount,
+        COALESCE(SUM(fp.amount), 0) AS revenue_amount
+      FROM financial_payments fp
+      INNER JOIN financial_transactions ft ON ft.id = fp.transaction_id
+      LEFT JOIN financial_line_items fli ON fli.transaction_id = ft.id
+      WHERE fp.status = 'completed' ${dateFilter}
+      GROUP BY DATE_TRUNC('month', fp.received_at)
+      ORDER BY period DESC
+    `,
+      params,
+    );
+
+    return {
+      totalRevenue: Number(taxSummary[0]?.total_revenue || 0),
+      totalTax: Number(taxSummary[0]?.total_tax || 0),
+      taxBreakdown,
+    };
+  }
+
+  async reconcilePayments(
+    tenantDb: DataSource,
+    reconciliationData: {
+      transactionId: string;
+      reconciliationDate: string;
+      reconciledAmount: number;
+      bankReference?: string;
+      notes?: string;
+    },
+    userId: string,
+  ) {
+    await tenantDb.query('BEGIN');
+
+    try {
+      const [transaction] = await tenantDb.query(
+        `SELECT id, balance, amount FROM financial_transactions WHERE id = $1 FOR UPDATE`,
+        [reconciliationData.transactionId],
+      );
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      // The actual table structure uses different column names
+      await tenantDb.query(
+        `
+        INSERT INTO financial_reconciliation_logs (
+          transaction_id,
+          reconciliation_date,
+          amount,
+          payment_reference,
+          status,
+          metadata
+        )
+        VALUES ($1, $2, $3, $4, 'matched', $5)
+      `,
+        [
+          reconciliationData.transactionId,
+          new Date(reconciliationData.reconciliationDate),
+          reconciliationData.reconciledAmount,
+          reconciliationData.bankReference || null,
+          JSON.stringify({ notes: reconciliationData.notes || null, reconciled_by: userId }),
+        ],
+      );
+
+      await tenantDb.query('COMMIT');
+
+      return { success: true, message: 'Payment reconciled successfully' };
+    } catch (error) {
+      await tenantDb.query('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async getReconciliationReport(
+    tenantDb: DataSource,
+    dateFrom?: string,
+    dateTo?: string,
+  ) {
+    let dateFilter = '';
+    const params: any[] = [];
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      dateFilter += ` AND frl.reconciliation_date >= $${params.length}`;
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      dateFilter += ` AND frl.reconciliation_date <= $${params.length}`;
+    }
+
+    // Use try-catch to handle cases where financial_transactions might not exist or have different structure
+    let reconciled;
+    try {
+      reconciled = await tenantDb.query(
+        `
+        SELECT 
+          frl.*,
+          COALESCE(ft.transaction_number, '') as transaction_number,
+          COALESCE(ft.amount, 0) as transaction_amount,
+          COALESCE(p.first_name, '') as first_name,
+          COALESCE(p.last_name, '') as last_name,
+          COALESCE(p.patient_number, '') as patient_number
+        FROM financial_reconciliation_logs frl
+        LEFT JOIN financial_transactions ft ON ft.id = frl.transaction_id
+        LEFT JOIN patients p ON p.id = ft.patient_id
+        WHERE 1=1 ${dateFilter}
+        ORDER BY frl.reconciliation_date DESC
+      `,
+        params,
+      );
+    } catch (error) {
+      // If join fails, return just the reconciliation logs
+      reconciled = await tenantDb.query(
+        `
+        SELECT frl.*
+        FROM financial_reconciliation_logs frl
+        WHERE 1=1 ${dateFilter}
+        ORDER BY frl.reconciliation_date DESC
+      `,
+        params,
+      );
+    }
+
+    const summary = await tenantDb.query(
+      `
+      SELECT 
+        COUNT(*) AS total_reconciled,
+        COALESCE(SUM(frl.amount), 0) AS total_amount
+      FROM financial_reconciliation_logs frl
+      WHERE 1=1 ${dateFilter}
+    `,
+      params,
+    );
+
+    return {
+      summary: summary[0] || { total_reconciled: 0, total_amount: 0 },
+      reconciled,
+    };
   }
 }
 

@@ -66,6 +66,15 @@ export class Prescription {
   @Column({ name: 'medication_name_snomed_definition_status', type: 'varchar', length: 50, nullable: true })
   medicationNameSnomedDefinitionStatus?: string;
 
+  @Column({ name: 'medication_name_rxnorm_code', type: 'varchar', length: 50, nullable: true })
+  medicationNameRxnormCode?: string;
+
+  @Column({ name: 'medication_name_rxnorm_name', type: 'text', nullable: true })
+  medicationNameRxnormName?: string;
+
+  @Column({ name: 'medication_name_rxnorm_tty', type: 'varchar', length: 20, nullable: true })
+  medicationNameRxnormTty?: string;
+
   @Column({ nullable: true })
   genericName: string;
 

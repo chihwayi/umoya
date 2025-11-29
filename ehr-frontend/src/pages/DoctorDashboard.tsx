@@ -35,6 +35,7 @@ import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
 import DoctorImagingResultsPanel from '../components/DoctorImagingResultsPanel';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
+import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 
 interface Appointment {
   id: string;
@@ -147,6 +148,8 @@ const DoctorDashboard: React.FC = () => {
   const [showEnhancedLabOrderModal, setShowEnhancedLabOrderModal] = useState(false);
   const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
+  const [showAvailabilityManager, setShowAvailabilityManager] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
   const appointmentFee =
@@ -327,9 +330,6 @@ const DoctorDashboard: React.FC = () => {
       },
     ];
   }, [tenantSlug]);
-
-  // Get current user info
-  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Real-time updates
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -425,7 +425,7 @@ const DoctorDashboard: React.FC = () => {
       setImagingStudyDetails(data);
     } catch (error) {
       console.error('Failed to load imaging study', error);
-      showError('Failed to load imaging study');
+      showError('Failed to load imaging study', 'Unable to load imaging study.');
       setImagingStudyLoadError(true);
     } finally {
       setLoadingImagingStudy(false);
@@ -442,7 +442,7 @@ const DoctorDashboard: React.FC = () => {
       setImagingStudyDetails(data);
     } catch (error) {
       console.error('Failed to refresh imaging study', error);
-      showError('Failed to refresh imaging study');
+      showError('Failed to refresh imaging study', 'Unable to refresh imaging study.');
       setImagingStudyLoadError(true);
     } finally {
       setLoadingImagingStudy(false);
@@ -484,7 +484,6 @@ const DoctorDashboard: React.FC = () => {
       const patientData = {
         patientId: currentAppointment.patient.id,
         age: patientAge,
-        gender: currentAppointment.patient.gender,
         vitals: latestVitals ? {
           bloodPressure: latestVitals.bloodPressure,
           heartRate: latestVitals.heartRate,
@@ -1169,6 +1168,14 @@ const DoctorDashboard: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowAvailabilityManager(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  title="Manage Availability"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Availability
+                </button>
                 <RealtimeStatusIndicator
                   isConnected={!connectionError}
                   lastUpdate={lastUpdate}
@@ -2630,10 +2637,17 @@ const DoctorDashboard: React.FC = () => {
       {showResultComparisonModal && currentAppointment && (
         <AdvancedResultComparison
           patientId={currentAppointment.patient.id}
-          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
           tenantSlug={tenantSlug!}
           token={localStorage.getItem('ehr_token') || ''}
-          onClose={() => setShowResultComparisonModal(false)}
+        />
+      )}
+
+      {/* Doctor Availability Manager */}
+      {showAvailabilityManager && currentUser && tenantSlug && (
+        <DoctorAvailabilityManager
+          doctorId={currentUser.id}
+          tenantSlug={tenantSlug}
+          onClose={() => setShowAvailabilityManager(false)}
         />
       )}
     </div>

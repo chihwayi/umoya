@@ -31,6 +31,7 @@ interface HIVEnrollment {
   last_cd4_count?: number;
   last_cd4_date?: string;
   current_regimen?: string;
+  current_regimen_code?: string;
   arv_status?: string;
   eac_status?: any;
 }
@@ -51,6 +52,8 @@ interface ARVChangeRequest {
   status: string;
   eac_completed: boolean;
   eac_sessions_completed: number;
+  approved_by_name?: string;
+  approval_date?: string;
 }
 
 const HIVDoctorDashboard: React.FC = () => {
@@ -303,7 +306,7 @@ const HIVDoctorDashboard: React.FC = () => {
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(e => e.enrollment_status === statusFilter);
+      filtered = filtered.filter(e => e.status === statusFilter);
     }
 
     // Search filter
@@ -724,11 +727,20 @@ const HIVDoctorDashboard: React.FC = () => {
                                       console.log('Current regimen from visit:', latestVisit?.arv_regimen_name);
                                       console.log('Current regimen code from visit:', latestVisit?.arv_regimen_code);
                                       
-                                      setSelectedEnrollmentForChange({ 
+                                      const mergedEnrollment = {
                                         ...enrollment,
-                                        ...fullEnrollment, // Override with full details
-                                        current_regimen: latestVisit?.arv_regimen_name || fullEnrollment.current_regimen || enrollment.current_regimen,
-                                        current_regimen_code: latestVisit?.arv_regimen_code || fullEnrollment.current_regimen_code || enrollment.current_regimen_code
+                                        ...(fullEnrollment || {}),
+                                      };
+                                      setSelectedEnrollmentForChange({
+                                        ...mergedEnrollment,
+                                        current_regimen:
+                                          latestVisit?.arv_regimen_name ||
+                                          fullEnrollment?.current_regimen ||
+                                          enrollment.current_regimen,
+                                        current_regimen_code:
+                                          latestVisit?.arv_regimen_code ||
+                                          fullEnrollment?.current_regimen_code ||
+                                          enrollment.current_regimen_code,
                                       });
                                       setShowRegimenChangeModal(true);
                                       setRegimenChangeForm({
@@ -874,7 +886,12 @@ const HIVDoctorDashboard: React.FC = () => {
                     <div className="flex gap-3">
                       <button
                         onClick={() => {
-                          setSelectedEnrollment({ id: request.enrollment_id, ...request });
+                          const { id: requestId, ...restRequest } = request;
+                          setSelectedEnrollment({
+                            ...restRequest,
+                            change_request_id: requestId,
+                            id: request.enrollment_id,
+                          });
                           setShowPatientDetail(true);
                         }}
                         className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 font-semibold"
@@ -1742,7 +1759,8 @@ const HIVDoctorDashboard: React.FC = () => {
                       requestedRegimenName: '',
                       changeReasonCode: '',
                       changeReasonDetails: '',
-                      clinicalJustification: ''
+                      clinicalJustification: '',
+                      selectedLine: ''
                     });
                   }}
                   className="p-2 hover:bg-white/10 rounded-lg"
@@ -2038,7 +2056,8 @@ const HIVDoctorDashboard: React.FC = () => {
                         requestedRegimenName: '',
                         changeReasonCode: '',
                         changeReasonDetails: '',
-                        clinicalJustification: ''
+                        clinicalJustification: '',
+                        selectedLine: ''
                       });
                     }}
                     className="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-semibold"

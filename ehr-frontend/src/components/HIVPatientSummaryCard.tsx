@@ -17,9 +17,8 @@ const HIVPatientSummaryCard: React.FC<HIVPatientSummaryCardProps> = ({
   onClose
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
-
   const handlePrint = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef,
     pageStyle: `
       @page {
         size: A4;

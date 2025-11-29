@@ -3,6 +3,24 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { OncologyService } from '../services/oncology.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import {
+  CreateOncologyImagingFindingDto,
+  CreateOncologyPathologyDto,
+  CreateResponseAssessmentDto,
+  UpdateOncologyBiomarkersDto,
+  CalculateAssessmentRecistDto,
+  CreateSurvivorshipPlanDto,
+  UpdateSurvivorshipPlanDto,
+  EnrollClinicalTrialDto,
+  UpdateClinicalTrialStatusDto,
+  RecordTrialComplianceDto,
+  RecordPatientReportedOutcomeDto,
+  ProHistoryQueryDto,
+  RecordGenomicDataDto,
+  RecordFinancialToxicityDto,
+  OncologyAnalyticsQueryDto,
+  OncologyAlertCheckDto,
+} from '../dto/oncology.dto';
 
 @ApiTags('Oncology')
 @Controller('oncology')
@@ -132,6 +150,315 @@ export class OncologyController {
   ) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.oncologyService.recordAdverseEvent(req.tenantDb, caseId, body, userId);
+  }
+
+  @Post('cases/:id/imaging-findings')
+  @ApiOperation({ summary: 'Record imaging finding' })
+  async recordImagingFinding(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: CreateOncologyImagingFindingDto,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.oncologyService.recordImagingFinding(req.tenantDb, caseId, body, userId);
+  }
+
+  @Get('cases/:id/imaging-findings')
+  @ApiOperation({ summary: 'List imaging findings for a case' })
+  async listImagingFindings(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getImagingFindings(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/imaging-findings/timeline')
+  @ApiOperation({ summary: 'Get imaging timeline for tumor measurements' })
+  async imagingTimeline(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getImagingTimeline(req.tenantDb, caseId);
+  }
+
+  @Post('imaging-findings/:findingId/calculate-recist')
+  @ApiOperation({ summary: 'Calculate RECIST response for an imaging finding' })
+  async calculateRecist(
+    @Request() req: RequestWithTenant,
+    @Param('findingId') findingId: string,
+  ) {
+    return this.oncologyService.calculateRecistResponse(req.tenantDb, findingId);
+  }
+
+  @Post('cases/:id/response-assessments')
+  @ApiOperation({ summary: 'Record treatment response assessment' })
+  async createResponseAssessment(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: CreateResponseAssessmentDto,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.oncologyService.recordResponseAssessment(req.tenantDb, caseId, body, userId);
+  }
+
+  @Get('cases/:id/response-assessments')
+  @ApiOperation({ summary: 'List response assessments for a case' })
+  async listResponseAssessments(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getResponseHistory(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:caseId/response-assessments/:assessmentId/calculate-recist')
+  @ApiOperation({ summary: 'Calculate RECIST based on target lesion change' })
+  async calculateResponseRecist(
+    @Request() req: RequestWithTenant,
+    @Param('caseId') caseId: string,
+    @Param('assessmentId') assessmentId: string,
+    @Body() body: CalculateAssessmentRecistDto,
+  ) {
+    return this.oncologyService.calculateResponseAssessmentRecist(req.tenantDb, caseId, assessmentId, body);
+  }
+
+  @Get('cases/:id/best-response')
+  @ApiOperation({ summary: 'Get best overall response summary' })
+  async getBestResponse(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getBestOverallResponse(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/survival-metrics')
+  @ApiOperation({ summary: 'Get PFS/OS survival estimates' })
+  async getSurvivalMetrics(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getSurvivalMetrics(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:id/pathology')
+  @ApiOperation({ summary: 'Record pathology and biomarker data' })
+  async recordPathology(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: CreateOncologyPathologyDto,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.oncologyService.recordPathology(req.tenantDb, caseId, body, userId);
+  }
+
+  @Get('cases/:id/pathology')
+  @ApiOperation({ summary: 'Get latest pathology entry' })
+  async getPathology(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getPathology(req.tenantDb, caseId);
+  }
+
+  @Patch('pathology/:pathologyId/biomarkers')
+  @ApiOperation({ summary: 'Update biomarkers/genomics for a pathology record' })
+  async updateBiomarkers(
+    @Request() req: RequestWithTenant,
+    @Param('pathologyId') pathologyId: string,
+    @Body() body: UpdateOncologyBiomarkersDto,
+  ) {
+    return this.oncologyService.updatePathologyBiomarkers(req.tenantDb, pathologyId, body);
+  }
+
+  @Get('cases/:id/biomarkers')
+  @ApiOperation({ summary: 'Get biomarker history for a case' })
+  async biomarkerSummary(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getBiomarkerSummary(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:id/survivorship-plan')
+  @ApiOperation({ summary: 'Create or replace survivorship plan' })
+  async createSurvivorshipPlan(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: CreateSurvivorshipPlanDto,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.oncologyService.createSurvivorshipPlan(req.tenantDb, caseId, body, userId);
+  }
+
+  @Get('cases/:id/survivorship-plan')
+  @ApiOperation({ summary: 'Get survivorship plan' })
+  async getSurvivorshipPlan(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getSurvivorshipPlan(req.tenantDb, caseId);
+  }
+
+  @Patch('survivorship-plans/:planId')
+  @ApiOperation({ summary: 'Update survivorship plan' })
+  async updateSurvivorshipPlan(
+    @Request() req: RequestWithTenant,
+    @Param('planId') planId: string,
+    @Body() body: UpdateSurvivorshipPlanDto,
+  ) {
+    return this.oncologyService.updateSurvivorshipPlan(req.tenantDb, planId, body);
+  }
+
+  @Get('cases/:id/follow-ups/upcoming')
+  @ApiOperation({ summary: 'Upcoming survivorship follow-up events' })
+  async upcomingFollowUps(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getUpcomingFollowUps(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/survivorship-report')
+  @ApiOperation({ summary: 'Generate survivorship care report' })
+  async generateSurvivorshipReport(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.generateSurvivorshipReport(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:id/clinical-trials')
+  @ApiOperation({ summary: 'Enroll patient in a clinical trial' })
+  async enrollClinicalTrial(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: EnrollClinicalTrialDto,
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.oncologyService.enrollInTrial(req.tenantDb, caseId, body, userId);
+  }
+
+  @Get('cases/:id/clinical-trials')
+  @ApiOperation({ summary: 'List clinical trial enrollments for case' })
+  async listClinicalTrials(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getTrialHistory(req.tenantDb, caseId);
+  }
+
+  @Patch('clinical-trials/:trialId/status')
+  @ApiOperation({ summary: 'Update clinical trial status' })
+  async updateClinicalTrialStatus(
+    @Request() req: RequestWithTenant,
+    @Param('trialId') trialId: string,
+    @Body() body: UpdateClinicalTrialStatusDto,
+  ) {
+    return this.oncologyService.updateTrialStatus(req.tenantDb, trialId, body);
+  }
+
+  @Post('clinical-trials/:trialId/compliance')
+  @ApiOperation({ summary: 'Track trial protocol compliance' })
+  async trackTrialCompliance(
+    @Request() req: RequestWithTenant,
+    @Param('trialId') trialId: string,
+    @Body() body: RecordTrialComplianceDto,
+  ) {
+    return this.oncologyService.trackTrialCompliance(req.tenantDb, trialId, body);
+  }
+
+  @Get('clinical-trials/:trialId/endpoints')
+  @ApiOperation({ summary: 'Get clinical trial endpoints' })
+  async getTrialEndpoints(@Request() req: RequestWithTenant, @Param('trialId') trialId: string) {
+    return this.oncologyService.getTrialEndpoints(req.tenantDb, trialId);
+  }
+
+  @Post('cases/:id/pros')
+  @ApiOperation({ summary: 'Record patient reported outcome' })
+  async recordPro(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: RecordPatientReportedOutcomeDto,
+  ) {
+    return this.oncologyService.recordPatientReportedOutcome(req.tenantDb, caseId, body);
+  }
+
+  @Get('cases/:id/pros')
+  @ApiOperation({ summary: 'Get patient reported outcome history' })
+  async getProHistory(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Query() query: ProHistoryQueryDto,
+  ) {
+    return this.oncologyService.getProHistory(req.tenantDb, caseId, query);
+  }
+
+  @Get('cases/:id/pros/trends')
+  @ApiOperation({ summary: 'Get PRO trends over time' })
+  async getProTrends(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getProTrends(req.tenantDb, caseId);
+  }
+
+  @Post('pros/:proId/calculate-scores')
+  @ApiOperation({ summary: 'Calculate PRO score for record' })
+  async calculateProScore(@Request() req: RequestWithTenant, @Param('proId') proId: string) {
+    return this.oncologyService.calculateProScore(req.tenantDb, proId);
+  }
+
+  @Post('cases/:id/genomic-data')
+  @ApiOperation({ summary: 'Record genomic data for pathology' })
+  async recordGenomicData(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: RecordGenomicDataDto,
+  ) {
+    return this.oncologyService.recordGenomicData(req.tenantDb, caseId, body);
+  }
+
+  @Get('cases/:id/genomic-summary')
+  @ApiOperation({ summary: 'Get genomic summary for case' })
+  async getGenomicSummary(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getGenomicSummary(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/targeted-therapies')
+  @ApiOperation({ summary: 'Suggest targeted therapies based on genomics' })
+  async getTargetedTherapies(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.matchTargetedTherapies(req.tenantDb, caseId);
+  }
+
+  @Get('analytics/response-rates')
+  @ApiOperation({ summary: 'Aggregate response rates across cases' })
+  async getResponseAnalytics(@Request() req: RequestWithTenant, @Query() query: OncologyAnalyticsQueryDto) {
+    return this.oncologyService.getResponseRates(req.tenantDb, query);
+  }
+
+  @Get('analytics/survival')
+  @ApiOperation({ summary: 'Aggregate survival metrics across cases' })
+  async getSurvivalAnalytics(@Request() req: RequestWithTenant, @Query() query: OncologyAnalyticsQueryDto) {
+    return this.oncologyService.getSurvivalAnalytics(req.tenantDb, query);
+  }
+
+  @Get('analytics/biomarkers')
+  @ApiOperation({ summary: 'Aggregate biomarker/genomic analytics' })
+  async getBiomarkerAnalytics(@Request() req: RequestWithTenant, @Query() query: OncologyAnalyticsQueryDto) {
+    return this.oncologyService.getBiomarkerAnalytics(req.tenantDb, query);
+  }
+
+  @Get('analytics/trials')
+  @ApiOperation({ summary: 'Clinical trial analytics' })
+  async getTrialAnalytics(@Request() req: RequestWithTenant, @Query() query: OncologyAnalyticsQueryDto) {
+    return this.oncologyService.getTrialAnalytics(req.tenantDb, query);
+  }
+
+  @Post('cases/:id/financial-toxicity')
+  @ApiOperation({ summary: 'Record financial toxicity assessment' })
+  async recordFinancialToxicity(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: RecordFinancialToxicityDto,
+  ) {
+    return this.oncologyService.trackFinancialToxicity(req.tenantDb, caseId, body);
+  }
+
+  @Get('cases/:id/financial-summary')
+  @ApiOperation({ summary: 'Get financial toxicity summary' })
+  async getFinancialSummary(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getFinancialSummary(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/financial-assistance')
+  @ApiOperation({ summary: 'Get financial assistance programs' })
+  async getFinancialAssistance(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getFinancialAssistancePrograms(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/treatment-recommendations')
+  @ApiOperation({ summary: 'Generate treatment recommendations for a case' })
+  async getTreatmentRecommendations(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.generateTreatmentRecommendations(req.tenantDb, caseId);
+  }
+
+  @Get('cases/:id/surveillance-reminders')
+  @ApiOperation({ summary: 'Generate surveillance reminders' })
+  async getSurveillanceReminders(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.generateSurveillanceReminders(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:id/check-alerts')
+  @ApiOperation({ summary: 'Run CDS alert checks (response/surveillance/toxicity)' })
+  async checkCaseAlerts(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Body() body: OncologyAlertCheckDto,
+  ) {
+    return this.oncologyService.checkCaseAlerts(req.tenantDb, caseId, body);
   }
 
   @Get('tumor-board/meetings')

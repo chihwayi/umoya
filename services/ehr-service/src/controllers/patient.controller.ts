@@ -29,6 +29,47 @@ export class PatientController {
     return this.patientService.searchPatients(query, req.tenantDb);
   }
 
+  @Get('search/advanced')
+  @ApiOperation({ summary: 'Advanced patient search with filters' })
+  @ApiQuery({ name: 'searchTerm', required: false, type: String })
+  @ApiQuery({ name: 'gender', required: false, type: String })
+  @ApiQuery({ name: 'ageMin', required: false, type: Number })
+  @ApiQuery({ name: 'ageMax', required: false, type: Number })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String })
+  @ApiQuery({ name: 'dateTo', required: false, type: String })
+  @ApiQuery({ name: 'medicalAidProvider', required: false, type: String })
+  @ApiQuery({ name: 'city', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Advanced search results retrieved successfully' })
+  async advancedSearch(
+    @Query('searchTerm') searchTerm?: string,
+    @Query('gender') gender?: string,
+    @Query('ageMin') ageMin?: string,
+    @Query('ageMax') ageMax?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('medicalAidProvider') medicalAidProvider?: string,
+    @Query('city') city?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: RequestWithTenant
+  ) {
+    const filters: any = {};
+    if (searchTerm) filters.searchTerm = searchTerm;
+    if (gender) filters.gender = gender;
+    if (ageMin) filters.ageMin = parseInt(ageMin, 10);
+    if (ageMax) filters.ageMax = parseInt(ageMax, 10);
+    if (dateFrom) filters.dateFrom = new Date(dateFrom);
+    if (dateTo) filters.dateTo = new Date(dateTo);
+    if (medicalAidProvider) filters.medicalAidProvider = medicalAidProvider;
+    if (city) filters.city = city;
+    if (page) filters.page = parseInt(page, 10);
+    if (limit) filters.limit = parseInt(limit, 10);
+
+    return this.patientService.advancedSearch(filters, req!.tenantDb);
+  }
+
   @Get('stats')
   async getPatientStats() {
     return {

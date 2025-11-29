@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Bill } from '../entities/billing.entity';
+import { Bill, BillStatus } from '../entities/billing.entity';
 
 @Injectable()
 export class PaymentsService {
@@ -55,9 +55,8 @@ export class PaymentsService {
 
     // Update bill status
     const billRepo = tenantDb.getRepository(Bill);
-    await billRepo.update(billId, { 
-      paymentMethod: 'EcoCash',
-      status: 'pending'
+    await billRepo.update(billId, {
+      status: BillStatus.PENDING,
     });
 
     return ecocashResponse;
@@ -85,9 +84,8 @@ export class PaymentsService {
 
     // Update bill status
     const billRepo = tenantDb.getRepository(Bill);
-    await billRepo.update(billId, { 
-      paymentMethod: 'OneMoney',
-      status: 'pending'
+    await billRepo.update(billId, {
+      status: BillStatus.PENDING,
     });
 
     return onemoneyResponse;

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
-import { PAYMENT_STATUS } from '../constants/payment-status';
+import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
 
 interface CardiologyFilters {
@@ -229,7 +229,7 @@ export class CardiologyService {
     const feeAmountValue = Number.isFinite(feeValue) && feeValue > 0 ? feeValue : 0;
 
     let financeTransactionId: string | null = null;
-    let paymentStatus: PAYMENT_STATUS = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    let paymentStatus: PaymentStatus = PAYMENT_STATUS.PAYMENT_CONFIRMED;
     let careStatus: string = care_status || 'scheduled';
 
     if (feeAmountValue > 0) {

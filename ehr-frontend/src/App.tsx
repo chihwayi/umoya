@@ -21,12 +21,17 @@ import HIVDoctorDashboard from './pages/HIVDoctorDashboard';
 import MaternityDoctorDashboard from './pages/MaternityDoctorDashboard';
 import RadiologistDashboard from './pages/RadiologistDashboard';
 import NurseDashboard from './pages/NurseDashboard';
+import TechnologistImagingDashboard from './pages/TechnologistImagingDashboard';
 import NursePatientSummary from './pages/NursePatientSummary';
 import LabDashboard from './pages/LabDashboard';
 import OncologyDashboard from './pages/OncologyDashboard';
 import OphthalmologyDashboard from './pages/OphthalmologyDashboard';
 import AccountsDashboard from './pages/AccountsDashboard';
 import CardiologyDashboard from './pages/CardiologyDashboard';
+import DiabetesManagementDashboard from './pages/DiabetesManagementDashboard';
+import PharmacyDashboard from './pages/PharmacyDashboard';
+import BillingDashboard from './pages/BillingDashboard';
+import ClaimsDashboard from './pages/ClaimsDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -68,7 +73,7 @@ function App() {
   return (
     <NotificationProvider>
       <AutoLogoutProvider>
-        <Router>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/" element={<TenantDirectory />} />
             <Route path="/:tenantSlug" element={<TenantRedirect />} />
@@ -153,6 +158,14 @@ function App() {
               }
             />
             <Route
+              path="/ehr/:tenantSlug/diabetes"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'technologist']}>
+                  <DiabetesManagementDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="/ehr/:tenantSlug/doctor/oncology"
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
@@ -198,6 +211,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['nurse']}>
                   <NurseDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/technologist/imaging"
+              element={
+                <RoleProtectedRoute allowedRoles={['technologist']}>
+                  <TechnologistImagingDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -279,6 +300,30 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['accounts']}>
                   <AccountsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/pharmacy"
+              element={
+                <RoleProtectedRoute allowedRoles={['pharmacist', 'pharmacy_tech', 'pharmacy', 'doctor', 'nurse']}>
+                  <PharmacyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/billing"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']}>
+                  <BillingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/claims"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'receptionist', 'doctor']}>
+                  <ClaimsDashboard />
                 </RoleProtectedRoute>
               }
             />

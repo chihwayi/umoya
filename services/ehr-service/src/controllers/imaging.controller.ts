@@ -3,10 +3,12 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ImagingService } from '../services/imaging.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { Roles } from '../decorators/roles.decorator';
+import { RolesGuard } from '../guards/roles.guard';
 
 @ApiTags('Radiology & Medical Imaging')
 @Controller('imaging')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ImagingController {
   constructor(private readonly imagingService: ImagingService) {}
@@ -56,6 +58,7 @@ export class ImagingController {
   @Get('orders')
   @ApiOperation({ summary: 'Get imaging orders' })
   @ApiResponse({ status: 200, description: 'List of imaging orders' })
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getOrders(
     @Request() req: RequestWithTenant,
     @Query('status') status?: string,
@@ -67,6 +70,7 @@ export class ImagingController {
   @Get('orders/:id')
   @ApiOperation({ summary: 'Get order details' })
   @ApiResponse({ status: 200, description: 'Order details' })
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getOrderById(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -77,6 +81,7 @@ export class ImagingController {
   @Get('orders/patient/:patientId')
   @ApiOperation({ summary: 'Get patient imaging orders' })
   @ApiResponse({ status: 200, description: 'Patient imaging orders' })
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getPatientOrders(
     @Request() req: RequestWithTenant,
     @Param('patientId') patientId: string,
@@ -87,6 +92,7 @@ export class ImagingController {
   @Patch('orders/:id/schedule')
   @ApiOperation({ summary: 'Schedule imaging order' })
   @ApiResponse({ status: 200, description: 'Order scheduled successfully' })
+  @Roles('technologist', 'radiologist', 'admin')
   async scheduleOrder(
     @Request() req: RequestWithTenant,
     @Param('id') orderId: string,
@@ -98,6 +104,7 @@ export class ImagingController {
   @Patch('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel imaging order' })
   @ApiResponse({ status: 200, description: 'Order cancelled successfully' })
+  @Roles('doctor', 'radiologist', 'admin')
   async cancelOrder(
     @Request() req: RequestWithTenant,
     @Param('id') orderId: string,
@@ -112,6 +119,7 @@ export class ImagingController {
   @Post('studies')
   @ApiOperation({ summary: 'Create study from order' })
   @ApiResponse({ status: 201, description: 'Study created successfully' })
+  @Roles('technologist', 'radiologist', 'admin')
   async createStudy(
     @Request() req: RequestWithTenant,
     @Body() studyData: any,
@@ -123,6 +131,8 @@ export class ImagingController {
   @Get('studies')
   @ApiOperation({ summary: 'Get imaging studies (worklist)' })
   @ApiResponse({ status: 200, description: 'List of imaging studies' })
+  @Roles('radiologist', 'admin')
+  @Roles('radiologist', 'technologist', 'admin')
   async getStudies(
     @Request() req: RequestWithTenant,
     @Query('status') status?: string,
@@ -135,6 +145,8 @@ export class ImagingController {
   @Get('studies/:id')
   @ApiOperation({ summary: 'Get study details with images' })
   @ApiResponse({ status: 200, description: 'Study details' })
+  @Roles('radiologist', 'doctor', 'admin')
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getStudyById(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -145,6 +157,7 @@ export class ImagingController {
   @Patch('studies/:id/assign')
   @ApiOperation({ summary: 'Assign radiologist to study' })
   @ApiResponse({ status: 200, description: 'Radiologist assigned successfully' })
+  @Roles('radiologist', 'admin')
   async assignRadiologist(
     @Request() req: RequestWithTenant,
     @Param('id') studyId: string,
@@ -156,18 +169,22 @@ export class ImagingController {
   @Post('studies/:id/images')
   @ApiOperation({ summary: 'Upload image to study' })
   @ApiResponse({ status: 201, description: 'Image uploaded successfully' })
+  @Roles('radiologist', 'technologist', 'admin')
+  @Roles('radiologist', 'technologist', 'admin')
   async uploadImage(
     @Request() req: RequestWithTenant,
     @Param('id') studyId: string,
     @Body() imageData: any,
   ) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
-    return this.imagingService.uploadImage(req.tenantDb, studyId, imageData, userId);
+    return this.imagingService.uploadImage(req.tenantDb, studyId, imageData, userId, req.tenantId);
   }
 
   @Get('studies/:id/images')
   @ApiOperation({ summary: 'Get study images' })
   @ApiResponse({ status: 200, description: 'Study images' })
+  @Roles('radiologist', 'doctor', 'admin')
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getStudyImages(
     @Request() req: RequestWithTenant,
     @Param('id') studyId: string,
@@ -178,6 +195,7 @@ export class ImagingController {
   @Delete('studies/:studyId/images/:imageId')
   @ApiOperation({ summary: 'Delete image' })
   @ApiResponse({ status: 200, description: 'Image deleted successfully' })
+  @Roles('radiologist', 'admin')
   async deleteImage(
     @Request() req: RequestWithTenant,
     @Param('studyId') studyId: string,
@@ -191,6 +209,7 @@ export class ImagingController {
   @Post('reports')
   @ApiOperation({ summary: 'Create imaging report (draft)' })
   @ApiResponse({ status: 201, description: 'Report created successfully' })
+  @Roles('radiologist', 'admin')
   async createReport(
     @Request() req: RequestWithTenant,
     @Body() reportData: any,
@@ -202,6 +221,7 @@ export class ImagingController {
   @Get('reports/templates')
   @ApiOperation({ summary: 'Get report templates' })
   @ApiResponse({ status: 200, description: 'Report templates' })
+  @Roles('radiologist', 'admin')
   async getReportTemplates(
     @Request() req: RequestWithTenant,
     @Query('modality') modalityId?: string,
@@ -213,6 +233,8 @@ export class ImagingController {
   @Get('reports/:id')
   @ApiOperation({ summary: 'Get report' })
   @ApiResponse({ status: 200, description: 'Report details' })
+  @Roles('radiologist', 'doctor', 'admin')
+  @Roles('radiologist', 'doctor', 'admin')
   async getReportById(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -223,6 +245,7 @@ export class ImagingController {
   @Get('reports/study/:studyId')
   @ApiOperation({ summary: 'Get report by study ID' })
   @ApiResponse({ status: 200, description: 'Report details' })
+  @Roles('radiologist', 'doctor', 'admin')
   async getReportByStudyId(
     @Request() req: RequestWithTenant,
     @Param('studyId') studyId: string,
@@ -233,6 +256,7 @@ export class ImagingController {
   @Patch('reports/:id')
   @ApiOperation({ summary: 'Update report' })
   @ApiResponse({ status: 200, description: 'Report updated successfully' })
+  @Roles('radiologist', 'admin')
   async updateReport(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -244,6 +268,7 @@ export class ImagingController {
   @Post('reports/:id/sign')
   @ApiOperation({ summary: 'Sign and finalize report' })
   @ApiResponse({ status: 200, description: 'Report signed successfully' })
+  @Roles('radiologist', 'admin')
   async signReport(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -255,6 +280,7 @@ export class ImagingController {
   @Post('reports/:id/amend')
   @ApiOperation({ summary: 'Amend signed report' })
   @ApiResponse({ status: 200, description: 'Report amended successfully' })
+  @Roles('radiologist', 'admin')
   async amendReport(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -269,6 +295,7 @@ export class ImagingController {
   @Post('images/:imageId/annotations')
   @ApiOperation({ summary: 'Add annotation to image' })
   @ApiResponse({ status: 201, description: 'Annotation added successfully' })
+  @Roles('radiologist', 'admin')
   async addAnnotation(
     @Request() req: RequestWithTenant,
     @Param('imageId') imageId: string,
@@ -281,6 +308,8 @@ export class ImagingController {
   @Get('images/:imageId/annotations')
   @ApiOperation({ summary: 'Get image annotations' })
   @ApiResponse({ status: 200, description: 'Image annotations' })
+  @Roles('radiologist', 'doctor', 'admin')
+  @Roles('radiologist', 'technologist', 'doctor', 'admin')
   async getImageAnnotations(
     @Request() req: RequestWithTenant,
     @Param('imageId') imageId: string,
@@ -293,6 +322,7 @@ export class ImagingController {
   @Get('doctor/results')
   @ApiOperation({ summary: 'Get imaging results for ordering doctor' })
   @ApiResponse({ status: 200, description: 'Doctor imaging results' })
+  @Roles('doctor', 'admin')
   async getDoctorResults(
     @Request() req: RequestWithTenant,
     @Query('status') status?: string,
@@ -305,6 +335,7 @@ export class ImagingController {
   @Post('reports/:id/acknowledge')
   @ApiOperation({ summary: 'Acknowledge imaging report as ordering doctor' })
   @ApiResponse({ status: 200, description: 'Report acknowledged successfully' })
+  @Roles('doctor', 'admin')
   async acknowledgeReport(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -319,6 +350,8 @@ export class ImagingController {
   @Get('worklist')
   @ApiOperation({ summary: 'Get radiologist worklist (unreported studies)' })
   @ApiResponse({ status: 200, description: 'Radiologist worklist' })
+  @Roles('radiologist', 'admin')
+  @Roles('radiologist', 'technologist', 'admin')
   async getRadiologistWorklist(@Request() req: RequestWithTenant) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.getRadiologistWorklist(req.tenantDb, userId);
@@ -327,6 +360,7 @@ export class ImagingController {
   @Get('worklist/my-studies')
   @ApiOperation({ summary: 'Get studies assigned to current radiologist' })
   @ApiResponse({ status: 200, description: 'Assigned studies' })
+  @Roles('radiologist', 'admin')
   async getMyStudies(@Request() req: RequestWithTenant) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.imagingService.getMyStudies(req.tenantDb, userId);
@@ -337,8 +371,23 @@ export class ImagingController {
   @Get('stats/summary')
   @ApiOperation({ summary: 'Get imaging statistics' })
   @ApiResponse({ status: 200, description: 'Imaging statistics' })
+  @Roles('radiologist', 'admin')
+  @Roles('radiologist', 'technologist', 'admin')
   async getImagingStats(@Request() req: RequestWithTenant) {
     return this.imagingService.getImagingStats(req.tenantDb);
+  }
+
+  @Patch('studies/:id/complete')
+  @ApiOperation({ summary: 'Mark study as completed and ready for reporting' })
+  @ApiResponse({ status: 200, description: 'Study marked as completed' })
+  @Roles('technologist', 'radiologist', 'admin')
+  async completeStudy(
+    @Request() req: RequestWithTenant,
+    @Param('id') studyId: string,
+    @Body() body: { completion_notes?: string },
+  ) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.imagingService.completeStudy(req.tenantDb, studyId, userId, body?.completion_notes);
   }
 }
 

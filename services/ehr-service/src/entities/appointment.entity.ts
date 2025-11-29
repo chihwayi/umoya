@@ -72,9 +72,6 @@ export class Appointment {
   @Column({ name: 'cancellation_reason', nullable: true })
   cancellationReason: string;
 
-  @Column({ name: 'patient_instructions', type: 'text', nullable: true })
-  patientInstructions: string;
-
   @Column({ name: 'preparation_notes', type: 'text', nullable: true })
   preparationNotes: string;
 

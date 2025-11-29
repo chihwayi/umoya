@@ -139,13 +139,14 @@ const riskBadge = (risk: string) => (
   </span>
 );
 
-const SectionCard: React.FC<{ title: string; icon?: React.ReactNode; actions?: React.ReactNode; className?: string }> = ({
-  title,
-  icon,
-  actions,
-  children,
-  className = '',
-}) => (
+type SectionCardProps = React.PropsWithChildren<{
+  title: string;
+  icon?: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+}>;
+
+const SectionCard = ({ title, icon, actions, className = '', children }: SectionCardProps) => (
   <div className={`bg-white border border-slate-200 rounded-xl shadow-sm ${className}`}>
     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
       <div className="flex items-center gap-3">
@@ -473,7 +474,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       setEnrollment(res.data);
     } catch (error) {
       console.error('Failed to load maternity enrollment', error);
-      showError('Unable to load maternity record. Please retry.');
+      showError('Unable to load maternity record. Please retry.', 'error');
     } finally {
       setLoading(false);
     }
@@ -508,7 +509,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     if (!enrollment) return;
 
     if (!ancForm.visit_date) {
-      showError('Visit date is required.');
+      showError('Visit date is required.', 'Please provide the visit date before saving.');
       return;
     }
 
@@ -550,7 +551,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       };
 
       await ehrApi.createANCVisit(tenantSlug, token, payload);
-      showSuccess(`ANC visit #${nextVisitNumber} recorded`);
+      showSuccess(`ANC visit #${nextVisitNumber} recorded`, 'ANC follow-up saved successfully.');
       setAncForm({
         ...ancForm,
         visit_date: defaultDate(),
@@ -578,7 +579,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       onUpdated?.();
     } catch (error) {
       console.error('Failed to create ANC visit', error);
-      showError('Unable to save ANC visit. Please review the form and try again.');
+      showError('Unable to save ANC visit. Please review the form and try again.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -587,7 +588,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const handleCreateDelivery = async () => {
     if (!enrollment) return;
     if (!deliveryForm.delivery_date || !deliveryForm.delivery_type) {
-      showError('Delivery date and type are required.');
+      showError('Delivery date and type are required.', 'Please complete the delivery details.');
       return;
     }
 
@@ -621,13 +622,13 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       };
 
       await ehrApi.createDelivery(tenantSlug, token, payload);
-      showSuccess('Delivery record saved');
+      showSuccess('Delivery record saved', 'Maternal delivery details stored successfully.');
       setDeliveryFormOpen(false);
       await refreshData();
       onUpdated?.();
     } catch (error) {
       console.error('Failed to create delivery', error);
-      showError('Unable to save delivery record.');
+      showError('Unable to save delivery record.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -635,12 +636,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
   const handleCreateBirthOutcome = async () => {
     if (!enrollment?.delivery) {
-      showError('Record the delivery before adding birth outcomes.');
+      showError('Record the delivery before adding birth outcomes.', 'Please capture delivery details first.');
       return;
     }
 
     if (!birthOutcomeForm.sex || !birthOutcomeForm.birth_outcome) {
-      showError('Provide newborn sex and outcome.');
+      showError('Provide newborn sex and outcome.', 'Newborn outcome fields are required.');
       return;
     }
 
@@ -673,7 +674,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       };
 
       await ehrApi.createBirthOutcome(tenantSlug, token, enrollment.delivery.id, payload);
-      showSuccess('Birth outcome recorded');
+      showSuccess('Birth outcome recorded', 'Newborn outcome details saved successfully.');
       setBirthOutcomeFormOpen(false);
       setBirthOutcomeForm({
         ...birthOutcomeForm,
@@ -694,7 +695,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       onUpdated?.();
     } catch (error) {
       console.error('Failed to create birth outcome', error);
-      showError('Unable to save birth outcome.');
+      showError('Unable to save birth outcome.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -702,12 +703,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
   const handleCreatePostnatalVisit = async () => {
     if (!enrollment?.delivery) {
-      showInfo('Record the delivery before adding postnatal visits.');
+      showInfo('Record the delivery before adding postnatal visits.', 'Please capture delivery details first.');
       return;
     }
 
     if (!postnatalForm.visit_date) {
-      showError('Visit date is required.');
+      showError('Visit date is required.', 'Please provide the postnatal visit date.');
       return;
     }
 
@@ -743,13 +744,13 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       };
 
       await ehrApi.createPostnatalVisit(tenantSlug, token, payload);
-      showSuccess('Postnatal visit saved');
+      showSuccess('Postnatal visit saved', 'Postnatal visit details stored successfully.');
       setPostnatalFormOpen(false);
       await refreshData();
       onUpdated?.();
     } catch (error) {
       console.error('Failed to create postnatal visit', error);
-      showError('Unable to save postnatal visit.');
+      showError('Unable to save postnatal visit.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -758,7 +759,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const handleAddRiskFactor = async () => {
     if (!enrollment) return;
     if (!riskForm.risk_factor) {
-      showError('Describe the risk factor.');
+      showError('Describe the risk factor.', 'Please enter a risk description before saving.');
       return;
     }
 
@@ -768,7 +769,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         ...riskForm,
         risk_factor_snomed: riskFactorConcept,
       });
-      showSuccess('Risk factor added');
+      showSuccess('Risk factor added', 'Risk information has been captured successfully.');
       setRiskFormOpen(false);
       setRiskForm({
         risk_factor: '',
@@ -781,7 +782,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       onUpdated?.();
     } catch (error) {
       console.error('Failed to add risk factor', error);
-      showError('Unable to save risk factor.');
+      showError('Unable to save risk factor.', 'error');
     } finally {
       setSubmitting(false);
     }

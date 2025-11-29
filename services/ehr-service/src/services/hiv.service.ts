@@ -1260,11 +1260,13 @@ export class HivService {
     // ============================================
     const visitId = result[0]?.id;
     const visitDateObj = new Date(visitDate);
+    const artStartDateValue = body?.artStartDate ? new Date(body.artStartDate) : visitDateObj;
+    const arvChangeStopReasonValue = body?.arvChangeStopReason ?? null;
 
     // 1. Update Monitoring Schedules (VL & CD4)
     if (viralLoad !== null && viralLoadTestDate) {
       const nextVlDate = this.monitoringService.calculateNextViralLoadDate(
-        artStartDate,
+        artStartDateValue,
         new Date(viralLoadTestDate),
         parseFloat(viralLoad.toString()),
         arvStatus === '4' ? visitDateObj : null, // Regimen change date
@@ -1300,7 +1302,7 @@ export class HivService {
 
     if (cd4Count !== null && cd4TestDate) {
       const nextCd4Date = this.monitoringService.calculateNextCD4Date(
-        artStartDate,
+        artStartDateValue,
         new Date(cd4TestDate),
         parseInt(cd4Count.toString()),
         visitDateObj
@@ -1362,7 +1364,7 @@ export class HivService {
           enrollmentId, visitId, arvRegimenCode, arvRegimenName,
           visitDate,
           arvStatus === '4' ? 'Change' : arvStatus === '2a' ? 'Start' : 'Continue',
-          arvChangeStopReason || null,
+          arvChangeStopReasonValue,
           providerId,
           viralLoad || null,
           cd4Count || null

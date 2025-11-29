@@ -94,7 +94,7 @@ export default function EnhancedLabOrderModal({
       setSearchResults(response.data.tests || []);
     } catch (error) {
       console.error('Failed to search tests:', error);
-      showError('Failed to search tests');
+      showError('Failed to search tests', 'An error occurred while searching for lab tests');
     } finally {
       setSearching(false);
     }
@@ -125,12 +125,13 @@ export default function EnhancedLabOrderModal({
 
       showSuccess(
         `Ordered ${orderSet.set_name} successfully (${orderSet.test_count} tests). Please route the patient through Accounts to confirm any outstanding laboratory fees.`,
+        'Order Set Created'
       );
       onSuccess?.();
       onClose();
     } catch (error) {
       console.error('Failed to order from set:', error);
-      showError('Failed to create orders');
+      showError('Failed to create orders', 'An error occurred while creating orders from the set');
     } finally {
       setLoading(false);
     }
@@ -138,9 +139,8 @@ export default function EnhancedLabOrderModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (selectedTests.length === 0) {
-      showError('Please select at least one test');
+      showError('No tests selected', 'Please select at least one test');
       return;
     }
 
@@ -194,7 +194,7 @@ export default function EnhancedLabOrderModal({
         totalEstimatedCost > 0
           ? ` Please direct the patient to Accounts to confirm payment of $${totalEstimatedCost.toFixed(2)}.`
           : '';
-      showSuccess(`Ordered ${selectedTests.length} test(s) successfully.${paymentNote}`);
+      showSuccess(`Ordered ${selectedTests.length} test(s) successfully.${paymentNote}`, '');
       onSuccess?.();
       setSelectedTests([]);
       setClinicalIndication('');
@@ -206,7 +206,7 @@ export default function EnhancedLabOrderModal({
       }
     } catch (error) {
       console.error('Failed to create lab orders:', error);
-      showError('Failed to create lab orders');
+      showError('Failed to create lab orders', '');
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,7 @@ import { Client } from 'pg';
 import { DataSource } from 'typeorm';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { DatabaseProvisioningService } from '../services/tenant-service/src/services/database-provisioning.service.js';
+import { DatabaseProvisioningService } from '../services/tenant-service/dist/services/database-provisioning.service.js';
 
 type TenantRow = {
   id: string;

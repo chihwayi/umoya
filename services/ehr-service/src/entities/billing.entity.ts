@@ -21,30 +21,31 @@ export enum PaymentMethod {
   MEDICAL_AID = 'medical_aid'
 }
 
-@Entity('bills')
+@Entity('billing')
 export class Bill {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ name: 'invoice_number' })
   billNumber: string;
 
-  @Column()
+  @Column({ name: 'patient_id' })
   patientId: string;
 
   @ManyToOne(() => Patient)
-  @JoinColumn({ name: 'patientId' })
+  @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column({ nullable: true })
+  @Column({ name: 'appointment_id', nullable: true })
   appointmentId: string;
 
   @ManyToOne(() => AppointmentSimple)
-  @JoinColumn({ name: 'appointmentId' })
+  @JoinColumn({ name: 'appointment_id' })
   appointment: AppointmentSimple;
 
-  @Column({ type: 'json' })
-  items: Array<{
+  // Items are not stored in the billing table - they're calculated from other sources
+  // This is just for TypeScript typing when working with bill data
+  items?: Array<{
     code: string;
     description: string;
     quantity: number;
@@ -53,39 +54,40 @@ export class Bill {
     category: 'consultation' | 'procedure' | 'medication' | 'lab' | 'imaging' | 'other';
   }>;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'subtotal', type: 'decimal', precision: 10, scale: 2 })
   subtotal: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'tax_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
   taxAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'discount_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
   discountAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'total_amount', type: 'decimal', precision: 10, scale: 2 })
   totalAmount: number;
 
-  @Column({ type: 'enum', enum: BillStatus, default: BillStatus.DRAFT })
+  @Column({ type: 'varchar', default: BillStatus.DRAFT })
   status: BillStatus;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'invoice_date', type: 'date' })
   billDate: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'due_date', type: 'date', nullable: true })
   dueDate: Date;
 
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'created_by', nullable: true })
   createdById: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'createdById' })
+  @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
-  @Column({ type: 'json', nullable: true })
-  payments: Array<{
+  // Payments, paidAmount, balanceAmount, and insurance are not in the billing table
+  // They're managed through the financial_transactions table
+  payments?: Array<{
     amount: number;
     method: PaymentMethod;
     reference: string;
@@ -93,14 +95,10 @@ export class Bill {
     receivedBy: string;
   }>;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  paidAmount: number;
+  paidAmount?: number;
+  balanceAmount?: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  balanceAmount: number;
-
-  @Column({ type: 'json', nullable: true })
-  insurance: {
+  insurance?: {
     provider: string;
     policyNumber: string;
     coveragePercentage: number;
@@ -108,9 +106,9 @@ export class Bill {
     claimStatus?: 'pending' | 'approved' | 'rejected';
   };
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

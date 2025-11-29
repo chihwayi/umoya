@@ -28,10 +28,10 @@ const HIVMonthlyReturnForm: React.FC<HIVMonthlyReturnFormProps> = ({ tenantSlug,
     try {
       const response = await ehrApi.getMonthlyReturn(selectedYear, selectedMonth, token, tenantSlug);
       setData(response.data);
-      showSuccess('Monthly return form loaded successfully');
+      showSuccess('Monthly return form loaded successfully', 'success');
     } catch (error: any) {
       console.error('Error loading monthly return:', error);
-      showError(error.response?.data?.message || 'Failed to load monthly return form');
+      showError(error.response?.data?.message || 'Failed to load monthly return form', 'error');
     } finally {
       setLoading(false);
     }

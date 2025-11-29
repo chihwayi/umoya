@@ -30,7 +30,7 @@ export class UsersService {
     return user;
   }
 
-  async createUser(createUserDto: CreateUserDto, tenantDb: DataSource): Promise<User> {
+  async createUser(createUserDto: CreateUserDto, tenantDb: DataSource): Promise<User & { tempPassword: string }> {
     const userRepository = tenantDb.getRepository(User);
     
     // Check if email already exists
@@ -58,10 +58,7 @@ export class UsersService {
     // Log temporary password for admin
     console.log(`🔑 TEMPORARY PASSWORD for ${savedUser.email}: ${tempPassword}`);
     
-    return {
-      ...savedUser,
-      tempPassword // Return temp password to frontend
-    };
+    return Object.assign(savedUser, { tempPassword });
   }
 
   async updateUser(id: string, updateUserDto: UpdateUserDto, tenantDb: DataSource): Promise<User> {

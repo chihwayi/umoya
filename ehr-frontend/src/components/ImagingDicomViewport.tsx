@@ -83,18 +83,47 @@ const base64ToArrayBuffer = (base64: string) => {
   return bytes.buffer;
 };
 
-const createDicomImageId = (fileName: string | undefined, filePath: string) => {
+const validateDicomBuffer = (buffer: ArrayBuffer) => {
+  if (buffer.byteLength < 132) {
+    throw new Error('Uploaded file is too small to contain a DICOM Part 10 header.');
+  }
+
+  const markerBytes = new Uint8Array(buffer.slice(128, 132));
+  let marker = '';
+  for (let i = 0; i < markerBytes.length; i += 1) {
+    marker += String.fromCharCode(markerBytes[i]);
+  }
+
+  if (marker !== 'DICM') {
+    throw new Error('DICM prefix not found at byte 132 – this upload is not a DICOM Part 10 file.');
+  }
+};
+
+const createDicomImageId = (image: ViewportImage): string | null => {
+  if (image.download_url) {
+    return `wadouri:${image.download_url}`;
+  }
+
+  const filePath = image.file_path;
+  if (!filePath) {
+    throw new Error('No inline DICOM payload available for this image.');
+  }
+
   const arrayBuffer = base64ToArrayBuffer(filePath);
+
+  validateDicomBuffer(arrayBuffer);
+
   const blob = new Blob([arrayBuffer], { type: 'application/dicom' });
-  const file = new File([blob], fileName || 'study.dcm', { type: 'application/dicom' });
+  const file = new File([blob], image.file_name || 'study.dcm', { type: 'application/dicom' });
   return cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
 };
 
 interface ViewportImage {
   id: string;
   file_name: string;
-  file_path: string;
+  file_path?: string | null;
   file_type?: string;
+  download_url?: string | null;
 }
 
 interface AnnotationRecord {
@@ -137,6 +166,7 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
 
   const elementRef = useRef<HTMLDivElement | null>(null);
   const imageIdCacheRef = useRef<Map<string, string>>(new Map());
+  const invalidImageRef = useRef<Set<string>>(new Set());
   const measurementCacheRef = useRef<Set<string>>(new Set());
   const cineIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const activeIndexRef = useRef<number>(0);
@@ -242,27 +272,41 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
   }, [hasStack, isPlaying, stopCine]);
 
   const getOrCreateImageId = useCallback((img: ViewportImage) => {
+    if (invalidImageRef.current.has(img.id)) {
+      return null;
+    }
+
     if (imageIdCacheRef.current.has(img.id)) {
       return imageIdCacheRef.current.get(img.id) as string;
     }
-    const newId = createDicomImageId(img.file_name, img.file_path);
-    imageIdCacheRef.current.set(img.id, newId);
-    return newId;
+    const newId = createDicomImageId(img);
+    if (newId) {
+      imageIdCacheRef.current.set(img.id, newId);
+      return newId;
+    }
+
+    invalidImageRef.current.add(img.id);
+    return null;
   }, []);
 
-  const applyTool = useCallback(
-    (toolId: string) => {
-      setActiveTool(toolId);
-      const toolName = `${toolId}Tool`;
+  const applyTool = useCallback((toolId: string) => {
+    setActiveTool(toolId);
+    const toolName = `${toolId}Tool`;
+    const element = elementRef.current;
 
-      if (isLengthTool(toolId)) {
-        cornerstoneTools.setToolActive(toolName, { mouseButtonMask: 1 });
-      } else {
-        cornerstoneTools.setToolActive(toolName, getToolActiveBindings(toolId));
+    const bindings = isLengthTool(toolId) ? { mouseButtonMask: 1 } : getToolActiveBindings(toolId);
+
+    if (element) {
+      try {
+        cornerstoneTools.setToolActiveForElement(element, toolName, bindings);
+        return;
+      } catch (err) {
+        console.warn(`Failed to set ${toolName} active for element`, err);
       }
-    },
-    [],
-  );
+    }
+
+    cornerstoneTools.setToolActive(toolName, bindings);
+  }, []);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -294,8 +338,15 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
         setWindowWidth(viewport.voi?.windowWidth ?? null);
         setWindowCenter(viewport.voi?.windowCenter ?? null);
       } catch (err) {
-        console.error('Failed to display DICOM image', err);
         const message = err instanceof Error ? err.message : 'Unable to display DICOM image';
+        if (err instanceof Error && err.message.includes('DICM prefix not found')) {
+          const target = activeImageRef.current;
+          if (target) {
+            invalidImageRef.current.add(target.id);
+          }
+        } else {
+          console.error('Failed to display DICOM image', err);
+        }
         setError(message);
         if (onError && err instanceof Error) {
           onError(err);
@@ -308,19 +359,36 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
   useEffect(() => {
     let cancelled = false;
     const loadImage = async () => {
-      if (!activeImage?.file_path) return;
+      if (!activeImage || (!activeImage.file_path && !activeImage.download_url)) {
+        setLoading(false);
+        setError('Image payload is not available for this study.');
+        return;
+      }
+
+      if (invalidImageRef.current.has(activeImage.id)) {
+        setLoading(false);
+        setError('Unable to render DICOM image. Please download and open externally.');
+        return;
+      }
       setLoading(true);
       setError(null);
 
       try {
         const newImageId = getOrCreateImageId(activeImage);
+        if (!newImageId) {
+          setError('Unable to render DICOM image. Please download and open externally.');
+          invalidImageRef.current.add(activeImage.id);
+          return;
+        }
         setCurrentImageId(newImageId);
         if (!cancelled) {
           await displayImage(newImageId);
         }
       } catch (err) {
-        console.error('DICOM load failure', err);
         const message = err instanceof Error ? err.message : 'Failed to load DICOM image';
+        if (!(err instanceof Error && err.message.includes('DICM prefix not found'))) {
+          console.error('DICOM load failure', err);
+        }
         setError(message);
         if (onError && err instanceof Error) {
           onError(err);
@@ -402,9 +470,22 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
 
     const observer = new ResizeObserver(() => {
       cornerstone.resize(element, true);
-      const imageId = currentImageId || (activeImageRef.current ? getOrCreateImageId(activeImageRef.current) : null);
-      if (imageId) {
-        displayImage(imageId);
+      try {
+        const fallbackImage = activeImageRef.current ? getOrCreateImageId(activeImageRef.current) : null;
+        const imageId = currentImageId || fallbackImage;
+        if (imageId) {
+          displayImage(imageId);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('DICM prefix not found')) {
+          const target = activeImageRef.current;
+          if (target) {
+            invalidImageRef.current.add(target.id);
+          }
+          setError(err.message);
+        } else {
+          console.warn('Resize observer skipped invalid DICOM', err);
+        }
       }
     });
 
@@ -627,12 +708,21 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
       )}
 
       {error && (
-        <div className="absolute inset-0 bg-black/70 backdrop-blur flex flex-col items-center justify-center gap-3 text-center text-slate-100 p-6 z-40">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur flex flex-col items-center justify-center gap-4 text-center text-slate-100 p-6 z-40">
           <AlertTriangle className="w-10 h-10 text-red-400" />
           <div>
             <p className="text-base font-semibold">Unable to render DICOM</p>
             <p className="text-xs text-slate-300 mt-1">{error}</p>
           </div>
+          {(activeImage?.download_url || activeImage?.file_path) && (
+            <a
+              href={activeImage.download_url || activeImage.file_path || undefined}
+              download={activeImage.file_name || 'study.dcm'}
+              className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition"
+            >
+              Download Original Study
+            </a>
+          )}
         </div>
       )}
     </div>

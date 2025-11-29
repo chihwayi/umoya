@@ -96,12 +96,94 @@ export class PatientService {
       .createQueryBuilder('patient')
       .where('patient.isActive = :isActive', { isActive: true })
       .andWhere(
-        '(patient.firstName ILIKE :query OR patient.lastName ILIKE :query OR patient.nationalId ILIKE :query OR patient.phone ILIKE :query OR patient.patientNumber ILIKE :query)',
+        '(patient.firstName ILIKE :query OR patient.lastName ILIKE :query OR patient.nationalId ILIKE :query OR patient.phone ILIKE :query OR patient.patientNumber ILIKE :query OR patient.email ILIKE :query OR patient.medicalAidNumber ILIKE :query)',
         { query: `%${query}%` }
       )
       .orderBy('patient.createdAt', 'DESC')
-      .limit(10)
+      .limit(50)
       .getMany();
+  }
+
+  async advancedSearch(
+    filters: {
+      searchTerm?: string;
+      gender?: string;
+      ageMin?: number;
+      ageMax?: number;
+      dateFrom?: Date;
+      dateTo?: Date;
+      medicalAidProvider?: string;
+      city?: string;
+      page?: number;
+      limit?: number;
+    },
+    tenantDb: DataSource
+  ): Promise<{ patients: Patient[]; total: number; pages: number }> {
+    const patientRepository = tenantDb.getRepository(Patient);
+    const queryBuilder = patientRepository
+      .createQueryBuilder('patient')
+      .where('patient.isActive = :isActive', { isActive: true });
+
+    // Search term filter
+    if (filters.searchTerm) {
+      queryBuilder.andWhere(
+        '(patient.firstName ILIKE :searchTerm OR patient.lastName ILIKE :searchTerm OR patient.nationalId ILIKE :searchTerm OR patient.phone ILIKE :searchTerm OR patient.patientNumber ILIKE :searchTerm OR patient.email ILIKE :searchTerm OR patient.medicalAidNumber ILIKE :searchTerm)',
+        { searchTerm: `%${filters.searchTerm}%` }
+      );
+    }
+
+    // Gender filter
+    if (filters.gender) {
+      queryBuilder.andWhere('patient.gender = :gender', { gender: filters.gender });
+    }
+
+    // Age range filter
+    if (filters.ageMin !== undefined || filters.ageMax !== undefined) {
+      const today = new Date();
+      if (filters.ageMax !== undefined) {
+        const minDate = new Date(today.getFullYear() - filters.ageMax - 1, today.getMonth(), today.getDate());
+        queryBuilder.andWhere('patient.dateOfBirth >= :minDate', { minDate });
+      }
+      if (filters.ageMin !== undefined) {
+        const maxDate = new Date(today.getFullYear() - filters.ageMin, today.getMonth(), today.getDate());
+        queryBuilder.andWhere('patient.dateOfBirth <= :maxDate', { maxDate });
+      }
+    }
+
+    // Date range filter (registration date)
+    if (filters.dateFrom) {
+      queryBuilder.andWhere('patient.createdAt >= :dateFrom', { dateFrom: filters.dateFrom });
+    }
+    if (filters.dateTo) {
+      queryBuilder.andWhere('patient.createdAt <= :dateTo', { dateTo: filters.dateTo });
+    }
+
+    // Medical aid provider filter
+    if (filters.medicalAidProvider) {
+      queryBuilder.andWhere('patient.medicalAidProvider ILIKE :medicalAidProvider', {
+        medicalAidProvider: `%${filters.medicalAidProvider}%`,
+      });
+    }
+
+    // City filter
+    if (filters.city) {
+      queryBuilder.andWhere('patient.city ILIKE :city', { city: `%${filters.city}%` });
+    }
+
+    // Pagination
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    const skip = (page - 1) * limit;
+
+    queryBuilder.orderBy('patient.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [patients, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      patients,
+      total,
+      pages: Math.ceil(total / limit),
+    };
   }
 
   async getPatientStats(tenantDb: DataSource): Promise<any> {

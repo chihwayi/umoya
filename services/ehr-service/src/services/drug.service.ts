@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, DeepPartial, Repository } from 'typeorm';
 import { Drug } from '../entities/drug.entity';
-import { DrugInteraction, InteractionSeverity } from '../entities/drug-interaction.entity';
+import { DrugInteraction, InteractionSeverity, EvidenceLevel } from '../entities/drug-interaction.entity';
 import { CdssService } from './cdss.service';
 
 @Injectable()
@@ -357,7 +357,7 @@ export class DrugService {
     const furosemide = drugs.find(d => d.genericName === 'furosemide');
     const metformin = drugs.find(d => d.genericName === 'metformin');
     
-    const interactions = [];
+    const interactions: Array<DeepPartial<DrugInteraction>> = [];
     
     // Warfarin interactions (critical)
     if (warfarin && aspirin) {
@@ -368,7 +368,7 @@ export class DrugService {
         description: 'Increased risk of bleeding when warfarin is combined with aspirin',
         mechanism: 'Both drugs affect hemostasis - warfarin inhibits clotting factors, aspirin inhibits platelet aggregation',
         management: 'Monitor INR closely. Consider proton pump inhibitor for GI protection.',
-        evidenceLevel: 'established'
+        evidenceLevel: EvidenceLevel.ESTABLISHED,
       });
     }
     
@@ -380,7 +380,7 @@ export class DrugService {
         description: 'Digoxin may enhance warfarin anticoagulant effect',
         mechanism: 'Potential displacement from protein binding sites',
         management: 'Monitor INR when starting or stopping digoxin',
-        evidenceLevel: 'probable'
+        evidenceLevel: EvidenceLevel.PROBABLE,
       });
     }
     
@@ -393,7 +393,7 @@ export class DrugService {
         description: 'Diuretics may cause hypokalemia which increases digoxin toxicity risk',
         mechanism: 'Hypokalemia enhances digoxin binding to Na+/K+ ATPase',
         management: 'Monitor potassium levels. Maintain K+ > 3.5 mEq/L',
-        evidenceLevel: 'established'
+        evidenceLevel: EvidenceLevel.ESTABLISHED,
       });
     }
     
@@ -406,12 +406,13 @@ export class DrugService {
         description: 'Furosemide may reduce metformin efficacy',
         mechanism: 'Possible interference with metformin renal clearance',
         management: 'Monitor blood glucose levels',
-        evidenceLevel: 'possible'
+        evidenceLevel: EvidenceLevel.POSSIBLE,
       });
     }
     
     if (interactions.length > 0) {
-      await interactionRepository.save(interactions.map(i => interactionRepository.create(i)));
+      const interactionEntities = interactions.map((interaction) => interactionRepository.create(interaction));
+      await interactionRepository.save(interactionEntities);
     }
     
     return { 

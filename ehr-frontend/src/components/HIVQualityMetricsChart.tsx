@@ -6,13 +6,14 @@ import {
   BarElement,
   ArcElement,
   PointElement,
-  LineElement,
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ChartOptions,
+  TooltipItem,
 } from 'chart.js';
-import { Bar, Doughnut, Line, Pie } from 'react-chartjs-2';
+import { Bar, Doughnut, Pie } from 'react-chartjs-2';
 import { CheckCircle, AlertTriangle, Clock, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 
 ChartJS.register(
@@ -21,7 +22,6 @@ ChartJS.register(
   BarElement,
   ArcElement,
   PointElement,
-  LineElement,
   Title,
   Tooltip,
   Legend,
@@ -169,7 +169,16 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
     }]
   };
 
-  const chartOptions = {
+  const pieTooltipLabel = (context: TooltipItem<'pie'>) => {
+    const label = context.label ?? '';
+    const value = Number(context.parsed ?? 0);
+    const data = (context.dataset.data as Array<number | null | undefined>) ?? [];
+    const total = data.reduce<number>((sum, current) => sum + Number(current ?? 0), 0);
+    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+    return `${label}: ${value} patients (${percentage}%)`;
+  };
+
+  const sharedOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -179,7 +188,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
           padding: 15,
           font: {
             size: 12,
-            weight: '500' as const
+            weight: 500
           }
         }
       },
@@ -196,10 +205,10 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
         cornerRadius: 8
       }
     }
-  };
+  } as const;
 
   const barChartOptions = {
-    ...chartOptions,
+    ...sharedOptions,
     scales: {
       y: {
         beginAtZero: true,
@@ -227,19 +236,61 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
         }
       }
     }
-  };
+  } satisfies ChartOptions<'bar'>;
 
   const doughnutOptions = {
-    ...chartOptions,
+    ...sharedOptions,
     cutout: '65%',
     plugins: {
-      ...chartOptions.plugins,
+      ...(sharedOptions.plugins || {}),
       legend: {
-        ...chartOptions.plugins.legend,
+        ...(sharedOptions.plugins?.legend || {}),
         position: 'bottom' as const
       }
     }
-  };
+  } satisfies ChartOptions<'doughnut'>;
+
+  const artBarOptions = {
+    ...sharedOptions,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          font: { size: 11 }
+        },
+        grid: {
+          color: 'rgba(148, 163, 184, 0.1)'
+        }
+      },
+      x: {
+        grid: { display: false },
+        ticks: {
+          font: { size: 11 }
+        }
+      }
+    }
+  } satisfies ChartOptions<'bar'>;
+
+  const outcomesBarOptions = artBarOptions;
+
+  const treatmentFailurePieOptions = {
+    ...sharedOptions,
+    plugins: {
+      ...(sharedOptions.plugins || {}),
+      legend: {
+        ...(sharedOptions.plugins?.legend || {}),
+        position: 'bottom' as const
+      },
+      tooltip: {
+        ...(sharedOptions.plugins?.tooltip || {}),
+        callbacks: {
+          label: pieTooltipLabel
+        }
+      }
+    }
+  } satisfies ChartOptions<'pie'>;
+
+  const ltfuPieOptions = treatmentFailurePieOptions;
 
   return (
     <div className="space-y-6">
@@ -340,29 +391,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
           </div>
           <div className="bg-white rounded-lg p-6 shadow-md">
             <div className="h-64 mb-4">
-              <Bar 
-                data={artData} 
-                options={{
-                  ...chartOptions,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        font: { size: 11 }
-                      },
-                      grid: {
-                        color: 'rgba(148, 163, 184, 0.1)'
-                      }
-                    },
-                    x: {
-                      grid: { display: false },
-                      ticks: {
-                        font: { size: 11 }
-                      }
-                    }
-                  }
-                }} 
-              />
+              <Bar data={artData} options={artBarOptions} />
             </div>
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
               <div>
@@ -392,29 +421,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
           </div>
           <div className="bg-white rounded-lg p-6 shadow-md">
             <div className="h-64 mb-4">
-              <Bar 
-                data={outcomesData} 
-                options={{
-                  ...chartOptions,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        font: { size: 11 }
-                      },
-                      grid: {
-                        color: 'rgba(148, 163, 184, 0.1)'
-                      }
-                    },
-                    x: {
-                      grid: { display: false },
-                      ticks: {
-                        font: { size: 11 }
-                      }
-                    }
-                  }
-                }} 
-              />
+              <Bar data={outcomesData} options={outcomesBarOptions} />
             </div>
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-slate-200">
               <div className="text-center">
@@ -462,7 +469,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg p-6 shadow-md">
             <div className="h-80">
-              <Pie 
+              <Pie
                 data={{
                   labels: ['Successful Treatment', 'Treatment Failures'],
                   datasets: [{
@@ -482,28 +489,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
                     hoverOffset: 10
                   }]
                 }}
-                options={{
-                  ...chartOptions,
-                  plugins: {
-                    ...chartOptions.plugins,
-                    legend: {
-                      ...chartOptions.plugins.legend,
-                      position: 'bottom' as const
-                    },
-                    tooltip: {
-                      ...chartOptions.plugins.tooltip,
-                      callbacks: {
-                        label: function(context: any) {
-                          const label = context.label || '';
-                          const value = context.parsed || 0;
-                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                          return `${label}: ${value} patients (${percentage}%)`;
-                        }
-                      }
-                    }
-                  }
-                }}
+                options={treatmentFailurePieOptions}
               />
             </div>
           </div>
@@ -568,7 +554,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-lg p-6 shadow-md">
             <div className="h-80">
-              <Pie 
+              <Pie
                 data={{
                   labels: ['Active in Care', 'Lost to Follow-Up'],
                   datasets: [{
@@ -588,28 +574,7 @@ const HIVQualityMetricsChart: React.FC<HIVQualityMetricsChartProps> = ({ metrics
                     hoverOffset: 10
                   }]
                 }}
-                options={{
-                  ...chartOptions,
-                  plugins: {
-                    ...chartOptions.plugins,
-                    legend: {
-                      ...chartOptions.plugins.legend,
-                      position: 'bottom' as const
-                    },
-                    tooltip: {
-                      ...chartOptions.plugins.tooltip,
-                      callbacks: {
-                        label: function(context: any) {
-                          const label = context.label || '';
-                          const value = context.parsed || 0;
-                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                          return `${label}: ${value} patients (${percentage}%)`;
-                        }
-                      }
-                    }
-                  }
-                }}
+                options={ltfuPieOptions}
               />
             </div>
           </div>

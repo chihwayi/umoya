@@ -374,7 +374,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                         ⚠️ Patient Requires EAC (Enhanced Adherence Counseling)
                       </h3>
                       <p className="text-red-800 mb-3">
-                        Patient has 2 consecutive viral loads >1000 copies/mL. Enhanced Adherence Counseling is required per WHO guidelines.
+                        Patient has 2 consecutive viral loads &gt;1000 copies/mL. Enhanced Adherence Counseling is required per WHO guidelines.
                       </p>
                       <button
                         onClick={() => setActiveTab('eac')}
@@ -579,7 +579,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                         ⚠️ Patient Requires EAC (Enhanced Adherence Counseling)
                       </h3>
                       <p className="text-red-800 mb-2">
-                        Patient has 2 consecutive viral loads >1000 copies/mL (WHO Guidelines). Enhanced Adherence Counseling is required.
+                        Patient has 2 consecutive viral loads &gt;1000 copies/mL (WHO Guidelines). Enhanced Adherence Counseling is required.
                       </p>
                       {eacEligibility.recentVisits && eacEligibility.recentVisits.length >= 2 && (
                         <div className="mt-4 space-y-2">
@@ -945,11 +945,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
 
           {activeTab === 'referrals' && (
             <div className="space-y-6">
-              <HIVReferralManagement
-                enrollmentId={enrollment.id}
-                patientName={`${enrollment.first_name} ${enrollment.last_name}`}
-                tenantSlug={tenantSlug}
-              />
+              <p className="text-slate-600">Referral management coming soon</p>
             </div>
           )}
 

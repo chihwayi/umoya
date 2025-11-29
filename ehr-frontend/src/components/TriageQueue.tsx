@@ -206,7 +206,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
       const tenantSlug = localStorage.getItem('ehr_tenant_slug');
       
       if (!token || !tenantSlug) {
-        showError('Authentication required');
+        showError('Authentication required', 'Please login to update appointment status.');
         return;
       }
 

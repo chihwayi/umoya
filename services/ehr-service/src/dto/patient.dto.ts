@@ -167,3 +167,33 @@ export class UpdatePatientDto {
   @IsString()
   medicalHistory?: string;
 }
+
+export class PatientQueryDto {
+  @ApiProperty({ required: false, description: 'Free text search across patient name, MRN, ID' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiProperty({ required: false, description: 'Patient number / MRN filter' })
+  @IsOptional()
+  @IsString()
+  patientNumber?: string;
+
+  @ApiProperty({ required: false, description: 'National ID filter' })
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
+
+  @ApiProperty({ required: false, description: 'Gender filter' })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiProperty({ required: false, description: 'Page number for pagination', default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiProperty({ required: false, description: 'Page size for pagination', default: 25 })
+  @IsOptional()
+  limit?: number;
+}

@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, DeepPartial } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
 import { LabTest } from '../entities/lab-test.entity';
 import { CriticalAlertService } from './critical-alert.service';
+import { CriticalValueType } from '../entities/critical-result-alert.entity';
 import { Patient } from '../entities/patient.entity';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
@@ -245,9 +246,10 @@ export class LabOrderService {
       loincCode: loincCode ?? null,
       loincLongName: loincLongName ?? null,
       cptCode: cptCode ?? null,
-    });
+    } as DeepPartial<LabOrder>) as LabOrder;
 
-    const saved = await labOrderRepository.save(labOrder);
+    const labOrderEntity = labOrder as LabOrder;
+    const saved = await labOrderRepository.save<LabOrder>(labOrderEntity);
 
     if (financeTransactionId) {
       await tenantDb.query(
@@ -831,7 +833,7 @@ export class LabOrderService {
                     testCode: result.testCode,
                     testName: result.testName || test.testName,
                     resultValue: String(result.value),
-                    criticalValueType: criticalCheck.type || 'critical',
+                    criticalValueType: criticalCheck.type ?? CriticalValueType.CRITICAL,
                     alertMessage
                   }, tenantDb);
                 }
@@ -863,13 +865,16 @@ export class LabOrderService {
     return labOrderRepository.save(labOrder);
   }
 
-  private async checkCriticalValue(test: LabTest, value: number): Promise<{ isCritical: boolean; type: 'high' | 'low' | null }> {
+  private async checkCriticalValue(
+    test: LabTest,
+    value: number,
+  ): Promise<{ isCritical: boolean; type: CriticalValueType | null }> {
     if (test.criticalHigh && value > test.criticalHigh) {
-      return { isCritical: true, type: 'high' };
+      return { isCritical: true, type: CriticalValueType.HIGH };
     }
     
     if (test.criticalLow && value < test.criticalLow) {
-      return { isCritical: true, type: 'low' };
+      return { isCritical: true, type: CriticalValueType.LOW };
     }
     
     return { isCritical: false, type: null };

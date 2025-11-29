@@ -243,7 +243,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
         patientCommitmentLevel: form.patientCommitmentLevel || null,
         nextSessionDate: form.nextSessionDate || null,
         followUpActions: form.followUpActions,
-        followUpActionConcepts,
+        followUpActionConcepts: followUpConcepts,
         followUpResponsiblePerson: form.followUpResponsiblePerson || null,
         sessionOutcome: form.sessionOutcome,
         sessionOutcomeConcept,

@@ -87,12 +87,12 @@ export default function MaternityEnrollmentModal({
     e.preventDefault();
 
     if (!selectedPatient) {
-      showError('Select the patient to enroll in maternity care');
+      showError('Select patient', 'Choose the patient to enroll in maternity care.');
       return;
     }
 
     if (!lmpDate) {
-      showError('Please provide Last Menstrual Period date');
+      showError('LMP required', 'Please provide the Last Menstrual Period date.');
       return;
     }
 
@@ -113,12 +113,12 @@ export default function MaternityEnrollmentModal({
         previous_complications: previousComplications,
       });
 
-      showSuccess('Patient enrolled in maternity care successfully');
+      showSuccess('Enrollment complete', 'Patient has been enrolled in maternity care successfully.');
       onSuccess?.();
       onClose();
     } catch (error) {
       console.error('Failed to enroll patient:', error);
-      showError('Failed to enroll patient in maternity care');
+      showError('Enrollment failed', 'Unable to enroll patient in maternity care.');
     } finally {
       setLoading(false);
     }

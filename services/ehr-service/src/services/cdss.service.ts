@@ -174,6 +174,15 @@ export class CdssService {
     console.log('[FALLBACK] Full symptoms object:', JSON.stringify(symptoms).substring(0, 500));
     this.logger.log(`[FALLBACK] basicDiagnosisAssist called with keys: ${Object.keys(symptoms).join(', ')}`);
     
+    const patientAge =
+      typeof symptoms.age === 'number'
+        ? symptoms.age
+        : typeof symptoms.patientAge === 'number'
+        ? symptoms.patientAge
+        : typeof symptoms.patient?.age === 'number'
+        ? symptoms.patient.age
+        : undefined;
+
     // Extract symptoms from different possible formats
     let allSymptoms: string[] = [];
     
@@ -315,7 +324,7 @@ export class CdssService {
     
     // Chest pain patterns
     if (allSymptomsText.includes('chest pain') || allSymptomsText.includes('chest discomfort')) {
-      if (age && age > 40) {
+      if (patientAge && patientAge > 40) {
         possibleDiagnoses.push({
           diagnosis: 'Acute Coronary Syndrome',
           condition: 'Acute Coronary Syndrome',

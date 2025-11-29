@@ -138,10 +138,10 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
         snomedConceptId: '315124006',
         snomedTerm: 'Measurement of viral load (procedure)',
       }, token, tenantSlug);
-      showSuccess('Viral load order submitted. Accounts will release the test once payment is confirmed.');
+      showSuccess('Viral load order submitted', 'Accounts will release the test once payment is confirmed.');
     } catch (e) {
       console.error('Failed to order VL:', e);
-      showError('Failed to submit viral load order');
+      showError('Failed to submit viral load order', 'Please try again or contact support.');
     } finally {
       setLoading(false);
     }
@@ -251,7 +251,7 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
             <span className="font-semibold">CDSS Prompts</span>
           </div>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Viral Load due if > 6 months from last test</li>
+            <li>Viral Load due if {'>'}  6 months from last test</li>
             <li>Consider TB testing if any symptom present</li>
             <li>Ensure cotrimoxazole prophylaxis when indicated</li>
             <li>For pregnancy/breastfeeding: ensure PMTCT linkage and VL monitoring</li>

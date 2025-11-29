@@ -67,7 +67,7 @@ export default function RadiologistWorklist({
       }
     } catch (error) {
       console.error('Failed to load studies:', error);
-      showError('Failed to load studies');
+      showError('Failed to load studies', 'Please refresh and try again.');
     } finally {
       setLoading(false);
     }
@@ -76,11 +76,11 @@ export default function RadiologistWorklist({
   const handleAssignToMe = async (studyId: string) => {
     try {
       await ehrApi.assignRadiologist(tenantSlug, token, studyId, userId);
-      showSuccess('Study assigned to you');
+      showSuccess('Study assigned', 'This imaging study is now under your queue.');
       loadStudies();
     } catch (error) {
       console.error('Failed to assign study:', error);
-      showError('Failed to assign study');
+      showError('Assignment failed', 'Unable to assign the study to you.');
     }
   };
 
@@ -180,7 +180,7 @@ export default function RadiologistWorklist({
             <div>
               <p className="text-sm text-gray-600">Avg TAT</p>
               <p className="text-2xl font-bold text-green-700">
-                {studies.length > 0 ? (studies.reduce((sum, s) => sum + (s.hours_pending || 0), 0) / studies.length).toFixed(1) : '0'}h
+                {studies.length > 0 ? (studies.reduce((sum, s) => sum + Number(s.hours_pending || 0), 0) / studies.length).toFixed(1) : '0'}h
               </p>
             </div>
             <Clock className="w-8 h-8 text-green-500" />

@@ -199,11 +199,10 @@ const LabResultsViewer: React.FC<LabResultsViewerProps> = ({ patientId, tenantSl
 
       const response = await ehrApi.interpretLabResults(
         currentResults,
-        historicalLabs.length > 0 ? historicalLabs : undefined,
+        historicalLabs.length > 0 ? historicalLabs : [],
         token,
         tenantSlug
       );
-      
       setCdssAnalysis(response.data);
     } catch (error) {
       console.error('Failed to get CDSS analysis:', error);

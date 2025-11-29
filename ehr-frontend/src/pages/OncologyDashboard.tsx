@@ -22,6 +22,18 @@ import { format } from 'date-fns';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import OncologyResponseAssessment from '../components/OncologyResponseAssessment';
+import OncologySurvivorshipPlan from '../components/OncologySurvivorshipPlan';
+import OncologyClinicalTrials from '../components/OncologyClinicalTrials';
+import OncologyPROs from '../components/OncologyPROs';
+import OncologyGenomicData from '../components/OncologyGenomicData';
+import OncologyAnalyticsPanel from '../components/OncologyAnalyticsPanel';
+import OncologyIntelligencePanel from '../components/OncologyIntelligencePanel';
+import OncologyFinancialToxicity from '../components/OncologyFinancialToxicity';
+import OncologyTimeline from '../components/OncologyTimeline';
+import OncologyResponseCharts from '../components/OncologyResponseCharts';
+import OncologyBiomarkerDashboard from '../components/OncologyBiomarkerDashboard';
+import OncologySurvivorshipDashboard from '../components/OncologySurvivorshipDashboard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 
 type OncologyCase = {
@@ -36,6 +48,7 @@ type OncologyCase = {
   overall_stage?: string;
   stage_at_diagnosis?: string;
   oncologist_name?: string;
+  oncologist_id?: string | null;
   status: string;
   updated_at?: string;
   active_regimens?: number;
@@ -1404,6 +1417,24 @@ const OncologyDashboard: React.FC = () => {
               </p>
             </div>
           </aside>
+
+          {tenantSlug && token && (
+            <div className="lg:col-span-3">
+              <OncologyAnalyticsPanel
+                tenantSlug={tenantSlug as string}
+                token={token as string}
+                caseContext={
+                  selectedCaseId && caseDetail
+                    ? {
+                        primary_diagnosis: caseDetail.case.primary_diagnosis,
+                        overall_stage: caseDetail.case.overall_stage,
+                        oncologist_id: (caseDetail.case as any).oncologist_id ?? null,
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1494,6 +1525,24 @@ const OncologyDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                {tenantSlug && token && caseDetail && selectedCaseId && (
+                  <>
+                    <OncologyTimeline
+                      tenantSlug={tenantSlug as string}
+                      token={token as string}
+                      caseId={selectedCaseId}
+                      caseDetail={caseDetail}
+                    />
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                      <div className="xl:col-span-2">
+                        <OncologyResponseCharts tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                      </div>
+                      <OncologySurvivorshipDashboard tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                    </div>
+                    <OncologyBiomarkerDashboard tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                  </>
+                )}
+
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Staging Timeline</h3>
@@ -1521,6 +1570,27 @@ const OncologyDashboard: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {tenantSlug && token && selectedCaseId && (
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                    <OncologyResponseAssessment
+                      tenantSlug={tenantSlug as string}
+                      token={token as string}
+                      caseId={selectedCaseId}
+                      regimens={caseDetail.regimens}
+                    />
+                  </div>
+                )}
+
+                {tenantSlug && token && selectedCaseId && (
+                  <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                    <OncologySurvivorshipPlan
+                      tenantSlug={tenantSlug as string}
+                      token={token as string}
+                      caseId={selectedCaseId}
+                    />
+                  </div>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -1759,6 +1829,26 @@ const OncologyDashboard: React.FC = () => {
               )}
             </div>
           </aside>
+
+          {tenantSlug && token && selectedCaseId && (
+            <section className="xl:col-span-3 grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2 space-y-6">
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                  <OncologyClinicalTrials tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                </div>
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                  <OncologyPROs tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm">
+                  <OncologyGenomicData tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                </div>
+                <OncologyIntelligencePanel tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+                <OncologyFinancialToxicity tenantSlug={tenantSlug as string} token={token as string} caseId={selectedCaseId} />
+              </div>
+            </section>
+          )}
         </section>
       </main>
 

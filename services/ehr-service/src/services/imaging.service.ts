@@ -1,19 +1,26 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
+import { StorageService } from './storage.service';
 
 @Injectable()
 export class ImagingService {
   private readonly logger = new Logger(ImagingService.name);
+  private readonly signedUrlTtlSeconds: number;
 
   constructor(
     private readonly financeService: FinanceService,
     private readonly terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
-  ) {}
+    private readonly storageService: StorageService,
+  ) {
+    const ttlCandidate = Number(process.env.IMAGING_SIGNED_URL_TTL ?? 300);
+    this.signedUrlTtlSeconds = Number.isFinite(ttlCandidate) && ttlCandidate > 0 ? ttlCandidate : 300;
+  }
 
   // ===== MODALITIES & STUDY TYPES =====
 
@@ -275,6 +282,7 @@ export class ImagingService {
     const query = `
       SELECT 
         io.*,
+        p.id as patient_id,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         p.date_of_birth,
@@ -315,6 +323,7 @@ export class ImagingService {
       `
       SELECT 
         io.*,
+        p.id as patient_id,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         p.date_of_birth,
@@ -600,24 +609,128 @@ export class ImagingService {
     return result[0];
   }
 
+  async completeStudy(
+    tenantDb: DataSource,
+    studyId: string,
+    userId?: string,
+    completionNotes?: string,
+  ) {
+    const study = await tenantDb.query(
+      `
+      SELECT imaging_order_id
+      FROM imaging_studies
+      WHERE id = $1
+      `,
+      [studyId],
+    );
+
+    if (study.length === 0) {
+      throw new NotFoundException(`Study with ID ${studyId} not found`);
+    }
+
+    const imagingOrderId = study[0].imaging_order_id;
+    await this.ensureOrderPaymentCleared(tenantDb, imagingOrderId);
+
+    const result = await tenantDb.query(
+      `
+      UPDATE imaging_studies
+      SET 
+        study_status = 'awaiting_report',
+        updated_at = NOW(),
+        technologist = COALESCE(technologist, $2),
+        study_description = COALESCE(study_description, $3)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [studyId, userId || null, completionNotes || null],
+    );
+
+    await tenantDb.query(
+      `
+      UPDATE imaging_orders
+      SET order_status = 'awaiting_report', updated_at = NOW()
+      WHERE id = $1
+      `,
+      [imagingOrderId],
+    );
+
+    this.logger.log(`Marked imaging study ${studyId} as awaiting report`);
+    return result[0];
+  }
+
   // ===== IMAGES =====
 
-  async uploadImage(tenantDb: DataSource, studyId: string, imageData: any, userId?: string) {
+  async uploadImage(
+    tenantDb: DataSource,
+    studyId: string,
+    imageData: any,
+    userId?: string,
+    tenantId?: string,
+  ) {
     const { file_name, file_path, file_type, file_size, image_number, view_position, is_primary } = imageData;
+
+    if (!file_path) {
+      throw new BadRequestException('file_path (base64 payload) is required');
+    }
+
+    let storedFilePath: string | null = file_path;
+    let storageMode: 'db' | 'object' = 'db';
+    let objectKey: string | null = null;
+    let contentType = this.resolveContentType(file_path, file_type);
+    let fileSizeBytes = file_size || null;
+    let fileChecksum: string | null = null;
+
+    if (this.storageService.isEnabled()) {
+      const decoded = this.decodeBase64Payload(file_path);
+      fileSizeBytes = decoded.buffer.length;
+      contentType = decoded.contentType || contentType;
+      fileChecksum = createHash('sha256').update(decoded.buffer).digest('hex');
+
+      const key = await this.storageService.uploadStudyAsset({
+        tenantId,
+        studyId,
+        filename: file_name,
+        buffer: decoded.buffer,
+        contentType,
+      });
+
+      if (key) {
+        objectKey = key;
+        storageMode = 'object';
+        storedFilePath = null;
+      }
+    } else {
+      const decoded = this.decodeBase64Payload(file_path);
+      fileChecksum = createHash('sha256').update(decoded.buffer).digest('hex');
+    }
 
     const result = await tenantDb.query(
       `
       INSERT INTO imaging_files (
         imaging_study_id, file_name, file_path, file_type, file_size,
-        image_number, view_position, is_primary, uploaded_by, uploaded_at
+        image_number, view_position, is_primary, uploaded_by, uploaded_at,
+        object_key, content_type, storage_mode, file_checksum
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $11, $12, $13)
       RETURNING *
       `,
-      [studyId, file_name, file_path, file_type, file_size, image_number, view_position, is_primary, userId],
+      [
+        studyId,
+        file_name,
+        storedFilePath,
+        file_type,
+        fileSizeBytes,
+        image_number,
+        view_position,
+        is_primary,
+        userId,
+        objectKey,
+        contentType,
+        storageMode,
+        fileChecksum,
+      ],
     );
 
-    // Update study image count
     await tenantDb.query(
       `
       UPDATE imaging_studies
@@ -629,7 +742,9 @@ export class ImagingService {
       [studyId],
     );
 
-    this.logger.log(`Uploaded image to study ${studyId}: ${file_name}`);
+    this.logger.log(
+      `Uploaded image to study ${studyId}: ${file_name} (${storageMode === 'object' ? 'object storage' : 'database'})`,
+    );
     return result[0];
   }
 
@@ -647,25 +762,83 @@ export class ImagingService {
       [studyId],
     );
 
-    return { images, total: images.length };
+    if (!images.length) {
+      return { images, total: 0 };
+    }
+
+    const hydrated = await Promise.all(
+      images.map(async (image: any) => {
+        if (image.storage_mode === 'object' && image.object_key) {
+          try {
+            const downloadUrl = await this.storageService.getSignedUrl(
+              image.object_key,
+              this.signedUrlTtlSeconds,
+            );
+            if (downloadUrl) {
+              return {
+                ...image,
+                file_path: null,
+                download_url: downloadUrl,
+                download_url_expires_at: new Date(Date.now() + this.signedUrlTtlSeconds * 1000).toISOString(),
+              };
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to generate signed URL for object ${image.object_key}: ${
+                error instanceof Error ? error.message : error
+              }`,
+            );
+          }
+
+          try {
+            const data = await this.storageService.getObjectData(image.object_key);
+            if (data) {
+              const mime = data.contentType || image.content_type || 'application/octet-stream';
+              const base64 = data.buffer.toString('base64');
+              return {
+                ...image,
+                file_path: `data:${mime};base64,${base64}`,
+                content_type: mime,
+                file_size: data.buffer.length,
+              };
+            }
+          } catch (error) {
+            this.logger.error(
+              `Failed to read object ${image.object_key} for study ${studyId}: ${
+                error instanceof Error ? error.message : error
+              }`,
+            );
+          }
+        }
+        return image;
+      }),
+    );
+
+    return { images: hydrated, total: hydrated.length };
   }
 
   async deleteImage(tenantDb: DataSource, imageId: string) {
-    const result = await tenantDb.query(
+    const image = await tenantDb.query(
       `
-      DELETE FROM imaging_files
+      SELECT * FROM imaging_files
       WHERE id = $1
-      RETURNING *
       `,
       [imageId],
     );
 
-    if (result.length === 0) {
+    if (image.length === 0) {
       throw new NotFoundException(`Image with ID ${imageId} not found`);
     }
 
-    // Update study image count
-    const studyId = result[0].imaging_study_id;
+    await tenantDb.query(
+      `
+      DELETE FROM imaging_files
+      WHERE id = $1
+      `,
+      [imageId],
+    );
+
+    const studyId = image[0].imaging_study_id;
     await tenantDb.query(
       `
       UPDATE imaging_studies
@@ -677,8 +850,20 @@ export class ImagingService {
       [studyId],
     );
 
+    if (image[0].storage_mode === 'object' && image[0].object_key) {
+      try {
+        await this.storageService.deleteObject(image[0].object_key);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete object ${image[0].object_key} for image ${imageId}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+    }
+
     this.logger.log(`Deleted image ${imageId} from study ${studyId}`);
-    return result[0];
+    return image[0];
   }
 
   // ===== REPORTS =====
@@ -702,6 +887,8 @@ export class ImagingService {
       follow_up_interval,
       coded_diagnoses,
     } = reportData;
+
+    await this.ensureOrderPaymentCleared(tenantDb, imaging_order_id);
 
     const structuredFindingsJson =
       structured_findings !== undefined && structured_findings !== null
@@ -822,6 +1009,9 @@ export class ImagingService {
       coded_diagnoses,
     } = reportData;
 
+    const reportOrderId = await this.getReportOrderId(tenantDb, reportId);
+    await this.ensureOrderPaymentCleared(tenantDb, reportOrderId);
+
     const structuredFindingsJson =
       structured_findings !== undefined ? JSON.stringify(structured_findings) : null;
     const codedDiagnosesJson =
@@ -873,6 +1063,9 @@ export class ImagingService {
   }
 
   async signReport(tenantDb: DataSource, reportId: string, userId?: string) {
+    const reportOrderId = await this.getReportOrderId(tenantDb, reportId);
+    await this.ensureOrderPaymentCleared(tenantDb, reportOrderId);
+
     const result = await tenantDb.query(
       `
       UPDATE imaging_reports
@@ -916,6 +1109,9 @@ export class ImagingService {
 
   async amendReport(tenantDb: DataSource, reportId: string, amendmentData: any, userId?: string) {
     const { amendment_reason, findings, impression } = amendmentData;
+
+    const reportOrderId = await this.getReportOrderId(tenantDb, reportId);
+    await this.ensureOrderPaymentCleared(tenantDb, reportOrderId);
 
     const result = await tenantDb.query(
       `
@@ -1450,6 +1646,63 @@ export class ImagingService {
     );
 
     return stats[0];
+  }
+
+  private decodeBase64Payload(dataUri: string): { buffer: Buffer; contentType?: string } {
+    if (!dataUri) {
+      return { buffer: Buffer.alloc(0) };
+    }
+
+    const matches = dataUri.match(/^data:(.+);base64,(.*)$/);
+    if (matches && matches.length === 3) {
+      return {
+        buffer: Buffer.from(matches[2], 'base64'),
+        contentType: matches[1],
+      };
+    }
+
+    return {
+      buffer: Buffer.from(dataUri, 'base64'),
+    };
+  }
+
+  private resolveContentType(dataUri: string, fallbackType?: string) {
+    const matches = dataUri?.match(/^data:(.+);base64,/);
+    if (matches && matches.length === 2) {
+      return matches[1];
+    }
+
+    switch ((fallbackType || '').toUpperCase()) {
+      case 'DICOM':
+        return 'application/dicom';
+      case 'JPEG':
+        return 'image/jpeg';
+      case 'PNG':
+        return 'image/png';
+      case 'PDF':
+        return 'application/pdf';
+      case 'TIFF':
+        return 'image/tiff';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  private async getReportOrderId(tenantDb: DataSource, reportId: string): Promise<string> {
+    const report = await tenantDb.query(
+      `
+      SELECT imaging_order_id
+      FROM imaging_reports
+      WHERE id = $1
+      `,
+      [reportId],
+    );
+
+    if (report.length === 0) {
+      throw new NotFoundException(`Report with ID ${reportId} not found`);
+    }
+
+    return report[0].imaging_order_id;
   }
 
   private async ensureOrderPaymentCleared(tenantDb: DataSource, orderId: string) {

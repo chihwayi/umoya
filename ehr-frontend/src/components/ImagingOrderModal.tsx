@@ -70,7 +70,7 @@ export default function ImagingOrderModal({
       setModalities(response.data.modalities || []);
     } catch (error) {
       console.error('Failed to load modalities:', error);
-      showError('Failed to load imaging modalities');
+      showError('Failed to load imaging modalities', 'An error occurred while loading imaging modalities');
     }
   };
 
@@ -80,20 +80,19 @@ export default function ImagingOrderModal({
       setStudyTypes(response.data.studyTypes || []);
     } catch (error) {
       console.error('Failed to load study types:', error);
-      showError('Failed to load study types');
+      showError('Failed to load study types', 'An error occurred while loading study types');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!selectedStudyType) {
-      showError('Please select an imaging study');
+      showError('Please select an imaging study', 'An imaging study must be selected to proceed');
       return;
     }
 
     if (!clinicalIndication.trim()) {
-      showError('Please provide clinical indication');
+      showError('Please provide clinical indication', 'Clinical indication is required for this imaging order');
       return;
     }
 
@@ -126,7 +125,7 @@ export default function ImagingOrderModal({
               2,
             )}.`
           : '';
-      showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`);
+      showSuccess(`${selectedStudyType.study_name} order placed.${costMessage}`, '');
       onSuccess?.();
       setCdssInsights(insights);
       if (!insights) {
@@ -134,7 +133,7 @@ export default function ImagingOrderModal({
       }
     } catch (error) {
       console.error('Failed to create imaging order:', error);
-      showError('Failed to create imaging order');
+      showError('Failed to create imaging order', 'An error occurred while processing your request');
     } finally {
       setLoading(false);
     }

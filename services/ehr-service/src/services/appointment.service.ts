@@ -4,6 +4,7 @@ import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { TenantService } from './tenant.service';
 import { FinanceService } from './finance.service';
+import { DoctorAvailabilityService } from './doctor-availability.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class AppointmentService {
   constructor(
     private tenantService: TenantService,
     private financeService: FinanceService,
+    private doctorAvailabilityService: DoctorAvailabilityService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -28,7 +30,20 @@ export class AppointmentService {
     }
     const appointmentRepository = connection.getRepository(AppointmentSimple);
     
-    // Check for conflicts
+    // Check if doctor is unavailable
+    const appointmentDate = new Date(createAppointmentDto.appointmentDate);
+    const isUnavailable = await this.doctorAvailabilityService.checkDoctorUnavailable(
+      createAppointmentDto.doctorId,
+      appointmentDate,
+      createAppointmentDto.durationMinutes || 30,
+      tenantId
+    );
+    
+    if (isUnavailable) {
+      throw new ConflictException('Doctor is not available at this time');
+    }
+    
+    // Check for conflicts with other appointments
     await this.checkForConflicts(
       createAppointmentDto.doctorId,
       createAppointmentDto.appointmentDate,
@@ -68,7 +83,7 @@ export class AppointmentService {
             },
           ],
         },
-        userId,
+        userId || createAppointmentDto.patientId,
       );
       financeTransactionId = transaction.id;
       paymentStatus = PAYMENT_STATUS.AWAITING_PAYMENT;
@@ -266,24 +281,56 @@ export class AppointmentService {
     return { average: 0, current: [] };
   }
 
-  async createRecurringAppointments(baseAppointment: CreateAppointmentDto, pattern: string, endDate: Date, tenantId: string): Promise<AppointmentSimple[]> {
+  async createRecurringAppointments(
+    baseAppointment: CreateAppointmentDto,
+    pattern: string,
+    endDate: Date,
+    tenantId: string,
+    userId?: string,
+  ): Promise<AppointmentSimple[]> {
     const appointments = [];
     const startDate = new Date(baseAppointment.appointmentDate);
     
+    // Preserve the original time from the base appointment
+    const baseTime = new Date(startDate);
+    const hours = baseTime.getHours();
+    const minutes = baseTime.getMinutes();
+    const seconds = baseTime.getSeconds();
+    const milliseconds = baseTime.getMilliseconds();
+    
     let currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const appointment = await this.create({
-        ...baseAppointment,
-        appointmentDate: currentDate.toISOString(),
-      }, baseAppointment.patientId, tenantId);
+    let createdCount = 0;
+    const maxAppointments = 100; // Safety limit
+    
+    while (currentDate <= endDate && createdCount < maxAppointments) {
+      // Preserve the time for each recurring appointment
+      currentDate.setHours(hours, minutes, seconds, milliseconds);
       
-      appointments.push(appointment);
+      try {
+        const appointment = await this.create(
+          {
+            ...baseAppointment,
+            appointmentDate: currentDate.toISOString(),
+          },
+          userId || baseAppointment.patientId,
+          tenantId,
+        );
+        
+        appointments.push(appointment);
+        createdCount++;
+      } catch (error) {
+        // Skip appointments that conflict or have other issues, but continue creating others
+        console.warn(`Failed to create recurring appointment for ${currentDate.toISOString()}:`, error);
+      }
       
       // Increment based on pattern
       if (pattern === 'weekly') {
         currentDate.setDate(currentDate.getDate() + 7);
       } else if (pattern === 'monthly') {
         currentDate.setMonth(currentDate.getMonth() + 1);
+      } else {
+        // Default to weekly if pattern is unknown
+        currentDate.setDate(currentDate.getDate() + 7);
       }
     }
     
@@ -317,7 +364,34 @@ export class AppointmentService {
       const time = new Date(apt.appointmentDate);
       return `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
     });
-    return allSlots.filter(slot => !bookedSlots.includes(slot));
+    
+    // Filter out slots where doctor is unavailable
+    const availableSlots = [];
+    const appointmentDate = new Date(date);
+    
+    for (const slot of allSlots) {
+      if (bookedSlots.includes(slot)) {
+        continue; // Skip already booked slots
+      }
+      
+      // Check if doctor is unavailable at this time
+      const [hours, minutes] = slot.split(':').map(Number);
+      const slotDateTime = new Date(appointmentDate);
+      slotDateTime.setHours(hours, minutes, 0, 0);
+      
+      const isUnavailable = await this.doctorAvailabilityService.checkDoctorUnavailable(
+        doctorId,
+        slotDateTime,
+        30, // Default 30-minute duration
+        tenantId
+      );
+      
+      if (!isUnavailable) {
+        availableSlots.push(slot);
+      }
+    }
+    
+    return availableSlots;
   }
 
   private async checkForConflicts(
@@ -347,7 +421,14 @@ export class AppointmentService {
 
     const newAppointmentTime = new Date(appointmentDate);
     for (const existing of existingAppointments) {
-      if (this.hasTimeConflict(newAppointmentTime, duration, existing.appointmentDate, existing.durationMinutes)) {
+      if (
+        this.hasTimeConflict(
+          newAppointmentTime,
+          duration,
+          existing.appointmentDate,
+          existing.durationMinutes
+        )
+      ) {
         throw new ConflictException('Doctor is not available at this time');
       }
     }
@@ -400,11 +481,35 @@ export class AppointmentService {
     return status.replace('-', '_');
   }
 
-  async getCalendarView(date: string, tenantId: string): Promise<any[]> {
+  async getCalendarView(date: string, view: 'day' | 'week' | 'month' = 'day', tenantId: string): Promise<any[]> {
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
     const startDate = new Date(date);
-    const endDate = new Date(date);
-    endDate.setDate(endDate.getDate() + 1);
+    let endDate = new Date(date);
+
+    // Calculate date range based on view type
+    switch (view) {
+      case 'day':
+        endDate.setDate(endDate.getDate() + 1);
+        break;
+      case 'week':
+        // Get start of week (Monday)
+        const dayOfWeek = startDate.getDay();
+        const diff = startDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        startDate.setDate(diff);
+        startDate.setHours(0, 0, 0, 0);
+        // Get end of week (Sunday)
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7);
+        break;
+      case 'month':
+        // Get start of month
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+        // Get end of month
+        endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + 1);
+        break;
+    }
 
     const appointments = await appointmentRepository.find({
       where: {
@@ -420,11 +525,129 @@ export class AppointmentService {
       title: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
       start: apt.appointmentDate,
       end: new Date(apt.appointmentDate.getTime() + (apt.durationMinutes * 60000)),
-      doctor: `${apt.doctor?.firstName} ${apt.doctor?.lastName}`,
+      doctor: {
+        id: apt.doctor?.id,
+        name: `${apt.doctor?.firstName} ${apt.doctor?.lastName}`,
+      },
+      patient: {
+        id: apt.patient?.id,
+        name: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
+        patientNumber: apt.patient?.patientNumber,
+      },
       status: apt.status,
       type: apt.appointmentType,
       reason: apt.reason,
+      durationMinutes: apt.durationMinutes,
+      priorityLevel: apt.priorityLevel,
+      paymentStatus: apt.paymentStatus,
     }));
+  }
+
+  async getMonthView(year: number, month: number, tenantId: string): Promise<any> {
+    const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const appointments = await appointmentRepository.find({
+      where: {
+        appointmentDate: Between(startDate, endDate),
+        status: Not('cancelled'),
+      },
+      relations: ['patient', 'doctor'],
+      order: { appointmentDate: 'ASC' },
+    });
+
+    // Group appointments by date
+    const appointmentsByDate: Record<string, any[]> = {};
+    appointments.forEach(apt => {
+      const dateKey = apt.appointmentDate.toISOString().split('T')[0];
+      if (!appointmentsByDate[dateKey]) {
+        appointmentsByDate[dateKey] = [];
+      }
+      appointmentsByDate[dateKey].push({
+        id: apt.id,
+        title: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
+        start: apt.appointmentDate,
+        end: new Date(apt.appointmentDate.getTime() + (apt.durationMinutes * 60000)),
+        doctor: {
+          id: apt.doctor?.id,
+          name: `${apt.doctor?.firstName} ${apt.doctor?.lastName}`,
+        },
+        patient: {
+          id: apt.patient?.id,
+          name: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
+          patientNumber: apt.patient?.patientNumber,
+        },
+        status: apt.status,
+        type: apt.appointmentType,
+        reason: apt.reason,
+        durationMinutes: apt.durationMinutes,
+      });
+    });
+
+    return {
+      year,
+      month,
+      appointmentsByDate,
+      totalAppointments: appointments.length,
+    };
+  }
+
+  async getWeekView(startDate: string, tenantId: string): Promise<any> {
+    const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const weekStart = new Date(startDate);
+    // Get Monday of the week
+    const dayOfWeek = weekStart.getDay();
+    const diff = weekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    weekStart.setDate(diff);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const appointments = await appointmentRepository.find({
+      where: {
+        appointmentDate: Between(weekStart, weekEnd),
+        status: Not('cancelled'),
+      },
+      relations: ['patient', 'doctor'],
+      order: { appointmentDate: 'ASC' },
+    });
+
+    // Group by day of week
+    const appointmentsByDay: Record<number, any[]> = {};
+    appointments.forEach(apt => {
+      const dayOfWeek = apt.appointmentDate.getDay();
+      if (!appointmentsByDay[dayOfWeek]) {
+        appointmentsByDay[dayOfWeek] = [];
+      }
+      appointmentsByDay[dayOfWeek].push({
+        id: apt.id,
+        title: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
+        start: apt.appointmentDate,
+        end: new Date(apt.appointmentDate.getTime() + (apt.durationMinutes * 60000)),
+        doctor: {
+          id: apt.doctor?.id,
+          name: `${apt.doctor?.firstName} ${apt.doctor?.lastName}`,
+        },
+        patient: {
+          id: apt.patient?.id,
+          name: `${apt.patient?.firstName} ${apt.patient?.lastName}`,
+          patientNumber: apt.patient?.patientNumber,
+        },
+        status: apt.status,
+        type: apt.appointmentType,
+        reason: apt.reason,
+        durationMinutes: apt.durationMinutes,
+      });
+    });
+
+    return {
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      appointmentsByDay,
+      totalAppointments: appointments.length,
+    };
   }
 
   async getAppointmentStats(tenantId: string): Promise<any> {
@@ -589,7 +812,8 @@ export class AppointmentService {
     });
 
     // Group by date and status
-    const trends = appointments.reduce((acc, apt) => {
+    const trends = appointments.reduce<Record<string, { total: number; completed: number; cancelled: number; noShow: number }>>(
+      (acc, apt) => {
       const date = apt.appointmentDate.toISOString().split('T')[0];
       if (!acc[date]) {
         acc[date] = { total: 0, completed: 0, cancelled: 0, noShow: 0 };
@@ -599,7 +823,9 @@ export class AppointmentService {
       if (apt.status === 'cancelled') acc[date].cancelled++;
       if (apt.status === 'no_show') acc[date].noShow++;
       return acc;
-    }, {});
+      },
+      {},
+    );
 
     return {
       period,
@@ -628,7 +854,22 @@ export class AppointmentService {
       relations: ['doctor']
     });
 
-    const doctorStats = appointments.reduce((acc, apt) => {
+    const doctorStats = appointments.reduce<
+      Record<
+        string,
+        {
+          doctorId: string;
+          doctorName: string;
+          total: number;
+          completed: number;
+          cancelled: number;
+          noShow: number;
+          completionRate?: number;
+          cancellationRate?: number;
+          noShowRate?: number;
+        }
+      >
+    >((acc, apt) => {
       const doctorName = `${apt.doctor?.firstName} ${apt.doctor?.lastName}`;
       if (!acc[apt.doctorId]) {
         acc[apt.doctorId] = {
@@ -649,8 +890,7 @@ export class AppointmentService {
       return acc;
     }, {});
 
-    // Calculate averages
-    Object.values(doctorStats).forEach((stats: any) => {
+    Object.values(doctorStats).forEach((stats) => {
       stats.completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
       stats.cancellationRate = stats.total > 0 ? Math.round((stats.cancelled / stats.total) * 100) : 0;
       stats.noShowRate = stats.total > 0 ? Math.round((stats.noShow / stats.total) * 100) : 0;

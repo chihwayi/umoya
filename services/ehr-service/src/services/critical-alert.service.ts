@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { CriticalResultAlert, AlertStatus } from '../entities/critical-result-alert.entity';
+import { CriticalResultAlert, AlertStatus, CriticalValueType } from '../entities/critical-result-alert.entity';
 
 @Injectable()
 export class CriticalAlertService {
@@ -12,7 +12,7 @@ export class CriticalAlertService {
     testCode: string;
     testName: string;
     resultValue: string;
-    criticalValueType: 'high' | 'low' | 'critical';
+    criticalValueType: CriticalValueType;
     alertMessage: string;
   }, tenantDb: DataSource): Promise<CriticalResultAlert> {
     const alertRepository = tenantDb.getRepository(CriticalResultAlert);

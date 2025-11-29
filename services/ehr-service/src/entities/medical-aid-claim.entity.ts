@@ -24,59 +24,53 @@ export class MedicalAidClaim {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column({ name: 'claim_number', unique: true })
   claimNumber: string;
 
   @ManyToOne(() => Patient)
-  @JoinColumn({ name: 'patientId' })
+  @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column()
+  @Column({ name: 'patient_id' })
   patientId: string;
 
   @ManyToOne(() => Bill)
-  @JoinColumn({ name: 'billId' })
+  @JoinColumn({ name: 'billing_id' })
   bill: Bill;
 
-  @Column()
+  @Column({ name: 'billing_id' })
   billId: string;
 
-  @Column({ type: 'enum', enum: MedicalAidProvider })
-  medicalAidProvider: MedicalAidProvider;
+  @Column({ name: 'medical_aid_name' })
+  medicalAidProvider: string;
 
-  @Column()
+  @Column({ name: 'member_number' })
   memberNumber: string;
 
-  @Column()
-  memberName: string;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'claim_amount', type: 'decimal', precision: 10, scale: 2 })
   claimAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'approved_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
   approvedAmount: number;
 
-  @Column({ type: 'enum', enum: ClaimStatus, default: ClaimStatus.DRAFT })
+  @Column({ type: 'varchar', default: ClaimStatus.DRAFT })
   status: ClaimStatus;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'submission_date', type: 'timestamp', nullable: true })
   submissionDate: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'response_date', type: 'timestamp', nullable: true })
   responseDate: Date;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string;
 
-  @Column({ type: 'jsonb', nullable: true })
-  claimData: any;
+  @Column({ name: 'claim_data', type: 'jsonb', nullable: true })
+  claimData?: any;
 
-  @Column({ type: 'jsonb', nullable: true })
-  responseData: any;
-
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

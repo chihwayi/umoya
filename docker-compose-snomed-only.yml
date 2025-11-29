@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  elasticsearch-snomed:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch-snomed
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx4g"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    ports:
+      - "9201:9200"
+    volumes:
+      - ./snowstorm/es-data-new:/usr/share/elasticsearch/data
+    networks:
+      - snomed-net
+
+  snowstorm-standalone:
+    image: snomedinternational/snowstorm:latest
+    container_name: snowstorm-standalone
+    depends_on:
+      - elasticsearch-snomed
+    environment:
+      - "JAVA_OPTS=-Xms2g -Xmx4g"
+      - elasticsearch.urls=http://elasticsearch-snomed:9200
+      - elasticsearch.index.prefix=snowstorm
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./snowstorm/import:/opt/snowstorm/import:ro
+    networks:
+      - snomed-net
+    command: ["java", "-jar", "/app.jar", "--elasticsearch.urls=http://elasticsearch-snomed:9200"]
+
+networks:
+  snomed-net:
+    driver: bridge

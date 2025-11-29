@@ -8,7 +8,7 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle, Camera, FlaskConical, HeartPulse
+  CheckCircle, Camera, FlaskConical, HeartPulse, Package
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -52,6 +52,11 @@ const EHRDashboard: React.FC = () => {
       // Redirect lab technicians directly to lab dashboard
       if (parsedUser.role === 'lab_tech' || parsedUser.role === 'lab_technician') {
         navigate(`/ehr/${tenantSlug}/lab`);
+        return;
+      }
+      // Redirect pharmacists directly to pharmacy dashboard
+      if (parsedUser.role === 'pharmacist' || parsedUser.role === 'pharmacy_tech' || parsedUser.role === 'pharmacy') {
+        navigate(`/ehr/${tenantSlug}/pharmacy`);
         return;
       }
       
@@ -109,10 +114,13 @@ const EHRDashboard: React.FC = () => {
           { icon: Bell, label: 'Notifications', desc: 'Patient alerts', color: 'from-indigo-500 to-blue-500' },
         ];
       case 'pharmacist':
+      case 'pharmacy_tech':
+      case 'pharmacy':
         return [
+          { icon: Package, label: 'Pharmacy Dashboard', desc: 'Inventory, orders & dispensing', color: 'from-indigo-500 to-purple-500', route: 'pharmacy' },
           { icon: Pill, label: 'Prescriptions', desc: 'Dispense medications', color: 'from-green-500 to-teal-500' },
           { icon: TestTube, label: 'Drug Interactions', desc: 'Safety checks', color: 'from-red-500 to-orange-500' },
-          { icon: BarChart3, label: 'Inventory', desc: 'Stock management', color: 'from-blue-500 to-indigo-500' },
+          { icon: BarChart3, label: 'Inventory', desc: 'Stock management', color: 'from-blue-500 to-indigo-500', route: 'pharmacy' },
         ];
       case 'lab_tech':
       case 'lab_technician':
@@ -124,14 +132,17 @@ const EHRDashboard: React.FC = () => {
         ];
       case 'accounts':
         return [
+          { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial overview', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
           { icon: Users, label: 'Patient Directory', desc: 'Lookup patient accounts & balances', color: 'from-blue-500 to-cyan-500', route: 'patients' },
           { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
           { icon: FileText, label: 'Billing Queue', desc: 'Manage outstanding invoices', color: 'from-indigo-500 to-slate-500', route: 'accounts' },
-          { icon: Shield, label: 'Medical Aid Claims', desc: 'File and reconcile remittances', color: 'from-emerald-500 to-teal-500', route: 'accounts' },
         ];
       case 'admin':
         return [
+          { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial management', color: 'from-purple-500 to-pink-500', route: 'billing' },
+          { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
           { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff & roles', color: 'from-slate-500 to-gray-500', route: 'users' },
           { icon: Shield, label: 'Security & Access', desc: 'User permissions & security', color: 'from-red-500 to-rose-500', route: 'security' },
           { icon: Eye, label: 'Audit Logs', desc: 'System activity & compliance', color: 'from-indigo-500 to-blue-500', route: 'audit' },

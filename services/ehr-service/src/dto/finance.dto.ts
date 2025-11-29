@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentStatus } from '../constants/payment-status';
 
@@ -127,3 +127,37 @@ export class CreateFinanceTransactionDto {
   dueDate?: string;
 }
 
+export class CreateInvoiceTemplateDto {
+  @ApiProperty({ example: 'Standard Invoice' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({
+    example: {
+      headerTitle: 'MediCore Health',
+      headerSubtitle: 'Excellence in Care',
+      addressLines: ['123 Health St.', 'Bulawayo'],
+      brandColor: '#2563eb',
+      footerNotes: ['Thank you for your payment.'],
+    },
+  })
+  @IsObject()
+  templateContent: Record<string, any>;
+
+  @ApiProperty({ example: ['patient.first_name', 'transaction.amount'], required: false })
+  @IsOptional()
+  @IsArray()
+  variables?: string[];
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isDefault?: boolean;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateInvoiceTemplateDto extends PartialType(CreateInvoiceTemplateDto) {}

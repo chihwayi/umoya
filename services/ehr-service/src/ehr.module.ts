@@ -7,6 +7,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 // Controllers
 import { AuthController } from './controllers/auth.controller';
 import { PatientController } from './controllers/patient.controller';
+import { PatientHistoryController } from './controllers/patient-history.controller';
 import { AppointmentController } from './controllers/appointment.controller';
 import { MedicalRecordController } from './controllers/medical-record.controller';
 import { PrescriptionController } from './controllers/prescription.controller';
@@ -43,10 +44,20 @@ import { FinanceController } from './controllers/finance.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
 import { TerminologyController } from './controllers/terminology.controller';
 import { MetricsController } from './controllers/metrics.controller';
+import { MedicationHistoryController } from './controllers/medication-history.controller';
+import { PrescriptionTemplateController } from './controllers/prescription-template.controller';
+import { WaitlistController } from './controllers/waitlist.controller';
+import { DiabetesController } from './controllers/diabetes.controller';
+import { CcdaController } from './controllers/ccda.controller';
+import { HipaaAuditController } from './controllers/hipaa-audit.controller';
+import { QualityMeasuresController } from './controllers/quality-measures.controller';
+import { PharmacyController } from './controllers/pharmacy.controller';
+import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
 import { PatientService } from './services/patient.service';
+import { PatientHistoryService } from './services/patient-history.service';
 import { AppointmentService } from './services/appointment.service';
 import { MedicalRecordService } from './services/medical-record.service';
 import { PrescriptionService } from './services/prescription.service';
@@ -84,19 +95,37 @@ import { HivTptTrackerService } from './services/hiv-tpt-tracker.service';
 import { HivPediatricDosingService } from './services/hiv-pediatric-dosing.service';
 import { HivMonthlyReturnService } from './services/hiv-monthly-return.service';
 import { ImagingService } from './services/imaging.service';
+import { StorageService } from './services/storage.service';
 import { MaternityService } from './services/maternity.service';
 import { OncologyService } from './services/oncology.service';
 import { OphthalmologyService } from './services/ophthalmology.service';
 import { FinanceService } from './services/finance.service';
+import { InvoicePdfService } from './services/invoice-pdf.service';
+import { InvoiceTemplateService } from './services/invoice-template.service';
 import { CardiologyService } from './services/cardiology.service';
 import { TerminologyService } from './services/terminology.service';
 import { CdssHookService } from './services/cdss-hook.service';
 import { SpecialtyAutomationService } from './services/specialty-automation.service';
 import { MetricsService } from './services/metrics.service';
+import { MedicationHistoryService } from './services/medication-history.service';
+import { PrescriptionTemplateService } from './services/prescription-template.service';
+import { WaitlistService } from './services/waitlist.service';
+import { DiabetesService } from './services/diabetes.service';
+import { DiabetesCdsService } from './services/diabetes-cds.service';
+import { DiabetesDeviceIntegrationService } from './services/diabetes-device-integration.service';
+import { CcdaService } from './services/ccda.service';
+import { HipaaAuditService } from './services/hipaa-audit.service';
+import { PharmacyService } from './services/pharmacy.service';
+import { DoctorAvailabilityService } from './services/doctor-availability.service';
+import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
+import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
+import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
+import { QualityMeasuresService } from './services/quality-measures.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TenantMiddleware } from './middleware/tenant.middleware';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -111,6 +140,7 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
   controllers: [
     AuthController,
     PatientController,
+    PatientHistoryController,
     AppointmentController,
     MedicalRecordController,
     PrescriptionController,
@@ -147,10 +177,20 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     FinanceController,
     TerminologyController,
     MetricsController,
+    MedicationHistoryController,
+    PrescriptionTemplateController,
+    WaitlistController,
+    DiabetesController,
+    CcdaController,
+    HipaaAuditController,
+    QualityMeasuresController,
+    PharmacyController,
+    DoctorAvailabilityController,
   ],
   providers: [
     AuthService,
     PatientService,
+    PatientHistoryService,
     AppointmentService,
     MedicalRecordService,
     PrescriptionService,
@@ -188,15 +228,33 @@ import { TenantMiddleware } from './middleware/tenant.middleware';
     HivPediatricDosingService,
     HivMonthlyReturnService,
     ImagingService,
+    StorageService,
     MaternityService,
     OncologyService,
     OphthalmologyService,
     CardiologyService,
     FinanceService,
+    InvoicePdfService,
+    InvoiceTemplateService,
     TerminologyService,
     CdssHookService,
     SpecialtyAutomationService,
     MetricsService,
+    MedicationHistoryService,
+    PrescriptionTemplateService,
+    WaitlistService,
+    DiabetesService,
+    DiabetesCdsService,
+    DiabetesDeviceIntegrationService,
+    CcdaService,
+    HipaaAuditService,
+    HipaaAuditInterceptor,
+    MinimumNecessaryInterceptor,
+    MinimumNecessaryGuard,
+    QualityMeasuresService,
+    PharmacyService,
+    DoctorAvailabilityService,
+    RolesGuard,
     JwtStrategy,
   ],
 })

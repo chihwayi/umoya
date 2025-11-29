@@ -39,7 +39,8 @@ interface ImagingStudyViewerModalProps {
 interface ImagingFile {
   id: string;
   file_name: string;
-  file_path: string;
+  file_path?: string | null;
+  download_url?: string | null;
   file_type: 'DICOM' | 'JPEG' | 'PNG' | 'PDF' | 'TIFF';
   file_size?: number;
   image_number?: number;
@@ -47,6 +48,8 @@ interface ImagingFile {
   is_primary?: boolean;
   uploaded_at?: string;
   uploaded_by_name?: string;
+  storage_mode?: string;
+  signed_url_expires_at?: string | null;
 }
 
 interface ImagingAnnotationRecord {
@@ -90,10 +93,11 @@ const determineFileType = (file: File): ImagingFile['file_type'] => {
 };
 
 const getImageDataUrl = (file: ImagingFile) => {
-  if (!file?.file_path) return '';
-  if (file.file_path.startsWith('http')) return file.file_path;
-  if (file.file_path.startsWith('data:')) return file.file_path;
-  return file.file_path;
+  if (!file) return '';
+  const source = file.file_path || file.download_url || '';
+  if (!source) return '';
+  if (source.startsWith('http') || source.startsWith('data:')) return source;
+  return source;
 };
 
 const formatCurrency = (value?: number | string | null) => {
@@ -181,7 +185,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       } catch (error: any) {
         console.error('Failed to load annotations', error);
         const message = error?.response?.data?.message || 'Failed to load annotations';
-        showError(message);
+        showError(message, 'error');
       } finally {
         if (annotationLoadIdRef.current === imageId) {
           setAnnotationsLoading(false);
@@ -202,12 +206,12 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
         await ehrApi.addImageAnnotation(tenantSlug, token, imageId, annotation);
         await loadAnnotations(imageId);
         if (!options.muteSuccess) {
-          showSuccess('Annotation saved');
+          showSuccess('Annotation saved', 'success');
         }
       } catch (error: any) {
         console.error('Failed to save annotation', error);
         const message = error?.response?.data?.message || 'Failed to save annotation';
-        showError(message);
+        showError(message, 'error');
       }
     },
     [loadAnnotations, showError, showSuccess, tenantSlug, token],
@@ -305,13 +309,13 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       if (!file) return;
 
       if (awaitingPayment) {
-        showError('Payment confirmation required before uploading images.');
+        showError('Payment confirmation required before uploading images.', 'error');
         event.target.value = '';
         return;
       }
 
       if (file.size > 75 * 1024 * 1024) {
-        showError('File size exceeds 75MB limit');
+        showError('File size exceeds 75MB limit', 'error');
         return;
       }
 
@@ -331,13 +335,13 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
         };
 
         await ehrApi.uploadImagingStudyImage(tenantSlug, token, study.id, payload);
-        showSuccess('Image uploaded successfully');
+        showSuccess('Image uploaded successfully', 'success');
         if (onRefresh) {
           await onRefresh();
         }
       } catch (error) {
         console.error('Failed to upload image', error);
-        showError('Failed to upload image');
+        showError('Failed to upload image', 'error');
       } finally {
         setUploading(false);
         event.target.value = '';
@@ -353,14 +357,14 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       try {
         setDeletingImageId(imageId);
         await ehrApi.deleteImagingStudyImage(tenantSlug, token, study.id, imageId);
-        showSuccess('Image deleted');
+        showSuccess('Image deleted', 'success');
         if (onRefresh) {
           await onRefresh();
         }
         return true;
       } catch (error) {
         console.error('Failed to delete image', error);
-        showError('Failed to delete image');
+        showError('Failed to delete image', 'error');
         return false;
       } finally {
         setDeletingImageId((current) => (current === imageId ? null : current));
@@ -374,7 +378,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       if (!study?.id) return;
 
       if (awaitingPayment) {
-        showError('Payment confirmation required before modifying study images.');
+        showError('Payment confirmation required before modifying study images.', 'error');
         return;
       }
 
@@ -440,44 +444,75 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
     : 'N/A';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" role="dialog" aria-modal>
-      <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-indigo-600 font-semibold mb-1">Study Viewer</p>
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Images className="w-5 h-5 text-indigo-500" />
-              {study.study_name}
-            </h2>
-            <div className="flex flex-wrap gap-4 text-xs text-slate-500 mt-2">
-              <span className="flex items-center gap-1">
-                <User className="w-3 h-3" /> {study.patient_name} ({study.patient_number})
-              </span>
-              <span>
-                Age {patientAge}, {study.gender}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> {studyDateDisplay}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" /> {study.study_time?.substring(0, 5) || 'N/A'}
-              </span>
-              <span className="flex items-center gap-1">
-                <Info className="w-3 h-3" /> {study.modality_code}
-              </span>
+    <div
+      className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm overflow-y-auto"
+      role="dialog"
+      aria-modal
+    >
+      <div className="min-h-full flex items-start justify-center p-4 sm:py-10">
+        <div className="w-full lg:max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col mt-6 sm:mt-0 sm:max-h-[95vh]">
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-800 to-sky-600 px-6 py-5 text-white relative">
+            <button
+              onClick={handleClose}
+              className="absolute right-4 top-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition text-white"
+              aria-label="Close viewer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between pr-10">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 text-xs uppercase tracking-widest text-white/70">
+                  <Images className="w-4 h-4" />
+                  Study Viewer
+                </div>
+                <h2 className="text-2xl font-semibold leading-snug flex flex-wrap gap-2">
+                  {study.study_name}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs font-medium">
+                    {study.modality_name}
+                  </span>
+                </h2>
+                <p className="text-sm text-white/80 flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1">
+                    <User className="w-4 h-4" /> {study.patient_name} ({study.patient_number})
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="w-4 h-4" /> {studyDateDisplay}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-4 h-4" /> {study.study_time?.substring(0, 5) || 'N/A'}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Info className="w-4 h-4" /> Age {patientAge}, {study.gender}
+                  </span>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full md:w-auto">
+                {[
+                  { label: 'Images', value: images.length },
+                  {
+                    label: 'Status',
+                    value: study.study_status?.replace(/_/g, ' ') || 'Pending',
+                  },
+                  {
+                    label: 'Payment',
+                    value: study.payment_status ? study.payment_status.replace(/_/g, ' ') : 'N/A',
+                  },
+                  { label: 'Priority', value: (study.priority || 'Routine').toUpperCase() },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-xl bg-white/10 px-3 py-2 text-xs text-white/80"
+                  >
+                    <p className="uppercase tracking-wide text-[10px]">{stat.label}</p>
+                    <p className="font-semibold text-sm">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={handleClose}
-            className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
-            aria-label="Close viewer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+          <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-slate-50">
           <div className="w-full lg:w-2/3 border-r bg-slate-50 flex flex-col">
             {awaitingPayment && (
               <div className="px-4 py-3 border-b border-amber-200 bg-amber-50 text-amber-700 flex items-start gap-3">
@@ -499,7 +534,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-2 px-4 py-3 border-b bg-white">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b bg-white sticky top-0 z-10">
               <button
                 onClick={() => setTab('images')}
                 className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
@@ -535,7 +570,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
             <div className="flex-1 overflow-auto relative">
               {tab === 'images' && (
                 <div className="flex flex-col lg:flex-row h-full">
-                  <div className="lg:w-1/4 border-b lg:border-b-0 lg:border-r bg-white overflow-auto">
+                  <div className="lg:w-1/4 border-b lg:border-b-0 lg:border-r bg-white overflow-auto max-h-60 lg:max-h-full">
                     <div className="p-4 space-y-3">
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span>Available Images</span>
@@ -604,7 +639,10 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                             imageStack={dicomImages}
                             currentIndex={currentDicomIndex >= 0 ? currentDicomIndex : undefined}
                             onIndexChange={handleStackIndexChange}
-                            annotations={currentAnnotations}
+                            annotations={currentAnnotations.map(ann => ({
+                              ...ann,
+                              annotation_text: ann.annotation_text ?? undefined
+                            }))}
                             readOnly={!canAnnotate}
                             onCreateAnnotation={canAnnotate ? handleAnnotationCreated : undefined}
                             overlay={
@@ -615,7 +653,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
                             }
                             onError={(err) => {
                               console.error('DICOM viewer error', err);
-                              showError('Unable to render DICOM image. Please download and open externally.');
+                              showError('Unable to render DICOM image. Please download and open externally.', 'error');
                             }}
                           />
                         </div>
@@ -923,6 +961,7 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
       <ConfirmationDialog

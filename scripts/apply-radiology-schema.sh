@@ -143,19 +143,25 @@ CREATE TABLE IF NOT EXISTS imaging_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE,
   file_name VARCHAR(255) NOT NULL,
-  file_path TEXT NOT NULL,
+  file_path TEXT,
   file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('DICOM','JPEG','PNG','PDF','TIFF')),
   file_size BIGINT,
   image_number INTEGER,
   view_position VARCHAR(50),
   is_primary BOOLEAN DEFAULT false,
   uploaded_by UUID REFERENCES users(id),
-  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  object_key TEXT,
+  content_type VARCHAR(100),
+  storage_mode VARCHAR(10) DEFAULT 'db' CHECK (storage_mode IN ('db','object')),
+  file_checksum VARCHAR(128)
 );
 
 CREATE INDEX IF NOT EXISTS idx_imaging_files_imaging_study_id ON imaging_files(imaging_study_id);
 CREATE INDEX IF NOT EXISTS idx_imaging_files_is_primary ON imaging_files(is_primary);
 CREATE INDEX IF NOT EXISTS idx_imaging_files_uploaded_at ON imaging_files(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_imaging_files_object_key ON imaging_files(object_key);
+ALTER TABLE imaging_files ALTER COLUMN file_path DROP NOT NULL;
 
 -- Imaging Reports
 CREATE TABLE IF NOT EXISTS imaging_reports (

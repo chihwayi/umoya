@@ -3,9 +3,9 @@ import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
-import { Prescription } from '../entities/prescription.entity';
-import { LabOrder } from '../entities/lab-order.entity';
-import { Bill } from '../entities/billing.entity';
+import { Prescription, PrescriptionStatus } from '../entities/prescription.entity';
+import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
+import { Bill, BillStatus } from '../entities/billing.entity';
 
 @Injectable()
 export class ReportsService {
@@ -28,9 +28,11 @@ export class ReportsService {
       summary: {
         totalVisits: appointments.length,
         lastVisit: appointments[0]?.appointmentDate,
-        activePrescriptions: prescriptions.filter(p => p.status === 'active').length,
-        pendingLabResults: labOrders.filter(l => l.status === 'pending').length,
-        chronicConditions: patient?.medicalHistory?.split(',') || []
+        activePrescriptions: prescriptions.filter((p) => p.status === PrescriptionStatus.ACTIVE).length,
+        pendingLabResults: labOrders.filter(
+          (l) => l.status !== LabOrderStatus.COMPLETED && l.status !== LabOrderStatus.CANCELLED,
+        ).length,
+        chronicConditions: patient?.medicalHistory?.split(',') || [],
       },
       recentActivity: {
         appointments: appointments.slice(0, 5),
@@ -55,8 +57,8 @@ export class ReportsService {
     const bills = await queryBuilder.getMany();
     
     const totalRevenue = bills.reduce((sum, bill) => sum + Number(bill.totalAmount), 0);
-    const paidBills = bills.filter(b => b.status === 'paid');
-    const pendingBills = bills.filter(b => b.status === 'pending');
+    const paidBills = bills.filter((b) => b.status === BillStatus.PAID);
+    const pendingBills = bills.filter((b) => b.status === BillStatus.PENDING);
     
     return {
       period: { startDate: query.startDate, endDate: query.endDate },
@@ -73,8 +75,8 @@ export class ReportsService {
         byStatus: {
           paid: paidBills.length,
           pending: pendingBills.length,
-          overdue: bills.filter(b => b.status === 'overdue').length
-        }
+          overdue: bills.filter((b) => b.status === BillStatus.OVERDUE).length,
+        },
       }
     };
   }
@@ -89,9 +91,11 @@ export class ReportsService {
     const prescriptions = await prescriptionRepo.find();
 
     // Common diagnoses analysis
-    const diagnoses = records.map(r => r.diagnosis).filter(Boolean);
-    const diagnosisCount = diagnoses.reduce((acc, diagnosis) => {
-      acc[diagnosis] = (acc[diagnosis] || 0) + 1;
+    const diagnoses = records.flatMap((record) => record.diagnoses?.map((diagnosis) => diagnosis.description) ?? []);
+    const diagnosisCount = diagnoses.reduce<Record<string, number>>((acc, diagnosis) => {
+      if (diagnosis) {
+        acc[diagnosis] = (acc[diagnosis] || 0) + 1;
+      }
       return acc;
     }, {});
 
@@ -101,7 +105,7 @@ export class ReportsService {
         totalConsultations: appointments.length,
         completedConsultations: appointments.filter(a => a.status === 'completed').length,
         totalPrescriptions: prescriptions.length,
-        activePrescriptions: prescriptions.filter(p => p.status === 'active').length
+        activePrescriptions: prescriptions.filter((p) => p.status === PrescriptionStatus.ACTIVE).length,
       },
       topDiagnoses: Object.entries(diagnosisCount)
         .sort(([,a], [,b]) => (b as number) - (a as number))
@@ -141,7 +145,7 @@ export class ReportsService {
         .select('SUM(bill.totalAmount)', 'total')
         .where('bill.createdAt >= :startOfMonth', { startOfMonth })
         .getRawOne(),
-      prescriptionRepo.count({ where: { status: 'active' } })
+      prescriptionRepo.count({ where: { status: PrescriptionStatus.ACTIVE } }),
     ]);
 
     return {
@@ -201,9 +205,9 @@ export class ReportsService {
     return {
       total: prescriptions.length,
       byStatus: {
-        active: prescriptions.filter(p => p.status === 'active').length,
-        completed: prescriptions.filter(p => p.status === 'completed').length,
-        cancelled: prescriptions.filter(p => p.status === 'cancelled').length
+        active: prescriptions.filter((p) => p.status === PrescriptionStatus.ACTIVE).length,
+        completed: prescriptions.filter((p) => p.status === PrescriptionStatus.COMPLETED).length,
+        cancelled: prescriptions.filter((p) => p.status === PrescriptionStatus.CANCELLED).length,
       },
       topMedications: Object.entries(medicationCount)
         .sort(([,a], [,b]) => (b as number) - (a as number))
@@ -224,9 +228,9 @@ export class ReportsService {
     return {
       total: labOrders.length,
       byStatus: {
-        pending: labOrders.filter(l => l.status === 'pending').length,
-        completed: labOrders.filter(l => l.status === 'completed').length,
-        cancelled: labOrders.filter(l => l.status === 'cancelled').length
+        pending: labOrders.filter((l) => l.status === LabOrderStatus.ORDERED).length,
+        completed: labOrders.filter((l) => l.status === LabOrderStatus.COMPLETED).length,
+        cancelled: labOrders.filter((l) => l.status === LabOrderStatus.CANCELLED).length,
       },
       turnaroundTime: {
         average: '2.5 days',

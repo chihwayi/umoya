@@ -1,8 +1,27 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
-import { PAYMENT_STATUS } from '../constants/payment-status';
+import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
+import {
+  CreateOncologyImagingFindingDto,
+  CreateOncologyPathologyDto,
+  CreateResponseAssessmentDto,
+  UpdateOncologyBiomarkersDto,
+  CalculateAssessmentRecistDto,
+  RECIST_RESPONSES,
+  CreateSurvivorshipPlanDto,
+  UpdateSurvivorshipPlanDto,
+  EnrollClinicalTrialDto,
+  UpdateClinicalTrialStatusDto,
+  RecordTrialComplianceDto,
+  RecordPatientReportedOutcomeDto,
+  ProHistoryQueryDto,
+  RecordGenomicDataDto,
+  RecordFinancialToxicityDto,
+  OncologyAnalyticsQueryDto,
+  OncologyAlertCheckDto,
+} from '../dto/oncology.dto';
 
 interface CaseFilter {
   status?: string;
@@ -95,6 +114,62 @@ export class OncologyService {
       moduleId: validated?.moduleId ?? raw?.moduleId,
       definitionStatus: validated?.definitionStatus ?? raw?.definitionStatus,
     };
+  }
+
+  private appendCaseAnalyticsFilters(
+    filters: OncologyAnalyticsQueryDto | undefined,
+    params: any[],
+    alias = 'oc',
+  ): string[] {
+    if (!filters) {
+      return [];
+    }
+    const clauses: string[] = [];
+    if (filters.cancerType) {
+      params.push(`%${filters.cancerType.toLowerCase()}%`);
+      clauses.push(`LOWER(${alias}.primary_diagnosis) LIKE $${params.length}`);
+    }
+    if (filters.stage) {
+      params.push(filters.stage.toLowerCase());
+      clauses.push(`LOWER(${alias}.overall_stage) = $${params.length}`);
+    }
+    if (filters.oncologistId) {
+      params.push(filters.oncologistId);
+      clauses.push(`${alias}.oncologist_id = $${params.length}`);
+    }
+    if (filters.biomarker) {
+      params.push(`%${filters.biomarker.toLowerCase()}%`);
+      clauses.push(
+        `EXISTS (
+          SELECT 1
+          FROM oncology_pathology op
+          WHERE op.oncology_case_id = ${alias}.id
+            AND LOWER(COALESCE(op.biomarkers::text, '') || ' ' || COALESCE(op.genomic_data::text, ''))
+              LIKE $${params.length}
+        )`,
+      );
+    }
+    return clauses;
+  }
+
+  private appendDateRangeFilters(
+    column: string,
+    filters: OncologyAnalyticsQueryDto | undefined,
+    params: any[],
+  ): string[] {
+    if (!filters) {
+      return [];
+    }
+    const clauses: string[] = [];
+    if (filters.startDate) {
+      params.push(filters.startDate);
+      clauses.push(`${column} >= $${params.length}::date`);
+    }
+    if (filters.endDate) {
+      params.push(filters.endDate);
+      clauses.push(`${column} <= $${params.length}::date`);
+    }
+    return clauses;
   }
 
   async listCases(tenantDb: DataSource, filters: CaseFilter = {}) {
@@ -722,7 +797,7 @@ export class OncologyService {
     const feeAmountValue = Number.isFinite(feeAmountNumber) && feeAmountNumber > 0 ? feeAmountNumber : 0;
 
     let financeTransactionId: string | null = null;
-    let paymentStatus: PAYMENT_STATUS = PAYMENT_STATUS.PAYMENT_CONFIRMED;
+    let paymentStatus: PaymentStatus = PAYMENT_STATUS.PAYMENT_CONFIRMED;
     const requestedStatus: string = status || 'scheduled';
     let effectiveStatus: string = requestedStatus;
 
@@ -1217,6 +1292,1721 @@ export class OncologyService {
       diagnosisDistribution,
       regimenMix,
       snomedAdverseEvents,
+    };
+  }
+
+  async recordImagingFinding(
+    tenantDb: DataSource,
+    caseId: string,
+    payload: CreateOncologyImagingFindingDto,
+    userId?: string,
+  ) {
+    if (!payload.imagingDate || !payload.imagingType) {
+      throw new BadRequestException('imagingDate and imagingType are required');
+    }
+
+    const [created] = await tenantDb.query(
+      `
+        INSERT INTO oncology_imaging_findings (
+          oncology_case_id,
+          imaging_study_id,
+          imaging_date,
+          imaging_type,
+          modality,
+          findings,
+          tumor_size_cm,
+          tumor_location,
+          lymph_nodes_involved,
+          metastatic_sites,
+          recist_response,
+          recist_criteria_met,
+          radiologist_id,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3::date,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12,
+          $13,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        payload.imagingStudyId ?? null,
+        payload.imagingDate,
+        payload.imagingType,
+        payload.modality ?? null,
+        payload.findings ?? null,
+        payload.tumorSizeCm ?? null,
+        payload.tumorLocation ?? null,
+        typeof payload.lymphNodesInvolved === 'number' ? payload.lymphNodesInvolved : null,
+        payload.metastaticSites && payload.metastaticSites.length ? payload.metastaticSites : null,
+        payload.recistResponse ?? null,
+        typeof payload.recistCriteriaMet === 'boolean' ? payload.recistCriteriaMet : null,
+        payload.radiologistId ?? userId ?? null,
+      ],
+    );
+
+    this.logger.log(`Recorded imaging finding ${created.id} for oncology case ${caseId}`);
+    return created;
+  }
+
+  async getImagingFindings(tenantDb: DataSource, caseId: string) {
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          oif.*,
+          i.study_type,
+          i.modality AS imaging_study_modality,
+          i.findings AS imaging_study_findings,
+          (rad.first_name || ' ' || rad.last_name) AS radiologist_name
+        FROM oncology_imaging_findings oif
+        LEFT JOIN imaging_studies i ON i.id = oif.imaging_study_id
+        LEFT JOIN users rad ON rad.id = oif.radiologist_id
+        WHERE oif.oncology_case_id = $1
+        ORDER BY oif.imaging_date DESC, oif.created_at DESC
+      `,
+      [caseId],
+    );
+
+    return { findings: rows };
+  }
+
+  async getImagingTimeline(tenantDb: DataSource, caseId: string) {
+    const rows = await tenantDb.query(
+      `
+        SELECT id, imaging_date, tumor_size_cm, recist_response, recist_criteria_met
+        FROM oncology_imaging_findings
+        WHERE oncology_case_id = $1
+        ORDER BY imaging_date ASC, created_at ASC
+      `,
+      [caseId],
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      date: row.imaging_date,
+      tumorSizeCm: row.tumor_size_cm,
+      recistResponse: row.recist_response,
+      recistCriteriaMet: row.recist_criteria_met,
+    }));
+  }
+
+  async calculateRecistResponse(tenantDb: DataSource, findingId: string) {
+    const [finding] = await tenantDb.query(`SELECT * FROM oncology_imaging_findings WHERE id = $1`, [findingId]);
+    if (!finding) {
+      throw new NotFoundException(`Imaging finding ${findingId} not found`);
+    }
+
+    if (finding.tumor_size_cm === null || finding.tumor_size_cm === undefined) {
+      await tenantDb.query(
+        `UPDATE oncology_imaging_findings SET recist_response = 'NE', recist_criteria_met = false, updated_at = NOW() WHERE id = $1`,
+        [findingId],
+      );
+      return { findingId, recistResponse: 'NE', percentChange: null };
+    }
+
+    const [baseline] = await tenantDb.query(
+      `
+        SELECT tumor_size_cm
+        FROM oncology_imaging_findings
+        WHERE oncology_case_id = $1
+          AND tumor_size_cm IS NOT NULL
+        ORDER BY imaging_date ASC, created_at ASC
+        LIMIT 1
+      `,
+      [finding.oncology_case_id],
+    );
+
+    if (!baseline || !baseline.tumor_size_cm || Number(baseline.tumor_size_cm) === 0) {
+      await tenantDb.query(
+        `UPDATE oncology_imaging_findings SET recist_response = 'NE', recist_criteria_met = false, updated_at = NOW() WHERE id = $1`,
+        [findingId],
+      );
+      return { findingId, recistResponse: 'NE', percentChange: null };
+    }
+
+    const baselineSize = Number(baseline.tumor_size_cm);
+    const currentSize = Number(finding.tumor_size_cm);
+    const percentChange = ((currentSize - baselineSize) / baselineSize) * 100;
+
+    let recist: 'CR' | 'PR' | 'SD' | 'PD' | 'NE' = 'SD';
+    if (currentSize <= 0.1) {
+      recist = 'CR';
+    } else if (percentChange <= -30) {
+      recist = 'PR';
+    } else if (percentChange >= 20) {
+      recist = 'PD';
+    }
+
+    const { rows } = await tenantDb.query(
+      `UPDATE oncology_imaging_findings SET recist_response = $1, recist_criteria_met = true, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [recist, findingId],
+    );
+
+    return {
+      finding: rows[0],
+      percentChange: Number(percentChange.toFixed(2)),
+    };
+  }
+
+  async recordPathology(
+    tenantDb: DataSource,
+    caseId: string,
+    payload: CreateOncologyPathologyDto,
+    userId?: string,
+  ) {
+    if (!payload.specimenDate) {
+      throw new BadRequestException('specimenDate is required');
+    }
+
+    const [created] = await tenantDb.query(
+      `
+        INSERT INTO oncology_pathology (
+          oncology_case_id,
+          pathology_report_id,
+          specimen_date,
+          specimen_type,
+          histology_type,
+          histology_snomed_code,
+          histology_snomed_term,
+          grade,
+          stage_t,
+          stage_n,
+          stage_m,
+          biomarkers,
+          genetic_testing,
+          genomic_data,
+          notes,
+          pathologist_id,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3::date,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          COALESCE($12::jsonb,'{}'::jsonb),
+          COALESCE($13::jsonb,'{}'::jsonb),
+          COALESCE($14::jsonb,'{}'::jsonb),
+          $15,
+          $16,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        payload.pathologyReportId ?? null,
+        payload.specimenDate,
+        payload.specimenType ?? null,
+        payload.histologyType ?? null,
+        payload.histologySnomedCode ?? null,
+        payload.histologySnomedTerm ?? null,
+        payload.grade ?? null,
+        payload.stageT ?? null,
+        payload.stageN ?? null,
+        payload.stageM ?? null,
+        payload.biomarkers ? JSON.stringify(payload.biomarkers) : null,
+        payload.geneticTesting ? JSON.stringify(payload.geneticTesting) : null,
+        payload.genomicData ? JSON.stringify(payload.genomicData) : null,
+        payload.notes ?? null,
+        payload.pathologistId ?? userId ?? null,
+      ],
+    );
+
+    this.logger.log(`Recorded pathology ${created.id} for oncology case ${caseId}`);
+    return created;
+  }
+
+  async getPathology(tenantDb: DataSource, caseId: string) {
+    const [current] = await tenantDb.query(
+      `
+        SELECT
+          op.*,
+          (u.first_name || ' ' || u.last_name) AS pathologist_name
+        FROM oncology_pathology op
+        LEFT JOIN users u ON u.id = op.pathologist_id
+        WHERE op.oncology_case_id = $1
+        ORDER BY op.specimen_date DESC NULLS LAST, op.created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    return current || null;
+  }
+
+  async updatePathologyBiomarkers(
+    tenantDb: DataSource,
+    pathologyId: string,
+    payload: UpdateOncologyBiomarkersDto,
+  ) {
+    if (!payload.biomarkers && !payload.geneticTesting && !payload.genomicData) {
+      throw new BadRequestException('At least one payload field is required');
+    }
+
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE oncology_pathology
+        SET
+          biomarkers = CASE WHEN $2::jsonb IS NULL THEN biomarkers ELSE COALESCE(biomarkers,'{}'::jsonb) || $2::jsonb END,
+          genetic_testing = CASE WHEN $3::jsonb IS NULL THEN genetic_testing ELSE COALESCE(genetic_testing,'{}'::jsonb) || $3::jsonb END,
+          genomic_data = CASE WHEN $4::jsonb IS NULL THEN genomic_data ELSE COALESCE(genomic_data,'{}'::jsonb) || $4::jsonb END,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        pathologyId,
+        payload.biomarkers ? JSON.stringify(payload.biomarkers) : null,
+        payload.geneticTesting ? JSON.stringify(payload.geneticTesting) : null,
+        payload.genomicData ? JSON.stringify(payload.genomicData) : null,
+      ],
+    );
+
+    if (!updated) {
+      throw new NotFoundException(`Pathology record ${pathologyId} not found`);
+    }
+
+    return updated;
+  }
+
+  async getBiomarkerSummary(tenantDb: DataSource, caseId: string) {
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          op.*,
+          (u.first_name || ' ' || u.last_name) AS pathologist_name
+        FROM oncology_pathology op
+        LEFT JOIN users u ON u.id = op.pathologist_id
+        WHERE op.oncology_case_id = $1
+        ORDER BY op.specimen_date DESC NULLS LAST, op.created_at DESC
+      `,
+      [caseId],
+    );
+
+    if (!rows.length) {
+      return { latest: null, history: [] };
+    }
+
+    return {
+      latest: rows[0],
+      history: rows,
+    };
+  }
+
+  async recordResponseAssessment(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: CreateResponseAssessmentDto,
+    userId?: string,
+  ) {
+    if (!dto.assessmentDate) {
+      throw new BadRequestException('assessmentDate is required');
+    }
+
+    if (dto.regimenId) {
+      const [regimenCheck] = await tenantDb.query(
+        `SELECT id FROM oncology_regimens WHERE id = $1 AND oncology_case_id = $2`,
+        [dto.regimenId, caseId],
+      );
+      if (!regimenCheck) {
+        throw new BadRequestException('Regimen does not belong to this case');
+      }
+    }
+
+    const [created] = await tenantDb.query(
+      `
+        INSERT INTO oncology_response_assessments (
+          oncology_case_id,
+          regimen_id,
+          assessment_date,
+          assessment_type,
+          recist_response,
+          best_overall_response,
+          target_lesions_count,
+          target_lesions_size_cm,
+          non_target_lesions_status,
+          new_lesions,
+          assessed_by,
+          notes,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3::date,
+          $4,
+          $5,
+          COALESCE($6, $5),
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        dto.regimenId ?? null,
+        dto.assessmentDate,
+        dto.assessmentType,
+        dto.recistResponse ?? null,
+        dto.bestOverallResponse ?? null,
+        dto.targetLesionsCount ?? null,
+        dto.targetLesionsSizeCm ?? null,
+        dto.nonTargetLesionsStatus ?? null,
+        typeof dto.newLesions === 'boolean' ? dto.newLesions : null,
+        userId ?? null,
+        dto.notes ?? null,
+      ],
+    );
+
+    return created;
+  }
+
+  async getResponseHistory(tenantDb: DataSource, caseId: string) {
+    return tenantDb.query(
+      `
+        SELECT
+          ora.*,
+          (u.first_name || ' ' || u.last_name) AS assessed_by_name,
+          reg.regimen_name
+        FROM oncology_response_assessments ora
+        LEFT JOIN users u ON u.id = ora.assessed_by
+        LEFT JOIN oncology_regimens reg ON reg.id = ora.regimen_id
+        WHERE ora.oncology_case_id = $1
+        ORDER BY ora.assessment_date DESC, ora.created_at DESC
+      `,
+      [caseId],
+    );
+  }
+
+  async calculateResponseAssessmentRecist(
+    tenantDb: DataSource,
+    caseId: string,
+    assessmentId: string,
+    dto: CalculateAssessmentRecistDto,
+  ) {
+    const [current] = await tenantDb.query(
+      `SELECT * FROM oncology_response_assessments WHERE id = $1 AND oncology_case_id = $2`,
+      [assessmentId, caseId],
+    );
+    if (!current) {
+      throw new NotFoundException(`Response assessment ${assessmentId} not found`);
+    }
+
+    const baselineId = dto.baselineAssessmentId;
+    const [baseline] = baselineId
+      ? await tenantDb.query(
+          `SELECT * FROM oncology_response_assessments WHERE id = $1 AND oncology_case_id = $2`,
+          [baselineId, caseId],
+        )
+      : await tenantDb.query(
+          `
+            SELECT *
+            FROM oncology_response_assessments
+            WHERE oncology_case_id = $1
+            ORDER BY assessment_date ASC, created_at ASC
+            LIMIT 1
+          `,
+          [caseId],
+        );
+
+    if (!baseline || baseline.id === current.id) {
+      return {
+        assessmentId: current.id,
+        baselineAssessmentId: baseline?.id ?? null,
+        percentChange: null,
+        recistResponse: 'NE',
+      };
+    }
+
+    if (
+      current.target_lesions_size_cm === null ||
+      current.target_lesions_size_cm === undefined ||
+      !baseline.target_lesions_size_cm
+    ) {
+      return {
+        assessmentId: current.id,
+        baselineAssessmentId: baseline.id,
+        percentChange: null,
+        recistResponse: 'NE',
+      };
+    }
+
+    const baselineSize = Number(baseline.target_lesions_size_cm);
+    const currentSize = Number(current.target_lesions_size_cm);
+    if (!Number.isFinite(baselineSize) || baselineSize === 0) {
+      return {
+        assessmentId: current.id,
+        baselineAssessmentId: baseline.id,
+        percentChange: null,
+        recistResponse: 'NE',
+      };
+    }
+
+    const percentChange = ((currentSize - baselineSize) / baselineSize) * 100;
+    let recist: (typeof RECIST_RESPONSES)[number] = 'SD';
+    if (current.new_lesions) {
+      recist = 'PD';
+    } else if (current.target_lesions_count === 0 || currentSize <= 0.1) {
+      recist = 'CR';
+    } else if (percentChange <= -30) {
+      recist = 'PR';
+    } else if (percentChange >= 20) {
+      recist = 'PD';
+    }
+
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE oncology_response_assessments
+        SET recist_response = $1,
+            best_overall_response = CASE
+              WHEN best_overall_response IS NULL THEN $1
+              ELSE best_overall_response
+            END,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+      `,
+      [recist, assessmentId],
+    );
+
+    return {
+      assessment: updated,
+      percentChange: Number(percentChange.toFixed(2)),
+      baselineAssessmentId: baseline.id,
+    };
+  }
+
+  async getBestOverallResponse(tenantDb: DataSource, caseId: string) {
+    const [latest] = await tenantDb.query(
+      `
+        SELECT recist_response, assessment_date, best_overall_response
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date DESC, created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const distribution = await tenantDb.query(
+      `
+        SELECT
+          recist_response,
+          COUNT(*)::int AS count
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+        GROUP BY recist_response
+      `,
+      [caseId],
+    );
+
+    const progression = await tenantDb.query(
+      `
+        SELECT assessment_date
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+          AND (recist_response = 'PD' OR new_lesions = true)
+        ORDER BY assessment_date ASC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    return {
+      latest,
+      distribution,
+      firstProgressionDate: progression[0]?.assessment_date ?? null,
+    };
+  }
+
+  async getSurvivalMetrics(tenantDb: DataSource, caseId: string) {
+    const [caseRow] = await tenantDb.query(
+      `
+        SELECT diagnosis_date, status, updated_at
+        FROM oncology_cases
+        WHERE id = $1
+      `,
+      [caseId],
+    );
+
+    const [baseline] = await tenantDb.query(
+      `
+        SELECT assessment_date
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date ASC, created_at ASC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const [progression] = await tenantDb.query(
+      `
+        SELECT assessment_date
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+          AND (recist_response = 'PD' OR new_lesions = true)
+        ORDER BY assessment_date ASC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const now = new Date();
+    const baselineDate = baseline?.assessment_date ? new Date(baseline.assessment_date) : caseRow?.diagnosis_date ? new Date(caseRow.diagnosis_date) : null;
+
+    const progressionDate = progression?.assessment_date ? new Date(progression.assessment_date) : null;
+
+    const pfsDays =
+      baselineDate && progressionDate
+        ? Math.max(0, Math.round((progressionDate.getTime() - baselineDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : baselineDate
+        ? Math.max(0, Math.round((now.getTime() - baselineDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : null;
+
+    const deathDate =
+      caseRow?.status === 'deceased' && caseRow.updated_at ? new Date(caseRow.updated_at) : null;
+    const diagnosisDate = caseRow?.diagnosis_date ? new Date(caseRow.diagnosis_date) : baselineDate;
+
+    const osDays =
+      diagnosisDate && deathDate
+        ? Math.max(0, Math.round((deathDate.getTime() - diagnosisDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : diagnosisDate
+        ? Math.max(0, Math.round((now.getTime() - diagnosisDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : null;
+
+    return {
+      diagnosisDate: caseRow?.diagnosis_date ?? null,
+      baselineAssessmentDate: baseline?.assessment_date ?? null,
+      progressionDate: progression?.assessment_date ?? null,
+      status: caseRow?.status ?? null,
+      progressionFreeSurvivalDays: pfsDays,
+      overallSurvivalDays: osDays,
+      isProgressed: Boolean(progressionDate),
+      isDeceased: caseRow?.status === 'deceased',
+    };
+  }
+
+  private serializeJson(value?: Record<string, any> | null) {
+    return value ? JSON.stringify(value) : null;
+  }
+
+  private serializeStringArray(value?: string[] | null) {
+    return value && value.length ? value : null;
+  }
+
+  async createSurvivorshipPlan(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: CreateSurvivorshipPlanDto,
+    userId?: string,
+  ) {
+    const [existing] = await tenantDb.query(
+      `SELECT id FROM oncology_survivorship_plans WHERE oncology_case_id = $1 LIMIT 1`,
+      [caseId],
+    );
+
+    if (existing) {
+      return this.updateSurvivorshipPlan(tenantDb, existing.id, dto);
+    }
+
+    const [plan] = await tenantDb.query(
+      `
+        INSERT INTO oncology_survivorship_plans (
+          oncology_case_id,
+          treatment_completion_date,
+          follow_up_schedule,
+          surveillance_imaging_schedule,
+          long_term_side_effects,
+          recurrence_risk,
+          lifestyle_recommendations,
+          created_by,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2::date,
+          COALESCE($3::jsonb, '{}'::jsonb),
+          COALESCE($4::jsonb, '{}'::jsonb),
+          $5,
+          $6,
+          $7,
+          $8,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        dto.treatmentCompletionDate ?? null,
+        this.serializeJson(dto.followUpSchedule),
+        this.serializeJson(dto.surveillanceImagingSchedule),
+        this.serializeStringArray(dto.longTermSideEffects),
+        dto.recurrenceRisk ?? null,
+        dto.lifestyleRecommendations ?? null,
+        userId ?? null,
+      ],
+    );
+
+    return plan;
+  }
+
+  async getSurvivorshipPlan(tenantDb: DataSource, caseId: string) {
+    const [plan] = await tenantDb.query(
+      `
+        SELECT
+          osp.*,
+          (u.first_name || ' ' || u.last_name) AS created_by_name
+        FROM oncology_survivorship_plans osp
+        LEFT JOIN users u ON u.id = osp.created_by
+        WHERE osp.oncology_case_id = $1
+        ORDER BY osp.created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    return plan ?? null;
+  }
+
+  async updateSurvivorshipPlan(
+    tenantDb: DataSource,
+    planId: string,
+    dto: UpdateSurvivorshipPlanDto,
+  ) {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (dto.treatmentCompletionDate !== undefined) {
+      updates.push(`treatment_completion_date = $${params.length + 1}::date`);
+      params.push(dto.treatmentCompletionDate ?? null);
+    }
+    if (dto.followUpSchedule !== undefined) {
+      updates.push(`follow_up_schedule = COALESCE($${params.length + 1}::jsonb, '{}'::jsonb)`);
+      params.push(this.serializeJson(dto.followUpSchedule));
+    }
+    if (dto.surveillanceImagingSchedule !== undefined) {
+      updates.push(`surveillance_imaging_schedule = COALESCE($${params.length + 1}::jsonb, '{}'::jsonb)`);
+      params.push(this.serializeJson(dto.surveillanceImagingSchedule));
+    }
+    if (dto.longTermSideEffects !== undefined) {
+      updates.push(`long_term_side_effects = $${params.length + 1}`);
+      params.push(this.serializeStringArray(dto.longTermSideEffects));
+    }
+    if (dto.recurrenceRisk !== undefined) {
+      updates.push(`recurrence_risk = $${params.length + 1}`);
+      params.push(dto.recurrenceRisk ?? null);
+    }
+    if (dto.lifestyleRecommendations !== undefined) {
+      updates.push(`lifestyle_recommendations = $${params.length + 1}`);
+      params.push(dto.lifestyleRecommendations ?? null);
+    }
+
+    if (!updates.length) {
+      throw new BadRequestException('No fields to update');
+    }
+
+    updates.push(`updated_at = NOW()`);
+
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE oncology_survivorship_plans
+        SET ${updates.join(', ')}
+        WHERE id = $${params.length + 1}
+        RETURNING *
+      `,
+      [...params, planId],
+    );
+
+    if (!updated) {
+      throw new NotFoundException(`Survivorship plan ${planId} not found`);
+    }
+
+    return updated;
+  }
+
+  private addMonthsToDate(date: Date, months: number) {
+    const result = new Date(date);
+    result.setMonth(result.getMonth() + months);
+    return result;
+  }
+
+  private monthsBetween(start: Date, end: Date) {
+    const millisecondsPerMonth = 1000 * 60 * 60 * 24 * 30.4375;
+    return Number(((end.getTime() - start.getTime()) / millisecondsPerMonth).toFixed(2));
+  }
+
+  private median(values: number[]) {
+    if (!values.length) {
+      return null;
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return Number(((sorted[mid - 1] + sorted[mid]) / 2).toFixed(2));
+    }
+    return Number(sorted[mid].toFixed(2));
+  }
+
+  async getUpcomingFollowUps(tenantDb: DataSource, caseId: string) {
+    const plan = await this.getSurvivorshipPlan(tenantDb, caseId);
+    if (!plan) {
+      return [];
+    }
+
+    const visits: any[] = plan.follow_up_schedule?.visits ?? [];
+    const startDate = plan.treatment_completion_date ? new Date(plan.treatment_completion_date) : new Date();
+    const now = new Date();
+    const horizon = this.addMonthsToDate(now, 6);
+
+    const events: Array<{
+      dueDate: string;
+      intervalMonths: number;
+      tests?: string[];
+      imaging?: string[];
+    }> = [];
+
+    visits.forEach((visit) => {
+      const interval = Number(visit.interval_months ?? 3);
+      const duration = Number(visit.duration_months ?? 24);
+      const iterations = Math.max(1, Math.floor(duration / interval));
+
+      for (let i = 0; i < iterations; i++) {
+        const due = this.addMonthsToDate(startDate, interval * (i + 1));
+        if (due >= now && due <= horizon) {
+          events.push({
+            dueDate: due.toISOString(),
+            intervalMonths: interval,
+            tests: visit.tests ?? visit.tests ?? [],
+            imaging: visit.imaging ?? visit.imaging ?? [],
+          });
+        }
+      }
+    });
+
+    return events
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 10);
+  }
+
+  async generateSurvivorshipReport(tenantDb: DataSource, caseId: string) {
+    const plan = await this.getSurvivorshipPlan(tenantDb, caseId);
+    if (!plan) {
+      throw new NotFoundException(`Survivorship plan not found for case ${caseId}`);
+    }
+
+    const upcoming = await this.getUpcomingFollowUps(tenantDb, caseId);
+    const responseSummary = await this.getBestOverallResponse(tenantDb, caseId);
+    const survivalMetrics = await this.getSurvivalMetrics(tenantDb, caseId);
+
+    return {
+      plan,
+      upcomingFollowUps: upcoming,
+      responseSummary,
+      survivalMetrics,
+    };
+  }
+
+  async enrollInTrial(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: EnrollClinicalTrialDto,
+    userId?: string,
+  ) {
+    const [trial] = await tenantDb.query(
+      `
+        INSERT INTO oncology_clinical_trials (
+          oncology_case_id,
+          trial_name,
+          trial_id,
+          trial_phase,
+          enrollment_date,
+          enrollment_status,
+          protocol_compliance_percentage,
+          trial_endpoints,
+          notes,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5::date,
+          COALESCE($6,'screening'),
+          $7,
+          COALESCE($8::jsonb,'{}'::jsonb),
+          $9,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        dto.trialName,
+        dto.trialId ?? null,
+        dto.trialPhase ?? null,
+        dto.enrollmentDate ?? null,
+        dto.enrollmentStatus ?? 'screening',
+        dto.protocolCompliancePercentage ?? null,
+        dto.trialEndpoints ? JSON.stringify(dto.trialEndpoints) : null,
+        dto.notes ?? null,
+      ],
+    );
+
+    this.logger.log(`Enrolled case ${caseId} into trial ${trial.trial_name} by ${userId ?? 'system'}`);
+    return trial;
+  }
+
+  async getTrialHistory(tenantDb: DataSource, caseId: string) {
+    return tenantDb.query(
+      `
+        SELECT *
+        FROM oncology_clinical_trials
+        WHERE oncology_case_id = $1
+        ORDER BY enrollment_date DESC NULLS LAST, created_at DESC
+      `,
+      [caseId],
+    );
+  }
+
+  async updateTrialStatus(
+    tenantDb: DataSource,
+    trialId: string,
+    dto: UpdateClinicalTrialStatusDto,
+  ) {
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE oncology_clinical_trials
+        SET enrollment_status = $2,
+            protocol_compliance_percentage = COALESCE($3, protocol_compliance_percentage),
+            trial_endpoints = COALESCE($4::jsonb, trial_endpoints),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        trialId,
+        dto.enrollmentStatus,
+        dto.protocolCompliancePercentage ?? null,
+        dto.trialEndpoints ? JSON.stringify(dto.trialEndpoints) : null,
+      ],
+    );
+
+    if (!updated) {
+      throw new NotFoundException(`Clinical trial ${trialId} not found`);
+    }
+    return updated;
+  }
+
+  async trackTrialCompliance(
+    tenantDb: DataSource,
+    trialId: string,
+    dto: RecordTrialComplianceDto,
+  ) {
+    return this.updateTrialStatus(tenantDb, trialId, {
+      enrollmentStatus: 'on_treatment',
+      protocolCompliancePercentage: dto.protocolCompliancePercentage,
+      trialEndpoints: dto.trialEndpoints,
+    });
+  }
+
+  async getTrialEndpoints(tenantDb: DataSource, trialId: string) {
+    const [trial] = await tenantDb.query(
+      `SELECT trial_endpoints FROM oncology_clinical_trials WHERE id = $1`,
+      [trialId],
+    );
+    if (!trial) {
+      throw new NotFoundException(`Clinical trial ${trialId} not found`);
+    }
+    return trial.trial_endpoints ?? {};
+  }
+
+  async recordPatientReportedOutcome(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: RecordPatientReportedOutcomeDto,
+  ) {
+    const [record] = await tenantDb.query(
+      `
+        INSERT INTO oncology_patient_reported_outcomes (
+          oncology_case_id,
+          assessment_date,
+          assessment_type,
+          assessment_data,
+          total_score,
+          domain_scores,
+          completed_by_patient,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2::date,
+          $3,
+          $4::jsonb,
+          $5,
+          COALESCE($6::jsonb, '{}'::jsonb),
+          COALESCE($7, true),
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        dto.assessmentDate,
+        dto.assessmentType,
+        JSON.stringify(dto.assessmentData),
+        dto.totalScore ?? null,
+        dto.domainScores ? JSON.stringify(dto.domainScores) : null,
+        dto.completedByPatient ?? true,
+      ],
+    );
+
+    return record;
+  }
+
+  async getProHistory(tenantDb: DataSource, caseId: string, query: ProHistoryQueryDto) {
+    const params: any[] = [caseId];
+    const conditions: string[] = ['oncology_case_id = $1'];
+    if (query.assessmentType) {
+      conditions.push(`assessment_type = $2`);
+      params.push(query.assessmentType);
+    }
+
+    return tenantDb.query(
+      `
+        SELECT *
+        FROM oncology_patient_reported_outcomes
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY assessment_date DESC, created_at DESC
+      `,
+      params,
+    );
+  }
+
+  async getProTrends(tenantDb: DataSource, caseId: string) {
+    return tenantDb.query(
+      `
+        SELECT
+          assessment_type,
+          assessment_date,
+          total_score,
+          domain_scores
+        FROM oncology_patient_reported_outcomes
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date ASC, created_at ASC
+      `,
+      [caseId],
+    );
+  }
+
+  async calculateProScore(tenantDb: DataSource, proId: string) {
+    const [record] = await tenantDb.query(
+      `SELECT * FROM oncology_patient_reported_outcomes WHERE id = $1`,
+      [proId],
+    );
+    if (!record) {
+      throw new NotFoundException(`PRO record ${proId} not found`);
+    }
+    if (record.total_score !== null && record.total_score !== undefined) {
+      return record;
+    }
+
+    const data = record.assessment_data ?? {};
+    const numericValues = Object.values(data)
+      .map((value: any) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    const totalScore = numericValues.length
+      ? Number((numericValues.reduce((sum, val) => sum + val, 0) / numericValues.length).toFixed(2))
+      : null;
+
+    const [updated] = await tenantDb.query(
+      `UPDATE oncology_patient_reported_outcomes SET total_score = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [proId, totalScore],
+    );
+    return updated;
+  }
+
+  async recordGenomicData(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: RecordGenomicDataDto,
+  ) {
+    const [pathology] = await tenantDb.query(
+      `SELECT id FROM oncology_pathology WHERE id = $1 AND oncology_case_id = $2`,
+      [dto.pathologyId, caseId],
+    );
+    if (!pathology) {
+      throw new BadRequestException('Pathology record does not belong to this case');
+    }
+
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE oncology_pathology
+        SET genomic_data = COALESCE(genomic_data, '{}'::jsonb) || $2::jsonb,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [dto.pathologyId, JSON.stringify(dto.genomicData)],
+    );
+
+    return updated;
+  }
+
+  async getGenomicSummary(tenantDb: DataSource, caseId: string) {
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          id,
+          specimen_date,
+          histology_type,
+          biomarkers,
+          genetic_testing,
+          genomic_data
+        FROM oncology_pathology
+        WHERE oncology_case_id = $1 AND (genomic_data IS NOT NULL AND genomic_data <> '{}'::jsonb)
+        ORDER BY specimen_date DESC NULLS LAST, created_at DESC
+      `,
+      [caseId],
+    );
+    return rows;
+  }
+
+  private targetedTherapyLibrary = [
+    { biomarker: 'HER2', therapy: 'Trastuzumab / Pertuzumab', cancerTypes: ['breast', 'gastric'] },
+    { biomarker: 'EGFR', therapy: 'Osimertinib', cancerTypes: ['nsclc'] },
+    { biomarker: 'ALK', therapy: 'Alectinib', cancerTypes: ['nsclc'] },
+    { biomarker: 'BRAF', therapy: 'Dabrafenib + Trametinib', cancerTypes: ['melanoma', 'thyroid'] },
+    { biomarker: 'PD-L1', therapy: 'Pembrolizumab', cancerTypes: ['nsclc', 'gastric', 'cervical'] },
+  ];
+
+  async matchTargetedTherapies(tenantDb: DataSource, caseId: string) {
+    const genomicRecords = await this.getGenomicSummary(tenantDb, caseId);
+    if (!genomicRecords.length) {
+      return [];
+    }
+
+    const recommendations: Array<{ biomarker: string; therapy: string; rationale: string }> = [];
+    genomicRecords.forEach((record) => {
+      const genomicData = record.genomic_data || {};
+      Object.entries(genomicData).forEach(([key, value]) => {
+        if (!value) return;
+        const normalizedKey = key.toString().toUpperCase();
+        const match = this.targetedTherapyLibrary.find((entry) => normalizedKey.includes(entry.biomarker.toUpperCase()));
+        if (match) {
+          recommendations.push({
+            biomarker: key,
+            therapy: match.therapy,
+            rationale: `Detected ${key} with value ${String(value)}. Evidence supports ${match.therapy}.`,
+          });
+        }
+      });
+    });
+
+    return recommendations;
+  }
+
+  async getResponseRates(tenantDb: DataSource, filters: OncologyAnalyticsQueryDto = {}) {
+    const params: any[] = [];
+    const clauses: string[] = [];
+    clauses.push(...this.appendDateRangeFilters('ora.assessment_date', filters, params));
+    clauses.push(...this.appendCaseAnalyticsFilters(filters, params));
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const distribution = await tenantDb.query(
+      `
+        SELECT
+          ora.recist_response,
+          COUNT(*)::int AS count,
+          COUNT(*) FILTER (WHERE ora.new_lesions IS TRUE)::int AS with_new_lesions
+        FROM oncology_response_assessments ora
+        INNER JOIN oncology_cases oc ON oc.id = ora.oncology_case_id
+        ${whereClause}
+        GROUP BY ora.recist_response
+      `,
+      params,
+    );
+
+    const bestResponses = await tenantDb.query(
+      `
+        SELECT
+          COALESCE(NULLIF(ora.best_overall_response, ''), 'Not captured') AS best_overall_response,
+          COUNT(*)::int AS count
+        FROM oncology_response_assessments ora
+        INNER JOIN oncology_cases oc ON oc.id = ora.oncology_case_id
+        ${whereClause}
+        GROUP BY best_overall_response
+      `,
+      params,
+    );
+
+    const total = distribution.reduce((sum, row) => sum + Number(row.count), 0);
+    const objective =
+      distribution
+        .filter((row) => ['CR', 'PR'].includes(row.recist_response))
+        .reduce((sum, row) => sum + Number(row.count), 0) ?? 0;
+    const diseaseControl =
+      distribution
+        .filter((row) => ['CR', 'PR', 'SD'].includes(row.recist_response))
+        .reduce((sum, row) => sum + Number(row.count), 0) ?? 0;
+    const newLesions =
+      distribution.reduce((sum, row) => sum + Number(row.with_new_lesions ?? 0), 0) ?? 0;
+
+    return {
+      totalAssessments: total,
+      overallResponseRate: total ? Number(((objective / total) * 100).toFixed(1)) : 0,
+      diseaseControlRate: total ? Number(((diseaseControl / total) * 100).toFixed(1)) : 0,
+      newLesionRate: total ? Number(((newLesions / total) * 100).toFixed(1)) : 0,
+      responseDistribution: distribution,
+      bestOverallResponseDistribution: bestResponses,
+    };
+  }
+
+  async getSurvivalAnalytics(tenantDb: DataSource, filters: OncologyAnalyticsQueryDto = {}) {
+    const params: any[] = [];
+    const clauses = this.appendCaseAnalyticsFilters(filters, params);
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          oc.id,
+          oc.diagnosis_date,
+          oc.status,
+          oc.updated_at,
+          MAX(ora.assessment_date) FILTER (WHERE ora.recist_response = 'PD') AS progression_date,
+          MAX(ora.assessment_date) AS last_assessment_date
+        FROM oncology_cases oc
+        LEFT JOIN oncology_response_assessments ora ON ora.oncology_case_id = oc.id
+        ${whereClause}
+        GROUP BY oc.id
+      `,
+      params,
+    );
+
+    const now = new Date();
+    const pfsDurations: number[] = [];
+    const osDurations: number[] = [];
+    let casesWithStart = 0;
+
+    rows.forEach((row) => {
+      if (!row.diagnosis_date) {
+        return;
+      }
+      const diagnosisDate = new Date(row.diagnosis_date);
+      casesWithStart += 1;
+
+      const progressionDate = row.progression_date ? new Date(row.progression_date) : null;
+      const lastAssessment = row.last_assessment_date ? new Date(row.last_assessment_date) : null;
+      const pfsEnd = progressionDate ?? lastAssessment ?? now;
+      pfsDurations.push(this.monthsBetween(diagnosisDate, pfsEnd));
+
+      const survivalEnd =
+        row.status === 'deceased'
+          ? new Date(row.updated_at ?? pfsEnd)
+          : now;
+      osDurations.push(this.monthsBetween(diagnosisDate, survivalEnd));
+    });
+
+    const medianPfs = this.median(pfsDurations);
+    const medianOs = this.median(osDurations);
+
+    const survivalRates = {
+      oneYear:
+        casesWithStart === 0
+          ? 0
+          : Number(
+              (
+                (osDurations.filter((duration) => duration >= 12).length / casesWithStart) *
+                100
+              ).toFixed(1),
+            ),
+      twoYear:
+        casesWithStart === 0
+          ? 0
+          : Number(
+              (
+                (osDurations.filter((duration) => duration >= 24).length / casesWithStart) *
+                100
+              ).toFixed(1),
+            ),
+      fiveYear:
+        casesWithStart === 0
+          ? 0
+          : Number(
+              (
+                (osDurations.filter((duration) => duration >= 60).length / casesWithStart) *
+                100
+              ).toFixed(1),
+            ),
+    };
+
+    return {
+      caseCount: rows.length,
+      withDiagnosisDate: casesWithStart,
+      medianPfsMonths: medianPfs,
+      medianOsMonths: medianOs,
+      survivalRates,
+      pfsDurations,
+      osDurations,
+    };
+  }
+
+  async getBiomarkerAnalytics(tenantDb: DataSource, filters: OncologyAnalyticsQueryDto = {}) {
+    const params: any[] = [];
+    const clauses = this.appendCaseAnalyticsFilters(filters, params, 'oc');
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          op.oncology_case_id,
+          op.biomarkers,
+          op.genetic_testing,
+          op.genomic_data,
+          oc.primary_diagnosis,
+          oc.overall_stage
+        FROM oncology_pathology op
+        INNER JOIN oncology_cases oc ON oc.id = op.oncology_case_id
+        ${whereClause}
+      `,
+      params,
+    );
+
+    const biomarkerCounts: Record<string, number> = {};
+    const genomicHighlights: Record<string, number> = {};
+
+    rows.forEach((row) => {
+      const biomarkers = row.biomarkers ?? {};
+      Object.keys(biomarkers).forEach((key) => {
+        if (!key) return;
+        const normalized = key.toUpperCase();
+        biomarkerCounts[normalized] = (biomarkerCounts[normalized] || 0) + 1;
+      });
+
+      const genomics = row.genomic_data ?? {};
+      Object.keys(genomics).forEach((key) => {
+        if (!key) return;
+        const normalized = key.toUpperCase();
+        genomicHighlights[normalized] = (genomicHighlights[normalized] || 0) + 1;
+      });
+    });
+
+    const topBiomarkers = Object.entries(biomarkerCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([marker, count]) => ({ marker, count }));
+
+    const genomicSignals = Object.entries(genomicHighlights)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([marker, count]) => ({ marker, count }));
+
+    return {
+      caseCount: rows.length,
+      topBiomarkers,
+      genomicSignals,
+    };
+  }
+
+  async getTrialAnalytics(tenantDb: DataSource, filters: OncologyAnalyticsQueryDto = {}) {
+    const params: any[] = [];
+    const clauses = this.appendCaseAnalyticsFilters(filters, params, 'oc');
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const trials = await tenantDb.query(
+      `
+        SELECT
+          oct.*,
+          oc.primary_diagnosis
+        FROM oncology_clinical_trials oct
+        INNER JOIN oncology_cases oc ON oc.id = oct.oncology_case_id
+        ${whereClause}
+      `,
+      params,
+    );
+
+    const statusBreakdown: Record<string, number> = {};
+    let totalCompliance = 0;
+    let complianceCount = 0;
+    const enrollmentTrend: Record<string, number> = {};
+
+    trials.forEach((trial) => {
+      const status = trial.enrollment_status || 'screening';
+      statusBreakdown[status] = (statusBreakdown[status] || 0) + 1;
+      if (trial.protocol_compliance_percentage !== null && trial.protocol_compliance_percentage !== undefined) {
+        totalCompliance += Number(trial.protocol_compliance_percentage);
+        complianceCount += 1;
+      }
+
+      if (trial.enrollment_date) {
+        const monthKey = trial.enrollment_date.slice(0, 7);
+        enrollmentTrend[monthKey] = (enrollmentTrend[monthKey] || 0) + 1;
+      }
+    });
+
+    const trendPoints = Object.entries(enrollmentTrend)
+      .sort(([a], [b]) => (a > b ? 1 : -1))
+      .map(([month, count]) => ({ month, count }));
+
+    return {
+      trialCount: trials.length,
+      statusBreakdown,
+      averageCompliance: complianceCount ? Number((totalCompliance / complianceCount).toFixed(1)) : null,
+      enrollmentTrend: trendPoints,
+    };
+  }
+
+  async trackFinancialToxicity(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: RecordFinancialToxicityDto,
+  ) {
+    const [record] = await tenantDb.query(
+      `
+        INSERT INTO oncology_financial_toxicity (
+          oncology_case_id,
+          assessment_date,
+          total_cost_to_date,
+          insurance_coverage_total,
+          out_of_pocket_total,
+          financial_assistance_total,
+          financial_stress_score,
+          notes,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          $2::date,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          NOW(),
+          NOW()
+        )
+        RETURNING *
+      `,
+      [
+        caseId,
+        dto.assessmentDate,
+        dto.totalCostToDate ?? null,
+        dto.insuranceCoverageTotal ?? null,
+        dto.outOfPocketTotal ?? null,
+        dto.financialAssistanceTotal ?? null,
+        dto.financialStressScore ?? null,
+        dto.notes ?? null,
+      ],
+    );
+    return record;
+  }
+
+  async getFinancialSummary(tenantDb: DataSource, caseId: string) {
+    const [latest] = await tenantDb.query(
+      `
+        SELECT *
+        FROM oncology_financial_toxicity
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const history = await tenantDb.query(
+      `
+        SELECT
+          assessment_date,
+          total_cost_to_date,
+          out_of_pocket_total,
+          financial_stress_score
+        FROM oncology_financial_toxicity
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date ASC NULLS LAST
+      `,
+      [caseId],
+    );
+
+    const [infusionStats] = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total_sessions,
+          COUNT(*) FILTER (WHERE out_of_pocket_cost IS NOT NULL)::int AS sessions_with_cost,
+          COALESCE(SUM(out_of_pocket_cost), 0)::numeric AS out_of_pocket_sum,
+          AVG(insurance_coverage_percentage)::numeric AS average_coverage_percentage
+        FROM oncology_infusion_sessions
+        WHERE regimen_id IN (
+          SELECT id FROM oncology_regimens WHERE oncology_case_id = $1
+        )
+      `,
+      [caseId],
+    );
+
+    return {
+      latestAssessment: latest ?? null,
+      history,
+      infusionStats: infusionStats ?? {},
+      stressFlag: latest?.financial_stress_score ? latest.financial_stress_score >= 7 : false,
+    };
+  }
+
+  async getFinancialAssistancePrograms(tenantDb: DataSource, caseId: string) {
+    const programs = await tenantDb.query(
+      `
+        SELECT DISTINCT financial_assistance_program
+        FROM oncology_infusion_sessions
+        WHERE regimen_id IN (
+          SELECT id FROM oncology_regimens WHERE oncology_case_id = $1
+        )
+          AND financial_assistance_program IS NOT NULL
+      `,
+      [caseId],
+    );
+
+    const suggestedPrograms = [
+      {
+        program: 'CancerCare Co-Pay Assistance',
+        description: 'Covers co-payments for select IV and oral therapies.',
+        contact: 'https://www.cancercare.org/financial',
+      },
+      {
+        program: 'PAN Foundation Oncology Fund',
+        description: 'Helps patients afford out-of-pocket costs for oncology regimens.',
+        contact: 'https://panfoundation.org/',
+      },
+      {
+        program: 'Manufacturer Patient Assistance',
+        description: 'Drug-specific programs for targeted therapies and immunotherapies.',
+        contact: 'Coordinate with pharmacy benefits team',
+      },
+    ];
+
+    return {
+      activePrograms: programs.map((row) => row.financial_assistance_program),
+      suggestedPrograms,
+    };
+  }
+
+  async generateTreatmentRecommendations(tenantDb: DataSource, caseId: string) {
+    const [caseRow] = await tenantDb.query(`SELECT * FROM oncology_cases WHERE id = $1`, [caseId]);
+    if (!caseRow) {
+      throw new NotFoundException(`Oncology case ${caseId} not found`);
+    }
+
+    const [latestResponse] = await tenantDb.query(
+      `
+        SELECT *
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const [pathology] = await tenantDb.query(
+      `
+        SELECT biomarkers, genomic_data, genetic_testing
+        FROM oncology_pathology
+        WHERE oncology_case_id = $1
+        ORDER BY specimen_date DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+      [caseId],
+    );
+
+    const recommendations: Array<{ title: string; rationale: string; severity: 'info' | 'warning' | 'critical' }> = [];
+
+    if (!latestResponse) {
+      recommendations.push({
+        title: 'Document baseline response assessment',
+        rationale: 'No RECIST assessment recorded. Capture baseline measurements before therapy escalation.',
+        severity: 'warning',
+      });
+    } else if (['SD', 'PD', 'NE'].includes(latestResponse.recist_response)) {
+      recommendations.push({
+        title: 'Evaluate alternative regimen',
+        rationale: `Latest RECIST response is ${latestResponse.recist_response}. Consider switching therapy or escalating imaging frequency.`,
+        severity: latestResponse.recist_response === 'PD' ? 'critical' : 'warning',
+      });
+    }
+
+    const biomarkers = pathology?.biomarkers ?? {};
+    const genomicData = pathology?.genomic_data ?? {};
+    const biomarkerKeys = [
+      ...Object.keys(biomarkers),
+      ...Object.keys(genomicData),
+    ].map((key) => key.toUpperCase());
+
+    if (biomarkerKeys.some((key) => key.includes('HER2'))) {
+      recommendations.push({
+        title: 'HER2-targeted therapy',
+        rationale: 'Detected HER2 biomarker. Consider trastuzumab±pertuzumab if patient not already on HER2 regimen.',
+        severity: 'info',
+      });
+    }
+    if (biomarkerKeys.some((key) => key.includes('PD-L1'))) {
+      recommendations.push({
+        title: 'Immunotherapy consideration',
+        rationale: 'PD-L1 expression detected. Evaluate eligibility for checkpoint inhibitors.',
+        severity: 'info',
+      });
+    }
+
+    if (!caseRow.care_plan) {
+      recommendations.push({
+        title: 'Document personalized care plan',
+        rationale: 'No narrative care plan captured for this case. Update care plan to reflect goals and survivorship considerations.',
+        severity: 'warning',
+      });
+    }
+
+    return {
+      case: { id: caseRow.id, primary_diagnosis: caseRow.primary_diagnosis, status: caseRow.status },
+      recommendations,
+    };
+  }
+
+  async checkResponseStatus(tenantDb: DataSource, caseId: string) {
+    const assessments = await this.getResponseHistory(tenantDb, caseId);
+    if (!assessments.length) {
+      return { latestAssessment: null, alerts: [] };
+    }
+
+    const latest = assessments[0];
+    const alerts: Array<{ message: string; severity: 'info' | 'warning' | 'critical' }> = [];
+    if (latest.recist_response === 'PD') {
+      alerts.push({
+        message: 'Progressive disease detected on latest assessment.',
+        severity: 'critical',
+      });
+    } else if (latest.recist_response === 'SD') {
+      alerts.push({
+        message: 'Stable disease persists. Evaluate need for regimen modification.',
+        severity: 'warning',
+      });
+    }
+    if (latest.new_lesions) {
+      alerts.push({
+        message: 'New lesions identified. Schedule confirmatory imaging.',
+        severity: 'critical',
+      });
+    }
+    return { latestAssessment: latest, alerts };
+  }
+
+  async generateSurveillanceReminders(tenantDb: DataSource, caseId: string) {
+    const plan = await this.getSurvivorshipPlan(tenantDb, caseId);
+    if (!plan) {
+      return { upcoming: [], overdue: [] };
+    }
+
+    const now = new Date();
+    const startDate = plan.treatment_completion_date ? new Date(plan.treatment_completion_date) : new Date();
+    const visits: any[] = plan.follow_up_schedule?.visits ?? [];
+    const overdue: Array<{ dueDate: string; tests?: string[]; imaging?: string[] }> = [];
+
+    visits.forEach((visit) => {
+      const interval = Number(visit.interval_months ?? 3);
+      const duration = Number(visit.duration_months ?? 24);
+      const iterations = Math.max(1, Math.floor(duration / interval));
+      for (let i = 0; i < iterations; i++) {
+        const due = this.addMonthsToDate(startDate, interval * (i + 1));
+        if (due < now) {
+          overdue.push({
+            dueDate: due.toISOString(),
+            tests: visit.tests ?? [],
+            imaging: visit.imaging ?? [],
+          });
+        }
+      }
+    });
+
+    const upcoming = await this.getUpcomingFollowUps(tenantDb, caseId);
+    return {
+      upcoming,
+      overdue: overdue.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()).slice(0, 5),
+    };
+  }
+
+  async checkToxicityAlerts(tenantDb: DataSource, caseId: string) {
+    const events = await tenantDb.query(
+      `
+        SELECT *
+        FROM oncology_adverse_events
+        WHERE oncology_case_id = $1
+          AND (grade IS NULL OR grade::int >= 3)
+          AND (resolved_date IS NULL OR resolved_date >= NOW() - INTERVAL '30 days')
+        ORDER BY event_date DESC NULLS LAST
+      `,
+      [caseId],
+    );
+
+    return events.map((event) => ({
+      event,
+      severity: event.grade && Number(event.grade) >= 4 ? 'critical' : 'warning',
+      message: `${event.event_type ?? 'Adverse event'} reported on ${event.event_date ?? 'recently'}`,
+    }));
+  }
+
+  async checkCaseAlerts(
+    tenantDb: DataSource,
+    caseId: string,
+    dto: OncologyAlertCheckDto = {},
+  ) {
+    const [responseStatus, surveillance, toxicityAlerts, recommendations] = await Promise.all([
+      this.checkResponseStatus(tenantDb, caseId),
+      dto.includeSurveillance === false ? Promise.resolve({ upcoming: [], overdue: [] }) : this.generateSurveillanceReminders(tenantDb, caseId),
+      dto.includeToxicity === false ? Promise.resolve([]) : this.checkToxicityAlerts(tenantDb, caseId),
+      dto.includeRecommendations === false ? Promise.resolve(null) : this.generateTreatmentRecommendations(tenantDb, caseId),
+    ]);
+
+    return {
+      responseStatus,
+      surveillance,
+      toxicityAlerts,
+      recommendations,
     };
   }
 }

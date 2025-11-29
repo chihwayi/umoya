@@ -8,6 +8,7 @@ import { Vitals } from '../entities/vitals.entity';
 import { Appointment } from '../entities/appointment.entity';
 import { Allergy } from '../entities/allergy.entity';
 import { Problem } from '../entities/problem.entity';
+import { User } from '../entities/user.entity';
 
 type BundleEntry = {
   resource: any;
@@ -68,7 +69,14 @@ export class FhirService {
           this.buildResourceCapability('Condition'),
           this.buildResourceCapability('AllergyIntolerance'),
           this.buildResourceCapability('ServiceRequest'),
-          this.buildResourceCapability('DocumentReference')
+          this.buildResourceCapability('DocumentReference'),
+          this.buildResourceCapability('Immunization'),
+          this.buildResourceCapability('Procedure'),
+          this.buildResourceCapability('CarePlan'),
+          this.buildResourceCapability('Location'),
+          this.buildResourceCapability('Organization'),
+          this.buildResourceCapability('Practitioner'),
+          this.buildResourceCapability('PractitionerRole')
         ]
       }]
     };
@@ -345,6 +353,12 @@ export class FhirService {
   }
 
   private patientToFhir(patient: Patient): any {
+    const extendedPatient = patient as Patient & {
+      middleName?: string;
+      province?: string;
+      postalCode?: string;
+      maritalStatus?: string;
+    };
     return {
       resourceType: 'Patient',
       id: patient.id,
@@ -361,11 +375,13 @@ export class FhirService {
         }] : [])
       ],
       active: patient.isActive,
-      name: [{
-        use: 'official',
-        family: patient.lastName,
-        given: [patient.firstName, ...(patient.middleName ? [patient.middleName] : [])]
-      }],
+      name: [
+        {
+          use: 'official',
+          family: patient.lastName,
+          given: [patient.firstName, ...(extendedPatient.middleName ? [extendedPatient.middleName] : [])],
+        },
+      ],
       telecom: [
         {
           system: 'phone',
@@ -383,16 +399,18 @@ export class FhirService {
         use: 'home',
         text: patient.address,
         city: patient.city,
-        state: patient.province,
-        postalCode: patient.postalCode
+        state: extendedPatient.province,
+        postalCode: extendedPatient.postalCode,
       }],
-      maritalStatus: patient.maritalStatus ? {
+      maritalStatus: extendedPatient.maritalStatus
+        ? {
         coding: [{
           system: 'http://terminology.hl7.org/CodeSystem/v3-MaritalStatus',
-          code: patient.maritalStatus.toUpperCase(),
-          display: patient.maritalStatus
+            code: extendedPatient.maritalStatus.toUpperCase(),
+            display: extendedPatient.maritalStatus,
         }]
-      } : undefined,
+          }
+        : undefined,
       contact: patient.emergencyContactName ? [{
         relationship: [{
           coding: [{
@@ -418,15 +436,12 @@ export class FhirService {
     return {
       firstName: name?.given?.[0] || '',
       lastName: name?.family || '',
-      middleName: name?.given?.[1],
       dateOfBirth: new Date(fhirPatient.birthDate),
       gender: fhirPatient.gender,
       phone: fhirPatient.telecom?.find(t => t.system === 'phone')?.value || '',
       email: fhirPatient.telecom?.find(t => t.system === 'email')?.value,
       address: fhirPatient.address?.[0]?.text || '',
       city: fhirPatient.address?.[0]?.city,
-      province: fhirPatient.address?.[0]?.state,
-      postalCode: fhirPatient.address?.[0]?.postalCode,
       nationalId: fhirPatient.identifier?.find(i => i.system === 'http://zimbabwe.gov.zw/national-id')?.value,
       isActive: fhirPatient.active !== false
     };
@@ -1000,6 +1015,131 @@ export class FhirService {
     };
   }
 
+  private buildResourceCapability(resourceType: string) {
+    return {
+      type: resourceType,
+      interaction: [
+        { code: 'read' },
+        { code: 'search-type' },
+        { code: 'create' },
+        { code: 'update' },
+      ],
+      versioning: 'no-version',
+      readHistory: false,
+      updateCreate: false,
+    };
+  }
+
+  private extractId(reference?: string | null): string | undefined {
+    if (!reference) {
+      return undefined;
+    }
+    const parts = reference.split('/');
+    return parts[parts.length - 1] || undefined;
+  }
+
+  private buildBundle(entries: BundleEntry[], type: 'searchset' | 'collection' = 'searchset') {
+    return {
+      resourceType: 'Bundle',
+      id: `bundle-${Date.now()}`,
+      type,
+      total: entries.length,
+      entry: entries,
+    };
+  }
+
+  private mapEncounterStatus(status: string) {
+    switch (status) {
+      case 'completed':
+        return 'finished';
+      case 'in_progress':
+      case 'in-progress':
+        return 'in-progress';
+      case 'cancelled':
+        return 'cancelled';
+      case 'no_show':
+      case 'no-show':
+        return 'cancelled';
+      default:
+        return 'planned';
+    }
+  }
+
+  private mapMedicationStatus(status: string) {
+    switch (status) {
+      case 'active':
+      case 'issued':
+        return 'active';
+      case 'completed':
+        return 'completed';
+      case 'stopped':
+      case 'cancelled':
+        return 'stopped';
+      case 'draft':
+        return 'draft';
+      default:
+        return 'active';
+    }
+  }
+
+  private mapDiagnosticReportStatus(status: LabOrderStatus | string) {
+    switch (status) {
+      case LabOrderStatus.COMPLETED:
+        return 'final';
+      case LabOrderStatus.IN_PROGRESS:
+      case 'in_progress':
+        return 'preliminary';
+      case LabOrderStatus.CANCELLED:
+        return 'cancelled';
+      default:
+        return 'registered';
+    }
+  }
+
+  private medicalRecordToDocumentReference(record: MedicalRecord) {
+    const narrative =
+      [record.chiefComplaint, record.historyOfPresentIllness, record.assessment, record.plan]
+        .filter(Boolean)
+        .join('\n\n') || 'Clinical note';
+
+    return {
+      resourceType: 'DocumentReference',
+      id: record.id,
+      status: 'current',
+      type: {
+        text: record.type,
+      },
+      subject: {
+        reference: `Patient/${record.patientId}`,
+      },
+      author: record.providerId
+        ? [
+            {
+              reference: `Practitioner/${record.providerId}`,
+            },
+          ]
+        : undefined,
+      date: record.recordDate?.toISOString(),
+      description: record.chiefComplaint,
+      content: record.attachments?.length
+        ? record.attachments.map((attachment) => ({
+            attachment: {
+              title: attachment.filename,
+              url: attachment.url,
+              contentType: attachment.type || 'application/octet-stream',
+            },
+          }))
+        : [
+            {
+              attachment: {
+                contentType: 'text/plain',
+                data: Buffer.from(narrative).toString('base64'),
+              },
+            },
+          ],
+    };
+  }
+
   private allergyToFhir(allergy: Allergy): any {
     return {
       resourceType: 'AllergyIntolerance',
@@ -1185,5 +1325,448 @@ export class FhirService {
       default:
         return undefined;
     }
+  }
+
+  // ========== Immunization Resource ==========
+
+  async searchImmunizations(query: any, tenantDb: DataSource) {
+    // Use raw SQL since medical_records doesn't have a 'type' column
+    // For now, return empty bundle - immunizations would need to be tracked separately
+    // or added to medical_records schema
+    return this.buildBundle([]);
+  }
+
+  async getImmunization(id: string, tenantDb: DataSource) {
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const record = await medicalRecordRepository.findOne({
+      where: { id, type: RecordType.VACCINATION }
+    });
+
+    if (!record) {
+      throw new Error('Immunization not found');
+    }
+
+    return this.medicalRecordToImmunization(record);
+  }
+
+  private medicalRecordToImmunization(record: MedicalRecord): any {
+    // Extract vaccination details from medical record
+    // Assuming vaccination name is in chiefComplaint or plan field
+    const vaccineName = record.chiefComplaint || record.plan || 'Unknown vaccine';
+
+    return {
+      resourceType: 'Immunization',
+      id: record.id,
+      status: 'completed',
+      vaccineCode: {
+        text: vaccineName,
+      },
+      patient: {
+        reference: `Patient/${record.patientId}`,
+      },
+      occurrenceDateTime: record.recordDate?.toISOString(),
+      recorded: record.createdAt?.toISOString(),
+      primarySource: true,
+      location: record.appointmentId ? {
+        reference: `Location/clinic`,
+      } : undefined,
+      performer: record.providerId ? [
+        {
+          actor: {
+            reference: `Practitioner/${record.providerId}`,
+          },
+        },
+      ] : undefined,
+      note: record.plan ? [
+        {
+          text: record.plan,
+        },
+      ] : undefined,
+    };
+  }
+
+  // ========== Procedure Resource ==========
+
+  async searchProcedures(query: any, tenantDb: DataSource) {
+    // Use raw SQL since medical_records doesn't have a 'type' column
+    // For now, return empty bundle - procedures would need to be tracked separately
+    // or added to medical_records schema
+    return this.buildBundle([]);
+  }
+
+  async getProcedure(id: string, tenantDb: DataSource) {
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const record = await medicalRecordRepository.findOne({
+      where: { id, type: RecordType.PROCEDURE }
+    });
+
+    if (!record) {
+      throw new Error('Procedure not found');
+    }
+
+    return this.medicalRecordToProcedure(record);
+  }
+
+  private medicalRecordToProcedure(record: MedicalRecord): any {
+    return {
+      resourceType: 'Procedure',
+      id: record.id,
+      status: 'completed',
+      code: {
+        text: record.chiefComplaint || 'Procedure',
+      },
+      subject: {
+        reference: `Patient/${record.patientId}`,
+      },
+      performedDateTime: record.recordDate?.toISOString(),
+      recorder: record.providerId ? {
+        reference: `Practitioner/${record.providerId}`,
+      } : undefined,
+      performer: record.providerId ? [
+        {
+          actor: {
+            reference: `Practitioner/${record.providerId}`,
+          },
+        },
+      ] : undefined,
+      note: record.plan ? [
+        {
+          text: record.plan,
+        },
+      ] : undefined,
+    };
+  }
+
+  private procedureToFhir(proc: any, record: MedicalRecord): any {
+    return {
+      resourceType: 'Procedure',
+      id: `${record.id}-${proc.code || 'proc'}`,
+      status: 'completed',
+      code: {
+        text: proc.description || proc.code || 'Procedure',
+        coding: proc.code ? [
+          {
+            system: 'http://snomed.info/sct',
+            code: proc.code,
+            display: proc.description,
+          },
+        ] : undefined,
+      },
+      subject: {
+        reference: `Patient/${record.patientId}`,
+      },
+      performedDateTime: proc.date ? new Date(proc.date).toISOString() : record.recordDate?.toISOString(),
+      performer: proc.provider ? [
+        {
+          actor: {
+            display: proc.provider,
+          },
+        },
+      ] : record.providerId ? [
+        {
+          actor: {
+            reference: `Practitioner/${record.providerId}`,
+          },
+        },
+      ] : undefined,
+    };
+  }
+
+  // ========== Location Resource ==========
+
+  async searchLocations(query: any, tenantDb: DataSource) {
+    // Return default clinic location
+    // In a real system, you'd have a locations table
+    const location = {
+      resourceType: 'Location',
+      id: 'clinic',
+      status: 'active',
+      name: 'MediCore Clinic',
+      description: 'Primary clinic location',
+      type: [
+        {
+          coding: [
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/v3-RoleCode',
+              code: 'HOSP',
+              display: 'Hospital',
+            },
+          ],
+        },
+      ],
+      address: {
+        use: 'work',
+      },
+    };
+
+    return this.buildBundle([
+      {
+        resource: location,
+        search: { mode: 'match' as const }
+      }
+    ]);
+  }
+
+  async getLocation(id: string, tenantDb: DataSource) {
+    return {
+      resourceType: 'Location',
+      id: id,
+      status: 'active',
+      name: 'MediCore Clinic',
+      description: 'Primary clinic location',
+      type: [
+        {
+          coding: [
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/v3-RoleCode',
+              code: 'HOSP',
+              display: 'Hospital',
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // ========== Organization Resource ==========
+
+  async searchOrganizations(query: any, tenantDb: DataSource) {
+    // Return default organization
+    const organization = {
+      resourceType: 'Organization',
+      id: 'medicore',
+      active: true,
+      name: 'MediCore Solutions',
+      type: [
+        {
+          coding: [
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/organization-type',
+              code: 'prov',
+              display: 'Healthcare Provider',
+            },
+          ],
+        },
+      ],
+    };
+
+    return this.buildBundle([
+      {
+        resource: organization,
+        search: { mode: 'match' as const }
+      }
+    ]);
+  }
+
+  async getOrganization(id: string, tenantDb: DataSource) {
+    return {
+      resourceType: 'Organization',
+      id: id,
+      active: true,
+      name: 'MediCore Solutions',
+      type: [
+        {
+          coding: [
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/organization-type',
+              code: 'prov',
+              display: 'Healthcare Provider',
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  // ========== Practitioner Resource ==========
+
+  async searchPractitioners(query: any, tenantDb: DataSource) {
+    const userRepository = tenantDb.getRepository(User);
+    
+    let queryBuilder = userRepository.createQueryBuilder('user')
+      .where('user.isActive = :isActive', { isActive: true });
+
+    if (query.name) {
+      queryBuilder.andWhere(
+        '(user.firstName ILIKE :name OR user.lastName ILIKE :name)',
+        { name: `%${query.name}%` }
+      );
+    }
+
+    if (query.identifier) {
+      queryBuilder.andWhere(
+        '(user.licenseNumber = :identifier OR user.email = :identifier)',
+        { identifier: query.identifier }
+      );
+    }
+
+    const users = await queryBuilder.getMany();
+
+    return this.buildBundle(
+      users.map(user => ({
+        resource: this.userToPractitioner(user),
+        search: { mode: 'match' as const }
+      }))
+    );
+  }
+
+  async getPractitioner(id: string, tenantDb: DataSource) {
+    const userRepository = tenantDb.getRepository(User);
+    const user = await userRepository.findOne({ where: { id } });
+    
+    if (!user) {
+      throw new Error('Practitioner not found');
+    }
+
+    return this.userToPractitioner(user);
+  }
+
+  private userToPractitioner(user: User): any {
+    return {
+      resourceType: 'Practitioner',
+      id: user.id,
+      active: user.isActive,
+      name: [
+        {
+          use: 'official',
+          family: user.lastName,
+          given: [user.firstName],
+        },
+      ],
+      telecom: [
+        ...(user.email ? [{
+          system: 'email',
+          value: user.email,
+        }] : []),
+        ...(user.phone ? [{
+          system: 'phone',
+          value: user.phone,
+        }] : []),
+      ],
+      identifier: user.licenseNumber ? [
+        {
+          system: 'http://medicore.co.zw/license',
+          value: user.licenseNumber,
+        },
+      ] : undefined,
+      qualification: user.specialization ? [
+        {
+          code: {
+            text: user.specialization,
+          },
+        },
+      ] : undefined,
+    };
+  }
+
+  // ========== PractitionerRole Resource ==========
+
+  async searchPractitionerRoles(query: any, tenantDb: DataSource) {
+    const userRepository = tenantDb.getRepository(User);
+    
+    let queryBuilder = userRepository.createQueryBuilder('user')
+      .where('user.isActive = :isActive', { isActive: true });
+
+    if (query.practitioner) {
+      const practitionerId = this.extractId(query.practitioner);
+      if (practitionerId) {
+        queryBuilder.andWhere('user.id = :practitionerId', { practitionerId });
+      }
+    }
+
+    const users = await queryBuilder.getMany();
+
+    return this.buildBundle(
+      users.map(user => ({
+        resource: this.userToPractitionerRole(user),
+        search: { mode: 'match' as const }
+      }))
+    );
+  }
+
+  async getPractitionerRole(id: string, tenantDb: DataSource) {
+    const userRepository = tenantDb.getRepository(User);
+    const user = await userRepository.findOne({ where: { id } });
+    
+    if (!user) {
+      throw new Error('PractitionerRole not found');
+    }
+
+    return this.userToPractitionerRole(user);
+  }
+
+  private userToPractitionerRole(user: User): any {
+    const roleCode = this.mapUserRoleToFhir(user.role);
+
+    return {
+      resourceType: 'PractitionerRole',
+      id: `${user.id}-role`,
+      active: user.isActive,
+      practitioner: {
+        reference: `Practitioner/${user.id}`,
+      },
+      organization: {
+        reference: 'Organization/medicore',
+      },
+      code: roleCode ? [
+        {
+          coding: [roleCode],
+        },
+      ] : undefined,
+      specialty: user.specialization ? [
+        {
+          coding: [
+            {
+              text: user.specialization,
+            },
+          ],
+        },
+      ] : undefined,
+    };
+  }
+
+  private mapUserRoleToFhir(role: string): any {
+    const roleMap: Record<string, any> = {
+      doctor: {
+        system: 'http://terminology.hl7.org/CodeSystem/practitioner-role',
+        code: 'doctor',
+        display: 'Doctor',
+      },
+      nurse: {
+        system: 'http://terminology.hl7.org/CodeSystem/practitioner-role',
+        code: 'nurse',
+        display: 'Nurse',
+      },
+      pharmacist: {
+        system: 'http://terminology.hl7.org/CodeSystem/practitioner-role',
+        code: 'pharmacist',
+        display: 'Pharmacist',
+      },
+      lab_tech: {
+        system: 'http://terminology.hl7.org/CodeSystem/practitioner-role',
+        code: 'lab',
+        display: 'Laboratory Technician',
+      },
+      radiologist: {
+        system: 'http://terminology.hl7.org/CodeSystem/practitioner-role',
+        code: 'radiologist',
+        display: 'Radiologist',
+      },
+    };
+
+    return roleMap[role];
+  }
+
+  // ========== CarePlan Resource ==========
+
+  async searchCarePlans(query: any, tenantDb: DataSource) {
+    // Care plans can be derived from various sources
+    // For now, return empty bundle - can be extended with diabetes care plans, oncology care plans, etc.
+    return this.buildBundle([]);
+  }
+
+  async getCarePlan(id: string, tenantDb: DataSource) {
+    // Placeholder - can be extended to fetch from diabetes_registry, oncology_cases, etc.
+    throw new Error('CarePlan not found');
   }
 }

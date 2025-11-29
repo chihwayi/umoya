@@ -75,7 +75,7 @@ export default function CriticalResultAlertPanel({
       setAlerts(response.data.alerts || []);
     } catch (error) {
       console.error('Failed to load critical alerts:', error);
-      showError('Failed to load critical alerts');
+      showError('Failed to load critical alerts', 'Unable to load critical alerts.');
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function CriticalResultAlertPanel({
         acknowledgment_notes: acknowledgmentNotes,
       });
 
-      showSuccess('Critical alert acknowledged successfully');
+      showSuccess('Critical alert acknowledged successfully', 'Alert has been acknowledged successfully.');
       setShowAcknowledgeModal(false);
       setAcknowledgmentNotes('');
       setSelectedAlert(null);
@@ -111,7 +111,7 @@ export default function CriticalResultAlertPanel({
       loadStats();
     } catch (error) {
       console.error('Failed to acknowledge alert:', error);
-      showError('Failed to acknowledge alert');
+      showError('Failed to acknowledge alert', 'Unable to acknowledge alert.');
     }
   };
 
@@ -123,12 +123,12 @@ export default function CriticalResultAlertPanel({
         escalate_to: 'supervisor', // The backend will find an appropriate supervisor
       });
 
-      showSuccess('Alert escalated to supervisor');
+      showSuccess('Alert escalated to supervisor', 'Alert has been escalated to supervisor.');
       loadAlerts();
       loadStats();
     } catch (error) {
       console.error('Failed to escalate alert:', error);
-      showError('Failed to escalate alert');
+      showError('Failed to escalate alert', 'Unable to escalate alert.');
     }
   };
 
@@ -200,7 +200,7 @@ export default function CriticalResultAlertPanel({
         <div className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Overdue (>30min)</p>
+              <p className="text-sm text-gray-600">Overdue ({'>'}30min)</p>
               <p className="text-2xl font-bold text-orange-700">{stats?.overdue_count || 0}</p>
             </div>
             <AlertTriangle className="w-8 h-8 text-orange-500" />

@@ -548,7 +548,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
             <div key={field}>
               <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
               <select
-                value={(testForm as Record<string, string>)[field]}
+                value={testForm[field as keyof typeof testForm] as string}
                 onChange={(e) => setTestForm({ ...testForm, [field]: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
               >

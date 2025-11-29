@@ -2,8 +2,8 @@
  * Integration Tests for Terminology Service
  * 
  * These tests require:
- * - Database connection
- * - SNOMED CT API (Snowstorm) running or mocked
+ * - Database connection (PostgreSQL master database)
+ * - SNOMED CT data imported into PostgreSQL
  * 
  * Run with: npm test -- terminology.integration.spec.ts
  */

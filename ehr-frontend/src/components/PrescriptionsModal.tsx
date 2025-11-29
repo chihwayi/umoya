@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock } from 'lucide-react';
+import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock, BookOpenCheck } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import PrescriptionTemplateLibrary, { PrescriptionTemplate } from './PrescriptionTemplateLibrary';
+import PrescriptionTemplateEditor from './PrescriptionTemplateEditor';
 
 interface Appointment {
   id: string;
@@ -101,12 +103,16 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [items, setItems] = useState<Rx[]>([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
   const [loadingFood, setLoadingFood] = useState(false);
   const [foodInteractions, setFoodInteractions] = useState<any | null>(null);
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PrescriptionTemplate | null>(null);
+  const [templateRefreshKey, setTemplateRefreshKey] = useState(0);
 
-  const awaitingPayment = appointment?.paymentStatus === 'awaiting_payment';
-  const financeReference = appointment?.financeTransactionId || null;
+  const awaitingPayment = (appointment as any)?.paymentStatus === 'awaiting_payment';
+  const financeReference = (appointment as any)?.financeTransactionId || null;
   const feeEstimate =
-    appointment?.feeAmount !== undefined && appointment?.feeAmount !== null
-      ? Number(appointment.feeAmount)
+    (appointment as any)?.feeAmount !== undefined && (appointment as any)?.feeAmount !== null
+      ? Number((appointment as any).feeAmount)
       : null;
 
   // Load allergies from structured table
@@ -200,6 +206,46 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
       setLoadingFood(false);
     }
   }, [items, token, tenantSlug]);
+
+  const applyTemplateToPrescription = (template: PrescriptionTemplate) => {
+    const baseItem: Rx = {
+      name: template.medicationName || template.name,
+      dosage: template.dosage || '',
+      frequency: template.frequency || '',
+      duration: template.duration || '',
+      instructions: template.instructions || '',
+      drugId: undefined,
+      foundDrug: undefined,
+      medicationSnomed: null,
+    };
+
+    setItems((prev) => {
+      const emptyIndex = prev.findIndex(
+        (rx) => !rx.name && !rx.dosage && !rx.frequency && !rx.instructions
+      );
+      if (emptyIndex !== -1) {
+        const clone = [...prev];
+        clone[emptyIndex] = { ...clone[emptyIndex], ...baseItem };
+        return clone;
+      }
+      return [...prev, baseItem];
+    });
+    showSuccess('Template applied', `${template.name} loaded into prescription form`);
+    setShowTemplateLibrary(false);
+  };
+
+  const handleOpenTemplateEditor = (templateToEdit?: PrescriptionTemplate | null) => {
+    setEditingTemplate(templateToEdit || null);
+    setShowTemplateEditor(true);
+  };
+
+  const handleTemplateSaved = (template?: PrescriptionTemplate) => {
+    setTemplateRefreshKey((prev) => prev + 1);
+    setShowTemplateEditor(false);
+    if (template) {
+      setEditingTemplate(template);
+    }
+  };
 
   // Real-time allergy checking for each medication
   const allergyWarnings = useMemo(() => {
@@ -296,8 +342,6 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
             medicationName: rx.name,
             medication_name_snomed: rx.medicationSnomed,
             genericName: rx.foundDrug?.genericName || rx.name,
-            strength: rx.foundDrug?.strength || '',
-            form: rx.foundDrug?.form || 'tablet',
             dosage: rx.dosage,
             frequency: rx.frequency,
             route: 'oral', // Default, can be enhanced
@@ -338,7 +382,8 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   if (!open) return null;
 
   return (
-    <ModalPortal>
+    <>
+      <ModalPortal>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
           <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -354,6 +399,15 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowTemplateLibrary(true)}
+                disabled={awaitingPayment}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-fuchsia-200 text-fuchsia-700 hover:bg-fuchsia-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium"
+                title="Browse prescription templates"
+              >
+                <BookOpenCheck className="w-4 h-4" />
+                Templates
+              </button>
               {awaitingPayment ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-medium">
                   <Lock className="w-4 h-4" />
@@ -753,7 +807,28 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
           </div>
         </div>
       </div>
-    </ModalPortal>
+      </ModalPortal>
+
+      <PrescriptionTemplateLibrary
+        open={showTemplateLibrary}
+        token={token}
+        tenantSlug={tenantSlug}
+        onClose={() => setShowTemplateLibrary(false)}
+        onApplyTemplate={applyTemplateToPrescription}
+        onCreateTemplate={() => handleOpenTemplateEditor(null)}
+        onEditTemplate={handleOpenTemplateEditor}
+        refreshKey={templateRefreshKey}
+      />
+
+      <PrescriptionTemplateEditor
+        open={showTemplateEditor}
+        token={token}
+        tenantSlug={tenantSlug}
+        onClose={() => setShowTemplateEditor(false)}
+        onSaved={handleTemplateSaved}
+        template={editingTemplate || undefined}
+      />
+    </>
   );
 };
 

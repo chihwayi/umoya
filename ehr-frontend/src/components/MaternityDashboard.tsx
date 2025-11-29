@@ -107,7 +107,7 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
       setIndicators(indicatorsRes.data);
     } catch (error) {
       console.error('Failed to load maternity data:', error);
-      showError('Failed to load maternity data');
+      showError('Failed to load maternity data', 'error');
     } finally {
       setLoading(false);
     }
@@ -207,7 +207,7 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
   const handleBulkAction = useCallback(
     (action: 'reminder' | 'followup') => {
       if (selectedIds.length === 0) {
-        showError('Select at least one enrollment first.');
+        showError('Select at least one enrollment first.', 'error');
         return;
       }
 

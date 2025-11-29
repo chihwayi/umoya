@@ -33,7 +33,9 @@ export class TriageService {
    * Parse allergies text into structured allergy objects
    * Supports formats like: "Penicillin (rash)", "Aspirin: severe", "None", "NKDA"
    */
-  private parseAllergiesText(allergiesText: string): Array<{ allergen: string; reaction?: string; severity?: string }> {
+  private parseAllergiesText(
+    allergiesText: string,
+  ): Array<{ allergen: string; reaction?: string; severity?: 'mild' | 'moderate' | 'severe' }> {
     if (!allergiesText || !allergiesText.trim()) {
       return [];
     }
@@ -45,7 +47,7 @@ export class TriageService {
       return [];
     }
 
-    const allergies: Array<{ allergen: string; reaction?: string; severity?: string }> = [];
+    const allergies: Array<{ allergen: string; reaction?: string; severity?: 'mild' | 'moderate' | 'severe' }> = [];
     const lines = allergiesText.split(/[,;\n\r]+/).map(l => l.trim()).filter(l => l);
 
     for (const line of lines) {
@@ -99,7 +101,7 @@ export class TriageService {
         allergies.push({
           allergen: allergen.trim(),
           reaction: reaction || undefined,
-          severity: severity as 'mild' | 'moderate' | 'severe' | undefined
+          severity: (severity as 'mild' | 'moderate' | 'severe' | undefined) || undefined,
         });
       }
     }

@@ -118,7 +118,7 @@ export class NursingNotesService {
     return normalized;
   }
 
-  async recordNote(data: Partial<NursingNote>, tenantId: string): Promise<NursingNote> {
+  async recordNote(data: Partial<NursingNote>, tenantId: string): Promise<NursingNote & { cdssInsights?: any }> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     if (!tenantDb) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);

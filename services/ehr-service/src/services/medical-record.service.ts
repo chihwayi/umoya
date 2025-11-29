@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, DeepPartial } from 'typeorm';
 import { MedicalRecord } from '../entities/medical-record.entity';
 
 @Injectable()
@@ -16,9 +16,10 @@ export class MedicalRecordService {
       recordNumber,
       providerId,
       recordDate: new Date()
-    });
+    } as DeepPartial<MedicalRecord>);
     
-    return recordRepository.save(record);
+    const saved = await recordRepository.save(record);
+    return saved;
   }
 
   async findByPatient(patientId: string, tenantDb: DataSource): Promise<any> {

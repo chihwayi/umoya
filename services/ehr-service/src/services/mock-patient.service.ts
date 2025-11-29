@@ -1,7 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 
 @Injectable()
 export class MockPatientService {
+  async create(payload: CreatePatientDto, userId: string) {
+    return {
+      id: `mock-${Date.now()}`,
+      createdBy: userId,
+      ...payload,
+    };
+  }
+
   async findAll(query: any) {
     // Mock patient data
     const patients = [
@@ -52,6 +61,18 @@ export class MockPatientService {
   async findOne(id: string) {
     const patients = await this.findAll({});
     return patients.patients.find(p => p.id === id);
+  }
+
+  async update(id: string, payload: UpdatePatientDto) {
+    return {
+      id,
+      ...payload,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async remove(id: string) {
+    return { id, deleted: true };
   }
 }
 

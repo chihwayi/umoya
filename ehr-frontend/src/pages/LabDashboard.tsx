@@ -399,7 +399,7 @@ const LabDashboard: React.FC = () => {
       setQualityControls(response.data || []);
     } catch (error: any) {
       console.error('Failed to fetch quality controls:', error);
-      showError('Failed to load quality control history');
+      showError('Failed to load quality control history', 'Unable to load quality control history.');
     } finally {
       setQcLoading(false);
     }
@@ -415,7 +415,7 @@ const LabDashboard: React.FC = () => {
       setReagentInventory(response.data || []);
     } catch (error: any) {
       console.error('Failed to fetch reagent inventory:', error);
-      showError('Failed to load reagent inventory');
+      showError('Failed to load reagent inventory', 'Unable to load reagent inventory.');
     } finally {
       setInventoryLoading(false);
     }
@@ -613,7 +613,7 @@ const LabDashboard: React.FC = () => {
       setActiveTab('in-progress');
     } catch (error: any) {
       const message = error?.response?.data?.message || 'Failed to collect sample';
-      showError(message);
+      showError(message, 'Unable to collect sample.');
     } finally {
       setLoading(false);
     }
@@ -635,7 +635,7 @@ const LabDashboard: React.FC = () => {
       ]);
     } catch (error: any) {
       const message = error?.response?.data?.message || 'Failed to start processing';
-      showError(message);
+      showError(message, 'Unable to start processing.');
     } finally {
       setLoading(false);
     }
@@ -2516,7 +2516,11 @@ const LabDashboard: React.FC = () => {
                         {workspaceOrder.processingContext?.expectedCompletion && (
                           <div className="flex justify-between font-semibold text-indigo-600">
                             <span>Expected completion</span>
-                            <span>{expectedCompletion}</span>
+                            <span>
+                              {formatDateTimeToDDMMYYYYHHMM(
+                                workspaceOrder.processingContext.expectedCompletion,
+                              )}
+                            </span>
                           </div>
                         )}
                       </div>

@@ -15,6 +15,8 @@ import {
   Download,
   MoreHorizontal,
   X,
+  Settings,
+  Plus,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -81,6 +83,49 @@ type PaymentFormState = {
   paymentReference: string;
   gatewayReference: string;
   note: string;
+};
+
+type InvoiceTemplateContent = {
+  headerTitle?: string;
+  headerSubtitle?: string;
+  addressLines?: string[];
+  brandColor?: string;
+  footerNotes?: string[];
+  contactEmail?: string;
+  contactPhone?: string;
+};
+
+type InvoiceTemplate = {
+  id: string;
+  name: string;
+  template_content: InvoiceTemplateContent;
+  variables?: string[];
+  is_default: boolean;
+  is_active: boolean;
+};
+
+type InvoiceTemplateFormState = {
+  name: string;
+  headerTitle: string;
+  headerSubtitle: string;
+  addressLines: string;
+  footerNotes: string;
+  brandColor: string;
+  contactEmail: string;
+  contactPhone: string;
+  isDefault: boolean;
+};
+
+const defaultTemplateFormState: InvoiceTemplateFormState = {
+  name: '',
+  headerTitle: 'MediCore Health',
+  headerSubtitle: 'Excellence in Care',
+  addressLines: '',
+  footerNotes: 'Thank you for choosing MediCore Health.',
+  brandColor: '#2563eb',
+  contactEmail: '',
+  contactPhone: '',
+  isDefault: false,
 };
 
 const paymentMethods = [
@@ -156,9 +201,17 @@ const AccountsDashboard: React.FC = () => {
     note: '',
   });
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [invoiceDownloading, setInvoiceDownloading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [userChecked, setUserChecked] = useState(false);
   const [accessGranted, setAccessGranted] = useState(false);
+  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateForm, setTemplateForm] = useState<InvoiceTemplateFormState>(defaultTemplateFormState);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateSubmitting, setTemplateSubmitting] = useState(false);
 
   const [filters, setFilters] = useState({
     status: '',
@@ -221,6 +274,126 @@ const AccountsDashboard: React.FC = () => {
     [tenantSlug, showError],
   );
 
+  const loadInvoiceTemplates = useCallback(async () => {
+    if (!tenantSlug) return;
+    try {
+      setTemplatesLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      const { data } = await ehrApi.getInvoiceTemplates(tenantSlug, token);
+      const templates: InvoiceTemplate[] = data || [];
+      setInvoiceTemplates(templates);
+      if (templates.length) {
+        const defaultTemplate = templates.find((tpl) => tpl.is_default);
+        setSelectedTemplateId(defaultTemplate?.id || templates[0].id);
+      } else {
+        setSelectedTemplateId(null);
+      }
+    } catch (error: any) {
+      console.error('Failed to load invoice templates', error);
+      showError('Error', error.response?.data?.message || 'Failed to load invoice templates');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [tenantSlug, showError]);
+
+  const openTemplateManager = () => {
+    setTemplateForm(defaultTemplateFormState);
+    setEditingTemplateId(null);
+    setShowTemplateModal(true);
+  };
+
+  const openEditTemplateModal = (template: InvoiceTemplate) => {
+    const content = template.template_content || {};
+    setTemplateForm({
+      name: template.name || '',
+      headerTitle: content.headerTitle || '',
+      headerSubtitle: content.headerSubtitle || '',
+      addressLines: Array.isArray(content.addressLines) ? content.addressLines.join('\n') : '',
+      footerNotes: Array.isArray(content.footerNotes) ? content.footerNotes.join('\n') : '',
+      brandColor: content.brandColor || '#2563eb',
+      contactEmail: content.contactEmail || '',
+      contactPhone: content.contactPhone || '',
+      isDefault: !!template.is_default,
+    });
+    setEditingTemplateId(template.id);
+    setShowTemplateModal(true);
+  };
+
+  const closeTemplateModal = () => {
+    setShowTemplateModal(false);
+    setTemplateForm(defaultTemplateFormState);
+    setEditingTemplateId(null);
+  };
+
+  const handleTemplateFieldChange = (field: keyof InvoiceTemplateFormState, value: string | boolean) => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleTemplateSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!tenantSlug) return;
+    if (!templateForm.name.trim()) {
+      showError('Template', 'Template name is required.');
+      return;
+    }
+    try {
+      setTemplateSubmitting(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      const payload = {
+        name: templateForm.name.trim(),
+        templateContent: {
+          headerTitle: templateForm.headerTitle || 'Invoice',
+          headerSubtitle: templateForm.headerSubtitle || '',
+          addressLines: templateForm.addressLines
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+          brandColor: templateForm.brandColor || '#2563eb',
+          footerNotes: templateForm.footerNotes
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+          contactEmail: templateForm.contactEmail || undefined,
+          contactPhone: templateForm.contactPhone || undefined,
+        },
+        isDefault: templateForm.isDefault,
+      };
+      if (editingTemplateId) {
+        await ehrApi.updateInvoiceTemplate(tenantSlug, token, editingTemplateId, payload);
+        showSuccess('Templates', 'Invoice template updated.');
+      } else {
+        await ehrApi.createInvoiceTemplate(tenantSlug, token, payload);
+        showSuccess('Templates', 'Invoice template created.');
+      }
+      closeTemplateModal();
+      loadInvoiceTemplates();
+    } catch (error: any) {
+      console.error('Failed to save invoice template', error);
+      showError('Error', error.response?.data?.message || 'Failed to save invoice template.');
+    } finally {
+      setTemplateSubmitting(false);
+    }
+  };
+
+  const handleSetTemplateDefault = async (templateId: string) => {
+    if (!tenantSlug) return;
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      await ehrApi.setDefaultInvoiceTemplate(tenantSlug, token, templateId);
+      showSuccess('Templates', 'Default invoice template updated.');
+      loadInvoiceTemplates();
+    } catch (error: any) {
+      console.error('Failed to set default template', error);
+      showError('Error', error.response?.data?.message || 'Failed to set default template.');
+    }
+  };
+
   useEffect(() => {
     const rawUser = typeof window !== 'undefined' ? localStorage.getItem('ehr_user') : null;
     if (rawUser) {
@@ -262,6 +435,11 @@ const AccountsDashboard: React.FC = () => {
     if (!accessGranted) return;
     loadTransactions();
   }, [accessGranted, loadTransactions]);
+
+  useEffect(() => {
+    if (!accessGranted) return;
+    loadInvoiceTemplates();
+  }, [accessGranted, loadInvoiceTemplates]);
 
   useEffect(() => {
     if (!accessGranted) {
@@ -363,6 +541,36 @@ const AccountsDashboard: React.FC = () => {
       showError('Error', error.response?.data?.message || 'Failed to record payment');
     } finally {
       setPaymentSubmitting(false);
+    }
+  };
+
+  const downloadInvoicePdf = async () => {
+    if (!tenantSlug || !selectedTransactionId) return;
+    try {
+      setInvoiceDownloading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+      const response = await ehrApi.downloadInvoicePdf(
+        tenantSlug,
+        token,
+        selectedTransactionId,
+        selectedTemplateId || undefined,
+      );
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      const invoiceName =
+        transactionDetail?.transaction?.id || selectedTransactionId;
+      anchor.href = url;
+      anchor.download = `invoice-${invoiceName}.pdf`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Invoice Ready', 'Invoice PDF downloaded.');
+    } catch (error: any) {
+      console.error('Failed to generate invoice PDF', error);
+      showError('Error', error.response?.data?.message || 'Failed to generate invoice PDF');
+    } finally {
+      setInvoiceDownloading(false);
     }
   };
 
@@ -689,17 +897,63 @@ const AccountsDashboard: React.FC = () => {
               {!detailLoading && transactionDetail && (
                 <div className="space-y-4">
                   <div className="p-4 border border-slate-200 rounded-xl bg-slate-50">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-2">
                       <h3 className="text-sm font-semibold text-slate-700">Transaction Summary</h3>
-                      {Number(transactionDetail.transaction.balance || 0) > 0 && (
-                        <button
-                          onClick={openPaymentModal}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition text-xs font-semibold"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          Record Payment
-                        </button>
-                      )}
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                        {invoiceTemplates.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                            <span className="font-semibold uppercase tracking-wide">Template</span>
+                            <select
+                              value={selectedTemplateId || ''}
+                              onChange={(e) => setSelectedTemplateId(e.target.value || null)}
+                              disabled={templatesLoading}
+                              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            >
+                              {invoiceTemplates.map((template) => (
+                                <option key={template.id} value={template.id}>
+                                  {template.name}{template.is_default ? ' (Default)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={openTemplateManager}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
+                            >
+                              <Settings className="w-3.5 h-3.5" />
+                              Manage
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={openTemplateManager}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 border border-dashed border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 text-xs font-semibold"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Create Invoice Template
+                          </button>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={downloadInvoicePdf}
+                            disabled={invoiceDownloading}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition text-xs font-semibold disabled:opacity-60"
+                          >
+                            <Download className="w-4 h-4" />
+                            {invoiceDownloading ? 'Preparing…' : 'Invoice PDF'}
+                          </button>
+                          {Number(transactionDetail.transaction.balance || 0) > 0 && (
+                            <button
+                              onClick={openPaymentModal}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 transition text-xs font-semibold"
+                            >
+                              <CreditCard className="w-4 h-4" />
+                              Record Payment
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
                       <div>
@@ -966,6 +1220,232 @@ const AccountsDashboard: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Invoice Template Manager */}
+      {showTemplateModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-5 border-b border-slate-200">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Invoice Templates</h3>
+                  <p className="text-sm text-slate-500">
+                    Configure headers, branding, and footer notes for generated invoices.
+                  </p>
+                </div>
+                <button onClick={closeTemplateModal} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="grid gap-6 p-5 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-700">Saved Templates</h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTemplateForm(defaultTemplateFormState);
+                        setEditingTemplateId(null);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                    >
+                      New Template
+                    </button>
+                  </div>
+                  {templatesLoading ? (
+                    <div className="flex items-center justify-center py-12 text-slate-400">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      Loading templates...
+                    </div>
+                  ) : invoiceTemplates.length === 0 ? (
+                    <div className="border border-dashed border-slate-300 rounded-2xl p-6 text-sm text-slate-500 text-center">
+                      No invoice templates configured yet. Use the form to create one.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {invoiceTemplates.map((template) => (
+                        <div
+                          key={template.id}
+                          className="border border-slate-200 rounded-2xl p-4 hover:border-blue-200 transition"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">{template.name}</p>
+                              <p className="text-xs text-slate-500">
+                                {template.template_content?.headerTitle || 'Untitled Header'}
+                              </p>
+                              <div className="flex flex-wrap gap-2 mt-2 text-xs text-slate-500">
+                                {template.is_default && (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                    Default
+                                  </span>
+                                )}
+                                {!template.is_active && (
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                    Inactive
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditTemplateModal(template)}
+                                className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600"
+                              >
+                                Edit
+                              </button>
+                              {!template.is_default && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetTemplateDefault(template.id)}
+                                  className="px-3 py-1.5 text-xs font-semibold border border-emerald-200 rounded-lg text-emerald-600 hover:bg-emerald-50"
+                                >
+                                  Set Default
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleTemplateSubmit} className="space-y-4 border border-slate-200 rounded-2xl p-5 bg-slate-50">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-700 mb-2">
+                      {editingTemplateId ? 'Edit Template' : 'Create Template'}
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Define your invoice branding. Address and footer notes accept multiple lines.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Template Name</label>
+                    <input
+                      type="text"
+                      value={templateForm.name}
+                      onChange={(e) => handleTemplateFieldChange('name', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Header Title</label>
+                      <input
+                        type="text"
+                        value={templateForm.headerTitle}
+                        onChange={(e) => handleTemplateFieldChange('headerTitle', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Header Subtitle</label>
+                      <input
+                        type="text"
+                        value={templateForm.headerSubtitle}
+                        onChange={(e) => handleTemplateFieldChange('headerSubtitle', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Address Lines (one per line)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={templateForm.addressLines}
+                      onChange={(e) => handleTemplateFieldChange('addressLines', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Brand Color</label>
+                      <input
+                        type="color"
+                        value={templateForm.brandColor}
+                        onChange={(e) => handleTemplateFieldChange('brandColor', e.target.value)}
+                        className="h-10 w-full border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Contact Email</label>
+                      <input
+                        type="email"
+                        value={templateForm.contactEmail}
+                        onChange={(e) => handleTemplateFieldChange('contactEmail', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label>
+                      <input
+                        type="text"
+                        value={templateForm.contactPhone}
+                        onChange={(e) => handleTemplateFieldChange('contactPhone', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Footer Notes (one per line)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={templateForm.footerNotes}
+                        onChange={(e) => handleTemplateFieldChange('footerNotes', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={templateForm.isDefault}
+                      onChange={(e) => handleTemplateFieldChange('isDefault', e.target.checked)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Set as default template
+                  </label>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeTemplateModal}
+                      className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                      disabled={templateSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={templateSubmitting}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-60"
+                    >
+                      {templateSubmitting ? (
+                        <span className="flex items-center gap-2 justify-center">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : editingTemplateId ? (
+                        'Update Template'
+                      ) : (
+                        'Create Template'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </ModalPortal>

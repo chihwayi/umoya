@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, Save, X, Plus, Edit, Trash2, 
   Pill, TestTube, Heart, Activity, AlertCircle,
-  Calendar, Clock, User, Stethoscope
+  Calendar, Clock, User, Stethoscope, FileCode
 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
-import { ehrApi, chartApi, terminologyApi } from '../services/api';
+import { ehrApi, chartApi } from '../services/api';
 import DatePicker from './DatePicker';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM, parseDDMMYYYYToDate, parseDDMMYYYYHHMMToDate } from '../utils/dateFormatting';
 import SnomedConceptPicker from './SnomedConceptPicker';
@@ -18,6 +18,8 @@ interface Appointment {
     firstName: string;
     lastName: string;
     patientNumber: string;
+    dateOfBirth?: string;
+    gender?: string;
   };
   doctor: {
     id: string;
@@ -147,6 +149,9 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
+
+  // Template state
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
 
   useEffect(() => {
     loadAppointmentData();
@@ -610,9 +615,18 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
               </div>
 
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200/50">
-                <label className="block text-sm font-semibold text-slate-700 mb-3">
-                  Additional Clinical Notes
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Additional Clinical Notes
+                  </label>
+                  <button
+                    onClick={() => setShowTemplateLibrary(true)}
+                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
+                  >
+                    <FileCode className="w-4 h-4" />
+                    Templates
+                  </button>
+                </div>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -687,16 +701,19 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
                   {showSnomedPicker && (
                     <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
                       <SnomedConceptPicker
-                        context="diagnosis"
-                        onSelect={(concept) => {
+                        value={diagnosisSnomedConcept}
+                        onChange={(concept) => {
+                          setDiagnosisSnomedConcept(concept);
                           if (concept) {
-                            setDiagnosisSnomedConcept(concept);
                             setDiagnosis(concept.term || diagnosis);
                             setShowSnomedPicker(false);
                           }
                         }}
                         token={token}
                         tenantSlug={tenantSlug}
+                        context="condition"
+                        label="Search SNOMED CT for diagnosis"
+                        placeholder="Search diagnosis concept..."
                       />
                     </div>
                   )}

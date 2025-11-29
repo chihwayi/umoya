@@ -11,6 +11,7 @@ import { useConfirmation } from '../hooks/useConfirmation';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { formatDateForAPI } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
+import AppointmentWaitlist from '../components/AppointmentWaitlist';
 
 interface Appointment {
   id: string;
@@ -207,9 +208,9 @@ const DoctorAppointmentManagement: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6">
           <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2 bg-gradient-to-r from-slate-500 to-slate-600 rounded-xl">
@@ -276,7 +277,7 @@ const DoctorAppointmentManagement: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8 mb-8">
+        <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
               <Search className="w-5 h-5 text-white" />
@@ -424,6 +425,10 @@ const DoctorAppointmentManagement: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          <div>
+            <AppointmentWaitlist tenantSlug={tenantSlug!} onScheduled={fetchAppointments} />
           </div>
         </div>
       </div>

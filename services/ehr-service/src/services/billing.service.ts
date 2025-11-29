@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, DeepPartial } from 'typeorm';
 import { Bill, BillStatus, PaymentMethod } from '../entities/billing.entity';
 
 @Injectable()
@@ -12,21 +12,33 @@ export class BillingService {
     const billNumber = `INV${String(billCount + 1).padStart(8, '0')}`;
     
     // Calculate totals
-    const subtotal = createDto.items.reduce((sum, item) => sum + item.totalPrice, 0);
+    const items = createDto.items || [];
+    const subtotal = items.reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0);
     const totalAmount = subtotal + (createDto.taxAmount || 0) - (createDto.discountAmount || 0);
     
-    const bill = billRepository.create({
-      ...createDto,
+    // Create bill without items (items column doesn't exist in billing table)
+    const billData: any = {
       billNumber,
-      createdById,
+      patientId: createDto.patientId,
+      appointmentId: createDto.appointmentId || null,
       subtotal,
+      taxAmount: createDto.taxAmount || 0,
+      discountAmount: createDto.discountAmount || 0,
       totalAmount,
-      balanceAmount: totalAmount,
-      billDate: new Date(),
-      dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null
-    });
+      status: createDto.status || BillStatus.PENDING,
+      billDate: createDto.billDate ? new Date(createDto.billDate) : new Date(),
+      dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
+      notes: createDto.notes || null,
+      createdById: createdById,
+    };
     
-    return billRepository.save(bill);
+    const bill = billRepository.create(billData as DeepPartial<Bill>);
+    const savedBill = await billRepository.save(bill);
+    
+    // Attach items to the returned object for API response (not stored in DB)
+    (savedBill as any).items = items;
+    
+    return savedBill;
   }
 
   async findAllBills(query: any, tenantDb: DataSource): Promise<any> {
@@ -67,19 +79,16 @@ export class BillingService {
       throw new NotFoundException('Bill not found');
     }
     
-    const payment = {
-      ...paymentDto,
-      date: new Date(),
-      receivedBy
-    };
+    // Payments are managed through financial_transactions, not directly on bills
+    // Update bill status if fully paid
+    // Note: Actual payment tracking should go through FinanceService
+    const paymentAmount = paymentDto.amount || 0;
     
-    bill.payments = bill.payments || [];
-    bill.payments.push(payment);
-    bill.paidAmount += paymentDto.amount;
-    bill.balanceAmount = bill.totalAmount - bill.paidAmount;
-    
-    if (bill.balanceAmount <= 0) {
+    // For now, just update status if payment covers the full amount
+    if (paymentAmount >= bill.totalAmount) {
       bill.status = BillStatus.PAID;
+      bill.paymentMethod = paymentDto.method || PaymentMethod.CASH;
+      bill.paymentDate = new Date();
     }
     
     return billRepository.save(bill);

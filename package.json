@@ -14,7 +14,9 @@
     "setup": "./scripts/setup.sh",
     "migrate": "./scripts/migrate.sh",
     "deploy": "./scripts/deploy.sh",
-    "backup": "./scripts/backup.sh"
+    "backup": "./scripts/backup.sh",
+    "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
+    "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts"
   },
   "workspaces": [
     "services/*",
@@ -68,5 +70,8 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "express": "^5.1.0"
   }
 }

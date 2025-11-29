@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Patient } from './patient.entity';
 import { User } from './user.entity';
 
@@ -24,7 +32,7 @@ export class AppointmentSimple {
   @Column({ name: 'appointment_date', type: 'timestamptz' })
   appointmentDate: Date;
 
-  @Column({ name: 'duration_minutes', default: 30 })
+  @Column({ name: 'duration_minutes', type: 'int', default: 30 })
   durationMinutes: number;
 
   @Column({ name: 'appointment_type', length: 100 })
@@ -39,8 +47,62 @@ export class AppointmentSimple {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-@Column({ name: 'fee_amount', type: 'numeric', nullable: true })
-feeAmount: number | null;
+  @Column({ name: 'patient_instructions', type: 'text', nullable: true })
+  patientInstructions?: string;
+
+  @Column({ name: 'priority_level', length: 50, default: 'normal' })
+  priorityLevel: string;
+
+  @Column({ name: 'virtual_meeting_url', length: 500, nullable: true })
+  virtualMeetingUrl?: string;
+
+  @Column({ name: 'is_telehealth', type: 'boolean', default: false })
+  isTelehealth: boolean;
+
+  @Column({ name: 'fee_amount', type: 'numeric', nullable: true })
+  feeAmount: number | null;
+
+  @Column({ name: 'finance_transaction_id', type: 'uuid', nullable: true })
+  financeTransactionId: string | null;
+
+  @Column({ name: 'payment_status', length: 50, default: 'payment_confirmed' })
+  paymentStatus: string;
+
+  @Column({ name: 'check_in_time', type: 'timestamptz', nullable: true })
+  checkInTime?: Date;
+
+  @Column({ name: 'actual_start_time', type: 'timestamptz', nullable: true })
+  actualStartTime?: Date;
+
+  @Column({ name: 'actual_end_time', type: 'timestamptz', nullable: true })
+  actualEndTime?: Date;
+
+  @Column({ name: 'wait_time_minutes', type: 'int', nullable: true })
+  waitTimeMinutes?: number;
+
+  @Column({ name: 'recurring_pattern', length: 100, nullable: true })
+  recurringPattern?: string;
+
+  @Column({ name: 'parent_appointment_id', type: 'uuid', nullable: true })
+  parentAppointmentId?: string;
+
+  @Column({ name: 'cancellation_reason', type: 'text', nullable: true })
+  cancellationReason?: string;
+
+  @Column({ name: 'preparation_notes', type: 'text', nullable: true })
+  preparationNotes?: string;
+
+  @Column({ name: 'estimated_cost', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  estimatedCost?: number;
+
+  @Column({ name: 'insurance_verified', type: 'boolean', default: false })
+  insuranceVerified: boolean;
+
+  @Column({ name: 'reminder_sent_count', type: 'int', default: 0 })
+  reminderSentCount: number;
+
+  @Column({ name: 'last_reminder_sent', type: 'timestamptz', nullable: true })
+  lastReminderSent?: Date;
 
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy: string;
@@ -54,10 +116,4 @@ feeAmount: number | null;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
-
-@Column({ name: 'finance_transaction_id', type: 'uuid', nullable: true })
-financeTransactionId: string | null;
-
-@Column({ name: 'payment_status', length: 50, default: 'payment_confirmed' })
-paymentStatus: string;
 }

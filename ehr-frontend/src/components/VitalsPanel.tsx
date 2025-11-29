@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X, Save, Activity, Heart, Thermometer, Droplets, Eye, 
-  Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain
+  X, Save, Activity, Heart, Thermometer, Droplets, Eye,
+  Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain, Loader2,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
 
 interface Patient {
   id: string;
@@ -32,6 +41,29 @@ interface VitalsData {
   notes: string;
 }
 
+type TrendPoint = {
+  timestamp: string;
+  value: number;
+};
+
+type VitalTrendMap = {
+  systolic?: TrendPoint[];
+  diastolic?: TrendPoint[];
+  heartRate?: TrendPoint[];
+  temperature?: TrendPoint[];
+  oxygenSaturation?: TrendPoint[];
+  respiratoryRate?: TrendPoint[];
+  weight?: TrendPoint[];
+  bmi?: TrendPoint[];
+};
+
+type VitalTrendsResponse = {
+  patientId: string;
+  count: number;
+  latest: any;
+  trends: VitalTrendMap;
+};
+
 interface VitalsPanelProps {
   patient?: Patient;
   appointments?: any[];
@@ -58,6 +90,8 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
   const [bmi, setBmi] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
+  const [trendLoading, setTrendLoading] = useState(false);
 
   useEffect(() => {
     setSelectedPatient(patient || null);
@@ -65,7 +99,10 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
 
   useEffect(() => {
     setCdssInsights(null);
-  }, [selectedPatient?.id]);
+    if (!selectedPatient) {
+      setTrendOverview(null);
+    }
+  }, [selectedPatient?.id, selectedPatient]);
 
   useEffect(() => {
     if (vitals.weight > 0 && vitals.height > 0) {
@@ -74,6 +111,14 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
       setBmi(Number(calculatedBmi.toFixed(1)));
     }
   }, [vitals.weight, vitals.height]);
+
+  useEffect(() => {
+    if (selectedPatient?.id) {
+      fetchVitalsTrend(selectedPatient.id);
+    } else {
+      setTrendOverview(null);
+    }
+  }, [selectedPatient?.id]);
 
   const handleInputChange = (field: keyof VitalsData, value: string | number) => {
     setVitals(prev => ({
@@ -108,6 +153,21 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
         return { status: 'Normal', color: 'text-green-600' };
       default:
         return { status: 'Normal', color: 'text-green-600' };
+    }
+  };
+
+  const fetchVitalsTrend = async (patientId: string) => {
+    try {
+      setTrendLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) return;
+      const response = await ehrApi.getVitals(patientId, token, tenantSlug, { trend: true, limit: 60 });
+      setTrendOverview(response.data);
+    } catch (error) {
+      console.error('Failed to load vitals trend', error);
+    } finally {
+      setTrendLoading(false);
     }
   };
 
@@ -151,6 +211,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
         null;
       setCdssInsights(insights);
       showSuccess('Success', 'Vitals recorded successfully');
+      fetchVitalsTrend(selectedPatient.id);
       onSave?.();
     } catch (error) {
       console.error('Error saving vitals:', error);
@@ -158,6 +219,86 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatTrendData = (entries?: TrendPoint[]) => {
+    if (!entries || !entries.length) return [];
+    return entries.map((entry) => ({
+      date: new Date(entry.timestamp || entry.recordedAt || entry.createdAt).toLocaleDateString(),
+      value: Number(entry.value),
+    }));
+  };
+
+  const getTrendDirection = (data: { value: number }[]) => {
+    if (!data || data.length < 2) return { direction: 'stable', delta: 0 };
+    const first = data[0].value;
+    const last = data[data.length - 1].value;
+    const delta = last - first;
+    if (Math.abs(delta) < 0.5) return { direction: 'stable', delta };
+    return { direction: delta > 0 ? 'up' : 'down', delta };
+  };
+
+  const renderTrendCard = (
+    label: string,
+    dataKey: keyof VitalTrendMap,
+    unit: string,
+    color: string,
+  ) => {
+    const entries = formatTrendData(trendOverview?.trends?.[dataKey]);
+    const latest = entries.length ? entries[entries.length - 1].value : null;
+    const { direction, delta } = getTrendDirection(entries);
+    const badge =
+      direction === 'up'
+        ? 'bg-red-50 text-red-600 border-red-100'
+        : direction === 'down'
+        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+        : 'bg-slate-50 text-slate-600 border-slate-200';
+
+    return (
+      <div key={label} className="border border-slate-200 rounded-2xl p-4 bg-white/70">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-xs uppercase text-slate-500 tracking-wide">{label}</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {latest !== null ? `${latest.toFixed(1)} ${unit}` : '—'}
+            </p>
+          </div>
+          {entries.length >= 2 && (
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${badge}`}>
+              {direction === 'up' ? 'Rising' : direction === 'down' ? 'Falling' : 'Stable'}{' '}
+              {Math.abs(delta).toFixed(1)}
+            </span>
+          )}
+        </div>
+        {entries.length >= 2 ? (
+          <div className="h-28">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={entries} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={30} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 10, borderColor: '#e2e8f0' }}
+                  formatter={(value: number) => [`${value.toFixed(1)} ${unit}`, label]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-28 flex items-center justify-center text-xs text-slate-400">
+            Not enough data
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderVitalInput = (
@@ -226,6 +367,37 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="bg-white/80 rounded-2xl border border-slate-200 shadow-inner p-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
+              <div>
+                <p className="text-xs uppercase text-slate-500 tracking-wide">Trend Overview</p>
+                <h3 className="text-lg font-semibold text-slate-900">Recent Vitals</h3>
+              </div>
+              {trendLoading && (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Updating...
+                </div>
+              )}
+            </div>
+            {trendOverview ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {renderTrendCard('Systolic BP', 'systolic', 'mmHg', '#ef4444')}
+                {renderTrendCard('Diastolic BP', 'diastolic', 'mmHg', '#f97316')}
+                {renderTrendCard('Heart Rate', 'heartRate', 'bpm', '#0ea5e9')}
+                {renderTrendCard('Temperature', 'temperature', '°C', '#8b5cf6')}
+                {renderTrendCard('Oxygen Saturation', 'oxygenSaturation', '%', '#10b981')}
+                {renderTrendCard('Weight', 'weight', 'kg', '#6366f1')}
+              </div>
+            ) : trendLoading ? (
+              <div className="py-12 text-center text-slate-400 text-sm">Loading trend data...</div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 text-sm">
+                No historical vitals found for this patient.
+              </div>
+            )}
           </div>
 
           {cdssInsights?.risk && (
@@ -417,34 +589,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
   return (
     <div className="space-y-6">
       {renderContent()}
-      
-      {patient && (
-        <div className="flex items-center justify-end gap-4 pt-6 border-t border-slate-200">
-          <button
-            onClick={onClose}
-            className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 font-semibold"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 font-semibold disabled:opacity-50 flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Vitals
-              </>
-            )}
-          </button>
-        </div>
-      )}
     </div>
   );
 };

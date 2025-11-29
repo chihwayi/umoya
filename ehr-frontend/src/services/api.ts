@@ -143,6 +143,80 @@ export const terminologyApi = {
     });
     return { data: response.data };
   },
+
+  // RxNorm methods
+  searchRxNorm: async (
+    term: string,
+    token: string,
+    tenantSlug: string,
+    options?: { limit?: number; offset?: number }
+  ) => {
+    if (!term || term.trim().length < 2) {
+      return { data: { concepts: [], total: 0, limit: options?.limit ?? 50, offset: options?.offset ?? 0 } };
+    }
+
+    const params: Record<string, any> = {
+      term: term.trim(),
+      limit: options?.limit ?? 50,
+      offset: options?.offset ?? 0,
+    };
+
+    const response = await ehrAxios.get('/terminology/rxnorm/search', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getRxNormConcept: async (rxcui: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/terminology/rxnorm/concepts/${rxcui}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  validateRxNorm: async (rxcui: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/terminology/rxnorm/validate/${rxcui}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getRxNormRelated: async (rxcui: string, token: string, tenantSlug: string, rela?: string) => {
+    const params: Record<string, any> = {};
+    if (rela) {
+      params.rela = rela;
+    }
+
+    const response = await ehrAxios.get(`/terminology/rxnorm/concepts/${rxcui}/related`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  findRxNormByName: async (name: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/terminology/rxnorm/find-by-name', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: { name: name.trim() },
+    });
+    return { data: response.data };
+  },
 };
 
 export const ehrApi = {
@@ -317,6 +391,82 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  createRecurringAppointments: async (appointmentData: any, pattern: string, endDate: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/appointments/recurring', {
+      appointment: appointmentData,
+      pattern,
+      endDate
+    }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Waitlist API
+  getWaitlist: async (token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get('/waitlist', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  createWaitlistEntry: async (waitlistData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/waitlist', waitlistData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateWaitlistEntry: async (id: string, waitlistData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/waitlist/${id}`, waitlistData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteWaitlistEntry: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/waitlist/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  scheduleFromWaitlist: async (id: string, appointmentDate: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/waitlist/${id}/schedule`, { appointmentDate }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  notifyWaitlistEntry: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/waitlist/${id}/notify`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   updateAppointmentStatus: async (appointmentId: string, status: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.put(`/appointments/${appointmentId}/status`, { status }, {
       headers: {
@@ -357,6 +507,49 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // Calendar Views
+  getCalendarView: async (date: string, view: 'day' | 'week' | 'month', token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/appointments/calendar/${date}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { view }
+    });
+    return { data: response.data };
+  },
+
+  getMonthView: async (year: number, month: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/appointments/calendar/month/${year}/${month}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getWeekView: async (startDate: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/appointments/calendar/week/${startDate}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  checkConflicts: async (doctorId: string, date: string, time: string, duration: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/appointments/conflicts/${doctorId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { date, time, duration: duration.toString() }
+    });
+    return { data: response.data };
+  },
+
   // Vitals API
   recordVitals: async (vitalsData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/vitals', vitalsData, {
@@ -368,12 +561,21 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  getVitals: async (patientId: string, token: string, tenantSlug: string) => {
+  getVitals: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { trend?: boolean; limit?: number },
+  ) => {
+    const params: Record<string, any> = {};
+    if (options?.trend) params.trend = 'true';
+    if (options?.limit) params.limit = options.limit;
     const response = await ehrAxios.get(`/vitals/patient/${patientId}`, {
-      headers: { 
+      headers: {
         'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
     });
     return { data: response.data };
   },
@@ -1589,6 +1791,134 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  downloadInvoicePdf: async (tenantSlug: string, token: string, transactionId: string, templateId?: string) => {
+    const response = await ehrAxios.get(`/finance/transactions/${transactionId}/invoice.pdf`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params: templateId ? { templateId } : undefined,
+      responseType: 'blob',
+    });
+    return response;
+  },
+
+  getInvoiceTemplates: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/finance/invoice-templates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createInvoiceTemplate: async (tenantSlug: string, token: string, templateData: any) => {
+    const response = await ehrAxios.post('/finance/invoice-templates', templateData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateInvoiceTemplate: async (tenantSlug: string, token: string, templateId: string, templateData: any) => {
+    const response = await ehrAxios.put(`/finance/invoice-templates/${templateId}`, templateData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  setDefaultInvoiceTemplate: async (tenantSlug: string, token: string, templateId: string) => {
+    const response = await ehrAxios.post(`/finance/invoice-templates/${templateId}/default`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getFinancialReports: async (
+    tenantSlug: string,
+    token: string,
+    params: {
+      reportType: 'revenue' | 'profit_loss' | 'cash_flow' | 'aging';
+      dateFrom?: string;
+      dateTo?: string;
+      groupBy?: 'day' | 'week' | 'month' | 'year';
+    },
+  ) => {
+    const response = await ehrAxios.get('/finance/reports', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getTaxSummary: async (tenantSlug: string, token: string, params?: { dateFrom?: string; dateTo?: string }) => {
+    const response = await ehrAxios.get('/finance/tax/summary', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  calculateTax: async (tenantSlug: string, token: string, amount: number, taxRate?: number) => {
+    const response = await ehrAxios.post(
+      '/finance/tax/calculate',
+      { amount, taxRate },
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  reconcilePayment: async (
+    tenantSlug: string,
+    token: string,
+    reconciliationData: {
+      transactionId: string;
+      reconciliationDate: string;
+      reconciledAmount: number;
+      bankReference?: string;
+      notes?: string;
+    },
+  ) => {
+    const response = await ehrAxios.post('/finance/reconciliation', reconciliationData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getReconciliationReport: async (tenantSlug: string, token: string, params?: { dateFrom?: string; dateTo?: string }) => {
+    const response = await ehrAxios.get('/finance/reconciliation', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   // ===== ENHANCED LIS - CRITICAL ALERTS =====
   getCriticalAlertStats: async (tenantSlug: string, token: string) => {
     const response = await ehrAxios.get('/lab/critical-alerts/stats/summary', {
@@ -1657,6 +1987,21 @@ export const ehrApi = {
   },
 
   // Imaging Studies
+  getImagingStudies: async (
+    tenantSlug: string,
+    token: string,
+    filters?: { status?: string; modality?: string; radiologist?: string },
+  ) => {
+    const response = await ehrAxios.get('/imaging/studies', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+
   getImagingStudy: async (tenantSlug: string, token: string, studyId: string) => {
     const response = await ehrAxios.get(`/imaging/studies/${studyId}`, {
       headers: {
@@ -1714,6 +2059,50 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+
+  scheduleImagingOrder: async (
+    tenantSlug: string,
+    token: string,
+    orderId: string,
+    scheduledDate: string,
+  ) => {
+    const response = await ehrAxios.patch(
+      `/imaging/orders/${orderId}/schedule`,
+      { scheduled_date: scheduledDate },
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  createImagingStudy: async (tenantSlug: string, token: string, payload: any) => {
+    const response = await ehrAxios.post('/imaging/studies', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  completeImagingStudy: async (
+    tenantSlug: string,
+    token: string,
+    studyId: string,
+    payload: { completion_notes?: string } = {},
+  ) => {
+    const response = await ehrAxios.patch(`/imaging/studies/${studyId}/complete`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },
@@ -1937,6 +2326,341 @@ export const ehrApi = {
 
   recordOncologyAdverseEvent: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
     const response = await ehrAxios.post(`/oncology/cases/${caseId}/adverse-events`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createOncologyResponseAssessment: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/response-assessments`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyResponseAssessments: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/response-assessments`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  calculateOncologyAssessmentRecist: async (
+    tenantSlug: string,
+    token: string,
+    caseId: string,
+    assessmentId: string,
+    payload: any,
+  ) => {
+    const response = await ehrAxios.post(
+      `/oncology/cases/${caseId}/response-assessments/${assessmentId}/calculate-recist`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  getOncologyBestResponse: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/best-response`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologySurvivalMetrics: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/survival-metrics`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologySurvivorshipPlan: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/survivorship-plan`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createOncologySurvivorshipPlan: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/survivorship-plan`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateOncologySurvivorshipPlan: async (tenantSlug: string, token: string, planId: string, payload: any) => {
+    const response = await ehrAxios.patch(`/oncology/survivorship-plans/${planId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyUpcomingFollowUps: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/follow-ups/upcoming`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologySurvivorshipReport: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/survivorship-report`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  enrollOncologyClinicalTrial: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/clinical-trials`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyClinicalTrials: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/clinical-trials`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateOncologyClinicalTrialStatus: async (tenantSlug: string, token: string, trialId: string, payload: any) => {
+    const response = await ehrAxios.patch(`/oncology/clinical-trials/${trialId}/status`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  trackOncologyTrialCompliance: async (tenantSlug: string, token: string, trialId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/clinical-trials/${trialId}/compliance`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyTrialEndpoints: async (tenantSlug: string, token: string, trialId: string) => {
+    const response = await ehrAxios.get(`/oncology/clinical-trials/${trialId}/endpoints`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordOncologyPRO: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/pros`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyPROHistory: async (tenantSlug: string, token: string, caseId: string, params?: any) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/pros`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getOncologyPROTrends: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/pros/trends`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  calculateOncologyProScore: async (tenantSlug: string, token: string, proId: string) => {
+    const response = await ehrAxios.post(`/oncology/pros/${proId}/calculate-scores`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordOncologyGenomicData: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/genomic-data`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyGenomicSummary: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/genomic-summary`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyTargetedTherapies: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/targeted-therapies`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyResponseAnalytics: async (tenantSlug: string, token: string, params: any = {}) => {
+    const response = await ehrAxios.get('/oncology/analytics/response-rates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getOncologySurvivalAnalytics: async (tenantSlug: string, token: string, params: any = {}) => {
+    const response = await ehrAxios.get('/oncology/analytics/survival', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getOncologyBiomarkerAnalytics: async (tenantSlug: string, token: string, params: any = {}) => {
+    const response = await ehrAxios.get('/oncology/analytics/biomarkers', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getOncologyTrialAnalytics: async (tenantSlug: string, token: string, params: any = {}) => {
+    const response = await ehrAxios.get('/oncology/analytics/trials', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  recordOncologyFinancialToxicity: async (tenantSlug: string, token: string, caseId: string, payload: any) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/financial-toxicity`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyFinancialSummary: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/financial-summary`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyFinancialAssistance: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/financial-assistance`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologyTreatmentRecommendations: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/treatment-recommendations`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getOncologySurveillanceReminders: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/surveillance-reminders`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  checkOncologyCaseAlerts: async (tenantSlug: string, token: string, caseId: string, payload: any = {}) => {
+    const response = await ehrAxios.post(`/oncology/cases/${caseId}/check-alerts`, payload, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
@@ -2307,8 +3031,138 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  // ===== CARDIOLOGY API =====
+  // Patient History API
+  getMedicalHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/history/medical`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
 
+  createMedicalHistory: async (patientId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/patients/${patientId}/history/medical`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateMedicalHistory: async (patientId: string, historyId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/patients/${patientId}/history/medical/${historyId}`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteMedicalHistory: async (patientId: string, historyId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/patients/${patientId}/history/medical/${historyId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getFamilyHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/history/family`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  createFamilyHistory: async (patientId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/patients/${patientId}/history/family`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateFamilyHistory: async (patientId: string, historyId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/patients/${patientId}/history/family/${historyId}`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteFamilyHistory: async (patientId: string, historyId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/patients/${patientId}/history/family/${historyId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getSocialHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/history/social`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  createSocialHistory: async (patientId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/patients/${patientId}/history/social`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  updateSocialHistory: async (patientId: string, historyId: string, historyData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/patients/${patientId}/history/social/${historyId}`, historyData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteSocialHistory: async (patientId: string, historyId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/patients/${patientId}/history/social/${historyId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getHistoryTimeline: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/history/timeline`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // ===== CARDIOLOGY API =====
   getCardiologyEncounters: async (tenantSlug: string, token: string, params: any = {}) => {
     const response = await ehrAxios.get('/cardiology/encounters', {
       headers: {
@@ -2376,6 +3230,1502 @@ export const ehrApi = {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
+    });
+    return { data: response.data };
+  },
+};
+
+// Doctor Availability API
+export const doctorAvailabilityApi = {
+  create: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/doctor-availability', data, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  list: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/doctor-availability', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  get: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/doctor-availability/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  update: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.patch(`/doctor-availability/${id}`, data, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  delete: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/doctor-availability/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+};
+
+export const medicationHistoryApi = {
+  getMedications: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string,
+    params: { status?: string; type?: string } = {},
+  ) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/medications`, {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCurrentMedications: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/medications/current`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createMedication: async (
+    patientId: string,
+    payload: any,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/patients/${patientId}/medications`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateMedication: async (
+    patientId: string,
+    medicationId: string,
+    payload: any,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(
+      `/patients/${patientId}/medications/${medicationId}`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  discontinueMedication: async (
+    patientId: string,
+    medicationId: string,
+    reason: string,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.put(
+      `/patients/${patientId}/medications/${medicationId}/discontinue`,
+      { reason },
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  deleteMedication: async (patientId: string, medicationId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/patients/${patientId}/medications/${medicationId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getMedicationTimeline: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/medications/timeline`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getReconciliationHistory: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/medications/reconciliation/history`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  performReconciliation: async (
+    patientId: string,
+    payload: any,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/patients/${patientId}/medications/reconciliation`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordAdherence: async (
+    patientId: string,
+    medicationId: string,
+    payload: Record<string, any>,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      `/patients/${patientId}/medications/${medicationId}/adherence`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+  getAdherenceRecords: async (
+    patientId: string,
+    medicationId: string,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(
+      `/patients/${patientId}/medications/${medicationId}/adherence`,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
+};
+
+export const clinicalTemplateApi = {
+  getTemplates: async (
+    token: string,
+    tenantSlug: string,
+    filters?: { category?: string; specialty?: string; isActive?: boolean; isDefault?: boolean },
+  ) => {
+    const params: Record<string, any> = {};
+    if (filters?.category) params.category = filters.category;
+    if (filters?.specialty) params.specialty = filters.specialty;
+    if (typeof filters?.isActive !== 'undefined') params.isActive = filters.isActive;
+    if (typeof filters?.isDefault !== 'undefined') params.isDefault = filters.isDefault;
+
+    const response = await ehrAxios.get('/clinical-templates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getTemplate: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinical-templates/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getDefaultTemplates: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinical-templates/defaults', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getTemplatesByCategory: async (category: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinical-templates/category/${category}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createTemplate: async (templateData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/clinical-templates', templateData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateTemplate: async (id: string, templateData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/clinical-templates/${id}`, templateData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  deleteTemplate: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/clinical-templates/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  applyTemplate: async (
+    templateId: string,
+    variables: Record<string, string>,
+    token: string,
+    tenantSlug: string,
+    context?: Record<string, any>,
+  ) => {
+    const payload: Record<string, any> = { templateId, variables };
+    if (context) {
+      payload.context = context;
+    }
+
+    const response = await ehrAxios.post('/clinical-templates/apply', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+};
+
+export const diabetesApi = {
+  getDashboardSummary: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/diabetes/dashboard/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  listRegistries: async (
+    token: string,
+    tenantSlug: string,
+    params?: { status?: string; diabetesType?: string; limit?: number; offset?: number; search?: string },
+  ) => {
+    const response = await ehrAxios.get('/diabetes/registry', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getRegistryByPatient: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getLatestCareBundle: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/care-bundle/latest`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCareBundleCompletion: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/care-bundle/completion`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCareBundleHistory: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/care-bundle`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordCareBundle: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/care-bundle`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getGlucoseTrends: async (registryId: string, token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/glucose/trends`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getGlucoseHistory: async (
+    registryId: string,
+    token: string,
+    tenantSlug: string,
+    params?: { limit?: number; offset?: number },
+  ) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/glucose`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  recordGlucose: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/glucose`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getCgmSummary: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/cgm-summary`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  syncCgmData: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/glucose/sync-cgm`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  listMedications: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/medications`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  createMedication: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/medications`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateMedication: async (medicationId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.patch(`/diabetes/medications/${medicationId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  trackMedicationAdherence: async (medicationId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/medications/${medicationId}/adherence`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getActiveInsulinRegimen: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/insulin-regimens/active`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  addInsulinRegimen: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/insulin-regimens`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateInsulinRegimen: async (regimenId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.patch(`/diabetes/insulin-regimens/${regimenId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  calculateInsulinDose: async (regimenId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/insulin-regimens/${regimenId}/calculate-dose`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getScreeningHistory: async (registryId: string, token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/screenings`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getUpcomingScreenings: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/screenings/upcoming`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getScreeningDueStatus: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/screenings/due`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordScreening: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/screenings`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getEducationHistory: async (registryId: string, token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/education`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getEducationDueStatus: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/education/due`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  recordEducationSession: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/education`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getAlerts: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/alerts`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  acknowledgeAlert: async (alertId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/alerts/${alertId}/acknowledge`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  resolveAlert: async (alertId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/alerts/${alertId}/resolve`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  generateAlerts: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/alerts/generate`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  listDevices: async (registryId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/diabetes/registry/${registryId}/devices`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  updateDevice: async (deviceId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.patch(`/diabetes/devices/${deviceId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  registerDevice: async (registryId: string, token: string, tenantSlug: string, payload: any) => {
+    const response = await ehrAxios.post(`/diabetes/registry/${registryId}/devices`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+};
+
+export const prescriptionTemplateApi = {
+  getTemplates: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      category?: string;
+      specialty?: string;
+      isActive?: boolean;
+      isDefault?: boolean;
+      search?: string;
+    }
+  ) => {
+    const params: Record<string, any> = {};
+    if (filters?.category) params.category = filters.category;
+    if (filters?.specialty) params.specialty = filters.specialty;
+    if (typeof filters?.isActive !== 'undefined') params.isActive = filters.isActive;
+    if (typeof filters?.isDefault !== 'undefined') params.isDefault = filters.isDefault;
+    if (filters?.search) params.search = filters.search;
+
+    const response = await ehrAxios.get('/prescription-templates', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getTemplate: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/prescription-templates/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getDefaultTemplates: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/prescription-templates/defaults', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getTemplatesByCategory: async (
+    category: string,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.get(
+      `/prescription-templates/category/${category}`,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return { data: response.data };
+  },
+
+  createTemplate: async (
+    templateData: any,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(
+      '/prescription-templates',
+      templateData,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return { data: response.data };
+  },
+
+  updateTemplate: async (
+    id: string,
+    templateData: any,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.put(
+      `/prescription-templates/${id}`,
+      templateData,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return { data: response.data };
+  },
+
+  deleteTemplate: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/prescription-templates/${id}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  // CCDA Document Generation
+  generateCCD: async (patientId: string, token: string, tenantSlug: string, options?: { effectiveTime?: string; authorId?: string }) => {
+    const params: Record<string, any> = {};
+    if (options?.effectiveTime) params.effectiveTime = options.effectiveTime;
+    if (options?.authorId) params.authorId = options.authorId;
+
+    const response = await ehrAxios.get(`/ccda/ccd/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+      responseType: 'text',
+    });
+    return { data: response.data };
+  },
+
+  generateDischargeSummary: async (
+    patientId: string,
+    encounterId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { effectiveTime?: string; authorId?: string }
+  ) => {
+    const params: Record<string, any> = { encounterId };
+    if (options?.effectiveTime) params.effectiveTime = options.effectiveTime;
+    if (options?.authorId) params.authorId = options.authorId;
+
+    const response = await ehrAxios.get(`/ccda/discharge-summary/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+      responseType: 'text',
+    });
+    return { data: response.data };
+  },
+
+  generateReferralSummary: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { effectiveTime?: string; authorId?: string }
+  ) => {
+    const params: Record<string, any> = {};
+    if (options?.effectiveTime) params.effectiveTime = options.effectiveTime;
+    if (options?.authorId) params.authorId = options.authorId;
+
+    const response = await ehrAxios.get(`/ccda/referral-summary/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+      responseType: 'text',
+    });
+    return { data: response.data };
+  },
+
+  generateProgressNote: async (
+    patientId: string,
+    encounterId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { effectiveTime?: string; authorId?: string }
+  ) => {
+    const params: Record<string, any> = { encounterId };
+    if (options?.effectiveTime) params.effectiveTime = options.effectiveTime;
+    if (options?.authorId) params.authorId = options.authorId;
+
+    const response = await ehrAxios.get(`/ccda/progress-note/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+      responseType: 'text',
+    });
+    return { data: response.data };
+  },
+
+  // HIPAA Audit Logs
+  getAuditLogs: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      userId?: string;
+      patientId?: string;
+      action?: string;
+      resourceType?: string;
+      outcome?: 'success' | 'failure' | 'denied';
+      riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+      startDate?: string;
+      endDate?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ) => {
+    const params: Record<string, any> = {};
+    if (filters?.userId) params.userId = filters.userId;
+    if (filters?.patientId) params.patientId = filters.patientId;
+    if (filters?.action) params.action = filters.action;
+    if (filters?.resourceType) params.resourceType = filters.resourceType;
+    if (filters?.outcome) params.outcome = filters.outcome;
+    if (filters?.riskLevel) params.riskLevel = filters.riskLevel;
+    if (filters?.startDate) params.startDate = filters.startDate;
+    if (filters?.endDate) params.endDate = filters.endDate;
+    if (filters?.limit) params.limit = filters.limit;
+    if (filters?.offset) params.offset = filters.offset;
+
+    const response = await ehrAxios.get('/hipaa-audit/logs', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getAuditSummary: async (
+    token: string,
+    tenantSlug: string,
+    startDate: string,
+    endDate: string
+  ) => {
+    const response = await ehrAxios.get('/hipaa-audit/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params: { startDate, endDate },
+    });
+    return { data: response.data };
+  },
+
+  detectBreaches: async (
+    token: string,
+    tenantSlug: string,
+    lookbackDays?: number
+  ) => {
+    const params: Record<string, any> = {};
+    if (lookbackDays) params.lookbackDays = lookbackDays;
+
+    const response = await ehrAxios.get('/hipaa-audit/breaches', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getPatientAccessReport: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string,
+    startDate?: string,
+    endDate?: string
+  ) => {
+    const params: Record<string, any> = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
+    const response = await ehrAxios.get(`/hipaa-audit/patient/${patientId}/access-report`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  // Quality Measures
+  getQualityMeasures: async (
+    token: string,
+    tenantSlug: string,
+    filters?: { type?: string; category?: string }
+  ) => {
+    const params: Record<string, any> = {};
+    if (filters?.type) params.type = filters.type;
+    if (filters?.category) params.category = filters.category;
+
+    const response = await ehrAxios.get('/quality-measures/measures', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getQualityMeasure: async (measureId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/quality-measures/measures/${measureId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  calculateQualityMeasure: async (
+    measureId: string,
+    startDate: string,
+    endDate: string,
+    token: string,
+    tenantSlug: string,
+    save?: boolean
+  ) => {
+    const params: Record<string, any> = { startDate, endDate };
+    if (save) params.save = 'true';
+
+    const response = await ehrAxios.post(`/quality-measures/calculate/${measureId}`, null, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  calculateQualityMeasures: async (
+    measureIds: string[],
+    startDate: string,
+    endDate: string,
+    token: string,
+    tenantSlug: string,
+    save?: boolean
+  ) => {
+    const params: Record<string, any> = { startDate, endDate };
+    if (save) params.save = 'true';
+
+    const response = await ehrAxios.post('/quality-measures/calculate', { measureIds }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getQualityMeasureResults: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      measureId?: string;
+      startDate?: string;
+      endDate?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ) => {
+    const params: Record<string, any> = {};
+    if (filters?.measureId) params.measureId = filters.measureId;
+    if (filters?.startDate) params.startDate = filters.startDate;
+    if (filters?.endDate) params.endDate = filters.endDate;
+    if (filters?.limit) params.limit = filters.limit;
+    if (filters?.offset) params.offset = filters.offset;
+
+    const response = await ehrAxios.get('/quality-measures/results', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
+  getQualityDashboard: async (
+    startDate: string,
+    endDate: string,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.get('/quality-measures/dashboard', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      params: { startDate, endDate },
+    });
+    return { data: response.data };
+  },
+};
+
+export const pharmacyApi = {
+  // Suppliers
+  listSuppliers: async (token: string, tenantSlug: string, filters?: { search?: string; status?: string; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/suppliers', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createSupplier: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/suppliers', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getSupplier: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/suppliers/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateSupplier: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/suppliers/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  deleteSupplier: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/pharmacy/suppliers/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getSupplierStatistics: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/suppliers/${id}/statistics`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Inventory
+  listInventory: async (token: string, tenantSlug: string, filters?: { search?: string; status?: string; lowStock?: boolean; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/inventory', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createInventory: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/inventory', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getInventory: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/inventory/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateInventory: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/inventory/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getLowStockItems: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/pharmacy/inventory/low-stock/items', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Purchase Orders
+  listPurchaseOrders: async (token: string, tenantSlug: string, filters?: { status?: string; supplierId?: string; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/purchase-orders', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createPurchaseOrder: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/purchase-orders', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getPurchaseOrder: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/purchase-orders/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updatePurchaseOrder: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/purchase-orders/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Receipts
+  createReceipt: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/receipts', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getReceipt: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/receipts/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  listReceipts: async (token: string, tenantSlug: string, filters?: { purchaseOrderId?: string; status?: string; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/receipts', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+
+  // Dispensings
+  createDispensing: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/dispensings', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getDispensing: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/dispensings/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateDispensing: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/dispensings/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Returns
+  createReturn: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/returns', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getReturn: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/returns/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Stock Adjustments
+  createStockAdjustment: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/stock-adjustments', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  getStockAdjustment: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/stock-adjustments/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Pricing Rules
+  listPricingRules: async (token: string, tenantSlug: string, filters?: { active?: boolean; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/pricing-rules', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createPricingRule: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/pricing-rules', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updatePricingRule: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/pricing-rules/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Formulary
+  listFormulary: async (token: string, tenantSlug: string, filters?: { search?: string; category?: string; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/formulary', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createFormulary: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/formulary', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateFormulary: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/formulary/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Alerts
+  listAlerts: async (token: string, tenantSlug: string, filters?: { type?: string; severity?: string; resolved?: boolean; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/alerts', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  createAlert: async (data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/pharmacy/alerts', data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  updateAlert: async (id: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/pharmacy/alerts/${id}`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Prescription Integration
+  getPendingPrescriptions: async (token: string, tenantSlug: string, filters?: { patientId?: string; limit?: number; offset?: number }) => {
+    const response = await ehrAxios.get('/pharmacy/prescriptions/pending', {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+  checkPrescriptionStock: async (prescriptionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/pharmacy/prescriptions/${prescriptionId}/stock-check`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+  dispensePrescription: async (prescriptionId: string, data: { items: Array<{ inventoryId: string; quantityDispensed: number }>; paymentMethod?: string; notes?: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/pharmacy/prescriptions/${prescriptionId}/dispense`, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
+
+// Medical Aid Claims API
+export const claimsApi = {
+  createClaim: async (tenantSlug: string, token: string, claimData: any) => {
+    const response = await ehrAxios.post('/claims', claimData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getClaims: async (
+    tenantSlug: string,
+    token: string,
+    params: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      provider?: string;
+      patientId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      search?: string;
+    } = {},
+  ) => {
+    const response = await ehrAxios.get('/claims', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getClaimById: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  submitClaim: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.put(`/claims/${claimId}/submit`, {}, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  checkClaimStatus: async (tenantSlug: string, token: string, claimId: string) => {
+    const response = await ehrAxios.get(`/claims/${claimId}/status`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  generateClaimFromBill: async (tenantSlug: string, token: string, billId: string, claimData: any) => {
+    const response = await ehrAxios.post(`/claims/from-bill/${billId}`, claimData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  resubmitClaim: async (tenantSlug: string, token: string, claimId: string, updatedData: any) => {
+    const response = await ehrAxios.put(`/claims/${claimId}/resubmit`, updatedData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getDashboardSummary: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/claims/dashboard/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getClaimAnalytics: async (
+    tenantSlug: string,
+    token: string,
+    params?: { dateFrom?: string; dateTo?: string; provider?: string },
+  ) => {
+    const response = await ehrAxios.get('/claims/analytics', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+};
+
+// Billing API (Bills table)
+export const billingApi = {
+  createBill: async (tenantSlug: string, token: string, billData: any) => {
+    const response = await ehrAxios.post('/billing/bills', billData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getBills: async (
+    tenantSlug: string,
+    token: string,
+    params: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      patientId?: string;
+    } = {},
+  ) => {
+    const response = await ehrAxios.get('/billing/bills', {
+      params,
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  addPayment: async (tenantSlug: string, token: string, billId: string, paymentData: any) => {
+    const response = await ehrAxios.post(`/billing/bills/${billId}/payments`, paymentData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },

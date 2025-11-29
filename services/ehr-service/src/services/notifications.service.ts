@@ -87,7 +87,8 @@ export class NotificationsService {
       throw new Error('Lab order not found');
     }
 
-    const message = `Dear ${labOrder.patient.firstName}, your lab results for ${labOrder.testName} are ready. Please visit the clinic to collect them or call us for details. MediCore Lab`;
+    const testName = labOrder.tests?.[0]?.testName || 'the requested tests';
+    const message = `Dear ${labOrder.patient.firstName}, your lab results for ${testName} are ready. Please visit the clinic to collect them or call us for details. MediCore Lab`;
 
     return this.sendSms({
       phone: labOrder.patient.phone,
@@ -106,7 +107,7 @@ export class NotificationsService {
       throw new Error('Bill not found');
     }
 
-    const message = `Dear ${bill.patient.firstName}, your bill #${bill.invoiceNumber} of $${bill.totalAmount} is due. Pay via EcoCash, OneMoney or visit our clinic. Thank you. MediCore`;
+    const message = `Dear ${bill.patient.firstName}, your bill #${bill.billNumber} of $${bill.totalAmount} is due. Pay via EcoCash, OneMoney or visit our clinic. Thank you. MediCore`;
 
     return this.sendSms({
       phone: bill.patient.phone,
