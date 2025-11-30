@@ -285,16 +285,20 @@ const RequestAppointmentPage: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {availableSlots.map((slot) => {
                     const slotDate = new Date(slot);
-                    const isSelected = formData.appointmentTime === slot;
+                    const hours = slotDate.getHours().toString().padStart(2, '0');
+                    const minutes = slotDate.getMinutes().toString().padStart(2, '0');
+                    const timeString = `${hours}:${minutes}`;
+                    const isSelected = formData.appointmentTime === timeString;
                     return (
                       <button
                         key={slot}
                         type="button"
                         onClick={() => handleTimeSlotSelect(slot)}
-                        className={`px-4 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 ${
+                        disabled={false}
+                        className={`px-4 py-3 rounded-xl font-semibold transition-all transform hover:scale-105 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                           isSelected
-                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg ring-2 ring-purple-300'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:scale-95'
                         }`}
                       >
                         {format(slotDate, 'h:mm a')}

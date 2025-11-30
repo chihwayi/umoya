@@ -272,21 +272,35 @@ export class PatientPortalAppointmentService {
     const unavailablePeriods = await connection.query(
       `SELECT 
         CASE 
-          WHEN start_time IS NOT NULL THEN (DATE($2) + start_time)::TIMESTAMP
-          ELSE (start_date)::TIMESTAMP
+          WHEN start_time IS NOT NULL AND is_all_day = FALSE THEN 
+            (DATE($2) + start_time)::TIMESTAMP
+          WHEN is_all_day = TRUE THEN 
+            start_date::TIMESTAMP
+          ELSE 
+            start_date::TIMESTAMP
         END as start_time,
         CASE 
-          WHEN end_time IS NOT NULL THEN (DATE($2) + end_time)::TIMESTAMP
-          WHEN end_date IS NOT NULL THEN (end_date)::TIMESTAMP
-          ELSE (start_date + INTERVAL '1 day')::TIMESTAMP
+          WHEN end_time IS NOT NULL AND is_all_day = FALSE THEN 
+            (DATE($2) + end_time)::TIMESTAMP
+          WHEN is_all_day = TRUE AND end_date IS NOT NULL THEN 
+            (end_date + INTERVAL '1 day')::TIMESTAMP
+          WHEN is_all_day = TRUE THEN 
+            (start_date + INTERVAL '1 day')::TIMESTAMP
+          WHEN end_date IS NOT NULL THEN 
+            (end_date + INTERVAL '1 day')::TIMESTAMP
+          ELSE 
+            (start_date + INTERVAL '1 day')::TIMESTAMP
         END as end_time
        FROM doctor_availability 
        WHERE doctor_id = $1 
+       AND is_unavailable = TRUE
        AND (
+         -- Date range overlaps with selected date
          (start_date <= DATE($2) AND (end_date IS NULL OR end_date >= DATE($2)))
-         OR (DATE(start_date) = DATE($2))
-       )
-       AND is_unavailable = TRUE`,
+         OR 
+         -- Single day unavailability
+         (DATE(start_date) = DATE($2) AND end_date IS NULL)
+       )`,
       [doctorId, date],
     );
 
