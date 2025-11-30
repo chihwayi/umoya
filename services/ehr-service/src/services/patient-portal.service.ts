@@ -7,6 +7,7 @@ import { LabOrder } from '../entities/lab-order.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { Bill } from '../entities/billing.entity';
 import { Patient } from '../entities/patient.entity';
+import { Vitals } from '../entities/vitals.entity';
 
 @Injectable()
 export class PatientPortalService {
@@ -36,43 +37,74 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    const appointmentRepository = connection.getRepository(AppointmentSimple);
-    const queryBuilder = appointmentRepository
-      .createQueryBuilder('appointment')
-      .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .where('appointment.patientId = :patientId', { patientId });
-
+    // Use raw SQL query to ensure proper column mapping
+    let query = `
+      SELECT 
+        a.id,
+        a.appointment_date as "appointmentDate",
+        a.duration_minutes as "durationMinutes",
+        a.appointment_type as "appointmentType",
+        a.status,
+        a.reason,
+        a.notes,
+        a.patient_instructions as "patientInstructions",
+        a.priority_level as "priorityLevel",
+        a.virtual_meeting_url as "virtualMeetingUrl",
+        a.is_telehealth as "isTelehealth",
+        a.fee_amount as "feeAmount",
+        a.payment_status as "paymentStatus",
+        u.id as doctor_id,
+        u.first_name as doctor_first_name,
+        u.last_name as doctor_last_name,
+        u.specialization as doctor_specialization
+      FROM appointments a
+      LEFT JOIN users u ON a.doctor_id = u.id
+      WHERE a.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
     if (filters?.startDate) {
-      queryBuilder.andWhere('appointment.appointmentDate >= :startDate', { startDate: filters.startDate });
+      query += ` AND a.appointment_date >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
     }
     if (filters?.endDate) {
-      queryBuilder.andWhere('appointment.appointmentDate <= :endDate', { endDate: filters.endDate });
+      query += ` AND a.appointment_date <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
     }
     if (filters?.status) {
-      queryBuilder.andWhere('appointment.status = :status', { status: filters.status });
+      query += ` AND a.status = $${paramIndex}`;
+      params.push(filters.status);
+      paramIndex++;
     }
+    
+    query += ` ORDER BY a.appointment_date DESC`;
+    
+    const rawAppointments = await connection.query(query, params);
 
-    const appointments = await queryBuilder.orderBy('appointment.appointmentDate', 'DESC').getMany();
-
-    return appointments.map((apt) => ({
+    return rawAppointments.map((apt: any) => ({
       id: apt.id,
-      appointmentDate: apt.appointmentDate,
-      durationMinutes: apt.durationMinutes,
+      appointmentDate: apt.appointmentDate || apt.appointment_date,
+      durationMinutes: apt.durationMinutes || apt.duration_minutes,
+      appointmentType: apt.appointmentType || apt.appointment_type,
       status: apt.status,
       reason: apt.reason,
       notes: apt.notes,
-      doctor: apt.doctor ? {
-        id: apt.doctor.id,
-        firstName: apt.doctor.firstName,
-        lastName: apt.doctor.lastName,
-        specialization: apt.doctor.specialization,
+      patientInstructions: apt.patientInstructions || apt.patient_instructions,
+      priorityLevel: apt.priorityLevel || apt.priority_level,
+      virtualMeetingUrl: apt.virtualMeetingUrl || apt.virtual_meeting_url,
+      isTelehealth: apt.isTelehealth || apt.is_telehealth,
+      feeAmount: apt.feeAmount || apt.fee_amount,
+      paymentStatus: apt.paymentStatus || apt.payment_status,
+      doctor: apt.doctor_id ? {
+        id: apt.doctor_id,
+        firstName: apt.doctor_first_name,
+        lastName: apt.doctor_last_name,
+        specialization: apt.doctor_specialization,
       } : null,
-      patient: {
-        id: apt.patient?.id,
-        firstName: apt.patient?.firstName,
-        lastName: apt.patient?.lastName,
-      },
     }));
   }
 

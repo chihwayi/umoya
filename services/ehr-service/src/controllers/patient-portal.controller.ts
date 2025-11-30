@@ -183,5 +183,32 @@ export class PatientPortalController {
     const patientId = req.user.sub;
     return this.patientPortalService.getPatientBill(patientId, id, req.tenantId);
   }
+
+  // Vitals
+  @Get('vitals')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient vitals', description: 'Get vital signs records for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit number of records' })
+  async getVitals(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('limit') limit?: string) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getPatientVitals(patientId, req.tenantId, { 
+      startDate, 
+      endDate, 
+      limit: limit ? parseInt(limit) : undefined 
+    });
+  }
+
+  // Dashboard Summary
+  @Get('dashboard/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get dashboard summary', description: 'Get summary statistics and quick info for patient dashboard' })
+  async getDashboardSummary(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user.sub;
+    return this.patientPortalService.getDashboardSummary(patientId, req.tenantId);
+  }
 }
 
