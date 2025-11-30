@@ -169,35 +169,41 @@ export class PatientAuthService {
     const patientRepository = await this.getPatientRepository(tenantId);
 
     // Find patient by email (case-insensitive search)
-    // TypeORM doesn't support case-insensitive search directly, so we'll get all and filter
-    const allPatients = await patientRepository.find({
-      where: { portalAccessEnabled: true },
-    });
+    // Use raw SQL query for better performance and case-insensitive matching
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
 
-    const patient = allPatients.find(
-      p => p.email && p.email.toLowerCase() === loginDto.email.toLowerCase()
+    const patients = await connection.query(
+      `SELECT id, email, patient_number, portal_access_enabled, portal_email_verified, portal_password_hash, first_name, last_name, phone, date_of_birth 
+       FROM patients 
+       WHERE LOWER(email) = LOWER($1) AND portal_access_enabled = TRUE`,
+      [loginDto.email]
     );
 
-    if (!patient) {
+    if (!patients || patients.length === 0) {
       this.logger.warn(`Login attempt with email: ${loginDto.email} - Patient not found or portal not enabled`);
       throw new UnauthorizedException('Invalid credentials or portal access not enabled');
     }
 
-    if (!patient.portalPasswordHash) {
-      this.logger.warn(`Login attempt for patient ${patient.patientNumber} - No password hash`);
+    const patient = patients[0];
+
+    if (!patient.portal_password_hash) {
+      this.logger.warn(`Login attempt for patient ${patient.patient_number} - No password hash`);
       throw new UnauthorizedException('Portal access not set up. Please register first.');
     }
 
     // Check password
-    const isPasswordValid = await bcrypt.compare(loginDto.password, patient.portalPasswordHash);
+    const isPasswordValid = await bcrypt.compare(loginDto.password, patient.portal_password_hash);
 
     if (!isPasswordValid) {
-      this.logger.warn(`Login attempt for patient ${patient.patientNumber} - Invalid password`);
+      this.logger.warn(`Login attempt for patient ${patient.patient_number} - Invalid password`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Check if email is verified (optional - can be made required)
-    if (!patient.portalEmailVerified) {
+    if (!patient.portal_email_verified) {
       return {
         success: false,
         requiresVerification: true,
@@ -206,17 +212,19 @@ export class PatientAuthService {
     }
 
     // Update last login
-    patient.portalLastLogin = new Date();
-    await patientRepository.save(patient);
+    await connection.query(
+      `UPDATE patients SET portal_last_login = NOW() WHERE id = $1`,
+      [patient.id]
+    );
 
     // Generate JWT token
     const payload = {
       sub: patient.id,
       email: patient.email,
       role: 'patient',
-      patientNumber: patient.patientNumber,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
+      patientNumber: patient.patient_number,
+      firstName: patient.first_name,
+      lastName: patient.last_name,
     };
 
     return {
@@ -224,12 +232,12 @@ export class PatientAuthService {
       token: this.jwtService.sign(payload, { expiresIn: '7d' }), // Longer expiry for patients
       patient: {
         id: patient.id,
-        patientNumber: patient.patientNumber,
-        firstName: patient.firstName,
-        lastName: patient.lastName,
+        patientNumber: patient.patient_number,
+        firstName: patient.first_name,
+        lastName: patient.last_name,
         email: patient.email,
         phone: patient.phone,
-        dateOfBirth: patient.dateOfBirth,
+        dateOfBirth: patient.date_of_birth,
       },
     };
   }
