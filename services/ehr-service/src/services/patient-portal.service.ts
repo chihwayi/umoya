@@ -518,18 +518,20 @@ export class PatientPortalService {
   }
 
   // Dashboard Summary
-  async getDashboardSummary(patientId: string, tenantId: string): Promise<any> {
+  async getPatientDashboardSummary(patientId: string, tenantId: string): Promise<any> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
+    this.logger.debug(`Dashboard summary for patientId: ${patientId}, tenantId: ${tenantId}`);
+    
     // Get counts for dashboard
     const appointmentsResult = await connection.query(
       `SELECT COUNT(*) as count FROM appointments WHERE patient_id = $1`,
       [patientId]
     );
-    this.logger.debug(`Appointments query result: ${JSON.stringify(appointmentsResult)}`);
+    this.logger.debug(`Appointments query result: ${JSON.stringify(appointmentsResult)}, patientId used: ${patientId}`);
     const appointmentsCount = appointmentsResult?.[0]?.count || '0';
     this.logger.debug(`Appointments count extracted: ${appointmentsCount}`);
     
