@@ -268,11 +268,24 @@ export class PatientPortalAppointmentService {
     );
 
     // Get doctor's unavailable periods
+    // Handle both date-only and timestamp formats
     const unavailablePeriods = await connection.query(
-      `SELECT start_time, end_time 
+      `SELECT 
+        CASE 
+          WHEN start_time IS NOT NULL THEN (DATE($2) + start_time)::TIMESTAMP
+          ELSE (start_date)::TIMESTAMP
+        END as start_time,
+        CASE 
+          WHEN end_time IS NOT NULL THEN (DATE($2) + end_time)::TIMESTAMP
+          WHEN end_date IS NOT NULL THEN (end_date)::TIMESTAMP
+          ELSE (start_date + INTERVAL '1 day')::TIMESTAMP
+        END as end_time
        FROM doctor_availability 
        WHERE doctor_id = $1 
-       AND DATE(start_time) = DATE($2)
+       AND (
+         (start_date <= DATE($2) AND (end_date IS NULL OR end_date >= DATE($2)))
+         OR (DATE(start_date) = DATE($2))
+       )
        AND is_unavailable = TRUE`,
       [doctorId, date],
     );
