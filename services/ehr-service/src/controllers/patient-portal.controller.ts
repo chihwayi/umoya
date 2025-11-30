@@ -207,8 +207,11 @@ export class PatientPortalController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get dashboard summary', description: 'Get summary statistics and quick info for patient dashboard' })
   async getDashboardSummary(@Req() req: RequestWithTenant & { user: any }) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.getDashboardSummary(patientId, req.tenantId);
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientDashboardSummary(patientId, req.tenantId);
   }
 }
 
