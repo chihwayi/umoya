@@ -163,27 +163,6 @@ export class PatientPortalController {
     );
   }
 
-  @Get('appointments/available-doctors')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get available doctors', description: 'Get list of available doctors for appointment booking' })
-  async getAvailableDoctors(@Req() req: RequestWithTenant & { user: any }) {
-    return this.patientPortalAppointmentService.getAvailableDoctors(req.tenantId);
-  }
-
-  @Get('appointments/available-slots')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get available time slots', description: 'Get available time slots for a doctor on a specific date' })
-  @ApiQuery({ name: 'doctorId', required: true, description: 'Doctor ID' })
-  @ApiQuery({ name: 'date', required: true, description: 'Date in YYYY-MM-DD format' })
-  async getAvailableTimeSlots(
-    @Query('doctorId') doctorId: string,
-    @Query('date') date: string,
-    @Req() req: RequestWithTenant & { user: any },
-  ) {
-    return this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
-  }
 
   @Delete('appointments/:id')
   @UseGuards(JwtAuthGuard)
