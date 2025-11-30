@@ -66,6 +66,7 @@ import { PatientHistoryService } from './services/patient-history.service';
 import { AppointmentService } from './services/appointment.service';
 import { MedicalRecordService } from './services/medical-record.service';
 import { PrescriptionService } from './services/prescription.service';
+import { PrescriptionPdfService } from './services/prescription-pdf.service';
 import { LabOrderService } from './services/lab-order.service';
 import { BillingService } from './services/billing.service';
 import { FhirService } from './services/fhir.service';
@@ -223,6 +224,7 @@ import { RolesGuard } from './guards/roles.guard';
     AppointmentService,
     MedicalRecordService,
     PrescriptionService,
+    PrescriptionPdfService,
     LabOrderService,
     BillingService,
     FhirService,

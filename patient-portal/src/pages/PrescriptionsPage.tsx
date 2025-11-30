@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Pill, Calendar, User, ArrowLeft, AlertCircle, Filter, CheckCircle, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Pill, Calendar, User, ArrowLeft, AlertCircle, Filter, CheckCircle, Clock, RefreshCw, AlertTriangle, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -12,6 +12,7 @@ const PrescriptionsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeOnly, setActiveOnly] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadPrescriptions();
@@ -26,6 +27,17 @@ const PrescriptionsPage: React.FC = () => {
       setError(err.message || 'Failed to load prescriptions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPrescription = async (prescriptionId: string) => {
+    try {
+      setDownloadingId(prescriptionId);
+      await patientPortalApi.downloadPrescription(prescriptionId, token!, tenantSlug);
+    } catch (err: any) {
+      setError(err.message || 'Failed to download prescription');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -130,12 +142,22 @@ const PrescriptionsPage: React.FC = () => {
                         </div>
                       </div>
                       
-                      {prescription.status === 'active' && (
-                        <button className="px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors flex items-center gap-2 border border-purple-200 hover:border-purple-300 self-start sm:self-auto">
-                          <RefreshCw className="w-4 h-4" />
-                          <span>Request Refill</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => handleDownloadPrescription(prescription.id)}
+                          disabled={downloadingId === prescription.id}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 rounded-xl transition-all flex items-center gap-2 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>{downloadingId === prescription.id ? 'Downloading...' : 'Download PDF'}</span>
                         </button>
-                      )}
+                        {prescription.status === 'active' && (
+                          <button className="px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors flex items-center gap-2 border border-purple-200 hover:border-purple-300">
+                            <RefreshCw className="w-4 h-4" />
+                            <span>Request Refill</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

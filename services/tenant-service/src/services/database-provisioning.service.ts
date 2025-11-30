@@ -215,6 +215,13 @@ export class DatabaseProvisioningService {
         description: 'Custom report builder, scheduled reports, clinical outcomes tracking, and analytics metrics',
         statements: () => this.getAnalyticsSchemaStatements(),
       },
+      {
+        id: 'sprint13_eprescription',
+        label: 'Sprint 13.3 - ePrescription Download',
+        version: '2025.12.15',
+        description: 'Prescription PDF download functionality with audit logging',
+        statements: () => this.getPrescriptionDownloadSchemaStatements(),
+      },
     ];
   }
 
@@ -4599,6 +4606,32 @@ export class DatabaseProvisioningService {
       BEFORE UPDATE ON analytics_metrics
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()`);
+
+    return statements;
+  }
+
+  private getPrescriptionDownloadSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Prescription Downloads Audit Table
+    statements.push(`CREATE TABLE IF NOT EXISTS prescription_downloads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      prescription_id UUID NOT NULL REFERENCES prescriptions(id) ON DELETE CASCADE,
+      downloaded_by UUID NOT NULL,
+      downloaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('doctor', 'patient', 'pharmacist', 'nurse', 'admin')),
+      ip_address INET,
+      user_agent TEXT,
+      file_name VARCHAR(255),
+      file_size_bytes INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    // Indexes for performance
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_prescription_id ON prescription_downloads(prescription_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_downloaded_by ON prescription_downloads(downloaded_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_downloaded_at ON prescription_downloads(downloaded_at)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_user_type ON prescription_downloads(user_type)`);
 
     return statements;
   }

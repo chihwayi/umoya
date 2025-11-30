@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { Response } from 'express';
 import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswordResetDto, PatientPasswordResetConfirmDto } from '../services/patient-auth.service';
 import { PatientPortalService } from '../services/patient-portal.service';
 import { PatientMessagingService } from '../services/patient-messaging.service';
 import { PatientNotificationsService } from '../services/patient-notifications.service';
 import { PatientPortalAppointmentService } from '../services/patient-portal-appointment.service';
+import { PrescriptionPdfService } from '../services/prescription-pdf.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
@@ -17,6 +19,7 @@ export class PatientPortalController {
     private readonly patientMessagingService: PatientMessagingService,
     private readonly patientNotificationsService: PatientNotificationsService,
     private readonly patientPortalAppointmentService: PatientPortalAppointmentService,
+    private readonly prescriptionPdfService: PrescriptionPdfService,
   ) {}
 
   @Post('register')
@@ -230,6 +233,52 @@ export class PatientPortalController {
   async getPrescriptions(@Req() req: RequestWithTenant & { user: any }, @Query('activeOnly') activeOnly?: string) {
     const patientId = req.user.sub;
     return this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, { activeOnly: activeOnly === 'true' });
+  }
+
+  @Get('prescriptions/:id/download')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Download prescription as PDF', description: 'Download prescription PDF for the logged-in patient' })
+  @ApiParam({ name: 'id', description: 'Prescription ID' })
+  async downloadPrescription(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+    @Res() res: Response,
+  ) {
+    const patientId = req.user.sub;
+    
+    // Verify prescription belongs to patient
+    const prescriptions = await this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, {});
+    const prescription = prescriptions.find((p: any) => p.id === id);
+    
+    if (!prescription) {
+      return res.status(404).json({ message: 'Prescription not found' });
+    }
+
+    try {
+      const { buffer, fileName } = await this.prescriptionPdfService.generatePrescriptionPDF(
+        req.tenantDb,
+        id,
+      );
+
+      // Log download for audit
+      await req.tenantDb.query(
+        `INSERT INTO prescription_downloads (prescription_id, downloaded_by, downloaded_at, user_type)
+         VALUES ($1, $2, NOW(), $3)`,
+        [id, patientId, 'patient'],
+      );
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'Failed to generate prescription PDF' });
+      }
+    }
   }
 
   // Bills
