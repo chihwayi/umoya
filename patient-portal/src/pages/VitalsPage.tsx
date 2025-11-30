@@ -19,11 +19,17 @@ const VitalsPage: React.FC = () => {
   const loadVitals = async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await patientPortalApi.getVitals(token!, tenantSlug, { limit: 50 });
-      setVitals(data);
+      // Handle both array and object with array property
+      const vitalsList = Array.isArray(data) ? data : (data?.vitals || data?.data || []);
+      setVitals(vitalsList);
+      if (vitalsList.length === 0) {
+        console.log('No vitals found for patient');
+      }
     } catch (err: any) {
+      console.error('Error loading vitals:', err);
       setError(err.message || 'Failed to load vitals');
-      console.error('Failed to load vitals:', err);
     } finally {
       setLoading(false);
     }
@@ -56,7 +62,9 @@ const VitalsPage: React.FC = () => {
           <div className="text-right hidden sm:block">
             <p className="text-xs text-gray-500 flex items-center gap-1">
               <User className="w-3 h-3" />
-              {vital.recordedBy}
+              {typeof vital.recordedBy === 'string' 
+                ? vital.recordedBy 
+                : `${vital.recordedBy.firstName || ''} ${vital.recordedBy.lastName || ''}`.trim() || 'Staff'}
             </p>
           </div>
         )}

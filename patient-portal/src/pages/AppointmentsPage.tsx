@@ -19,9 +19,16 @@ const AppointmentsPage: React.FC = () => {
   const loadAppointments = async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await patientPortalApi.getAppointments(token!, tenantSlug);
-      setAppointments(data);
+      // Handle both array and object with array property
+      const appointmentsList = Array.isArray(data) ? data : (data?.appointments || data?.data || []);
+      setAppointments(appointmentsList);
+      if (appointmentsList.length === 0) {
+        console.log('No appointments found for patient');
+      }
     } catch (err: any) {
+      console.error('Error loading appointments:', err);
       setError(err.message || 'Failed to load appointments');
     } finally {
       setLoading(false);
