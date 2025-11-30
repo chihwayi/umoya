@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
+import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, TrendingUp, TrendingDown, Plus, X, Save, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
@@ -11,6 +11,22 @@ const VitalsPage: React.FC = () => {
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [formData, setFormData] = useState({
+    bloodPressure: '',
+    heartRate: '',
+    temperature: '',
+    oxygenSaturation: '',
+    respiratoryRate: '',
+    weight: '',
+    height: '',
+    bloodGlucose: '',
+    painLevel: '',
+    notes: '',
+  });
 
   useEffect(() => {
     loadVitals();
@@ -40,6 +56,53 @@ const VitalsPage: React.FC = () => {
       return format(new Date(date), 'MMM dd, yyyy HH:mm');
     } catch {
       return 'N/A';
+    }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setSubmitError('');
+  };
+
+  const handleSubmitVitals = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setSubmitError('');
+    setSubmitSuccess(false);
+
+    try {
+      // Prepare data - convert empty strings to null
+      const vitalsData: any = {};
+      Object.keys(formData).forEach(key => {
+        const value = formData[key as keyof typeof formData];
+        vitalsData[key] = value === '' ? null : (key === 'painLevel' || key === 'heartRate' || key === 'oxygenSaturation' || key === 'respiratoryRate' ? parseInt(value) || null : parseFloat(value) || null);
+      });
+
+      await patientPortalApi.submitVitals(vitalsData, token!, tenantSlug);
+      setSubmitSuccess(true);
+      setFormData({
+        bloodPressure: '',
+        heartRate: '',
+        temperature: '',
+        oxygenSaturation: '',
+        respiratoryRate: '',
+        weight: '',
+        height: '',
+        bloodGlucose: '',
+        painLevel: '',
+        notes: '',
+      });
+      
+      // Reload vitals after successful submission
+      setTimeout(() => {
+        loadVitals();
+        setShowSubmitForm(false);
+        setSubmitSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Failed to submit vitals');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -230,12 +293,242 @@ const VitalsPage: React.FC = () => {
                 <p className="text-sm text-gray-600">Your health monitoring records</p>
               </div>
             </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-semibold text-gray-700">{vitals.length} Records</p>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-semibold text-gray-700">{vitals.length} Records</p>
+              </div>
+              <button
+                onClick={() => setShowSubmitForm(true)}
+                className="bg-gradient-to-r from-red-600 to-pink-600 text-white px-6 py-2 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 hover:scale-105"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Submit Vitals</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Submit Vitals Modal */}
+      {showSubmitForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-red-600 to-pink-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Submit Vital Signs</h2>
+              <button
+                onClick={() => {
+                  setShowSubmitForm(false);
+                  setSubmitError('');
+                  setSubmitSuccess(false);
+                }}
+                className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitVitals} className="p-6 space-y-6">
+              {submitSuccess && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <p className="text-green-800 font-semibold">Vitals submitted successfully!</p>
+                </div>
+              )}
+
+              {submitError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-800">{submitError}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Blood Pressure <span className="text-gray-500">(e.g., 120/80)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.bloodPressure}
+                    onChange={(e) => handleInputChange('bloodPressure', e.target.value)}
+                    placeholder="120/80"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Heart Rate <span className="text-gray-500">(bpm)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.heartRate}
+                    onChange={(e) => handleInputChange('heartRate', e.target.value)}
+                    placeholder="72"
+                    min="30"
+                    max="220"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Temperature <span className="text-gray-500">(°C)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.temperature}
+                    onChange={(e) => handleInputChange('temperature', e.target.value)}
+                    placeholder="36.5"
+                    min="30"
+                    max="45"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Oxygen Saturation <span className="text-gray-500">(%)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.oxygenSaturation}
+                    onChange={(e) => handleInputChange('oxygenSaturation', e.target.value)}
+                    placeholder="98"
+                    min="70"
+                    max="100"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Respiratory Rate <span className="text-gray-500">(/min)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.respiratoryRate}
+                    onChange={(e) => handleInputChange('respiratoryRate', e.target.value)}
+                    placeholder="16"
+                    min="8"
+                    max="40"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Weight <span className="text-gray-500">(kg)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.weight}
+                    onChange={(e) => handleInputChange('weight', e.target.value)}
+                    placeholder="70"
+                    min="1"
+                    max="500"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Height <span className="text-gray-500">(cm)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.height}
+                    onChange={(e) => handleInputChange('height', e.target.value)}
+                    placeholder="170"
+                    min="30"
+                    max="250"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Blood Glucose <span className="text-gray-500">(mg/dL)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.bloodGlucose}
+                    onChange={(e) => handleInputChange('bloodGlucose', e.target.value)}
+                    placeholder="100"
+                    min="20"
+                    max="600"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Pain Level <span className="text-gray-500">(0-10)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.painLevel}
+                    onChange={(e) => handleInputChange('painLevel', e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    max="10"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Notes <span className="text-gray-500">(optional)</span>
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => handleInputChange('notes', e.target.value)}
+                  placeholder="Any additional notes about your vitals..."
+                  rows={3}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all resize-none"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSubmitForm(false);
+                    setSubmitError('');
+                    setSubmitSuccess(false);
+                  }}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (
+                    <>
+                      <Activity className="w-5 h-5 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5" />
+                      <span>Submit Vitals</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
