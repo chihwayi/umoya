@@ -10,6 +10,7 @@ import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import LabResultsPage from './pages/LabResultsPage';
 import PrescriptionsPage from './pages/PrescriptionsPage';
 import BillsPage from './pages/BillsPage';
+import VitalsPage from './pages/VitalsPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
@@ -77,6 +78,14 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <BillsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vitals"
+              element={
+                <ProtectedRoute requireLinked>
+                  <VitalsPage />
                 </ProtectedRoute>
               }
             />

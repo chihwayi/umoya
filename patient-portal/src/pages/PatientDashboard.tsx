@@ -14,7 +14,10 @@ const PatientDashboard: React.FC = () => {
     pendingBills: 0,
     unreadMessages: 0,
     activePrescriptions: 0,
+    medicalRecords: 0,
+    vitalsRecords: 0,
   });
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,18 +26,36 @@ const PatientDashboard: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const [appointments, bills, prescriptions] = await Promise.all([
-        patientPortalApi.getAppointments(token!, tenantSlug, { status: 'scheduled' }).catch(() => []),
-        patientPortalApi.getBills(token!, tenantSlug, { status: 'pending' }).catch(() => []),
-        patientPortalApi.getPrescriptions(token!, tenantSlug, true).catch(() => []),
-      ]);
+      // Use dashboard summary endpoint for better performance
+      const summary = await patientPortalApi.getDashboardSummary(token!, tenantSlug).catch(() => null);
+      
+      if (summary) {
+        setDashboardData(summary);
+        setStats({
+          upcomingAppointments: summary.summary?.appointments || 0,
+          pendingBills: summary.summary?.pendingBills || 0,
+          unreadMessages: 0, // TODO: Implement messaging
+          activePrescriptions: summary.summary?.activePrescriptions || 0,
+          medicalRecords: summary.summary?.medicalRecords || 0,
+          vitalsRecords: summary.summary?.vitalsRecords || 0,
+        });
+      } else {
+        // Fallback to individual API calls
+        const [appointments, bills, prescriptions] = await Promise.all([
+          patientPortalApi.getAppointments(token!, tenantSlug, { status: 'scheduled' }).catch(() => []),
+          patientPortalApi.getBills(token!, tenantSlug, { status: 'pending' }).catch(() => []),
+          patientPortalApi.getPrescriptions(token!, tenantSlug, true).catch(() => []),
+        ]);
 
-      setStats({
-        upcomingAppointments: appointments.length || 0,
-        pendingBills: bills.length || 0,
-        unreadMessages: 0, // TODO: Implement messaging
-        activePrescriptions: prescriptions.length || 0,
-      });
+        setStats({
+          upcomingAppointments: appointments.length || 0,
+          pendingBills: bills.length || 0,
+          unreadMessages: 0,
+          activePrescriptions: prescriptions.length || 0,
+          medicalRecords: 0,
+          vitalsRecords: 0,
+        });
+      }
     } catch (error) {
       console.error('Failed to load stats:', error);
     } finally {
@@ -88,13 +109,13 @@ const PatientDashboard: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between mb-4">
               <Calendar className="w-8 h-8 opacity-90" />
               <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
-            <p className="text-blue-100 text-sm mb-1">Upcoming Appointments</p>
+            <p className="text-blue-100 text-sm mb-1">Appointments</p>
             <p className="text-3xl font-bold">{stats.upcomingAppointments}</p>
           </div>
 
@@ -112,7 +133,7 @@ const PatientDashboard: React.FC = () => {
               <MessageSquare className="w-8 h-8 opacity-90" />
               <Bell className="w-5 h-5 opacity-75" />
             </div>
-            <p className="text-indigo-100 text-sm mb-1">Unread Messages</p>
+            <p className="text-indigo-100 text-sm mb-1">Messages</p>
             <p className="text-3xl font-bold">{stats.unreadMessages}</p>
           </div>
 
@@ -121,10 +142,95 @@ const PatientDashboard: React.FC = () => {
               <Pill className="w-8 h-8 opacity-90" />
               <Activity className="w-5 h-5 opacity-75" />
             </div>
-            <p className="text-purple-100 text-sm mb-1">Active Prescriptions</p>
+            <p className="text-purple-100 text-sm mb-1">Prescriptions</p>
             <p className="text-3xl font-bold">{stats.activePrescriptions}</p>
           </div>
+
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <FileText className="w-8 h-8 opacity-90" />
+              <TrendingUp className="w-5 h-5 opacity-75" />
+            </div>
+            <p className="text-green-100 text-sm mb-1">Records</p>
+            <p className="text-3xl font-bold">{stats.medicalRecords}</p>
+          </div>
+
+          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-4">
+              <Activity className="w-8 h-8 opacity-90" />
+              <TrendingUp className="w-5 h-5 opacity-75" />
+            </div>
+            <p className="text-red-100 text-sm mb-1">Vitals</p>
+            <p className="text-3xl font-bold">{stats.vitalsRecords}</p>
+          </div>
         </div>
+
+        {/* Upcoming Appointment & Latest Vitals */}
+        {(dashboardData?.upcomingAppointment || dashboardData?.latestVitals) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {dashboardData.upcomingAppointment && (
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  Upcoming Appointment
+                </h3>
+                <p className="text-blue-100 mb-2">
+                  {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'EEEE, MMMM dd, yyyy')}
+                </p>
+                <p className="text-blue-100 mb-2">
+                  {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'h:mm a')}
+                </p>
+                {dashboardData.upcomingAppointment.reason && (
+                  <p className="text-blue-200 text-sm mt-2">Reason: {dashboardData.upcomingAppointment.reason}</p>
+                )}
+                <Link
+                  to="/appointments"
+                  className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
+                >
+                  View All Appointments →
+                </Link>
+              </div>
+            )}
+
+            {dashboardData.latestVitals && (
+              <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Activity className="w-5 h-5" />
+                  Latest Vitals
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {dashboardData.latestVitals.bloodPressure && (
+                    <div>
+                      <p className="text-red-100 text-xs mb-1">Blood Pressure</p>
+                      <p className="text-lg font-bold">{dashboardData.latestVitals.bloodPressure}</p>
+                    </div>
+                  )}
+                  {dashboardData.latestVitals.heartRate && (
+                    <div>
+                      <p className="text-red-100 text-xs mb-1">Heart Rate</p>
+                      <p className="text-lg font-bold">{dashboardData.latestVitals.heartRate} bpm</p>
+                    </div>
+                  )}
+                  {dashboardData.latestVitals.temperature && (
+                    <div>
+                      <p className="text-red-100 text-xs mb-1">Temperature</p>
+                      <p className="text-lg font-bold">{dashboardData.latestVitals.temperature}°C</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-red-200 text-xs mt-3">
+                  {format(new Date(dashboardData.latestVitals.recordedAt), 'MMM dd, yyyy')}
+                </p>
+                <Link
+                  to="/vitals"
+                  className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
+                >
+                  View All Vitals →
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Menu Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

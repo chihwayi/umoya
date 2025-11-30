@@ -130,5 +130,34 @@ export const patientPortalApi = {
     if (!response.ok) throw new Error('Failed to fetch bill');
     return response.json();
   },
+
+  // Vitals
+  getVitals: async (token: string, tenantSlug: string, filters?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+
+    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals?${params.toString()}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch vitals');
+    return response.json();
+  },
+
+  // Dashboard Summary
+  getDashboardSummary: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
+    return response.json();
+  },
 };
 
