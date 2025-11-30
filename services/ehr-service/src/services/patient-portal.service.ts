@@ -438,4 +438,159 @@ export class PatientPortalService {
       notes: bill.notes,
     };
   }
+
+  // Vitals
+  async getPatientVitals(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Use raw SQL query to get vitals
+    let query = `
+      SELECT 
+        v.id,
+        v.blood_pressure as "bloodPressure",
+        v.heart_rate as "heartRate",
+        v.temperature,
+        v.oxygen_saturation as "oxygenSaturation",
+        v.respiratory_rate as "respiratoryRate",
+        v.weight,
+        v.height,
+        v.bmi,
+        v.pain_level as "painLevel",
+        v.blood_glucose as "bloodGlucose",
+        v.notes,
+        v.recorded_at as "recordedAt",
+        u.id as recorded_by_id,
+        u.first_name as recorded_by_first_name,
+        u.last_name as recorded_by_last_name
+      FROM vitals v
+      LEFT JOIN users u ON v.recorded_by = u.id
+      WHERE v.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
+    if (filters?.startDate) {
+      query += ` AND v.recorded_at >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+    if (filters?.endDate) {
+      query += ` AND v.recorded_at <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY v.recorded_at DESC`;
+    
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(filters.limit);
+    } else {
+      query += ` LIMIT 100`; // Default limit
+    }
+    
+    const rawVitals = await connection.query(query, params);
+
+    return rawVitals.map((vital: any) => ({
+      id: vital.id,
+      bloodPressure: vital.bloodPressure || vital.blood_pressure,
+      heartRate: vital.heartRate || vital.heart_rate,
+      temperature: vital.temperature,
+      oxygenSaturation: vital.oxygenSaturation || vital.oxygen_saturation,
+      respiratoryRate: vital.respiratoryRate || vital.respiratory_rate,
+      weight: vital.weight,
+      height: vital.height,
+      bmi: vital.bmi,
+      painLevel: vital.painLevel || vital.pain_level,
+      bloodGlucose: vital.bloodGlucose || vital.blood_glucose,
+      notes: vital.notes,
+      recordedAt: vital.recordedAt || vital.recorded_at,
+      recordedBy: vital.recorded_by_id ? {
+        id: vital.recorded_by_id,
+        firstName: vital.recorded_by_first_name,
+        lastName: vital.recorded_by_last_name,
+      } : null,
+    }));
+  }
+
+  // Dashboard Summary
+  async getDashboardSummary(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Get counts for dashboard
+    const [appointmentsCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM appointments WHERE patient_id = $1`,
+      [patientId]
+    );
+    
+    const [prescriptionsCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
+      [patientId]
+    );
+    
+    const [recordsCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`,
+      [patientId]
+    );
+    
+    const [billsCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM billing WHERE patient_id = $1 AND status != 'paid'`,
+      [patientId]
+    );
+    
+    const [vitalsCount] = await connection.query(
+      `SELECT COUNT(*) as count FROM vitals WHERE patient_id = $1`,
+      [patientId]
+    );
+
+    // Get upcoming appointment
+    const [upcomingAppointment] = await connection.query(
+      `SELECT id, appointment_date, status, reason 
+       FROM appointments 
+       WHERE patient_id = $1 AND appointment_date >= NOW() AND status IN ('scheduled', 'confirmed')
+       ORDER BY appointment_date ASC 
+       LIMIT 1`,
+      [patientId]
+    );
+
+    // Get latest vitals
+    const [latestVitals] = await connection.query(
+      `SELECT id, blood_pressure, heart_rate, temperature, recorded_at
+       FROM vitals 
+       WHERE patient_id = $1 
+       ORDER BY recorded_at DESC 
+       LIMIT 1`,
+      [patientId]
+    );
+
+    return {
+      summary: {
+        appointments: parseInt(appointmentsCount?.count || '0'),
+        activePrescriptions: parseInt(prescriptionsCount?.count || '0'),
+        medicalRecords: parseInt(recordsCount?.count || '0'),
+        pendingBills: parseInt(billsCount?.count || '0'),
+        vitalsRecords: parseInt(vitalsCount?.count || '0'),
+      },
+      upcomingAppointment: upcomingAppointment ? {
+        id: upcomingAppointment.id,
+        appointmentDate: upcomingAppointment.appointment_date,
+        status: upcomingAppointment.status,
+        reason: upcomingAppointment.reason,
+      } : null,
+      latestVitals: latestVitals ? {
+        id: latestVitals.id,
+        bloodPressure: latestVitals.blood_pressure,
+        heartRate: latestVitals.heart_rate,
+        temperature: latestVitals.temperature,
+        recordedAt: latestVitals.recorded_at,
+      } : null,
+    };
+  }
 }
