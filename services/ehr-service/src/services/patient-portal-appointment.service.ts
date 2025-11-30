@@ -322,14 +322,18 @@ export class PatientPortalAppointmentService {
         const conflicts = existingAppointments.some((apt: any) => {
           const aptStart = new Date(apt.appointment_date);
           const aptEnd = new Date(aptStart.getTime() + (apt.duration_minutes || 30) * 60000);
-          return slotTime < aptEnd && slotTime >= aptStart;
+          const slotEnd = new Date(slotTime.getTime() + slotDuration * 60000);
+          // Check if slots overlap (slot starts before apt ends AND slot ends after apt starts)
+          return (slotTime < aptEnd && slotEnd > aptStart);
         });
 
         // Check if slot is in unavailable period
         const isUnavailable = unavailablePeriods.some((period: any) => {
           const periodStart = new Date(period.start_time);
           const periodEnd = new Date(period.end_time);
-          return slotTime >= periodStart && slotTime < periodEnd;
+          const slotEnd = new Date(slotTime.getTime() + slotDuration * 60000);
+          // Check if slot overlaps with unavailable period
+          return (slotTime < periodEnd && slotEnd > periodStart);
         });
 
         if (!conflicts && !isUnavailable) {
