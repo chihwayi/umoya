@@ -297,7 +297,7 @@ const RequestAppointmentPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Doctor Selection */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 relative z-10">
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Stethoscope className="w-5 h-5 text-blue-600" />
               Select Doctor
@@ -307,7 +307,7 @@ const RequestAppointmentPage: React.FC = () => {
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
               </div>
             ) : (
-              <div className="relative" ref={doctorDropdownRef}>
+              <div className="relative z-50" ref={doctorDropdownRef}>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Search className="h-5 w-5 text-gray-400" />
@@ -338,7 +338,7 @@ const RequestAppointmentPage: React.FC = () => {
                 </div>
                 
                 {showDoctorDropdown && filteredDoctors.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-64 overflow-y-auto">
+                  <div className="absolute z-[9999] w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-64 overflow-y-auto">
                     {filteredDoctors.map((doctor) => (
                       <button
                         key={doctor.id}
@@ -370,7 +370,7 @@ const RequestAppointmentPage: React.FC = () => {
                 )}
                 
                 {showDoctorDropdown && doctorSearchTerm && filteredDoctors.length === 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-center text-gray-500">
+                  <div className="absolute z-[9999] w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-center text-gray-500">
                     <p>No doctors found matching "{doctorSearchTerm}"</p>
                   </div>
                 )}
