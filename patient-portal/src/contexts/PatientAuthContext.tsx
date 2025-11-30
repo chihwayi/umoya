@@ -71,14 +71,19 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        const errorData = await response.json().catch(() => ({ message: 'Login failed' }));
+        throw new Error(errorData.message || errorData.error || `Login failed: ${response.status}`);
       }
+
+      const data = await response.json();
 
       if (data.requiresVerification) {
         throw new Error('Please verify your email before logging in.');
+      }
+
+      if (!data.token) {
+        throw new Error('Login response missing token');
       }
 
       setToken(data.token);
@@ -92,6 +97,7 @@ export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ childre
       localStorage.setItem('patient_data', JSON.stringify(patientData));
       localStorage.setItem('patient_tenant', tenantSlug);
     } catch (error: any) {
+      console.error('Login error:', error);
       throw error;
     }
   };
