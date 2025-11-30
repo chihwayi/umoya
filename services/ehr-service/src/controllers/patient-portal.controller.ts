@@ -96,8 +96,12 @@ export class PatientPortalController {
   @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
   async getAppointments(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('status') status?: string) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.getPatientAppointments(patientId, req.tenantId, { startDate, endDate, status });
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const appointments = await this.patientPortalService.getPatientAppointments(patientId, req.tenantId, { startDate, endDate, status });
+    return appointments; // Return array directly
   }
 
   @Get('appointments/:id')
@@ -197,12 +201,16 @@ export class PatientPortalController {
   @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit number of records' })
   async getVitals(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('limit') limit?: string) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.getPatientVitals(patientId, req.tenantId, { 
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const vitals = await this.patientPortalService.getPatientVitals(patientId, req.tenantId, { 
       startDate, 
       endDate, 
       limit: limit ? parseInt(limit) : undefined 
     });
+    return vitals; // Return array directly
   }
 
   // Dashboard Summary
