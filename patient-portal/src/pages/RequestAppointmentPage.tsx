@@ -262,9 +262,11 @@ const RequestAppointmentPage: React.FC = () => {
                 value={formData.appointmentDate}
                 onChange={handleDateChange}
                 min={new Date().toISOString().split('T')[0]}
+                max={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                 required
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white/50 backdrop-blur-sm"
               />
+              <p className="text-xs text-gray-500 mt-2">You can book appointments up to 90 days in advance</p>
             </div>
           )}
 
