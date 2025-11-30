@@ -14,6 +14,7 @@ import VitalsPage from './pages/VitalsPage';
 import MessagesPage from './pages/MessagesPage';
 import RequestAppointmentPage from './pages/RequestAppointmentPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
+import TelemedicinePage from './pages/TelemedicinePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -104,6 +105,14 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <MessagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/telemedicine/:consultationId"
+              element={
+                <ProtectedRoute requireLinked>
+                  <TelemedicinePage />
                 </ProtectedRoute>
               }
             />

@@ -317,6 +317,11 @@ export class TelemedicineService {
       params.push(filters.dateTo);
     }
 
+    if (filters.appointmentId) {
+      where.push(`tc.appointment_id = $${params.length + 1}`);
+      params.push(filters.appointmentId);
+    }
+
     const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;

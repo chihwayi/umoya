@@ -441,6 +441,11 @@ export class TelemedicineConsultationQueryDto {
   @IsOptional()
   doctorId?: string;
 
+  @ApiPropertyOptional({ description: 'Appointment ID' })
+  @IsUUID()
+  @IsOptional()
+  appointmentId?: string;
+
   @ApiPropertyOptional({ description: 'Status' })
   @IsString()
   @IsOptional()

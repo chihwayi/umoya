@@ -11,6 +11,7 @@ const AppointmentsPage: React.FC = () => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [joiningConsultation, setJoiningConsultation] = useState<string | null>(null);
 
   useEffect(() => {
     loadAppointments();
@@ -43,6 +44,28 @@ const AppointmentsPage: React.FC = () => {
       await loadAppointments();
     } catch (err: any) {
       alert(err.message || 'Failed to cancel appointment');
+    }
+  };
+
+  const handleJoinConsultation = async (appointmentId: string) => {
+    try {
+      setJoiningConsultation(appointmentId);
+      
+      // Get consultation by appointment ID
+      const consultation = await patientPortalApi.getConsultationByAppointment(appointmentId, token!, tenantSlug);
+      
+      // Join consultation
+      await patientPortalApi.joinConsultation(consultation.id, token!, tenantSlug);
+      
+      // Get meeting URL
+      const meetingInfo = await patientPortalApi.getMeetingUrl(consultation.id, token!, tenantSlug);
+      
+      // Navigate to video consultation page
+      window.location.href = `/telemedicine/${consultation.id}?url=${encodeURIComponent(meetingInfo.meetingUrl)}&password=${meetingInfo.meetingPassword || ''}`;
+    } catch (err: any) {
+      alert(err.message || 'Failed to join consultation');
+    } finally {
+      setJoiningConsultation(null);
     }
   };
 
@@ -208,7 +231,30 @@ const AppointmentsPage: React.FC = () => {
                       </div>
                     )}
 
-                    {apt.virtualMeetingUrl && (
+                    {apt.isTelehealth && apt.status === 'scheduled' && (
+                      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-purple-900 mb-2">Video Consultation Available</p>
+                        <button
+                          onClick={() => handleJoinConsultation(apt.id)}
+                          disabled={joiningConsultation === apt.id}
+                          className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {joiningConsultation === apt.id ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Joining...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Video className="w-5 h-5" />
+                              <span>Join Video Consultation</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    
+                    {apt.virtualMeetingUrl && !apt.isTelehealth && (
                       <div className="bg-purple-50 border-l-4 border-purple-500 rounded-lg p-4">
                         <p className="text-sm font-semibold text-purple-900 mb-2">Virtual Meeting Link:</p>
                         <a

@@ -22,6 +22,7 @@ export class PatientPortalController {
     private readonly patientPortalAppointmentService: PatientPortalAppointmentService,
     private readonly prescriptionPdfService: PrescriptionPdfService,
     private readonly patientVitalsSubmissionService: PatientVitalsSubmissionService,
+    private readonly telemedicineService: TelemedicineService,
   ) {}
 
   @Post('register')
@@ -337,6 +338,74 @@ export class PatientPortalController {
       throw new Error('Patient ID not found in token');
     }
     return this.patientVitalsSubmissionService.submitPatientVitals(patientId, vitalsData, req.tenantId);
+  }
+
+  // Telemedicine
+  @Get('telemedicine/consultation/:appointmentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get telemedicine consultation by appointment ID', description: 'Get consultation details for a telehealth appointment' })
+  @ApiParam({ name: 'appointmentId', description: 'Appointment ID' })
+  async getConsultationByAppointment(@Param('appointmentId') appointmentId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    // Verify appointment belongs to patient
+    const appointment = await this.patientPortalService.getPatientAppointment(patientId, appointmentId, req.tenantId);
+    if (!appointment) {
+      throw new Error('Appointment not found');
+    }
+
+    // Get consultation by appointment ID
+    const consultations = await this.telemedicineService.listConsultations(req.tenantDb, { appointmentId });
+    if (consultations.length === 0) {
+      throw new Error('Telemedicine consultation not found for this appointment');
+    }
+
+    return consultations[0];
+  }
+
+  @Post('telemedicine/consultation/:consultationId/join')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Join telemedicine consultation', description: 'Join a video consultation as patient' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async joinConsultation(@Param('consultationId') consultationId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    // Verify consultation belongs to patient
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    // Join consultation
+    return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, { role: 'patient' });
+  }
+
+  @Get('telemedicine/consultation/:consultationId/meeting-url')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get meeting URL for consultation', description: 'Get video meeting URL and password' })
+  @ApiParam({ name: 'consultationId', description: 'Consultation ID' })
+  async getMeetingUrl(@Param('consultationId') consultationId: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+
+    // Verify consultation belongs to patient
+    const consultation = await this.telemedicineService.getConsultation(req.tenantDb, consultationId);
+    if (consultation.patient_id !== patientId) {
+      throw new Error('You do not have access to this consultation');
+    }
+
+    return this.telemedicineService.getMeetingUrl(req.tenantDb, consultationId);
   }
 
   // Dashboard Summary

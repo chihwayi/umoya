@@ -243,6 +243,56 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  // Telemedicine
+  getConsultationByAppointment: async (appointmentId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/appointment/${appointmentId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch consultation');
+    return response.json();
+  },
+
+  getConsultation: async (consultationId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch consultation');
+    return response.json();
+  },
+
+  joinConsultation: async (consultationId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to join consultation');
+    }
+    return response.json();
+  },
+
+  getMeetingUrl: async (consultationId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/meeting-url`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to get meeting URL');
+    return response.json();
+  },
+
   // Dashboard Summary
   getDashboardSummary: async (token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, {
