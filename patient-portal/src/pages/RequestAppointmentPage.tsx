@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Calendar, Clock, User, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope } from 'lucide-react';
+import { Calendar, Clock, User, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope, Search, ChevronDown, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -25,6 +25,13 @@ const RequestAppointmentPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Doctor search states
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [selectedDoctorDisplay, setSelectedDoctorDisplay] = useState('');
+  const doctorDropdownRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     doctorId: '',
@@ -56,16 +63,83 @@ const RequestAppointmentPage: React.FC = () => {
     }
   }, [formData.doctorId, formData.appointmentDate]);
 
+  // Filter doctors based on search term
+  useEffect(() => {
+    if (doctorSearchTerm.trim() === '') {
+      setFilteredDoctors(doctors);
+    } else {
+      const searchLower = doctorSearchTerm.toLowerCase();
+      const filtered = doctors.filter(doctor =>
+        `${doctor.firstName} ${doctor.lastName}`.toLowerCase().includes(searchLower) ||
+        (doctor.specialization && doctor.specialization.toLowerCase().includes(searchLower)) ||
+        `${doctor.firstName} ${doctor.lastName} ${doctor.specialization || ''}`.toLowerCase().includes(searchLower)
+      );
+      setFilteredDoctors(filtered);
+    }
+  }, [doctorSearchTerm, doctors]);
+
+  // Update selected doctor display
+  useEffect(() => {
+    if (formData.doctorId) {
+      const doctor = doctors.find(d => d.id === formData.doctorId);
+      if (doctor) {
+        setSelectedDoctorDisplay(`Dr. ${doctor.firstName} ${doctor.lastName}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`);
+        setDoctorSearchTerm(`Dr. ${doctor.firstName} ${doctor.lastName}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`);
+      }
+    } else {
+      setSelectedDoctorDisplay('');
+      setDoctorSearchTerm('');
+    }
+  }, [formData.doctorId, doctors]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
+        setShowDoctorDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const loadDoctors = async () => {
     try {
       setLoadingDoctors(true);
       const data = await patientPortalApi.getAvailableDoctors(token!, tenantSlug);
       setDoctors(data || []);
+      setFilteredDoctors(data || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load doctors');
     } finally {
       setLoadingDoctors(false);
     }
+  };
+
+  const handleDoctorSelect = (doctor: Doctor) => {
+    setFormData({ ...formData, doctorId: doctor.id, appointmentDate: '', appointmentTime: '' });
+    setSelectedDoctorDisplay(`Dr. ${doctor.firstName} ${doctor.lastName}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`);
+    setDoctorSearchTerm(`Dr. ${doctor.firstName} ${doctor.lastName}${doctor.specialization ? ` - ${doctor.specialization}` : ''}`);
+    setShowDoctorDropdown(false);
+  };
+
+  const handleDoctorSearchChange = (value: string) => {
+    setDoctorSearchTerm(value);
+    setShowDoctorDropdown(true);
+    if (!value) {
+      setFormData({ ...formData, doctorId: '', appointmentDate: '', appointmentTime: '' });
+      setSelectedDoctorDisplay('');
+    }
+  };
+
+  const clearDoctorSelection = () => {
+    setFormData({ ...formData, doctorId: '', appointmentDate: '', appointmentTime: '' });
+    setDoctorSearchTerm('');
+    setSelectedDoctorDisplay('');
+    setShowDoctorDropdown(false);
   };
 
   const loadAvailableSlots = async () => {
@@ -233,20 +307,74 @@ const RequestAppointmentPage: React.FC = () => {
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
               </div>
             ) : (
-              <select
-                value={formData.doctorId}
-                onChange={(e) => setFormData({ ...formData, doctorId: e.target.value, appointmentDate: '', appointmentTime: '' })}
-                required
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white/50 backdrop-blur-sm"
-              >
-                <option value="">Select a doctor...</option>
-                {doctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    Dr. {doctor.firstName} {doctor.lastName}
-                    {doctor.specialization && ` - ${doctor.specialization}`}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={doctorDropdownRef}>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={doctorSearchTerm}
+                    onChange={(e) => handleDoctorSearchChange(e.target.value)}
+                    onFocus={() => setShowDoctorDropdown(true)}
+                    placeholder="Search for a doctor..."
+                    required={!formData.doctorId}
+                    className="w-full pl-12 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white/50 backdrop-blur-sm"
+                  />
+                  {formData.doctorId && (
+                    <button
+                      type="button"
+                      onClick={clearDoctorSelection}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                  {!formData.doctorId && (
+                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                
+                {showDoctorDropdown && filteredDoctors.length > 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-64 overflow-y-auto">
+                    {filteredDoctors.map((doctor) => (
+                      <button
+                        key={doctor.id}
+                        type="button"
+                        onClick={() => handleDoctorSelect(doctor)}
+                        className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors ${
+                          formData.doctorId === doctor.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
+                            {doctor.firstName.charAt(0)}{doctor.lastName.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-gray-900">
+                              Dr. {doctor.firstName} {doctor.lastName}
+                            </p>
+                            {doctor.specialization && (
+                              <p className="text-sm text-gray-600">{doctor.specialization}</p>
+                            )}
+                          </div>
+                          {formData.doctorId === doctor.id && (
+                            <CheckCircle className="w-5 h-5 text-blue-600" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {showDoctorDropdown && doctorSearchTerm && filteredDoctors.length === 0 && (
+                  <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-center text-gray-500">
+                    <p>No doctors found matching "{doctorSearchTerm}"</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
