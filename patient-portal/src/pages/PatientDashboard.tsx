@@ -32,12 +32,12 @@ const PatientDashboard: React.FC = () => {
       if (summary) {
         setDashboardData(summary);
         setStats({
-          upcomingAppointments: summary.summary?.appointments || 0,
-          pendingBills: summary.summary?.pendingBills || 0,
+          upcomingAppointments: summary.summary?.appointments || summary.appointmentCount || 0,
+          pendingBills: summary.summary?.pendingBills || summary.pendingBillCount || 0,
           unreadMessages: 0, // TODO: Implement messaging
-          activePrescriptions: summary.summary?.activePrescriptions || 0,
-          medicalRecords: summary.summary?.medicalRecords || 0,
-          vitalsRecords: summary.summary?.vitalsRecords || 0,
+          activePrescriptions: summary.summary?.activePrescriptions || summary.activePrescriptionCount || 0,
+          medicalRecords: summary.summary?.medicalRecords || summary.medicalRecordCount || 0,
+          vitalsRecords: summary.summary?.vitalsRecords || summary.vitalsCount || 0,
         });
       } else {
         // Fallback to individual API calls

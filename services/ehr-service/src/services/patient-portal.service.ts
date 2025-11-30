@@ -525,33 +525,38 @@ export class PatientPortalService {
     }
 
     // Get counts for dashboard
-    const [appointmentsCount] = await connection.query(
+    const appointmentsResult = await connection.query(
       `SELECT COUNT(*) as count FROM appointments WHERE patient_id = $1`,
       [patientId]
     );
+    const appointmentsCount = appointmentsResult[0]?.count || '0';
     
-    const [prescriptionsCount] = await connection.query(
+    const prescriptionsResult = await connection.query(
       `SELECT COUNT(*) as count FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
       [patientId]
     );
+    const prescriptionsCount = prescriptionsResult[0]?.count || '0';
     
-    const [recordsCount] = await connection.query(
+    const recordsResult = await connection.query(
       `SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`,
       [patientId]
     );
+    const recordsCount = recordsResult[0]?.count || '0';
     
-    const [billsCount] = await connection.query(
+    const billsResult = await connection.query(
       `SELECT COUNT(*) as count FROM billing WHERE patient_id = $1 AND status != 'paid'`,
       [patientId]
     );
+    const billsCount = billsResult[0]?.count || '0';
     
-    const [vitalsCount] = await connection.query(
+    const vitalsResult = await connection.query(
       `SELECT COUNT(*) as count FROM vitals WHERE patient_id = $1`,
       [patientId]
     );
+    const vitalsCount = vitalsResult[0]?.count || '0';
 
     // Get upcoming appointment
-    const [upcomingAppointment] = await connection.query(
+    const upcomingAppointmentResult = await connection.query(
       `SELECT id, appointment_date, status, reason 
        FROM appointments 
        WHERE patient_id = $1 AND appointment_date >= NOW() AND status IN ('scheduled', 'confirmed')
@@ -559,37 +564,41 @@ export class PatientPortalService {
        LIMIT 1`,
       [patientId]
     );
+    const upcomingAppointment = upcomingAppointmentResult[0] || null;
 
     // Get latest vitals
-    const [latestVitals] = await connection.query(
-      `SELECT id, blood_pressure, heart_rate, temperature, recorded_at
+    const latestVitalsResult = await connection.query(
+      `SELECT id, blood_pressure, heart_rate, temperature, oxygen_saturation, recorded_at
        FROM vitals 
        WHERE patient_id = $1 
        ORDER BY recorded_at DESC 
        LIMIT 1`,
       [patientId]
     );
+    const latestVitals = latestVitalsResult[0] || null;
 
     return {
       summary: {
-        appointments: parseInt(appointmentsCount?.count || '0'),
-        activePrescriptions: parseInt(prescriptionsCount?.count || '0'),
-        medicalRecords: parseInt(recordsCount?.count || '0'),
-        pendingBills: parseInt(billsCount?.count || '0'),
-        vitalsRecords: parseInt(vitalsCount?.count || '0'),
+        appointments: parseInt(appointmentsCount || '0', 10),
+        activePrescriptions: parseInt(prescriptionsCount || '0', 10),
+        medicalRecords: parseInt(recordsCount || '0', 10),
+        pendingBills: parseInt(billsCount || '0', 10),
+        vitalsRecords: parseInt(vitalsCount || '0', 10),
       },
       upcomingAppointment: upcomingAppointment ? {
         id: upcomingAppointment.id,
-        appointmentDate: upcomingAppointment.appointment_date,
+        appointmentDate: upcomingAppointment.appointment_date || upcomingAppointment.appointmentDate,
         status: upcomingAppointment.status,
         reason: upcomingAppointment.reason,
+        doctorName: upcomingAppointment.doctor_name || null,
       } : null,
       latestVitals: latestVitals ? {
         id: latestVitals.id,
-        bloodPressure: latestVitals.blood_pressure,
-        heartRate: latestVitals.heart_rate,
+        bloodPressure: latestVitals.blood_pressure || latestVitals.bloodPressure,
+        heartRate: latestVitals.heart_rate || latestVitals.heartRate,
         temperature: latestVitals.temperature,
-        recordedAt: latestVitals.recorded_at,
+        oxygenSaturation: latestVitals.oxygen_saturation || latestVitals.oxygenSaturation,
+        recordedAt: latestVitals.recorded_at || latestVitals.recordedAt,
       } : null,
     };
   }
