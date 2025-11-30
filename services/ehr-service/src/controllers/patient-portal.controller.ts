@@ -4,6 +4,7 @@ import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswor
 import { PatientPortalService } from '../services/patient-portal.service';
 import { PatientMessagingService } from '../services/patient-messaging.service';
 import { PatientNotificationsService } from '../services/patient-notifications.service';
+import { PatientPortalAppointmentService } from '../services/patient-portal-appointment.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
@@ -15,6 +16,7 @@ export class PatientPortalController {
     private readonly patientPortalService: PatientPortalService,
     private readonly patientMessagingService: PatientMessagingService,
     private readonly patientNotificationsService: PatientNotificationsService,
+    private readonly patientPortalAppointmentService: PatientPortalAppointmentService,
   ) {}
 
   @Post('register')
@@ -117,10 +119,70 @@ export class PatientPortalController {
   @Post('appointments/request')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Request appointment', description: 'Request a new appointment' })
+  @ApiOperation({ summary: 'Request appointment', description: 'Request a new appointment (without payment)' })
   async requestAppointment(@Body() appointmentData: any, @Req() req: RequestWithTenant & { user: any }) {
-    const patientId = req.user.sub;
+    const patientId = req.user?.sub || req.user?.id;
     return this.patientPortalService.requestAppointment(patientId, appointmentData, req.tenantId);
+  }
+
+  @Post('appointments/request-with-payment')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Request appointment with payment', description: 'Request a new appointment and pay for it immediately' })
+  @ApiResponse({ status: 201, description: 'Appointment requested and payment processed' })
+  @ApiResponse({ status: 400, description: 'Invalid appointment or payment data' })
+  async requestAppointmentWithPayment(
+    @Body() body: {
+      appointment: {
+        doctorId: string;
+        appointmentDate: string;
+        reason: string;
+        durationMinutes?: number;
+        appointmentType?: string;
+        notes?: string;
+        isTelehealth?: boolean;
+      };
+      payment: {
+        method: 'ecocash' | 'onemoney' | 'cash' | 'card';
+        phoneNumber?: string;
+        amount: number;
+        currency?: string;
+      };
+    },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalAppointmentService.requestAppointmentWithPayment(
+      patientId,
+      body.appointment,
+      body.payment,
+      req.tenantId,
+    );
+  }
+
+  @Get('appointments/available-doctors')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get available doctors', description: 'Get list of available doctors for appointment booking' })
+  async getAvailableDoctors(@Req() req: RequestWithTenant & { user: any }) {
+    return this.patientPortalAppointmentService.getAvailableDoctors(req.tenantId);
+  }
+
+  @Get('appointments/available-slots')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get available time slots', description: 'Get available time slots for a doctor on a specific date' })
+  @ApiQuery({ name: 'doctorId', required: true, description: 'Doctor ID' })
+  @ApiQuery({ name: 'date', required: true, description: 'Date in YYYY-MM-DD format' })
+  async getAvailableTimeSlots(
+    @Query('doctorId') doctorId: string,
+    @Query('date') date: string,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    return this.patientPortalAppointmentService.getAvailableTimeSlots(doctorId, date, req.tenantId);
   }
 
   @Delete('appointments/:id')

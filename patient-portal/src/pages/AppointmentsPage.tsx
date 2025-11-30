@@ -85,10 +85,13 @@ const AppointmentsPage: React.FC = () => {
                 <p className="text-sm text-gray-600">View and manage your appointments</p>
               </div>
             </div>
-            <button className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
+            <Link
+              to="/appointments/request"
+              className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
+            >
               <Plus className="w-5 h-5" />
               Request Appointment
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -111,10 +114,13 @@ const AppointmentsPage: React.FC = () => {
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
               You don't have any appointments scheduled yet. Request an appointment to get started.
             </p>
-            <button className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
+            <Link
+              to="/appointments/request"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
+            >
               <Plus className="w-5 h-5" />
               Request Appointment
-            </button>
+            </Link>
           </div>
         ) : (
           <div className="space-y-6">
@@ -233,7 +239,7 @@ const AppointmentsPage: React.FC = () => {
         {/* Mobile Request Button */}
         <div className="md:hidden fixed bottom-6 right-6 z-20">
           <Link
-            to="/dashboard"
+            to="/appointments/request"
             className="w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-110 flex items-center justify-center"
           >
             <Plus className="w-6 h-6" />

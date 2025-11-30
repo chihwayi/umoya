@@ -55,6 +55,65 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  requestAppointmentWithPayment: async (data: {
+    appointment: {
+      doctorId: string;
+      appointmentDate: string;
+      reason: string;
+      durationMinutes?: number;
+      appointmentType?: string;
+      notes?: string;
+      isTelehealth?: boolean;
+    };
+    payment: {
+      method: 'ecocash' | 'onemoney' | 'cash' | 'card';
+      phoneNumber?: string;
+      amount: number;
+      currency?: string;
+    };
+  }, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/request-with-payment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to request appointment');
+    }
+    return response.json();
+  },
+
+  getAvailableDoctors: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-doctors`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch available doctors');
+    return response.json();
+  },
+
+  getAvailableTimeSlots: async (doctorId: string, date: string, token: string, tenantSlug: string) => {
+    const params = new URLSearchParams();
+    params.append('doctorId', doctorId);
+    params.append('date', date);
+
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-slots?${params.toString()}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch available time slots');
+    return response.json();
+  },
+
   // Medical Records
   getRecords: async (token: string, tenantSlug: string, filters?: { startDate?: string; endDate?: string; type?: string }) => {
     const params = new URLSearchParams();
