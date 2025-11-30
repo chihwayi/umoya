@@ -95,7 +95,12 @@ const RequestAppointmentPage: React.FC = () => {
   };
 
   const handleTimeSlotSelect = (slot: string) => {
-    setFormData({ ...formData, appointmentTime: slot });
+    // Extract time from ISO string (HH:MM format)
+    const slotDate = new Date(slot);
+    const hours = slotDate.getHours().toString().padStart(2, '0');
+    const minutes = slotDate.getMinutes().toString().padStart(2, '0');
+    const timeString = `${hours}:${minutes}`;
+    setFormData({ ...formData, appointmentTime: timeString });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -127,7 +132,8 @@ const RequestAppointmentPage: React.FC = () => {
       setSubmitting(true);
 
       // Combine date and time
-      const appointmentDateTime = new Date(`${formData.appointmentDate}T${formData.appointmentTime}`);
+      // appointmentTime is in HH:MM format, combine with date
+      const appointmentDateTime = new Date(`${formData.appointmentDate}T${formData.appointmentTime}:00`);
       
       const result = await patientPortalApi.requestAppointmentWithPayment(
         {
@@ -450,8 +456,13 @@ const RequestAppointmentPage: React.FC = () => {
               <h3 className="text-xl font-bold mb-4">Appointment Summary</h3>
               <div className="space-y-2 text-indigo-100">
                 <p><span className="font-semibold">Doctor:</span> Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}</p>
-                <p><span className="font-semibold">Date:</span> {format(new Date(`${formData.appointmentDate}T${formData.appointmentTime}`), 'EEEE, MMMM d, yyyy')}</p>
-                <p><span className="font-semibold">Time:</span> {format(new Date(formData.appointmentTime), 'h:mm a')}</p>
+                <p><span className="font-semibold">Date:</span> {format(new Date(`${formData.appointmentDate}T${formData.appointmentTime || '12:00'}:00`), 'EEEE, MMMM d, yyyy')}</p>
+                <p><span className="font-semibold">Time:</span> {formData.appointmentTime ? (() => {
+                  const [hours, minutes] = formData.appointmentTime.split(':');
+                  const timeDate = new Date();
+                  timeDate.setHours(parseInt(hours), parseInt(minutes));
+                  return format(timeDate, 'h:mm a');
+                })() : 'Not selected'}</p>
                 <p><span className="font-semibold">Duration:</span> {formData.durationMinutes} minutes</p>
                 <p><span className="font-semibold">Type:</span> {formData.appointmentType}</p>
                 {formData.isTelehealth && <p><span className="font-semibold">Mode:</span> Telehealth (Virtual)</p>}
