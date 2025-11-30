@@ -142,6 +142,7 @@ import { PatientPortalService } from './services/patient-portal.service';
 import { PatientMessagingService } from './services/patient-messaging.service';
 import { PatientNotificationsService } from './services/patient-notifications.service';
 import { PatientPortalAppointmentService } from './services/patient-portal-appointment.service';
+import { PatientVitalsSubmissionService } from './services/patient-vitals-submission.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -304,6 +305,7 @@ import { RolesGuard } from './guards/roles.guard';
     PatientMessagingService,
     PatientNotificationsService,
     PatientPortalAppointmentService,
+    PatientVitalsSubmissionService,
     RolesGuard,
     JwtStrategy,
   ],

@@ -6,6 +6,7 @@ import { PatientPortalService } from '../services/patient-portal.service';
 import { PatientMessagingService } from '../services/patient-messaging.service';
 import { PatientNotificationsService } from '../services/patient-notifications.service';
 import { PatientPortalAppointmentService } from '../services/patient-portal-appointment.service';
+import { PatientVitalsSubmissionService } from '../services/patient-vitals-submission.service';
 import { PrescriptionPdfService } from '../services/prescription-pdf.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -20,6 +21,7 @@ export class PatientPortalController {
     private readonly patientNotificationsService: PatientNotificationsService,
     private readonly patientPortalAppointmentService: PatientPortalAppointmentService,
     private readonly prescriptionPdfService: PrescriptionPdfService,
+    private readonly patientVitalsSubmissionService: PatientVitalsSubmissionService,
   ) {}
 
   @Post('register')
@@ -320,9 +322,21 @@ export class PatientPortalController {
     const vitals = await this.patientPortalService.getPatientVitals(patientId, req.tenantId, { 
       startDate, 
       endDate, 
-      limit: limit ? parseInt(limit) : undefined 
+      limit: limit ? parseInt(limit) : undefined
     });
     return vitals; // Return array directly
+  }
+
+  @Post('vitals/submit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Submit patient vitals', description: 'Submit vital signs from patient portal' })
+  async submitVitals(@Body() vitalsData: any, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientVitalsSubmissionService.submitPatientVitals(patientId, vitalsData, req.tenantId);
   }
 
   // Dashboard Summary

@@ -226,6 +226,23 @@ export const patientPortalApi = {
     return response.json();
   },
 
+  submitVitals: async (vitalsData: any, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(vitalsData),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to submit vitals');
+    }
+    return response.json();
+  },
+
   // Dashboard Summary
   getDashboardSummary: async (token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, {
