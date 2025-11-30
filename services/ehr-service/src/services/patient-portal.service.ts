@@ -529,7 +529,9 @@ export class PatientPortalService {
       `SELECT COUNT(*) as count FROM appointments WHERE patient_id = $1`,
       [patientId]
     );
-    const appointmentsCount = appointmentsResult[0]?.count || '0';
+    this.logger.debug(`Appointments query result: ${JSON.stringify(appointmentsResult)}`);
+    const appointmentsCount = appointmentsResult?.[0]?.count || '0';
+    this.logger.debug(`Appointments count extracted: ${appointmentsCount}`);
     
     const prescriptionsResult = await connection.query(
       `SELECT COUNT(*) as count FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
