@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell } from 'lucide-react';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell, X } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
+import { useNotifications } from '../hooks/useNotifications';
 import { format } from 'date-fns';
 
 const PatientDashboard: React.FC = () => {
   const { patient, logout, token } = usePatientAuth();
   const navigate = useNavigate();
   const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications(30000); // Poll every 30 seconds
+  const [showNotifications, setShowNotifications] = useState(false);
   const [stats, setStats] = useState({
     upcomingAppointments: 0,
     pendingBills: 0,
@@ -95,13 +98,112 @@ const PatientDashboard: React.FC = () => {
                 <p className="text-sm text-gray-600">Patient Number: {patient?.patientNumber}</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Notifications Bell */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  <Bell className="w-5 h-5 text-gray-700" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Dropdown */}
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 max-h-96 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                      <h3 className="font-bold text-gray-900">Notifications</h3>
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={async () => {
+                              await markAllAsRead();
+                            }}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowNotifications(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto max-h-80">
+                      {notifications.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <Bell className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600 text-sm">No notifications</p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                              !notification.read ? 'bg-blue-50' : ''
+                            }`}
+                            onClick={async () => {
+                              if (!notification.read) {
+                                await markAsRead(notification.id);
+                              }
+                              if (notification.actionUrl) {
+                                navigate(notification.actionUrl);
+                                setShowNotifications(false);
+                              }
+                            }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                                !notification.read ? 'bg-indigo-600' : 'bg-transparent'
+                              }`}></div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-semibold mb-1 ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
+                                  {notification.title}
+                                </p>
+                                <p className="text-xs text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
+                                <p className="text-xs text-gray-400">
+                                  {format(new Date(notification.sentAt), 'MMM d, h:mm a')}
+                                </p>
+                                {notification.actionLabel && (
+                                  <button className="mt-2 text-xs text-indigo-600 hover:text-indigo-700 font-semibold">
+                                    {notification.actionLabel} →
+                                  </button>
+                                )}
+                              </div>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  await deleteNotification(notification.id);
+                                }}
+                                className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

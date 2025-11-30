@@ -1,53 +1,91 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, CheckCircle, Clock, User, Plus } from 'lucide-react';
+import { patientPortalApi } from '../services/api';
+import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, CheckCircle, Clock, User, Plus, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const MessagesPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
+  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
   const [messages, setMessages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [newMessage, setNewMessage] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [sending, setSending] = useState(false);
+  
+  // New message form
+  const [newMessage, setNewMessage] = useState({
+    recipientId: '',
+    recipientType: 'staff',
+    subject: '',
+    message: '',
+    messageType: 'general',
+    priority: 'normal',
+  });
 
-  // Mock messages for now - will be replaced with actual API call
   useEffect(() => {
-    setLoading(true);
-    // Simulate loading
-    setTimeout(() => {
-      setMessages([
-        {
-          id: '1',
-          subject: 'Appointment Reminder',
-          message: 'This is a reminder that you have an appointment scheduled for tomorrow at 10:00 AM.',
-          from: 'Dr. Sarah Johnson',
-          fromRole: 'Doctor',
-          date: new Date(),
-          read: false,
-          type: 'appointment',
-        },
-        {
-          id: '2',
-          subject: 'Lab Results Available',
-          message: 'Your recent lab test results are now available. Please log in to view them.',
-          from: 'Lab Department',
-          fromRole: 'Staff',
-          date: new Date(Date.now() - 86400000),
-          read: true,
-          type: 'lab_results',
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    loadMessages();
   }, []);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
-    // TODO: Implement actual API call
-    alert('Message sending functionality will be implemented soon.');
-    setNewMessage('');
+  const loadMessages = async () => {
+    try {
+      setLoading(true);
+      const data = await patientPortalApi.getMessages(token!, tenantSlug);
+      setMessages(data.messages || []);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load messages');
+      console.error('Failed to load messages:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.message.trim()) {
+      alert('Please enter a message');
+      return;
+    }
+
+    try {
+      setSending(true);
+      await patientPortalApi.sendMessage(newMessage, token!, tenantSlug);
+      setNewMessage({
+        recipientId: '',
+        recipientType: 'staff',
+        subject: '',
+        message: '',
+        messageType: 'general',
+        priority: 'normal',
+      });
+      await loadMessages();
+      alert('Message sent successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to send message');
+      console.error('Failed to send message:', err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleMarkAsRead = async (messageId: string) => {
+    try {
+      await patientPortalApi.markMessageAsRead(messageId, token!, tenantSlug);
+      await loadMessages();
+      if (selectedMessage?.id === messageId) {
+        setSelectedMessage({ ...selectedMessage, read: true });
+      }
+    } catch (err: any) {
+      console.error('Failed to mark message as read:', err);
+    }
+  };
+
+  const handleSelectMessage = async (message: any) => {
+    setSelectedMessage(message);
+    if (!message.read) {
+      await handleMarkAsRead(message.id);
+    }
   };
 
   const unreadCount = messages.filter(m => !m.read).length;
@@ -92,6 +130,13 @@ const MessagesPage: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-3 animate-shake">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <p className="text-sm font-medium text-red-800">{error}</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Messages List */}
           <div className="lg:col-span-1">
@@ -112,7 +157,7 @@ const MessagesPage: React.FC = () => {
                   messages.map((message) => (
                     <div
                       key={message.id}
-                      onClick={() => setSelectedMessage(message)}
+                      onClick={() => handleSelectMessage(message)}
                       className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
                         selectedMessage?.id === message.id ? 'bg-indigo-50' : ''
                       } ${!message.read ? 'bg-blue-50' : ''}`}
@@ -126,16 +171,16 @@ const MessagesPage: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <p className={`text-sm font-semibold truncate ${!message.read ? 'text-gray-900' : 'text-gray-700'}`}>
-                              {message.from}
+                              {message.senderType === 'patient' ? 'You' : message.senderType === 'doctor' ? 'Dr. Staff' : 'Clinic Staff'}
                             </p>
                             {!message.read && (
                               <div className="w-2 h-2 bg-indigo-600 rounded-full flex-shrink-0"></div>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 mb-1">{message.subject}</p>
+                          <p className="text-xs text-gray-500 mb-1 truncate">{message.subject || 'No subject'}</p>
                           <p className="text-xs text-gray-600 truncate">{message.message}</p>
                           <p className="text-xs text-gray-400 mt-1">
-                            {format(new Date(message.date), 'MMM d, h:mm a')}
+                            {format(new Date(message.createdAt), 'MMM d, h:mm a')}
                           </p>
                         </div>
                       </div>
@@ -146,19 +191,19 @@ const MessagesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Message Detail */}
+          {/* Message Detail / Composer */}
           <div className="lg:col-span-2">
             {selectedMessage ? (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 mb-6">
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedMessage.subject}</h2>
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">{selectedMessage.subject || 'No Subject'}</h2>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <User className="w-4 h-4" />
-                        <span>{selectedMessage.from}</span>
+                        <span>{selectedMessage.senderType === 'patient' ? 'You' : selectedMessage.senderType === 'doctor' ? 'Dr. Staff' : 'Clinic Staff'}</span>
                         <span className="text-gray-400">•</span>
-                        <span>{selectedMessage.fromRole}</span>
+                        <span>{selectedMessage.senderType}</span>
                       </div>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -168,7 +213,7 @@ const MessagesPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-gray-500">
-                    {format(new Date(selectedMessage.date), 'EEEE, MMMM d, yyyy at h:mm a')}
+                    {format(new Date(selectedMessage.createdAt), 'EEEE, MMMM d, yyyy at h:mm a')}
                   </p>
                 </div>
                 <div className="p-6">
@@ -184,7 +229,7 @@ const MessagesPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center mb-6">
                 <MessageSquare className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-gray-900 mb-2">Select a Message</h3>
                 <p className="text-gray-600">Choose a message from the list to view its details</p>
@@ -192,23 +237,26 @@ const MessagesPage: React.FC = () => {
             )}
 
             {/* New Message Composer */}
-            <div className="mt-6 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Send a Message</h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">To:</label>
-                  <select className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm">
-                    <option>Select recipient...</option>
-                    <option>Dr. Sarah Johnson</option>
-                    <option>Nurse Department</option>
-                    <option>Lab Department</option>
-                    <option>Billing Department</option>
+                  <select
+                    value={newMessage.recipientType}
+                    onChange={(e) => setNewMessage({ ...newMessage, recipientType: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm"
+                  >
+                    <option value="staff">Clinic Staff</option>
+                    <option value="doctor">Doctor</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Subject:</label>
                   <input
                     type="text"
+                    value={newMessage.subject}
+                    onChange={(e) => setNewMessage({ ...newMessage, subject: e.target.value })}
                     placeholder="Message subject..."
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm"
                   />
@@ -216,8 +264,8 @@ const MessagesPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Message:</label>
                   <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    value={newMessage.message}
+                    onChange={(e) => setNewMessage({ ...newMessage, message: e.target.value })}
                     placeholder="Type your message here..."
                     rows={6}
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm resize-none"
@@ -230,10 +278,20 @@ const MessagesPage: React.FC = () => {
                   </button>
                   <button
                     onClick={handleSendMessage}
-                    className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                    disabled={sending || !newMessage.message.trim()}
+                    className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Send className="w-4 h-4" />
-                    Send Message
+                    {sending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send Message
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -246,4 +304,3 @@ const MessagesPage: React.FC = () => {
 };
 
 export default MessagesPage;
-

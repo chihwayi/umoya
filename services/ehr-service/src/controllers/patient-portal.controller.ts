@@ -2,6 +2,8 @@ import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete 
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswordResetDto, PatientPasswordResetConfirmDto } from '../services/patient-auth.service';
 import { PatientPortalService } from '../services/patient-portal.service';
+import { PatientMessagingService } from '../services/patient-messaging.service';
+import { PatientNotificationsService } from '../services/patient-notifications.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
@@ -11,6 +13,8 @@ export class PatientPortalController {
   constructor(
     private readonly patientAuthService: PatientAuthService,
     private readonly patientPortalService: PatientPortalService,
+    private readonly patientMessagingService: PatientMessagingService,
+    private readonly patientNotificationsService: PatientNotificationsService,
   ) {}
 
   @Post('register')
@@ -212,6 +216,148 @@ export class PatientPortalController {
       throw new Error('Patient ID not found in token');
     }
     return this.patientPortalService.getPatientDashboardSummary(patientId, req.tenantId);
+  }
+
+  // Messages
+  @Get('messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient messages', description: 'Get all messages for the logged-in patient' })
+  @ApiQuery({ name: 'read', required: false, type: Boolean, description: 'Filter by read status' })
+  @ApiQuery({ name: 'messageType', required: false, description: 'Filter by message type' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit results' })
+  @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination' })
+  async getMessages(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('read') read?: string,
+    @Query('messageType') messageType?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientMessagingService.getPatientMessages(patientId, req.tenantId, {
+      read: read === 'true' ? true : read === 'false' ? false : undefined,
+      messageType: messageType as any,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined,
+    });
+  }
+
+  @Get('messages/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get message details', description: 'Get details of a specific message' })
+  @ApiParam({ name: 'id', description: 'Message ID' })
+  async getMessage(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientMessagingService.getMessage(id, patientId, req.tenantId);
+  }
+
+  @Post('messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send a message', description: 'Send a message to clinic staff' })
+  async sendMessage(
+    @Body() body: { recipientId: string; recipientType: string; message: string; subject?: string; messageType?: string; priority?: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientMessagingService.sendMessage(
+      patientId,
+      body.recipientId,
+      body.recipientType as any,
+      body.message,
+      body.subject,
+      (body.messageType as any) || 'general',
+      (body.priority as any) || 'normal',
+      req.tenantId,
+    );
+  }
+
+  @Put('messages/:id/read')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark message as read', description: 'Mark a message as read' })
+  @ApiParam({ name: 'id', description: 'Message ID' })
+  async markMessageAsRead(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientMessagingService.markAsRead(id, patientId, req.tenantId);
+    return { success: true };
+  }
+
+  @Put('messages/read-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark all messages as read', description: 'Mark all messages as read' })
+  async markAllMessagesAsRead(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientMessagingService.markAllAsRead(patientId, req.tenantId);
+    return { success: true };
+  }
+
+  @Delete('messages/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a message', description: 'Delete a message' })
+  @ApiParam({ name: 'id', description: 'Message ID' })
+  async deleteMessage(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientMessagingService.deleteMessage(id, patientId, req.tenantId);
+    return { success: true };
+  }
+
+  // Notifications
+  @Get('notifications')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient notifications', description: 'Get all notifications for the logged-in patient' })
+  @ApiQuery({ name: 'read', required: false, type: Boolean, description: 'Filter by read status' })
+  @ApiQuery({ name: 'notificationType', required: false, description: 'Filter by notification type' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit results' })
+  async getNotifications(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('read') read?: string,
+    @Query('notificationType') notificationType?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientNotificationsService.getPatientNotifications(patientId, req.tenantId, {
+      read: read === 'true' ? true : read === 'false' ? false : undefined,
+      notificationType: notificationType as any,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  @Put('notifications/:id/read')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark notification as read', description: 'Mark a notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  async markNotificationAsRead(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientNotificationsService.markAsRead(id, patientId, req.tenantId);
+    return { success: true };
+  }
+
+  @Put('notifications/read-all')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Mark all notifications as read', description: 'Mark all notifications as read' })
+  async markAllNotificationsAsRead(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientNotificationsService.markAllAsRead(patientId, req.tenantId);
+    return { success: true };
+  }
+
+  @Delete('notifications/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a notification', description: 'Delete a notification' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  async deleteNotification(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    await this.patientNotificationsService.deleteNotification(id, patientId, req.tenantId);
+    return { success: true };
   }
 }
 
