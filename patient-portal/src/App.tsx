@@ -11,6 +11,7 @@ import LabResultsPage from './pages/LabResultsPage';
 import PrescriptionsPage from './pages/PrescriptionsPage';
 import BillsPage from './pages/BillsPage';
 import VitalsPage from './pages/VitalsPage';
+import MessagesPage from './pages/MessagesPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
@@ -86,6 +87,14 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <VitalsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <ProtectedRoute requireLinked>
+                  <MessagesPage />
                 </ProtectedRoute>
               }
             />

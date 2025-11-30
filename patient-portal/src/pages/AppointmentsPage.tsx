@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Calendar, Clock, User, X, Plus, AlertCircle, ArrowLeft, CheckCircle, MapPin, FileText } from 'lucide-react';
+import { Calendar, Clock, User, X, Plus, AlertCircle, ArrowLeft, CheckCircle, MapPin, FileText, Video, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -62,26 +62,32 @@ const AppointmentsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Dashboard</span>
-            </Link>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">My Appointments</h1>
-            <p className="text-gray-600">View and manage your appointments</p>
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200/50 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link
+                to="/dashboard"
+                className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+              >
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">My Appointments</h1>
+                <p className="text-sm text-gray-600">View and manage your appointments</p>
+              </div>
+            </div>
+            <button className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
+              <Plus className="w-5 h-5" />
+              Request Appointment
+            </button>
           </div>
-          <button className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
-            <Plus className="w-5 h-5" />
-            Request Appointment
-          </button>
         </div>
+      </header>
 
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-3 animate-shake">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -104,28 +110,39 @@ const AppointmentsPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {appointments.map((apt) => (
               <div
                 key={apt.id}
                 className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all transform hover:scale-[1.01]"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                        <Calendar className="w-8 h-8 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                <div className="flex flex-col md:flex-row items-start gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                    {apt.isTelehealth ? (
+                      <Video className="w-8 h-8 text-white" />
+                    ) : (
+                      <Calendar className="w-8 h-8 text-white" />
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 w-full">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="text-xl font-bold text-gray-900">
                             {format(new Date(apt.appointmentDate), 'EEEE, MMMM d, yyyy')}
                           </h3>
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(apt.status)}`}>
                             {apt.status.charAt(0).toUpperCase() + apt.status.slice(1).replace('_', ' ')}
                           </span>
+                          {apt.isTelehealth && (
+                            <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-semibold border border-purple-200 flex items-center gap-1">
+                              <Video className="w-3 h-3" />
+                              Telehealth
+                            </span>
+                          )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-4 text-gray-600 mb-3">
+                        <div className="flex flex-wrap items-center gap-4 text-gray-600">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4" />
                             <span className="text-sm font-medium">
@@ -143,41 +160,63 @@ const AppointmentsPage: React.FC = () => {
                             </div>
                           )}
                         </div>
-
-                        {apt.reason && (
-                          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3 mb-3">
-                            <p className="text-sm text-gray-700">
-                              <strong className="text-blue-900">Reason:</strong> {apt.reason}
-                            </p>
-                          </div>
-                        )}
-
-                        {apt.notes && (
-                          <div className="flex items-start gap-2 text-sm text-gray-600">
-                            <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <p>{apt.notes}</p>
-                          </div>
-                        )}
                       </div>
+                      
+                      {apt.status === 'scheduled' && (
+                        <button
+                          onClick={() => handleCancel(apt.id)}
+                          className="flex-shrink-0 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2 border border-red-200 hover:border-red-300 self-start sm:self-auto"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>Cancel</span>
+                        </button>
+                      )}
+
+                      {apt.status === 'completed' && (
+                        <div className="flex-shrink-0 px-4 py-2 bg-green-50 text-green-600 rounded-xl flex items-center gap-2 border border-green-200 self-start sm:self-auto">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Completed</span>
+                        </div>
+                      )}
                     </div>
+
+                    {apt.reason && (
+                      <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-gray-700">
+                          <strong className="text-blue-900">Reason:</strong> {apt.reason}
+                        </p>
+                      </div>
+                    )}
+
+                    {apt.notes && (
+                      <div className="flex items-start gap-2 text-sm text-gray-600 mb-4">
+                        <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <p>{apt.notes}</p>
+                      </div>
+                    )}
+
+                    {apt.virtualMeetingUrl && (
+                      <div className="bg-purple-50 border-l-4 border-purple-500 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-purple-900 mb-2">Virtual Meeting Link:</p>
+                        <a
+                          href={apt.virtualMeetingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-purple-700 hover:text-purple-900 underline flex items-center gap-2"
+                        >
+                          <Video className="w-4 h-4" />
+                          Join Meeting
+                        </a>
+                      </div>
+                    )}
+
+                    {apt.patientInstructions && (
+                      <div className="mt-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-lg p-4">
+                        <p className="text-sm font-semibold text-indigo-900 mb-1">Patient Instructions:</p>
+                        <p className="text-sm text-indigo-800">{apt.patientInstructions}</p>
+                      </div>
+                    )}
                   </div>
-
-                  {apt.status === 'scheduled' && (
-                    <button
-                      onClick={() => handleCancel(apt.id)}
-                      className="flex-shrink-0 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-2 border border-red-200 hover:border-red-300"
-                    >
-                      <X className="w-4 h-4" />
-                      <span className="hidden sm:inline">Cancel</span>
-                    </button>
-                  )}
-
-                  {apt.status === 'completed' && (
-                    <div className="flex-shrink-0 px-4 py-2 bg-green-50 text-green-600 rounded-xl flex items-center gap-2 border border-green-200">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="hidden sm:inline">Completed</span>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
@@ -185,12 +224,15 @@ const AppointmentsPage: React.FC = () => {
         )}
 
         {/* Mobile Request Button */}
-        <div className="md:hidden fixed bottom-6 right-6">
-          <button className="w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-110 flex items-center justify-center">
+        <div className="md:hidden fixed bottom-6 right-6 z-20">
+          <Link
+            to="/dashboard"
+            className="w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-110 flex items-center justify-center"
+          >
             <Plus className="w-6 h-6" />
-          </button>
+          </Link>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { CreditCard, Calendar, ArrowLeft, AlertCircle, CheckCircle, Clock, DollarSign, FileText, Filter, Download } from 'lucide-react';
+import { CreditCard, Calendar, ArrowLeft, AlertCircle, CheckCircle, Clock, DollarSign, FileText, Filter, Download, Receipt } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const BillsPage: React.FC = () => {
-  const { token } = usePatientAuth();
+  const { token, patient } = usePatientAuth();
   const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
   const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +56,7 @@ const BillsPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-yellow-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your bills...</p>
         </div>
       </div>
@@ -65,23 +65,29 @@ const BillsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dashboard</span>
-          </Link>
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Bills & Payments</h1>
-          <p className="text-gray-600">View and manage your medical bills</p>
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-gray-200/50 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center gap-4">
+            <Link
+              to="/dashboard"
+              className="w-10 h-10 bg-gradient-to-br from-yellow-600 to-orange-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Bills & Payments</h1>
+              <p className="text-sm text-gray-600">View and manage your medical bills</p>
+            </div>
+          </div>
         </div>
+      </header>
 
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Summary Card */}
         {totalPending > 0 && (
-          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl shadow-xl p-6 mb-6 text-white">
+          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl shadow-xl p-6 mb-6 text-white transform hover:scale-[1.02] transition-transform">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-yellow-100 text-sm mb-1">Total Pending</p>
@@ -99,7 +105,7 @@ const BillsPage: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="flex-1 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white/50 backdrop-blur-sm appearance-none cursor-pointer px-4"
+              className="flex-1 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all bg-white/50 backdrop-blur-sm appearance-none cursor-pointer px-4"
             >
               <option value="all">All Bills</option>
               <option value="pending">Pending</option>
@@ -111,7 +117,7 @@ const BillsPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-3">
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center gap-3 animate-shake">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
             <p className="text-sm font-medium text-red-800">{error}</p>
           </div>
@@ -126,22 +132,23 @@ const BillsPage: React.FC = () => {
             <p className="text-gray-600">You don't have any bills at this time.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {bills.map((bill) => (
               <div
                 key={bill.id}
-                className={`bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all ${
+                className={`bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all transform hover:scale-[1.01] ${
                   isOverdue(bill.dueDate, bill.status) ? 'ring-2 ring-red-400' : ''
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                        <CreditCard className="w-8 h-8 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                <div className="flex flex-col md:flex-row items-start gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <Receipt className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  <div className="flex-1 w-full">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="text-xl font-bold text-gray-900">
                             Bill #{bill.billNumber}
                           </h3>
@@ -173,7 +180,7 @@ const BillsPage: React.FC = () => {
                         <div className="space-y-2">
                           {bill.items.map((item: any, idx: number) => (
                             <div key={idx} className="flex items-center justify-between text-sm">
-                              <span className="text-gray-700">{item.description || item.code}</span>
+                              <span className="text-gray-700">{item.description || item.code || `Item ${idx + 1}`}</span>
                               <span className="font-semibold text-gray-900">
                                 ${(item.totalPrice || item.unitPrice || 0).toFixed(2)}
                               </span>
@@ -183,20 +190,27 @@ const BillsPage: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-gray-200 gap-4">
                       <div>
                         <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="text-3xl font-bold text-gray-900">
                           ${parseFloat(bill.totalAmount || 0).toFixed(2)}
                         </p>
+                        {bill.subtotal && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            <span>Subtotal: ${parseFloat(bill.subtotal || 0).toFixed(2)}</span>
+                            {bill.taxAmount && <span> • Tax: ${parseFloat(bill.taxAmount || 0).toFixed(2)}</span>}
+                            {bill.discountAmount && <span> • Discount: ${parseFloat(bill.discountAmount || 0).toFixed(2)}</span>}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <button className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-2 border border-gray-200">
                           <Download className="w-4 h-4" />
                           <span className="hidden sm:inline">Download</span>
                         </button>
                         {(bill.status === 'pending' || bill.status === 'sent') && (
-                          <button className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
+                          <button className="px-6 py-2 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-xl font-semibold hover:from-yellow-700 hover:to-orange-700 transition-all transform hover:scale-105 shadow-lg">
                             Pay Now
                           </button>
                         )}
@@ -208,16 +222,22 @@ const BillsPage: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {bill.notes && (
+                      <div className="mt-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-blue-900 mb-1">Notes:</p>
+                        <p className="text-xs text-blue-800">{bill.notes}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 };
 
 export default BillsPage;
-

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User } from 'lucide-react';
+import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
 const VitalsPage: React.FC = () => {
-  const { token } = usePatientAuth();
+  const { token, patient } = usePatientAuth();
   const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,10 +38,10 @@ const VitalsPage: React.FC = () => {
   };
 
   const VitalCard = ({ vital }: { vital: any }) => (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-gray-200/50 hover:shadow-xl transition-all">
+    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-white/20 hover:shadow-xl transition-all transform hover:scale-[1.01]">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
             <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
@@ -53,18 +53,18 @@ const VitalsPage: React.FC = () => {
           </div>
         </div>
         {vital.recordedBy && (
-          <div className="text-right">
+          <div className="text-right hidden sm:block">
             <p className="text-xs text-gray-500 flex items-center gap-1">
               <User className="w-3 h-3" />
-              {vital.recordedBy.firstName} {vital.recordedBy.lastName}
+              {vital.recordedBy}
             </p>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {vital.bloodPressure && (
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-blue-600" />
               <span className="text-xs font-semibold text-blue-700">Blood Pressure</span>
@@ -74,7 +74,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.heartRate && (
-          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
             <div className="flex items-center gap-2 mb-2">
               <Heart className="w-4 h-4 text-red-600" />
               <span className="text-xs font-semibold text-red-700">Heart Rate</span>
@@ -84,7 +84,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.temperature && (
-          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
             <div className="flex items-center gap-2 mb-2">
               <Thermometer className="w-4 h-4 text-orange-600" />
               <span className="text-xs font-semibold text-orange-700">Temperature</span>
@@ -94,7 +94,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.oxygenSaturation && (
-          <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-4 border border-cyan-200">
             <div className="flex items-center gap-2 mb-2">
               <Droplet className="w-4 h-4 text-cyan-600" />
               <span className="text-xs font-semibold text-cyan-700">O2 Saturation</span>
@@ -104,7 +104,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.respiratoryRate && (
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
             <div className="flex items-center gap-2 mb-2">
               <Wind className="w-4 h-4 text-green-600" />
               <span className="text-xs font-semibold text-green-700">Respiratory Rate</span>
@@ -114,7 +114,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.weight && (
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
             <div className="flex items-center gap-2 mb-2">
               <Scale className="w-4 h-4 text-purple-600" />
               <span className="text-xs font-semibold text-purple-700">Weight</span>
@@ -124,7 +124,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.height && (
-          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4 border border-indigo-200">
             <div className="flex items-center gap-2 mb-2">
               <Ruler className="w-4 h-4 text-indigo-600" />
               <span className="text-xs font-semibold text-indigo-700">Height</span>
@@ -134,7 +134,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.bmi && (
-          <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4 border border-pink-200">
             <div className="flex items-center gap-2 mb-2">
               <Gauge className="w-4 h-4 text-pink-600" />
               <span className="text-xs font-semibold text-pink-700">BMI</span>
@@ -144,7 +144,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.bloodGlucose && (
-          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-200">
             <div className="flex items-center gap-2 mb-2">
               <Droplet className="w-4 h-4 text-yellow-600" />
               <span className="text-xs font-semibold text-yellow-700">Blood Glucose</span>
@@ -154,7 +154,7 @@ const VitalsPage: React.FC = () => {
         )}
 
         {vital.painLevel !== null && vital.painLevel !== undefined && (
-          <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-4">
+          <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-4 border border-rose-200">
             <div className="flex items-center gap-2 mb-2">
               <AlertCircle className="w-4 h-4 text-rose-600" />
               <span className="text-xs font-semibold text-rose-700">Pain Level</span>
@@ -179,7 +179,7 @@ const VitalsPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="text-center">
-          <Activity className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
+          <Activity className="w-12 h-12 text-red-600 animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading vitals...</p>
         </div>
       </div>
@@ -195,7 +195,7 @@ const VitalsPage: React.FC = () => {
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={loadVitals}
-            className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
           >
             Try Again
           </button>
@@ -213,16 +213,16 @@ const VitalsPage: React.FC = () => {
             <div className="flex items-center gap-4">
               <Link
                 to="/dashboard"
-                className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+                className="w-10 h-10 bg-gradient-to-br from-red-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
               >
-                <span className="text-white font-bold">←</span>
+                <ArrowLeft className="w-5 h-5 text-white" />
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Vital Signs</h1>
                 <p className="text-sm text-gray-600">Your health monitoring records</p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-gray-700">{vitals.length} Records</p>
             </div>
           </div>
@@ -238,7 +238,7 @@ const VitalsPage: React.FC = () => {
             <p className="text-gray-600 mb-6">You don't have any vital signs records yet.</p>
             <Link
               to="/dashboard"
-              className="inline-block bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+              className="inline-block bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Dashboard
             </Link>
@@ -256,4 +256,3 @@ const VitalsPage: React.FC = () => {
 };
 
 export default VitalsPage;
-
