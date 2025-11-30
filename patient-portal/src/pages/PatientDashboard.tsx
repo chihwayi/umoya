@@ -232,11 +232,11 @@ const PatientDashboard: React.FC = () => {
 
           <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between mb-4">
-              <MessageSquare className="w-8 h-8 opacity-90" />
-              <Bell className="w-5 h-5 opacity-75" />
+              <Bell className="w-8 h-8 opacity-90" />
+              <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
-            <p className="text-indigo-100 text-sm mb-1">Messages</p>
-            <p className="text-3xl font-bold">{stats.unreadMessages}</p>
+            <p className="text-indigo-100 text-sm mb-1">Notifications</p>
+            <p className="text-3xl font-bold">{unreadCount}</p>
           </div>
 
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
