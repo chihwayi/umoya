@@ -243,6 +243,13 @@ export class DatabaseProvisioningService {
         description: 'Enhanced claims processing with pre-authorization, status tracking, API integrations, and rejection handling',
         statements: () => this.getSprint14_2ClaimsEnhancementStatements(),
       },
+      {
+        id: 'sprint16_workflow_engine',
+        label: 'Sprint 16 - Clinical Workflow Engine',
+        version: '2025.12.23',
+        description: 'Automated clinical workflows with triggers, steps, execution tracking, and templates',
+        statements: () => this.getSprint16WorkflowSchemaStatements(),
+      },
     ];
   }
 
@@ -6711,6 +6718,150 @@ RECOMMENDATIONS:
     statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_submission_method ON medical_aid_claims(submission_method) WHERE submission_method IS NOT NULL`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_external_claim_id ON medical_aid_claims(external_claim_id) WHERE external_claim_id IS NOT NULL`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_next_status_check_at ON medical_aid_claims(next_status_check_at) WHERE next_status_check_at IS NOT NULL`);
+
+    return statements;
+  }
+
+  private getSprint16WorkflowSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Clinical Workflows Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS clinical_workflows (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        trigger_event VARCHAR(100) NOT NULL CHECK (trigger_event IN (
+          'patient_check_in',
+          'appointment_scheduled',
+          'appointment_started',
+          'appointment_completed',
+          'lab_result_received',
+          'vitals_recorded',
+          'prescription_created',
+          'triage_completed',
+          'referral_created',
+          'custom'
+        )),
+        trigger_conditions JSONB,
+        is_active BOOLEAN DEFAULT true,
+        priority INTEGER DEFAULT 0,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Workflow Steps Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS workflow_steps (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workflow_id UUID NOT NULL REFERENCES clinical_workflows(id) ON DELETE CASCADE,
+        step_order INTEGER NOT NULL,
+        step_type VARCHAR(50) NOT NULL CHECK (step_type IN (
+          'assign_role',
+          'send_notification',
+          'create_task',
+          'update_status',
+          'create_order',
+          'assign_appointment',
+          'send_message',
+          'execute_script',
+          'wait',
+          'condition'
+        )),
+        step_config JSONB NOT NULL,
+        conditions JSONB,
+        timeout_minutes INTEGER,
+        retry_count INTEGER DEFAULT 0,
+        is_required BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Workflow Executions Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS workflow_executions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workflow_id UUID NOT NULL REFERENCES clinical_workflows(id),
+        trigger_event VARCHAR(100) NOT NULL,
+        trigger_entity_type VARCHAR(50) NOT NULL,
+        trigger_entity_id UUID NOT NULL,
+        patient_id UUID REFERENCES patients(id),
+        status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN (
+          'pending',
+          'running',
+          'completed',
+          'failed',
+          'cancelled',
+          'timeout'
+        )),
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        error_message TEXT,
+        execution_data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Workflow Step Executions Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS workflow_step_executions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        execution_id UUID NOT NULL REFERENCES workflow_executions(id) ON DELETE CASCADE,
+        step_id UUID NOT NULL REFERENCES workflow_steps(id),
+        step_order INTEGER NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN (
+          'pending',
+          'running',
+          'completed',
+          'failed',
+          'skipped',
+          'timeout'
+        )),
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        result_data JSONB,
+        error_message TEXT,
+        retry_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Workflow Templates Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS workflow_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(50),
+        template_data JSONB NOT NULL,
+        is_default BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        usage_count INTEGER DEFAULT 0,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflows_trigger_event ON clinical_workflows(trigger_event)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflows_is_active ON clinical_workflows(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON workflow_steps(workflow_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_steps_order ON workflow_steps(workflow_id, step_order)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow_id ON workflow_executions(workflow_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_executions_trigger ON workflow_executions(trigger_entity_type, trigger_entity_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_executions_patient_id ON workflow_executions(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_executions_status ON workflow_executions(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_executions_created_at ON workflow_executions(created_at)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_step_executions_execution_id ON workflow_step_executions(execution_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_step_executions_step_id ON workflow_step_executions(step_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_step_executions_status ON workflow_step_executions(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_templates_category ON workflow_templates(category)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_workflow_templates_is_active ON workflow_templates(is_active)`);
 
     return statements;
   }

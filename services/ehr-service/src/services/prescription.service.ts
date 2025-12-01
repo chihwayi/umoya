@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Prescription, PrescriptionStatus } from '../entities/prescription.entity';
 import { TerminologyService } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
+import { ClinicalWorkflowService } from './clinical-workflow.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -18,6 +19,7 @@ export class PrescriptionService {
   constructor(
     private readonly terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
+    @Optional() private workflowService?: ClinicalWorkflowService,
   ) {}
   
   private extractConceptId(candidate: any): string | null {
@@ -159,6 +161,27 @@ export class PrescriptionService {
       this.logger.warn(
         `CDSS hook failed for prescription ${createdPrescription.id}: ${error instanceof Error ? error.message : error}`,
       );
+    }
+
+    // Trigger workflow for prescription_created
+    if (this.workflowService) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'prescription_created',
+          {
+            entityType: 'prescription',
+            entityId: createdPrescription.id,
+            patientId: createdPrescription.patientId,
+            data: {
+              medicationName: createdPrescription.medicationName,
+              status: createdPrescription.status,
+            },
+          },
+          tenantDb,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for prescription_created: ${error instanceof Error ? error.message : error}`);
+      }
     }
 
     return {

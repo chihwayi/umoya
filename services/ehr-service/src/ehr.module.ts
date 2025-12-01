@@ -64,6 +64,7 @@ import { PatientPortalController } from './controllers/patient-portal.controller
 import { PatientProController } from './controllers/patient-pro.controller';
 import { MedicalAidApiController } from './controllers/medical-aid-api.controller';
 import { TenantsController } from './controllers/tenants.controller';
+import { WorkflowController } from './controllers/workflow.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -158,6 +159,7 @@ import { PatientProService } from './services/patient-pro.service';
 import { ProSchedulingService } from './services/pro-scheduling.service';
 import { HealthGoalsService } from './services/health-goals.service';
 import { MedicalAidApiService } from './services/medical-aid-api.service';
+import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -238,6 +240,7 @@ import { RolesGuard } from './guards/roles.guard';
     PatientProController,
     MedicalAidApiController,
     TenantsController,
+    WorkflowController,
   ],
   providers: [
     AuthService,
@@ -336,6 +339,7 @@ import { RolesGuard } from './guards/roles.guard';
     ProSchedulingService,
     HealthGoalsService,
     MedicalAidApiService,
+    ClinicalWorkflowService,
     RolesGuard,
     JwtStrategy,
   ],

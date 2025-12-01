@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Vitals } from '../entities/vitals.entity';
 import { TenantService } from './tenant.service';
 import { CdssHookService } from './cdss-hook.service';
+import { ClinicalWorkflowService } from './clinical-workflow.service';
 
 @Injectable()
 export class VitalsService {
@@ -11,6 +12,7 @@ export class VitalsService {
   constructor(
     private tenantService: TenantService,
     private cdssHookService: CdssHookService,
+    @Optional() private workflowService?: ClinicalWorkflowService,
   ) {}
 
   private async getRepository(tenantId: string): Promise<Repository<Vitals>> {
@@ -33,6 +35,29 @@ export class VitalsService {
       });
     } catch (error) {
       this.logger.warn(`CDSS hook failed for vitals: ${error instanceof Error ? error.message : error}`);
+    }
+
+    // Trigger workflow for vitals_recorded
+    if (this.workflowService) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'vitals_recorded',
+          {
+            entityType: 'vitals',
+            entityId: saved.id,
+            patientId: saved.patientId,
+            data: {
+              bloodPressure: saved.bloodPressure,
+              heartRate: saved.heartRate,
+              temperature: saved.temperature,
+              oxygenSaturation: saved.oxygenSaturation,
+            },
+          },
+          tenantDb,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for vitals_recorded: ${error instanceof Error ? error.message : error}`);
+      }
     }
 
     return {

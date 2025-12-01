@@ -1,11 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { LabOrder } from '../entities/lab-order.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
+import { ClinicalWorkflowService } from './clinical-workflow.service';
 
 @Injectable()
 export class Hl7Service {
+  private readonly logger = new Logger(Hl7Service.name);
+
+  constructor(@Optional() private workflowService?: ClinicalWorkflowService) {}
 
   async processAdtMessage(hl7Message: string, tenantDb: DataSource) {
     try {
@@ -144,6 +148,27 @@ export class Hl7Service {
       labOrder.results = results;
       labOrder.status = 'completed' as any;
       await labOrderRepository.save(labOrder);
+
+      // Trigger workflow for lab_result_received
+      if (this.workflowService) {
+        try {
+          await this.workflowService.executeWorkflow(
+            'lab_result_received',
+            {
+              entityType: 'lab_order',
+              entityId: labOrder.id,
+              patientId: labOrder.patientId,
+              data: {
+                resultsCount: results.length,
+                hasCriticalValues: results.some((r: any) => r.flag === 'critical' || r.flag === 'high' || r.flag === 'low'),
+              },
+            },
+            tenantDb,
+          );
+        } catch (error) {
+          this.logger.warn(`Failed to trigger workflow for lab_result_received: ${error instanceof Error ? error.message : error}`);
+        }
+      }
 
       return {
         messageType: 'ORU',

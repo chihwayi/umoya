@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
 import { TenantService } from './tenant.service';
 import { AllergyService } from './allergy.service';
 import { TerminologyService } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
+import { ClinicalWorkflowService } from './clinical-workflow.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -22,6 +23,7 @@ export class TriageService {
     private allergyService: AllergyService,
     private terminologyService: TerminologyService,
     private cdssHookService: CdssHookService,
+    @Optional() private workflowService?: ClinicalWorkflowService,
   ) {}
 
   private async getRepository(tenantId: string): Promise<Repository<TriageAssessment>> {
@@ -276,6 +278,28 @@ export class TriageService {
       } catch (e) {
         // Log but don't fail triage save if allergy sync fails
         console.error('Failed to sync allergies from triage:', e);
+      }
+    }
+
+    // Trigger workflow for triage_completed
+    if (this.workflowService) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'triage_completed',
+          {
+            entityType: 'triage_assessment',
+            entityId: saved.id,
+            patientId: saved.patient_id,
+            data: {
+              priority: saved.priority,
+              severityScore: saved.severity_score,
+              chiefComplaint: saved.chief_complaint,
+            },
+          },
+          tenantDb,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for triage_completed: ${error instanceof Error ? error.message : error}`);
       }
     }
 

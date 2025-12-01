@@ -33,6 +33,7 @@ import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
 import ProAlerts from '../components/ProAlerts';
 import PatientProViewer from '../components/PatientProViewer';
 import QuestionnaireLibrary from '../components/QuestionnaireLibrary';
+import WorkflowList from '../components/WorkflowList';
 import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
 import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
@@ -154,6 +155,7 @@ const DoctorDashboard: React.FC = () => {
   const [showAvailabilityManager, setShowAvailabilityManager] = useState(false);
   const [showProViewerModal, setShowProViewerModal] = useState(false);
   const [showQuestionnaireLibrary, setShowQuestionnaireLibrary] = useState(false);
+  const [showWorkflowList, setShowWorkflowList] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
@@ -1042,6 +1044,7 @@ const DoctorDashboard: React.FC = () => {
     return [
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
       { icon: FileText, label: 'Questionnaires', desc: 'Assign & manage PROs', color: 'from-indigo-500 to-purple-500', action: 'questionnaires' },
+      { icon: Activity, label: 'Workflows', desc: 'Automate care processes', color: 'from-violet-500 to-purple-500', action: 'workflows' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
@@ -1123,6 +1126,9 @@ const DoctorDashboard: React.FC = () => {
                         return;
                       }
                       setShowQuestionnaireLibrary(true);
+                      setSidebarOpen(false);
+                    } else if (action.action === 'workflows') {
+                      setShowWorkflowList(true);
                       setSidebarOpen(false);
                     } else if (action.route) {
                       navigate(`/ehr/${tenantSlug}/${action.route}`);
@@ -2743,6 +2749,21 @@ const DoctorDashboard: React.FC = () => {
                   showSuccess('Success', 'Questionnaire assigned successfully!');
                   // Optionally refresh PRO alerts
                 }}
+              />
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Workflow List Modal */}
+      {showWorkflowList && tenantSlug && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+              <WorkflowList
+                tenantSlug={tenantSlug}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => setShowWorkflowList(false)}
               />
             </div>
           </div>

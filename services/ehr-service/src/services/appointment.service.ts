@@ -9,6 +9,7 @@ import { TelemedicineService } from './telemedicine.service';
 import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
 import { PatientProService } from './patient-pro.service';
+import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class AppointmentService {
     private notificationsService: NotificationsService,
     private emailService: EmailService,
     @Optional() private patientProService?: PatientProService,
+    @Optional() private workflowService?: ClinicalWorkflowService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -119,6 +121,28 @@ export class AppointmentService {
         `UPDATE financial_transactions SET source_reference_id = $1 WHERE id = $2`,
         [savedAppointment.id, financeTransactionId],
       );
+    }
+
+    // Trigger workflow for appointment_scheduled
+    if (this.workflowService) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'appointment_scheduled',
+          {
+            entityType: 'appointment',
+            entityId: savedAppointment.id,
+            patientId: savedAppointment.patientId,
+            data: {
+              appointmentType: savedAppointment.appointmentType,
+              priority: savedAppointment.priority,
+              doctorId: savedAppointment.doctorId,
+            },
+          },
+          connection,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for appointment_scheduled: ${error.message}`);
+      }
     }
 
     // If this is a telehealth appointment, create a telemedicine consultation
@@ -325,31 +349,103 @@ export class AppointmentService {
   async checkInPatient(id: string, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
     
     this.ensurePaymentCleared(appointment);
 
     appointment.status = 'confirmed';
-    return appointmentRepository.save(appointment);
+    const savedAppointment = await appointmentRepository.save(appointment);
+
+    // Trigger workflow for patient_check_in
+    if (this.workflowService && connection) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'patient_check_in',
+          {
+            entityType: 'appointment',
+            entityId: savedAppointment.id,
+            patientId: savedAppointment.patientId,
+            data: {
+              appointmentType: savedAppointment.appointmentType,
+              doctorId: savedAppointment.doctorId,
+            },
+          },
+          connection,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for patient_check_in: ${error.message}`);
+      }
+    }
+
+    return savedAppointment;
   }
 
   async startAppointment(id: string, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
     
     this.ensurePaymentCleared(appointment);
 
     appointment.status = 'in_progress';
-    return appointmentRepository.save(appointment);
+    const savedAppointment = await appointmentRepository.save(appointment);
+
+    // Trigger workflow for appointment_started
+    if (this.workflowService && connection) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'appointment_started',
+          {
+            entityType: 'appointment',
+            entityId: savedAppointment.id,
+            patientId: savedAppointment.patientId,
+            data: {
+              appointmentType: savedAppointment.appointmentType,
+              doctorId: savedAppointment.doctorId,
+            },
+          },
+          connection,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for appointment_started: ${error.message}`);
+      }
+    }
+
+    return savedAppointment;
   }
 
   async completeAppointment(id: string, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
     
     this.ensurePaymentCleared(appointment);
 
     appointment.status = 'completed';
-    return appointmentRepository.save(appointment);
+    const savedAppointment = await appointmentRepository.save(appointment);
+
+    // Trigger workflow for appointment_completed
+    if (this.workflowService && connection) {
+      try {
+        await this.workflowService.executeWorkflow(
+          'appointment_completed',
+          {
+            entityType: 'appointment',
+            entityId: savedAppointment.id,
+            patientId: savedAppointment.patientId,
+            data: {
+              appointmentType: savedAppointment.appointmentType,
+              doctorId: savedAppointment.doctorId,
+            },
+          },
+          connection,
+        );
+      } catch (error) {
+        this.logger.warn(`Failed to trigger workflow for appointment_completed: ${error.message}`);
+      }
+    }
+
+    return savedAppointment;
   }
 
   async getWaitTimes(doctorId: string, date: string, tenantId: string): Promise<{ average: number; current: number[] }> {

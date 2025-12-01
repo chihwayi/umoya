@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { DNA, Target, Pill, Sparkles } from 'lucide-react';
+import { Dna, Target, Pill, Sparkles } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
@@ -44,7 +44,7 @@ const OncologyBiomarkerDashboard: React.FC<OncologyBiomarkerDashboardProps> = ({
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
           <p className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <DNA className="h-4 w-4 text-fuchsia-500" />
+            <Dna className="h-4 w-4 text-fuchsia-500" />
             Biomarker Intelligence
           </p>
           <p className="text-xs text-slate-500">Top biomarkers, genomic signals, and therapy matches.</p>

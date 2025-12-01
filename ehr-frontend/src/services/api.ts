@@ -3598,9 +3598,150 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  // Clinical Workflows
+  createWorkflow: async (workflowData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/workflows', workflowData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflows: async (token: string, tenantSlug: string, filters?: { triggerEvent?: string; isActive?: boolean; search?: string }) => {
+    const params: any = {};
+    if (filters?.triggerEvent) params.triggerEvent = filters.triggerEvent;
+    if (filters?.isActive !== undefined) params.isActive = filters.isActive;
+    if (filters?.search) params.search = filters.search;
+    const response = await ehrAxios.get('/workflows', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowById: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/workflows/${workflowId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateWorkflow: async (workflowId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/workflows/${workflowId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deleteWorkflow: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/workflows/${workflowId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  activateWorkflow: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/${workflowId}/activate`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deactivateWorkflow: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/${workflowId}/deactivate`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  duplicateWorkflow: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/${workflowId}/duplicate`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  addWorkflowStep: async (workflowId: string, stepData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/${workflowId}/steps`, stepData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateWorkflowStep: async (stepId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/workflows/steps/${stepId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deleteWorkflowStep: async (stepId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/workflows/steps/${stepId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  executeWorkflow: async (executionData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/workflows/execute', executionData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowExecutions: async (token: string, tenantSlug: string, filters?: { workflowId?: string; patientId?: string; status?: string; limit?: number }) => {
+    const params: any = {};
+    if (filters?.workflowId) params.workflowId = filters.workflowId;
+    if (filters?.patientId) params.patientId = filters.patientId;
+    if (filters?.status) params.status = filters.status;
+    if (filters?.limit) params.limit = filters.limit;
+    const response = await ehrAxios.get('/workflows/executions', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowExecutionById: async (executionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/workflows/executions/${executionId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  cancelWorkflowExecution: async (executionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/executions/${executionId}/cancel`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowExecutionSteps: async (executionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/workflows/executions/${executionId}/steps`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowTemplates: async (token: string, tenantSlug: string, category?: string) => {
+    const params: any = {};
+    if (category) params.category = category;
+    const response = await ehrAxios.get('/workflows/templates', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  createWorkflowFromTemplate: async (templateId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/templates/${templateId}/apply`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 };
 
-// Doctor Availability API
+// Doctor Availability API (standalone)
 export const doctorAvailabilityApi = {
   create: async (data: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/doctor-availability', data, {
