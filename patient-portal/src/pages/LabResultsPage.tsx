@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { FlaskConical, Calendar, ArrowLeft, AlertCircle, CheckCircle, XCircle, TrendingUp, FileDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const LabResultsPage: React.FC = () => {
   const { token } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,7 +74,7 @@ const LabResultsPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <Link
-            to="/dashboard"
+            to={`/${tenantSlug}/dashboard`}
             className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

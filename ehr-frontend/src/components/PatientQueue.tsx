@@ -69,13 +69,15 @@ interface PatientQueueProps {
   token: string;
   onAppointmentUpdate: () => void;
   appointments?: Appointment[]; // Add appointments prop
+  onAppointmentSelect?: (appointment: Appointment) => void; // Callback when appointment is selected
 }
 
 const PatientQueue: React.FC<PatientQueueProps> = ({
   tenantSlug,
   token,
   onAppointmentUpdate,
-  appointments: propAppointments = []
+  appointments: propAppointments = [],
+  onAppointmentSelect
 }) => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -218,6 +220,11 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
         case 'start':
           await ehrApi.startAppointment(appointmentId, token, tenantSlug);
           showSuccess('Success', 'Appointment started');
+          // Select the appointment when starting
+          const appointment = displayAppointments.find(apt => apt.id === appointmentId);
+          if (appointment && onAppointmentSelect) {
+            onAppointmentSelect(appointment);
+          }
           break;
         case 'complete':
           await ehrApi.completeAppointment(appointmentId, token, tenantSlug);
@@ -447,7 +454,13 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
             {filteredAppointments.map((appointment) => (
               <div
                 key={appointment.id}
-                className={`p-4 border rounded-lg transition-all hover:shadow-md ${
+                onClick={() => {
+                  // Select appointment when clicking on the card
+                  if (onAppointmentSelect) {
+                    onAppointmentSelect(appointment);
+                  }
+                }}
+                className={`p-4 border rounded-lg transition-all hover:shadow-md cursor-pointer ${
                   (appointment.status === 'in-progress' || appointment.status === 'in_progress')
                     ? 'border-yellow-300 bg-yellow-50' 
                     : appointment.status === 'confirmed'
@@ -526,7 +539,10 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                       if (normalizedStatus === 'scheduled') {
                         return (
                           <button
-                            onClick={() => handleAppointmentAction(appointment.id, 'check-in')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentAction(appointment.id, 'check-in');
+                            }}
                             className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
                           >
                             <CheckCircle className="w-4 h-4" />
@@ -536,7 +552,10 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                       } else if (normalizedStatus === 'confirmed') {
                         return (
                           <button
-                            onClick={() => handleAppointmentAction(appointment.id, 'start')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentAction(appointment.id, 'start');
+                            }}
                             className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-1"
                           >
                             <Play className="w-4 h-4" />
@@ -546,7 +565,10 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                       } else if (normalizedStatus === 'in-progress' || normalizedStatus === 'in_progress') {
                         return (
                           <button
-                            onClick={() => handleAppointmentAction(appointment.id, 'complete')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAppointmentAction(appointment.id, 'complete');
+                            }}
                             className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center gap-1"
                           >
                             <Square className="w-4 h-4" />
@@ -557,7 +579,10 @@ const PatientQueue: React.FC<PatientQueueProps> = ({
                       return null;
                     })()}
                     <button
-                      onClick={() => navigate(`/ehr/${tenantSlug}/doctor/patients/${appointment.patient.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/ehr/${tenantSlug}/doctor/patients/${appointment.patient.id}`);
+                      }}
                       className="px-3 py-1 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm flex items-center gap-1"
                     >
                       <User className="w-4 h-4" />

@@ -210,3 +210,4 @@ done
 echo ""
 echo "🎉 Analytics schema application completed!"
 
+

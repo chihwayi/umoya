@@ -59,3 +59,4 @@ done
 
 echo "✅ Patient portal access schema applied to all tenant databases!"
 
+

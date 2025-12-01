@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
   Play,
@@ -67,6 +68,7 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   token
 }) => {
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
@@ -74,6 +76,7 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   const [showClinicalNotes, setShowClinicalNotes] = useState(false);
   const [showPrescriptions, setShowPrescriptions] = useState(false);
   const [showLabOrders, setShowLabOrders] = useState(false);
+  const [startingVideo, setStartingVideo] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     appointmentDate: formatDateForInput(new Date(appointment.appointmentDate)),
     selectedTime: new Date(appointment.appointmentDate).toLocaleTimeString('en-US', {
@@ -266,6 +269,51 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
     setShowLabOrders(true);
   };
 
+  const handleStartVideoConsultation = async () => {
+    if (!ensurePaymentCleared('Cannot start video consultation while payment is pending')) {
+      return;
+    }
+
+    try {
+      setStartingVideo(true);
+      
+      // Get current user (doctor) ID
+      const storedUser = localStorage.getItem('ehr_user');
+      const user = storedUser ? JSON.parse(storedUser) : null;
+      const doctorId = user?.id || user?.userId;
+
+      if (!doctorId) {
+        showError('Error', 'Doctor ID not found. Please log in again.');
+        return;
+      }
+
+      // Create telemedicine consultation
+      const consultationData = {
+        appointmentId: appointment.id,
+        patientId: appointment.patient.id,
+        doctorId: doctorId,
+        consultationType: 'video',
+        scheduledStartTime: new Date().toISOString(),
+      };
+
+      const consultation = await ehrApi.createTelemedicineConsultation(consultationData, token, tenantSlug);
+      
+      // Get meeting URL
+      const meetingInfo = await ehrApi.getTelemedicineMeetingUrl(consultation.data.id, token, tenantSlug);
+      const meetingUrl = meetingInfo.data.meeting_url || meetingInfo.data.meetingUrl;
+
+      // Navigate to telemedicine consultation page
+      navigate(`/ehr/${tenantSlug}/telemedicine/consultation/${consultation.data.id}`);
+      
+      showSuccess('Success', 'Video consultation started. Patient will be notified.');
+    } catch (error: any) {
+      console.error('Error starting video consultation:', error);
+      showError('Error', error.response?.data?.message || 'Failed to start video consultation');
+    } finally {
+      setStartingVideo(false);
+    }
+  };
+
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -305,6 +353,16 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           >
             <Play className="w-4 h-4" />
             Start
+          </button>,
+          <button
+            key="video"
+            onClick={handleStartVideoConsultation}
+            disabled={loading || awaitingPayment || startingVideo}
+            className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            title={awaitingPayment ? 'Awaiting payment confirmation' : 'Start video consultation'}
+          >
+            <Video className="w-4 h-4" />
+            {startingVideo ? 'Starting...' : 'Video Call'}
           </button>
         );
         break;
@@ -320,6 +378,16 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           >
             <Square className="w-4 h-4" />
             Complete
+          </button>,
+          <button
+            key="video"
+            onClick={handleStartVideoConsultation}
+            disabled={loading || awaitingPayment || startingVideo}
+            className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            title={awaitingPayment ? 'Awaiting payment confirmation' : 'Start video consultation'}
+          >
+            <Video className="w-4 h-4" />
+            {startingVideo ? 'Starting...' : 'Video Call'}
           </button>
         );
         break;

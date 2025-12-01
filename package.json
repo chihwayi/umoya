@@ -16,7 +16,8 @@
     "deploy": "./scripts/deploy.sh",
     "backup": "./scripts/backup.sh",
     "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
-    "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts"
+    "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
+    "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts"
   },
   "workspaces": [
     "services/*",

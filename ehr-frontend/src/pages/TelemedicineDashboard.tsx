@@ -23,9 +23,9 @@ import {
   Droplet,
   Scale,
 } from 'lucide-react';
-import { telemedicineApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import { ehrApi } from '../services/api';
 
 const StatCard: React.FC<{
   title: string;
@@ -110,7 +110,7 @@ const TelemedicineDashboard: React.FC = () => {
         query.status = statusFilter;
       }
 
-      const consultationsRes = await telemedicineApi.getConsultations(tenantSlug, token, query);
+      const consultationsRes = await ehrApi.getTelemedicineConsultations(token, tenantSlug, query);
       const consultationsData = consultationsRes.data?.consultations || consultationsRes.data || [];
 
       setConsultations(consultationsData);
@@ -132,7 +132,7 @@ const TelemedicineDashboard: React.FC = () => {
       });
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
-      showError(error?.response?.data?.message || 'Failed to load dashboard data');
+      showError(error?.response?.data?.message || 'Failed to load dashboard data', error?.response?.data?.error || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }

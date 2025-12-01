@@ -258,3 +258,4 @@ const AppointmentReminderModal: React.FC<AppointmentReminderModalProps> = ({
 
 export default AppointmentReminderModal;
 
+

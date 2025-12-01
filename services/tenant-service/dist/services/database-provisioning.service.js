@@ -103,6 +103,8 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                     (db) => this.seedLabCatalog(db),
                     (db) => this.seedImagingCatalog(db),
                     (db) => this.seedLookupTables(db),
+                    (db) => this.seedClinicalNoteTemplates(db),
+                    (db) => this.seedPrescriptionTemplates(db),
                 ],
             },
             {
@@ -125,6 +127,83 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 version: '2025.03.01',
                 description: 'Provides SNOMED → ICD-10 mapping storage and metadata tracking',
                 statements: () => this.getIcd10MappingStatements(),
+            },
+            {
+                id: 'sprint5_features',
+                label: 'Sprint 5 Features',
+                version: '2025.03.02',
+                description: 'Waitlist management, invoice enhancements, order templates, and vital trends',
+                statements: () => this.getSprint5SchemaStatements(),
+            },
+            {
+                id: 'sprint6_diabetes',
+                label: 'Sprint 6 - Diabetes Management',
+                version: '2025.03.10',
+                description: 'Diabetes registry, care bundles, glucose tracking, alerts, and device integration',
+                statements: () => this.getSprint6DiabetesSchemaStatements(),
+            },
+            {
+                id: 'sprint7_oncology',
+                label: 'Sprint 7 - Oncology Enhancements',
+                version: '2025.04.01',
+                description: 'Imaging findings, pathology/biomarkers, response assessments, survivorship, trials, PROs, and financial toxicity tracking',
+                statements: () => this.getSprint7OncologySchemaStatements(),
+            },
+            {
+                id: 'sprint8_pharmacy',
+                label: 'Sprint 8 - Pharmacy Management System',
+                version: '2025.11.29',
+                description: 'Complete pharmacy management with inventory tracking, purchase orders, dispensing, returns, pricing rules, and formulary checking',
+                statements: () => this.getSprint8PharmacySchemaStatements(),
+            },
+            {
+                id: 'appointment_enhancements',
+                label: 'Appointment Enhancements - Doctor Availability',
+                version: '2025.12.01',
+                description: 'Doctor availability management to prevent appointments during unavailable times',
+                statements: () => this.getAppointmentEnhancementsSchemaStatements(),
+            },
+            {
+                id: 'billing_claims_enhancements',
+                label: 'Billing & Claims Enhancements',
+                version: '2025.11.29',
+                description: 'Enhanced billing table structure and medical aid claims schema updates',
+                statements: () => this.getBillingClaimsEnhancementsStatements(),
+            },
+            {
+                id: 'sprint9_telemedicine',
+                label: 'Sprint 9 - Telemedicine Platform',
+                version: '2025.12.01',
+                description: 'Telemedicine consultations, remote patient monitoring, digital prescriptions, and consent management',
+                statements: () => this.getTelemedicineSchemaStatements(),
+            },
+            {
+                id: 'sprint10_analytics',
+                label: 'Sprint 10 - Advanced Analytics & Reporting',
+                version: '2025.12.01',
+                description: 'Custom report builder, scheduled reports, clinical outcomes tracking, and analytics metrics',
+                statements: () => this.getAnalyticsSchemaStatements(),
+            },
+            {
+                id: 'sprint13_eprescription',
+                label: 'Sprint 13.3 - ePrescription Download',
+                version: '2025.12.15',
+                description: 'Prescription PDF download functionality with audit logging',
+                statements: () => this.getPrescriptionDownloadSchemaStatements(),
+            },
+            {
+                id: 'sprint15_pro',
+                label: 'Sprint 15 - Patient-Reported Outcomes (PROs)',
+                version: '2025.12.20',
+                description: 'Patient-Reported Outcomes system with questionnaires, responses, scheduling, and alerts',
+                statements: () => this.getProSchemaStatements(),
+            },
+            {
+                id: 'sprint13_7_health_goals',
+                label: 'Sprint 13.7 - Health Goals & Progress Tracking',
+                version: '2025.12.21',
+                description: 'Patient health goals, progress tracking, achievements, and gamification',
+                statements: () => this.getHealthGoalsSchemaStatements(),
             },
         ];
     }
@@ -275,6 +354,215 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
       
+      -- Patient Medical History (Sprint 5)
+      CREATE TABLE IF NOT EXISTS patient_medical_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          condition_type VARCHAR(50) NOT NULL CHECK (condition_type IN ('diagnosis', 'surgery', 'procedure', 'injury', 'hospitalization', 'other')),
+          condition_name VARCHAR(255) NOT NULL,
+          snomed_concept_id VARCHAR(50),
+          snomed_term TEXT,
+          diagnosis_date DATE,
+          resolved_date DATE,
+          status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'resolved', 'chronic', 'history')),
+          severity VARCHAR(50),
+          notes TEXT,
+          treating_physician VARCHAR(255),
+          facility_name VARCHAR(255),
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_patient_medical_history_patient_id ON patient_medical_history(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_medical_history_snomed_concept_id ON patient_medical_history(snomed_concept_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_medical_history_status ON patient_medical_history(status);
+      CREATE INDEX IF NOT EXISTS idx_patient_medical_history_diagnosis_date ON patient_medical_history(diagnosis_date);
+      
+      -- Patient Family History (Sprint 5)
+      CREATE TABLE IF NOT EXISTS patient_family_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          relationship VARCHAR(50) NOT NULL CHECK (relationship IN ('mother', 'father', 'sibling', 'grandmother', 'grandfather', 'aunt', 'uncle', 'cousin', 'other')),
+          relative_name VARCHAR(255),
+          condition_name VARCHAR(255) NOT NULL,
+          snomed_concept_id VARCHAR(50),
+          snomed_term TEXT,
+          age_at_onset INTEGER,
+          age_at_death INTEGER,
+          cause_of_death VARCHAR(255),
+          notes TEXT,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_patient_family_history_patient_id ON patient_family_history(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_family_history_relationship ON patient_family_history(relationship);
+      CREATE INDEX IF NOT EXISTS idx_patient_family_history_snomed_concept_id ON patient_family_history(snomed_concept_id);
+      
+      -- Patient Social History (Sprint 5)
+      CREATE TABLE IF NOT EXISTS patient_social_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          history_type VARCHAR(50) NOT NULL CHECK (history_type IN ('smoking', 'alcohol', 'drug_use', 'occupation', 'exercise', 'diet', 'travel', 'sexual_history', 'other')),
+          status VARCHAR(50),
+          frequency VARCHAR(100),
+          quantity VARCHAR(100),
+          start_date DATE,
+          end_date DATE,
+          notes TEXT,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_patient_social_history_patient_id ON patient_social_history(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_social_history_history_type ON patient_social_history(history_type);
+      
+      -- Patient Documents (Sprint 5)
+      CREATE TABLE IF NOT EXISTS patient_documents (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          document_type VARCHAR(50) NOT NULL CHECK (document_type IN ('id_card', 'insurance_card', 'medical_report', 'lab_result', 'imaging_result', 'prescription', 'certificate', 'other')),
+          document_name VARCHAR(255) NOT NULL,
+          file_path VARCHAR(500),
+          file_url TEXT,
+          file_size INTEGER,
+          mime_type VARCHAR(100),
+          description TEXT,
+          uploaded_by UUID REFERENCES users(id),
+          uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_patient_documents_patient_id ON patient_documents(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_documents_document_type ON patient_documents(document_type);
+      CREATE INDEX IF NOT EXISTS idx_patient_documents_uploaded_at ON patient_documents(uploaded_at);
+      
+      -- Clinical Note Templates (Sprint 5)
+      CREATE TABLE IF NOT EXISTS clinical_note_templates (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(50) NOT NULL CHECK (category IN ('SOAP', 'H&P', 'Progress', 'Discharge', 'Procedure', 'Consultation', 'Other')),
+          content TEXT NOT NULL,
+          variables JSONB DEFAULT '[]'::jsonb,
+          specialty VARCHAR(100),
+          is_default BOOLEAN DEFAULT false,
+          is_active BOOLEAN DEFAULT true,
+          usage_count INTEGER DEFAULT 0,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_category ON clinical_note_templates(category);
+      CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_specialty ON clinical_note_templates(specialty);
+      CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_is_active ON clinical_note_templates(is_active);
+      CREATE INDEX IF NOT EXISTS idx_clinical_note_templates_is_default ON clinical_note_templates(is_default);
+      
+      -- Patient Medications (Sprint 5)
+      CREATE TABLE IF NOT EXISTS patient_medications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          medication_name VARCHAR(255) NOT NULL,
+          generic_name VARCHAR(255),
+          snomed_concept_id VARCHAR(50),
+          snomed_term TEXT,
+          medication_type VARCHAR(50) NOT NULL CHECK (medication_type IN ('current', 'past', 'allergy', 'discontinued')),
+          dosage VARCHAR(100) NOT NULL,
+          dosage_unit VARCHAR(50),
+          frequency VARCHAR(100) NOT NULL,
+          route VARCHAR(50) CHECK (route IN ('oral', 'injection', 'topical', 'inhalation', 'intravenous', 'sublingual', 'rectal', 'other')),
+          duration VARCHAR(100),
+          start_date DATE,
+          end_date DATE,
+          prescribed_by UUID REFERENCES users(id),
+          prescribing_physician_name VARCHAR(255),
+          prescription_id UUID REFERENCES prescriptions(id),
+          status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'discontinued', 'completed', 'allergy', 'on_hold')),
+          reason_for_discontinuation TEXT,
+          adherence_percentage INTEGER CHECK (adherence_percentage >= 0 AND adherence_percentage <= 100),
+          last_taken_date DATE,
+          notes TEXT,
+          reconciliation_status VARCHAR(50) DEFAULT 'verified' CHECK (reconciliation_status IN ('verified', 'needs_review', 'discrepancy', 'resolved')),
+          reconciliation_notes TEXT,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_patient_id ON patient_medications(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_medication_type ON patient_medications(medication_type);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_status ON patient_medications(status);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_snomed_concept_id ON patient_medications(snomed_concept_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_prescription_id ON patient_medications(prescription_id);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_reconciliation_status ON patient_medications(reconciliation_status);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_start_date ON patient_medications(start_date);
+      CREATE INDEX IF NOT EXISTS idx_patient_medications_end_date ON patient_medications(end_date);
+      
+      -- Medication Adherence Tracking (Sprint 5)
+      CREATE TABLE IF NOT EXISTS medication_adherence (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          medication_id UUID NOT NULL REFERENCES patient_medications(id) ON DELETE CASCADE,
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          adherence_date DATE NOT NULL,
+          taken BOOLEAN DEFAULT false,
+          missed_reason VARCHAR(255),
+          notes TEXT,
+          recorded_by UUID REFERENCES users(id),
+          recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE(medication_id, adherence_date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_medication_adherence_medication_id ON medication_adherence(medication_id);
+      CREATE INDEX IF NOT EXISTS idx_medication_adherence_patient_id ON medication_adherence(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_medication_adherence_adherence_date ON medication_adherence(adherence_date);
+      
+      -- Medication Reconciliation Log (Sprint 5)
+      CREATE TABLE IF NOT EXISTS medication_reconciliation_log (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+          reconciliation_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+          reconciled_by UUID REFERENCES users(id),
+          reconciliation_type VARCHAR(50) NOT NULL CHECK (reconciliation_type IN ('admission', 'transfer', 'discharge', 'outpatient_visit', 'pharmacy_visit')),
+          source VARCHAR(100),
+          discrepancies_found INTEGER DEFAULT 0,
+          discrepancies_resolved INTEGER DEFAULT 0,
+          notes TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_patient_id ON medication_reconciliation_log(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_reconciliation_date ON medication_reconciliation_log(reconciliation_date);
+      CREATE INDEX IF NOT EXISTS idx_medication_reconciliation_log_reconciliation_type ON medication_reconciliation_log(reconciliation_type);
+      
+      -- Prescription Templates (Sprint 5)
+      CREATE TABLE IF NOT EXISTS prescription_templates (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(50) NOT NULL CHECK (category IN ('antibiotic', 'pain_management', 'hypertension', 'diabetes', 'respiratory', 'gastrointestinal', 'cardiac', 'mental_health', 'pediatric', 'other')),
+          medication_name VARCHAR(255) NOT NULL,
+          generic_name VARCHAR(255),
+          dosage VARCHAR(100) NOT NULL,
+          dosage_unit VARCHAR(50),
+          frequency VARCHAR(100) NOT NULL,
+          route VARCHAR(50) CHECK (route IN ('oral', 'injection', 'topical', 'inhalation', 'intravenous', 'sublingual', 'rectal', 'other')),
+          duration VARCHAR(100),
+          instructions TEXT,
+          indications TEXT,
+          contraindications TEXT,
+          side_effects TEXT,
+          specialty VARCHAR(100),
+          is_default BOOLEAN DEFAULT false,
+          is_active BOOLEAN DEFAULT true,
+          usage_count INTEGER DEFAULT 0,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_prescription_templates_category ON prescription_templates(category);
+      CREATE INDEX IF NOT EXISTS idx_prescription_templates_specialty ON prescription_templates(specialty);
+      CREATE INDEX IF NOT EXISTS idx_prescription_templates_is_active ON prescription_templates(is_active);
+      CREATE INDEX IF NOT EXISTS idx_prescription_templates_is_default ON prescription_templates(is_default);
+      CREATE INDEX IF NOT EXISTS idx_prescription_templates_medication_name ON prescription_templates(medication_name);
+      
       CREATE TABLE appointments (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -415,7 +703,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       );
       
       CREATE TABLE prescriptions (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          id UUID PRIMARY KEY DEFAULT uuid_generate_uuid(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
           doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           medication_name VARCHAR(255) NOT NULL,
@@ -423,6 +711,9 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
           medication_name_snomed_term TEXT,
           medication_name_snomed_module_id VARCHAR(50),
           medication_name_snomed_definition_status VARCHAR(50),
+          medication_name_rxnorm_code VARCHAR(50),
+          medication_name_rxnorm_name TEXT,
+          medication_name_rxnorm_tty VARCHAR(20),
           dosage VARCHAR(100) NOT NULL,
           frequency VARCHAR(100) NOT NULL,
           duration VARCHAR(100) NOT NULL,
@@ -483,16 +774,18 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       CREATE TABLE medical_aid_claims (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-          appointment_id UUID REFERENCES appointments(id),
+          billing_id UUID REFERENCES billing(id) ON DELETE SET NULL,
           claim_number VARCHAR(100) UNIQUE NOT NULL,
           medical_aid_name VARCHAR(100) NOT NULL,
-          medical_aid_number VARCHAR(100) NOT NULL,
+          member_number VARCHAR(100) NOT NULL,
           claim_amount DECIMAL(10,2) NOT NULL,
-          status VARCHAR(50) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'approved', 'rejected', 'pending')),
-          submission_date DATE NOT NULL,
-          response_date DATE,
-          response_notes TEXT,
-          created_by UUID NOT NULL REFERENCES users(id),
+          approved_amount DECIMAL(10,2),
+          status VARCHAR(50) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'processing', 'approved', 'rejected', 'paid')),
+          submission_date TIMESTAMP WITH TIME ZONE,
+          response_date TIMESTAMP WITH TIME ZONE,
+          rejection_reason TEXT,
+          claim_data JSONB,
+          created_by UUID REFERENCES users(id),
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -568,6 +861,69 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
       CREATE INDEX idx_audit_logs_table_name ON audit_logs(table_name);
       CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+      
+      -- HIPAA-compliant audit logging table
+      CREATE TABLE IF NOT EXISTS hipaa_audit_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_name VARCHAR(255),
+          user_role VARCHAR(50),
+          action VARCHAR(100) NOT NULL,
+          resource_type VARCHAR(100) NOT NULL,
+          resource_id UUID,
+          patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+          ip_address INET,
+          user_agent TEXT,
+          session_id VARCHAR(255),
+          outcome VARCHAR(20) NOT NULL CHECK (outcome IN ('success', 'failure', 'denied')),
+          reason TEXT,
+          data_accessed JSONB,
+          old_values JSONB,
+          new_values JSONB,
+          metadata JSONB,
+          risk_level VARCHAR(20) CHECK (risk_level IN ('low', 'medium', 'high', 'critical')),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      -- HIPAA audit log indexes for compliance reporting
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_user_id ON hipaa_audit_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_patient_id ON hipaa_audit_logs(patient_id);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_action ON hipaa_audit_logs(action);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_resource_type ON hipaa_audit_logs(resource_type);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_outcome ON hipaa_audit_logs(outcome);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_risk_level ON hipaa_audit_logs(risk_level);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_created_at ON hipaa_audit_logs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_session_id ON hipaa_audit_logs(session_id);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_user_patient ON hipaa_audit_logs(user_id, patient_id);
+      CREATE INDEX IF NOT EXISTS idx_hipaa_audit_date_range ON hipaa_audit_logs(created_at, patient_id);
+      
+      -- Quality Measures Results Table
+      CREATE TABLE IF NOT EXISTS quality_measure_results (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          measure_id VARCHAR(100) NOT NULL,
+          measure_name TEXT NOT NULL,
+          period_start DATE NOT NULL,
+          period_end DATE NOT NULL,
+          denominator INTEGER NOT NULL DEFAULT 0,
+          numerator INTEGER NOT NULL DEFAULT 0,
+          exclusions INTEGER NOT NULL DEFAULT 0,
+          rate DECIMAL(5,2) NOT NULL,
+          benchmark DECIMAL(5,2),
+          status VARCHAR(20) CHECK (status IN ('met', 'not_met', 'partial')),
+          numerator_patients TEXT[],
+          denominator_patients TEXT[],
+          exclusion_patients TEXT[],
+          calculated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      
+      -- Quality measure indexes
+      CREATE INDEX IF NOT EXISTS idx_quality_measure_id ON quality_measure_results(measure_id);
+      CREATE INDEX IF NOT EXISTS idx_quality_measure_period ON quality_measure_results(period_start, period_end);
+      CREATE INDEX IF NOT EXISTS idx_quality_measure_status ON quality_measure_results(status);
+      CREATE INDEX IF NOT EXISTS idx_quality_measure_calculated_at ON quality_measure_results(calculated_at);
       
     `;
         let statements = schema.split(';').filter(stmt => stmt.trim());
@@ -871,6 +1227,9 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         generic_name VARCHAR(255) NOT NULL,
         brand_names TEXT[],
         atc_code VARCHAR(20),
+        rxnorm_code VARCHAR(50),
+        rxnorm_name TEXT,
+        rxnorm_tty VARCHAR(20),
         drug_class VARCHAR(100),
         active_ingredients TEXT[],
         dosage_forms TEXT[],
@@ -883,6 +1242,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
     `);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_rxnorm_code ON drugs(rxnorm_code)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
@@ -1056,9 +1416,10 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_result_acknowledged ON lab_orders(result_acknowledged)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code)`);
-        statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+        statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), rxnorm_code VARCHAR(50), rxnorm_name TEXT, rxnorm_tty VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_rxnorm_code ON drugs(rxnorm_code)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
@@ -1134,10 +1495,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_radiologist_assigned ON imaging_studies(radiologist_assigned)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_study_status ON imaging_studies(study_status)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_studies_study_date ON imaging_studies(study_date)`);
-        statements.push(`CREATE TABLE IF NOT EXISTS imaging_files (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, file_name VARCHAR(255) NOT NULL, file_path TEXT NOT NULL, file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('DICOM','JPEG','PNG','PDF','TIFF')), file_size BIGINT, image_number INTEGER, view_position VARCHAR(50), is_primary BOOLEAN DEFAULT false, uploaded_by UUID REFERENCES users(id), uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+        statements.push(`CREATE TABLE IF NOT EXISTS imaging_files (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, file_name VARCHAR(255) NOT NULL, file_path TEXT, file_type VARCHAR(20) NOT NULL CHECK (file_type IN ('DICOM','JPEG','PNG','PDF','TIFF')), file_size BIGINT, image_number INTEGER, view_position VARCHAR(50), is_primary BOOLEAN DEFAULT false, uploaded_by UUID REFERENCES users(id), uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), object_key TEXT, content_type VARCHAR(100), storage_mode VARCHAR(10) DEFAULT 'db' CHECK (storage_mode IN ('db','object')), file_checksum VARCHAR(128))`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_imaging_study_id ON imaging_files(imaging_study_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_is_primary ON imaging_files(is_primary)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_uploaded_at ON imaging_files(uploaded_at)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_files_object_key ON imaging_files(object_key)`);
+        statements.push(`ALTER TABLE imaging_files ALTER COLUMN file_path DROP NOT NULL`);
         statements.push(`CREATE TABLE IF NOT EXISTS imaging_reports (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), imaging_study_id UUID NOT NULL REFERENCES imaging_studies(id) ON DELETE CASCADE, imaging_order_id UUID NOT NULL REFERENCES imaging_orders(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, report_status VARCHAR(20) DEFAULT 'draft' CHECK (report_status IN ('draft','preliminary','final','amended')), clinical_history TEXT, technique TEXT, findings TEXT NOT NULL, impression TEXT NOT NULL, recommendations TEXT, comparison_studies TEXT, critical_findings TEXT, is_critical BOOLEAN DEFAULT false, structured_findings JSONB DEFAULT '{}'::jsonb, severity VARCHAR(20), follow_up_recommended BOOLEAN DEFAULT false, follow_up_interval VARCHAR(100), coded_diagnoses JSONB DEFAULT '[]'::jsonb, drafted_by UUID REFERENCES users(id), drafted_at TIMESTAMP WITH TIME ZONE, signed_by UUID REFERENCES users(id), signed_at TIMESTAMP WITH TIME ZONE, amended_by UUID REFERENCES users(id), amendment_reason TEXT, amended_at TIMESTAMP WITH TIME ZONE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_imaging_study_id ON imaging_reports(imaging_study_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_imaging_reports_patient_id ON imaging_reports(patient_id)`);
@@ -2603,6 +2966,1283 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_snomed_manual_mapping_active ON snomed_manual_mappings(active)`);
         return statements;
     }
+    getSprint5SchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS appointment_waitlist (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id),
+        appointment_type VARCHAR(100),
+        preferred_date DATE,
+        preferred_time_start TIME,
+        preferred_time_end TIME,
+        priority VARCHAR(50) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        reason TEXT,
+        notes TEXT,
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'notified', 'scheduled', 'cancelled', 'expired')),
+        notified_at TIMESTAMP WITH TIME ZONE,
+        scheduled_appointment_id UUID REFERENCES appointments(id),
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_appointment_waitlist_patient_id ON appointment_waitlist(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_appointment_waitlist_doctor_id ON appointment_waitlist(doctor_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_appointment_waitlist_status ON appointment_waitlist(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_appointment_waitlist_priority ON appointment_waitlist(priority)`,
+            `CREATE INDEX IF NOT EXISTS idx_appointment_waitlist_preferred_date ON appointment_waitlist(preferred_date)`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(100)`,
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_invoice_number_unique ON billing(invoice_number) WHERE invoice_number IS NOT NULL`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS invoice_date DATE`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS due_date DATE`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(12,2) DEFAULT 0`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12,2)`,
+            `ALTER TABLE billing ADD COLUMN IF NOT EXISTS template_id UUID`,
+            `CREATE INDEX IF NOT EXISTS idx_billing_invoice_number ON billing(invoice_number)`,
+            `CREATE INDEX IF NOT EXISTS idx_billing_invoice_date ON billing(invoice_date)`,
+            `CREATE TABLE IF NOT EXISTS invoice_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        template_content TEXT NOT NULL,
+        variables JSONB DEFAULT '[]'::jsonb,
+        is_default BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_invoice_templates_is_active ON invoice_templates(is_active)`,
+            `CREATE INDEX IF NOT EXISTS idx_invoice_templates_is_default ON invoice_templates(is_default)`,
+            `CREATE TABLE IF NOT EXISTS lab_order_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(50) CHECK (category IN ('CBC', 'BMP', 'LFT', 'Lipid', 'Thyroid', 'Hormone', 'Other')),
+        tests JSONB NOT NULL DEFAULT '[]'::jsonb,
+        description TEXT,
+        is_default BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_lab_order_templates_category ON lab_order_templates(category)`,
+            `CREATE INDEX IF NOT EXISTS idx_lab_order_templates_is_active ON lab_order_templates(is_active)`,
+            `CREATE TABLE IF NOT EXISTS imaging_order_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(50) CHECK (category IN ('X-Ray', 'CT', 'MRI', 'Ultrasound', 'Echocardiogram', 'Other')),
+        imaging_type VARCHAR(100) NOT NULL,
+        body_part VARCHAR(100),
+        description TEXT,
+        is_default BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_imaging_order_templates_category ON imaging_order_templates(category)`,
+            `CREATE INDEX IF NOT EXISTS idx_imaging_order_templates_is_active ON imaging_order_templates(is_active)`,
+            `CREATE TRIGGER IF NOT EXISTS update_appointment_waitlist_updated_at BEFORE UPDATE ON appointment_waitlist
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_invoice_templates_updated_at BEFORE UPDATE ON invoice_templates
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_lab_order_templates_updated_at BEFORE UPDATE ON lab_order_templates
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_imaging_order_templates_updated_at BEFORE UPDATE ON imaging_order_templates
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+        ];
+    }
+    getSprint6DiabetesSchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS diabetes_registry (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        diabetes_type VARCHAR(30) NOT NULL CHECK (diabetes_type IN ('type1','type2','gestational','lada','mody','secondary','prediabetes','other')),
+        diabetes_type_snomed_code VARCHAR(50),
+        diabetes_type_snomed_term TEXT,
+        diagnosis_date DATE NOT NULL,
+        age_at_diagnosis INTEGER,
+        status VARCHAR(30) NOT NULL DEFAULT 'active' CHECK (status IN ('active','in_remission','resolved','deceased')),
+        family_history BOOLEAN DEFAULT false,
+        primary_care_provider_id UUID REFERENCES users(id),
+        endocrinologist_id UUID REFERENCES users(id),
+        diabetes_educator_id UUID REFERENCES users(id),
+        care_plan TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(patient_id)
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_registry_patient_id ON diabetes_registry(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_registry_type ON diabetes_registry(diabetes_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_registry_status ON diabetes_registry(status)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_care_bundle (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        bundle_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        hba1c_checked BOOLEAN DEFAULT false,
+        hba1c_value NUMERIC(5,2),
+        hba1c_date DATE,
+        blood_pressure_checked BOOLEAN DEFAULT false,
+        systolic_bp INTEGER,
+        diastolic_bp INTEGER,
+        bp_date DATE,
+        lipid_profile_checked BOOLEAN DEFAULT false,
+        lipid_profile_date DATE,
+        foot_exam_checked BOOLEAN DEFAULT false,
+        foot_exam_date DATE,
+        foot_exam_result TEXT,
+        eye_exam_checked BOOLEAN DEFAULT false,
+        eye_exam_date DATE,
+        eye_exam_result TEXT,
+        urine_acr_checked BOOLEAN DEFAULT false,
+        urine_acr_value NUMERIC(10,2),
+        urine_acr_date DATE,
+        diabetes_education_documented BOOLEAN DEFAULT false,
+        education_date DATE,
+        medication_review_completed BOOLEAN DEFAULT false,
+        medication_review_date DATE,
+        bundle_completion_percentage INTEGER CHECK (bundle_completion_percentage IS NULL OR (bundle_completion_percentage >= 0 AND bundle_completion_percentage <= 100)),
+        reviewed_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_care_bundle_registry_id ON diabetes_care_bundle(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_care_bundle_patient_id ON diabetes_care_bundle(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_care_bundle_date ON diabetes_care_bundle(bundle_date)`,
+            `CREATE TABLE IF NOT EXISTS glucose_monitoring (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        monitoring_type VARCHAR(30) NOT NULL CHECK (monitoring_type IN ('self_monitoring','cgm','flash','lab')),
+        device_type VARCHAR(100),
+        device_id VARCHAR(255),
+        glucose_value NUMERIC(6,2) NOT NULL,
+        glucose_unit VARCHAR(10) DEFAULT 'mg/dL' CHECK (glucose_unit IN ('mg/dL','mmol/L')),
+        reading_type VARCHAR(30) CHECK (reading_type IN ('fasting','pre_meal','post_meal','random','bedtime','overnight','other')),
+        meal_context TEXT,
+        insulin_dose NUMERIC(8,2),
+        insulin_type VARCHAR(100),
+        carbohydrates_grams NUMERIC(6,2),
+        exercise_minutes INTEGER,
+        stress_level INTEGER CHECK (stress_level IS NULL OR (stress_level >= 1 AND stress_level <= 10)),
+        notes TEXT,
+        recorded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        recorded_by UUID REFERENCES users(id),
+        device_synced_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_glucose_monitoring_registry_id ON glucose_monitoring(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_glucose_monitoring_patient_id ON glucose_monitoring(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_glucose_monitoring_recorded_at ON glucose_monitoring(recorded_at)`,
+            `CREATE TABLE IF NOT EXISTS cgm_summary (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        summary_date DATE NOT NULL,
+        time_in_range_70_180 NUMERIC(5,2),
+        time_above_range_180 NUMERIC(5,2),
+        time_below_range_70 NUMERIC(5,2),
+        time_below_range_54 NUMERIC(5,2),
+        average_glucose NUMERIC(6,2),
+        glucose_variability NUMERIC(6,2),
+        total_readings INTEGER,
+        device_type VARCHAR(100),
+        device_id VARCHAR(255),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(diabetes_registry_id, summary_date)
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_cgm_summary_registry_id ON cgm_summary(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_cgm_summary_patient_id ON cgm_summary(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_cgm_summary_date ON cgm_summary(summary_date)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_medications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        medication_name VARCHAR(255) NOT NULL,
+        medication_type VARCHAR(30) NOT NULL CHECK (medication_type IN ('oral','injectable','insulin','combination','other')),
+        medication_category VARCHAR(100) CHECK (medication_category IN ('metformin','sulfonylurea','dpp4_inhibitor','sglt2_inhibitor','glp1_agonist','thiazolidinedione','alpha_glucosidase_inhibitor','meglitinide','insulin_basal','insulin_bolus','insulin_premixed','other')),
+        medication_snomed_code VARCHAR(50),
+        medication_snomed_term TEXT,
+        dosage VARCHAR(100) NOT NULL,
+        frequency VARCHAR(100) NOT NULL,
+        route VARCHAR(50) CHECK (route IN ('oral','subcutaneous','intramuscular','intravenous','inhalation','other')),
+        start_date DATE NOT NULL,
+        end_date DATE,
+        status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active','discontinued','on_hold','completed')),
+        adherence_percentage INTEGER CHECK (adherence_percentage IS NULL OR (adherence_percentage >= 0 AND adherence_percentage <= 100)),
+        prescribed_by UUID REFERENCES users(id),
+        reason_for_discontinuation TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_medications_registry_id ON diabetes_medications(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_medications_patient_id ON diabetes_medications(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_medications_status ON diabetes_medications(status)`,
+            `CREATE TABLE IF NOT EXISTS insulin_regimens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        regimen_type VARCHAR(30) NOT NULL CHECK (regimen_type IN ('basal_only','basal_bolus','premixed','pump','other')),
+        basal_insulin_type VARCHAR(100),
+        basal_dose NUMERIC(8,2),
+        basal_frequency VARCHAR(100),
+        bolus_insulin_type VARCHAR(100),
+        bolus_ratio NUMERIC(6,2),
+        correction_factor NUMERIC(6,2),
+        target_glucose NUMERIC(6,2),
+        carb_ratio NUMERIC(6,2),
+        pump_settings JSONB DEFAULT '{}'::jsonb,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        status VARCHAR(30) DEFAULT 'active' CHECK (status IN ('active','discontinued','on_hold')),
+        notes TEXT,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_insulin_regimens_registry_id ON insulin_regimens(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_insulin_regimens_patient_id ON insulin_regimens(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_insulin_regimens_status ON insulin_regimens(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_insulin_regimens_start_date ON insulin_regimens(start_date)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_complication_screening (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        screening_type VARCHAR(50) NOT NULL CHECK (screening_type IN ('retinopathy','neuropathy','nephropathy','cardiovascular','foot_ulcer','other')),
+        screening_date DATE NOT NULL,
+        screening_result TEXT,
+        screening_result_snomed_code VARCHAR(50),
+        screening_result_snomed_term TEXT,
+        severity_grade VARCHAR(50),
+        findings TEXT,
+        treatment_recommended BOOLEAN DEFAULT false,
+        treatment_plan TEXT,
+        next_screening_due_date DATE,
+        performed_by UUID REFERENCES users(id),
+        reviewed_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_complication_screening_registry_id ON diabetes_complication_screening(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_complication_screening_patient_id ON diabetes_complication_screening(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_complication_screening_type ON diabetes_complication_screening(screening_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_complication_screening_due_date ON diabetes_complication_screening(next_screening_due_date)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_education_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        session_date DATE NOT NULL,
+        session_type VARCHAR(30) NOT NULL CHECK (session_type IN ('individual','group','online','phone','other')),
+        topics_covered TEXT[] DEFAULT '{}',
+        educator_id UUID REFERENCES users(id),
+        patient_attendance BOOLEAN DEFAULT true,
+        completion_status VARCHAR(30) DEFAULT 'completed' CHECK (completion_status IN ('completed','partial','missed','rescheduled')),
+        assessment_score INTEGER CHECK (assessment_score IS NULL OR (assessment_score >= 0 AND assessment_score <= 100)),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_education_sessions_registry_id ON diabetes_education_sessions(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_education_sessions_patient_id ON diabetes_education_sessions(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_education_sessions_date ON diabetes_education_sessions(session_date)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('overdue_screening','abnormal_value','medication_adherence','hypoglycemia','hyperglycemia','care_bundle_incomplete','device_issue','other')),
+        alert_severity VARCHAR(20) NOT NULL CHECK (alert_severity IN ('low','medium','high','critical')),
+        alert_message TEXT NOT NULL,
+        related_metric VARCHAR(100),
+        related_value NUMERIC(12,4),
+        related_date DATE,
+        acknowledged BOOLEAN DEFAULT false,
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        resolved BOOLEAN DEFAULT false,
+        resolved_by UUID REFERENCES users(id),
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        resolution_notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_alerts_registry_id ON diabetes_alerts(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_alerts_patient_id ON diabetes_alerts(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_alerts_type ON diabetes_alerts(alert_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_alerts_severity ON diabetes_alerts(alert_severity)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_alerts_resolved ON diabetes_alerts(resolved)`,
+            `CREATE TABLE IF NOT EXISTS diabetes_device_integration (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        diabetes_registry_id UUID NOT NULL REFERENCES diabetes_registry(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        device_type VARCHAR(50) NOT NULL CHECK (device_type IN ('cgm','insulin_pump','glucose_meter','smart_pen','fitness_tracker','other')),
+        device_brand VARCHAR(100),
+        device_model VARCHAR(100),
+        device_serial_number VARCHAR(255),
+        device_id VARCHAR(255),
+        integration_type VARCHAR(30) CHECK (integration_type IN ('api','hl7','fhir','manual','healthkit','google_fit','file_upload')),
+        integration_status VARCHAR(30) DEFAULT 'active' CHECK (integration_status IN ('active','inactive','error','pending','revoked')),
+        last_sync_at TIMESTAMP WITH TIME ZONE,
+        sync_frequency VARCHAR(50),
+        api_credentials_encrypted TEXT,
+        settings JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_device_integration_registry_id ON diabetes_device_integration(diabetes_registry_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_device_integration_patient_id ON diabetes_device_integration(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_device_integration_type ON diabetes_device_integration(device_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_diabetes_device_integration_status ON diabetes_device_integration(integration_status)`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_registry_updated_at BEFORE UPDATE ON diabetes_registry
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_care_bundle_updated_at BEFORE UPDATE ON diabetes_care_bundle
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_glucose_monitoring_updated_at BEFORE UPDATE ON glucose_monitoring
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_cgm_summary_updated_at BEFORE UPDATE ON cgm_summary
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_medications_updated_at BEFORE UPDATE ON diabetes_medications
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_insulin_regimens_updated_at BEFORE UPDATE ON insulin_regimens
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_complication_screening_updated_at BEFORE UPDATE ON diabetes_complication_screening
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_education_sessions_updated_at BEFORE UPDATE ON diabetes_education_sessions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_alerts_updated_at BEFORE UPDATE ON diabetes_alerts
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER IF NOT EXISTS update_diabetes_device_integration_updated_at BEFORE UPDATE ON diabetes_device_integration
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+        ];
+    }
+    getSprint7OncologySchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_imaging_findings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      imaging_study_id UUID REFERENCES imaging_studies(id) ON DELETE SET NULL,
+      imaging_date DATE NOT NULL,
+      imaging_type VARCHAR(100) NOT NULL,
+      modality VARCHAR(50),
+      findings TEXT,
+      tumor_size_cm NUMERIC(6,2),
+      tumor_location TEXT,
+      lymph_nodes_involved INTEGER,
+      metastatic_sites TEXT[] DEFAULT '{}'::text[],
+      recist_response VARCHAR(10) CHECK (recist_response IN ('CR','PR','SD','PD','NE')),
+      recist_criteria_met BOOLEAN,
+      radiologist_id UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_imaging_findings_case_id ON oncology_imaging_findings(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_imaging_findings_date ON oncology_imaging_findings(imaging_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_pathology (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      pathology_report_id UUID,
+      specimen_date DATE NOT NULL,
+      specimen_type VARCHAR(100),
+      histology_type VARCHAR(255),
+      histology_snomed_code VARCHAR(50),
+      histology_snomed_term TEXT,
+      grade VARCHAR(50),
+      stage_t VARCHAR(10),
+      stage_n VARCHAR(10),
+      stage_m VARCHAR(10),
+      biomarkers JSONB DEFAULT '{}'::jsonb,
+      genetic_testing JSONB DEFAULT '{}'::jsonb,
+      genomic_data JSONB DEFAULT '{}'::jsonb,
+      notes TEXT,
+      pathologist_id UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_pathology_case_id ON oncology_pathology(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_pathology_specimen_date ON oncology_pathology(specimen_date)`);
+        statements.push(`ALTER TABLE oncology_pathology ADD COLUMN IF NOT EXISTS genomic_data JSONB DEFAULT '{}'::jsonb`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_response_assessments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      regimen_id UUID REFERENCES oncology_regimens(id) ON DELETE SET NULL,
+      assessment_date DATE NOT NULL,
+      assessment_type VARCHAR(30) CHECK (assessment_type IN ('baseline','interim','end_of_treatment','follow_up')),
+      recist_response VARCHAR(10) CHECK (recist_response IN ('CR','PR','SD','PD','NE')),
+      best_overall_response VARCHAR(50),
+      target_lesions_count INTEGER,
+      target_lesions_size_cm NUMERIC(6,2),
+      non_target_lesions_status VARCHAR(50),
+      new_lesions BOOLEAN,
+      assessed_by UUID REFERENCES users(id),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_response_case_id ON oncology_response_assessments(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_response_date ON oncology_response_assessments(assessment_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_survivorship_plans (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      treatment_completion_date DATE,
+      follow_up_schedule JSONB DEFAULT '{}'::jsonb,
+      surveillance_imaging_schedule JSONB DEFAULT '{}'::jsonb,
+      long_term_side_effects TEXT[] DEFAULT '{}'::text[],
+      recurrence_risk VARCHAR(50),
+      lifestyle_recommendations TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_survivorship_case_id ON oncology_survivorship_plans(oncology_case_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_clinical_trials (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      trial_name VARCHAR(255) NOT NULL,
+      trial_id VARCHAR(100),
+      trial_phase VARCHAR(50),
+      enrollment_date DATE,
+      enrollment_status VARCHAR(30) CHECK (enrollment_status IN ('screening','enrolled','on_treatment','completed','withdrawn')),
+      protocol_compliance_percentage INTEGER,
+      trial_endpoints JSONB DEFAULT '{}'::jsonb,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_clinical_trials_case_id ON oncology_clinical_trials(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_clinical_trials_status ON oncology_clinical_trials(enrollment_status)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_patient_reported_outcomes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      assessment_date DATE NOT NULL,
+      assessment_type VARCHAR(100) CHECK (assessment_type IN ('EORTC_QLQ_C30','FACT_G','symptom_tracking','functional_status','satisfaction')),
+      assessment_data JSONB NOT NULL,
+      total_score NUMERIC(6,2),
+      domain_scores JSONB,
+      completed_by_patient BOOLEAN DEFAULT true,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_pro_case_id ON oncology_patient_reported_outcomes(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_pro_assessment_date ON oncology_patient_reported_outcomes(assessment_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS oncology_financial_toxicity (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      oncology_case_id UUID NOT NULL REFERENCES oncology_cases(id) ON DELETE CASCADE,
+      assessment_date DATE NOT NULL,
+      total_cost_to_date NUMERIC(12,2),
+      insurance_coverage_total NUMERIC(12,2),
+      out_of_pocket_total NUMERIC(12,2),
+      financial_assistance_total NUMERIC(12,2),
+      financial_stress_score INTEGER CHECK (financial_stress_score BETWEEN 1 AND 10),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_financial_toxicity_case_id ON oncology_financial_toxicity(oncology_case_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_oncology_financial_toxicity_date ON oncology_financial_toxicity(assessment_date)`);
+        statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS insurance_coverage_percentage NUMERIC(5,2)`);
+        statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS out_of_pocket_cost NUMERIC(12,2)`);
+        statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS financial_assistance_received BOOLEAN`);
+        statements.push(`ALTER TABLE oncology_infusion_sessions ADD COLUMN IF NOT EXISTS financial_assistance_program VARCHAR(255)`);
+        return statements;
+    }
+    getSprint8PharmacySchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_suppliers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      contact_person VARCHAR(255),
+      email VARCHAR(255),
+      phone VARCHAR(50),
+      address TEXT,
+      city VARCHAR(100),
+      country VARCHAR(100),
+      payment_terms VARCHAR(100),
+      tax_id VARCHAR(100),
+      status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','inactive')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_suppliers_name ON pharmacy_suppliers(name)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_suppliers_status ON pharmacy_suppliers(status)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_inventory (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255),
+      generic_name VARCHAR(255),
+      sku VARCHAR(100),
+      barcode VARCHAR(100),
+      drug_id UUID REFERENCES drugs(id) ON DELETE SET NULL,
+      snomed_code VARCHAR(50),
+      snomed_term TEXT,
+      category VARCHAR(100),
+      unit_of_measure VARCHAR(50) DEFAULT 'unit',
+      quantity_on_hand INTEGER NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
+      reorder_level INTEGER DEFAULT 10 CHECK (reorder_level >= 0),
+      max_stock_level INTEGER CHECK (max_stock_level > 0),
+      cost_per_unit NUMERIC(12,2) CHECK (cost_per_unit >= 0),
+      selling_price NUMERIC(12,2) CHECK (selling_price >= 0),
+      expiry_date DATE,
+      batch_number VARCHAR(100),
+      location VARCHAR(100),
+      supplier_id UUID REFERENCES pharmacy_suppliers(id) ON DELETE SET NULL,
+      status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','discontinued','expired','recalled')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_name ON pharmacy_inventory(name)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_sku ON pharmacy_inventory(sku)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_drug_id ON pharmacy_inventory(drug_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_status ON pharmacy_inventory(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_supplier_id ON pharmacy_inventory(supplier_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_purchase_orders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      order_number VARCHAR(50) UNIQUE NOT NULL,
+      supplier_id UUID NOT NULL REFERENCES pharmacy_suppliers(id) ON DELETE RESTRICT,
+      order_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      expected_delivery_date DATE,
+      status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft','pending','approved','ordered','received','cancelled')),
+      total_amount NUMERIC(12,2) DEFAULT 0 CHECK (total_amount >= 0),
+      currency VARCHAR(10) DEFAULT 'USD',
+      notes TEXT,
+      approved_by UUID REFERENCES users(id),
+      approved_at TIMESTAMP WITH TIME ZONE,
+      ordered_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_order_number ON pharmacy_purchase_orders(order_number)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_supplier_id ON pharmacy_purchase_orders(supplier_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_status ON pharmacy_purchase_orders(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_order_date ON pharmacy_purchase_orders(order_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_purchase_order_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      purchase_order_id UUID NOT NULL REFERENCES pharmacy_purchase_orders(id) ON DELETE CASCADE,
+      drug_id UUID NOT NULL REFERENCES drugs(id) ON DELETE RESTRICT,
+      rxnorm_code VARCHAR(50),
+      quantity_ordered INTEGER NOT NULL CHECK (quantity_ordered > 0),
+      unit_cost NUMERIC(12,2) NOT NULL CHECK (unit_cost >= 0),
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (quantity_ordered * unit_cost) STORED,
+      quantity_received INTEGER DEFAULT 0 CHECK (quantity_received >= 0),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_items_po_id ON pharmacy_purchase_order_items(purchase_order_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_po_items_drug_id ON pharmacy_purchase_order_items(drug_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_receipts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      receipt_number VARCHAR(50) UNIQUE NOT NULL,
+      purchase_order_id UUID REFERENCES pharmacy_purchase_orders(id) ON DELETE SET NULL,
+      supplier_id UUID NOT NULL REFERENCES pharmacy_suppliers(id) ON DELETE RESTRICT,
+      receipt_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      received_by UUID REFERENCES users(id),
+      verified_by UUID REFERENCES users(id),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected','processed')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipts_receipt_number ON pharmacy_receipts(receipt_number)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipts_po_id ON pharmacy_receipts(purchase_order_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipts_supplier_id ON pharmacy_receipts(supplier_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipts_status ON pharmacy_receipts(status)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_receipt_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      receipt_id UUID NOT NULL REFERENCES pharmacy_receipts(id) ON DELETE CASCADE,
+      purchase_order_item_id UUID REFERENCES pharmacy_purchase_order_items(id) ON DELETE SET NULL,
+      drug_id UUID NOT NULL REFERENCES drugs(id) ON DELETE RESTRICT,
+      batch_number VARCHAR(100),
+      expiry_date DATE NOT NULL,
+      manufacturing_date DATE,
+      quantity_received INTEGER NOT NULL CHECK (quantity_received > 0),
+      unit_cost NUMERIC(12,2) NOT NULL CHECK (unit_cost >= 0),
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (quantity_received * unit_cost) STORED,
+      condition VARCHAR(20) DEFAULT 'good' CHECK (condition IN ('good','damaged','expired','short_supply')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipt_items_receipt_id ON pharmacy_receipt_items(receipt_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipt_items_po_item_id ON pharmacy_receipt_items(purchase_order_item_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_receipt_items_drug_id ON pharmacy_receipt_items(drug_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_dispensings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      prescription_id UUID REFERENCES prescriptions(id) ON DELETE SET NULL,
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      dispensing_number VARCHAR(50) UNIQUE NOT NULL,
+      dispensing_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      dispensed_by UUID REFERENCES users(id),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','dispensed','partial','cancelled','returned')),
+      payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending','paid','partially_paid','refunded')),
+      payment_method VARCHAR(50),
+      total_amount NUMERIC(12,2) DEFAULT 0 CHECK (total_amount >= 0),
+      amount_paid NUMERIC(12,2) DEFAULT 0 CHECK (amount_paid >= 0),
+      discount_amount NUMERIC(12,2) DEFAULT 0 CHECK (discount_amount >= 0),
+      bill_id UUID REFERENCES billing(id) ON DELETE SET NULL,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_dispensing_number ON pharmacy_dispensings(dispensing_number)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_prescription_id ON pharmacy_dispensings(prescription_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_patient_id ON pharmacy_dispensings(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_status ON pharmacy_dispensings(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_payment_status ON pharmacy_dispensings(payment_status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_dispensing_date ON pharmacy_dispensings(dispensing_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_bill_id ON pharmacy_dispensings(bill_id)`);
+        statements.push(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pharmacy_dispensings' AND column_name = 'bill_id') THEN ALTER TABLE pharmacy_dispensings ADD COLUMN bill_id UUID REFERENCES billing(id) ON DELETE SET NULL; END IF; END $$;`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_dispensing_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      dispensing_id UUID NOT NULL REFERENCES pharmacy_dispensings(id) ON DELETE CASCADE,
+      inventory_id UUID NOT NULL REFERENCES pharmacy_inventory(id) ON DELETE RESTRICT,
+      drug_id UUID NOT NULL REFERENCES drugs(id) ON DELETE RESTRICT,
+      rxnorm_code VARCHAR(50),
+      batch_number VARCHAR(100),
+      expiry_date DATE,
+      quantity_dispensed INTEGER NOT NULL CHECK (quantity_dispensed > 0),
+      unit_price NUMERIC(12,2) NOT NULL CHECK (unit_price >= 0),
+      total_price NUMERIC(12,2) GENERATED ALWAYS AS (quantity_dispensed * unit_price) STORED,
+      instructions TEXT,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensing_items_dispensing_id ON pharmacy_dispensing_items(dispensing_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensing_items_inventory_id ON pharmacy_dispensing_items(inventory_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensing_items_drug_id ON pharmacy_dispensing_items(drug_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_returns (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      dispensing_id UUID NOT NULL REFERENCES pharmacy_dispensings(id) ON DELETE RESTRICT,
+      return_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      return_reason VARCHAR(100),
+      returned_by UUID REFERENCES users(id),
+      approved_by UUID REFERENCES users(id),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','processed')),
+      refund_amount NUMERIC(12,2) DEFAULT 0 CHECK (refund_amount >= 0),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_returns_dispensing_id ON pharmacy_returns(dispensing_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_returns_status ON pharmacy_returns(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_returns_return_date ON pharmacy_returns(return_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_return_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      return_id UUID NOT NULL REFERENCES pharmacy_returns(id) ON DELETE CASCADE,
+      dispensing_item_id UUID REFERENCES pharmacy_dispensing_items(id) ON DELETE SET NULL,
+      inventory_id UUID REFERENCES pharmacy_inventory(id) ON DELETE SET NULL,
+      quantity_returned INTEGER NOT NULL CHECK (quantity_returned > 0),
+      condition VARCHAR(20) DEFAULT 'good' CHECK (condition IN ('good','damaged','expired')),
+      restockable BOOLEAN DEFAULT false,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_return_items_return_id ON pharmacy_return_items(return_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_return_items_dispensing_item_id ON pharmacy_return_items(dispensing_item_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_return_items_inventory_id ON pharmacy_return_items(inventory_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_stock_movements (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      inventory_id UUID NOT NULL REFERENCES pharmacy_inventory(id) ON DELETE CASCADE,
+      movement_type VARCHAR(20) NOT NULL CHECK (movement_type IN ('purchase','sale','return','adjustment','expiry','damage','transfer')),
+      reference_type VARCHAR(50),
+      reference_id UUID,
+      quantity_before INTEGER NOT NULL,
+      quantity_change INTEGER NOT NULL,
+      quantity_after INTEGER NOT NULL,
+      unit_cost NUMERIC(12,2),
+      movement_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      performed_by UUID REFERENCES users(id),
+      reason TEXT,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_movements_inventory_id ON pharmacy_stock_movements(inventory_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_movements_movement_type ON pharmacy_stock_movements(movement_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_movements_reference ON pharmacy_stock_movements(reference_type, reference_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_movements_date ON pharmacy_stock_movements(movement_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_stock_adjustments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      adjustment_number VARCHAR(50) UNIQUE NOT NULL,
+      adjustment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      adjustment_type VARCHAR(20) NOT NULL CHECK (adjustment_type IN ('increase','decrease','correction')),
+      reason VARCHAR(100),
+      approved_by UUID REFERENCES users(id),
+      performed_by UUID REFERENCES users(id),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','processed')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_adjustments_adjustment_number ON pharmacy_stock_adjustments(adjustment_number)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_adjustments_status ON pharmacy_stock_adjustments(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_adjustments_date ON pharmacy_stock_adjustments(adjustment_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_stock_adjustment_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      adjustment_id UUID NOT NULL REFERENCES pharmacy_stock_adjustments(id) ON DELETE CASCADE,
+      inventory_id UUID NOT NULL REFERENCES pharmacy_inventory(id) ON DELETE RESTRICT,
+      quantity_before INTEGER NOT NULL,
+      quantity_adjustment INTEGER NOT NULL,
+      quantity_after INTEGER NOT NULL,
+      unit_cost NUMERIC(12,2),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_adjustment_items_adjustment_id ON pharmacy_stock_adjustment_items(adjustment_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_stock_adjustment_items_inventory_id ON pharmacy_stock_adjustment_items(inventory_id)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_pricing_rules (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      rule_name VARCHAR(255) NOT NULL,
+      rule_type VARCHAR(30) NOT NULL CHECK (rule_type IN ('markup_percentage','markup_fixed','discount_percentage','discount_fixed','fixed_price')),
+      markup_percentage NUMERIC(5,2) CHECK (markup_percentage >= 0),
+      markup_fixed NUMERIC(12,2) CHECK (markup_fixed >= 0),
+      discount_percentage NUMERIC(5,2) CHECK (discount_percentage >= 0 AND discount_percentage <= 100),
+      discount_fixed NUMERIC(12,2) CHECK (discount_fixed >= 0),
+      fixed_price NUMERIC(12,2) CHECK (fixed_price >= 0),
+      applies_to VARCHAR(20) NOT NULL CHECK (applies_to IN ('all','category','drug','supplier')),
+      category_id UUID,
+      drug_id UUID REFERENCES drugs(id) ON DELETE CASCADE,
+      supplier_id UUID REFERENCES pharmacy_suppliers(id) ON DELETE CASCADE,
+      priority INTEGER DEFAULT 0,
+      active BOOLEAN DEFAULT true,
+      valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
+      valid_to DATE,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_active ON pharmacy_pricing_rules(active)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_applies_to ON pharmacy_pricing_rules(applies_to)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_drug_id ON pharmacy_pricing_rules(drug_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_supplier_id ON pharmacy_pricing_rules(supplier_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_priority ON pharmacy_pricing_rules(priority DESC)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_pricing_rules_valid_dates ON pharmacy_pricing_rules(valid_from, valid_to)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_formulary (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      medical_aid_id UUID,
+      medical_aid_name VARCHAR(255),
+      drug_id UUID NOT NULL REFERENCES drugs(id) ON DELETE CASCADE,
+      rxnorm_code VARCHAR(50),
+      covered BOOLEAN DEFAULT true,
+      requires_prior_auth BOOLEAN DEFAULT false,
+      co_pay_amount NUMERIC(12,2) CHECK (co_pay_amount >= 0),
+      co_pay_percentage NUMERIC(5,2) CHECK (co_pay_percentage >= 0 AND co_pay_percentage <= 100),
+      max_quantity_per_month INTEGER CHECK (max_quantity_per_month > 0),
+      max_days_supply INTEGER CHECK (max_days_supply > 0),
+      tier VARCHAR(20),
+      effective_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      expiry_date DATE,
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_formulary_medical_aid ON pharmacy_formulary(medical_aid_id, medical_aid_name)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_formulary_drug_id ON pharmacy_formulary(drug_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_formulary_rxnorm_code ON pharmacy_formulary(rxnorm_code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_formulary_covered ON pharmacy_formulary(covered)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_formulary_effective_dates ON pharmacy_formulary(effective_date, expiry_date)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS pharmacy_alerts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      alert_type VARCHAR(30) NOT NULL CHECK (alert_type IN ('low_stock','out_of_stock','expiring_soon','expired','reorder_due','price_change')),
+      inventory_id UUID REFERENCES pharmacy_inventory(id) ON DELETE CASCADE,
+      severity VARCHAR(20) DEFAULT 'medium' CHECK (severity IN ('low','medium','high','critical')),
+      alert_message TEXT NOT NULL,
+      related_data JSONB DEFAULT '{}'::jsonb,
+      acknowledged BOOLEAN DEFAULT false,
+      acknowledged_by UUID REFERENCES users(id),
+      acknowledged_at TIMESTAMP WITH TIME ZONE,
+      resolved BOOLEAN DEFAULT false,
+      resolved_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_alert_type ON pharmacy_alerts(alert_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_inventory_id ON pharmacy_alerts(inventory_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_severity ON pharmacy_alerts(severity)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_acknowledged ON pharmacy_alerts(acknowledged)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_resolved ON pharmacy_alerts(resolved)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_created_at ON pharmacy_alerts(created_at)`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_suppliers_updated_at BEFORE UPDATE ON pharmacy_suppliers
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_inventory_updated_at BEFORE UPDATE ON pharmacy_inventory
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_purchase_orders_updated_at BEFORE UPDATE ON pharmacy_purchase_orders
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_purchase_order_items_updated_at BEFORE UPDATE ON pharmacy_purchase_order_items
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_receipts_updated_at BEFORE UPDATE ON pharmacy_receipts
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_receipt_items_updated_at BEFORE UPDATE ON pharmacy_receipt_items
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_dispensings_updated_at BEFORE UPDATE ON pharmacy_dispensings
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_dispensing_items_updated_at BEFORE UPDATE ON pharmacy_dispensing_items
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_returns_updated_at BEFORE UPDATE ON pharmacy_returns
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_return_items_updated_at BEFORE UPDATE ON pharmacy_return_items
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_stock_adjustments_updated_at BEFORE UPDATE ON pharmacy_stock_adjustments
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_stock_adjustment_items_updated_at BEFORE UPDATE ON pharmacy_stock_adjustment_items
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_pricing_rules_updated_at BEFORE UPDATE ON pharmacy_pricing_rules
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_pharmacy_formulary_updated_at BEFORE UPDATE ON pharmacy_formulary
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        return statements;
+    }
+    getAppointmentEnhancementsSchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS doctor_availability (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      start_date DATE NOT NULL,
+      end_date DATE,
+      start_time TIME,
+      end_time TIME,
+      is_all_day BOOLEAN DEFAULT false,
+      is_unavailable BOOLEAN DEFAULT true,
+      reason VARCHAR(255),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_doctor_id ON doctor_availability(doctor_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_dates ON doctor_availability(start_date, end_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_doctor_availability_is_unavailable ON doctor_availability(is_unavailable)`);
+        statements.push(`CREATE TRIGGER IF NOT EXISTS update_doctor_availability_updated_at BEFORE UPDATE ON doctor_availability
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`);
+        return statements;
+    }
+    getBillingClaimsEnhancementsStatements() {
+        const statements = [];
+        statements.push(`DO $$ 
+      BEGIN
+        -- Add billing_id if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'billing_id') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN billing_id UUID REFERENCES billing(id) ON DELETE SET NULL;
+        END IF;
+
+        -- Rename medical_aid_number to member_number if it exists
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'medical_aid_number') THEN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'member_number') THEN
+            ALTER TABLE medical_aid_claims RENAME COLUMN medical_aid_number TO member_number;
+          END IF;
+        END IF;
+
+        -- Add member_number if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'member_number') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN member_number VARCHAR(100);
+        END IF;
+
+        -- Add approved_amount if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'approved_amount') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN approved_amount DECIMAL(10,2);
+        END IF;
+
+        -- Add rejection_reason if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'rejection_reason') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN rejection_reason TEXT;
+        END IF;
+
+        -- Add claim_data if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'claim_data') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN claim_data JSONB;
+        END IF;
+
+        -- Update submission_date and response_date to TIMESTAMP WITH TIME ZONE if they're DATE
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'submission_date' AND data_type = 'date') THEN
+          ALTER TABLE medical_aid_claims ALTER COLUMN submission_date TYPE TIMESTAMP WITH TIME ZONE USING submission_date::TIMESTAMP WITH TIME ZONE;
+        END IF;
+
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'response_date' AND data_type = 'date') THEN
+          ALTER TABLE medical_aid_claims ALTER COLUMN response_date TYPE TIMESTAMP WITH TIME ZONE USING response_date::TIMESTAMP WITH TIME ZONE;
+        END IF;
+
+        -- Remove appointment_id if it exists (replaced by billing_id)
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'appointment_id') THEN
+          ALTER TABLE medical_aid_claims DROP COLUMN IF EXISTS appointment_id;
+        END IF;
+
+        -- Remove response_notes if it exists (replaced by rejection_reason)
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'response_notes') THEN
+          ALTER TABLE medical_aid_claims DROP COLUMN IF EXISTS response_notes;
+        END IF;
+
+        -- Update status constraint to include new statuses
+        ALTER TABLE medical_aid_claims DROP CONSTRAINT IF EXISTS medical_aid_claims_status_check;
+        ALTER TABLE medical_aid_claims ADD CONSTRAINT medical_aid_claims_status_check 
+          CHECK (status IN ('draft', 'submitted', 'processing', 'approved', 'rejected', 'paid'));
+
+        -- Update default status
+        ALTER TABLE medical_aid_claims ALTER COLUMN status SET DEFAULT 'draft';
+
+        -- Make created_by nullable if it's not already
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'created_by' AND is_nullable = 'NO') THEN
+          ALTER TABLE medical_aid_claims ALTER COLUMN created_by DROP NOT NULL;
+        END IF;
+
+        -- Make submission_date nullable if it's not already
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'submission_date' AND is_nullable = 'NO') THEN
+          ALTER TABLE medical_aid_claims ALTER COLUMN submission_date DROP NOT NULL;
+        END IF;
+
+        -- Create index on billing_id if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'medical_aid_claims' AND indexname = 'idx_claims_billing_id') THEN
+          CREATE INDEX idx_claims_billing_id ON medical_aid_claims(billing_id);
+        END IF;
+      END $$;`);
+        return statements;
+    }
+    getTelemedicineSchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_consultations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consultation_type VARCHAR(20) NOT NULL DEFAULT 'video' CHECK (consultation_type IN ('video', 'audio', 'chat', 'hybrid')),
+      meeting_room_id VARCHAR(255) UNIQUE,
+      meeting_url TEXT,
+      meeting_password VARCHAR(100),
+      scheduled_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+      actual_start_time TIMESTAMP WITH TIME ZONE,
+      actual_end_time TIMESTAMP WITH TIME ZONE,
+      duration_minutes INTEGER,
+      connection_quality VARCHAR(20) CHECK (connection_quality IN ('excellent', 'good', 'fair', 'poor')),
+      doctor_connection_quality VARCHAR(20) CHECK (doctor_connection_quality IN ('excellent', 'good', 'fair', 'poor')),
+      patient_joined BOOLEAN DEFAULT false,
+      patient_join_time TIMESTAMP WITH TIME ZONE,
+      doctor_joined BOOLEAN DEFAULT false,
+      doctor_join_time TIMESTAMP WITH TIME ZONE,
+      status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'waiting', 'in_progress', 'completed', 'cancelled', 'no_show', 'technical_issue')),
+      cancellation_reason TEXT,
+      technical_issues TEXT,
+      patient_consent BOOLEAN DEFAULT false,
+      consent_date TIMESTAMP WITH TIME ZONE,
+      recording_enabled BOOLEAN DEFAULT false,
+      recording_url TEXT,
+      notes TEXT,
+      satisfaction_rating INTEGER CHECK (satisfaction_rating >= 1 AND satisfaction_rating <= 5),
+      satisfaction_feedback TEXT,
+      created_by UUID REFERENCES users(id),
+      updated_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_devices (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('smartphone', 'tablet', 'laptop', 'desktop')),
+      device_name VARCHAR(255),
+      operating_system VARCHAR(50),
+      browser VARCHAR(50),
+      browser_version VARCHAR(50),
+      internet_connection_type VARCHAR(20) CHECK (internet_connection_type IN ('wifi', 'mobile_data', 'ethernet', 'unknown')),
+      average_bandwidth INTEGER,
+      last_used TIMESTAMP WITH TIME ZONE,
+      is_primary BOOLEAN DEFAULT false,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_consents (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      consent_type VARCHAR(30) NOT NULL CHECK (consent_type IN ('general_telehealth', 'video_recording', 'data_sharing', 'research')),
+      consent_status VARCHAR(20) NOT NULL DEFAULT 'granted' CHECK (consent_status IN ('granted', 'denied', 'expired', 'revoked')),
+      consent_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      expiry_date TIMESTAMP WITH TIME ZONE,
+      revoked_date TIMESTAMP WITH TIME ZONE,
+      consent_document_url TEXT,
+      ip_address INET,
+      user_agent TEXT,
+      witnessed_by UUID REFERENCES users(id),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_technical_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      consultation_id UUID NOT NULL REFERENCES telemedicine_consultations(id) ON DELETE CASCADE,
+      log_type VARCHAR(30) NOT NULL CHECK (log_type IN ('connection_issue', 'audio_issue', 'video_issue', 'bandwidth_issue', 'other')),
+      severity VARCHAR(20) NOT NULL DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+      description TEXT NOT NULL,
+      resolution TEXT,
+      resolved BOOLEAN DEFAULT false,
+      resolved_at TIMESTAMP WITH TIME ZONE,
+      resolved_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS remote_patient_monitoring (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      monitoring_type VARCHAR(30) NOT NULL CHECK (monitoring_type IN ('blood_pressure', 'blood_glucose', 'weight', 'temperature', 'heart_rate', 'oxygen_saturation', 'other')),
+      device_name VARCHAR(255),
+      device_model VARCHAR(255),
+      reading_value DECIMAL(10,2),
+      reading_unit VARCHAR(20),
+      reading_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      uploaded_by UUID REFERENCES users(id),
+      device_synced BOOLEAN DEFAULT false,
+      notes TEXT,
+      alert_triggered BOOLEAN DEFAULT false,
+      alert_severity VARCHAR(20) CHECK (alert_severity IN ('low', 'medium', 'high', 'critical')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS telemedicine_prescriptions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      consultation_id UUID NOT NULL REFERENCES telemedicine_consultations(id) ON DELETE CASCADE,
+      prescription_id UUID REFERENCES prescriptions(id) ON DELETE SET NULL,
+      e_signature_patient TEXT,
+      e_signature_doctor TEXT,
+      signed_by_patient_at TIMESTAMP WITH TIME ZONE,
+      signed_by_doctor_at TIMESTAMP WITH TIME ZONE,
+      signature_method VARCHAR(20) CHECK (signature_method IN ('digital_pen', 'touch', 'click_to_sign')),
+      is_valid BOOLEAN DEFAULT false,
+      pdf_url TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_appointment_id ON telemedicine_consultations(appointment_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_patient_id ON telemedicine_consultations(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_doctor_id ON telemedicine_consultations(doctor_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_status ON telemedicine_consultations(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_scheduled_start_time ON telemedicine_consultations(scheduled_start_time)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consultations_meeting_room_id ON telemedicine_consultations(meeting_room_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_devices_patient_id ON telemedicine_devices(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consents_patient_id ON telemedicine_consents(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_consents_patient_status ON telemedicine_consents(patient_id, consent_status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_technical_logs_consultation_id ON telemedicine_technical_logs(consultation_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_patient_id ON remote_patient_monitoring(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_patient_date ON remote_patient_monitoring(patient_id, reading_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_remote_patient_monitoring_type ON remote_patient_monitoring(monitoring_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_telemedicine_prescriptions_consultation_id ON telemedicine_prescriptions(consultation_id)`);
+        statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consultations_updated_at ON telemedicine_consultations`);
+        statements.push(`CREATE TRIGGER update_telemedicine_consultations_updated_at
+      BEFORE UPDATE ON telemedicine_consultations
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_devices_updated_at ON telemedicine_devices`);
+        statements.push(`CREATE TRIGGER update_telemedicine_devices_updated_at
+      BEFORE UPDATE ON telemedicine_devices
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_consents_updated_at ON telemedicine_consents`);
+        statements.push(`CREATE TRIGGER update_telemedicine_consents_updated_at
+      BEFORE UPDATE ON telemedicine_consents
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_technical_logs_updated_at ON telemedicine_technical_logs`);
+        statements.push(`CREATE TRIGGER update_telemedicine_technical_logs_updated_at
+      BEFORE UPDATE ON telemedicine_technical_logs
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_remote_patient_monitoring_updated_at ON remote_patient_monitoring`);
+        statements.push(`CREATE TRIGGER update_remote_patient_monitoring_updated_at
+      BEFORE UPDATE ON remote_patient_monitoring
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_telemedicine_prescriptions_updated_at ON telemedicine_prescriptions`);
+        statements.push(`CREATE TRIGGER update_telemedicine_prescriptions_updated_at
+      BEFORE UPDATE ON telemedicine_prescriptions
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        return statements;
+    }
+    getAnalyticsSchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS report_templates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      report_type VARCHAR(50) NOT NULL CHECK (report_type IN ('financial', 'clinical', 'operational', 'custom')),
+      category VARCHAR(100),
+      config JSONB DEFAULT '{}'::jsonb,
+      query_config JSONB DEFAULT '{}'::jsonb,
+      visualization_config JSONB DEFAULT '{}'::jsonb,
+      is_public BOOLEAN DEFAULT false,
+      is_default BOOLEAN DEFAULT false,
+      created_by UUID REFERENCES users(id),
+      shared_with_roles TEXT[] DEFAULT '{}',
+      usage_count INTEGER DEFAULT 0,
+      last_used TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS scheduled_reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      template_id UUID REFERENCES report_templates(id) ON DELETE SET NULL,
+      name VARCHAR(255) NOT NULL,
+      schedule_type VARCHAR(50) NOT NULL CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'custom')),
+      schedule_config JSONB DEFAULT '{}'::jsonb,
+      recipients TEXT[] DEFAULT '{}',
+      recipient_roles TEXT[] DEFAULT '{}',
+      format VARCHAR(20) NOT NULL DEFAULT 'pdf' CHECK (format IN ('pdf', 'excel', 'csv', 'json')),
+      filters JSONB DEFAULT '{}'::jsonb,
+      is_active BOOLEAN DEFAULT true,
+      last_run TIMESTAMP WITH TIME ZONE,
+      next_run TIMESTAMP WITH TIME ZONE,
+      run_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      last_error TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS report_executions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      report_template_id UUID REFERENCES report_templates(id) ON DELETE SET NULL,
+      scheduled_report_id UUID REFERENCES scheduled_reports(id) ON DELETE SET NULL,
+      execution_type VARCHAR(20) NOT NULL CHECK (execution_type IN ('manual', 'scheduled', 'api')),
+      executed_by UUID REFERENCES users(id),
+      execution_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      duration_ms INTEGER,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+      filters_applied JSONB DEFAULT '{}'::jsonb,
+      result_count INTEGER,
+      file_url TEXT,
+      error_message TEXT,
+      metadata JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS clinical_outcomes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+      outcome_type VARCHAR(50) NOT NULL CHECK (outcome_type IN ('treatment_response', 'readmission', 'complication', 'mortality', 'quality_of_life', 'other')),
+      condition VARCHAR(255),
+      snomed_code VARCHAR(50),
+      baseline_date DATE,
+      outcome_date DATE,
+      outcome_value DECIMAL(10,2),
+      outcome_unit VARCHAR(50),
+      outcome_status VARCHAR(50) CHECK (outcome_status IN ('improved', 'stable', 'worsened', 'resolved', 'ongoing')),
+      severity VARCHAR(20) CHECK (severity IN ('mild', 'moderate', 'severe', 'critical')),
+      related_appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      related_prescription_id UUID REFERENCES prescriptions(id) ON DELETE SET NULL,
+      related_lab_order_id UUID REFERENCES lab_orders(id) ON DELETE SET NULL,
+      notes TEXT,
+      recorded_by UUID REFERENCES users(id),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS analytics_metrics (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      metric_name VARCHAR(100) NOT NULL,
+      metric_category VARCHAR(50) CHECK (metric_category IN ('financial', 'clinical', 'operational')),
+      metric_date DATE NOT NULL,
+      metric_value DECIMAL(15,2),
+      metric_unit VARCHAR(50),
+      dimensions JSONB DEFAULT '{}'::jsonb,
+      calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      calculation_method VARCHAR(255),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS report_favorites (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_template_id UUID NOT NULL REFERENCES report_templates(id) ON DELETE CASCADE,
+      custom_name VARCHAR(255),
+      "order" INTEGER DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(user_id, report_template_id)
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_report_type ON report_templates(report_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_category ON report_templates(category)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_templates_created_by ON report_templates(created_by)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_is_active ON scheduled_reports(is_active)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_next_run ON scheduled_reports(next_run)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_scheduled_reports_template_id ON scheduled_reports(template_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_executed_by ON report_executions(executed_by)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_execution_time ON report_executions(execution_time)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_status ON report_executions(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_template_id ON report_executions(report_template_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_executions_scheduled_id ON report_executions(scheduled_report_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_patient_id ON clinical_outcomes(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_outcome_type ON clinical_outcomes(outcome_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_clinical_outcomes_outcome_date ON clinical_outcomes(outcome_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_metric_name ON analytics_metrics(metric_name)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_metric_date ON analytics_metrics(metric_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_analytics_metrics_category ON analytics_metrics(metric_category)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_report_favorites_user_id ON report_favorites(user_id)`);
+        statements.push(`DROP TRIGGER IF EXISTS update_report_templates_updated_at ON report_templates`);
+        statements.push(`CREATE TRIGGER update_report_templates_updated_at
+      BEFORE UPDATE ON report_templates
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_scheduled_reports_updated_at ON scheduled_reports`);
+        statements.push(`CREATE TRIGGER update_scheduled_reports_updated_at
+      BEFORE UPDATE ON scheduled_reports
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_report_executions_updated_at ON report_executions`);
+        statements.push(`CREATE TRIGGER update_report_executions_updated_at
+      BEFORE UPDATE ON report_executions
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_clinical_outcomes_updated_at ON clinical_outcomes`);
+        statements.push(`CREATE TRIGGER update_clinical_outcomes_updated_at
+      BEFORE UPDATE ON clinical_outcomes
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        statements.push(`DROP TRIGGER IF EXISTS update_analytics_metrics_updated_at ON analytics_metrics`);
+        statements.push(`CREATE TRIGGER update_analytics_metrics_updated_at
+      BEFORE UPDATE ON analytics_metrics
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column()`);
+        return statements;
+    }
+    getPrescriptionDownloadSchemaStatements() {
+        const statements = [];
+        statements.push(`CREATE TABLE IF NOT EXISTS prescription_downloads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      prescription_id UUID NOT NULL REFERENCES prescriptions(id) ON DELETE CASCADE,
+      downloaded_by UUID NOT NULL,
+      downloaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      user_type VARCHAR(20) NOT NULL CHECK (user_type IN ('doctor', 'patient', 'pharmacist', 'nurse', 'admin')),
+      ip_address INET,
+      user_agent TEXT,
+      file_name VARCHAR(255),
+      file_size_bytes INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_prescription_id ON prescription_downloads(prescription_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_downloaded_by ON prescription_downloads(downloaded_by)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_downloaded_at ON prescription_downloads(downloaded_at)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_prescription_downloads_user_type ON prescription_downloads(user_type)`);
+        return statements;
+    }
     getIcd10MappingStatements() {
         return [
             `
@@ -3768,6 +5408,320 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       ON CONFLICT (template_code) DO NOTHING;
     `);
     }
+    async seedClinicalNoteTemplates(tenantDataSource) {
+        this.logger.log('Seeding default clinical note templates...');
+        const templates = [
+            {
+                name: 'General SOAP Note',
+                category: 'SOAP',
+                content: `CHIEF COMPLAINT:
+{{chiefComplaint}}
+
+SUBJECTIVE:
+{{subjective}}
+
+OBJECTIVE:
+Vital Signs: {{vitalSigns}}
+Physical Examination: {{physicalExam}}
+
+ASSESSMENT:
+{{assessment}}
+
+PLAN:
+{{plan}}`,
+                variables: ['chiefComplaint', 'subjective', 'vitalSigns', 'physicalExam', 'assessment', 'plan'],
+                isDefault: true,
+            },
+            {
+                name: 'History & Physical (H&P)',
+                category: 'H&P',
+                content: `HISTORY & PHYSICAL EXAMINATION
+
+CHIEF COMPLAINT:
+{{chiefComplaint}}
+
+HISTORY OF PRESENT ILLNESS:
+{{historyPresentIllness}}
+
+PAST MEDICAL HISTORY:
+{{pastMedicalHistory}}
+
+MEDICATIONS:
+{{medications}}
+
+ALLERGIES:
+{{allergies}}
+
+SOCIAL HISTORY:
+{{socialHistory}}
+
+FAMILY HISTORY:
+{{familyHistory}}
+
+REVIEW OF SYSTEMS:
+{{reviewOfSystems}}
+
+PHYSICAL EXAMINATION:
+{{physicalExamination}}
+
+ASSESSMENT AND PLAN:
+{{assessmentPlan}}`,
+                variables: ['chiefComplaint', 'historyPresentIllness', 'pastMedicalHistory', 'medications', 'allergies', 'socialHistory', 'familyHistory', 'reviewOfSystems', 'physicalExamination', 'assessmentPlan'],
+                isDefault: true,
+            },
+            {
+                name: 'Progress Note',
+                category: 'Progress',
+                content: `PROGRESS NOTE
+
+Date: {{date}}
+Provider: {{providerName}}
+
+SUBJECTIVE:
+{{subjective}}
+
+OBJECTIVE:
+{{objective}}
+
+ASSESSMENT:
+{{assessment}}
+
+PLAN:
+{{plan}}
+
+Follow-up: {{followUp}}`,
+                variables: ['date', 'providerName', 'subjective', 'objective', 'assessment', 'plan', 'followUp'],
+                isDefault: true,
+            },
+            {
+                name: 'Discharge Summary',
+                category: 'Discharge',
+                content: `DISCHARGE SUMMARY
+
+Patient: {{patientName}}
+Date of Admission: {{admissionDate}}
+Date of Discharge: {{dischargeDate}}
+Attending Physician: {{providerName}}
+
+ADMISSION DIAGNOSIS:
+{{admissionDiagnosis}}
+
+DISCHARGE DIAGNOSIS:
+{{dischargeDiagnosis}}
+
+HOSPITAL COURSE:
+{{hospitalCourse}}
+
+DISCHARGE MEDICATIONS:
+{{dischargeMedications}}
+
+DISCHARGE INSTRUCTIONS:
+{{dischargeInstructions}}
+
+FOLLOW-UP:
+{{followUp}}`,
+                variables: ['patientName', 'admissionDate', 'dischargeDate', 'providerName', 'admissionDiagnosis', 'dischargeDiagnosis', 'hospitalCourse', 'dischargeMedications', 'dischargeInstructions', 'followUp'],
+                isDefault: true,
+            },
+            {
+                name: 'Procedure Note',
+                category: 'Procedure',
+                content: `PROCEDURE NOTE
+
+Procedure: {{procedureName}}
+Date: {{date}}
+Provider: {{providerName}}
+Patient: {{patientName}}
+
+INDICATION:
+{{indication}}
+
+PROCEDURE:
+{{procedureDescription}}
+
+COMPLICATIONS:
+{{complications}}
+
+POST-PROCEDURE PLAN:
+{{postProcedurePlan}}`,
+                variables: ['procedureName', 'date', 'providerName', 'patientName', 'indication', 'procedureDescription', 'complications', 'postProcedurePlan'],
+                isDefault: true,
+            },
+            {
+                name: 'Consultation Note',
+                category: 'Consultation',
+                content: `CONSULTATION NOTE
+
+Date: {{date}}
+Consultant: {{providerName}}
+Referring Physician: {{referringPhysician}}
+Patient: {{patientName}}
+
+REASON FOR CONSULTATION:
+{{reasonForConsultation}}
+
+HISTORY:
+{{history}}
+
+EXAMINATION:
+{{examination}}
+
+ASSESSMENT:
+{{assessment}}
+
+RECOMMENDATIONS:
+{{recommendations}}`,
+                variables: ['date', 'providerName', 'referringPhysician', 'patientName', 'reasonForConsultation', 'history', 'examination', 'assessment', 'recommendations'],
+                isDefault: true,
+            },
+        ];
+        for (const template of templates) {
+            const existing = await tenantDataSource.query(`
+        SELECT id FROM clinical_note_templates WHERE name = $1 AND category = $2
+      `, [template.name, template.category]);
+            if (existing.length === 0) {
+                await tenantDataSource.query(`
+          INSERT INTO clinical_note_templates (name, category, content, variables, is_default, is_active, created_at, updated_at)
+          VALUES ($1, $2, $3, $4::jsonb, $5, true, NOW(), NOW())
+        `, [
+                    template.name,
+                    template.category,
+                    template.content,
+                    JSON.stringify(template.variables),
+                    template.isDefault,
+                ]);
+            }
+        }
+        this.logger.log(`Seeded ${templates.length} default clinical note templates`);
+    }
+    async seedPrescriptionTemplates(tenantDataSource) {
+        this.logger.log('Seeding default prescription templates...');
+        const templates = [
+            {
+                name: 'Paracetamol 500mg',
+                category: 'pain_management',
+                medicationName: 'Paracetamol',
+                genericName: 'Acetaminophen',
+                dosage: '500',
+                dosageUnit: 'mg',
+                frequency: 'Every 6-8 hours as needed',
+                route: 'oral',
+                duration: '3-5 days',
+                instructions: 'Take with or without food. Do not exceed 4g per day.',
+                indications: 'Pain relief, fever reduction',
+                contraindications: 'Severe liver disease',
+                sideEffects: 'Rare: skin rash, liver damage with overdose',
+                isDefault: true,
+            },
+            {
+                name: 'Amoxicillin 500mg',
+                category: 'antibiotic',
+                medicationName: 'Amoxicillin',
+                genericName: 'Amoxicillin',
+                dosage: '500',
+                dosageUnit: 'mg',
+                frequency: 'Three times daily',
+                route: 'oral',
+                duration: '7-10 days',
+                instructions: 'Take with food to reduce stomach upset. Complete full course even if feeling better.',
+                indications: 'Bacterial infections (respiratory, urinary, skin)',
+                contraindications: 'Penicillin allergy',
+                sideEffects: 'Diarrhea, nausea, rash',
+                isDefault: true,
+            },
+            {
+                name: 'Ibuprofen 400mg',
+                category: 'pain_management',
+                medicationName: 'Ibuprofen',
+                genericName: 'Ibuprofen',
+                dosage: '400',
+                dosageUnit: 'mg',
+                frequency: 'Every 6-8 hours with food',
+                route: 'oral',
+                duration: '3-7 days',
+                instructions: 'Take with food or milk. Avoid if history of stomach ulcers.',
+                indications: 'Pain, inflammation, fever',
+                contraindications: 'Active peptic ulcer, severe heart failure, third trimester pregnancy',
+                sideEffects: 'Stomach upset, dizziness, headache',
+                isDefault: true,
+            },
+            {
+                name: 'Metformin 500mg',
+                category: 'diabetes',
+                medicationName: 'Metformin',
+                genericName: 'Metformin',
+                dosage: '500',
+                dosageUnit: 'mg',
+                frequency: 'Twice daily with meals',
+                route: 'oral',
+                duration: 'Ongoing',
+                instructions: 'Take with meals to reduce gastrointestinal side effects. Start with once daily for first week.',
+                indications: 'Type 2 diabetes mellitus',
+                contraindications: 'Severe renal impairment, metabolic acidosis',
+                sideEffects: 'Nausea, diarrhea, metallic taste',
+                isDefault: true,
+            },
+            {
+                name: 'Amlodipine 5mg',
+                category: 'hypertension',
+                medicationName: 'Amlodipine',
+                genericName: 'Amlodipine',
+                dosage: '5',
+                dosageUnit: 'mg',
+                frequency: 'Once daily',
+                route: 'oral',
+                duration: 'Ongoing',
+                instructions: 'Take at the same time each day. May cause ankle swelling.',
+                indications: 'Hypertension, angina',
+                contraindications: 'Severe hypotension, cardiogenic shock',
+                sideEffects: 'Dizziness, ankle swelling, flushing',
+                isDefault: true,
+            },
+            {
+                name: 'Salbutamol Inhaler',
+                category: 'respiratory',
+                medicationName: 'Salbutamol',
+                genericName: 'Albuterol',
+                dosage: '100',
+                dosageUnit: 'mcg',
+                frequency: '1-2 puffs as needed, up to 4 times daily',
+                route: 'inhalation',
+                duration: 'As needed',
+                instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
+                indications: 'Asthma, COPD, bronchospasm',
+                contraindications: 'Hypersensitivity to salbutamol',
+                sideEffects: 'Tremor, palpitations, headache',
+                isDefault: true,
+            },
+        ];
+        for (const template of templates) {
+            const existing = await tenantDataSource.query(`
+        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
+      `, [template.name, template.category]);
+            if (existing.length === 0) {
+                await tenantDataSource.query(`
+          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
+        `, [
+                    template.name,
+                    template.category,
+                    template.medicationName,
+                    template.genericName,
+                    template.dosage,
+                    template.dosageUnit,
+                    template.frequency,
+                    template.route,
+                    template.duration,
+                    template.instructions,
+                    template.indications,
+                    template.contraindications,
+                    template.sideEffects,
+                    template.isDefault,
+                ]);
+            }
+        }
+        this.logger.log(`Seeded ${templates.length} default prescription templates`);
+    }
     async deleteDatabase(databaseName) {
         try {
             await this.dataSource.query(`
@@ -3782,6 +5736,215 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             this.logger.error(`Failed to delete database ${databaseName}:`, error);
             throw error;
         }
+    }
+    getProSchemaStatements() {
+        const statements = [];
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100),
+        version VARCHAR(20) DEFAULT '1.0',
+        is_active BOOLEAN DEFAULT true,
+        is_standard BOOLEAN DEFAULT true,
+        scoring_algorithm VARCHAR(100),
+        min_score DECIMAL(10,2),
+        max_score DECIMAL(10,2),
+        questions JSONB NOT NULL,
+        scoring_rules JSONB,
+        alert_rules JSONB,
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_questionnaires (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        appointment_id UUID REFERENCES appointments(id),
+        assigned_by UUID REFERENCES users(id),
+        assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        due_date TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'expired', 'cancelled')),
+        completion_percentage INTEGER DEFAULT 0 CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
+        total_score DECIMAL(10,2),
+        reminder_sent_count INTEGER DEFAULT 0,
+        last_reminder_sent TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_responses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_questionnaire_id UUID NOT NULL REFERENCES patient_questionnaires(id) ON DELETE CASCADE,
+        question_number INTEGER NOT NULL,
+        question_text TEXT NOT NULL,
+        response_value TEXT,
+        response_type VARCHAR(50),
+        response_options JSONB,
+        score DECIMAL(10,2),
+        answered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        schedule_type VARCHAR(50) NOT NULL CHECK (schedule_type IN ('one_time', 'daily', 'weekly', 'monthly', 'event_triggered')),
+        start_date DATE NOT NULL,
+        end_date DATE,
+        frequency INTEGER DEFAULT 1,
+        day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6),
+        day_of_month INTEGER CHECK (day_of_month >= 1 AND day_of_month <= 31),
+        trigger_event VARCHAR(100),
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS pro_alert_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        rule_name VARCHAR(255) NOT NULL,
+        condition_type VARCHAR(50) NOT NULL CHECK (condition_type IN ('score_greater_than', 'score_less_than', 'score_between', 'score_equals', 'change_greater_than')),
+        condition_value JSONB NOT NULL,
+        alert_severity VARCHAR(50) DEFAULT 'medium' CHECK (alert_severity IN ('low', 'medium', 'high', 'critical')),
+        alert_message TEXT,
+        notify_roles TEXT[],
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS pro_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        patient_questionnaire_id UUID NOT NULL REFERENCES patient_questionnaires(id),
+        alert_rule_id UUID REFERENCES pro_alert_rules(id),
+        alert_severity VARCHAR(50) NOT NULL,
+        alert_message TEXT NOT NULL,
+        score_value DECIMAL(10,2),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'acknowledged', 'resolved', 'dismissed')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_patient_id ON patient_questionnaires(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_status ON patient_questionnaires(status)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_due_date ON patient_questionnaires(due_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_appointment_id ON patient_questionnaires(appointment_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_responses_patient_questionnaire_id ON questionnaire_responses(patient_questionnaire_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_schedules_patient_id ON questionnaire_schedules(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_schedules_active ON questionnaire_schedules(is_active) WHERE is_active = true`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pro_alerts_patient_id ON pro_alerts(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_pro_alerts_status ON pro_alerts(status) WHERE status = 'active'`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_templates_code ON questionnaire_templates(code)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_templates_active ON questionnaire_templates(is_active) WHERE is_active = true`);
+        return statements;
+    }
+    getHealthGoalsSchemaStatements() {
+        const statements = [];
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_health_goals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        goal_type VARCHAR(100) NOT NULL CHECK (goal_type IN ('weight_loss', 'weight_gain', 'blood_pressure', 'blood_glucose', 'cholesterol', 'exercise', 'medication_adherence', 'smoking_cessation', 'alcohol_reduction', 'diet', 'other')),
+        goal_name VARCHAR(255) NOT NULL,
+        description TEXT,
+        target_value DECIMAL(10,2),
+        current_value DECIMAL(10,2),
+        unit VARCHAR(50),
+        start_date DATE NOT NULL,
+        target_date DATE NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused', 'cancelled', 'failed')),
+        progress_percentage DECIMAL(5,2) DEFAULT 0 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
+        milestone_percentage DECIMAL(5,2) DEFAULT 25,
+        milestone_achieved BOOLEAN DEFAULT false,
+        milestone_achieved_at TIMESTAMP WITH TIME ZONE,
+        is_auto_tracked BOOLEAN DEFAULT false,
+        tracking_source VARCHAR(100),
+        notes TEXT,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS goal_progress_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        goal_id UUID NOT NULL REFERENCES patient_health_goals(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        logged_value DECIMAL(10,2) NOT NULL,
+        logged_date DATE NOT NULL,
+        source VARCHAR(100) CHECK (source IN ('manual', 'vitals', 'lab_result', 'patient_portal', 'wearable', 'auto')),
+        source_id UUID,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(goal_id, logged_date)
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_achievements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        achievement_type VARCHAR(100) NOT NULL CHECK (achievement_type IN ('goal_completed', 'milestone_reached', 'streak', 'consistency', 'improvement', 'engagement', 'special')),
+        achievement_name VARCHAR(255) NOT NULL,
+        achievement_description TEXT,
+        badge_icon VARCHAR(100),
+        badge_color VARCHAR(50),
+        points INTEGER DEFAULT 0,
+        goal_id UUID REFERENCES patient_health_goals(id) ON DELETE SET NULL,
+        milestone_percentage DECIMAL(5,2),
+        streak_days INTEGER,
+        earned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+        statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_streaks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        streak_type VARCHAR(100) NOT NULL CHECK (streak_type IN ('vitals_submission', 'medication_adherence', 'exercise', 'goal_progress', 'portal_login')),
+        current_streak_days INTEGER DEFAULT 0,
+        longest_streak_days INTEGER DEFAULT 0,
+        last_activity_date DATE,
+        streak_start_date DATE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(patient_id, streak_type)
+      )
+    `);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_patient_id ON patient_health_goals(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_status ON patient_health_goals(status) WHERE status = 'active'`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_goal_type ON patient_health_goals(goal_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_target_date ON patient_health_goals(target_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_goal_id ON goal_progress_logs(goal_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_patient_id ON goal_progress_logs(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_logged_date ON goal_progress_logs(logged_date)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_patient_id ON patient_achievements(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_achievement_type ON patient_achievements(achievement_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_earned_at ON patient_achievements(earned_at)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_patient_id ON patient_streaks(patient_id)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_streak_type ON patient_streaks(streak_type)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_is_active ON patient_streaks(is_active) WHERE is_active = true`);
+        return statements;
     }
 };
 exports.DatabaseProvisioningService = DatabaseProvisioningService;

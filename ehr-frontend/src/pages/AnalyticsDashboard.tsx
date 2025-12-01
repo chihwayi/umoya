@@ -142,7 +142,7 @@ const AnalyticsDashboard: React.FC = () => {
       });
       setMetricTrends(trendsRes.data || []);
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to load metric trends');
+      showError('Failed to load metric trends', error.response?.data?.message || 'Failed to load metric trends');
     }
   };
 
@@ -180,7 +180,7 @@ const AnalyticsDashboard: React.FC = () => {
         loadMetricTrends(selectedMetric);
       }
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to load dashboard data');
+      showError('Failed to load dashboard data', error.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -214,12 +214,12 @@ const AnalyticsDashboard: React.FC = () => {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        showSuccess(`Report exported successfully as ${format.toUpperCase()}`);
+        showSuccess('Report exported successfully', `The report has been exported successfully as ${format.toUpperCase()}.`);
       } else {
-        showSuccess(`Report executed successfully. ${result.data?.total || 0} results returned.`);
+        showSuccess('Report executed successfully', `The report has been executed successfully. ${result.data?.total || 0} results returned.`);
       }
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to execute template');
+      showError('Failed to execute template', error.response?.data?.message || 'Failed to execute template');
     }
   };
 
@@ -228,10 +228,10 @@ const AnalyticsDashboard: React.FC = () => {
 
     try {
       await analyticsApi.executeSchedule(tenantSlug, token, scheduleId);
-      showSuccess('Scheduled report executed successfully');
+      showSuccess('Scheduled report executed successfully', 'The scheduled report has been executed successfully.');
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to execute schedule');
+      showError('Failed to execute schedule', error.response?.data?.message || 'Failed to execute schedule');
     }
   };
 
@@ -240,10 +240,10 @@ const AnalyticsDashboard: React.FC = () => {
 
     try {
       await analyticsApi.pauseSchedule(tenantSlug, token, scheduleId);
-      showSuccess('Schedule paused successfully');
+      showSuccess('Schedule paused successfully', 'The schedule has been paused successfully.');
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to pause schedule');
+      showError('Failed to pause schedule', error.response?.data?.message || 'Failed to pause schedule');
     }
   };
 
@@ -252,10 +252,10 @@ const AnalyticsDashboard: React.FC = () => {
 
     try {
       await analyticsApi.resumeSchedule(tenantSlug, token, scheduleId);
-      showSuccess('Schedule resumed successfully');
+      showSuccess('Schedule resumed successfully', 'The schedule has been resumed successfully.');
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to resume schedule');
+      showError('Failed to resume schedule', error.response?.data?.message || 'Failed to resume schedule');
     }
   };
 
@@ -265,10 +265,10 @@ const AnalyticsDashboard: React.FC = () => {
 
     try {
       await analyticsApi.deleteTemplate(tenantSlug, token, templateId);
-      showSuccess('Template deleted successfully');
+      showSuccess('Template deleted successfully', 'The template has been deleted successfully.');
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to delete template');
+      showError('Failed to delete template',  error.response?.data?.message || 'Failed to delete template');
     }
   };
 
@@ -278,10 +278,10 @@ const AnalyticsDashboard: React.FC = () => {
 
     try {
       await analyticsApi.deleteSchedule(tenantSlug, token, scheduleId);
-      showSuccess('Schedule deleted successfully');
+      showSuccess('Schedule deleted successfully', 'The schedule has been deleted successfully.');
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to delete schedule');
+      showError('Failed to delete schedule', error.response?.data?.message || 'Failed to delete schedule');
     }
   };
 
@@ -739,10 +739,10 @@ const AnalyticsDashboard: React.FC = () => {
                               if (!window.confirm('Are you sure you want to delete this outcome?')) return;
                               try {
                                 await analyticsApi.deleteOutcome(tenantSlug!, token, outcome.id);
-                                showSuccess('Outcome deleted successfully');
+                                showSuccess('Outcome deleted successfully', 'The outcome has been deleted successfully.');
                                 loadDashboardData();
                               } catch (error: any) {
-                                showError(error.response?.data?.message || 'Failed to delete outcome');
+                                showError('Failed to delete outcome', error.response?.data?.message || 'Failed to delete outcome');
                               }
                             }}
                             className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { Activity, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, AlertCircle, Calendar, User, ArrowLeft, TrendingUp, TrendingDown, Plus, X, Save, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
 const VitalsPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const [vitals, setVitals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -283,7 +284,7 @@ const VitalsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                to="/dashboard"
+                to={`/${tenantSlug}/dashboard`}
                 className="w-10 h-10 bg-gradient-to-br from-red-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />

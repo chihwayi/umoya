@@ -26,3 +26,4 @@ COMMENT ON COLUMN patients.portal_email_verification_token IS 'Token for email v
 COMMENT ON COLUMN patients.portal_password_reset_token IS 'Token for password reset';
 COMMENT ON COLUMN patients.portal_password_reset_expires IS 'Password reset token expiration';
 
+

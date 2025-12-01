@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { FileText, Calendar, User, ArrowLeft, AlertCircle, Filter, Search, Stethoscope, Activity, Heart, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const MedicalRecordsPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -21,10 +22,36 @@ const MedicalRecordsPage: React.FC = () => {
   const loadRecords = async () => {
     try {
       setLoading(true);
+      setError('');
+      console.log('Loading medical records...', { tenantSlug, patient: patient?.id, hasToken: !!token });
+      
+      // Decode JWT token to see what's inside
+      if (token) {
+        try {
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            console.log('JWT Token payload:', payload);
+            console.log('JWT Token sub (patient ID):', payload.sub);
+            console.log('JWT Token email:', payload.email);
+          }
+        } catch (e) {
+          console.warn('Could not decode JWT token:', e);
+        }
+      }
+      
       const data = await patientPortalApi.getRecords(token!, tenantSlug, { type: typeFilter !== 'all' ? typeFilter : undefined });
-      setRecords(data);
+      console.log('Medical Records response:', data);
+      console.log('Response type:', typeof data, 'Is array:', Array.isArray(data));
+      // Handle both array and object with data property
+      const recordsArray = Array.isArray(data) ? data : (data?.data || data?.records || []);
+      console.log('Records array:', recordsArray, 'Length:', recordsArray.length);
+      setRecords(recordsArray);
     } catch (err: any) {
+      console.error('Error loading medical records:', err);
+      console.error('Error details:', err.response?.data || err.message);
       setError(err.message || 'Failed to load medical records');
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -62,7 +89,7 @@ const MedicalRecordsPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <Link
-              to="/dashboard"
+              to={`/${tenantSlug}/dashboard`}
               className="w-10 h-10 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
             >
               <ArrowLeft className="w-5 h-5 text-white" />

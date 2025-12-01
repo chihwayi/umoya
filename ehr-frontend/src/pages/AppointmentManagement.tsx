@@ -7,8 +7,9 @@ import AppointmentReminderModal from '../components/AppointmentReminderModal';
 import AppointmentWaitlist from '../components/AppointmentWaitlist';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
-import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
+import { formatDateForAPI, formatDateForInput, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
+import AppointmentTemplatesPanel from '../components/AppointmentTemplatesPanel';
 
 interface Appointment {
   id: string;
@@ -27,8 +28,8 @@ interface Appointment {
   durationMinutes: number;
   appointmentType: string;
   status: string;
-  reason: string;
-  notes: string;
+  reason?: string;
+  notes?: string;
   priorityLevel?: string;
   isTelehealth?: boolean;
   virtualMeetingUrl?: string;

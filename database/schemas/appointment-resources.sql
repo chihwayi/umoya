@@ -50,3 +50,4 @@ CREATE TRIGGER trigger_appointment_resource_bookings_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_appointment_resources_updated_at();
 
+

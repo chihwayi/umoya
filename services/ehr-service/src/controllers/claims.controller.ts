@@ -86,6 +86,30 @@ export class ClaimsController {
     return this.claimsService.generateClaimFromBill(billId, claimData, req.tenantDb);
   }
 
+  @Post('from-appointment/:appointmentId')
+  @ApiOperation({ summary: 'Generate claim automatically from a completed appointment' })
+  @ApiResponse({ status: 201, description: 'Claim generated successfully' })
+  async generateClaimFromAppointment(
+    @Param('appointmentId') appointmentId: string,
+    @Body() claimData: any,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.generateClaimFromAppointment(appointmentId, claimData, req.tenantDb);
+  }
+
+  @Post('from-procedure/:procedureId')
+  @ApiOperation({ summary: 'Generate claim automatically from a procedure (lab/imaging)' })
+  @ApiQuery({ name: 'type', enum: ['lab', 'imaging', 'other'], required: true })
+  @ApiResponse({ status: 201, description: 'Claim generated successfully' })
+  async generateClaimFromProcedure(
+    @Param('procedureId') procedureId: string,
+    @Query('type') type: 'lab' | 'imaging' | 'other',
+    @Body() claimData: any,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.generateClaimFromProcedure(procedureId, type, claimData, req.tenantDb);
+  }
+
   @Put(':id/resubmit')
   @ApiOperation({ summary: 'Resubmit a rejected claim' })
   @ApiResponse({ status: 200, description: 'Claim prepared for resubmission' })
@@ -95,5 +119,114 @@ export class ClaimsController {
     @Request() req: RequestWithTenant,
   ) {
     return this.claimsService.resubmitClaim(id, updatedData, req.tenantDb);
+  }
+
+  // Sprint 14.2 Enhanced Endpoints
+
+  @Post(':id/submit-enhanced')
+  @ApiOperation({ summary: 'Submit claim with enhanced tracking and API integration' })
+  @ApiQuery({ name: 'method', enum: ['api', 'edi', 'manual'], required: false })
+  @ApiResponse({ status: 200, description: 'Claim submitted successfully' })
+  async submitClaimEnhanced(
+    @Param('id') id: string,
+    @Query('method') method: 'api' | 'edi' | 'manual',
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.submitClaimEnhanced(id, method || 'api', req.tenantDb);
+  }
+
+  @Get(':id/status-enhanced')
+  @ApiOperation({ summary: 'Check claim status with enhanced tracking and history' })
+  @ApiResponse({ status: 200, description: 'Claim status retrieved with history' })
+  async checkClaimStatusEnhanced(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.checkClaimStatusEnhanced(id, req.tenantDb);
+  }
+
+  @Get(':id/status-history')
+  @ApiOperation({ summary: 'Get claim status change history' })
+  @ApiResponse({ status: 200, description: 'Status history retrieved' })
+  async getClaimStatusHistory(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.claimsService.getClaimStatusHistory(id, req.tenantDb);
+  }
+
+  @Post(':id/response-enhanced')
+  @ApiOperation({ summary: 'Process enhanced claim response from medical aid (webhook/polling)' })
+  @ApiResponse({ status: 200, description: 'Response processed successfully' })
+  async processClaimResponse(
+    @Param('id') id: string,
+    @Body() responseData: any,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.processClaimResponse(id, responseData, req.tenantDb);
+  }
+
+  @Post('bulk/submit')
+  @ApiOperation({ summary: 'Bulk submit multiple claims' })
+  @ApiResponse({ status: 200, description: 'Bulk submission completed' })
+  async bulkSubmitClaims(
+    @Body() body: { claimIds: string[]; method?: 'api' | 'edi' },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.bulkSubmitClaims(
+      body.claimIds,
+      body.method || 'api',
+      req.tenantDb,
+    );
+  }
+
+  @Post('bulk/check-status')
+  @ApiOperation({ summary: 'Bulk check status for multiple claims' })
+  @ApiResponse({ status: 200, description: 'Bulk status check completed' })
+  async bulkCheckClaimStatuses(
+    @Body() body: { claimIds: string[] },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.bulkCheckClaimStatuses(body.claimIds, req.tenantDb);
+  }
+
+  // Pre-Authorization Endpoints
+
+  @Post('pre-authorizations')
+  @ApiOperation({ summary: 'Create a pre-authorization request' })
+  @ApiResponse({ status: 201, description: 'Pre-authorization created successfully' })
+  async createPreAuthorization(
+    @Body() preAuthData: any,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.createPreAuthorization(preAuthData, req.tenantDb);
+  }
+
+  @Get('pre-authorizations')
+  @ApiOperation({ summary: 'Get pre-authorization requests' })
+  @ApiQuery({ name: 'patientId', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'medicalAidName', required: false })
+  @ApiResponse({ status: 200, description: 'Pre-authorizations retrieved' })
+  async getPreAuthorizations(
+    @Query() query: any,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.getPreAuthorizations(query, req.tenantDb);
+  }
+
+  @Post('pre-authorizations/:id/submit')
+  @ApiOperation({ summary: 'Submit pre-authorization to medical aid' })
+  @ApiResponse({ status: 200, description: 'Pre-authorization submitted successfully' })
+  async submitPreAuthorization(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.submitPreAuthorization(id, req.tenantDb);
+  }
+
+  @Post(':id/link-preauth/:preAuthId')
+  @ApiOperation({ summary: 'Link a claim to an approved pre-authorization' })
+  @ApiResponse({ status: 200, description: 'Claim linked to pre-authorization' })
+  async linkClaimToPreAuth(
+    @Param('id') claimId: string,
+    @Param('preAuthId') preAuthId: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.claimsService.linkClaimToPreAuth(claimId, preAuthId, req.tenantDb);
   }
 }

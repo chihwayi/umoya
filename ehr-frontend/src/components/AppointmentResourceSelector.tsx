@@ -165,7 +165,7 @@ const AppointmentResourceSelector: React.FC<AppointmentResourceSelectorProps> = 
                       )}
                     </div>
                     {!isAvailable && (
-                      <AlertCircle className="h-4 w-4 text-red-500" title="Not available at this time" />
+                      <AlertCircle className="h-4 w-4 text-red-500" aria-label="Not available at this time" />
                     )}
                   </label>
                 );
@@ -213,7 +213,7 @@ const AppointmentResourceSelector: React.FC<AppointmentResourceSelectorProps> = 
                       )}
                     </div>
                     {!isAvailable && (
-                      <AlertCircle className="h-4 w-4 text-red-500" title="Not available at this time" />
+                      <AlertCircle className="h-4 w-4 text-red-500" aria-label="Not available at this time" />
                     )}
                   </label>
                 );
@@ -233,4 +233,5 @@ const AppointmentResourceSelector: React.FC<AppointmentResourceSelectorProps> = 
 };
 
 export default AppointmentResourceSelector;
+
 

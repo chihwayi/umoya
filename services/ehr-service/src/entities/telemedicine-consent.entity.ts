@@ -58,3 +58,4 @@ export class TelemedicineConsent {
   updatedAt: Date;
 }
 
+

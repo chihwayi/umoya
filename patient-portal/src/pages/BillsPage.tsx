@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { CreditCard, Calendar, ArrowLeft, AlertCircle, CheckCircle, Clock, DollarSign, FileText, Filter, Download, Receipt } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const BillsPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -20,9 +21,13 @@ const BillsPage: React.FC = () => {
   const loadBills = async () => {
     try {
       setLoading(true);
+      setError('');
+      console.log('Loading bills...', { tenantSlug, statusFilter });
       const data = await patientPortalApi.getBills(token!, tenantSlug, { status: statusFilter !== 'all' ? statusFilter : undefined });
-      setBills(data);
+      console.log('Bills response:', data, 'Type:', Array.isArray(data) ? 'array' : typeof data, 'Length:', Array.isArray(data) ? data.length : 'N/A');
+      setBills(Array.isArray(data) ? data : []);
     } catch (err: any) {
+      console.error('Error loading bills:', err);
       setError(err.message || 'Failed to load bills');
     } finally {
       setLoading(false);
@@ -70,7 +75,7 @@ const BillsPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <Link
-              to="/dashboard"
+              to={`/${tenantSlug}/dashboard`}
               className="w-10 h-10 bg-gradient-to-br from-yellow-600 to-orange-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
             >
               <ArrowLeft className="w-5 h-5 text-white" />

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Calendar, Clock, User, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope, Search, ChevronDown, X } from 'lucide-react';
+import { useTenantSlug } from '../hooks/useTenantSlug';
+import { Calendar, Clock, User, ArrowLeft, CreditCard, Phone, DollarSign, AlertCircle, CheckCircle, Loader2, Stethoscope, Search, ChevronDown, X, FileText } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
@@ -15,7 +16,7 @@ interface Doctor {
 const RequestAppointmentPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
   const navigate = useNavigate();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -25,6 +26,9 @@ const RequestAppointmentPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
+  const [pendingQuestionnaires, setPendingQuestionnaires] = useState<any[]>([]);
+  const [showQuestionnairePrompt, setShowQuestionnairePrompt] = useState(false);
   
   // Doctor search states
   const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
@@ -227,11 +231,30 @@ const RequestAppointmentPage: React.FC = () => {
       );
 
       setSuccess(true);
-      
-      // Show success message and redirect
-      setTimeout(() => {
-        navigate('/appointments');
-      }, 3000);
+      const appointmentId = result.appointment?.id || result.id;
+      setCreatedAppointmentId(appointmentId);
+
+      // Check for pre-visit questionnaires
+      try {
+        const questionnaires = await patientPortalApi.getPreVisitQuestionnaires(appointmentId, token!, tenantSlug);
+        const pending = Array.isArray(questionnaires) ? questionnaires.filter((q: any) => q.status === 'pending' || q.status === 'in_progress') : [];
+        
+        if (pending.length > 0) {
+          setPendingQuestionnaires(pending);
+          setShowQuestionnairePrompt(true);
+        } else {
+          // No questionnaires, redirect after delay
+          setTimeout(() => {
+            navigate(`/${tenantSlug}/appointments`);
+          }, 3000);
+        }
+      } catch (err) {
+        // If questionnaire check fails, just redirect
+        console.error('Error checking for questionnaires:', err);
+        setTimeout(() => {
+          navigate(`/${tenantSlug}/appointments`);
+        }, 3000);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to request appointment');
       console.error('Error requesting appointment:', err);
@@ -243,6 +266,68 @@ const RequestAppointmentPage: React.FC = () => {
   const selectedDoctor = doctors.find(d => d.id === formData.doctorId);
 
   if (success) {
+    if (showQuestionnairePrompt && pendingQuestionnaires.length > 0) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
+          <div className="max-w-lg w-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-10 border border-white/20">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-6 shadow-lg mx-auto flex">
+              <CheckCircle className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3 text-center">Appointment Requested!</h2>
+            <p className="text-gray-600 mb-6 text-center">
+              {paymentData.method === 'ecocash' || paymentData.method === 'onemoney'
+                ? 'Please complete the mobile money payment to confirm your appointment. Check your phone for payment instructions.'
+                : 'Your appointment has been requested and payment processed successfully!'}
+            </p>
+
+            {/* Pre-visit Questionnaire Prompt */}
+            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 mb-6 border border-purple-200">
+              <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-purple-600" />
+                Pre-Visit Questionnaires
+              </h3>
+              <p className="text-gray-700 mb-4">
+                Please complete the following health questionnaires before your appointment. This helps your doctor prepare for your visit.
+              </p>
+              <div className="space-y-3 mb-4">
+                {pendingQuestionnaires.map((q: any) => (
+                  <div key={q.id} className="bg-white rounded-lg p-4 border border-purple-200 flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-900">{q.name}</p>
+                      {q.description && <p className="text-sm text-gray-600 mt-1">{q.description}</p>}
+                    </div>
+                    <Link
+                      to={`/${tenantSlug}/questionnaires/${q.id}`}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg text-sm"
+                    >
+                      Complete
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Link
+                to={`/${tenantSlug}/appointments`}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 rounded-xl font-semibold hover:bg-gray-300 transition-all text-center"
+              >
+                Complete Later
+              </Link>
+              {pendingQuestionnaires.length > 0 && (
+                <Link
+                  to={`/${tenantSlug}/questionnaires/${pendingQuestionnaires[0].id}`}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg text-center"
+                >
+                  Start Questionnaires
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
         <div className="max-w-md w-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-10 text-center border border-white/20">
@@ -256,7 +341,7 @@ const RequestAppointmentPage: React.FC = () => {
               : 'Your appointment has been requested and payment processed successfully!'}
           </p>
           <Link
-            to="/appointments"
+            to={`/${tenantSlug}/appointments`}
             className="inline-block px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
           >
             View My Appointments
@@ -273,7 +358,7 @@ const RequestAppointmentPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <Link
-              to="/appointments"
+              to={`/${tenantSlug}/appointments`}
               className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
             >
               <ArrowLeft className="w-5 h-5 text-white" />
@@ -610,7 +695,7 @@ const RequestAppointmentPage: React.FC = () => {
           {/* Submit Button */}
           <div className="flex items-center gap-4">
             <Link
-              to="/appointments"
+              to={`/${tenantSlug}/appointments`}
               className="px-6 py-3 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200"
             >
               Cancel

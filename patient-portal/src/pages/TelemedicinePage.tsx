@@ -2,14 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
-import { Video, Phone, Mic, MicOff, VideoOff, X, AlertCircle, CheckCircle, User, Clock } from 'lucide-react';
+import { useTenantSlug } from '../hooks/useTenantSlug';
+import { useNotification } from '../components/GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
+import { Video, Phone, Mic, MicOff, VideoOff, X, AlertCircle, CheckCircle, User, Clock, Activity, FileText, Heart, Thermometer, Droplet, Wind, Scale, Ruler, Gauge, Save, ChevronDown, ChevronUp } from 'lucide-react';
 
 const TelemedicinePage: React.FC = () => {
-  const { consultationId } = useParams<{ consultationId: string }>();
+  const { consultationId, tenantSlug: urlTenantSlug } = useParams<{ consultationId: string; tenantSlug: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { token } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
+  const { showError, showSuccess } = useNotification();
+  const { confirmation, confirm, cancel } = useConfirmation();
 
   const [consultation, setConsultation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +27,27 @@ const TelemedicinePage: React.FC = () => {
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
+  
+  // Pre-consultation vitals
+  const [showPreConsultationVitals, setShowPreConsultationVitals] = useState(false);
+  const [vitalsSubmitted, setVitalsSubmitted] = useState(false);
+  const [submittingVitals, setSubmittingVitals] = useState(false);
+  const [vitalsForm, setVitalsForm] = useState({
+    bloodPressure: '',
+    heartRate: '',
+    temperature: '',
+    oxygenSaturation: '',
+    respiratoryRate: '',
+    weight: '',
+    height: '',
+    bloodGlucose: '',
+    painLevel: '',
+    notes: '',
+  });
+  
+  // Post-consultation summary
+  const [consultationSummary, setConsultationSummary] = useState<any>(null);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     if (consultationId) {
@@ -48,6 +75,26 @@ const TelemedicinePage: React.FC = () => {
     }
   };
 
+  const handleSubmitPreConsultationVitals = async () => {
+    try {
+      setSubmittingVitals(true);
+      const vitalsData: any = {};
+      Object.keys(vitalsForm).forEach(key => {
+        const value = vitalsForm[key as keyof typeof vitalsForm];
+        vitalsData[key] = value === '' ? null : (key === 'painLevel' || key === 'heartRate' || key === 'oxygenSaturation' || key === 'respiratoryRate' ? parseInt(value) || null : parseFloat(value) || null);
+      });
+
+      await patientPortalApi.submitVitals(vitalsData, token!, tenantSlug);
+      setVitalsSubmitted(true);
+      setShowPreConsultationVitals(false);
+      showSuccess('Vitals submitted successfully', 'success');
+    } catch (err: any) {
+      showError(err.message || 'Failed to submit vitals', 'error');
+    } finally {
+      setSubmittingVitals(false);
+    }
+  };
+
   const handleJoinMeeting = async () => {
     try {
       if (!consultationId) return;
@@ -63,45 +110,83 @@ const TelemedicinePage: React.FC = () => {
     }
   };
 
-  const handleEndCall = async () => {
-    if (window.confirm('Are you sure you want to end this consultation?')) {
-      navigate('/appointments');
+  const loadConsultationSummary = async () => {
+    try {
+      // Load post-consultation summary if consultation is completed
+      if (consultation?.status === 'completed') {
+        // This would typically come from the consultation object or a separate endpoint
+        // For now, we'll use the consultation data
+        setConsultationSummary({
+          diagnosis: consultation.diagnosis || 'No diagnosis recorded',
+          treatmentPlan: consultation.treatment_plan || 'No treatment plan recorded',
+          prescriptions: consultation.prescriptions || [],
+          followUpDate: consultation.follow_up_date,
+          notes: consultation.notes || consultation.summary || 'No notes available',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to load consultation summary:', err);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-indigo-50">
-        <div className="text-center">
-          <Video className="w-16 h-16 text-purple-600 animate-pulse mx-auto mb-4" />
-          <p className="text-gray-600">Loading consultation...</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (consultation?.status === 'completed') {
+      loadConsultationSummary();
+    }
+  }, [consultation]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-4">
-        <div className="max-w-md w-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => navigate('/appointments')}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Back to Appointments
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleEndCall = async () => {
+    const confirmed = await confirm({
+      title: 'End Consultation',
+      message: 'Are you sure you want to end this consultation?',
+      confirmText: 'Yes, End Call',
+      cancelText: 'Continue Call',
+      type: 'warning',
+    });
+
+    if (confirmed) {
+      navigate(`/${tenantSlug}/appointments`);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900">
-      {/* Header */}
-      <header className="bg-black/30 backdrop-blur-sm border-b border-white/10 sticky top-0 z-50">
+    <>
+      <ConfirmationDialog
+        isOpen={confirmation.isOpen}
+        title={confirmation.title}
+        message={confirmation.message}
+        confirmText={confirmation.confirmText}
+        cancelText={confirmation.cancelText}
+        type={confirmation.type}
+        onConfirm={() => confirmation.onConfirm?.()}
+        onCancel={cancel}
+      />
+
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-indigo-50">
+          <div className="text-center">
+            <Video className="w-16 h-16 text-purple-600 animate-pulse mx-auto mb-4" />
+            <p className="text-gray-600">Loading consultation...</p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-indigo-50 p-4">
+          <div className="max-w-md w-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={() => navigate(`/${tenantSlug}/appointments`)}
+              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Back to Appointments
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900">
+          {/* Header */}
+          <header className="bg-black/30 backdrop-blur-sm border-b border-white/10 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -160,6 +245,139 @@ const TelemedicinePage: React.FC = () => {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Pre-Consultation Vitals */}
+              {!vitalsSubmitted && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <Activity className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-semibold text-blue-900">Pre-Consultation Vitals</h3>
+                    </div>
+                    <button
+                      onClick={() => setShowPreConsultationVitals(!showPreConsultationVitals)}
+                      className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
+                    >
+                      {showPreConsultationVitals ? (
+                        <>
+                          <ChevronUp className="w-4 h-4" />
+                          Hide Form
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-4 h-4" />
+                          Submit Vitals
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  
+                  {showPreConsultationVitals && (
+                    <div className="space-y-4 pt-4 border-t border-blue-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">Blood Pressure</label>
+                          <input
+                            type="text"
+                            value={vitalsForm.bloodPressure}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, bloodPressure: e.target.value })}
+                            placeholder="120/80"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">Heart Rate (bpm)</label>
+                          <input
+                            type="number"
+                            value={vitalsForm.heartRate}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, heartRate: e.target.value })}
+                            placeholder="72"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">Temperature (°C)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={vitalsForm.temperature}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, temperature: e.target.value })}
+                            placeholder="36.5"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">O2 Saturation (%)</label>
+                          <input
+                            type="number"
+                            value={vitalsForm.oxygenSaturation}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, oxygenSaturation: e.target.value })}
+                            placeholder="98"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">Weight (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={vitalsForm.weight}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, weight: e.target.value })}
+                            placeholder="70"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-900 mb-1">Pain Level (0-10)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={vitalsForm.painLevel}
+                            onChange={(e) => setVitalsForm({ ...vitalsForm, painLevel: e.target.value })}
+                            placeholder="0"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-900 mb-1">Notes</label>
+                        <textarea
+                          value={vitalsForm.notes}
+                          onChange={(e) => setVitalsForm({ ...vitalsForm, notes: e.target.value })}
+                          placeholder="Any symptoms or concerns..."
+                          rows={2}
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSubmitPreConsultationVitals}
+                        disabled={submittingVitals}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {submittingVitals ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            Submit Vitals
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {vitalsSubmitted && (
+                    <div className="flex items-center gap-2 text-green-700 pt-2">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="text-sm font-medium">Vitals submitted successfully</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -300,6 +518,70 @@ const TelemedicinePage: React.FC = () => {
               </div>
             </div>
 
+            {/* Post-Consultation Summary */}
+            {consultation?.status === 'completed' && consultationSummary && (
+              <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Consultation Summary
+                  </h3>
+                  <button
+                    onClick={() => setShowSummary(!showSummary)}
+                    className="text-white/70 hover:text-white"
+                  >
+                    {showSummary ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                </div>
+                
+                {showSummary && (
+                  <div className="space-y-4 pt-4 border-t border-white/20">
+                    {consultationSummary.diagnosis && (
+                      <div>
+                        <p className="text-purple-200 text-sm mb-1">Diagnosis</p>
+                        <p className="text-white font-medium">{consultationSummary.diagnosis}</p>
+                      </div>
+                    )}
+                    
+                    {consultationSummary.treatmentPlan && (
+                      <div>
+                        <p className="text-purple-200 text-sm mb-1">Treatment Plan</p>
+                        <p className="text-white">{consultationSummary.treatmentPlan}</p>
+                      </div>
+                    )}
+                    
+                    {consultationSummary.prescriptions && consultationSummary.prescriptions.length > 0 && (
+                      <div>
+                        <p className="text-purple-200 text-sm mb-2">Prescriptions</p>
+                        <div className="space-y-2">
+                          {consultationSummary.prescriptions.map((prescription: any, index: number) => (
+                            <div key={index} className="bg-white/5 rounded-lg p-3">
+                              <p className="text-white font-medium">{prescription.medicationName}</p>
+                              <p className="text-white/70 text-sm">{prescription.dosage} • {prescription.frequency}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {consultationSummary.followUpDate && (
+                      <div>
+                        <p className="text-purple-200 text-sm mb-1">Follow-Up Date</p>
+                        <p className="text-white">{new Date(consultationSummary.followUpDate).toLocaleDateString()}</p>
+                      </div>
+                    )}
+                    
+                    {consultationSummary.notes && (
+                      <div>
+                        <p className="text-purple-200 text-sm mb-1">Notes</p>
+                        <p className="text-white/90">{consultationSummary.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Note about video provider integration */}
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
@@ -315,7 +597,9 @@ const TelemedicinePage: React.FC = () => {
           </div>
         )}
       </main>
-    </div>
+        </div>
+      )}
+    </>
   );
 };
 

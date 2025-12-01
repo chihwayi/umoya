@@ -29,7 +29,7 @@ export class PrescriptionPdfService {
         u.license_number as doctor_license
       FROM prescriptions p
       LEFT JOIN patients pt ON pt.id = p.patient_id
-      LEFT JOIN users u ON u.id = p.prescriber_id
+      LEFT JOIN users u ON u.id = p.doctor_id
       WHERE p.id = $1`,
       [prescriptionId],
     );
@@ -45,13 +45,14 @@ export class PrescriptionPdfService {
     const clinicEmail = process.env.CLINIC_EMAIL || '';
 
     // Generate QR code data
+    const prescriptionNumber = prescription.prescription_number || prescription.id.substring(0, 8).toUpperCase();
     const qrData = JSON.stringify({
       prescriptionId: prescription.id,
-      prescriptionNumber: prescription.prescription_number,
+      prescriptionNumber: prescriptionNumber,
       patientNumber: prescription.patient_number,
       medication: prescription.medication_name,
-      prescriber: `${prescription.doctor_first_name} ${prescription.doctor_last_name}`,
-      date: prescription.created_at,
+      prescriber: `${prescription.doctor_first_name || ''} ${prescription.doctor_last_name || ''}`.trim(),
+      date: prescription.created_at || prescription.prescribed_date,
     });
 
     // Generate QR code as data URL
@@ -119,7 +120,7 @@ export class PrescriptionPdfService {
       .fontSize(12)
       .font('Helvetica')
       .fillColor('#4B5563')
-      .text(`Prescription #: ${prescription.prescription_number}`, { align: 'right' })
+      .text(`Prescription #: ${prescriptionNumber}`, { align: 'right' })
       .text(`Date: ${new Date(prescription.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'right' })
       .moveDown(1);
 
@@ -372,7 +373,7 @@ export class PrescriptionPdfService {
 
     return {
       buffer,
-      fileName: `prescription-${prescription.prescription_number}.pdf`,
+      fileName: `prescription-${prescriptionNumber}.pdf`,
     };
   }
 }

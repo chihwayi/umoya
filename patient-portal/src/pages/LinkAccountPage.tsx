@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { Link, Shield, Calendar, Hash, Phone, User, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
 
 const LinkAccountPage: React.FC = () => {
   const navigate = useNavigate();
   const { linkAccount, patient } = usePatientAuth();
+  const tenantSlug = useTenantSlug();
   const [formData, setFormData] = useState({
     patientNumber: '',
     dateOfBirth: '',
@@ -14,7 +16,6 @@ const LinkAccountPage: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [tenantSlug] = useState(localStorage.getItem('patient_tenant') || 'bulawayo-general');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +39,7 @@ const LinkAccountPage: React.FC = () => {
         tenantSlug,
       );
 
-      navigate('/dashboard');
+      navigate(`/${tenantSlug}/dashboard`);
     } catch (err: any) {
       setError(err.message || 'Account linking failed. Please verify your information.');
     } finally {

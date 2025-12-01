@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
+import { useTenantSlug } from './useTenantSlug';
 import { patientPortalApi } from '../services/api';
 
 interface Notification {
@@ -19,7 +20,7 @@ interface Notification {
 
 export const useNotifications = (pollInterval: number = 30000) => {
   const { token } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);

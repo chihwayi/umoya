@@ -352,7 +352,7 @@ export class FhirService {
     return this.buildBundle(entries);
   }
 
-  private patientToFhir(patient: Patient): any {
+  patientToFhir(patient: Patient): any {
     const extendedPatient = patient as Patient & {
       middleName?: string;
       province?: string;
@@ -741,7 +741,7 @@ export class FhirService {
     return observation;
   }
 
-  private appointmentToEncounter(appointment: Appointment): any {
+  appointmentToEncounter(appointment: Appointment): any {
     const status = this.mapEncounterStatus(appointment.status);
     const start = appointment.actualStartTime || appointment.appointmentDate;
     const end = appointment.actualEndTime || (appointment.durationMinutes
@@ -805,7 +805,7 @@ export class FhirService {
     };
   }
 
-  private prescriptionToMedicationRequest(prescription: Prescription): any {
+  prescriptionToMedicationRequest(prescription: Prescription): any {
     const status = this.mapMedicationStatus(prescription.status);
 
     return {
@@ -886,7 +886,7 @@ export class FhirService {
     };
   }
 
-  private labOrderToDiagnosticReport(order: LabOrder): any {
+  labOrderToDiagnosticReport(order: LabOrder): any {
     const tests = order.tests || [];
     const primaryTest = tests[0];
 

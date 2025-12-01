@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req, Put, Optional } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AppointmentService } from '../services/appointment.service';
+import { PatientProService } from '../services/patient-pro.service';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -10,7 +11,10 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @Controller('appointments')
 @UseGuards(JwtAuthGuard)
 export class AppointmentController {
-  constructor(private readonly appointmentService: AppointmentService) {}
+  constructor(
+    private readonly appointmentService: AppointmentService,
+    @Optional() private readonly patientProService?: PatientProService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create new appointment', description: 'Schedule a new appointment for a patient with conflict detection' })
@@ -244,5 +248,28 @@ export class AppointmentController {
     @Req() req: RequestWithTenant
   ) {
     return this.appointmentService.checkConflicts(doctorId, date, time, parseInt(duration), req.tenantId);
+  }
+
+  @Get(':id/pro-responses')
+  @ApiOperation({ summary: 'Get PRO responses for appointment', description: 'Get Patient-Reported Outcomes responses for a specific appointment (doctor view)' })
+  @ApiParam({ name: 'id', description: 'Appointment ID' })
+  @ApiResponse({ status: 200, description: 'PRO responses retrieved successfully' })
+  async getProResponses(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    if (!this.patientProService || !req.tenantDb) {
+      return { questionnaires: [] };
+    }
+
+    // Get appointment to get patient ID
+    const appointment = await this.appointmentService.findOne(id, req.tenantId);
+    if (!appointment) {
+      throw new Error('Appointment not found');
+    }
+
+    const patientId = (appointment as any).patient?.id || (appointment as any).patientId;
+    if (!patientId) {
+      return { questionnaires: [] };
+    }
+
+    return this.patientProService.getProResponsesForAppointment(req.tenantDb, id, patientId);
   }
 }

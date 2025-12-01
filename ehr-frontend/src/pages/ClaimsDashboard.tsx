@@ -19,8 +19,21 @@ import {
   BarChart3,
   DollarSign,
   Users,
+  Shield,
+  History,
+  Layers,
+  Settings,
+  CheckSquare,
+  Square,
+  Calendar,
+  Activity,
+  ExternalLink,
+  Link as LinkIcon,
+  ChevronDown,
+  ChevronUp,
+  Upload,
 } from 'lucide-react';
-import { claimsApi, billingApi } from '../services/api';
+import { claimsApi, billingApi, ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 
@@ -65,7 +78,7 @@ const ClaimsDashboard: React.FC = () => {
   const [claims, setClaims] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'create' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config'>('overview');
   const [filters, setFilters] = useState({
     status: '',
     provider: '',
@@ -76,6 +89,11 @@ const ClaimsDashboard: React.FC = () => {
   const [showClaimDetailModal, setShowClaimDetailModal] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<any>(null);
   const [analytics, setAnalytics] = useState<any>(null);
+  const [preAuthorizations, setPreAuthorizations] = useState<any[]>([]);
+  const [selectedClaims, setSelectedClaims] = useState<Set<string>>(new Set());
+  const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
+  const [showApiConfigModal, setShowApiConfigModal] = useState(false);
+  const [showPreAuthModal, setShowPreAuthModal] = useState(false);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -122,6 +140,26 @@ const ClaimsDashboard: React.FC = () => {
         });
         setAnalytics(analyticsResponse.data);
       }
+
+      if (activeTab === 'preauth') {
+        const preAuthResponse = await claimsApi.getPreAuthorizations(tenantSlug, token);
+        setPreAuthorizations(preAuthResponse.data || []);
+      }
+
+      if (activeTab === 'api-config') {
+        const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
+        setApiConfigurations(configResponse.data || []);
+      }
+
+      if (activeTab === 'preauth') {
+        const preAuthResponse = await claimsApi.getPreAuthorizations(tenantSlug, token);
+        setPreAuthorizations(Array.isArray(preAuthResponse.data) ? preAuthResponse.data : []);
+      }
+
+      if (activeTab === 'api-config') {
+        const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
+        setApiConfigurations(Array.isArray(configResponse.data) ? configResponse.data : []);
+      }
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
       showError(error.response?.data?.message || 'Failed to load dashboard data', 'error');
@@ -130,13 +168,62 @@ const ClaimsDashboard: React.FC = () => {
     }
   }, [tenantSlug, token, activeTab, filters, searchTerm]);
 
-  const handleSubmitClaim = async (claimId: string) => {
+  const handleSubmitClaim = async (claimId: string, method: 'api' | 'edi' | 'manual' = 'api') => {
     try {
-      await claimsApi.submitClaim(tenantSlug!, token, claimId);
+      await claimsApi.submitClaimEnhanced(tenantSlug!, token, claimId, method);
       showSuccess('Claim submitted successfully', 'success');
       loadDashboardData();
     } catch (error: any) {
       showError(error.response?.data?.message || 'Failed to submit claim', 'error');
+    }
+  };
+
+  const handleBulkSubmit = async (method: 'api' | 'edi' = 'api') => {
+    if (selectedClaims.size === 0) {
+      showError('Please select at least one claim', 'error');
+      return;
+    }
+
+    try {
+      const result = await claimsApi.bulkSubmitClaims(tenantSlug!, token, Array.from(selectedClaims), method);
+      showSuccess(`Submitted ${result.data.successful} of ${result.data.total} claims`, 'success');
+      setSelectedClaims(new Set());
+      loadDashboardData();
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to submit claims', 'error');
+    }
+  };
+
+  const handleBulkCheckStatus = async () => {
+    if (selectedClaims.size === 0) {
+      showError('Please select at least one claim', 'error');
+      return;
+    }
+
+    try {
+      const result = await claimsApi.bulkCheckClaimStatuses(tenantSlug!, token, Array.from(selectedClaims));
+      showSuccess(`Checked ${result.data.successful} of ${result.data.total} claims`, 'success');
+      loadDashboardData();
+    } catch (error: any) {
+      showError(error.response?.data?.message || 'Failed to check claim statuses', 'error');
+    }
+  };
+
+  const toggleClaimSelection = (claimId: string) => {
+    const newSelection = new Set(selectedClaims);
+    if (newSelection.has(claimId)) {
+      newSelection.delete(claimId);
+    } else {
+      newSelection.add(claimId);
+    }
+    setSelectedClaims(newSelection);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedClaims.size === claims.length) {
+      setSelectedClaims(new Set());
+    } else {
+      setSelectedClaims(new Set(claims.map((c: any) => c.id)));
     }
   };
 
@@ -219,20 +306,32 @@ const ClaimsDashboard: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b border-white/10">
-          {(['overview', 'claims', 'create', 'analytics'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-medium transition-colors capitalize ${
-                activeTab === tab
-                  ? 'text-white border-b-2 border-purple-500'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="flex gap-2 mb-6 border-b border-white/10 overflow-x-auto">
+          {([
+            { id: 'overview', label: 'Overview', icon: BarChart3 },
+            { id: 'claims', label: 'Claims', icon: FileText },
+            { id: 'create', label: 'Create', icon: Plus },
+            { id: 'preauth', label: 'Pre-Auth', icon: Shield },
+            { id: 'bulk', label: 'Bulk Ops', icon: Layers },
+            { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+            { id: 'api-config', label: 'API Config', icon: Settings },
+          ] as const).map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-6 py-3 font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'text-white border-b-2 border-purple-500'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Overview Tab */}
@@ -359,6 +458,41 @@ const ClaimsDashboard: React.FC = () => {
         {/* Claims Tab */}
         {activeTab === 'claims' && (
           <div className="space-y-6">
+            {/* Bulk Actions */}
+            {selectedClaims.size > 0 && (
+              <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 backdrop-blur p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-white font-medium">
+                      {selectedClaims.size} claim{selectedClaims.size > 1 ? 's' : ''} selected
+                    </span>
+                    <button
+                      onClick={() => setSelectedClaims(new Set())}
+                      className="text-white/60 hover:text-white text-sm"
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleBulkSubmit('api')}
+                      className="px-4 py-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm flex items-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      Submit Selected
+                    </button>
+                    <button
+                      onClick={handleBulkCheckStatus}
+                      className="px-4 py-2 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-sm flex items-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Check Status
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -428,13 +562,42 @@ const ClaimsDashboard: React.FC = () => {
 
             {/* Claims List */}
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+              {claims.length > 0 && (
+                <div className="mb-4 flex items-center justify-between">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 text-white/60 hover:text-white text-sm"
+                  >
+                    {selectedClaims.size === claims.length ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                    Select All
+                  </button>
+                </div>
+              )}
               <div className="space-y-2">
                 {claims.map((claim: any) => (
                   <div
                     key={claim.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                    className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+                      selectedClaims.has(claim.id)
+                        ? 'bg-purple-500/20 border-2 border-purple-500/50'
+                        : 'bg-white/5 hover:bg-white/10'
+                    }`}
                   >
                     <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => toggleClaimSelection(claim.id)}
+                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                      >
+                        {selectedClaims.has(claim.id) ? (
+                          <CheckSquare className="w-5 h-5 text-purple-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-white/40" />
+                        )}
+                      </button>
                       <div className="p-2 rounded-lg bg-purple-500/20">
                         <FileText className="w-5 h-5 text-purple-400" />
                       </div>
@@ -463,14 +626,49 @@ const ClaimsDashboard: React.FC = () => {
                         >
                           <Eye className="w-4 h-4 text-white/60" />
                         </button>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedClaims.has(claim.id)}
+                            onChange={(e) => {
+                              const newSelection = new Set(selectedClaims);
+                              if (e.target.checked) {
+                                newSelection.add(claim.id);
+                              } else {
+                                newSelection.delete(claim.id);
+                              }
+                              setSelectedClaims(newSelection);
+                            }}
+                            className="w-4 h-4 rounded border-white/20 bg-white/10 text-purple-600 focus:ring-purple-500"
+                          />
                         {claim.status === 'draft' && (
                           <button
-                            onClick={() => handleSubmitClaim(claim.id)}
+                            onClick={() => handleSubmitClaim(claim.id, 'api')}
                             className="px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm"
+                            title="Submit via API"
                           >
                             Submit
                           </button>
                         )}
+                        {claim.status === 'submitted' || claim.status === 'processing' ? (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await claimsApi.checkClaimStatusEnhanced(tenantSlug!, token, claim.id);
+                                showSuccess('Status checked successfully', 'success');
+                                loadDashboardData();
+                              } catch (error: any) {
+                                showError(error.response?.data?.message || 'Failed to check status', 'error');
+                              }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 text-sm flex items-center gap-1"
+                            title="Check status with medical aid"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Check
+                          </button>
+                        ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -519,6 +717,37 @@ const ClaimsDashboard: React.FC = () => {
             onResubmit={handleResubmitClaim}
             tenantSlug={tenantSlug!}
             token={token}
+            onRefresh={loadDashboardData}
+          />
+        </ModalPortal>
+      )}
+
+      {/* Pre-Authorization Modal */}
+      {showPreAuthModal && (
+        <ModalPortal>
+          <PreAuthorizationModal
+            tenantSlug={tenantSlug!}
+            token={token}
+            onClose={() => setShowPreAuthModal(false)}
+            onSuccess={() => {
+              setShowPreAuthModal(false);
+              loadDashboardData();
+            }}
+          />
+        </ModalPortal>
+      )}
+
+      {/* API Configuration Modal */}
+      {showApiConfigModal && (
+        <ModalPortal>
+          <ApiConfigurationModal
+            tenantSlug={tenantSlug!}
+            token={token}
+            onClose={() => setShowApiConfigModal(false)}
+            onSuccess={() => {
+              setShowApiConfigModal(false);
+              loadDashboardData();
+            }}
           />
         </ModalPortal>
       )}
@@ -534,20 +763,62 @@ const CreateClaimTab: React.FC<{
   onSuccess: () => void;
 }> = ({ tenantSlug, token, bills, onSuccess }) => {
   const { showError, showSuccess } = useNotification();
+  const [claimSource, setClaimSource] = useState<'bill' | 'appointment' | 'procedure'>('bill');
   const [selectedBill, setSelectedBill] = useState<any>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+  const [selectedProcedure, setSelectedProcedure] = useState<any>(null);
+  const [procedureType, setProcedureType] = useState<'lab' | 'imaging'>('lab');
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [procedures, setProcedures] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     medicalAidProvider: '',
     memberNumber: '',
     memberName: '',
   });
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // Load appointments and procedures when source changes
+  useEffect(() => {
+    if (claimSource === 'appointment') {
+      loadAppointments();
+    } else if (claimSource === 'procedure') {
+      loadProcedures();
+    }
+  }, [claimSource]);
+
+  const loadAppointments = async () => {
+    setLoadingData(true);
+    try {
+      const response = await ehrApi.getAppointments(tenantSlug, token, { status: 'completed' });
+      setAppointments(response.data?.appointments || []);
+    } catch (error: any) {
+      showError('Failed to load appointments', error.response?.data?.message || 'Failed to load appointments');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const loadProcedures = async () => {
+    setLoadingData(true);
+    try {
+      // Load lab orders and imaging orders
+      const [labResponse, imagingResponse] = await Promise.all([
+        ehrApi.getLabOrders(tenantSlug, token, 'completed').catch(() => ({ data: [] })),
+        ehrApi.getImagingOrders(tenantSlug, token, 'completed').catch(() => ({ data: [] })),
+      ]);
+      setProcedures([
+        ...(labResponse.data || []).map((item: any) => ({ ...item, procedureType: 'lab' })),
+        ...(imagingResponse.data || []).map((item: any) => ({ ...item, procedureType: 'imaging' })),
+      ]);
+    } catch (error: any) {
+      showError('Failed to load procedures', error.response?.data?.message || 'Failed to load procedures');
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   const handleCreateClaim = async () => {
-    if (!selectedBill) {
-      showError('Please select a bill', 'error');
-      return;
-    }
-
     if (!formData.medicalAidProvider || !formData.memberNumber) {
       showError('Please fill in all required fields', 'error');
       return;
@@ -555,7 +826,22 @@ const CreateClaimTab: React.FC<{
 
     setLoading(true);
     try {
-      await claimsApi.generateClaimFromBill(tenantSlug, token, selectedBill.id, formData);
+      if (claimSource === 'bill' && selectedBill) {
+        await claimsApi.generateClaimFromBill(tenantSlug, token, selectedBill.id, formData);
+      } else if (claimSource === 'appointment' && selectedAppointment) {
+        await claimsApi.generateClaimFromAppointment(tenantSlug, token, selectedAppointment.id, formData);
+      } else if (claimSource === 'procedure' && selectedProcedure) {
+        await claimsApi.generateClaimFromProcedure(
+          tenantSlug,
+          token,
+          selectedProcedure.id,
+          selectedProcedure.procedureType || procedureType,
+          formData,
+        );
+      } else {
+        showError('Please select a source item', 'error');
+        return;
+      }
       showSuccess('Claim created successfully', 'success');
       onSuccess();
     } catch (error: any) {
@@ -568,38 +854,148 @@ const CreateClaimTab: React.FC<{
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
-        <h3 className="text-xl font-bold text-white mb-4">Create Claim from Bill</h3>
+        <h3 className="text-xl font-bold text-white mb-4">Create Medical Aid Claim</h3>
         
-        {/* Bill Selection */}
+        {/* Source Selection */}
         <div className="mb-6">
-          <label className="block text-white/60 text-sm mb-2">Select Bill</label>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {bills.map((bill) => (
-              <div
-                key={bill.id}
-                onClick={() => setSelectedBill(bill)}
-                className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                  selectedBill?.id === bill.id
-                    ? 'bg-purple-500/20 border-2 border-purple-500'
-                    : 'bg-white/5 hover:bg-white/10 border-2 border-transparent'
+          <label className="block text-white/60 text-sm mb-2">Claim Source</label>
+          <div className="grid grid-cols-3 gap-3">
+            {(['bill', 'appointment', 'procedure'] as const).map((source) => (
+              <button
+                key={source}
+                onClick={() => setClaimSource(source)}
+                className={`px-4 py-3 rounded-lg transition-colors capitalize ${
+                  claimSource === source
+                    ? 'bg-purple-500/20 border-2 border-purple-500 text-white'
+                    : 'bg-white/5 hover:bg-white/10 border-2 border-transparent text-white/60'
                 }`}
               >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-white font-medium">{bill.billNumber}</p>
-                    <p className="text-white/60 text-sm">
-                      {bill.patient?.firstName} {bill.patient?.lastName} • {new Date(bill.billDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className="text-white font-bold">{formatCurrency(bill.totalAmount)}</p>
-                </div>
-              </div>
+                {source === 'appointment' ? 'From Appointment' : source === 'procedure' ? 'From Procedure' : 'From Bill'}
+              </button>
             ))}
           </div>
         </div>
 
+        {/* Bill Selection */}
+        {claimSource === 'bill' && (
+          <div className="mb-6">
+            <label className="block text-white/60 text-sm mb-2">Select Bill</label>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {bills.map((bill) => (
+                <div
+                  key={bill.id}
+                  onClick={() => setSelectedBill(bill)}
+                  className={`p-4 rounded-lg cursor-pointer transition-colors ${
+                    selectedBill?.id === bill.id
+                      ? 'bg-purple-500/20 border-2 border-purple-500'
+                      : 'bg-white/5 hover:bg-white/10 border-2 border-transparent'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-white font-medium">{bill.billNumber}</p>
+                      <p className="text-white/60 text-sm">
+                        {bill.patient?.firstName} {bill.patient?.lastName} • {new Date(bill.billDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <p className="text-white font-bold">{formatCurrency(bill.totalAmount)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Appointment Selection */}
+        {claimSource === 'appointment' && (
+          <div className="mb-6">
+            <label className="block text-white/60 text-sm mb-2">Select Completed Appointment</label>
+            {loadingData ? (
+              <div className="text-white/60 text-center py-8">Loading appointments...</div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {appointments.map((appointment) => (
+                  <div
+                    key={appointment.id}
+                    onClick={() => setSelectedAppointment(appointment)}
+                    className={`p-4 rounded-lg cursor-pointer transition-colors ${
+                      selectedAppointment?.id === appointment.id
+                        ? 'bg-purple-500/20 border-2 border-purple-500'
+                        : 'bg-white/5 hover:bg-white/10 border-2 border-transparent'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-medium">
+                          {appointment.patient?.firstName} {appointment.patient?.lastName}
+                        </p>
+                        <p className="text-white/60 text-sm">
+                          {appointment.appointmentType} • {new Date(appointment.appointmentDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <p className="text-white font-bold">{formatCurrency(appointment.feeAmount || 0)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Procedure Selection */}
+        {claimSource === 'procedure' && (
+          <div className="mb-6">
+            <div className="mb-4">
+              <label className="block text-white/60 text-sm mb-2">Procedure Type</label>
+              <select
+                value={procedureType}
+                onChange={(e) => {
+                  setProcedureType(e.target.value as 'lab' | 'imaging');
+                  setSelectedProcedure(null);
+                }}
+                className="w-full px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white"
+              >
+                <option value="lab">Lab Test</option>
+                <option value="imaging">Imaging Study</option>
+              </select>
+            </div>
+            <label className="block text-white/60 text-sm mb-2">Select Completed Procedure</label>
+            {loadingData ? (
+              <div className="text-white/60 text-center py-8">Loading procedures...</div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {procedures
+                  .filter((p) => p.procedureType === procedureType)
+                  .map((procedure) => (
+                    <div
+                      key={procedure.id}
+                      onClick={() => setSelectedProcedure(procedure)}
+                      className={`p-4 rounded-lg cursor-pointer transition-colors ${
+                        selectedProcedure?.id === procedure.id
+                          ? 'bg-purple-500/20 border-2 border-purple-500'
+                          : 'bg-white/5 hover:bg-white/10 border-2 border-transparent'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-white font-medium">
+                            {procedure.patient?.firstName} {procedure.patient?.lastName}
+                          </p>
+                          <p className="text-white/60 text-sm">
+                            {procedure.testName || procedure.studyType} • {new Date(procedure.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <p className="text-white font-bold">{formatCurrency(procedure.feeAmount || procedure.price || 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Claim Details */}
-        {selectedBill && (
+        {(selectedBill || selectedAppointment || selectedProcedure) && (
           <div className="space-y-4">
             <div>
               <label className="block text-white/60 text-sm mb-2">Medical Aid Provider *</label>
@@ -738,17 +1134,40 @@ const AnalyticsTab: React.FC<{
 const ClaimDetailModal: React.FC<{
   claim: any;
   onClose: () => void;
-  onSubmit: (id: string) => void;
+  onSubmit: (id: string, method?: 'api' | 'edi' | 'manual') => void;
   onResubmit: (id: string, data: any) => void;
   tenantSlug: string;
   token: string;
 }> = ({ claim, onClose, onSubmit, onResubmit }) => {
+  const { showError, showSuccess } = useNotification();
   const [showResubmitForm, setShowResubmitForm] = useState(false);
+  const [showStatusHistory, setShowStatusHistory] = useState(false);
+  const [statusHistory, setStatusHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [resubmitData, setResubmitData] = useState({
     memberNumber: claim.memberNumber || '',
     memberName: claim.memberName || '',
     claimAmount: claim.claimAmount || '',
   });
+
+  const loadStatusHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await claimsApi.getClaimStatusHistory(tenantSlug, token, claim.id);
+      setStatusHistory(response.data || []);
+    } catch (error: any) {
+      showError('Failed to load status history', error.response?.data?.message || '');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showStatusHistory && statusHistory.length === 0) {
+      loadStatusHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showStatusHistory]);
 
   return (
     <div className="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -805,6 +1224,78 @@ const ClaimDetailModal: React.FC<{
           </div>
         )}
 
+        {/* Status History Section */}
+        <div className="border-t border-white/10 pt-4">
+          <button
+            onClick={() => {
+              setShowStatusHistory(!showStatusHistory);
+              if (!showStatusHistory && statusHistory.length === 0) {
+                loadStatusHistory();
+              }
+            }}
+            className="flex items-center gap-2 text-white/60 hover:text-white transition-colors mb-2"
+          >
+            <History className="w-4 h-4" />
+            <span className="text-sm font-medium">Status History</span>
+            {showStatusHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showStatusHistory && (
+            <div className="mt-4 space-y-3">
+              {loadingHistory ? (
+                <div className="text-white/60 text-center py-4">Loading history...</div>
+              ) : statusHistory.length === 0 ? (
+                <div className="text-white/60 text-center py-4">No status history available</div>
+              ) : (
+                <div className="space-y-2">
+                  {statusHistory.map((history: any, index: number) => (
+                    <div
+                      key={history.id || index}
+                      className="p-3 rounded-lg bg-white/5 border border-white/10"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              history.status === 'approved' || history.status === 'paid'
+                                ? 'bg-green-500/20 text-green-400'
+                                : history.status === 'rejected'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {history.status}
+                            </span>
+                            {history.previousStatus && (
+                              <>
+                                <span className="text-white/40">←</span>
+                                <span className="text-white/60 text-xs">{history.previousStatus}</span>
+                              </>
+                            )}
+                          </div>
+                          {history.changeReason && (
+                            <p className="text-white/80 text-sm mt-1">{history.changeReason}</p>
+                          )}
+                          {history.changedByName && (
+                            <p className="text-white/60 text-xs mt-1">By: {history.changedByName}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white/60 text-xs">
+                            {new Date(history.createdAt).toLocaleDateString()}
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            {new Date(history.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {showResubmitForm && claim.status === 'rejected' && (
           <div className="p-4 rounded-lg bg-white/5 border border-white/10 space-y-3">
             <h4 className="text-white font-medium">Update Claim Information</h4>
@@ -837,12 +1328,44 @@ const ClaimDetailModal: React.FC<{
 
         <div className="flex gap-3 pt-4">
           {claim.status === 'draft' && (
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={() => onSubmit(claim.id, 'api')}
+                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                title="Submit via API"
+              >
+                <Send className="w-4 h-4" />
+                Submit (API)
+              </button>
+              <button
+                onClick={() => onSubmit(claim.id, 'edi')}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2"
+                title="Submit via EDI"
+              >
+                <Upload className="w-4 h-4" />
+                EDI
+              </button>
+            </div>
+          )}
+          {(claim.status === 'submitted' || claim.status === 'processing') && (
             <button
-              onClick={() => onSubmit(claim.id)}
-              className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+              onClick={async () => {
+                try {
+                  const response = await claimsApi.checkClaimStatusEnhanced(tenantSlug, token, claim.id);
+                  showSuccess('Status checked successfully', 'success');
+                  if (response.data.claim) {
+                    // Update local claim data
+                    Object.assign(claim, response.data.claim);
+                  }
+                  loadStatusHistory();
+                } catch (error: any) {
+                  showError(error.response?.data?.message || 'Failed to check status', 'error');
+                }
+              }}
+              className="flex-1 px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
             >
-              <Send className="w-4 h-4" />
-              Submit Claim
+              <RefreshCw className="w-4 h-4" />
+              Check Status
             </button>
           )}
           {claim.status === 'rejected' && !showResubmitForm && (

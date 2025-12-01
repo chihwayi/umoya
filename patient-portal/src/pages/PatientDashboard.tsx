@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell, X } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, TrendingUp, Clock, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, Video, ClipboardList, Users } from 'lucide-react';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { format } from 'date-fns';
 
 const PatientDashboard: React.FC = () => {
   const { patient, logout, token } = usePatientAuth();
   const navigate = useNavigate();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications(30000); // Poll every 30 seconds
   const [showNotifications, setShowNotifications] = useState(false);
   const [stats, setStats] = useState({
@@ -68,16 +69,31 @@ const PatientDashboard: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate(`/${tenantSlug}/login`);
   };
 
   const menuItems = [
     { icon: Calendar, label: 'Appointments', path: '/appointments', color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
     { icon: FileText, label: 'Medical Records', path: '/records', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50', textColor: 'text-green-600' },
     { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+    { icon: AlarmClock, label: 'Medication Reminders', path: '/medication-reminders', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
+    { icon: CheckCircle2, label: 'Adherence Tracking', path: '/medication-adherence', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50', textColor: 'text-teal-600' },
     { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'from-yellow-500 to-yellow-600', bgColor: 'bg-yellow-50', textColor: 'text-yellow-600' },
     { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'from-red-500 to-red-600', bgColor: 'bg-red-50', textColor: 'text-red-600' },
+    { icon: ClipboardList, label: 'Questionnaires', path: '/questionnaires', color: 'from-pink-500 to-pink-600', bgColor: 'bg-pink-50', textColor: 'text-pink-600' },
+    { icon: Download, label: 'Export Records', path: '/export', color: 'from-gray-500 to-gray-600', bgColor: 'bg-gray-50', textColor: 'text-gray-600' },
+  ];
+
+  const chronicDiseaseItems = [
+    { icon: Droplet, label: 'Diabetes Management', path: '/diabetes', color: 'from-blue-500 to-cyan-500', bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
+    { icon: Heart, label: 'Heart Health', path: '/cardiology', color: 'from-red-500 to-pink-500', bgColor: 'bg-red-50', textColor: 'text-red-600' },
+  ];
+
+  const advancedFeatures = [
+    { icon: Activity, label: 'Symptom Checker', path: '/symptom-checker', color: 'from-orange-500 to-red-500', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
+    { icon: Users, label: 'Family Access', path: '/family-access', color: 'from-pink-500 to-rose-500', bgColor: 'bg-pink-50', textColor: 'text-pink-600' },
+    { icon: Activity, label: 'Fitness Apps', path: '/fitness-integration', color: 'from-green-500 to-emerald-500', bgColor: 'bg-green-50', textColor: 'text-green-600' },
   ];
 
   return (
@@ -155,7 +171,17 @@ const PatientDashboard: React.FC = () => {
                                 await markAsRead(notification.id);
                               }
                               if (notification.actionUrl) {
-                                navigate(notification.actionUrl);
+                                // Ensure actionUrl includes tenant slug
+                                let url = notification.actionUrl;
+                                if (!url.startsWith(`/${tenantSlug}/`) && !url.startsWith('/select-tenant')) {
+                                  // If URL doesn't have tenant slug, add it
+                                  if (url.startsWith('/')) {
+                                    url = `/${tenantSlug}${url}`;
+                                  } else {
+                                    url = `/${tenantSlug}/${url}`;
+                                  }
+                                }
+                                navigate(url);
                                 setShowNotifications(false);
                               }
                             }}
@@ -212,23 +238,29 @@ const PatientDashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <Link
+            to={`/${tenantSlug}/appointments`}
+            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-4">
               <Calendar className="w-8 h-8 opacity-90" />
               <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
             <p className="text-blue-100 text-sm mb-1">Appointments</p>
             <p className="text-3xl font-bold">{stats.upcomingAppointments}</p>
-          </div>
+          </Link>
 
-          <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <Link
+            to={`/${tenantSlug}/bills`}
+            className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-4">
               <CreditCard className="w-8 h-8 opacity-90" />
               <Clock className="w-5 h-5 opacity-75" />
             </div>
             <p className="text-yellow-100 text-sm mb-1">Pending Bills</p>
             <p className="text-3xl font-bold">{stats.pendingBills}</p>
-          </div>
+          </Link>
 
           <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between mb-4">
@@ -239,32 +271,41 @@ const PatientDashboard: React.FC = () => {
             <p className="text-3xl font-bold">{unreadCount}</p>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <Link
+            to={`/${tenantSlug}/prescriptions`}
+            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-4">
               <Pill className="w-8 h-8 opacity-90" />
               <Activity className="w-5 h-5 opacity-75" />
             </div>
             <p className="text-purple-100 text-sm mb-1">Prescriptions</p>
             <p className="text-3xl font-bold">{stats.activePrescriptions}</p>
-          </div>
+          </Link>
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <Link
+            to={`/${tenantSlug}/records`}
+            className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-4">
               <FileText className="w-8 h-8 opacity-90" />
               <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
-            <p className="text-green-100 text-sm mb-1">Records</p>
+            <p className="text-green-100 text-sm mb-1">Medical Records</p>
             <p className="text-3xl font-bold">{stats.medicalRecords}</p>
-          </div>
+          </Link>
 
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <Link
+            to={`/${tenantSlug}/vitals`}
+            className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
             <div className="flex items-center justify-between mb-4">
               <Activity className="w-8 h-8 opacity-90" />
               <TrendingUp className="w-5 h-5 opacity-75" />
             </div>
             <p className="text-red-100 text-sm mb-1">Vitals</p>
             <p className="text-3xl font-bold">{stats.vitalsRecords}</p>
-          </div>
+          </Link>
         </div>
 
         {/* Upcoming Appointment & Latest Vitals */}
@@ -286,7 +327,7 @@ const PatientDashboard: React.FC = () => {
                   <p className="text-blue-200 text-sm mt-2">Reason: {dashboardData.upcomingAppointment.reason}</p>
                 )}
                 <Link
-                  to="/appointments"
+                  to={`/${tenantSlug}/appointments`}
                   className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
                 >
                   View All Appointments →
@@ -324,7 +365,7 @@ const PatientDashboard: React.FC = () => {
                   {format(new Date(dashboardData.latestVitals.recordedAt), 'MMM dd, yyyy')}
                 </p>
                 <Link
-                  to="/vitals"
+                  to={`/${tenantSlug}/vitals`}
                   className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
                 >
                   View All Vitals →
@@ -341,7 +382,7 @@ const PatientDashboard: React.FC = () => {
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                to={`/${tenantSlug}${item.path}`}
                 className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="flex items-center gap-4">
@@ -359,12 +400,104 @@ const PatientDashboard: React.FC = () => {
           })}
         </div>
 
+        {/* Advanced Features */}
+        {advancedFeatures.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Advanced Features</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {advancedFeatures.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.path}
+                    to={`/${tenantSlug}${item.path}`}
+                    className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                        <Icon className="w-7 h-7 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          {item.label}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">AI-powered health insights</p>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Features */}
+        {advancedFeatures.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Advanced Features</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {advancedFeatures.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.path}
+                    to={`/${tenantSlug}${item.path}`}
+                    className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                        <Icon className="w-7 h-7 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          {item.label}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">AI-powered health insights</p>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Chronic Disease Management */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Chronic Disease Management</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {chronicDiseaseItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={`/${tenantSlug}${item.path}`}
+                  className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                      <Icon className="w-7 h-7 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-lg mb-1">{item.label}</h3>
+                      <p className="text-sm text-gray-600">Monitor your health</p>
+                    </div>
+                    <ArrowRight className={`w-5 h-5 ${item.textColor} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Quick Actions */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-xl p-8 text-white">
           <h3 className="text-2xl font-bold mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
-              to="/appointments"
+              to={`/${tenantSlug}/appointments/request`}
               className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
             >
               <Calendar className="w-6 h-6 mb-2" />
@@ -372,7 +505,7 @@ const PatientDashboard: React.FC = () => {
               <p className="text-sm text-white/80">Schedule a visit</p>
             </Link>
             <Link
-              to="/bills"
+              to={`/${tenantSlug}/bills`}
               className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
             >
               <CreditCard className="w-6 h-6 mb-2" />
@@ -380,7 +513,7 @@ const PatientDashboard: React.FC = () => {
               <p className="text-sm text-white/80">View and pay bills</p>
             </Link>
             <Link
-              to="/messages"
+              to={`/${tenantSlug}/messages`}
               className="bg-white/20 backdrop-blur-sm rounded-xl p-4 hover:bg-white/30 transition-colors"
             >
               <MessageSquare className="w-6 h-6 mb-2" />

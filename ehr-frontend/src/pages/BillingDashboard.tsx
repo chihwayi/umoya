@@ -24,6 +24,7 @@ import {
   Eye,
   Edit,
 } from 'lucide-react';
+import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { ehrApi, billingApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
@@ -146,7 +147,7 @@ const BillingDashboard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
-      showError(error.response?.data?.message || 'Failed to load dashboard data');
+      showError('Failed to load dashboard data', error.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -162,9 +163,9 @@ const BillingDashboard: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      showSuccess('Invoice downloaded successfully');
+      showSuccess('Invoice downloaded successfully', 'The invoice has been downloaded successfully.');
     } catch (error: any) {
-      showError('Failed to download invoice');
+      showError('Failed to download invoice', error.response?.data?.message || 'Failed to download invoice');
     }
   };
 
@@ -173,12 +174,12 @@ const BillingDashboard: React.FC = () => {
 
     try {
       await ehrApi.recordFinancialPayment(tenantSlug!, token, selectedTransaction.id, paymentData);
-      showSuccess('Payment recorded successfully');
+      showSuccess('Payment recorded successfully', 'The payment has been recorded successfully.');
       setShowPaymentModal(false);
       setSelectedTransaction(null);
       loadDashboardData();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to record payment');
+      showError('Failed to record payment', error.response?.data?.message || 'Failed to record payment');
     }
   };
 
@@ -538,11 +539,7 @@ const BillingDashboard: React.FC = () => {
 
       {/* Payment Modal */}
       {showPaymentModal && (
-        <ModalPortal onClose={() => {
-          setShowPaymentModal(false);
-          setSelectedTransaction(null);
-          setSelectedBill(null);
-        }}>
+        <ModalPortal>
           <PaymentModal
             transaction={selectedTransaction}
             bill={selectedBill}
@@ -675,7 +672,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
       });
       setReportData(response.data);
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to load report');
+      showError('Failed to load report', error.response?.data?.message || 'Failed to load report');
     } finally {
       setLoading(false);
     }
@@ -690,7 +687,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
       });
       setTaxSummary(response.data);
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to load tax summary');
+      showError('Failed to load tax summary', error.response?.data?.message || 'Failed to load tax summary');
     } finally {
       setLoading(false);
     }
@@ -705,7 +702,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
       });
       setReconciliationReport(response.data);
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to load reconciliation report');
+      showError('Failed to load reconciliation report', error.response?.data?.message || 'Failed to load reconciliation report');
     } finally {
       setLoading(false);
     }
@@ -791,12 +788,54 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                 </select>
               </div>
             </div>
-            <button
-              onClick={loadReport}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-            >
-              Generate Report
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={loadReport}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Generate Report
+              </button>
+              {reportData && (
+                <>
+                  <button
+                    onClick={() => {
+                      // Export as PDF
+                      window.print();
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export PDF
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Export as CSV
+                      if (reportData) {
+                        let csv = '';
+                        if (reportType === 'revenue' && reportData.byPeriod) {
+                          csv = 'Period,Revenue,Transactions\n';
+                          reportData.byPeriod.forEach((item: any) => {
+                            csv += `${new Date(item.period).toLocaleDateString()},${item.total_revenue || 0},${item.transaction_count || 0}\n`;
+                          });
+                        }
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${reportType}_report_${new Date().toISOString().split('T')[0]}.csv`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export CSV
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Report Results */}
@@ -811,57 +850,217 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
               </h3>
 
               {reportType === 'revenue' && reportData.summary && (
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="p-4 rounded-lg bg-white/5">
-                    <p className="text-white/60 text-sm">Total Revenue</p>
-                    <p className="text-2xl font-bold text-white">{formatCurrency(reportData.summary.totalRevenue)}</p>
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="p-4 rounded-lg bg-white/5">
+                      <p className="text-white/60 text-sm">Total Revenue</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.summary.totalRevenue)}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-white/5">
+                      <p className="text-white/60 text-sm">Transactions</p>
+                      <p className="text-2xl font-bold text-white">{reportData.summary.totalTransactions}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-white/5">
+                      <p className="text-white/60 text-sm">Patients</p>
+                      <p className="text-2xl font-bold text-white">{reportData.summary.totalPatients}</p>
+                    </div>
                   </div>
-                  <div className="p-4 rounded-lg bg-white/5">
-                    <p className="text-white/60 text-sm">Transactions</p>
-                    <p className="text-2xl font-bold text-white">{reportData.summary.totalTransactions}</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-white/5">
-                    <p className="text-white/60 text-sm">Patients</p>
-                    <p className="text-2xl font-bold text-white">{reportData.summary.totalPatients}</p>
-                  </div>
-                </div>
+                  
+                  {/* Revenue Chart */}
+                  {reportData.byPeriod && reportData.byPeriod.length > 0 && (
+                    <div className="mb-6 p-4 rounded-lg bg-white/5">
+                      <h4 className="text-white font-bold mb-4">Revenue Trend</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={reportData.byPeriod.map((item: any) => ({
+                          period: new Date(item.period).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          revenue: Number(item.total_revenue || 0),
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                          <XAxis dataKey="period" stroke="rgba(255,255,255,0.6)" />
+                          <YAxis stroke="rgba(255,255,255,0.6)" />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={(value: any) => formatCurrency(value)}
+                          />
+                          <Area type="monotone" dataKey="revenue" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Revenue by Module */}
+                  {reportData.byModule && reportData.byModule.length > 0 && (
+                    <div className="mb-6 p-4 rounded-lg bg-white/5">
+                      <h4 className="text-white font-bold mb-4">Revenue by Service Module</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportData.byModule.map((item: any) => ({
+                          module: item.source_module || 'Other',
+                          revenue: Number(item.total_revenue || 0),
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                          <XAxis dataKey="module" stroke="rgba(255,255,255,0.6)" />
+                          <YAxis stroke="rgba(255,255,255,0.6)" />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={(value: any) => formatCurrency(value)}
+                          />
+                          <Bar dataKey="revenue" fill="#8b5cf6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </>
               )}
 
               {reportType === 'profit_loss' && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-green-500/20">
-                    <p className="text-white/60 text-sm">Total Revenue</p>
-                    <p className="text-2xl font-bold text-white">{formatCurrency(reportData.revenue?.total || 0)}</p>
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="p-4 rounded-lg bg-green-500/20 border border-green-500/30">
+                      <p className="text-white/60 text-sm">Total Revenue</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.revenue?.total || 0)}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-red-500/20 border border-red-500/30">
+                      <p className="text-white/60 text-sm">Total Expenses</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.expenses?.total || 0)}</p>
+                      {reportData.expenses?.note && (
+                        <p className="text-white/60 text-xs mt-1">{reportData.expenses.note}</p>
+                      )}
+                    </div>
+                    <div className="p-4 rounded-lg bg-blue-500/20 border border-blue-500/30">
+                      <p className="text-white/60 text-sm">Net Profit</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.profit?.total || 0)}</p>
+                      {reportData.profit?.margin && (
+                        <p className="text-white/60 text-xs mt-1">Margin: {reportData.profit.margin}%</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="p-4 rounded-lg bg-red-500/20">
-                    <p className="text-white/60 text-sm">Total Expenses</p>
-                    <p className="text-2xl font-bold text-white">{formatCurrency(reportData.expenses?.total || 0)}</p>
-                    {reportData.expenses?.note && (
-                      <p className="text-white/60 text-xs mt-1">{reportData.expenses.note}</p>
-                    )}
+
+                  {/* P&L Breakdown Chart */}
+                  {reportData.revenue?.breakdown && reportData.revenue.breakdown.length > 0 && (
+                    <div className="mb-6 p-4 rounded-lg bg-white/5">
+                      <h4 className="text-white font-bold mb-4">Revenue Breakdown by Module</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportData.revenue.breakdown.map((item: any) => ({
+                          module: item.source_module || 'Other',
+                          amount: Number(item.amount || 0),
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                          <XAxis dataKey="module" stroke="rgba(255,255,255,0.6)" />
+                          <YAxis stroke="rgba(255,255,255,0.6)" />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={(value: any) => formatCurrency(value)}
+                          />
+                          <Bar dataKey="amount" fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Profit Visualization */}
+                  <div className="p-4 rounded-lg bg-white/5">
+                    <h4 className="text-white font-bold mb-4">Profit Visualization</h4>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={[
+                        { name: 'Revenue', value: Number(reportData.revenue?.total || 0), fill: '#10b981' },
+                        { name: 'Expenses', value: Number(reportData.expenses?.total || 0), fill: '#ef4444' },
+                        { name: 'Net Profit', value: Number(reportData.profit?.total || 0), fill: '#3b82f6' },
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.6)" />
+                        <YAxis stroke="rgba(255,255,255,0.6)" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                          labelStyle={{ color: '#fff' }}
+                          formatter={(value: any) => formatCurrency(value)}
+                        />
+                        <Bar dataKey="value" />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="p-4 rounded-lg bg-blue-500/20">
-                    <p className="text-white/60 text-sm">Net Profit</p>
-                    <p className="text-2xl font-bold text-white">{formatCurrency(reportData.profit?.total || 0)}</p>
+                </>
+              )}
+
+              {reportType === 'cash_flow' && reportData.cashFlow && (
+                <>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="p-4 rounded-lg bg-white/5">
+                      <p className="text-white/60 text-sm">Total Cash Inflow</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.summary?.totalInflow || 0)}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-white/5">
+                      <p className="text-white/60 text-sm">Average Daily Inflow</p>
+                      <p className="text-2xl font-bold text-white">{formatCurrency(reportData.summary?.averageDailyInflow || 0)}</p>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Cash Flow Chart */}
+                  {reportData.cashFlow && reportData.cashFlow.length > 0 && (
+                    <div className="mb-6 p-4 rounded-lg bg-white/5">
+                      <h4 className="text-white font-bold mb-4">Cash Flow Trend</h4>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={reportData.cashFlow.map((item: any) => ({
+                          period: new Date(item.period).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          inflow: Number(item.cash_inflow || 0),
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                          <XAxis dataKey="period" stroke="rgba(255,255,255,0.6)" />
+                          <YAxis stroke="rgba(255,255,255,0.6)" />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={(value: any) => formatCurrency(value)}
+                          />
+                          <Line type="monotone" dataKey="inflow" stroke="#3b82f6" strokeWidth={2} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </>
               )}
 
               {reportType === 'aging' && reportData.summary && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-5 gap-4">
+                <>
+                  <div className="grid grid-cols-5 gap-4 mb-6">
                     {[
-                      { label: 'Current', value: reportData.summary.current },
-                      { label: '0-30 Days', value: reportData.summary.bucket_0_30 },
-                      { label: '31-60 Days', value: reportData.summary.bucket_31_60 },
-                      { label: '61-90 Days', value: reportData.summary.bucket_61_90 },
-                      { label: 'Over 90 Days', value: reportData.summary.bucket_over_90 },
+                      { label: 'Current', value: reportData.summary.current, color: '#10b981' },
+                      { label: '0-30 Days', value: reportData.summary.bucket_0_30, color: '#3b82f6' },
+                      { label: '31-60 Days', value: reportData.summary.bucket_31_60, color: '#f59e0b' },
+                      { label: '61-90 Days', value: reportData.summary.bucket_61_90, color: '#ef4444' },
+                      { label: 'Over 90 Days', value: reportData.summary.bucket_over_90, color: '#dc2626' },
                     ].map((bucket) => (
-                      <div key={bucket.label} className="p-4 rounded-lg bg-white/5">
+                      <div key={bucket.label} className="p-4 rounded-lg bg-white/5 border" style={{ borderColor: `${bucket.color}40` }}>
                         <p className="text-white/60 text-sm">{bucket.label}</p>
                         <p className="text-xl font-bold text-white">{formatCurrency(bucket.value)}</p>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Aging Chart */}
+                  <div className="mb-6 p-4 rounded-lg bg-white/5">
+                    <h4 className="text-white font-bold mb-4">Aging Breakdown</h4>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={[
+                        { bucket: 'Current', amount: Number(reportData.summary.current || 0) },
+                        { bucket: '0-30 Days', amount: Number(reportData.summary.bucket_0_30 || 0) },
+                        { bucket: '31-60 Days', amount: Number(reportData.summary.bucket_31_60 || 0) },
+                        { bucket: '61-90 Days', amount: Number(reportData.summary.bucket_61_90 || 0) },
+                        { bucket: 'Over 90 Days', amount: Number(reportData.summary.bucket_over_90 || 0) },
+                      ]}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <XAxis dataKey="bucket" stroke="rgba(255,255,255,0.6)" />
+                        <YAxis stroke="rgba(255,255,255,0.6)" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}
+                          labelStyle={{ color: '#fff' }}
+                          formatter={(value: any) => formatCurrency(value)}
+                        />
+                        <Bar dataKey="amount" fill="#ef4444" />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                   {reportData.byPatient && reportData.byPatient.length > 0 && (
                     <div className="mt-6">
@@ -884,7 +1083,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                       </div>
                     </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}
@@ -894,8 +1093,8 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
       {/* Tax Management Sub-tab */}
       {activeSubTab === 'tax' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
+              <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-white/60 text-sm mb-2">From Date</label>
                 <input
@@ -1046,10 +1245,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
 
       {/* Reconcile Payment Modal */}
       {showReconcileModal && (
-        <ModalPortal onClose={() => {
-          setShowReconcileModal(false);
-          setSelectedTransactionForReconcile(null);
-        }}>
+        <ModalPortal>
           <ReconcilePaymentModal
             tenantSlug={tenantSlug}
             token={token}
@@ -1093,10 +1289,10 @@ const ReconcilePaymentModal: React.FC<{
         bankReference: formData.bankReference || undefined,
         notes: formData.notes || undefined,
       });
-      showSuccess('Payment reconciled successfully');
+      showSuccess('Payment reconciled successfully', 'The payment has been reconciled successfully.');
       onSuccess();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to reconcile payment');
+      showError('Failed to reconcile payment', error.response?.data?.message || 'Failed to reconcile payment');
     }
   };
 

@@ -2,7 +2,8 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { VitalsService } from './vitals.service';
-import { NotificationsService } from './notifications.service';
+import { PatientNotificationsService } from './patient-notifications.service';
+import { HealthGoalsService } from './health-goals.service';
 
 @Injectable()
 export class PatientVitalsSubmissionService {
@@ -11,7 +12,8 @@ export class PatientVitalsSubmissionService {
   constructor(
     private tenantService: TenantService,
     private vitalsService: VitalsService,
-    private notificationsService: NotificationsService,
+    private patientNotificationsService?: PatientNotificationsService,
+    private healthGoalsService?: HealthGoalsService,
   ) {}
 
   /**
@@ -176,7 +178,7 @@ export class PatientVitalsSubmissionService {
     }
 
     // Send notifications if alerts exist
-    if (alerts.length > 0) {
+    if (alerts.length > 0 && this.patientNotificationsService) {
       try {
         // Get patient info for notification
         const patientResult = await tenantDb.query(
@@ -186,32 +188,22 @@ export class PatientVitalsSubmissionService {
         const patient = patientResult[0];
 
         // Create notification for patient
-        await this.notificationsService.createNotification(
-          tenantDb,
-          {
-            patientId,
-            type: 'vital_alert',
-            title: 'Vital Signs Alert',
-            message: alerts.join(' '),
-            priority: alerts.some((a) => a.includes('CRITICAL')) ? 'high' : 'medium',
-          },
+        await this.patientNotificationsService.createNotification(
+          patientId,
+          'vital_alert' as any,
+          'Vital Signs Alert',
+          alerts.join(' '),
           tenantId,
+          {
+            priority: alerts.some((a) => a.includes('CRITICAL')) ? 'high' : 'normal',
+            actionUrl: '/vitals',
+            actionLabel: 'View Vitals',
+            metadata: { alerts, vitals },
+          },
         );
 
-        // Also notify clinic staff for critical alerts
-        if (alerts.some((a) => a.includes('CRITICAL'))) {
-          await this.notificationsService.createNotification(
-            tenantDb,
-            {
-              type: 'patient_vital_critical',
-              title: `Critical Vital Alert - ${patient?.first_name} ${patient?.last_name}`,
-              message: `Patient ${patient?.first_name} ${patient?.last_name} submitted critical vitals: ${alerts.join(' ')}`,
-              priority: 'critical',
-              metadata: { patientId, vitals },
-            },
-            tenantId,
-          );
-        }
+        // Note: Clinic staff notifications would need a different service
+        // For now, we only send patient notifications
       } catch (error) {
         this.logger.warn(`Failed to send vital alerts: ${error instanceof Error ? error.message : error}`);
       }
@@ -268,6 +260,18 @@ export class PatientVitalsSubmissionService {
 
     // Check for abnormal values and generate alerts
     await this.checkAbnormalVitals(vitalsData, patientId, tenantDb, tenantId);
+
+    // Auto-update health goals from vitals
+    if (this.healthGoalsService) {
+      try {
+        await this.healthGoalsService.autoUpdateFromVitals(tenantDb, patientId, {
+          ...vitalsData,
+          id: savedVitals.id,
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to auto-update health goals from vitals: ${error instanceof Error ? error.message : error}`);
+      }
+    }
 
     return {
       vitals: savedVitals,

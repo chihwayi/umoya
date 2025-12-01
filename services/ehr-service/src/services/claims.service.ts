@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MedicalAidClaim, ClaimStatus, MedicalAidProvider } from '../entities/medical-aid-claim.entity';
 import { Bill } from '../entities/billing.entity';
+import { MedicalAidApiService } from './medical-aid-api.service';
 
 @Injectable()
 export class ClaimsService {
+  private readonly logger = new Logger(ClaimsService.name);
+
+  constructor(private readonly medicalAidApiService?: MedicalAidApiService) {}
   
   async createClaim(createClaimDto: any, tenantDb: DataSource) {
     const claimRepository = tenantDb.getRepository(MedicalAidClaim);
@@ -66,6 +70,131 @@ export class ClaimsService {
         taxAmount: bill.taxAmount,
         discountAmount: bill.discountAmount,
         totalAmount: bill.totalAmount,
+        ...claimData.additionalData
+      }
+    } as any);
+
+    return claimRepository.save(claim);
+  }
+
+  async generateClaimFromAppointment(appointmentId: string, claimData: any, tenantDb: DataSource) {
+    const claimRepository = tenantDb.getRepository(MedicalAidClaim);
+    
+    // Fetch appointment with patient and related data
+    const appointment = await tenantDb.query(
+      `SELECT a.*, p.id as patient_id, p.first_name, p.last_name, p.date_of_birth, p.gender
+       FROM appointments a
+       JOIN patients p ON a.patient_id = p.id
+       WHERE a.id = $1`,
+      [appointmentId]
+    );
+    
+    if (!appointment || appointment.length === 0) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    const appt = appointment[0];
+
+    // Check if claim already exists for this appointment
+    const existingClaim = await tenantDb.query(
+      `SELECT id FROM medical_aid_claims 
+       WHERE claim_data->>'appointmentId' = $1`,
+      [appointmentId]
+    );
+
+    if (existingClaim && existingClaim.length > 0) {
+      throw new BadRequestException('Claim already exists for this appointment');
+    }
+
+    // Calculate claim amount from appointment charges or use provided amount
+    const claimAmount = claimData.claimAmount || 0;
+
+    const claimCount = await claimRepository.count();
+    const claimNumber = `CLM${String(claimCount + 1).padStart(8, '0')}`;
+
+    const claim = claimRepository.create({
+      patientId: appt.patient_id,
+      medicalAidProvider: claimData.medicalAidProvider,
+      memberNumber: claimData.memberNumber,
+      claimAmount,
+      claimNumber,
+      status: ClaimStatus.DRAFT,
+      claimData: {
+        appointmentId,
+        appointmentType: appt.appointment_type,
+        appointmentDate: appt.appointment_date,
+        patientName: `${appt.first_name} ${appt.last_name}`,
+        ...claimData.additionalData
+      }
+    } as any);
+
+    return claimRepository.save(claim);
+  }
+
+  async generateClaimFromProcedure(procedureId: string, type: 'lab' | 'imaging' | 'other', claimData: any, tenantDb: DataSource) {
+    const claimRepository = tenantDb.getRepository(MedicalAidClaim);
+    
+    // Determine table name based on procedure type
+    let tableName: string;
+    let patientIdColumn: string;
+    
+    switch (type) {
+      case 'lab':
+        tableName = 'lab_orders';
+        patientIdColumn = 'patient_id';
+        break;
+      case 'imaging':
+        tableName = 'imaging_orders';
+        patientIdColumn = 'patient_id';
+        break;
+      default:
+        throw new BadRequestException(`Unsupported procedure type: ${type}`);
+    }
+
+    // Fetch procedure with patient data
+    const procedure = await tenantDb.query(
+      `SELECT p.*, pt.id as patient_id, pt.first_name, pt.last_name
+       FROM ${tableName} p
+       JOIN patients pt ON p.${patientIdColumn} = pt.id
+       WHERE p.id = $1`,
+      [procedureId]
+    );
+    
+    if (!procedure || procedure.length === 0) {
+      throw new NotFoundException(`${type} procedure not found`);
+    }
+
+    const proc = procedure[0];
+
+    // Check if claim already exists for this procedure
+    const existingClaim = await tenantDb.query(
+      `SELECT id FROM medical_aid_claims 
+       WHERE claim_data->>'procedureId' = $1 AND claim_data->>'procedureType' = $2`,
+      [procedureId, type]
+    );
+
+    if (existingClaim && existingClaim.length > 0) {
+      throw new BadRequestException('Claim already exists for this procedure');
+    }
+
+    // Calculate claim amount from procedure charges or use provided amount
+    const claimAmount = claimData.claimAmount || proc.total_amount || 0;
+
+    const claimCount = await claimRepository.count();
+    const claimNumber = `CLM${String(claimCount + 1).padStart(8, '0')}`;
+
+    const claim = claimRepository.create({
+      patientId: proc.patient_id,
+      medicalAidProvider: claimData.medicalAidProvider,
+      memberNumber: claimData.memberNumber,
+      claimAmount,
+      claimNumber,
+      status: ClaimStatus.DRAFT,
+      claimData: {
+        procedureId,
+        procedureType: type,
+        procedureDate: proc.order_date || proc.created_at,
+        patientName: `${proc.first_name} ${proc.last_name}`,
         ...claimData.additionalData
       }
     } as any);
@@ -305,18 +434,535 @@ export class ClaimsService {
       throw new BadRequestException('Only rejected claims can be resubmitted');
     }
 
-    // Update claim data if provided
-    if (updatedData.memberNumber) claim.memberNumber = updatedData.memberNumber;
-    if (updatedData.claimAmount) claim.claimAmount = updatedData.claimAmount;
-    if (updatedData.claimData) claim.claimData = { ...claim.claimData, ...updatedData.claimData };
+    // Create new claim based on rejected one (tracking original)
+    const claimCount = await claimRepository.count();
+    const newClaimNumber = `CLM${String(claimCount + 1).padStart(8, '0')}`;
 
-    // Reset to draft for review before resubmission
-    claim.status = ClaimStatus.DRAFT;
-    claim.rejectionReason = null;
-    claim.responseDate = null;
-    claim.approvedAmount = null;
+    // Update resubmission count on original claim
+    const resubmissionCount = ((claim as any).resubmissionCount || 0) + 1;
+    await tenantDb.query(
+      `UPDATE medical_aid_claims SET resubmission_count = $1 WHERE id = $2`,
+      [resubmissionCount, claim.id]
+    );
 
-    return claimRepository.save(claim);
+    // Create new claim linked to original
+    const newClaim = claimRepository.create({
+      ...claim,
+      id: undefined, // New ID
+      claimNumber: newClaimNumber,
+      originalClaimId: claim.id,
+      resubmissionCount: 0,
+      status: ClaimStatus.DRAFT,
+      rejectionReason: null,
+      responseDate: null,
+      approvedAmount: null,
+      submissionDate: null,
+      memberNumber: updatedData.memberNumber || claim.memberNumber,
+      claimAmount: updatedData.claimAmount || claim.claimAmount,
+      claimData: updatedData.claimData ? { ...claim.claimData, ...updatedData.claimData } : claim.claimData,
+      diagnosisCodes: updatedData.diagnosisCodes || (claim as any).diagnosisCodes,
+      primaryDiagnosisCode: updatedData.primaryDiagnosisCode || (claim as any).primaryDiagnosisCode,
+      primaryDiagnosisDescription: updatedData.primaryDiagnosisDescription || (claim as any).primaryDiagnosisDescription,
+    } as any);
+
+    const savedClaim = await claimRepository.save(newClaim);
+
+    // Log status history
+    await this.logClaimStatusChange(tenantDb, savedClaim.id, ClaimStatus.DRAFT, ClaimStatus.REJECTED, null, 'Resubmission created from rejected claim');
+
+    return savedClaim;
+  }
+
+  /**
+   * Create a pre-authorization request
+   */
+  async createPreAuthorization(preAuthData: any, tenantDb: DataSource) {
+    const preAuth = await tenantDb.query(
+      `INSERT INTO pre_authorization_requests (
+        patient_id, billing_id, appointment_id, medical_aid_name, member_number,
+        request_type, requested_amount, request_date, diagnosis_codes,
+        primary_diagnosis_code, primary_diagnosis_description, procedure_codes,
+        service_codes, clinical_notes, request_data, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      RETURNING *`,
+      [
+        preAuthData.patientId,
+        preAuthData.billingId || null,
+        preAuthData.appointmentId || null,
+        preAuthData.medicalAidName,
+        preAuthData.memberNumber,
+        preAuthData.requestType || 'consultation',
+        preAuthData.requestedAmount,
+        preAuthData.requestDate || new Date(),
+        preAuthData.diagnosisCodes || [],
+        preAuthData.primaryDiagnosisCode || null,
+        preAuthData.primaryDiagnosisDescription || null,
+        preAuthData.procedureCodes || [],
+        preAuthData.serviceCodes || [],
+        preAuthData.clinicalNotes || null,
+        JSON.stringify(preAuthData.requestData || {}),
+        preAuthData.createdBy || null,
+      ]
+    );
+
+    return preAuth[0];
+  }
+
+  /**
+   * Submit pre-authorization to medical aid
+   */
+  async submitPreAuthorization(preAuthId: string, tenantDb: DataSource) {
+    const [preAuth] = await tenantDb.query(
+      `SELECT * FROM pre_authorization_requests WHERE id = $1`,
+      [preAuthId]
+    );
+
+    if (!preAuth) {
+      throw new NotFoundException('Pre-authorization request not found');
+    }
+
+    if (preAuth.status !== 'pending') {
+      throw new BadRequestException(`Pre-authorization is already ${preAuth.status}`);
+    }
+
+    // Submit via API if service available
+    if (this.medicalAidApiService) {
+      const apiResult = await this.medicalAidApiService.submitPreAuthorization(
+        preAuth.medical_aid_name,
+        {
+          patientId: preAuth.patient_id,
+          memberNumber: preAuth.member_number,
+          requestType: preAuth.request_type,
+          requestedAmount: parseFloat(preAuth.requested_amount),
+          diagnosisCodes: preAuth.diagnosis_codes || [],
+          primaryDiagnosisCode: preAuth.primary_diagnosis_code,
+          procedureCodes: preAuth.procedure_codes || [],
+          serviceCodes: preAuth.service_codes || [],
+          clinicalNotes: preAuth.clinical_notes,
+        },
+        tenantDb,
+      );
+
+      if (apiResult.success) {
+        await tenantDb.query(
+          `UPDATE pre_authorization_requests 
+           SET status = 'submitted', 
+               submitted_at = NOW(),
+               external_preauth_id = $1,
+               api_response_data = $2
+           WHERE id = $3`,
+          [
+            apiResult.preAuthId,
+            JSON.stringify(apiResult),
+            preAuthId,
+          ]
+        );
+      } else {
+        throw new BadRequestException(apiResult.error || 'Pre-authorization submission failed');
+      }
+    } else {
+      // Simulate submission
+      await tenantDb.query(
+        `UPDATE pre_authorization_requests 
+         SET status = 'submitted', submitted_at = NOW() 
+         WHERE id = $1`,
+        [preAuthId]
+      );
+    }
+
+    const [updated] = await tenantDb.query(
+      `SELECT * FROM pre_authorization_requests WHERE id = $1`,
+      [preAuthId]
+    );
+
+    return updated;
+  }
+
+  /**
+   * Get pre-authorization requests
+   */
+  async getPreAuthorizations(query: any, tenantDb: DataSource) {
+    let whereClause = 'WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (query.patientId) {
+      whereClause += ` AND patient_id = $${paramIndex}`;
+      params.push(query.patientId);
+      paramIndex++;
+    }
+
+    if (query.status) {
+      whereClause += ` AND status = $${paramIndex}`;
+      params.push(query.status);
+      paramIndex++;
+    }
+
+    if (query.medicalAidName) {
+      whereClause += ` AND medical_aid_name = $${paramIndex}`;
+      params.push(query.medicalAidName);
+      paramIndex++;
+    }
+
+    const preAuths = await tenantDb.query(
+      `SELECT * FROM pre_authorization_requests ${whereClause} ORDER BY created_at DESC`,
+      params
+    );
+
+    return preAuths;
+  }
+
+  /**
+   * Link claim to pre-authorization
+   */
+  async linkClaimToPreAuth(claimId: string, preAuthId: string, tenantDb: DataSource) {
+    // Verify pre-auth exists and is approved
+    const [preAuth] = await tenantDb.query(
+      `SELECT * FROM pre_authorization_requests WHERE id = $1`,
+      [preAuthId]
+    );
+
+    if (!preAuth) {
+      throw new NotFoundException('Pre-authorization not found');
+    }
+
+    if (preAuth.status !== 'approved') {
+      throw new BadRequestException('Pre-authorization must be approved before linking to claim');
+    }
+
+    // Update claim with pre-auth reference
+    await tenantDb.query(
+      `UPDATE medical_aid_claims SET pre_authorization_id = $1 WHERE id = $2`,
+      [preAuthId, claimId]
+    );
+
+    return this.getClaimById(claimId, tenantDb);
+  }
+
+  /**
+   * Log claim status change to history
+   */
+  private async logClaimStatusChange(
+    tenantDb: DataSource,
+    claimId: string,
+    newStatus: string,
+    previousStatus: string | null,
+    changedBy: string | null,
+    reason?: string,
+    apiResponse?: any
+  ) {
+    await tenantDb.query(
+      `INSERT INTO claim_status_history (
+        claim_id, status, previous_status, changed_by, change_reason, api_response
+      ) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        claimId,
+        newStatus,
+        previousStatus,
+        changedBy,
+        reason || null,
+        apiResponse ? JSON.stringify(apiResponse) : null,
+      ]
+    );
+  }
+
+  /**
+   * Get claim status history
+   */
+  async getClaimStatusHistory(claimId: string, tenantDb: DataSource) {
+    const history = await tenantDb.query(
+      `SELECT 
+        csh.*,
+        u.first_name || ' ' || u.last_name as changed_by_name
+       FROM claim_status_history csh
+       LEFT JOIN users u ON u.id = csh.changed_by
+       WHERE csh.claim_id = $1
+       ORDER BY csh.created_at DESC`,
+      [claimId]
+    );
+
+    return history.map((h: any) => ({
+      id: h.id,
+      claimId: h.claim_id,
+      status: h.status,
+      previousStatus: h.previous_status,
+      changedBy: h.changed_by,
+      changedByName: h.changed_by_name,
+      changeReason: h.change_reason,
+      notes: h.notes,
+      apiResponse: h.api_response,
+      metadata: h.metadata,
+      createdAt: h.created_at,
+    }));
+  }
+
+  /**
+   * Enhanced submit claim with API integration
+   */
+  async submitClaimEnhanced(id: string, submissionMethod: 'api' | 'edi' | 'manual' = 'api', tenantDb: DataSource) {
+    const claimRepository = tenantDb.getRepository(MedicalAidClaim);
+    const claim = await claimRepository.findOne({ where: { id } });
+    
+    if (!claim) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    if (claim.status !== ClaimStatus.DRAFT) {
+      throw new BadRequestException('Only draft claims can be submitted');
+    }
+
+    const previousStatus = claim.status;
+    const startTime = Date.now();
+
+    try {
+      // If API method and service available, submit via API
+      if (submissionMethod === 'api' && this.medicalAidApiService) {
+        const apiResult = await this.medicalAidApiService.submitClaim(
+          claim.medicalAidProvider,
+          {
+            claimId: claim.id,
+            patientId: claim.patientId,
+            memberNumber: claim.memberNumber,
+            claimAmount: claim.claimAmount,
+            diagnosisCodes: (claim as any).diagnosisCodes,
+            primaryDiagnosisCode: (claim as any).primaryDiagnosisCode,
+            procedureCodes: (claim.claimData as any)?.procedureCodes,
+            serviceCodes: (claim.claimData as any)?.serviceCodes,
+            claimData: claim.claimData,
+          },
+          tenantDb,
+        );
+
+        if (apiResult.success) {
+          (claim as any).externalClaimId = apiResult.externalClaimId;
+          claim.status = ClaimStatus.SUBMITTED;
+          claim.submissionDate = new Date();
+          (claim as any).submissionMethod = submissionMethod;
+          (claim as any).lastStatusCheckAt = new Date();
+          (claim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          (claim as any).apiResponseData = { submission: apiResult };
+        } else {
+          throw new BadRequestException(apiResult.error || 'API submission failed');
+        }
+      } else {
+        // Manual or EDI submission (simulated for now)
+        claim.status = ClaimStatus.SUBMITTED;
+        claim.submissionDate = new Date();
+        (claim as any).submissionMethod = submissionMethod;
+        (claim as any).lastStatusCheckAt = new Date();
+        (claim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+
+      const savedClaim = await claimRepository.save(claim);
+
+      // Log submission
+      await tenantDb.query(
+        `INSERT INTO claim_submissions (
+          claim_id, submission_method, submission_status, submission_attempt,
+          submitted_at, submitted_by, processing_time_ms
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          claim.id,
+          submissionMethod,
+          'success',
+          1,
+          new Date(),
+          null, // TODO: Get from context
+          Date.now() - startTime,
+        ]
+      );
+
+      // Log status change
+      await this.logClaimStatusChange(
+        tenantDb,
+        claim.id,
+        ClaimStatus.SUBMITTED,
+        previousStatus,
+        null,
+        `Submitted via ${submissionMethod}`
+      );
+
+      return savedClaim;
+    } catch (error: any) {
+      // Log failed submission
+      await tenantDb.query(
+        `INSERT INTO claim_submissions (
+          claim_id, submission_method, submission_status, submission_attempt,
+          error_message, submitted_at, processing_time_ms
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          claim.id,
+          submissionMethod,
+          'failed',
+          1,
+          error.message,
+          new Date(),
+          Date.now() - startTime,
+        ]
+      );
+
+      throw error;
+    }
+  }
+
+  /**
+   * Check claim status from medical aid (polling)
+   */
+  async checkClaimStatusEnhanced(id: string, tenantDb: DataSource) {
+    const claimRepository = tenantDb.getRepository(MedicalAidClaim);
+    const claim = await claimRepository.findOne({ where: { id } });
+    
+    if (!claim) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    if (!claim.submissionDate) {
+      throw new BadRequestException('Claim has not been submitted yet');
+    }
+
+    // If API service available and external claim ID exists, check via API
+    if (this.medicalAidApiService && (claim as any).externalClaimId) {
+      try {
+        const statusResult = await this.medicalAidApiService.checkClaimStatus(
+          claim.medicalAidProvider,
+          (claim as any).externalClaimId,
+          tenantDb,
+        );
+
+        // Update claim with status from API
+        await this.processClaimResponse(id, {
+          status: statusResult.status,
+          approved: statusResult.status === 'approved' || statusResult.status === 'paid',
+          rejected: statusResult.status === 'rejected',
+          approvedAmount: statusResult.approvedAmount,
+          rejectionReason: statusResult.rejectionReason,
+          details: statusResult.details,
+        }, tenantDb);
+      } catch (error: any) {
+        this.logger.warn(`Status check failed for claim ${id}: ${error.message}`);
+      }
+    }
+
+    // Update last check time
+    (claim as any).lastStatusCheckAt = new Date();
+    (claim as any).nextStatusCheckAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await claimRepository.save(claim);
+
+    // Get status history
+    const history = await this.getClaimStatusHistory(id, tenantDb);
+
+    return {
+      claim: await this.getClaimById(id, tenantDb),
+      statusHistory: history,
+      lastChecked: (claim as any).lastStatusCheckAt,
+      nextCheck: (claim as any).nextStatusCheckAt,
+    };
+  }
+
+  /**
+   * Process claim response from medical aid (webhook or polling result)
+   */
+  async processClaimResponse(id: string, responseData: any, tenantDb: DataSource) {
+    const claimRepository = tenantDb.getRepository(MedicalAidClaim);
+    const claim = await claimRepository.findOne({ where: { id } });
+    
+    if (!claim) {
+      throw new NotFoundException('Claim not found');
+    }
+
+    const previousStatus = claim.status;
+
+    // Update claim based on response
+    if (responseData.approved) {
+      claim.status = ClaimStatus.APPROVED;
+      claim.approvedAmount = responseData.approvedAmount || claim.claimAmount;
+    } else if (responseData.rejected) {
+      claim.status = ClaimStatus.REJECTED;
+      claim.rejectionReason = responseData.rejectionReason || responseData.reason;
+    } else if (responseData.processing) {
+      claim.status = ClaimStatus.PROCESSING;
+    } else if (responseData.paid) {
+      claim.status = ClaimStatus.PAID;
+      claim.approvedAmount = responseData.paidAmount || claim.approvedAmount;
+    }
+
+    claim.responseDate = new Date();
+    (claim as any).externalClaimId = responseData.externalClaimId || responseData.referenceNumber;
+    (claim as any).apiResponseData = responseData;
+
+    const savedClaim = await claimRepository.save(claim);
+
+    // Log status change
+    await this.logClaimStatusChange(
+      tenantDb,
+      claim.id,
+      savedClaim.status,
+      previousStatus,
+      null,
+      responseData.rejectionReason || 'Status updated from medical aid',
+      responseData
+    );
+
+    // Update submission record if exists
+    await tenantDb.query(
+      `UPDATE claim_submissions 
+       SET response_payload = $1, responded_at = NOW(), submission_status = $2
+       WHERE claim_id = $3 AND responded_at IS NULL
+       ORDER BY submitted_at DESC LIMIT 1`,
+      [
+        JSON.stringify(responseData),
+        responseData.approved || responseData.paid ? 'success' : responseData.rejected ? 'failed' : 'pending',
+        claim.id,
+      ]
+    );
+
+    return savedClaim;
+  }
+
+  /**
+   * Bulk submit claims
+   */
+  async bulkSubmitClaims(claimIds: string[], submissionMethod: 'api' | 'edi' = 'api', tenantDb: DataSource) {
+    const results = [];
+
+    for (const claimId of claimIds) {
+      try {
+        const result = await this.submitClaimEnhanced(claimId, submissionMethod, tenantDb);
+        results.push({ claimId, success: true, claim: result });
+      } catch (error: any) {
+        results.push({ claimId, success: false, error: error.message });
+      }
+    }
+
+    return {
+      total: claimIds.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+    };
+  }
+
+  /**
+   * Bulk check claim statuses
+   */
+  async bulkCheckClaimStatuses(claimIds: string[], tenantDb: DataSource) {
+    const results = [];
+
+    for (const claimId of claimIds) {
+      try {
+        const result = await this.checkClaimStatusEnhanced(claimId, tenantDb);
+        results.push({ claimId, success: true, data: result });
+      } catch (error: any) {
+        results.push({ claimId, success: false, error: error.message });
+      }
+    }
+
+    return {
+      total: claimIds.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+    };
   }
 
   async getDashboardSummary(tenantDb: DataSource) {

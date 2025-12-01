@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { UserPlus, Mail, Lock, Calendar, Phone, Hash, Eye, EyeOff, CheckCircle, AlertCircle, Heart, Shield } from 'lucide-react';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { register } = usePatientAuth();
   const [formData, setFormData] = useState({
     patientNumber: '',
@@ -20,7 +21,9 @@ const RegisterPage: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [tenantSlug] = useState('bulawayo-general');
+  
+  // Use fallback tenant if not in URL
+  const effectiveTenantSlug = tenantSlug || 'bulawayo-general';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,12 +65,12 @@ const RegisterPage: React.FC = () => {
           dateOfBirth: formData.dateOfBirth,
           phone: formData.phone || undefined,
         },
-        tenantSlug,
+        effectiveTenantSlug,
       );
 
       setSuccess(true);
       setTimeout(() => {
-        navigate('/login');
+        navigate(`/${effectiveTenantSlug}/login`);
       }, 3000);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -333,7 +336,7 @@ const RegisterPage: React.FC = () => {
               <p className="text-sm text-gray-600">
                 Already have an account?{' '}
                 <Link
-                  to="/login"
+                  to={`/${effectiveTenantSlug}/login`}
                   className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
                 >
                   Sign in

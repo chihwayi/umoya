@@ -63,3 +63,4 @@ export class AppointmentResourceBooking {
   updatedAt: Date;
 }
 
+

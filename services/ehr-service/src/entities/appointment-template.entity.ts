@@ -39,3 +39,4 @@ export class AppointmentTemplate {
   updatedAt: Date;
 }
 
+

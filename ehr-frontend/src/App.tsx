@@ -33,6 +33,7 @@ import PharmacyDashboard from './pages/PharmacyDashboard';
 import BillingDashboard from './pages/BillingDashboard';
 import ClaimsDashboard from './pages/ClaimsDashboard';
 import TelemedicineDashboard from './pages/TelemedicineDashboard';
+import TelemedicineConsultationPage from './pages/TelemedicineConsultationPage';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
@@ -334,6 +335,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'receptionist']}>
                   <TelemedicineDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/telemedicine/consultation/:consultationId"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TelemedicineConsultationPage />
                 </RoleProtectedRoute>
               }
             />

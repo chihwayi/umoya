@@ -60,10 +60,37 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
         token,
         tenantSlug
       );
-      setAvailabilities(response.data || []);
+      
+      // Handle different response structures
+      let availabilitiesList: DoctorAvailability[] = [];
+      
+      // Debug logging
+      console.log('DoctorAvailabilityManager - API Response:', response);
+      console.log('DoctorAvailabilityManager - response.data:', response.data);
+      console.log('DoctorAvailabilityManager - response.data type:', typeof response.data);
+      console.log('DoctorAvailabilityManager - isArray(response.data):', Array.isArray(response.data));
+      
+      if (Array.isArray(response.data)) {
+        availabilitiesList = response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        // Try common nested structures
+        if (Array.isArray(response.data.availabilities)) {
+          availabilitiesList = response.data.availabilities;
+        } else if (Array.isArray(response.data.data)) {
+          availabilitiesList = response.data.data;
+        } else if (Array.isArray(response.data.items)) {
+          availabilitiesList = response.data.items;
+        } else if (Array.isArray(response.data.results)) {
+          availabilitiesList = response.data.results;
+        }
+      }
+      
+      console.log('DoctorAvailabilityManager - Final availabilitiesList:', availabilitiesList);
+      setAvailabilities(availabilitiesList);
     } catch (error: any) {
       console.error('Error fetching availabilities:', error);
       showError('Error', 'Failed to load availability records');
+      setAvailabilities([]); // Ensure it's always an array
     } finally {
       setLoading(false);
     }
@@ -328,7 +355,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
           {/* List */}
           {loading ? (
             <div className="text-center py-8 text-gray-500">Loading...</div>
-          ) : availabilities.length === 0 ? (
+          ) : !Array.isArray(availabilities) || availabilities.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
               <p>No unavailability periods set</p>

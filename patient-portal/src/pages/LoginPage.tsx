@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { LogIn, Mail, Lock, AlertCircle, Eye, EyeOff, Heart, Shield, Sparkles } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { login } = usePatientAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -13,7 +14,9 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [tenantSlug] = useState('bulawayo-general');
+  
+  // Use fallback tenant if not in URL
+  const effectiveTenantSlug = tenantSlug || 'bulawayo-general';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +25,8 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password, tenantSlug);
-      navigate('/dashboard');
+      await login(formData.email, formData.password, effectiveTenantSlug);
+      navigate(`/${effectiveTenantSlug}/dashboard`);
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {

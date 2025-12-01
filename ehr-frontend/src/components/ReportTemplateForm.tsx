@@ -37,7 +37,7 @@ const ReportTemplateForm: React.FC<ReportTemplateFormProps> = ({
     try {
       if (template) {
         await analyticsApi.updateTemplate(tenantSlug, token, template.id, formData);
-        showSuccess('Template updated successfully');
+        showSuccess('Template updated successfully', 'The template has been updated successfully.');
       } else {
         await analyticsApi.createTemplate(tenantSlug, token, {
           ...formData,
@@ -45,12 +45,12 @@ const ReportTemplateForm: React.FC<ReportTemplateFormProps> = ({
           queryConfig: { table: 'appointments', columns: ['*'] },
           visualizationConfig: {},
         });
-        showSuccess('Template created successfully');
+        showSuccess('Template created successfully', 'The template has been created successfully.');
       }
       onSuccess();
       onClose();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to save template');
+      showError('Failed to save template', error.response?.data?.message || 'Failed to save template');
     } finally {
       setLoading(false);
     }
@@ -178,4 +178,5 @@ const ReportTemplateForm: React.FC<ReportTemplateFormProps> = ({
 };
 
 export default ReportTemplateForm;
+
 

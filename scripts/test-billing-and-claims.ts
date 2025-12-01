@@ -729,8 +729,8 @@ async function runAllTests() {
     let newBill = null;
     if (patientId) {
       newBill = await testCreateBill(token, patientId);
-      if (newBill) {
-        await testAddPayment(token, newBill.id);
+      if (newBill && typeof newBill === 'object' && 'id' in newBill) {
+        await testAddPayment(token, (newBill as { id: string }).id);
       }
     }
 
@@ -744,9 +744,9 @@ async function runAllTests() {
 
     // Create a new claim if we have a bill
     let newClaim = null;
-    if (newBill) {
+    if (newBill && typeof newBill === 'object' && 'id' in newBill) {
       // Try to generate claim from bill
-      newClaim = await testGenerateClaimFromBill(token, newBill.id);
+      newClaim = await testGenerateClaimFromBill(token, (newBill as { id: string }).id);
       
       // If that fails (claim exists), create a manual claim
       if (!newClaim && bills.length > 0) {
@@ -757,16 +757,15 @@ async function runAllTests() {
     }
 
     // Test claim operations if we have a claim
-    if (newClaim) {
-      await testCheckClaimStatus(token, newClaim.id);
+    if (newClaim && typeof newClaim === 'object' && 'id' in newClaim) {
+      await testCheckClaimStatus(token, (newClaim as { id: string; status?: string }).id);
       
       // Only submit if status is draft
-      if (newClaim.status === 'draft') {
-        await testSubmitClaim(token, newClaim.id);
+      if ('status' in newClaim && (newClaim as { status?: string }).status === 'draft') {
+        await testSubmitClaim(token, (newClaim as { id: string }).id);
       }
-
       // Test resubmit (will skip if not rejected)
-      await testResubmitClaim(token, newClaim.id);
+      await testResubmitClaim(token, (newClaim as { id: string }).id);
     } else if (claims.length > 0) {
       // Use existing claim for testing
       const existingClaim = claims[0];

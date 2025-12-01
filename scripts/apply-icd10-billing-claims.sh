@@ -64,3 +64,4 @@ echo "📋 Next Steps:"
 echo "   1. Verify columns were added: docker exec $CONTAINER_NAME psql -U $DB_USERNAME -d <tenant_db> -c '\\d billing'"
 echo "   2. Verify claims table: docker exec $CONTAINER_NAME psql -U $DB_USERNAME -d <tenant_db> -c '\\d medical_aid_claims'"
 
+

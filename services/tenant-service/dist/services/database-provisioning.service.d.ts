@@ -27,6 +27,15 @@ export declare class DatabaseProvisioningService {
     private generateConnectionString;
     applyClinicSchema(connectionString: string, options?: ApplySchemaOptions): Promise<void>;
     private getClinicSchema;
+    private getSprint5SchemaStatements;
+    private getSprint6DiabetesSchemaStatements;
+    private getSprint7OncologySchemaStatements;
+    private getSprint8PharmacySchemaStatements;
+    private getAppointmentEnhancementsSchemaStatements;
+    private getBillingClaimsEnhancementsStatements;
+    private getTelemedicineSchemaStatements;
+    private getAnalyticsSchemaStatements;
+    private getPrescriptionDownloadSchemaStatements;
     private getIcd10MappingStatements;
     private getTriggerStatements;
     private getSnomedUpgradeStatements;
@@ -39,6 +48,10 @@ export declare class DatabaseProvisioningService {
     private seedDefaultUsers;
     private seedLabCatalog;
     private seedImagingCatalog;
+    private seedClinicalNoteTemplates;
+    private seedPrescriptionTemplates;
     deleteDatabase(databaseName: string): Promise<void>;
+    private getProSchemaStatements;
+    private getHealthGoalsSchemaStatements;
 }
 export {};

@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
+import { useNotification } from '../components/GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { Calendar, Clock, User, X, Plus, AlertCircle, ArrowLeft, CheckCircle, MapPin, FileText, Video, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const AppointmentsPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
+  const { showError, showSuccess } = useNotification();
+  const { confirmation, confirm, cancel } = useConfirmation();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,13 +43,22 @@ const AppointmentsPage: React.FC = () => {
   };
 
   const handleCancel = async (id: string) => {
-    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
+    const confirmed = await confirm({
+      title: 'Cancel Appointment',
+      message: 'Are you sure you want to cancel this appointment?',
+      confirmText: 'Yes, Cancel',
+      cancelText: 'Keep Appointment',
+      type: 'warning',
+    });
+
+    if (!confirmed) return;
 
     try {
       await patientPortalApi.cancelAppointment(id, token!, tenantSlug);
       await loadAppointments();
+      showSuccess('Success', 'Appointment cancelled successfully');
     } catch (err: any) {
-      alert(err.message || 'Failed to cancel appointment');
+      showError('Error', err.message || 'Failed to cancel appointment');
     }
   };
 
@@ -60,10 +75,10 @@ const AppointmentsPage: React.FC = () => {
       // Get meeting URL
       const meetingInfo = await patientPortalApi.getMeetingUrl(consultation.id, token!, tenantSlug);
       
-      // Navigate to video consultation page
-      window.location.href = `/telemedicine/${consultation.id}?url=${encodeURIComponent(meetingInfo.meetingUrl)}&password=${meetingInfo.meetingPassword || ''}`;
+      // Navigate to video consultation page with tenant slug
+      window.location.href = `/${tenantSlug}/telemedicine/${consultation.id}?url=${encodeURIComponent(meetingInfo.meetingUrl)}&password=${meetingInfo.meetingPassword || ''}`;
     } catch (err: any) {
-      alert(err.message || 'Failed to join consultation');
+      showError('Error', err.message || 'Failed to join consultation');
     } finally {
       setJoiningConsultation(null);
     }
@@ -98,7 +113,7 @@ const AppointmentsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                to="/dashboard"
+                to={`/${tenantSlug}/dashboard`}
                 className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
@@ -109,7 +124,7 @@ const AppointmentsPage: React.FC = () => {
               </div>
             </div>
             <Link
-              to="/appointments/request"
+              to={`/${tenantSlug}/appointments/request`}
               className="hidden md:flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
             >
               <Plus className="w-5 h-5" />
@@ -138,7 +153,7 @@ const AppointmentsPage: React.FC = () => {
               You don't have any appointments scheduled yet. Request an appointment to get started.
             </p>
             <Link
-              to="/appointments/request"
+              to={`/${tenantSlug}/appointments/request`}
               className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
             >
               <Plus className="w-5 h-5" />
@@ -231,7 +246,8 @@ const AppointmentsPage: React.FC = () => {
                       </div>
                     )}
 
-                    {apt.isTelehealth && apt.status === 'scheduled' && (
+                    {/* Check for telehealth appointment OR if consultation exists */}
+                    {((apt.isTelehealth && apt.status === 'scheduled') || apt.status === 'confirmed' || apt.status === 'in-progress') && (
                       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 rounded-lg p-4">
                         <p className="text-sm font-semibold text-purple-900 mb-2">Video Consultation Available</p>
                         <button
@@ -281,6 +297,17 @@ const AppointmentsPage: React.FC = () => {
             ))}
           </div>
         )}
+
+        <ConfirmationDialog
+          isOpen={confirmation.isOpen}
+          title={confirmation.title}
+          message={confirmation.message}
+          confirmText={confirmation.confirmText}
+          cancelText={confirmation.cancelText}
+          type={confirmation.type}
+          onConfirm={() => confirmation.onConfirm?.()}
+          onCancel={cancel}
+        />
 
         {/* Mobile Request Button */}
         <div className="md:hidden fixed bottom-6 right-6 z-20">

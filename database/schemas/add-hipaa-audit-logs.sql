@@ -60,3 +60,4 @@ COMMENT ON COLUMN hipaa_audit_logs.metadata IS 'Additional metadata about the ac
 COMMENT ON COLUMN hipaa_audit_logs.risk_level IS 'Risk level: low, medium, high, or critical';
 COMMENT ON COLUMN hipaa_audit_logs.created_at IS 'Timestamp when the action occurred';
 
+

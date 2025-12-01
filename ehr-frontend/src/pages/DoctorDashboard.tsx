@@ -30,6 +30,9 @@ import { chartApi } from '../services/api';
 import ClinicalAlerts from '../components/ClinicalAlerts';
 import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
 import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
+import ProAlerts from '../components/ProAlerts';
+import PatientProViewer from '../components/PatientProViewer';
+import QuestionnaireLibrary from '../components/QuestionnaireLibrary';
 import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
 import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
@@ -149,6 +152,8 @@ const DoctorDashboard: React.FC = () => {
   const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
   const [showAvailabilityManager, setShowAvailabilityManager] = useState(false);
+  const [showProViewerModal, setShowProViewerModal] = useState(false);
+  const [showQuestionnaireLibrary, setShowQuestionnaireLibrary] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
@@ -1036,6 +1041,7 @@ const DoctorDashboard: React.FC = () => {
   const getDoctorActions = () => {
     return [
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
+      { icon: FileText, label: 'Questionnaires', desc: 'Assign & manage PROs', color: 'from-indigo-500 to-purple-500', action: 'questionnaires' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
@@ -1109,6 +1115,15 @@ const DoctorDashboard: React.FC = () => {
                   onClick={() => {
                     if (action.route === 'doctor') {
                       setActiveTab('dashboard');
+                    } else if (action.action === 'questionnaires') {
+                      // Open questionnaire library - if no patient selected, show error
+                      if (!currentAppointment?.patient?.id) {
+                        showError('No Patient Selected', 'Please select a patient from your appointments first, then open the questionnaire library.');
+                        setSidebarOpen(false);
+                        return;
+                      }
+                      setShowQuestionnaireLibrary(true);
+                      setSidebarOpen(false);
                     } else if (action.route) {
                       navigate(`/ehr/${tenantSlug}/${action.route}`);
                     }
@@ -1533,6 +1548,11 @@ const DoctorDashboard: React.FC = () => {
               token={localStorage.getItem('ehr_token') || ''}
               onAppointmentUpdate={fetchTodayAppointments}
               appointments={appointments}
+              onAppointmentSelect={(appointment) => {
+                setCurrentAppointment(appointment);
+                // Switch to the main view tab to show appointment details
+                setActiveTab('main');
+              }}
             />
           )}
 
@@ -1932,6 +1952,47 @@ const DoctorDashboard: React.FC = () => {
                         </div>
                       );
                     })()}
+
+                    {/* PRO Alerts - Patient-Reported Outcomes */}
+                    {currentAppointment && (
+                      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-purple-600" />
+                            Patient-Reported Outcomes
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (!currentAppointment?.patient?.id) {
+                                  showError('No Patient Selected', 'Please select a patient first');
+                                  return;
+                                }
+                                setShowQuestionnaireLibrary(true);
+                              }}
+                              className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                              title="Assign Questionnaire"
+                            >
+                              <FileText className="w-3 h-3" />
+                              Assign
+                            </button>
+                            <button
+                              onClick={() => setShowProViewerModal(true)}
+                              className="px-3 py-1.5 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View All
+                            </button>
+                          </div>
+                        </div>
+                        <ProAlerts
+                          patientId={currentAppointment.patient.id}
+                          tenantSlug={tenantSlug!}
+                          token={localStorage.getItem('ehr_token') || ''}
+                          onAlertClick={() => setShowProViewerModal(true)}
+                        />
+                      </div>
+                    )}
 
                     {/* Chart Sidebar - Compact */}
                     <div className="lg:col-span-1">
@@ -2649,6 +2710,43 @@ const DoctorDashboard: React.FC = () => {
           tenantSlug={tenantSlug}
           onClose={() => setShowAvailabilityManager(false)}
         />
+      )}
+
+      {/* Patient PRO Viewer Modal */}
+      {showProViewerModal && currentAppointment && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <PatientProViewer
+                patientId={currentAppointment.patient.id}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => setShowProViewerModal(false)}
+              />
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Questionnaire Library Modal */}
+      {showQuestionnaireLibrary && currentAppointment && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+              <QuestionnaireLibrary
+                patientId={currentAppointment.patient.id}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => setShowQuestionnaireLibrary(false)}
+                onAssigned={() => {
+                  setShowQuestionnaireLibrary(false);
+                  showSuccess('Success', 'Questionnaire assigned successfully!');
+                  // Optionally refresh PRO alerts
+                }}
+              />
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

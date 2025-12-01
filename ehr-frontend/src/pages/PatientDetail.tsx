@@ -9,6 +9,8 @@ import { ehrApi } from '../services/api';
 import CurrentMedications from '../components/CurrentMedications';
 import MedicationTimeline from '../components/MedicationTimeline';
 import MedicationReconciliation from '../components/MedicationReconciliation';
+import PatientProTrends from '../components/PatientProTrends';
+import PatientProSchedules from '../components/PatientProSchedules';
 
 interface Patient {
   id: string;
@@ -324,6 +326,16 @@ const PatientDetail: React.FC = () => {
       {/* Medication Reconciliation */}
       <div className="mt-6">
         <MedicationReconciliation patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
+      </div>
+
+      {/* PRO Trends */}
+      <div className="mt-6">
+        <PatientProTrends patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
+      </div>
+
+      {/* PRO Schedules */}
+      <div className="mt-6">
+        <PatientProSchedules patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
       </div>
     </div>
   );

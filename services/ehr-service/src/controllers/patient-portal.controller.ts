@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { Response } from 'express';
+import * as fs from 'fs';
 import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswordResetDto, PatientPasswordResetConfirmDto } from '../services/patient-auth.service';
 import { PatientPortalService } from '../services/patient-portal.service';
 import { PatientMessagingService } from '../services/patient-messaging.service';
@@ -8,12 +9,19 @@ import { PatientNotificationsService } from '../services/patient-notifications.s
 import { PatientPortalAppointmentService } from '../services/patient-portal-appointment.service';
 import { PatientVitalsSubmissionService } from '../services/patient-vitals-submission.service';
 import { PrescriptionPdfService } from '../services/prescription-pdf.service';
+import { TelemedicineService } from '../services/telemedicine.service';
+import { HealthRecordsExportService } from '../services/health-records-export.service';
+import { PatientProService } from '../services/patient-pro.service';
+import { AssignQuestionnaireDto, SubmitQuestionnaireDto } from '../dto/patient-pro.dto';
+import { HealthGoalsService, CreateGoalDto, UpdateGoalDto, LogProgressDto } from '../services/health-goals.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @ApiTags('Patient Portal')
 @Controller('patient-portal')
 export class PatientPortalController {
+  private readonly logger = new Logger(PatientPortalController.name);
+
   constructor(
     private readonly patientAuthService: PatientAuthService,
     private readonly patientPortalService: PatientPortalService,
@@ -23,6 +31,9 @@ export class PatientPortalController {
     private readonly prescriptionPdfService: PrescriptionPdfService,
     private readonly patientVitalsSubmissionService: PatientVitalsSubmissionService,
     private readonly telemedicineService: TelemedicineService,
+    private readonly healthRecordsExportService: HealthRecordsExportService,
+    private readonly patientProService: PatientProService,
+    private readonly healthGoalsService: HealthGoalsService,
   ) {}
 
   @Post('register')
@@ -211,8 +222,42 @@ export class PatientPortalController {
   @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
   @ApiQuery({ name: 'type', required: false, description: 'Filter by record type' })
   async getRecords(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('type') type?: string) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.getPatientRecords(patientId, req.tenantId, { startDate, endDate, type });
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getRecords] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.log(`[getRecords] Patient ID from token: ${patientId}, Tenant ID: ${req.tenantId}, User object: ${JSON.stringify(req.user)}`);
+    
+    // Debug: Check if patient exists and has records
+    try {
+      if (req.tenantDb) {
+        const patientCheck = await req.tenantDb.query(`SELECT id, first_name, last_name FROM patients WHERE id = $1`, [patientId]);
+        this.logger.log(`[getRecords] Patient check result: ${JSON.stringify(patientCheck)}`);
+        
+        const recordCount = await req.tenantDb.query(`SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`, [patientId]);
+        this.logger.log(`[getRecords] Record count for patient ${patientId}: ${JSON.stringify(recordCount)}`);
+        
+        // Test the exact query
+        const testQuery = await req.tenantDb.query(
+          `SELECT id, visit_date, chief_complaint FROM medical_records WHERE patient_id = $1 LIMIT 1`,
+          [patientId]
+        );
+        this.logger.log(`[getRecords] Test query result: ${JSON.stringify(testQuery)}`);
+      }
+    } catch (debugError: any) {
+      this.logger.error(`[getRecords] Debug query error: ${debugError.message || debugError}`);
+    }
+    
+    try {
+      const result = await this.patientPortalService.getPatientRecords(patientId, req.tenantId, { startDate, endDate, type });
+      this.logger.log(`[getRecords] Service returned ${result.length} records`);
+      this.logger.log(`[getRecords] First record sample: ${JSON.stringify(result[0] || null)}`);
+      return result;
+    } catch (serviceError: any) {
+      this.logger.error(`[getRecords] Service error: ${serviceError.message || serviceError}`);
+      throw serviceError;
+    }
   }
 
   // Lab Results
@@ -234,7 +279,10 @@ export class PatientPortalController {
   @ApiOperation({ summary: 'Get patient prescriptions', description: 'Get prescriptions for the logged-in patient' })
   @ApiQuery({ name: 'activeOnly', required: false, type: Boolean, description: 'Get only active prescriptions' })
   async getPrescriptions(@Req() req: RequestWithTenant & { user: any }, @Query('activeOnly') activeOnly?: string) {
-    const patientId = req.user.sub;
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
     return this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, { activeOnly: activeOnly === 'true' });
   }
 
@@ -248,7 +296,10 @@ export class PatientPortalController {
     @Req() req: RequestWithTenant & { user: any },
     @Res() res: Response,
   ) {
-    const patientId = req.user.sub;
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      return res.status(401).json({ message: 'Patient ID not found in token' });
+    }
     
     // Verify prescription belongs to patient
     const prescriptions = await this.patientPortalService.getPatientPrescriptions(patientId, req.tenantId, {});
@@ -293,7 +344,10 @@ export class PatientPortalController {
   @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by payment status' })
   async getBills(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('status') status?: string) {
-    const patientId = req.user.sub;
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
     return this.patientPortalService.getPatientBills(patientId, req.tenantId, { startDate, endDate, status });
   }
 
@@ -359,12 +413,12 @@ export class PatientPortalController {
     }
 
     // Get consultation by appointment ID
-    const consultations = await this.telemedicineService.listConsultations(req.tenantDb, { appointmentId });
-    if (consultations.length === 0) {
+    const result = await this.telemedicineService.listConsultations(req.tenantDb, { appointmentId });
+    if (result.consultations.length === 0) {
       throw new Error('Telemedicine consultation not found for this appointment');
     }
 
-    return consultations[0];
+    return result.consultations[0];
   }
 
   @Post('telemedicine/consultation/:consultationId/join')
@@ -385,7 +439,7 @@ export class PatientPortalController {
     }
 
     // Join consultation
-    return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, { role: 'patient' });
+    return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, { userId: patientId, role: 'patient' });
   }
 
   @Get('telemedicine/consultation/:consultationId/meeting-url')
@@ -561,6 +615,772 @@ export class PatientPortalController {
     const patientId = req.user?.sub || req.user?.id;
     await this.patientNotificationsService.deleteNotification(id, patientId, req.tenantId);
     return { success: true };
+  }
+
+  // Chronic Disease Management - Diabetes
+  @Get('diabetes/registry')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient diabetes registry', description: 'Get diabetes registry information for the logged-in patient' })
+  async getDiabetesRegistry(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientDiabetesRegistry(patientId, req.tenantId);
+  }
+
+  @Get('diabetes/glucose-history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient glucose history', description: 'Get glucose readings history for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Limit results' })
+  async getGlucoseHistory(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientGlucoseHistory(patientId, req.tenantId, {
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  @Get('diabetes/care-plan')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient diabetes care plan', description: 'Get care plan and medications for the logged-in patient' })
+  async getDiabetesCarePlan(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientDiabetesCarePlan(patientId, req.tenantId);
+  }
+
+  @Get('diabetes/medications')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient diabetes medications', description: 'Get diabetes medications for the logged-in patient' })
+  async getDiabetesMedications(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientDiabetesMedications(patientId, req.tenantId);
+  }
+
+  // Chronic Disease Management - Cardiology/Hypertension
+  @Get('cardiology/encounters')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient cardiology encounters', description: 'Get cardiology encounter history for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Limit results' })
+  async getCardiologyEncounters(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientCardiologyEncounters(patientId, req.tenantId, {
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  @Get('cardiology/blood-pressure-trends')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient blood pressure trends', description: 'Get blood pressure trend data for the logged-in patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter from date' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter to date' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Limit results' })
+  async getBloodPressureTrends(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getPatientBloodPressureTrends(patientId, req.tenantId, {
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - REFILL REQUESTS
+  // ============================================
+
+  @Post('prescriptions/:prescriptionId/refill-request')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Request prescription refill', description: 'Submit a refill request for a prescription' })
+  @ApiParam({ name: 'prescriptionId', description: 'Prescription ID' })
+  @ApiResponse({ status: 201, description: 'Refill request created successfully' })
+  @ApiResponse({ status: 404, description: 'Prescription not found' })
+  async createRefillRequest(
+    @Param('prescriptionId') prescriptionId: string,
+    @Body() body: { requestedQuantity?: number; reason?: string; urgency?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.createRefillRequest(patientId, req.tenantId, prescriptionId, body);
+  }
+
+  @Get('prescriptions/refill-requests')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get refill requests', description: 'Get all refill requests for the patient' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status (pending, approved, rejected, cancelled)' })
+  @ApiResponse({ status: 200, description: 'Refill requests retrieved successfully' })
+  async getRefillRequests(@Req() req: RequestWithTenant, @Query('status') status?: string) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getRefillRequests(patientId, req.tenantId, { status });
+  }
+
+  @Delete('prescriptions/refill-requests/:requestId')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cancel refill request', description: 'Cancel a pending refill request' })
+  @ApiParam({ name: 'requestId', description: 'Refill request ID' })
+  @ApiResponse({ status: 200, description: 'Refill request cancelled successfully' })
+  @ApiResponse({ status: 404, description: 'Refill request not found' })
+  async cancelRefillRequest(@Param('requestId') requestId: string, @Req() req: RequestWithTenant) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    await this.patientPortalService.cancelRefillRequest(patientId, req.tenantId, requestId);
+    return { message: 'Refill request cancelled successfully' };
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - REMINDERS
+  // ============================================
+
+  @Post('prescriptions/:prescriptionId/reminders')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create medication reminder', description: 'Create a reminder for medication intake' })
+  @ApiParam({ name: 'prescriptionId', description: 'Prescription ID' })
+  @ApiResponse({ status: 201, description: 'Medication reminder created successfully' })
+  @ApiResponse({ status: 404, description: 'Prescription not found' })
+  async createMedicationReminder(
+    @Param('prescriptionId') prescriptionId: string,
+    @Body() body: { reminderTime: string; reminderDays: number[]; reminderType?: string; timezone?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.createMedicationReminder(patientId, req.tenantId, prescriptionId, body);
+  }
+
+  @Get('prescriptions/reminders')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get medication reminders', description: 'Get all medication reminders for the patient' })
+  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean, description: 'Filter only active reminders' })
+  @ApiResponse({ status: 200, description: 'Medication reminders retrieved successfully' })
+  async getMedicationReminders(@Req() req: RequestWithTenant, @Query('activeOnly') activeOnly?: string) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getMedicationReminders(patientId, req.tenantId, {
+      activeOnly: activeOnly === 'true',
+    });
+  }
+
+  @Put('prescriptions/reminders/:reminderId')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update medication reminder', description: 'Update a medication reminder' })
+  @ApiParam({ name: 'reminderId', description: 'Reminder ID' })
+  @ApiResponse({ status: 200, description: 'Medication reminder updated successfully' })
+  @ApiResponse({ status: 404, description: 'Medication reminder not found' })
+  async updateMedicationReminder(
+    @Param('reminderId') reminderId: string,
+    @Body() body: { reminderTime?: string; reminderDays?: number[]; reminderType?: string; isActive?: boolean },
+    @Req() req: RequestWithTenant,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.updateMedicationReminder(patientId, req.tenantId, reminderId, body);
+  }
+
+  @Delete('prescriptions/reminders/:reminderId')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Delete medication reminder', description: 'Delete a medication reminder' })
+  @ApiParam({ name: 'reminderId', description: 'Reminder ID' })
+  @ApiResponse({ status: 200, description: 'Medication reminder deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Medication reminder not found' })
+  async deleteMedicationReminder(@Param('reminderId') reminderId: string, @Req() req: RequestWithTenant) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    await this.patientPortalService.deleteMedicationReminder(patientId, req.tenantId, reminderId);
+    return { message: 'Medication reminder deleted successfully' };
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - ADHERENCE TRACKING
+  // ============================================
+
+  @Post('prescriptions/:prescriptionId/adherence')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log medication adherence', description: 'Log whether medication was taken or missed' })
+  @ApiParam({ name: 'prescriptionId', description: 'Prescription ID' })
+  @ApiResponse({ status: 201, description: 'Adherence logged successfully' })
+  @ApiResponse({ status: 404, description: 'Prescription not found' })
+  async logMedicationAdherence(
+    @Param('prescriptionId') prescriptionId: string,
+    @Body() body: { scheduledTime: string; taken: boolean; takenTime?: string; missedReason?: string; notes?: string },
+    @Req() req: RequestWithTenant,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.logMedicationAdherence(patientId, req.tenantId, prescriptionId, body);
+  }
+
+  @Get('prescriptions/adherence/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get adherence summary', description: 'Get medication adherence summary statistics' })
+  @ApiQuery({ name: 'prescriptionId', required: false, description: 'Filter by prescription ID' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for summary period' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for summary period' })
+  @ApiResponse({ status: 200, description: 'Adherence summary retrieved successfully' })
+  async getMedicationAdherenceSummary(
+    @Req() req: RequestWithTenant,
+    @Query('prescriptionId') prescriptionId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getMedicationAdherenceSummary(patientId, req.tenantId, prescriptionId, {
+      startDate,
+      endDate,
+    });
+  }
+
+  @Get('prescriptions/adherence/logs')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get adherence logs', description: 'Get detailed medication adherence logs' })
+  @ApiQuery({ name: 'prescriptionId', required: false, description: 'Filter by prescription ID' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for logs' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for logs' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit number of results' })
+  @ApiResponse({ status: 200, description: 'Adherence logs retrieved successfully' })
+  async getMedicationAdherenceLogs(
+    @Req() req: RequestWithTenant,
+    @Query('prescriptionId') prescriptionId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const patientId = (req.user as any)?.sub || (req.user as any)?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.patientPortalService.getMedicationAdherenceLogs(patientId, req.tenantId, prescriptionId, {
+      startDate,
+      endDate,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  // Health Records Export
+  @Post('export/pdf')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export complete medical record as PDF', description: 'Generate and download complete medical record PDF' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for export range' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for export range' })
+  @ApiResponse({ status: 200, description: 'PDF export generated successfully' })
+  async exportMedicalRecordPdf(
+    @Req() req: RequestWithTenant & { user: any },
+    @Res() res: Response,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      return res.status(401).json({ message: 'Patient ID not found in token' });
+    }
+    this.logger.log(`[exportMedicalRecordPdf] Patient ID: ${patientId}, Tenant ID: ${req.tenantId}`);
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string;
+    const userAgent = req.headers['user-agent'];
+
+    try {
+      const result = await this.healthRecordsExportService.exportCompleteMedicalRecordPdf(
+        patientId,
+        req.tenantId,
+        { startDate, endDate },
+        patientId,
+        ipAddress,
+        userAgent,
+      );
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="medical-record-${patientId}-${Date.now()}.pdf"`);
+      res.setHeader('Content-Length', result.fileSize);
+
+      const fileStream = fs.createReadStream(result.filePath);
+      fileStream.pipe(res);
+
+      // Clean up file after streaming
+      fileStream.on('end', () => {
+        try {
+          fs.unlinkSync(result.filePath);
+        } catch (unlinkError) {
+          this.logger.warn(`[exportMedicalRecordPdf] Failed to delete temp file: ${unlinkError}`);
+        }
+      });
+    } catch (error: any) {
+      this.logger.error(`[exportMedicalRecordPdf] Export failed: ${error.message}`, error.stack);
+      res.status(500).json({ error: error.message || 'Failed to generate PDF export' });
+    }
+  }
+
+  @Get('export/fhir')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export medical records as FHIR Bundle', description: 'Export patient data in FHIR R4 format' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for export range' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for export range' })
+  @ApiResponse({ status: 200, description: 'FHIR bundle exported successfully' })
+  async exportFhirBundle(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.log(`[exportFhirBundle] Patient ID: ${patientId}, Tenant ID: ${req.tenantId}`);
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string;
+    const userAgent = req.headers['user-agent'];
+
+    try {
+      const result = await this.healthRecordsExportService.exportFhirBundle(
+        patientId,
+        req.tenantId,
+        { startDate, endDate },
+        patientId,
+        ipAddress,
+        userAgent,
+      );
+
+      return result.data;
+    } catch (error: any) {
+      this.logger.error(`[exportFhirBundle] Export failed: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  @Get('export/json')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export medical records as JSON', description: 'Export patient data in JSON format' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for export range' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for export range' })
+  @ApiResponse({ status: 200, description: 'JSON export generated successfully' })
+  async exportJson(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.log(`[exportJson] Patient ID: ${patientId}, Tenant ID: ${req.tenantId}`);
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string;
+    const userAgent = req.headers['user-agent'];
+
+    try {
+      const result = await this.healthRecordsExportService.exportJson(
+        patientId,
+        req.tenantId,
+        { startDate, endDate },
+        patientId,
+        ipAddress,
+        userAgent,
+      );
+
+      return result.data;
+    } catch (error: any) {
+      this.logger.error(`[exportJson] Export failed: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  @Get('export/csv')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export medical records as CSV', description: 'Export patient data in CSV format' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date for export range' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date for export range' })
+  @ApiQuery({ name: 'dataType', required: false, description: 'Type of data to export (appointments, prescriptions, lab_results, vitals)' })
+  @ApiResponse({ status: 200, description: 'CSV export generated successfully' })
+  async exportCsv(
+    @Req() req: RequestWithTenant & { user: any },
+    @Res() res: Response,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('dataType') dataType?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      return res.status(401).json({ message: 'Patient ID not found in token' });
+    }
+    this.logger.log(`[exportCsv] Patient ID: ${patientId}, Tenant ID: ${req.tenantId}`);
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string;
+    const userAgent = req.headers['user-agent'];
+
+    try {
+      const result = await this.healthRecordsExportService.exportCsv(
+        patientId,
+        req.tenantId,
+        { startDate, endDate, dataType },
+        patientId,
+        ipAddress,
+        userAgent,
+      );
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="medical-records-${patientId}-${Date.now()}.csv"`);
+      res.send(result.csv);
+    } catch (error: any) {
+      this.logger.error(`[exportCsv] Export failed: ${error.message}`, error.stack);
+      res.status(500).json({ error: error.message || 'Failed to generate CSV export' });
+    }
+  }
+
+  // ==================== Patient-Reported Outcomes (PROs) ====================
+  // NOTE: Specific routes MUST come before parameterized routes to avoid route conflicts
+
+  @Get('questionnaires/available')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get available questionnaires', description: 'List all available questionnaires for the patient' })
+  @ApiResponse({ status: 200, description: 'Questionnaires retrieved successfully' })
+  async getAvailableQuestionnaires(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getAvailableQuestionnaires] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getAvailableQuestionnaires] Patient ID: ${patientId}`);
+    return this.patientProService.getAvailableQuestionnaires(req.tenantDb, patientId);
+  }
+
+  @Get('questionnaires/pending')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pending questionnaires', description: 'Get questionnaires assigned to patient that are pending completion' })
+  @ApiResponse({ status: 200, description: 'Pending questionnaires retrieved successfully' })
+  async getPendingQuestionnaires(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getPendingQuestionnaires] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getPendingQuestionnaires] Patient ID: ${patientId}`);
+    return this.patientProService.getPendingQuestionnaires(req.tenantDb, patientId);
+  }
+
+  @Get('questionnaires/history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get questionnaire history', description: 'Get patient questionnaire completion history' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit number of results' })
+  @ApiQuery({ name: 'category', required: false, type: String, description: 'Filter by category' })
+  @ApiResponse({ status: 200, description: 'Questionnaire history retrieved successfully' })
+  async getQuestionnaireHistory(
+    @Req() req: RequestWithTenant & { user: { sub?: string; id?: string } },
+    @Query('limit') limit?: number,
+    @Query('category') category?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getQuestionnaireHistory] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getQuestionnaireHistory] Patient ID: ${patientId}`);
+    return this.patientProService.getPatientQuestionnaireHistory(req.tenantDb, patientId, {
+      limit: limit ? parseInt(String(limit), 10) : undefined,
+      category,
+    });
+  }
+
+  @Post('questionnaires/initialize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Initialize standard questionnaires', description: 'Initialize standard questionnaires (PHQ-9, GAD-7, etc.) in the tenant database. This should be called once per tenant.' })
+  @ApiResponse({ status: 200, description: 'Standard questionnaires initialized successfully' })
+  async initializeStandardQuestionnaires(@Req() req: RequestWithTenant) {
+    await this.patientProService.initializeStandardQuestionnaires(req.tenantDb);
+    return { message: 'Standard questionnaires initialized successfully' };
+  }
+
+  // IMPORTANT: Specific routes must come BEFORE parameterized routes
+  // to prevent route conflicts (e.g., /schedules matching /:questionnaireId)
+  @Get('questionnaires/trends')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get PRO trends', description: 'Get PRO score trends over time for the patient' })
+  @ApiQuery({ name: 'questionnaireCode', required: false, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'PRO trends retrieved successfully' })
+  async getProTrends(
+    @Req() req: RequestWithTenant & { user: { sub?: string; id?: string } },
+    @Query('questionnaireCode') questionnaireCode?: string,
+    @Query('limit') limit?: number,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getProTrends] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getProTrends] Patient ID: ${patientId}`);
+    return this.patientProService.getProTrends(
+      req.tenantDb,
+      patientId,
+      questionnaireCode,
+      limit ? parseInt(String(limit), 10) : 10,
+    );
+  }
+
+  @Get('questionnaires/schedules')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get questionnaire schedules', description: 'Get all scheduled questionnaires for the patient' })
+  @ApiResponse({ status: 200, description: 'Schedules retrieved successfully' })
+  async getSchedules(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getSchedules] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getSchedules] Patient ID: ${patientId}`);
+    return this.patientProService.getPatientSchedules(req.tenantDb, patientId);
+  }
+
+  @Get('questionnaires/:questionnaireId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get questionnaire details', description: 'Get questionnaire template and patient assignment details' })
+  @ApiParam({ name: 'questionnaireId', description: 'Patient questionnaire ID' })
+  @ApiResponse({ status: 200, description: 'Questionnaire retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Questionnaire not found' })
+  async getQuestionnaire(
+    @Param('questionnaireId') questionnaireId: string,
+    @Req() req: RequestWithTenant & { user: { sub?: string; id?: string } },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      this.logger.error(`[getQuestionnaire] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`[getQuestionnaire] Patient ID: ${patientId}, Questionnaire ID: ${questionnaireId}`);
+    return this.patientProService.getPatientQuestionnaire(req.tenantDb, questionnaireId, patientId);
+  }
+
+  @Post('questionnaires/:questionnaireId/submit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Submit questionnaire responses', description: 'Submit answers to a questionnaire' })
+  @ApiParam({ name: 'questionnaireId', description: 'Patient questionnaire ID' })
+  @ApiResponse({ status: 200, description: 'Questionnaire submitted successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid responses or questionnaire already completed' })
+  async submitQuestionnaire(
+    @Param('questionnaireId') questionnaireId: string,
+    @Body() submitDto: SubmitQuestionnaireDto,
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    // Extract patient ID - try both sub and id fields
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    this.logger.debug(`Submitting questionnaire ${questionnaireId} for patient ${patientId}`);
+    return this.patientProService.submitQuestionnaireResponses(
+      req.tenantDb,
+      questionnaireId,
+      patientId,
+      submitDto.responses,
+    );
+  }
+
+  @Get('appointments/:appointmentId/questionnaires')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pre-visit questionnaires for an appointment', description: 'Get questionnaires assigned for a specific appointment' })
+  @ApiParam({ name: 'appointmentId', description: 'Appointment ID' })
+  @ApiResponse({ status: 200, description: 'Pre-visit questionnaires retrieved successfully' })
+  async getPreVisitQuestionnaires(
+    @Param('appointmentId') appointmentId: string,
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    return this.patientProService.getPreVisitQuestionnaires(req.tenantDb, appointmentId, patientId);
+  }
+
+  // Health Goals Endpoints
+  @Post('goals')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a health goal', description: 'Create a new health goal for the patient' })
+  @ApiResponse({ status: 201, description: 'Goal created successfully' })
+  async createGoal(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Body() dto: CreateGoalDto,
+  ) {
+    const patientId = req.user.sub;
+    return this.healthGoalsService.createGoal(req.tenantDb, patientId, dto);
+  }
+
+  @Get('goals')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient goals', description: 'Get all health goals for the patient' })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'completed', 'paused', 'cancelled', 'failed'] })
+  @ApiResponse({ status: 200, description: 'Goals retrieved successfully' })
+  async getGoals(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Query('status') status?: string,
+  ) {
+    const patientId = req.user.sub;
+    return this.healthGoalsService.getPatientGoals(req.tenantDb, patientId, status);
+  }
+
+  @Get('goals/:goalId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a specific goal', description: 'Get details of a specific health goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal retrieved successfully' })
+  async getGoal(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('goalId') goalId: string,
+  ) {
+    return this.healthGoalsService.getGoalById(req.tenantDb, goalId);
+  }
+
+  @Put('goals/:goalId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a health goal', description: 'Update an existing health goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal updated successfully' })
+  async updateGoal(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('goalId') goalId: string,
+    @Body() dto: UpdateGoalDto,
+  ) {
+    return this.healthGoalsService.updateGoal(req.tenantDb, goalId, dto);
+  }
+
+  @Delete('goals/:goalId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a health goal', description: 'Delete a health goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal deleted successfully' })
+  async deleteGoal(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('goalId') goalId: string,
+  ) {
+    return this.healthGoalsService.deleteGoal(req.tenantDb, goalId);
+  }
+
+  @Post('goals/:goalId/progress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Log progress for a goal', description: 'Log progress towards a health goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Progress logged successfully' })
+  async logProgress(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('goalId') goalId: string,
+    @Body() dto: LogProgressDto,
+  ) {
+    const patientId = req.user.sub;
+    return this.healthGoalsService.logProgress(req.tenantDb, goalId, patientId, dto);
+  }
+
+  @Get('goals/:goalId/progress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get progress logs for a goal', description: 'Get all progress logs for a health goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Progress logs retrieved successfully' })
+  async getProgressLogs(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('goalId') goalId: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.healthGoalsService.getProgressLogs(req.tenantDb, goalId, limit ? parseInt(String(limit), 10) : undefined);
+  }
+
+  @Get('achievements')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient achievements', description: 'Get all achievements earned by the patient' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Achievements retrieved successfully' })
+  async getAchievements(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Query('limit') limit?: number,
+  ) {
+    const patientId = req.user.sub;
+    return this.healthGoalsService.getPatientAchievements(req.tenantDb, patientId, limit ? parseInt(String(limit), 10) : undefined);
+  }
+
+  @Get('streaks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient streaks', description: 'Get all active streaks for the patient' })
+  @ApiResponse({ status: 200, description: 'Streaks retrieved successfully' })
+  async getStreaks(@Req() req: RequestWithTenant & { user: { sub: string } }) {
+    const patientId = req.user.sub;
+    return this.healthGoalsService.getPatientStreaks(req.tenantDb, patientId);
   }
 }
 

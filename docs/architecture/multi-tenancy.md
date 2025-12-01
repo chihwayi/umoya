@@ -1,146 +1,163 @@
 # Multi-Tenancy Architecture
 
 ## Overview
-MediCore implements a **strict multi-tenant architecture** ensuring complete data isolation between clinics while maintaining cost efficiency and scalability.
+MediCore uses a database-per-tenant architecture where each clinic has its own isolated database, ensuring complete data separation and security.
 
-## Tenancy Strategy: Database-per-Tenant with Shared Infrastructure
+## Architecture Pattern
 
-### Architecture Components
+### Database-Per-Tenant
+- **Master Database**: Stores tenant metadata
+- **Tenant Databases**: One database per clinic
+- **Naming Convention**: `clinic_{subdomain}_db`
+- **Complete Isolation**: No shared data between tenants
 
-#### 1. Tenant Management Layer
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    API Gateway                              │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │ Tenant Router   │  │ Rate Limiter    │  │ Auth Filter  │ │
-│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 Tenant Service                              │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │ Tenant Registry │  │ DB Provisioner  │  │ Config Mgmt  │ │
-│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+## Tenant Management
 
-#### 2. Database Architecture
-```
-Master Database (PostgreSQL)
-├── tenant_registry
-│   ├── tenant_id (UUID)
-│   ├── clinic_name
-│   ├── subdomain
-│   ├── database_name
-│   ├── connection_string
-│   ├── subscription_tier
-│   ├── created_at
-│   └── status
-└── tenant_configurations
-    ├── tenant_id
-    ├── feature_flags
-    ├── integration_settings
-    └── billing_config
+### Tenant Registration
+1. Tenant registers with subdomain
+2. Master database record created
+3. New database provisioned
+4. Core schema applied
+5. Optional bundles applied
+6. Initial configuration set
 
-Tenant Databases (Per Clinic)
-clinic_abc123_db
-├── patients
-├── appointments  
-├── medical_records
-├── prescriptions
-├── billing
-├── claims
-├── users
-└── audit_logs
-```
+### Tenant Identification
+- **Subdomain**: `clinic-name.medicore.com`
+- **Tenant Key**: Header `X-Tenant-Key: clinic-name`
+- **Database Name**: `clinic_clinic-name_db`
 
-### Implementation Strategy
+## Database Provisioning
 
-#### Phase 1: Tenant Foundation
-1. **Tenant Registry Service**
-   - Clinic registration and onboarding
-   - Database provisioning automation
-   - Subdomain management (clinic1.medicore.co.zw)
-   - Subscription tier management
+### Automatic Provisioning
+- Triggered on tenant registration
+- Applies core schema
+- Applies subscription-based bundles
+- Seeds initial data (optional)
 
-2. **Database Provisioning**
-   - Automated database creation per tenant
-   - Schema migration automation
-   - Connection pool management
-   - Backup and recovery per tenant
+### Manual Provisioning
+- Admin-triggered provisioning
+- Bundle-specific provisioning
+- Schema updates
+- Migration scripts
 
-3. **Request Routing**
-   - Subdomain-based tenant identification
-   - JWT token tenant validation
-   - Database connection routing
-   - Cross-tenant access prevention
+### Schema Bundles
+- **Core Bundle**: Base clinic schema
+- **SNOMED Bundle**: Terminology tables
+- **HIV Bundle**: HIV-specific tables
+- **Patient Portal Bundle**: Portal features
+- **Billing Bundle**: Financial features
+- **Claims Bundle**: Medical aid claims
 
-## Tenant Identification Methods
+## Tenant Context
 
-### 1. Subdomain-based (Primary)
-```
-https://clinic-abc.medicore.co.zw/api/patients
-https://dr-smith-surgery.medicore.co.zw/api/appointments
-```
-
-### 2. JWT Token-based (Fallback)
-```json
-{
-  "sub": "user123",
-  "tenant_id": "clinic_abc123",
-  "role": "doctor",
-  "permissions": ["read:patients", "write:prescriptions"]
-}
-```
-
-### 3. Header-based (API Integration)
-```
-X-Tenant-ID: clinic_abc123
-Authorization: Bearer <jwt_token>
-```
-
-## Database Connection Management
-
-### Connection Pool Strategy
+### Request Routing
 ```typescript
-class TenantConnectionManager {
-  private connectionPools: Map<string, Pool> = new Map();
-  
-  async getConnection(tenantId: string): Promise<Pool> {
-    if (!this.connectionPools.has(tenantId)) {
-      const config = await this.getTenantDbConfig(tenantId);
-      const pool = new Pool(config);
-      this.connectionPools.set(tenantId, pool);
-    }
-    return this.connectionPools.get(tenantId);
-  }
-  
-  private async getTenantDbConfig(tenantId: string) {
-    const tenant = await this.tenantRegistry.findById(tenantId);
-    return {
-      host: tenant.db_host,
-      database: tenant.db_name,
-      user: tenant.db_user,
-      password: tenant.db_password,
-      port: tenant.db_port,
-      max: 20,
-      idleTimeoutMillis: 30000,
-    };
+// Middleware extracts tenant from subdomain or header
+@Middleware()
+export class TenantMiddleware {
+  async use(req: Request, res: Response, next: NextFunction) {
+    const tenantSubdomain = req.headers['x-tenant-key'] || 
+                           extractSubdomain(req.hostname);
+    const tenant = await this.getTenant(tenantSubdomain);
+    req.tenant = tenant;
+    req.tenantDb = await this.getTenantDatabase(tenant);
+    next();
   }
 }
 ```
 
-## Security Considerations
+### Database Connection
+- Dynamic connection per request
+- Connection pooling per tenant
+- Automatic connection management
+- Connection caching
 
-### 1. Data Isolation
-- **Physical Separation**: Each tenant has dedicated database
-- **Access Control**: Tenant-specific user accounts
-- **Encryption**: Data encrypted at rest and in transit
-- **Audit Logging**: Complete audit trail per tenant
+## Data Isolation
 
-### 2. Cross-Tenant Prevention
-- **Request Validation**: Verify tenant context on every request
-- **Database Queries**: Tenant ID validation in all queries
-- **File Storage**: Tenant-specific storage buckets
-- **API Endpoints**: Tenant-aware route guards
+### Complete Isolation
+- Separate database per tenant
+- No cross-tenant queries possible
+- Independent schema versions
+- Isolated backups
+
+### Security Benefits
+- Data breach containment
+- Compliance isolation
+- Performance isolation
+- Backup/restore per tenant
+
+## Schema Management
+
+### Version Tracking
+- Track applied schema versions
+- Prevent duplicate applications
+- Enable rollback
+- Migration history
+
+### Schema Updates
+- Bundle-based updates
+- Version-controlled changes
+- Backward compatibility
+- Rollback procedures
+
+## Performance Considerations
+
+### Connection Pooling
+- Per-tenant connection pools
+- Configurable pool sizes
+- Connection reuse
+- Timeout management
+
+### Caching
+- Tenant-specific cache keys
+- Cache isolation
+- Cache invalidation per tenant
+- Redis namespacing
+
+## Backup & Recovery
+
+### Per-Tenant Backups
+- Individual tenant backups
+- Point-in-time recovery
+- Selective restore
+- Backup scheduling per tenant
+
+### Disaster Recovery
+- Tenant-specific recovery
+- Minimal impact on other tenants
+- Isolated recovery procedures
+- Data loss containment
+
+## Scaling
+
+### Horizontal Scaling
+- Add tenant databases as needed
+- Distribute tenants across servers
+- Load balancing per tenant
+- Independent scaling
+
+### Resource Management
+- Per-tenant resource limits
+- Usage monitoring per tenant
+- Billing per tenant
+- Quota management
+
+## Best Practices
+
+### Tenant Management
+- Unique subdomain per tenant
+- Validate tenant status
+- Handle inactive tenants
+- Monitor tenant health
+
+### Security
+- Never expose tenant data
+- Validate tenant context
+- Audit tenant access
+- Secure tenant switching
+
+### Performance
+- Optimize per-tenant queries
+- Monitor tenant performance
+- Set resource limits
+- Cache tenant data

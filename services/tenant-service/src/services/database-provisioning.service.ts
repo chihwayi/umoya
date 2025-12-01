@@ -222,6 +222,27 @@ export class DatabaseProvisioningService {
         description: 'Prescription PDF download functionality with audit logging',
         statements: () => this.getPrescriptionDownloadSchemaStatements(),
       },
+      {
+        id: 'sprint15_pro',
+        label: 'Sprint 15 - Patient-Reported Outcomes (PROs)',
+        version: '2025.12.20',
+        description: 'Patient-Reported Outcomes system with questionnaires, responses, scheduling, and alerts',
+        statements: () => this.getProSchemaStatements(),
+      },
+      {
+        id: 'sprint13_7_health_goals',
+        label: 'Sprint 13.7 - Health Goals & Progress Tracking',
+        version: '2025.12.21',
+        description: 'Patient health goals, progress tracking, achievements, and gamification',
+        statements: () => this.getHealthGoalsSchemaStatements(),
+      },
+      {
+        id: 'sprint14_2_claims_enhancement',
+        label: 'Sprint 14.2 - Medical Aid Claims Processing Enhancement',
+        version: '2025.12.22',
+        description: 'Enhanced claims processing with pre-authorization, status tracking, API integrations, and rejection handling',
+        statements: () => this.getSprint14_2ClaimsEnhancementStatements(),
+      },
     ];
   }
 
@@ -6255,1439 +6276,442 @@ RECOMMENDATIONS:
       throw error;
     }
   }
-}
 
-        WHERE os.set_code = '${link.set}' AND tc.test_code = '${link.test}'
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-  }
+  private getProSchemaStatements(): string[] {
+    const statements: string[] = [];
 
-  private async seedImagingCatalog(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding baseline imaging catalog...');
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_modalities (modality_code, modality_name, description, is_active)
-      VALUES 
-        ('XR', 'X-Ray (Radiography)', 'Conventional radiography using ionizing radiation', true),
-        ('CT', 'CT Scan (Computed Tomography)', 'Cross-sectional imaging using X-rays and computer processing', true),
-        ('MRI', 'MRI (Magnetic Resonance Imaging)', 'Imaging using magnetic fields and radio waves', true),
-        ('US', 'Ultrasound', 'Imaging using high-frequency sound waves', true),
-        ('MG', 'Mammography', 'Breast imaging using low-dose X-rays', true),
-        ('FL', 'Fluoroscopy', 'Real-time X-ray imaging', true),
-        ('NM', 'Nuclear Medicine', 'Imaging using radioactive tracers', true),
-        ('PET', 'PET Scan', 'Positron emission tomography for metabolic imaging', true)
-      ON CONFLICT (modality_code) DO NOTHING;
+    // Questionnaire Templates Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        code VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100),
+        version VARCHAR(20) DEFAULT '1.0',
+        is_active BOOLEAN DEFAULT true,
+        is_standard BOOLEAN DEFAULT true,
+        scoring_algorithm VARCHAR(100),
+        min_score DECIMAL(10,2),
+        max_score DECIMAL(10,2),
+        questions JSONB NOT NULL,
+        scoring_rules JSONB,
+        alert_rules JSONB,
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    const imagingStudies = [
-      { modality: 'XR', code: 'CXR-PA', name: 'Chest X-Ray (PA)', body: 'Chest', views: '{PA}', images: 1, contrast: false, cost: 25.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'CXR-PA-LAT', name: 'Chest X-Ray (PA & Lateral)', body: 'Chest', views: '{PA,Lateral}', images: 2, contrast: false, cost: 35.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'SPINE-L', name: 'Lumbar Spine X-Ray', body: 'Lumbar Spine', views: '{AP,Lateral}', images: 2, contrast: false, cost: 45.00, prep: 'Remove metal objects. Stand still during imaging.' },
-      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: null, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
-      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: null, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
-      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: null, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: null, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: null, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
-      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: null, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
-      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: null, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
-      { modality: 'MG', code: 'MG-SCREENING', name: 'Screening Mammogram', body: 'Breast', views: '{CC,MLO}', images: 4, contrast: false, cost: 120.00, prep: 'Avoid deodorant/powder on exam day. Wear two-piece clothing.' }
-    ];
-
-    for (const study of imagingStudies) {
-      await tenantDataSource.query(`
-        INSERT INTO imaging_study_types (modality_id, study_code, study_name, body_part, views, typical_images, contrast_required, cost, description, preparation_instructions, is_active)
-        SELECT mod.id, '${study.code}', '${study.name.replace(/'/g, "''")}', '${study.body}', ${study.views ? `'${study.views}'::text[]` : 'NULL'}, ${study.images}, ${study.contrast}, ${study.cost.toFixed(2)},
-               '${study.name.replace(/'/g, "''")}', ${study.prep ? `'${study.prep.replace(/'/g, "''")}'` : 'NULL'}, true
-        FROM imaging_modalities mod
-        WHERE mod.modality_code = '${study.modality}'
-        ON CONFLICT (study_code) DO NOTHING;
-      `);
-    }
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Chest X-Ray - Normal', 'CXR-NORMAL',
-             'PA and lateral chest radiographs were obtained.',
-             E'LUNGS: Clear bilaterally. No focal consolidation, pleural effusion, or pneumothorax.\nHEART: Normal size and contour.\nMEDIASTINUM: Normal width. No mediastinal mass.\nBONES: No acute fracture.\nSOFT TISSUES: Unremarkable.',
-             'Normal chest radiograph.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'CXR-PA-LAT'
-      WHERE mod.modality_code = 'XR'
-      ON CONFLICT (template_code) DO NOTHING;
+    // Patient Questionnaires Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_questionnaires (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        appointment_id UUID REFERENCES appointments(id),
+        assigned_by UUID REFERENCES users(id),
+        assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        due_date TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'expired', 'cancelled')),
+        completion_percentage INTEGER DEFAULT 0 CHECK (completion_percentage >= 0 AND completion_percentage <= 100),
+        total_score DECIMAL(10,2),
+        reminder_sent_count INTEGER DEFAULT 0,
+        last_reminder_sent TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Abdomen Ultrasound - Normal', 'US-ABD-NORMAL',
-             'Grayscale ultrasound examination of the abdomen.',
-             E'LIVER: Normal size, echogenicity, and contour. No focal lesion.\nGALLBLADDER: Normal. No stones or wall thickening.\nKIDNEYS: Normal size and echogenicity. No hydronephrosis or stones.\nSPLEEN: Normal.\nASCITES: None.',
-             'Normal abdominal ultrasound.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'US-ABD'
-      WHERE mod.modality_code = 'US'
-      ON CONFLICT (template_code) DO NOTHING;
-    `);
-  }
-
-  private async seedClinicalNoteTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default clinical note templates...');
-
-    const templates = [
-      {
-        name: 'General SOAP Note',
-        category: 'SOAP',
-        content: `CHIEF COMPLAINT:
-{{chiefComplaint}}
-
-SUBJECTIVE:
-{{subjective}}
-
-OBJECTIVE:
-Vital Signs: {{vitalSigns}}
-Physical Examination: {{physicalExam}}
-
-ASSESSMENT:
-{{assessment}}
-
-PLAN:
-{{plan}}`,
-        variables: ['chiefComplaint', 'subjective', 'vitalSigns', 'physicalExam', 'assessment', 'plan'],
-        isDefault: true,
-      },
-      {
-        name: 'History & Physical (H&P)',
-        category: 'H&P',
-        content: `HISTORY & PHYSICAL EXAMINATION
-
-CHIEF COMPLAINT:
-{{chiefComplaint}}
-
-HISTORY OF PRESENT ILLNESS:
-{{historyPresentIllness}}
-
-PAST MEDICAL HISTORY:
-{{pastMedicalHistory}}
-
-MEDICATIONS:
-{{medications}}
-
-ALLERGIES:
-{{allergies}}
-
-SOCIAL HISTORY:
-{{socialHistory}}
-
-FAMILY HISTORY:
-{{familyHistory}}
-
-REVIEW OF SYSTEMS:
-{{reviewOfSystems}}
-
-PHYSICAL EXAMINATION:
-{{physicalExamination}}
-
-ASSESSMENT AND PLAN:
-{{assessmentPlan}}`,
-        variables: ['chiefComplaint', 'historyPresentIllness', 'pastMedicalHistory', 'medications', 'allergies', 'socialHistory', 'familyHistory', 'reviewOfSystems', 'physicalExamination', 'assessmentPlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Progress Note',
-        category: 'Progress',
-        content: `PROGRESS NOTE
-
-Date: {{date}}
-Provider: {{providerName}}
-
-SUBJECTIVE:
-{{subjective}}
-
-OBJECTIVE:
-{{objective}}
-
-ASSESSMENT:
-{{assessment}}
-
-PLAN:
-{{plan}}
-
-Follow-up: {{followUp}}`,
-        variables: ['date', 'providerName', 'subjective', 'objective', 'assessment', 'plan', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Discharge Summary',
-        category: 'Discharge',
-        content: `DISCHARGE SUMMARY
-
-Patient: {{patientName}}
-Date of Admission: {{admissionDate}}
-Date of Discharge: {{dischargeDate}}
-Attending Physician: {{providerName}}
-
-ADMISSION DIAGNOSIS:
-{{admissionDiagnosis}}
-
-DISCHARGE DIAGNOSIS:
-{{dischargeDiagnosis}}
-
-HOSPITAL COURSE:
-{{hospitalCourse}}
-
-DISCHARGE MEDICATIONS:
-{{dischargeMedications}}
-
-DISCHARGE INSTRUCTIONS:
-{{dischargeInstructions}}
-
-FOLLOW-UP:
-{{followUp}}`,
-        variables: ['patientName', 'admissionDate', 'dischargeDate', 'providerName', 'admissionDiagnosis', 'dischargeDiagnosis', 'hospitalCourse', 'dischargeMedications', 'dischargeInstructions', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Procedure Note',
-        category: 'Procedure',
-        content: `PROCEDURE NOTE
-
-Procedure: {{procedureName}}
-Date: {{date}}
-Provider: {{providerName}}
-Patient: {{patientName}}
-
-INDICATION:
-{{indication}}
-
-PROCEDURE:
-{{procedureDescription}}
-
-COMPLICATIONS:
-{{complications}}
-
-POST-PROCEDURE PLAN:
-{{postProcedurePlan}}`,
-        variables: ['procedureName', 'date', 'providerName', 'patientName', 'indication', 'procedureDescription', 'complications', 'postProcedurePlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Consultation Note',
-        category: 'Consultation',
-        content: `CONSULTATION NOTE
-
-Date: {{date}}
-Consultant: {{providerName}}
-Referring Physician: {{referringPhysician}}
-Patient: {{patientName}}
-
-REASON FOR CONSULTATION:
-{{reasonForConsultation}}
-
-HISTORY:
-{{history}}
-
-EXAMINATION:
-{{examination}}
-
-ASSESSMENT:
-{{assessment}}
-
-RECOMMENDATIONS:
-{{recommendations}}`,
-        variables: ['date', 'providerName', 'referringPhysician', 'patientName', 'reasonForConsultation', 'history', 'examination', 'assessment', 'recommendations'],
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      // Check if template already exists
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM clinical_note_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO clinical_note_templates (name, category, content, variables, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4::jsonb, $5, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.content,
-          JSON.stringify(template.variables),
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default clinical note templates`);
-  }
-
-  private async seedPrescriptionTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default prescription templates...');
-
-    const templates = [
-      {
-        name: 'Paracetamol 500mg',
-        category: 'pain_management',
-        medicationName: 'Paracetamol',
-        genericName: 'Acetaminophen',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours as needed',
-        route: 'oral',
-        duration: '3-5 days',
-        instructions: 'Take with or without food. Do not exceed 4g per day.',
-        indications: 'Pain relief, fever reduction',
-        contraindications: 'Severe liver disease',
-        sideEffects: 'Rare: skin rash, liver damage with overdose',
-        isDefault: true,
-      },
-      {
-        name: 'Amoxicillin 500mg',
-        category: 'antibiotic',
-        medicationName: 'Amoxicillin',
-        genericName: 'Amoxicillin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Three times daily',
-        route: 'oral',
-        duration: '7-10 days',
-        instructions: 'Take with food to reduce stomach upset. Complete full course even if feeling better.',
-        indications: 'Bacterial infections (respiratory, urinary, skin)',
-        contraindications: 'Penicillin allergy',
-        sideEffects: 'Diarrhea, nausea, rash',
-        isDefault: true,
-      },
-      {
-        name: 'Ibuprofen 400mg',
-        category: 'pain_management',
-        medicationName: 'Ibuprofen',
-        genericName: 'Ibuprofen',
-        dosage: '400',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours with food',
-        route: 'oral',
-        duration: '3-7 days',
-        instructions: 'Take with food or milk. Avoid if history of stomach ulcers.',
-        indications: 'Pain, inflammation, fever',
-        contraindications: 'Active peptic ulcer, severe heart failure, third trimester pregnancy',
-        sideEffects: 'Stomach upset, dizziness, headache',
-        isDefault: true,
-      },
-      {
-        name: 'Metformin 500mg',
-        category: 'diabetes',
-        medicationName: 'Metformin',
-        genericName: 'Metformin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Twice daily with meals',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take with meals to reduce gastrointestinal side effects. Start with once daily for first week.',
-        indications: 'Type 2 diabetes mellitus',
-        contraindications: 'Severe renal impairment, metabolic acidosis',
-        sideEffects: 'Nausea, diarrhea, metallic taste',
-        isDefault: true,
-      },
-      {
-        name: 'Amlodipine 5mg',
-        category: 'hypertension',
-        medicationName: 'Amlodipine',
-        genericName: 'Amlodipine',
-        dosage: '5',
-        dosageUnit: 'mg',
-        frequency: 'Once daily',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take at the same time each day. May cause ankle swelling.',
-        indications: 'Hypertension, angina',
-        contraindications: 'Severe hypotension, cardiogenic shock',
-        sideEffects: 'Dizziness, ankle swelling, flushing',
-        isDefault: true,
-      },
-      {
-        name: 'Salbutamol Inhaler',
-        category: 'respiratory',
-        medicationName: 'Salbutamol',
-        genericName: 'Albuterol',
-        dosage: '100',
-        dosageUnit: 'mcg',
-        frequency: '1-2 puffs as needed, up to 4 times daily',
-        route: 'inhalation',
-        duration: 'As needed',
-        instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
-        indications: 'Asthma, COPD, bronchospasm',
-        contraindications: 'Hypersensitivity to salbutamol',
-        sideEffects: 'Tremor, palpitations, headache',
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.medicationName,
-          template.genericName,
-          template.dosage,
-          template.dosageUnit,
-          template.frequency,
-          template.route,
-          template.duration,
-          template.instructions,
-          template.indications,
-          template.contraindications,
-          template.sideEffects,
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default prescription templates`);
-  }
-
-  async deleteDatabase(databaseName: string): Promise<void> {
-    try {
-      // Terminate connections to the database
-      await this.dataSource.query(`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
-      
-      // Drop database
-      await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-      
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
-  }
-}
-
-        WHERE os.set_code = '${link.set}' AND tc.test_code = '${link.test}'
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-  }
-
-  private async seedImagingCatalog(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding baseline imaging catalog...');
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_modalities (modality_code, modality_name, description, is_active)
-      VALUES 
-        ('XR', 'X-Ray (Radiography)', 'Conventional radiography using ionizing radiation', true),
-        ('CT', 'CT Scan (Computed Tomography)', 'Cross-sectional imaging using X-rays and computer processing', true),
-        ('MRI', 'MRI (Magnetic Resonance Imaging)', 'Imaging using magnetic fields and radio waves', true),
-        ('US', 'Ultrasound', 'Imaging using high-frequency sound waves', true),
-        ('MG', 'Mammography', 'Breast imaging using low-dose X-rays', true),
-        ('FL', 'Fluoroscopy', 'Real-time X-ray imaging', true),
-        ('NM', 'Nuclear Medicine', 'Imaging using radioactive tracers', true),
-        ('PET', 'PET Scan', 'Positron emission tomography for metabolic imaging', true)
-      ON CONFLICT (modality_code) DO NOTHING;
+    // Questionnaire Responses Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_responses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_questionnaire_id UUID NOT NULL REFERENCES patient_questionnaires(id) ON DELETE CASCADE,
+        question_number INTEGER NOT NULL,
+        question_text TEXT NOT NULL,
+        response_value TEXT,
+        response_type VARCHAR(50),
+        response_options JSONB,
+        score DECIMAL(10,2),
+        answered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    const imagingStudies = [
-      { modality: 'XR', code: 'CXR-PA', name: 'Chest X-Ray (PA)', body: 'Chest', views: '{PA}', images: 1, contrast: false, cost: 25.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'CXR-PA-LAT', name: 'Chest X-Ray (PA & Lateral)', body: 'Chest', views: '{PA,Lateral}', images: 2, contrast: false, cost: 35.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'SPINE-L', name: 'Lumbar Spine X-Ray', body: 'Lumbar Spine', views: '{AP,Lateral}', images: 2, contrast: false, cost: 45.00, prep: 'Remove metal objects. Stand still during imaging.' },
-      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: null, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
-      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: null, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
-      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: null, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: null, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: null, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
-      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: null, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
-      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: null, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
-      { modality: 'MG', code: 'MG-SCREENING', name: 'Screening Mammogram', body: 'Breast', views: '{CC,MLO}', images: 4, contrast: false, cost: 120.00, prep: 'Avoid deodorant/powder on exam day. Wear two-piece clothing.' }
-    ];
-
-    for (const study of imagingStudies) {
-      await tenantDataSource.query(`
-        INSERT INTO imaging_study_types (modality_id, study_code, study_name, body_part, views, typical_images, contrast_required, cost, description, preparation_instructions, is_active)
-        SELECT mod.id, '${study.code}', '${study.name.replace(/'/g, "''")}', '${study.body}', ${study.views ? `'${study.views}'::text[]` : 'NULL'}, ${study.images}, ${study.contrast}, ${study.cost.toFixed(2)},
-               '${study.name.replace(/'/g, "''")}', ${study.prep ? `'${study.prep.replace(/'/g, "''")}'` : 'NULL'}, true
-        FROM imaging_modalities mod
-        WHERE mod.modality_code = '${study.modality}'
-        ON CONFLICT (study_code) DO NOTHING;
-      `);
-    }
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Chest X-Ray - Normal', 'CXR-NORMAL',
-             'PA and lateral chest radiographs were obtained.',
-             E'LUNGS: Clear bilaterally. No focal consolidation, pleural effusion, or pneumothorax.\nHEART: Normal size and contour.\nMEDIASTINUM: Normal width. No mediastinal mass.\nBONES: No acute fracture.\nSOFT TISSUES: Unremarkable.',
-             'Normal chest radiograph.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'CXR-PA-LAT'
-      WHERE mod.modality_code = 'XR'
-      ON CONFLICT (template_code) DO NOTHING;
+    // Questionnaire Schedules Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS questionnaire_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        schedule_type VARCHAR(50) NOT NULL CHECK (schedule_type IN ('one_time', 'daily', 'weekly', 'monthly', 'event_triggered')),
+        start_date DATE NOT NULL,
+        end_date DATE,
+        frequency INTEGER DEFAULT 1,
+        day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6),
+        day_of_month INTEGER CHECK (day_of_month >= 1 AND day_of_month <= 31),
+        trigger_event VARCHAR(100),
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Abdomen Ultrasound - Normal', 'US-ABD-NORMAL',
-             'Grayscale ultrasound examination of the abdomen.',
-             E'LIVER: Normal size, echogenicity, and contour. No focal lesion.\nGALLBLADDER: Normal. No stones or wall thickening.\nKIDNEYS: Normal size and echogenicity. No hydronephrosis or stones.\nSPLEEN: Normal.\nASCITES: None.',
-             'Normal abdominal ultrasound.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'US-ABD'
-      WHERE mod.modality_code = 'US'
-      ON CONFLICT (template_code) DO NOTHING;
-    `);
-  }
-
-  private async seedClinicalNoteTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default clinical note templates...');
-
-    const templates = [
-      {
-        name: 'General SOAP Note',
-        category: 'SOAP',
-        content: `CHIEF COMPLAINT:
-{{chiefComplaint}}
-
-SUBJECTIVE:
-{{subjective}}
-
-OBJECTIVE:
-Vital Signs: {{vitalSigns}}
-Physical Examination: {{physicalExam}}
-
-ASSESSMENT:
-{{assessment}}
-
-PLAN:
-{{plan}}`,
-        variables: ['chiefComplaint', 'subjective', 'vitalSigns', 'physicalExam', 'assessment', 'plan'],
-        isDefault: true,
-      },
-      {
-        name: 'History & Physical (H&P)',
-        category: 'H&P',
-        content: `HISTORY & PHYSICAL EXAMINATION
-
-CHIEF COMPLAINT:
-{{chiefComplaint}}
-
-HISTORY OF PRESENT ILLNESS:
-{{historyPresentIllness}}
-
-PAST MEDICAL HISTORY:
-{{pastMedicalHistory}}
-
-MEDICATIONS:
-{{medications}}
-
-ALLERGIES:
-{{allergies}}
-
-SOCIAL HISTORY:
-{{socialHistory}}
-
-FAMILY HISTORY:
-{{familyHistory}}
-
-REVIEW OF SYSTEMS:
-{{reviewOfSystems}}
-
-PHYSICAL EXAMINATION:
-{{physicalExamination}}
-
-ASSESSMENT AND PLAN:
-{{assessmentPlan}}`,
-        variables: ['chiefComplaint', 'historyPresentIllness', 'pastMedicalHistory', 'medications', 'allergies', 'socialHistory', 'familyHistory', 'reviewOfSystems', 'physicalExamination', 'assessmentPlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Progress Note',
-        category: 'Progress',
-        content: `PROGRESS NOTE
-
-Date: {{date}}
-Provider: {{providerName}}
-
-SUBJECTIVE:
-{{subjective}}
-
-OBJECTIVE:
-{{objective}}
-
-ASSESSMENT:
-{{assessment}}
-
-PLAN:
-{{plan}}
-
-Follow-up: {{followUp}}`,
-        variables: ['date', 'providerName', 'subjective', 'objective', 'assessment', 'plan', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Discharge Summary',
-        category: 'Discharge',
-        content: `DISCHARGE SUMMARY
-
-Patient: {{patientName}}
-Date of Admission: {{admissionDate}}
-Date of Discharge: {{dischargeDate}}
-Attending Physician: {{providerName}}
-
-ADMISSION DIAGNOSIS:
-{{admissionDiagnosis}}
-
-DISCHARGE DIAGNOSIS:
-{{dischargeDiagnosis}}
-
-HOSPITAL COURSE:
-{{hospitalCourse}}
-
-DISCHARGE MEDICATIONS:
-{{dischargeMedications}}
-
-DISCHARGE INSTRUCTIONS:
-{{dischargeInstructions}}
-
-FOLLOW-UP:
-{{followUp}}`,
-        variables: ['patientName', 'admissionDate', 'dischargeDate', 'providerName', 'admissionDiagnosis', 'dischargeDiagnosis', 'hospitalCourse', 'dischargeMedications', 'dischargeInstructions', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Procedure Note',
-        category: 'Procedure',
-        content: `PROCEDURE NOTE
-
-Procedure: {{procedureName}}
-Date: {{date}}
-Provider: {{providerName}}
-Patient: {{patientName}}
-
-INDICATION:
-{{indication}}
-
-PROCEDURE:
-{{procedureDescription}}
-
-COMPLICATIONS:
-{{complications}}
-
-POST-PROCEDURE PLAN:
-{{postProcedurePlan}}`,
-        variables: ['procedureName', 'date', 'providerName', 'patientName', 'indication', 'procedureDescription', 'complications', 'postProcedurePlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Consultation Note',
-        category: 'Consultation',
-        content: `CONSULTATION NOTE
-
-Date: {{date}}
-Consultant: {{providerName}}
-Referring Physician: {{referringPhysician}}
-Patient: {{patientName}}
-
-REASON FOR CONSULTATION:
-{{reasonForConsultation}}
-
-HISTORY:
-{{history}}
-
-EXAMINATION:
-{{examination}}
-
-ASSESSMENT:
-{{assessment}}
-
-RECOMMENDATIONS:
-{{recommendations}}`,
-        variables: ['date', 'providerName', 'referringPhysician', 'patientName', 'reasonForConsultation', 'history', 'examination', 'assessment', 'recommendations'],
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      // Check if template already exists
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM clinical_note_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO clinical_note_templates (name, category, content, variables, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4::jsonb, $5, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.content,
-          JSON.stringify(template.variables),
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default clinical note templates`);
-  }
-
-  private async seedPrescriptionTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default prescription templates...');
-
-    const templates = [
-      {
-        name: 'Paracetamol 500mg',
-        category: 'pain_management',
-        medicationName: 'Paracetamol',
-        genericName: 'Acetaminophen',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours as needed',
-        route: 'oral',
-        duration: '3-5 days',
-        instructions: 'Take with or without food. Do not exceed 4g per day.',
-        indications: 'Pain relief, fever reduction',
-        contraindications: 'Severe liver disease',
-        sideEffects: 'Rare: skin rash, liver damage with overdose',
-        isDefault: true,
-      },
-      {
-        name: 'Amoxicillin 500mg',
-        category: 'antibiotic',
-        medicationName: 'Amoxicillin',
-        genericName: 'Amoxicillin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Three times daily',
-        route: 'oral',
-        duration: '7-10 days',
-        instructions: 'Take with food to reduce stomach upset. Complete full course even if feeling better.',
-        indications: 'Bacterial infections (respiratory, urinary, skin)',
-        contraindications: 'Penicillin allergy',
-        sideEffects: 'Diarrhea, nausea, rash',
-        isDefault: true,
-      },
-      {
-        name: 'Ibuprofen 400mg',
-        category: 'pain_management',
-        medicationName: 'Ibuprofen',
-        genericName: 'Ibuprofen',
-        dosage: '400',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours with food',
-        route: 'oral',
-        duration: '3-7 days',
-        instructions: 'Take with food or milk. Avoid if history of stomach ulcers.',
-        indications: 'Pain, inflammation, fever',
-        contraindications: 'Active peptic ulcer, severe heart failure, third trimester pregnancy',
-        sideEffects: 'Stomach upset, dizziness, headache',
-        isDefault: true,
-      },
-      {
-        name: 'Metformin 500mg',
-        category: 'diabetes',
-        medicationName: 'Metformin',
-        genericName: 'Metformin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Twice daily with meals',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take with meals to reduce gastrointestinal side effects. Start with once daily for first week.',
-        indications: 'Type 2 diabetes mellitus',
-        contraindications: 'Severe renal impairment, metabolic acidosis',
-        sideEffects: 'Nausea, diarrhea, metallic taste',
-        isDefault: true,
-      },
-      {
-        name: 'Amlodipine 5mg',
-        category: 'hypertension',
-        medicationName: 'Amlodipine',
-        genericName: 'Amlodipine',
-        dosage: '5',
-        dosageUnit: 'mg',
-        frequency: 'Once daily',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take at the same time each day. May cause ankle swelling.',
-        indications: 'Hypertension, angina',
-        contraindications: 'Severe hypotension, cardiogenic shock',
-        sideEffects: 'Dizziness, ankle swelling, flushing',
-        isDefault: true,
-      },
-      {
-        name: 'Salbutamol Inhaler',
-        category: 'respiratory',
-        medicationName: 'Salbutamol',
-        genericName: 'Albuterol',
-        dosage: '100',
-        dosageUnit: 'mcg',
-        frequency: '1-2 puffs as needed, up to 4 times daily',
-        route: 'inhalation',
-        duration: 'As needed',
-        instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
-        indications: 'Asthma, COPD, bronchospasm',
-        contraindications: 'Hypersensitivity to salbutamol',
-        sideEffects: 'Tremor, palpitations, headache',
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.medicationName,
-          template.genericName,
-          template.dosage,
-          template.dosageUnit,
-          template.frequency,
-          template.route,
-          template.duration,
-          template.instructions,
-          template.indications,
-          template.contraindications,
-          template.sideEffects,
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default prescription templates`);
-  }
-
-  async deleteDatabase(databaseName: string): Promise<void> {
-    try {
-      // Terminate connections to the database
-      await this.dataSource.query(`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
-      
-      // Drop database
-      await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-      
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
-  }
-}
-
-      {
-        name: 'Amlodipine 5mg',
-        category: 'hypertension',
-        medicationName: 'Amlodipine',
-        genericName: 'Amlodipine',
-        dosage: '5',
-        dosageUnit: 'mg',
-        frequency: 'Once daily',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take at the same time each day. May cause ankle swelling.',
-        indications: 'Hypertension, angina',
-        contraindications: 'Severe hypotension, cardiogenic shock',
-        sideEffects: 'Dizziness, ankle swelling, flushing',
-        isDefault: true,
-      },
-      {
-        name: 'Salbutamol Inhaler',
-        category: 'respiratory',
-        medicationName: 'Salbutamol',
-        genericName: 'Albuterol',
-        dosage: '100',
-        dosageUnit: 'mcg',
-        frequency: '1-2 puffs as needed, up to 4 times daily',
-        route: 'inhalation',
-        duration: 'As needed',
-        instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
-        indications: 'Asthma, COPD, bronchospasm',
-        contraindications: 'Hypersensitivity to salbutamol',
-        sideEffects: 'Tremor, palpitations, headache',
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.medicationName,
-          template.genericName,
-          template.dosage,
-          template.dosageUnit,
-          template.frequency,
-          template.route,
-          template.duration,
-          template.instructions,
-          template.indications,
-          template.contraindications,
-          template.sideEffects,
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default prescription templates`);
-  }
-
-  async deleteDatabase(databaseName: string): Promise<void> {
-    try {
-      // Terminate connections to the database
-      await this.dataSource.query(`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
-      
-      // Drop database
-      await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-      
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
-  }
-}
-
-        WHERE os.set_code = '${link.set}' AND tc.test_code = '${link.test}'
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-  }
-
-  private async seedImagingCatalog(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding baseline imaging catalog...');
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_modalities (modality_code, modality_name, description, is_active)
-      VALUES 
-        ('XR', 'X-Ray (Radiography)', 'Conventional radiography using ionizing radiation', true),
-        ('CT', 'CT Scan (Computed Tomography)', 'Cross-sectional imaging using X-rays and computer processing', true),
-        ('MRI', 'MRI (Magnetic Resonance Imaging)', 'Imaging using magnetic fields and radio waves', true),
-        ('US', 'Ultrasound', 'Imaging using high-frequency sound waves', true),
-        ('MG', 'Mammography', 'Breast imaging using low-dose X-rays', true),
-        ('FL', 'Fluoroscopy', 'Real-time X-ray imaging', true),
-        ('NM', 'Nuclear Medicine', 'Imaging using radioactive tracers', true),
-        ('PET', 'PET Scan', 'Positron emission tomography for metabolic imaging', true)
-      ON CONFLICT (modality_code) DO NOTHING;
+    // PRO Alert Rules Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS pro_alert_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        questionnaire_template_id UUID NOT NULL REFERENCES questionnaire_templates(id),
+        rule_name VARCHAR(255) NOT NULL,
+        condition_type VARCHAR(50) NOT NULL CHECK (condition_type IN ('score_greater_than', 'score_less_than', 'score_between', 'score_equals', 'change_greater_than')),
+        condition_value JSONB NOT NULL,
+        alert_severity VARCHAR(50) DEFAULT 'medium' CHECK (alert_severity IN ('low', 'medium', 'high', 'critical')),
+        alert_message TEXT,
+        notify_roles TEXT[],
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    const imagingStudies = [
-      { modality: 'XR', code: 'CXR-PA', name: 'Chest X-Ray (PA)', body: 'Chest', views: '{PA}', images: 1, contrast: false, cost: 25.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'CXR-PA-LAT', name: 'Chest X-Ray (PA & Lateral)', body: 'Chest', views: '{PA,Lateral}', images: 2, contrast: false, cost: 35.00, prep: 'Remove jewelry and metal. Hold breath when instructed.' },
-      { modality: 'XR', code: 'SPINE-L', name: 'Lumbar Spine X-Ray', body: 'Lumbar Spine', views: '{AP,Lateral}', images: 2, contrast: false, cost: 45.00, prep: 'Remove metal objects. Stand still during imaging.' },
-      { modality: 'CT', code: 'CT-HEAD', name: 'CT Head (Brain)', body: 'Head/Brain', views: null, images: 1, contrast: false, cost: 200.00, prep: 'Remove metal from head. Remain still during scan.' },
-      { modality: 'CT', code: 'CT-ABD-PELVIS', name: 'CT Abdomen & Pelvis', body: 'Abdomen/Pelvis', views: null, images: 1, contrast: true, cost: 300.00, prep: 'NPO 4 hours before scan. Oral contrast may be required.' },
-      { modality: 'MRI', code: 'MRI-BRAIN', name: 'MRI Brain', body: 'Brain', views: null, images: 1, contrast: false, cost: 400.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'MRI', code: 'MRI-SPINE-L', name: 'MRI Lumbar Spine', body: 'Lumbar Spine', views: null, images: 1, contrast: false, cost: 450.00, prep: 'Screen for implants. Remove all metal.' },
-      { modality: 'US', code: 'US-ABD', name: 'Abdomen Ultrasound', body: 'Abdomen', views: null, images: 1, contrast: false, cost: 75.00, prep: 'NPO 6-8 hours before exam.' },
-      { modality: 'US', code: 'US-OB', name: 'Obstetric Ultrasound', body: 'Uterus/Fetus', views: null, images: 1, contrast: false, cost: 85.00, prep: 'Full bladder recommended for early pregnancy.' },
-      { modality: 'US', code: 'US-THYROID', name: 'Thyroid Ultrasound', body: 'Neck/Thyroid', views: null, images: 1, contrast: false, cost: 70.00, prep: 'No special preparation required.' },
-      { modality: 'MG', code: 'MG-SCREENING', name: 'Screening Mammogram', body: 'Breast', views: '{CC,MLO}', images: 4, contrast: false, cost: 120.00, prep: 'Avoid deodorant/powder on exam day. Wear two-piece clothing.' }
-    ];
-
-    for (const study of imagingStudies) {
-      await tenantDataSource.query(`
-        INSERT INTO imaging_study_types (modality_id, study_code, study_name, body_part, views, typical_images, contrast_required, cost, description, preparation_instructions, is_active)
-        SELECT mod.id, '${study.code}', '${study.name.replace(/'/g, "''")}', '${study.body}', ${study.views ? `'${study.views}'::text[]` : 'NULL'}, ${study.images}, ${study.contrast}, ${study.cost.toFixed(2)},
-               '${study.name.replace(/'/g, "''")}', ${study.prep ? `'${study.prep.replace(/'/g, "''")}'` : 'NULL'}, true
-        FROM imaging_modalities mod
-        WHERE mod.modality_code = '${study.modality}'
-        ON CONFLICT (study_code) DO NOTHING;
-      `);
-    }
-
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Chest X-Ray - Normal', 'CXR-NORMAL',
-             'PA and lateral chest radiographs were obtained.',
-             E'LUNGS: Clear bilaterally. No focal consolidation, pleural effusion, or pneumothorax.\nHEART: Normal size and contour.\nMEDIASTINUM: Normal width. No mediastinal mass.\nBONES: No acute fracture.\nSOFT TISSUES: Unremarkable.',
-             'Normal chest radiograph.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'CXR-PA-LAT'
-      WHERE mod.modality_code = 'XR'
-      ON CONFLICT (template_code) DO NOTHING;
+    // PRO Alerts Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS pro_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        patient_questionnaire_id UUID NOT NULL REFERENCES patient_questionnaires(id),
+        alert_rule_id UUID REFERENCES pro_alert_rules(id),
+        alert_severity VARCHAR(50) NOT NULL,
+        alert_message TEXT NOT NULL,
+        score_value DECIMAL(10,2),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'acknowledged', 'resolved', 'dismissed')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
 
-    await tenantDataSource.query(`
-      INSERT INTO imaging_report_templates (modality_id, study_type_id, template_name, template_code, technique_template, findings_template, impression_template, is_default)
-      SELECT mod.id, st.id,
-             'Abdomen Ultrasound - Normal', 'US-ABD-NORMAL',
-             'Grayscale ultrasound examination of the abdomen.',
-             E'LIVER: Normal size, echogenicity, and contour. No focal lesion.\nGALLBLADDER: Normal. No stones or wall thickening.\nKIDNEYS: Normal size and echogenicity. No hydronephrosis or stones.\nSPLEEN: Normal.\nASCITES: None.',
-             'Normal abdominal ultrasound.',
-             true
-      FROM imaging_modalities mod
-      JOIN imaging_study_types st ON st.study_code = 'US-ABD'
-      WHERE mod.modality_code = 'US'
-      ON CONFLICT (template_code) DO NOTHING;
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_patient_id ON patient_questionnaires(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_status ON patient_questionnaires(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_due_date ON patient_questionnaires(due_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_questionnaires_appointment_id ON patient_questionnaires(appointment_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_responses_patient_questionnaire_id ON questionnaire_responses(patient_questionnaire_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_schedules_patient_id ON questionnaire_schedules(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_schedules_active ON questionnaire_schedules(is_active) WHERE is_active = true`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pro_alerts_patient_id ON pro_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pro_alerts_status ON pro_alerts(status) WHERE status = 'active'`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_templates_code ON questionnaire_templates(code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_questionnaire_templates_active ON questionnaire_templates(is_active) WHERE is_active = true`);
+
+    return statements;
+  }
+
+  private getHealthGoalsSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Patient Health Goals Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_health_goals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        goal_type VARCHAR(100) NOT NULL CHECK (goal_type IN ('weight_loss', 'weight_gain', 'blood_pressure', 'blood_glucose', 'cholesterol', 'exercise', 'medication_adherence', 'smoking_cessation', 'alcohol_reduction', 'diet', 'other')),
+        goal_name VARCHAR(255) NOT NULL,
+        description TEXT,
+        target_value DECIMAL(10,2),
+        current_value DECIMAL(10,2),
+        unit VARCHAR(50),
+        start_date DATE NOT NULL,
+        target_date DATE NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused', 'cancelled', 'failed')),
+        progress_percentage DECIMAL(5,2) DEFAULT 0 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
+        milestone_percentage DECIMAL(5,2) DEFAULT 25,
+        milestone_achieved BOOLEAN DEFAULT false,
+        milestone_achieved_at TIMESTAMP WITH TIME ZONE,
+        is_auto_tracked BOOLEAN DEFAULT false,
+        tracking_source VARCHAR(100),
+        notes TEXT,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
     `);
+
+    // Goal Progress Logs Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS goal_progress_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        goal_id UUID NOT NULL REFERENCES patient_health_goals(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        logged_value DECIMAL(10,2) NOT NULL,
+        logged_date DATE NOT NULL,
+        source VARCHAR(100) CHECK (source IN ('manual', 'vitals', 'lab_result', 'patient_portal', 'wearable', 'auto')),
+        source_id UUID,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(goal_id, logged_date)
+      )
+    `);
+
+    // Patient Achievements Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_achievements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        achievement_type VARCHAR(100) NOT NULL CHECK (achievement_type IN ('goal_completed', 'milestone_reached', 'streak', 'consistency', 'improvement', 'engagement', 'special')),
+        achievement_name VARCHAR(255) NOT NULL,
+        achievement_description TEXT,
+        badge_icon VARCHAR(100),
+        badge_color VARCHAR(50),
+        points INTEGER DEFAULT 0,
+        goal_id UUID REFERENCES patient_health_goals(id) ON DELETE SET NULL,
+        milestone_percentage DECIMAL(5,2),
+        streak_days INTEGER,
+        earned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Patient Streaks Table (for tracking consecutive days of activity)
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_streaks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        streak_type VARCHAR(100) NOT NULL CHECK (streak_type IN ('vitals_submission', 'medication_adherence', 'exercise', 'goal_progress', 'portal_login')),
+        current_streak_days INTEGER DEFAULT 0,
+        longest_streak_days INTEGER DEFAULT 0,
+        last_activity_date DATE,
+        streak_start_date DATE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(patient_id, streak_type)
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_patient_id ON patient_health_goals(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_status ON patient_health_goals(status) WHERE status = 'active'`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_goal_type ON patient_health_goals(goal_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_health_goals_target_date ON patient_health_goals(target_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_goal_id ON goal_progress_logs(goal_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_patient_id ON goal_progress_logs(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_goal_progress_logs_logged_date ON goal_progress_logs(logged_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_patient_id ON patient_achievements(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_achievement_type ON patient_achievements(achievement_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_achievements_earned_at ON patient_achievements(earned_at)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_patient_id ON patient_streaks(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_streak_type ON patient_streaks(streak_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_streaks_is_active ON patient_streaks(is_active) WHERE is_active = true`);
+
+    return statements;
   }
 
-  private async seedClinicalNoteTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default clinical note templates...');
+  private getSprint14_2ClaimsEnhancementStatements(): string[] {
+    const statements: string[] = [];
 
-    const templates = [
-      {
-        name: 'General SOAP Note',
-        category: 'SOAP',
-        content: `CHIEF COMPLAINT:
-{{chiefComplaint}}
+    // Enhance medical_aid_claims table with additional columns
+    statements.push(`
+      DO $$ 
+      BEGIN
+        -- Add pre_authorization_id if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'pre_authorization_id') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN pre_authorization_id UUID;
+        END IF;
 
-SUBJECTIVE:
-{{subjective}}
+        -- Add resubmission_count if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'resubmission_count') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN resubmission_count INTEGER DEFAULT 0;
+        END IF;
 
-OBJECTIVE:
-Vital Signs: {{vitalSigns}}
-Physical Examination: {{physicalExam}}
+        -- Add original_claim_id for tracking resubmissions
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'original_claim_id') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN original_claim_id UUID REFERENCES medical_aid_claims(id) ON DELETE SET NULL;
+        END IF;
 
-ASSESSMENT:
-{{assessment}}
+        -- Add submission_method
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'submission_method') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN submission_method VARCHAR(50) CHECK (submission_method IN ('api', 'edi', 'manual', 'bulk'));
+        END IF;
 
-PLAN:
-{{plan}}`,
-        variables: ['chiefComplaint', 'subjective', 'vitalSigns', 'physicalExam', 'assessment', 'plan'],
-        isDefault: true,
-      },
-      {
-        name: 'History & Physical (H&P)',
-        category: 'H&P',
-        content: `HISTORY & PHYSICAL EXAMINATION
+        -- Add external_claim_id (from medical aid system)
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'external_claim_id') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN external_claim_id VARCHAR(255);
+        END IF;
 
-CHIEF COMPLAINT:
-{{chiefComplaint}}
+        -- Add api_response_data for storing API responses
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'api_response_data') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN api_response_data JSONB;
+        END IF;
 
-HISTORY OF PRESENT ILLNESS:
-{{historyPresentIllness}}
+        -- Add last_status_check_at
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'last_status_check_at') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN last_status_check_at TIMESTAMP WITH TIME ZONE;
+        END IF;
 
-PAST MEDICAL HISTORY:
-{{pastMedicalHistory}}
+        -- Add next_status_check_at for polling
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'next_status_check_at') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN next_status_check_at TIMESTAMP WITH TIME ZONE;
+        END IF;
 
-MEDICATIONS:
-{{medications}}
+        -- Add diagnosis_codes if it doesn't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'diagnosis_codes') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN diagnosis_codes TEXT[];
+        END IF;
 
-ALLERGIES:
-{{allergies}}
+        -- Add primary_diagnosis_code
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'primary_diagnosis_code') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN primary_diagnosis_code VARCHAR(50);
+        END IF;
 
-SOCIAL HISTORY:
-{{socialHistory}}
+        -- Add primary_diagnosis_description
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'medical_aid_claims' AND column_name = 'primary_diagnosis_description') THEN
+          ALTER TABLE medical_aid_claims ADD COLUMN primary_diagnosis_description TEXT;
+        END IF;
 
-FAMILY HISTORY:
-{{familyHistory}}
+        -- Update status enum to include more states
+        -- Note: This is handled by the CHECK constraint, but we ensure it's correct
+      END $$;
+    `);
 
-REVIEW OF SYSTEMS:
-{{reviewOfSystems}}
+    // Pre-Authorization Requests Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS pre_authorization_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        billing_id UUID REFERENCES billing(id) ON DELETE SET NULL,
+        appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+        medical_aid_name VARCHAR(100) NOT NULL,
+        member_number VARCHAR(100) NOT NULL,
+        request_type VARCHAR(50) NOT NULL CHECK (request_type IN ('consultation', 'procedure', 'surgery', 'hospitalization', 'medication', 'imaging', 'lab_test', 'other')),
+        requested_amount DECIMAL(10,2) NOT NULL,
+        approved_amount DECIMAL(10,2),
+        status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'submitted', 'approved', 'rejected', 'expired', 'cancelled')),
+        request_date DATE NOT NULL,
+        approval_date DATE,
+        expiry_date DATE,
+        rejection_reason TEXT,
+        diagnosis_codes TEXT[],
+        primary_diagnosis_code VARCHAR(50),
+        primary_diagnosis_description TEXT,
+        procedure_codes TEXT[],
+        service_codes TEXT[],
+        clinical_notes TEXT,
+        request_data JSONB,
+        api_response_data JSONB,
+        external_preauth_id VARCHAR(255),
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        responded_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
 
-PHYSICAL EXAMINATION:
-{{physicalExamination}}
+    // Claim Status History Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS claim_status_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        claim_id UUID NOT NULL REFERENCES medical_aid_claims(id) ON DELETE CASCADE,
+        status VARCHAR(50) NOT NULL,
+        previous_status VARCHAR(50),
+        changed_by UUID REFERENCES users(id),
+        change_reason TEXT,
+        notes TEXT,
+        api_response JSONB,
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
 
-ASSESSMENT AND PLAN:
-{{assessmentPlan}}`,
-        variables: ['chiefComplaint', 'historyPresentIllness', 'pastMedicalHistory', 'medications', 'allergies', 'socialHistory', 'familyHistory', 'reviewOfSystems', 'physicalExamination', 'assessmentPlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Progress Note',
-        category: 'Progress',
-        content: `PROGRESS NOTE
+    // Medical Aid API Configurations Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS medical_aid_api_configurations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        medical_aid_name VARCHAR(100) NOT NULL UNIQUE,
+        provider_type VARCHAR(50) NOT NULL CHECK (provider_type IN ('cimas', 'premier', 'econet_health', 'psmas', 'other')),
+        api_base_url VARCHAR(500) NOT NULL,
+        api_key VARCHAR(255),
+        api_secret VARCHAR(255),
+        authentication_type VARCHAR(50) NOT NULL CHECK (authentication_type IN ('api_key', 'oauth2', 'basic', 'bearer', 'custom')),
+        auth_endpoint VARCHAR(500),
+        token_endpoint VARCHAR(500),
+        refresh_token_endpoint VARCHAR(500),
+        claim_submission_endpoint VARCHAR(500),
+        status_check_endpoint VARCHAR(500),
+        preauth_endpoint VARCHAR(500),
+        member_verification_endpoint VARCHAR(500),
+        webhook_url VARCHAR(500),
+        webhook_secret VARCHAR(255),
+        request_timeout INTEGER DEFAULT 30000,
+        retry_count INTEGER DEFAULT 3,
+        retry_delay INTEGER DEFAULT 1000,
+        is_active BOOLEAN DEFAULT true,
+        configuration_data JSONB,
+        test_mode BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
 
-Date: {{date}}
-Provider: {{providerName}}
+    // Claim Submissions Audit Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS claim_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        claim_id UUID NOT NULL REFERENCES medical_aid_claims(id) ON DELETE CASCADE,
+        submission_method VARCHAR(50) NOT NULL CHECK (submission_method IN ('api', 'edi', 'manual', 'bulk')),
+        submission_status VARCHAR(50) NOT NULL CHECK (submission_status IN ('success', 'failed', 'pending', 'retrying')),
+        submission_attempt INTEGER DEFAULT 1,
+        request_payload JSONB,
+        response_payload JSONB,
+        error_message TEXT,
+        error_code VARCHAR(100),
+        external_reference_id VARCHAR(255),
+        submitted_by UUID REFERENCES users(id),
+        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        responded_at TIMESTAMP WITH TIME ZONE,
+        processing_time_ms INTEGER
+      )
+    `);
 
-SUBJECTIVE:
-{{subjective}}
+    // Indexes for Pre-Authorization Requests
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_patient_id ON pre_authorization_requests(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_billing_id ON pre_authorization_requests(billing_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_status ON pre_authorization_requests(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_medical_aid_name ON pre_authorization_requests(medical_aid_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_request_date ON pre_authorization_requests(request_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preauth_requests_expiry_date ON pre_authorization_requests(expiry_date) WHERE expiry_date IS NOT NULL`);
 
-OBJECTIVE:
-{{objective}}
+    // Indexes for Claim Status History
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_status_history_claim_id ON claim_status_history(claim_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_status_history_status ON claim_status_history(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_status_history_created_at ON claim_status_history(created_at)`);
 
-ASSESSMENT:
-{{assessment}}
+    // Indexes for Medical Aid API Configurations
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_medical_aid_api_config_medical_aid_name ON medical_aid_api_configurations(medical_aid_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_medical_aid_api_config_provider_type ON medical_aid_api_configurations(provider_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_medical_aid_api_config_is_active ON medical_aid_api_configurations(is_active) WHERE is_active = true`);
 
-PLAN:
-{{plan}}
+    // Indexes for Claim Submissions
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_submissions_claim_id ON claim_submissions(claim_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_submissions_status ON claim_submissions(submission_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_submissions_submitted_at ON claim_submissions(submitted_at)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claim_submissions_external_reference_id ON claim_submissions(external_reference_id) WHERE external_reference_id IS NOT NULL`);
 
-Follow-up: {{followUp}}`,
-        variables: ['date', 'providerName', 'subjective', 'objective', 'assessment', 'plan', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Discharge Summary',
-        category: 'Discharge',
-        content: `DISCHARGE SUMMARY
+    // Additional indexes for enhanced medical_aid_claims
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_preauth_id ON medical_aid_claims(pre_authorization_id) WHERE pre_authorization_id IS NOT NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_original_claim_id ON medical_aid_claims(original_claim_id) WHERE original_claim_id IS NOT NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_submission_method ON medical_aid_claims(submission_method) WHERE submission_method IS NOT NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_external_claim_id ON medical_aid_claims(external_claim_id) WHERE external_claim_id IS NOT NULL`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_claims_next_status_check_at ON medical_aid_claims(next_status_check_at) WHERE next_status_check_at IS NOT NULL`);
 
-Patient: {{patientName}}
-Date of Admission: {{admissionDate}}
-Date of Discharge: {{dischargeDate}}
-Attending Physician: {{providerName}}
-
-ADMISSION DIAGNOSIS:
-{{admissionDiagnosis}}
-
-DISCHARGE DIAGNOSIS:
-{{dischargeDiagnosis}}
-
-HOSPITAL COURSE:
-{{hospitalCourse}}
-
-DISCHARGE MEDICATIONS:
-{{dischargeMedications}}
-
-DISCHARGE INSTRUCTIONS:
-{{dischargeInstructions}}
-
-FOLLOW-UP:
-{{followUp}}`,
-        variables: ['patientName', 'admissionDate', 'dischargeDate', 'providerName', 'admissionDiagnosis', 'dischargeDiagnosis', 'hospitalCourse', 'dischargeMedications', 'dischargeInstructions', 'followUp'],
-        isDefault: true,
-      },
-      {
-        name: 'Procedure Note',
-        category: 'Procedure',
-        content: `PROCEDURE NOTE
-
-Procedure: {{procedureName}}
-Date: {{date}}
-Provider: {{providerName}}
-Patient: {{patientName}}
-
-INDICATION:
-{{indication}}
-
-PROCEDURE:
-{{procedureDescription}}
-
-COMPLICATIONS:
-{{complications}}
-
-POST-PROCEDURE PLAN:
-{{postProcedurePlan}}`,
-        variables: ['procedureName', 'date', 'providerName', 'patientName', 'indication', 'procedureDescription', 'complications', 'postProcedurePlan'],
-        isDefault: true,
-      },
-      {
-        name: 'Consultation Note',
-        category: 'Consultation',
-        content: `CONSULTATION NOTE
-
-Date: {{date}}
-Consultant: {{providerName}}
-Referring Physician: {{referringPhysician}}
-Patient: {{patientName}}
-
-REASON FOR CONSULTATION:
-{{reasonForConsultation}}
-
-HISTORY:
-{{history}}
-
-EXAMINATION:
-{{examination}}
-
-ASSESSMENT:
-{{assessment}}
-
-RECOMMENDATIONS:
-{{recommendations}}`,
-        variables: ['date', 'providerName', 'referringPhysician', 'patientName', 'reasonForConsultation', 'history', 'examination', 'assessment', 'recommendations'],
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      // Check if template already exists
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM clinical_note_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO clinical_note_templates (name, category, content, variables, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4::jsonb, $5, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.content,
-          JSON.stringify(template.variables),
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default clinical note templates`);
-  }
-
-  private async seedPrescriptionTemplates(tenantDataSource: DataSource): Promise<void> {
-    this.logger.log('Seeding default prescription templates...');
-
-    const templates = [
-      {
-        name: 'Paracetamol 500mg',
-        category: 'pain_management',
-        medicationName: 'Paracetamol',
-        genericName: 'Acetaminophen',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours as needed',
-        route: 'oral',
-        duration: '3-5 days',
-        instructions: 'Take with or without food. Do not exceed 4g per day.',
-        indications: 'Pain relief, fever reduction',
-        contraindications: 'Severe liver disease',
-        sideEffects: 'Rare: skin rash, liver damage with overdose',
-        isDefault: true,
-      },
-      {
-        name: 'Amoxicillin 500mg',
-        category: 'antibiotic',
-        medicationName: 'Amoxicillin',
-        genericName: 'Amoxicillin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Three times daily',
-        route: 'oral',
-        duration: '7-10 days',
-        instructions: 'Take with food to reduce stomach upset. Complete full course even if feeling better.',
-        indications: 'Bacterial infections (respiratory, urinary, skin)',
-        contraindications: 'Penicillin allergy',
-        sideEffects: 'Diarrhea, nausea, rash',
-        isDefault: true,
-      },
-      {
-        name: 'Ibuprofen 400mg',
-        category: 'pain_management',
-        medicationName: 'Ibuprofen',
-        genericName: 'Ibuprofen',
-        dosage: '400',
-        dosageUnit: 'mg',
-        frequency: 'Every 6-8 hours with food',
-        route: 'oral',
-        duration: '3-7 days',
-        instructions: 'Take with food or milk. Avoid if history of stomach ulcers.',
-        indications: 'Pain, inflammation, fever',
-        contraindications: 'Active peptic ulcer, severe heart failure, third trimester pregnancy',
-        sideEffects: 'Stomach upset, dizziness, headache',
-        isDefault: true,
-      },
-      {
-        name: 'Metformin 500mg',
-        category: 'diabetes',
-        medicationName: 'Metformin',
-        genericName: 'Metformin',
-        dosage: '500',
-        dosageUnit: 'mg',
-        frequency: 'Twice daily with meals',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take with meals to reduce gastrointestinal side effects. Start with once daily for first week.',
-        indications: 'Type 2 diabetes mellitus',
-        contraindications: 'Severe renal impairment, metabolic acidosis',
-        sideEffects: 'Nausea, diarrhea, metallic taste',
-        isDefault: true,
-      },
-      {
-        name: 'Amlodipine 5mg',
-        category: 'hypertension',
-        medicationName: 'Amlodipine',
-        genericName: 'Amlodipine',
-        dosage: '5',
-        dosageUnit: 'mg',
-        frequency: 'Once daily',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take at the same time each day. May cause ankle swelling.',
-        indications: 'Hypertension, angina',
-        contraindications: 'Severe hypotension, cardiogenic shock',
-        sideEffects: 'Dizziness, ankle swelling, flushing',
-        isDefault: true,
-      },
-      {
-        name: 'Salbutamol Inhaler',
-        category: 'respiratory',
-        medicationName: 'Salbutamol',
-        genericName: 'Albuterol',
-        dosage: '100',
-        dosageUnit: 'mcg',
-        frequency: '1-2 puffs as needed, up to 4 times daily',
-        route: 'inhalation',
-        duration: 'As needed',
-        instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
-        indications: 'Asthma, COPD, bronchospasm',
-        contraindications: 'Hypersensitivity to salbutamol',
-        sideEffects: 'Tremor, palpitations, headache',
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.medicationName,
-          template.genericName,
-          template.dosage,
-          template.dosageUnit,
-          template.frequency,
-          template.route,
-          template.duration,
-          template.instructions,
-          template.indications,
-          template.contraindications,
-          template.sideEffects,
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default prescription templates`);
-  }
-
-  async deleteDatabase(databaseName: string): Promise<void> {
-    try {
-      // Terminate connections to the database
-      await this.dataSource.query(`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
-      
-      // Drop database
-      await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-      
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
-  }
-}
-      {
-        name: 'Amlodipine 5mg',
-        category: 'hypertension',
-        medicationName: 'Amlodipine',
-        genericName: 'Amlodipine',
-        dosage: '5',
-        dosageUnit: 'mg',
-        frequency: 'Once daily',
-        route: 'oral',
-        duration: 'Ongoing',
-        instructions: 'Take at the same time each day. May cause ankle swelling.',
-        indications: 'Hypertension, angina',
-        contraindications: 'Severe hypotension, cardiogenic shock',
-        sideEffects: 'Dizziness, ankle swelling, flushing',
-        isDefault: true,
-      },
-      {
-        name: 'Salbutamol Inhaler',
-        category: 'respiratory',
-        medicationName: 'Salbutamol',
-        genericName: 'Albuterol',
-        dosage: '100',
-        dosageUnit: 'mcg',
-        frequency: '1-2 puffs as needed, up to 4 times daily',
-        route: 'inhalation',
-        duration: 'As needed',
-        instructions: 'Shake well before use. Rinse mouth after use to prevent thrush.',
-        indications: 'Asthma, COPD, bronchospasm',
-        contraindications: 'Hypersensitivity to salbutamol',
-        sideEffects: 'Tremor, palpitations, headache',
-        isDefault: true,
-      },
-    ];
-
-    for (const template of templates) {
-      const existing = await tenantDataSource.query(`
-        SELECT id FROM prescription_templates WHERE name = $1 AND category = $2
-      `, [template.name, template.category]);
-
-      if (existing.length === 0) {
-        await tenantDataSource.query(`
-          INSERT INTO prescription_templates (name, category, medication_name, generic_name, dosage, dosage_unit, frequency, route, duration, instructions, indications, contraindications, side_effects, is_default, is_active, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
-        `, [
-          template.name,
-          template.category,
-          template.medicationName,
-          template.genericName,
-          template.dosage,
-          template.dosageUnit,
-          template.frequency,
-          template.route,
-          template.duration,
-          template.instructions,
-          template.indications,
-          template.contraindications,
-          template.sideEffects,
-          template.isDefault,
-        ]);
-      }
-    }
-
-    this.logger.log(`Seeded ${templates.length} default prescription templates`);
-  }
-
-  async deleteDatabase(databaseName: string): Promise<void> {
-    try {
-      // Terminate connections to the database
-      await this.dataSource.query(`
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
-      
-      // Drop database
-      await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
-      
-      this.logger.log(`Database ${databaseName} deleted successfully`);
-    } catch (error) {
-      this.logger.error(`Failed to delete database ${databaseName}:`, error);
-      throw error;
-    }
+    return statements;
   }
 }

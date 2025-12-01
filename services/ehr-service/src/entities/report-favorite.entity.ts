@@ -40,3 +40,4 @@ export class ReportFavorite {
   createdAt: Date;
 }
 
+

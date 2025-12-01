@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { Repository, Between, Not } from 'typeorm';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
@@ -8,6 +8,7 @@ import { DoctorAvailabilityService } from './doctor-availability.service';
 import { TelemedicineService } from './telemedicine.service';
 import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
+import { PatientProService } from './patient-pro.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class AppointmentService {
     private telemedicineService: TelemedicineService,
     private notificationsService: NotificationsService,
     private emailService: EmailService,
+    @Optional() private patientProService?: PatientProService,
   ) {}
 
   private async getAppointmentRepository(tenantId: string): Promise<Repository<AppointmentSimple>> {
@@ -150,6 +152,29 @@ export class AppointmentService {
       } catch (error) {
         this.logger.error(`Failed to create telemedicine consultation for appointment ${savedAppointment.id}:`, error);
         // Don't fail the appointment creation if telemedicine setup fails
+      }
+    }
+
+    // Auto-assign pre-visit questionnaires based on appointment type
+    if (this.patientProService) {
+      try {
+        const appointmentDate = typeof createAppointmentDto.appointmentDate === 'string' 
+          ? new Date(createAppointmentDto.appointmentDate)
+          : createAppointmentDto.appointmentDate;
+        
+        const appointmentDateStr = appointmentDate.toISOString();
+        
+        await this.patientProService.autoAssignPreVisitQuestionnaires(
+          connection,
+          createAppointmentDto.patientId,
+          savedAppointment.id,
+          createAppointmentDto.appointmentType || 'consultation',
+          appointmentDateStr,
+        );
+        this.logger.log(`Pre-visit questionnaires assigned for appointment ${savedAppointment.id}`);
+      } catch (error) {
+        this.logger.error(`Failed to assign pre-visit questionnaires for appointment ${savedAppointment.id}:`, error);
+        // Don't fail the appointment creation if questionnaire assignment fails
       }
     }
 

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { useTenantSlug } from '../hooks/useTenantSlug';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 
 const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
 
 const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const { tenantSlug: urlTenantSlug } = useParams<{ tenantSlug: string }>();
+  const tenantSlug = useTenantSlug();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
@@ -13,11 +16,17 @@ const VerifyEmailPage: React.FC = () => {
   useEffect(() => {
     const verifyEmail = async () => {
       const token = searchParams.get('token');
-      const tenant = searchParams.get('tenant') || 'bulawayo-general';
+      const tenant = tenantSlug || urlTenantSlug || searchParams.get('tenant');
 
       if (!token) {
         setStatus('error');
         setMessage('Verification token is missing.');
+        return;
+      }
+
+      if (!tenant) {
+        setStatus('error');
+        setMessage('Tenant information is missing. Please access this page through the correct tenant URL.');
         return;
       }
 
@@ -40,7 +49,7 @@ const VerifyEmailPage: React.FC = () => {
 
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          navigate('/login');
+          navigate(`/${tenant}/login`);
         }, 3000);
       } catch (error: any) {
         setStatus('error');
@@ -49,7 +58,7 @@ const VerifyEmailPage: React.FC = () => {
     };
 
     verifyEmail();
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, tenantSlug]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -83,7 +92,14 @@ const VerifyEmailPage: React.FC = () => {
             <h2 className="text-3xl font-bold text-gray-900 mb-3">Verification Failed</h2>
             <p className="text-gray-600 mb-6">{message}</p>
             <button
-              onClick={() => navigate('/login')}
+              onClick={() => {
+                const currentTenant = tenantSlug || urlTenantSlug || searchParams.get('tenant');
+                if (currentTenant) {
+                  navigate(`/${currentTenant}/login`);
+                } else {
+                  navigate('/select-tenant');
+                }
+              }}
               className="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
             >
               Go to Login

@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { patientPortalApi } from '../services/api';
+import { useTenantSlug } from '../hooks/useTenantSlug';
+import { useNotification } from '../components/GlobalNotification';
 import { MessageSquare, ArrowLeft, Send, Paperclip, AlertCircle, CheckCircle, Clock, User, Plus, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 
 const MessagesPage: React.FC = () => {
   const { token, patient } = usePatientAuth();
-  const tenantSlug = localStorage.getItem('patient_tenant') || 'bulawayo-general';
+  const tenantSlug = useTenantSlug();
+  const { showError, showSuccess, showWarning } = useNotification();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -44,7 +47,7 @@ const MessagesPage: React.FC = () => {
 
   const handleSendMessage = async () => {
     if (!newMessage.message.trim()) {
-      alert('Please enter a message');
+      showWarning('Validation', 'Please enter a message');
       return;
     }
 
@@ -60,9 +63,9 @@ const MessagesPage: React.FC = () => {
         priority: 'normal',
       });
       await loadMessages();
-      alert('Message sent successfully!');
+      showSuccess('Success', 'Message sent successfully!');
     } catch (err: any) {
-      alert(err.message || 'Failed to send message');
+      showError('Error', err.message || 'Failed to send message');
       console.error('Failed to send message:', err);
     } finally {
       setSending(false);
@@ -109,7 +112,7 @@ const MessagesPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                to="/dashboard"
+                to={`/${tenantSlug}/dashboard`}
                 className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />

@@ -225,3 +225,4 @@ done
 echo ""
 echo "🎉 Telemedicine schema application completed!"
 
+

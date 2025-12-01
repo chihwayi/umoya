@@ -193,7 +193,45 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    // Use raw SQL query to avoid TypeORM column name mapping issues
+    this.logger.log(`[getPatientRecords] Querying medical records for patientId: ${patientId}, tenantId: ${tenantId}`);
+    
+    // Verify patient exists
+    const patientCheck = await connection.query(
+      `SELECT id, first_name, last_name, patient_number FROM patients WHERE id = $1`,
+      [patientId]
+    );
+    
+    if (!patientCheck || patientCheck.length === 0) {
+      this.logger.warn(`[getPatientRecords] Patient not found: ${patientId}`);
+      return [];
+    }
+    
+    this.logger.log(`[getPatientRecords] Patient found: ${patientCheck[0].first_name} ${patientCheck[0].last_name} (${patientCheck[0].patient_number})`);
+    
+    // Debug: Check which database we're connected to
+    const dbName = await connection.query(`SELECT current_database() as db_name`);
+    this.logger.log(`[getPatientRecords] Connected to database: ${JSON.stringify(dbName)}`);
+    
+    // Debug: Check record count directly
+    const directCount = await connection.query(
+      `SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`,
+      [patientId]
+    );
+    this.logger.log(`[getPatientRecords] Direct count query result: ${JSON.stringify(directCount)}`);
+    
+    // Debug: Get all records for this patient without joins
+    const directRecords = await connection.query(
+      `SELECT id, patient_id, visit_date, chief_complaint FROM medical_records WHERE patient_id = $1`,
+      [patientId]
+    );
+    this.logger.log(`[getPatientRecords] Direct records query result: ${JSON.stringify(directRecords)}`);
+    
+    // If direct query finds records but main query doesn't, there's a join issue
+    if (directRecords && directRecords.length > 0) {
+      this.logger.warn(`[getPatientRecords] Direct query found ${directRecords.length} records but main query may fail due to JOIN`);
+    }
+
+    // Use raw SQL query - EXACT same pattern as getPatientAppointments which works
     // Note: medical_records table uses visit_date, not record_date, and has diagnosis_codes array
     let query = `
       SELECT 
@@ -232,7 +270,10 @@ export class PatientPortalService {
     
     query += ` ORDER BY mr.visit_date DESC`;
     
+    this.logger.log(`[getPatientRecords] Executing query with patientId: ${patientId}`);
     const rawRecords = await connection.query(query, params);
+    
+    this.logger.log(`[getPatientRecords] Found ${rawRecords.length} medical records for patient ${patientId}`);
 
     return rawRecords.map((record: any) => ({
       id: record.id,
@@ -294,6 +335,8 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
+    this.logger.debug(`getPatientPrescriptions: patientId=${patientId}, tenantId=${tenantId}, activeOnly=${filters?.activeOnly}`);
+
     // Use raw SQL query to avoid TypeORM column name mapping issues
     // Note: Only select columns that actually exist in the database
     let query = `
@@ -323,11 +366,59 @@ export class PatientPortalService {
       params.push('active');
     }
     
-    query += ` ORDER BY p.created_at DESC`;
+    query += ` ORDER BY p.prescribed_date DESC NULLS LAST, p.created_at DESC`;
     
+    this.logger.debug(`Prescriptions query: ${query}, params: ${JSON.stringify(params)}`);
     const rawPrescriptions = await connection.query(query, params);
+    this.logger.debug(`Prescriptions query returned ${rawPrescriptions.length} results`);
     
-    return rawPrescriptions.map((prescription: any) => ({
+    // Get diabetes medications (if patient has diabetes registry)
+    let diabetesMedications: any[] = [];
+    try {
+      const [registry] = await connection.query(
+        `SELECT id FROM diabetes_registry WHERE patient_id = $1`,
+        [patientId]
+      );
+      
+      if (registry) {
+        let diabetesQuery = `
+          SELECT 
+            dm.id,
+            dm.start_date as "prescribedDate",
+            dm.created_at as "createdAt",
+            dm.status,
+            dm.medication_name as "medicationName",
+            dm.dosage,
+            dm.frequency,
+            NULL as duration,
+            NULL as quantity,
+            dm.notes as instructions,
+            u.id as prescriber_id,
+            u.first_name as prescriber_first_name,
+            u.last_name as prescriber_last_name
+          FROM diabetes_medications dm
+          LEFT JOIN users u ON dm.prescribed_by = u.id
+          WHERE dm.diabetes_registry_id = $1
+        `;
+        
+        const diabetesParams: any[] = [registry.id];
+        
+        if (filters?.activeOnly) {
+          diabetesQuery += ` AND dm.status = $2`;
+          diabetesParams.push('active');
+        }
+        
+        diabetesQuery += ` ORDER BY dm.start_date DESC NULLS LAST, dm.created_at DESC`;
+        
+        diabetesMedications = await connection.query(diabetesQuery, diabetesParams);
+        this.logger.debug(`Diabetes medications query returned ${diabetesMedications.length} results`);
+      }
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch diabetes medications: ${error.message}`);
+    }
+    
+    // Map regular prescriptions
+    const mappedPrescriptions = rawPrescriptions.map((prescription: any) => ({
       id: prescription.id,
       prescribedDate: prescription.prescribedDate || prescription.prescribed_date || prescription.createdAt || prescription.created_at,
       status: prescription.status,
@@ -337,12 +428,43 @@ export class PatientPortalService {
       duration: prescription.duration,
       quantity: prescription.quantity,
       instructions: prescription.instructions,
+      isDiabetesMedication: false, // Flag to identify diabetes medications
       prescriber: prescription.prescriber_id ? {
         id: prescription.prescriber_id,
         firstName: prescription.prescriber_first_name,
         lastName: prescription.prescriber_last_name,
       } : null,
     }));
+    
+    // Map diabetes medications and add flag
+    const mappedDiabetesMeds = diabetesMedications.map((dm: any) => ({
+      id: dm.id,
+      prescribedDate: dm.prescribedDate || dm.start_date || dm.createdAt || dm.created_at,
+      status: dm.status === 'discontinued' ? 'discontinued' : (dm.status || 'active'),
+      medicationName: dm.medicationName || dm.medication_name,
+      dosage: dm.dosage,
+      frequency: dm.frequency,
+      duration: dm.duration,
+      quantity: dm.quantity,
+      instructions: dm.instructions,
+      isDiabetesMedication: true, // Flag to identify diabetes medications
+      prescriber: dm.prescriber_id ? {
+        id: dm.prescriber_id,
+        firstName: dm.prescriber_first_name,
+        lastName: dm.prescriber_last_name,
+      } : null,
+    }));
+    
+    // Merge and sort by date (most recent first)
+    const allPrescriptions = [...mappedPrescriptions, ...mappedDiabetesMeds];
+    allPrescriptions.sort((a, b) => {
+      const dateA = new Date(a.prescribedDate || a.createdAt || 0).getTime();
+      const dateB = new Date(b.prescribedDate || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+    
+    this.logger.debug(`Returning ${allPrescriptions.length} total prescriptions (${mappedPrescriptions.length} regular + ${mappedDiabetesMeds.length} diabetes)`);
+    return allPrescriptions;
   }
 
   // Bills
@@ -351,6 +473,8 @@ export class PatientPortalService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+
+    this.logger.debug(`getPatientBills: patientId=${patientId}, tenantId=${tenantId}, filters=${JSON.stringify(filters)}`);
 
     // Use raw SQL query to avoid TypeORM column name mapping issues
     let query = `
@@ -390,7 +514,9 @@ export class PatientPortalService {
     
     query += ` ORDER BY b.invoice_date DESC`;
     
+    this.logger.debug(`Bills query: ${query}, params: ${JSON.stringify(params)}`);
     const rawBills = await connection.query(query, params);
+    this.logger.debug(`Bills query returned ${rawBills.length} results`);
 
     return rawBills.map((bill: any) => ({
       id: bill.id,
@@ -518,6 +644,353 @@ export class PatientPortalService {
   }
 
   // Dashboard Summary
+  // Chronic Disease Management - Diabetes
+  async getPatientDiabetesRegistry(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const [registry] = await connection.query(
+      `SELECT 
+        dr.*,
+        u1.first_name || ' ' || u1.last_name as primary_care_provider_name,
+        u2.first_name || ' ' || u2.last_name as endocrinologist_name,
+        u3.first_name || ' ' || u3.last_name as diabetes_educator_name
+      FROM diabetes_registry dr
+      LEFT JOIN users u1 ON dr.primary_care_provider_id = u1.id
+      LEFT JOIN users u2 ON dr.endocrinologist_id = u2.id
+      LEFT JOIN users u3 ON dr.diabetes_educator_id = u3.id
+      WHERE dr.patient_id = $1`,
+      [patientId],
+    );
+
+    return registry || null;
+  }
+
+  async getPatientGlucoseHistory(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Get glucose data from vitals table (primary source) and glucose_monitoring (secondary)
+    // This ensures we show glucose data even if patient doesn't have a diabetes registry yet
+    let query = `
+      SELECT 
+        id,
+        blood_glucose as "glucoseValue",
+        'mg/dL' as "glucoseUnit",
+        'random' as "measurementType",
+        recorded_at as "measurementTime",
+        notes,
+        created_at as "createdAt"
+      FROM vitals
+      WHERE patient_id = $1 AND blood_glucose IS NOT NULL AND blood_glucose > 0
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
+    if (filters?.startDate) {
+      query += ` AND recorded_at >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+    if (filters?.endDate) {
+      query += ` AND recorded_at <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+    
+    // Also get from glucose_monitoring if registry exists
+    const [registry] = await connection.query(
+      `SELECT id FROM diabetes_registry WHERE patient_id = $1`,
+      [patientId],
+    );
+
+    if (registry) {
+      query += `
+        UNION ALL
+        SELECT 
+          id,
+          glucose_value as "glucoseValue",
+          COALESCE(glucose_unit, 'mg/dL') as "glucoseUnit",
+          COALESCE(reading_type, 'random') as "measurementType",
+          recorded_at as "measurementTime",
+          notes,
+          created_at as "createdAt"
+        FROM glucose_monitoring
+        WHERE diabetes_registry_id = $${paramIndex}
+      `;
+      params.push(registry.id);
+      paramIndex++;
+      
+      if (filters?.startDate) {
+        query += ` AND recorded_at >= $${paramIndex}`;
+        params.push(filters.startDate);
+        paramIndex++;
+      }
+      if (filters?.endDate) {
+        query += ` AND recorded_at <= $${paramIndex}`;
+        params.push(filters.endDate);
+        paramIndex++;
+      }
+    }
+    
+    query += ` ORDER BY "measurementTime" DESC`;
+    
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(filters.limit);
+    } else {
+      query += ` LIMIT 100`;
+    }
+    
+    return await connection.query(query, params);
+  }
+
+  async getPatientDiabetesCarePlan(patientId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Get registry first
+    const [registry] = await connection.query(
+      `SELECT id, care_plan as "carePlan" FROM diabetes_registry WHERE patient_id = $1`,
+      [patientId],
+    );
+
+    if (!registry) {
+      return null;
+    }
+
+    // Get latest care bundle
+    const [careBundle] = await connection.query(
+      `SELECT 
+        id,
+        bundle_date as "bundleDate",
+        hba1c_checked as "hba1cChecked",
+        hba1c_value as "hba1cValue",
+        hba1c_date as "hba1cDate",
+        blood_pressure_checked as "bloodPressureChecked",
+        systolic_bp as "systolicBp",
+        diastolic_bp as "diastolicBp",
+        bp_date as "bpDate",
+        lipid_profile_checked as "lipidProfileChecked",
+        lipid_profile_date as "lipidProfileDate",
+        foot_exam_checked as "footExamChecked",
+        foot_exam_date as "footExamDate",
+        foot_exam_result as "footExamResult",
+        eye_exam_checked as "eyeExamChecked",
+        eye_exam_date as "eyeExamDate",
+        eye_exam_result as "eyeExamResult",
+        urine_acr_checked as "urineAcrChecked",
+        urine_acr_value as "urineAcrValue",
+        urine_acr_date as "urineAcrDate",
+        diabetes_education_documented as "diabetesEducationDocumented",
+        education_date as "educationDate",
+        medication_review_completed as "medicationReviewCompleted",
+        medication_review_date as "medicationReviewDate",
+        bundle_completion_percentage as "completionPercentage",
+        created_at as "createdAt"
+      FROM diabetes_care_bundle
+      WHERE diabetes_registry_id = $1
+      ORDER BY bundle_date DESC
+      LIMIT 1`,
+      [registry.id],
+    );
+
+    // Get active medications
+    const medications = await connection.query(
+      `SELECT 
+        id,
+        medication_name as "medicationName",
+        medication_type as "medicationType",
+        dosage,
+        frequency,
+        start_date as "startDate",
+        end_date as "endDate",
+        status,
+        notes
+      FROM diabetes_medications
+      WHERE diabetes_registry_id = $1 AND status = 'active'
+      ORDER BY start_date DESC`,
+      [registry.id],
+    );
+
+    return {
+      careBundle: careBundle || null,
+      medications,
+      registry: {
+        id: registry.id,
+        carePlan: registry.carePlan,
+      },
+    };
+  }
+
+  async getPatientDiabetesMedications(patientId: string, tenantId: string): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Get registry first
+    const [registry] = await connection.query(
+      `SELECT id FROM diabetes_registry WHERE patient_id = $1`,
+      [patientId],
+    );
+
+    if (!registry) {
+      return [];
+    }
+
+    return await connection.query(
+      `SELECT 
+        id,
+        medication_name as "medicationName",
+        medication_type as "medicationType",
+        dosage,
+        frequency,
+        start_date as "startDate",
+        end_date as "endDate",
+        status,
+        notes,
+        adherence_percentage as "adherencePercentage"
+      FROM diabetes_medications
+      WHERE diabetes_registry_id = $1
+      ORDER BY start_date DESC`,
+      [registry.id],
+    );
+  }
+
+  // Chronic Disease Management - Cardiology/Hypertension
+  async getPatientCardiologyEncounters(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        ce.id,
+        ce.encounter_date as "encounterDate",
+        ce.visit_reason as "chiefComplaint",
+        ce.hemodynamics->>'systolic_bp' as "bloodPressureSystolic",
+        ce.hemodynamics->>'diastolic_bp' as "bloodPressureDiastolic",
+        ce.hemodynamics->>'heart_rate' as "heartRate",
+        ce.risk_score as "riskScore",
+        ce.care_status as "careStatus",
+        ce.payment_status as "paymentStatus",
+        ce.care_plan as "notes",
+        u.first_name || ' ' || u.last_name as cardiologist_name,
+        ce.created_at as "createdAt"
+      FROM cardiology_encounters ce
+      LEFT JOIN users u ON ce.cardiologist_id = u.id
+      WHERE ce.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
+    if (filters?.startDate) {
+      query += ` AND ce.encounter_date >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+    if (filters?.endDate) {
+      query += ` AND ce.encounter_date <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY ce.encounter_date DESC`;
+    
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(filters.limit);
+    } else {
+      query += ` LIMIT 50`;
+    }
+    
+    return await connection.query(query, params);
+  }
+
+  async getPatientBloodPressureTrends(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Get BP data from vitals table (primary source) and cardiology encounters (secondary)
+    // Parse blood_pressure string format "120/80" into systolic and diastolic
+    let query = `
+      SELECT 
+        recorded_at as "date",
+        CASE 
+          WHEN blood_pressure ~ '^[0-9]+/[0-9]+$' THEN
+            (regexp_split_to_array(blood_pressure, '/'))[1]::integer
+          ELSE NULL
+        END as "systolic",
+        CASE 
+          WHEN blood_pressure ~ '^[0-9]+/[0-9]+$' THEN
+            (regexp_split_to_array(blood_pressure, '/'))[2]::integer
+          ELSE NULL
+        END as "diastolic",
+        heart_rate as "heartRate"
+      FROM vitals
+      WHERE patient_id = $1 AND blood_pressure IS NOT NULL AND blood_pressure != ''
+    `;
+    
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+    
+    if (filters?.startDate) {
+      query += ` AND recorded_at >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+    if (filters?.endDate) {
+      query += ` AND recorded_at <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+    
+    query += ` 
+      UNION ALL
+      SELECT 
+        encounter_date as "date",
+        (hemodynamics->>'systolic_bp')::integer as "systolic",
+        (hemodynamics->>'diastolic_bp')::integer as "diastolic",
+        (hemodynamics->>'heart_rate')::integer as "heartRate"
+      FROM cardiology_encounters
+      WHERE patient_id = $1 AND hemodynamics->>'systolic_bp' IS NOT NULL
+    `;
+    
+    if (filters?.startDate) {
+      query += ` AND encounter_date >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+    if (filters?.endDate) {
+      query += ` AND encounter_date <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY "date" DESC`;
+    
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(filters.limit);
+    } else {
+      query += ` LIMIT 100`;
+    }
+    
+    return await connection.query(query, params);
+  }
+
   async getPatientDashboardSummary(patientId: string, tenantId: string): Promise<any> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
     if (!connection) {
@@ -535,11 +1008,31 @@ export class PatientPortalService {
     const appointmentsCount = appointmentsResult?.[0]?.count || '0';
     this.logger.debug(`Appointments count extracted: ${appointmentsCount}`);
     
+    // Count regular prescriptions
     const prescriptionsResult = await connection.query(
       `SELECT COUNT(*) as count FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
       [patientId]
     );
-    const prescriptionsCount = prescriptionsResult[0]?.count || '0';
+    let prescriptionsCount = parseInt(prescriptionsResult[0]?.count || '0', 10);
+    
+    // Also count diabetes medications (if patient has diabetes registry)
+    try {
+      const [registry] = await connection.query(
+        `SELECT id FROM diabetes_registry WHERE patient_id = $1`,
+        [patientId]
+      );
+      
+      if (registry) {
+        const diabetesMedsResult = await connection.query(
+          `SELECT COUNT(*) as count FROM diabetes_medications WHERE diabetes_registry_id = $1 AND status = 'active'`,
+          [registry.id]
+        );
+        const diabetesMedsCount = parseInt(diabetesMedsResult[0]?.count || '0', 10);
+        prescriptionsCount += diabetesMedsCount;
+      }
+    } catch (error: any) {
+      this.logger.warn(`Failed to count diabetes medications for dashboard: ${error.message}`);
+    }
     
     const recordsResult = await connection.query(
       `SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`,
@@ -584,7 +1077,7 @@ export class PatientPortalService {
     return {
       summary: {
         appointments: parseInt(appointmentsCount || '0', 10),
-        activePrescriptions: parseInt(prescriptionsCount || '0', 10),
+        activePrescriptions: prescriptionsCount,
         medicalRecords: parseInt(recordsCount || '0', 10),
         pendingBills: parseInt(billsCount || '0', 10),
         vitalsRecords: parseInt(vitalsCount || '0', 10),
@@ -605,5 +1098,521 @@ export class PatientPortalService {
         recordedAt: latestVitals.recorded_at || latestVitals.recordedAt,
       } : null,
     };
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - REFILL REQUESTS
+  // ============================================
+
+  async createRefillRequest(patientId: string, tenantId: string, prescriptionId: string, data: { requestedQuantity?: number; reason?: string; urgency?: string }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify prescription belongs to patient
+    const [prescription] = await connection.query(
+      `SELECT id, patient_id, medication_name, refills FROM prescriptions WHERE id = $1 AND patient_id = $2`,
+      [prescriptionId, patientId],
+    );
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found or does not belong to you');
+    }
+
+    // Check for existing pending request
+    const [existingRequest] = await connection.query(
+      `SELECT id FROM prescription_refill_requests WHERE prescription_id = $1 AND patient_id = $2 AND status = 'pending'`,
+      [prescriptionId, patientId],
+    );
+
+    if (existingRequest) {
+      throw new Error('You already have a pending refill request for this prescription');
+    }
+
+    // Create refill request
+    const result = await connection.query(
+      `INSERT INTO prescription_refill_requests (
+        prescription_id, patient_id, requested_quantity, reason, urgency
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING 
+        id,
+        prescription_id as "prescriptionId",
+        patient_id as "patientId",
+        request_date as "requestDate",
+        status,
+        requested_quantity as "requestedQuantity",
+        reason,
+        urgency,
+        reviewed_by as "reviewedBy",
+        reviewed_at as "reviewedAt",
+        review_notes as "reviewNotes",
+        approved_quantity as "approvedQuantity",
+        created_at as "createdAt"
+      `,
+      [
+        prescriptionId,
+        patientId,
+        data.requestedQuantity || null,
+        data.reason || null,
+        data.urgency || 'normal',
+      ],
+    );
+
+    return result[0];
+  }
+
+  async getRefillRequests(patientId: string, tenantId: string, filters?: { status?: string }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        r.id,
+        r.prescription_id as "prescriptionId",
+        r.patient_id as "patientId",
+        r.request_date as "requestDate",
+        r.status,
+        r.requested_quantity as "requestedQuantity",
+        r.reason,
+        r.urgency,
+        r.reviewed_by as "reviewedBy",
+        r.reviewed_at as "reviewedAt",
+        r.review_notes as "reviewNotes",
+        r.approved_quantity as "approvedQuantity",
+        p.medication_name as "medicationName",
+        p.dosage,
+        p.frequency,
+        r.created_at as "createdAt"
+      FROM prescription_refill_requests r
+      JOIN prescriptions p ON r.prescription_id = p.id
+      WHERE r.patient_id = $1
+    `;
+
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+
+    if (filters?.status) {
+      query += ` AND r.status = $${paramIndex}`;
+      params.push(filters.status);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY r.request_date DESC`;
+
+    return await connection.query(query, params);
+  }
+
+  async cancelRefillRequest(patientId: string, tenantId: string, requestId: string): Promise<void> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify request belongs to patient and is pending
+    const [request] = await connection.query(
+      `SELECT id, status FROM prescription_refill_requests WHERE id = $1 AND patient_id = $2`,
+      [requestId, patientId],
+    );
+
+    if (!request) {
+      throw new NotFoundException('Refill request not found');
+    }
+
+    if (request.status !== 'pending') {
+      throw new Error('Only pending requests can be cancelled');
+    }
+
+    await connection.query(
+      `UPDATE prescription_refill_requests SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+      [requestId],
+    );
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - REMINDERS
+  // ============================================
+
+  async createMedicationReminder(patientId: string, tenantId: string, prescriptionId: string, data: { reminderTime: string; reminderDays: number[]; reminderType?: string; timezone?: string }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify prescription belongs to patient
+    const [prescription] = await connection.query(
+      `SELECT id, patient_id, medication_name FROM prescriptions WHERE id = $1 AND patient_id = $2`,
+      [prescriptionId, patientId],
+    );
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found or does not belong to you');
+    }
+
+    // Calculate next send time
+    const nextSendAt = this.calculateNextReminderTime(data.reminderTime, data.reminderDays, data.timezone);
+
+    const result = await connection.query(
+      `INSERT INTO medication_reminders (
+        prescription_id, patient_id, medication_name, reminder_time, reminder_days, reminder_type, timezone, next_send_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING 
+        id,
+        prescription_id as "prescriptionId",
+        patient_id as "patientId",
+        medication_name as "medicationName",
+        reminder_time as "reminderTime",
+        reminder_days as "reminderDays",
+        reminder_type as "reminderType",
+        is_active as "isActive",
+        timezone,
+        last_sent_at as "lastSentAt",
+        next_send_at as "nextSendAt",
+        sent_count as "sentCount",
+        acknowledged_count as "acknowledgedCount",
+        created_at as "createdAt"
+      `,
+      [
+        prescriptionId,
+        patientId,
+        prescription.medication_name,
+        data.reminderTime,
+        data.reminderDays,
+        data.reminderType || 'notification',
+        data.timezone || 'Africa/Harare',
+        nextSendAt,
+      ],
+    );
+
+    return result[0];
+  }
+
+  async getMedicationReminders(patientId: string, tenantId: string, filters?: { activeOnly?: boolean }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        m.id,
+        m.prescription_id as "prescriptionId",
+        m.patient_id as "patientId",
+        m.medication_name as "medicationName",
+        m.reminder_time as "reminderTime",
+        m.reminder_days as "reminderDays",
+        m.reminder_type as "reminderType",
+        m.is_active as "isActive",
+        m.timezone,
+        m.last_sent_at as "lastSentAt",
+        m.next_send_at as "nextSendAt",
+        m.sent_count as "sentCount",
+        m.acknowledged_count as "acknowledgedCount",
+        p.dosage,
+        p.frequency,
+        m.created_at as "createdAt"
+      FROM medication_reminders m
+      JOIN prescriptions p ON m.prescription_id = p.id
+      WHERE m.patient_id = $1
+    `;
+
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+
+    if (filters?.activeOnly) {
+      query += ` AND m.is_active = $${paramIndex}`;
+      params.push(true);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY m.created_at DESC`;
+
+    return await connection.query(query, params);
+  }
+
+  async updateMedicationReminder(patientId: string, tenantId: string, reminderId: string, data: { reminderTime?: string; reminderDays?: number[]; reminderType?: string; isActive?: boolean }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify reminder belongs to patient
+    const [reminder] = await connection.query(
+      `SELECT id, patient_id FROM medication_reminders WHERE id = $1 AND patient_id = $2`,
+      [reminderId, patientId],
+    );
+
+    if (!reminder) {
+      throw new NotFoundException('Medication reminder not found');
+    }
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.reminderTime !== undefined) {
+      updates.push(`reminder_time = $${paramIndex}`);
+      params.push(data.reminderTime);
+      paramIndex++;
+    }
+    if (data.reminderDays !== undefined) {
+      updates.push(`reminder_days = $${paramIndex}`);
+      params.push(data.reminderDays);
+      paramIndex++;
+    }
+    if (data.reminderType !== undefined) {
+      updates.push(`reminder_type = $${paramIndex}`);
+      params.push(data.reminderType);
+      paramIndex++;
+    }
+    if (data.isActive !== undefined) {
+      updates.push(`is_active = $${paramIndex}`);
+      params.push(data.isActive);
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      throw new Error('No fields to update');
+    }
+
+    // Recalculate next_send_at if reminder time or days changed
+    if (data.reminderTime || data.reminderDays) {
+      const [currentReminder] = await connection.query(
+        `SELECT reminder_time, reminder_days, timezone FROM medication_reminders WHERE id = $1`,
+        [reminderId],
+      );
+      const nextSendAt = this.calculateNextReminderTime(
+        data.reminderTime || currentReminder.reminder_time,
+        data.reminderDays || currentReminder.reminder_days,
+        currentReminder.timezone,
+      );
+      updates.push(`next_send_at = $${paramIndex}`);
+      params.push(nextSendAt);
+      paramIndex++;
+    }
+
+    updates.push(`updated_at = NOW()`);
+    params.push(reminderId);
+
+    const query = `UPDATE medication_reminders SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+
+    const result = await connection.query(query, params);
+    return result[0];
+  }
+
+  async deleteMedicationReminder(patientId: string, tenantId: string, reminderId: string): Promise<void> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify reminder belongs to patient
+    const [reminder] = await connection.query(
+      `SELECT id FROM medication_reminders WHERE id = $1 AND patient_id = $2`,
+      [reminderId, patientId],
+    );
+
+    if (!reminder) {
+      throw new NotFoundException('Medication reminder not found');
+    }
+
+    await connection.query(`DELETE FROM medication_reminders WHERE id = $1`, [reminderId]);
+  }
+
+  // ============================================
+  // MEDICATION MANAGEMENT - ADHERENCE TRACKING
+  // ============================================
+
+  async logMedicationAdherence(patientId: string, tenantId: string, prescriptionId: string, data: { scheduledTime: string; taken: boolean; takenTime?: string; missedReason?: string; notes?: string }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify prescription belongs to patient
+    const [prescription] = await connection.query(
+      `SELECT id, patient_id, medication_name FROM prescriptions WHERE id = $1 AND patient_id = $2`,
+      [prescriptionId, patientId],
+    );
+
+    if (!prescription) {
+      throw new NotFoundException('Prescription not found or does not belong to you');
+    }
+
+    const result = await connection.query(
+      `INSERT INTO patient_medication_adherence_logs (
+        prescription_id, patient_id, medication_name, scheduled_time, taken_time, taken, missed_reason, notes, source
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'patient_portal')
+      RETURNING 
+        id,
+        prescription_id as "prescriptionId",
+        patient_id as "patientId",
+        medication_name as "medicationName",
+        scheduled_time as "scheduledTime",
+        taken_time as "takenTime",
+        taken,
+        missed_reason as "missedReason",
+        notes,
+        reminder_sent as "reminderSent",
+        reminder_sent_at as "reminderSentAt",
+        source,
+        created_at as "createdAt"
+      `,
+      [
+        prescriptionId,
+        patientId,
+        prescription.medication_name,
+        data.scheduledTime,
+        data.taken ? (data.takenTime || new Date().toISOString()) : null,
+        data.taken,
+        data.missedReason || null,
+        data.notes || null,
+      ],
+    );
+
+    return result[0];
+  }
+
+  async getMedicationAdherenceSummary(patientId: string, tenantId: string, prescriptionId?: string, filters?: { startDate?: string; endDate?: string }): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        prescription_id as "prescriptionId",
+        COUNT(*) as "totalDoses",
+        SUM(CASE WHEN taken = true THEN 1 ELSE 0 END) as "takenDoses",
+        SUM(CASE WHEN taken = false THEN 1 ELSE 0 END) as "missedDoses",
+        ROUND(
+          (SUM(CASE WHEN taken = true THEN 1 ELSE 0 END)::DECIMAL / NULLIF(COUNT(*), 0)) * 100,
+          2
+        ) as "adherencePercentage"
+      FROM patient_medication_adherence_logs
+      WHERE patient_id = $1
+    `;
+
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+
+    if (prescriptionId) {
+      query += ` AND prescription_id = $${paramIndex}`;
+      params.push(prescriptionId);
+      paramIndex++;
+    }
+
+    if (filters?.startDate) {
+      query += ` AND scheduled_time >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+
+    if (filters?.endDate) {
+      query += ` AND scheduled_time <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+
+    query += ` GROUP BY prescription_id`;
+
+    return await connection.query(query, params);
+  }
+
+  async getMedicationAdherenceLogs(patientId: string, tenantId: string, prescriptionId?: string, filters?: { startDate?: string; endDate?: string; limit?: number }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        id,
+        prescription_id as "prescriptionId",
+        patient_id as "patientId",
+        medication_name as "medicationName",
+        scheduled_time as "scheduledTime",
+        taken_time as "takenTime",
+        taken,
+        missed_reason as "missedReason",
+        notes,
+        reminder_sent as "reminderSent",
+        reminder_sent_at as "reminderSentAt",
+        source,
+        created_at as "createdAt"
+      FROM patient_medication_adherence_logs
+      WHERE patient_id = $1
+    `;
+
+    const params: any[] = [patientId];
+    let paramIndex = 2;
+
+    if (prescriptionId) {
+      query += ` AND prescription_id = $${paramIndex}`;
+      params.push(prescriptionId);
+      paramIndex++;
+    }
+
+    if (filters?.startDate) {
+      query += ` AND scheduled_time >= $${paramIndex}`;
+      params.push(filters.startDate);
+      paramIndex++;
+    }
+
+    if (filters?.endDate) {
+      query += ` AND scheduled_time <= $${paramIndex}`;
+      params.push(filters.endDate);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY scheduled_time DESC`;
+
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex}`;
+      params.push(filters.limit);
+    } else {
+      query += ` LIMIT 100`;
+    }
+
+    return await connection.query(query, params);
+  }
+
+  // Helper method to calculate next reminder time
+  private calculateNextReminderTime(reminderTime: string, reminderDays: number[], timezone: string = 'Africa/Harare'): Date {
+    const now = new Date();
+    const [hours, minutes] = reminderTime.split(':').map(Number);
+    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    // Find next day in reminderDays array
+    let daysUntilNext = 0;
+    for (let i = 0; i < 7; i++) {
+      const checkDay = (currentDay + i) % 7;
+      if (reminderDays.includes(checkDay)) {
+        if (i === 0) {
+          // Today is in the list, check if time has passed
+          const reminderToday = new Date(now);
+          reminderToday.setHours(hours, minutes, 0, 0);
+          if (reminderToday > now) {
+            return reminderToday; // Reminder is later today
+          }
+        } else {
+          daysUntilNext = i;
+          break;
+        }
+      }
+    }
+
+    // If no day found in next 7 days, use first day in list
+    if (daysUntilNext === 0 && reminderDays.length > 0) {
+      daysUntilNext = (reminderDays[0] - currentDay + 7) % 7 || 7;
+    }
+
+    const nextDate = new Date(now);
+    nextDate.setDate(now.getDate() + daysUntilNext);
+    nextDate.setHours(hours, minutes, 0, 0);
+
+    return nextDate;
   }
 }

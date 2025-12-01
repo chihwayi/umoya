@@ -26,3 +26,4 @@ COMMENT ON COLUMN medical_aid_claims.diagnosis_codes IS 'Array of ICD-10 diagnos
 COMMENT ON COLUMN medical_aid_claims.primary_diagnosis_code IS 'Primary ICD-10 diagnosis code for this claim';
 COMMENT ON COLUMN medical_aid_claims.primary_diagnosis_description IS 'Description of the primary diagnosis';
 
+

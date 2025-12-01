@@ -1,4 +1,4 @@
-import { Module, MiddlewareConsumer } from '@nestjs/common';
+import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -41,6 +41,9 @@ import { MaternityController } from './controllers/maternity.controller';
 import { OncologyController } from './controllers/oncology.controller';
 import { OphthalmologyController } from './controllers/ophthalmology.controller';
 import { FinanceController } from './controllers/finance.controller';
+import { FinancialReportsController } from './controllers/financial-reports.controller';
+import { TaxManagementController } from './controllers/tax-management.controller';
+import { PaymentReconciliationController } from './controllers/payment-reconciliation.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
 import { TerminologyController } from './controllers/terminology.controller';
 import { MetricsController } from './controllers/metrics.controller';
@@ -58,6 +61,9 @@ import { AnalyticsController } from './controllers/analytics.controller';
 import { AppointmentResourceController } from './controllers/appointment-resource.controller';
 import { ClinicalTemplateController } from './controllers/clinical-template.controller';
 import { PatientPortalController } from './controllers/patient-portal.controller';
+import { PatientProController } from './controllers/patient-pro.controller';
+import { MedicalAidApiController } from './controllers/medical-aid-api.controller';
+import { TenantsController } from './controllers/tenants.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -106,6 +112,9 @@ import { MaternityService } from './services/maternity.service';
 import { OncologyService } from './services/oncology.service';
 import { OphthalmologyService } from './services/ophthalmology.service';
 import { FinanceService } from './services/finance.service';
+import { FinancialReportsService } from './services/financial-reports.service';
+import { TaxManagementService } from './services/tax-management.service';
+import { PaymentReconciliationService } from './services/payment-reconciliation.service';
 import { InvoicePdfService } from './services/invoice-pdf.service';
 import { InvoiceTemplateService } from './services/invoice-template.service';
 import { CardiologyService } from './services/cardiology.service';
@@ -143,6 +152,12 @@ import { PatientMessagingService } from './services/patient-messaging.service';
 import { PatientNotificationsService } from './services/patient-notifications.service';
 import { PatientPortalAppointmentService } from './services/patient-portal-appointment.service';
 import { PatientVitalsSubmissionService } from './services/patient-vitals-submission.service';
+import { MedicationReminderService } from './services/medication-reminder.service';
+import { HealthRecordsExportService } from './services/health-records-export.service';
+import { PatientProService } from './services/patient-pro.service';
+import { ProSchedulingService } from './services/pro-scheduling.service';
+import { HealthGoalsService } from './services/health-goals.service';
+import { MedicalAidApiService } from './services/medical-aid-api.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -201,6 +216,9 @@ import { RolesGuard } from './guards/roles.guard';
     OphthalmologyController,
     CardiologyController,
     FinanceController,
+    FinancialReportsController,
+    TaxManagementController,
+    PaymentReconciliationController,
     TerminologyController,
     MetricsController,
     MedicationHistoryController,
@@ -217,6 +235,9 @@ import { RolesGuard } from './guards/roles.guard';
     AppointmentResourceController,
     ClinicalTemplateController,
     PatientPortalController,
+    PatientProController,
+    MedicalAidApiController,
+    TenantsController,
   ],
   providers: [
     AuthService,
@@ -266,6 +287,9 @@ import { RolesGuard } from './guards/roles.guard';
     OphthalmologyService,
     CardiologyService,
     FinanceService,
+    FinancialReportsService,
+    TaxManagementService,
+    PaymentReconciliationService,
     InvoicePdfService,
     InvoiceTemplateService,
     TerminologyService,
@@ -306,6 +330,12 @@ import { RolesGuard } from './guards/roles.guard';
     PatientNotificationsService,
     PatientPortalAppointmentService,
     PatientVitalsSubmissionService,
+    MedicationReminderService,
+    HealthRecordsExportService,
+    PatientProService,
+    ProSchedulingService,
+    HealthGoalsService,
+    MedicalAidApiService,
     RolesGuard,
     JwtStrategy,
   ],
@@ -314,6 +344,9 @@ export class EhrModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenantMiddleware)
+      .exclude(
+        { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
+      )
       .forRoutes('*');
   }
 }

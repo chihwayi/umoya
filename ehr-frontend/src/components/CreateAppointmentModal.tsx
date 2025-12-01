@@ -308,6 +308,8 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
 
       console.log('📤 Create appointment payload:', payload);
 
+      let createdAppointment: any = null;
+      
       if (isRecurring) {
         if (!recurringEndDate) {
           showError('Validation Error', 'Please select an end date for recurring appointments');
