@@ -244,7 +244,7 @@ const EHRDashboard: React.FC = () => {
               <span>Dashboard</span>
             </button>
             
-            {user?.role !== 'admin' && (
+            {user?.role !== 'admin' && user?.role !== 'accounts' && (
               <button 
                 onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
                 className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
@@ -262,6 +262,40 @@ const EHRDashboard: React.FC = () => {
                 <Calendar className="w-5 h-5" />
                 <span>Appointments</span>
               </button>
+            )}
+
+            {/* Finance/Accounts Navigation */}
+            {user?.role === 'accounts' && (
+              <>
+                <button 
+                  onClick={() => navigate(`/ehr/${tenantSlug}/accounts`)}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Accounts Dashboard</span>
+                </button>
+                <button 
+                  onClick={() => navigate(`/ehr/${tenantSlug}/billing`)}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  <span>Billing</span>
+                </button>
+                <button 
+                  onClick={() => navigate(`/ehr/${tenantSlug}/claims`)}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <FileText className="w-5 h-5" />
+                  <span>Medical Aid Claims</span>
+                </button>
+                <button 
+                  onClick={() => navigate(`/ehr/${tenantSlug}/accounts/analytics`)}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <BarChart3 className="w-5 h-5" />
+                  <span>Revenue Analytics</span>
+                </button>
+              </>
             )}
             
             {user?.role === 'admin' && (
