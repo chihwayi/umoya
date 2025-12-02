@@ -6,7 +6,7 @@ import {
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
-  Camera, TrendingUp, Baby, FlaskConical
+  Camera, TrendingUp, Baby, FlaskConical, Target
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -34,6 +34,10 @@ import ProAlerts from '../components/ProAlerts';
 import PatientProViewer from '../components/PatientProViewer';
 import QuestionnaireLibrary from '../components/QuestionnaireLibrary';
 import WorkflowList from '../components/WorkflowList';
+import CarePlanTemplates from '../components/CarePlanTemplates';
+import CarePlanViewer from '../components/CarePlanViewer';
+import CarePlanBuilder from '../components/CarePlanBuilder';
+import CarePlanList from '../components/CarePlanList';
 import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
 import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
@@ -156,6 +160,12 @@ const DoctorDashboard: React.FC = () => {
   const [showProViewerModal, setShowProViewerModal] = useState(false);
   const [showQuestionnaireLibrary, setShowQuestionnaireLibrary] = useState(false);
   const [showWorkflowList, setShowWorkflowList] = useState(false);
+  const [showCarePlanList, setShowCarePlanList] = useState(false);
+  const [showCarePlanTemplates, setShowCarePlanTemplates] = useState(false);
+  const [showCarePlanViewer, setShowCarePlanViewer] = useState(false);
+  const [showCarePlanBuilder, setShowCarePlanBuilder] = useState(false);
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(null);
+  const [carePlanPatientId, setCarePlanPatientId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
@@ -1045,6 +1055,7 @@ const DoctorDashboard: React.FC = () => {
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
       { icon: FileText, label: 'Questionnaires', desc: 'Assign & manage PROs', color: 'from-indigo-500 to-purple-500', action: 'questionnaires' },
       { icon: Activity, label: 'Workflows', desc: 'Automate care processes', color: 'from-violet-500 to-purple-500', action: 'workflows' },
+      { icon: Target, label: 'Care Plans', desc: 'Structured care management', color: 'from-teal-500 to-cyan-500', action: 'care-plans' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
@@ -1130,6 +1141,15 @@ const DoctorDashboard: React.FC = () => {
                     } else if (action.action === 'workflows') {
                       setShowWorkflowList(true);
                       setSidebarOpen(false);
+                    } else if (action.action === 'care-plans') {
+                      // Open care plan list - if no patient selected, show error
+                      if (!currentAppointment?.patient?.id) {
+                        showError('No Patient Selected', 'Please select a patient from your appointments first, then open care plans.');
+                      } else {
+                        setCarePlanPatientId(currentAppointment.patient.id);
+                        setShowCarePlanList(true);
+                        setSidebarOpen(false);
+                      }
                     } else if (action.route) {
                       navigate(`/ehr/${tenantSlug}/${action.route}`);
                     }
@@ -2768,6 +2788,75 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* Care Plan List Modal */}
+      {showCarePlanList && tenantSlug && carePlanPatientId && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <CarePlanList
+              patientId={carePlanPatientId}
+              tenantSlug={tenantSlug}
+              token={localStorage.getItem('ehr_token') || ''}
+              onClose={() => {
+                setShowCarePlanList(false);
+                setCarePlanPatientId(null);
+              }}
+            />
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Care Plan Templates Modal */}
+      {showCarePlanTemplates && tenantSlug && carePlanPatientId && (
+        <CarePlanTemplates
+          patientId={carePlanPatientId}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => {
+            setShowCarePlanTemplates(false);
+            setCarePlanPatientId(null);
+          }}
+          onApplied={() => {
+            setShowCarePlanTemplates(false);
+            // Optionally refresh patient care plans
+          }}
+        />
+      )}
+
+      {/* Care Plan Viewer Modal */}
+      {showCarePlanViewer && tenantSlug && selectedCarePlanId && (
+        <CarePlanViewer
+          carePlanId={selectedCarePlanId}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => {
+            setShowCarePlanViewer(false);
+            setSelectedCarePlanId(null);
+          }}
+          onEdit={() => {
+            setShowCarePlanViewer(false);
+            setShowCarePlanBuilder(true);
+          }}
+        />
+      )}
+
+      {/* Care Plan Builder Modal */}
+      {showCarePlanBuilder && tenantSlug && carePlanPatientId && (
+        <CarePlanBuilder
+          patientId={carePlanPatientId}
+          carePlanId={selectedCarePlanId || undefined}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => {
+            setShowCarePlanBuilder(false);
+            setSelectedCarePlanId(null);
+          }}
+          onSave={() => {
+            setShowCarePlanBuilder(false);
+            // Optionally refresh patient care plans
+          }}
+        />
       )}
     </div>
   );

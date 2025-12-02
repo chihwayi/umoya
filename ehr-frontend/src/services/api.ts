@@ -3772,6 +3772,199 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  // ==================== CARE PLANS ====================
+
+  // Care Plan Management
+  createCarePlan: async (carePlanData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/care-plans', carePlanData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCarePlans: async (patientId: string, filters: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/care-plans', {
+      params: { patientId, ...filters },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCarePlanById: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/care-plans/${carePlanId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateCarePlan: async (carePlanId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/care-plans/${carePlanId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deleteCarePlan: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/care-plans/${carePlanId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  completeCarePlan: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/complete`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  activateCarePlan: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/activate`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  holdCarePlan: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/hold`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Goals
+  addGoal: async (carePlanId: string, goalData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/goals`, goalData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateGoal: async (goalId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/care-plans/goals/${goalId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deleteGoal: async (goalId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/care-plans/goals/${goalId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  achieveGoal: async (goalId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/goals/${goalId}/achieve`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Interventions
+  addIntervention: async (carePlanId: string, interventionData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/interventions`, interventionData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateIntervention: async (interventionId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/care-plans/interventions/${interventionId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  deleteIntervention: async (interventionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/care-plans/interventions/${interventionId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  completeIntervention: async (interventionId: string, outcomeNotes: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/interventions/${interventionId}/complete`, 
+      { outcomeNotes },
+      {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      }
+    );
+    return { data: response.data };
+  },
+
+  // Progress
+  recordProgress: async (carePlanId: string, progressData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/progress`, progressData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCarePlanProgress: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/care-plans/${carePlanId}/progress`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Outcomes
+  assessOutcome: async (carePlanId: string, outcomeData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/outcomes`, outcomeData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getOutcomes: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/care-plans/${carePlanId}/outcomes`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Templates
+  getCarePlanTemplates: async (category: string | null, token: string, tenantSlug: string) => {
+    const params: any = {};
+    if (category) params.category = category;
+    const response = await ehrAxios.get('/care-plans/templates', {
+      params,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getCarePlanTemplateById: async (templateId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/care-plans/templates/${templateId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  createCarePlanTemplate: async (templateData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/care-plans/templates', templateData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateCarePlanTemplate: async (templateId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/care-plans/templates/${templateId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  applyCarePlanTemplate: async (templateId: string, patientId: string, customizations: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/templates/${templateId}/apply`, 
+      { patientId, customizations },
+      {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      }
+    );
+    return { data: response.data };
+  },
 };
 
 // Doctor Availability API (standalone)
