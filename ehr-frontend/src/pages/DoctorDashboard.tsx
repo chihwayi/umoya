@@ -6,7 +6,7 @@ import {
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
-  Camera, TrendingUp, Baby, FlaskConical, Target
+  Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -38,6 +38,12 @@ import CarePlanTemplates from '../components/CarePlanTemplates';
 import CarePlanViewer from '../components/CarePlanViewer';
 import CarePlanBuilder from '../components/CarePlanBuilder';
 import CarePlanList from '../components/CarePlanList';
+import ReferralList from '../components/ReferralList';
+import ReferralForm from '../components/ReferralForm';
+import ReferralTemplates from '../components/ReferralTemplates';
+import DocumentList from '../components/DocumentList';
+import { Inbox } from '../components/Inbox';
+import { MessageComposer } from '../components/MessageComposer';
 import EnhancedLabOrderModal from '../components/EnhancedLabOrderModal';
 import ImagingOrderModal from '../components/ImagingOrderModal';
 import AdvancedResultComparison from '../components/AdvancedResultComparison';
@@ -135,6 +141,13 @@ const DoctorDashboard: React.FC = () => {
   const [rxData, setRxData] = useState({ medication: '', dosage: '', frequency: '', duration: '' });
   const [showCarePlanModal, setShowCarePlanModal] = useState(false);
   const [carePlan, setCarePlan] = useState({ goals: '', tasks: '', dueDate: '' });
+  const [showReferralListModal, setShowReferralListModal] = useState(false);
+  const [showReferralFormModal, setShowReferralFormModal] = useState(false);
+  const [showReferralTemplatesModal, setShowReferralTemplatesModal] = useState(false);
+  const [showDocumentListModal, setShowDocumentListModal] = useState(false);
+  const [showInboxModal, setShowInboxModal] = useState(false);
+  const [showMessageComposerModal, setShowMessageComposerModal] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [patientRiskAssessment, setPatientRiskAssessment] = useState<any>(null);
   const [loadingRiskAssessment, setLoadingRiskAssessment] = useState(false);
   const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
@@ -275,7 +288,7 @@ const DoctorDashboard: React.FC = () => {
   const openReferralModal = () => {
     if (!currentAppointment) return;
     if (appointmentAwaitingPayment) {
-      notifyAppointmentPaymentBlocked('Referral handoff is locked until payment clears');
+      notifyAppointmentPaymentBlocked('Return to nurse is locked until payment clears');
       return;
     }
     setCurrentReferralAppointment(currentAppointment);
@@ -416,6 +429,26 @@ const DoctorDashboard: React.FC = () => {
       fetchAuthorizedOrders();
     }
   }, [selectedDate, currentUser]);
+
+  // Load unread message count
+  useEffect(() => {
+    const loadUnreadCount = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token') || '';
+        if (token && tenantSlug) {
+          const response = await ehrApi.getUnreadCount(token, tenantSlug);
+          setUnreadMessageCount(response.data.count || 0);
+        }
+      } catch (error) {
+        console.error('Failed to load unread count:', error);
+      }
+    };
+
+    loadUnreadCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [tenantSlug]);
 
   useEffect(() => {
     const loadChartData = async () => {
@@ -1066,6 +1099,9 @@ const DoctorDashboard: React.FC = () => {
       { icon: FileText, label: 'Questionnaires', desc: 'Assign & manage PROs', color: 'from-indigo-500 to-purple-500', action: 'questionnaires' },
       { icon: Activity, label: 'Workflows', desc: 'Automate care processes', color: 'from-violet-500 to-purple-500', action: 'workflows' },
       { icon: Target, label: 'Care Plans', desc: 'Structured care management', color: 'from-teal-500 to-cyan-500', action: 'care-plans' },
+      { icon: Send, label: 'Referrals', desc: 'Refer patients to specialists', color: 'from-blue-500 to-indigo-500', action: 'referrals' },
+      { icon: FileText, label: 'Documents', desc: 'Upload & manage patient documents', color: 'from-purple-500 to-pink-500', action: 'documents' },
+      { icon: Mail, label: 'Messages', desc: 'Provider messaging & inbox', color: 'from-indigo-500 to-purple-500', action: 'messages' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
@@ -1171,6 +1207,48 @@ const DoctorDashboard: React.FC = () => {
                         setShowCarePlanList(true);
                         setSidebarOpen(false);
                       }
+                    } else if (action.action === 'referrals') {
+                      // Open referral list - auto-select first patient if none selected
+                      let patientId = currentAppointment?.patient?.id;
+                      
+                      if (!patientId && appointments.length > 0) {
+                        // Auto-select first appointment's patient
+                        patientId = appointments[0].patient?.id;
+                        if (patientId) {
+                          setCurrentAppointment(appointments[0]);
+                          showSuccess('Patient Selected', `Showing referrals for ${appointments[0].patient.firstName} ${appointments[0].patient.lastName}`);
+                        }
+                      }
+                      
+                      if (!patientId) {
+                        showError('No Patients Available', 'You have no appointments today. Referrals require a patient context.');
+                      } else {
+                        setShowReferralListModal(true);
+                        setSidebarOpen(false);
+                      }
+                    } else if (action.action === 'documents') {
+                      // Open document list - auto-select first patient if none selected
+                      let patientId = currentAppointment?.patient?.id;
+                      
+                      if (!patientId && appointments.length > 0) {
+                        // Auto-select first appointment's patient
+                        patientId = appointments[0].patient?.id;
+                        if (patientId) {
+                          setCurrentAppointment(appointments[0]);
+                          showSuccess('Patient Selected', `Showing documents for ${appointments[0].patient.firstName} ${appointments[0].patient.lastName}`);
+                        }
+                      }
+                      
+                      if (!patientId) {
+                        showError('No Patients Available', 'You have no appointments today. Documents require a patient context.');
+                      } else {
+                        setShowDocumentListModal(true);
+                        setSidebarOpen(false);
+                      }
+                    } else if (action.action === 'messages') {
+                      // Open inbox
+                      setShowInboxModal(true);
+                      setSidebarOpen(false);
                     } else if (action.route) {
                       navigate(`/ehr/${tenantSlug}/${action.route}`);
                     }
@@ -1187,6 +1265,11 @@ const DoctorDashboard: React.FC = () => {
                     <p className="font-medium truncate">{action.label}</p>
                     <p className="text-xs text-slate-400 truncate">{action.desc}</p>
                   </div>
+                  {action.action === 'messages' && unreadMessageCount > 0 && (
+                    <span className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded-full">
+                      {unreadMessageCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -1409,181 +1492,106 @@ const DoctorDashboard: React.FC = () => {
 
           {/* Tab Content */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-8">
-              {/* Smart Task Hub */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-slate-900">Today</h2>
-                    <button onClick={() => { fetchTodayAppointments(); fetchAuthorizedOrders(); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <RefreshCw className="w-4 h-4 text-slate-600" />
-                    </button>
+            <div className="space-y-6">
+              {/* Critical Alert Banner */}
+              {criticalAlertCount > 0 && (
+                <div 
+                  onClick={() => setActiveTab('critical-alerts')}
+                  className="p-4 border-2 border-red-500 bg-red-50 rounded-xl flex items-center justify-between cursor-pointer hover:bg-red-100 transition-colors animate-pulse shadow-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                    <div>
+                      <div className="text-base font-bold text-red-900">🚨 CRITICAL LAB RESULTS PENDING</div>
+                      <div className="text-sm text-red-700">Immediate attention required</div>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    {/* Critical Alerts - URGENT PRIORITY */}
-                    {criticalAlertCount > 0 && (
-                      <div 
-                        onClick={() => setActiveTab('critical-alerts')}
-                        className="p-3 border-2 border-red-500 bg-red-50 rounded-lg flex items-center justify-between cursor-pointer hover:bg-red-100 transition-colors animate-pulse"
-                      >
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-red-600" />
-                          <div className="text-sm font-bold text-red-900">🚨 CRITICAL LAB RESULTS PENDING</div>
-                        </div>
-                        <span className="text-xs px-3 py-1 rounded-full bg-red-600 text-white font-bold">{criticalAlertCount}</span>
-                      </div>
-                    )}
-                    
-                    {/* Tasks: results to review, notes to finalize, messages could be wired later */}
-                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
-                      <div className="text-sm text-slate-700">Authorized orders awaiting nursing execution</div>
-                      <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">{authorizedOrders.length}</span>
-                    </div>
-                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
-                      <div className="text-sm text-slate-700">Appointments in progress</div>
-                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800">{getCurrentAppointments().length}</span>
-                    </div>
-                    <div className="p-3 border border-slate-200 rounded-lg flex items-center justify-between">
-                      <div className="text-sm text-slate-700">Patients checked-in and waiting</div>
-                      <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-800">{appointments.filter(a => a.status === 'confirmed').length}</span>
-                    </div>
+                  <span className="text-lg px-4 py-2 rounded-full bg-red-600 text-white font-bold">{criticalAlertCount}</span>
+                </div>
+              )}
+
+              {/* Key Metrics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Today's Appointments */}
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <Calendar className="w-8 h-8 opacity-80" />
+                    <span className="text-4xl font-bold">{appointments.length}</span>
+                  </div>
+                  <div className="text-sm opacity-90">Today's Appointments</div>
+                  <div className="mt-2 flex items-center gap-4 text-xs">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {getCurrentAppointments().length} in progress
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      {appointments.filter(a => a.status === 'completed').length} completed
+                    </span>
                   </div>
                 </div>
 
-                {/* Vitals snapshot */}
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Latest Vitals</h3>
-                  {appointments.slice(0, 5).map((apt) => {
-                    const list = vitalsData[apt.patient.id] || [];
-                    const latest = list[0];
-                    return (
-                      <div key={apt.id} className="mb-3 p-3 rounded-lg border border-slate-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-medium text-slate-900 truncate">{apt.patient.firstName} {apt.patient.lastName}</div>
-                          <div className="text-xs text-slate-500">{latest ? new Date(latest.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No vitals'}</div>
-                        </div>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">BP: {latest?.bloodPressure || '-'}</span>
-                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">HR: {latest?.heartRate ?? '-'}</span>
-                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">Temp: {latest?.temperature ?? '-'}</span>
-                          <span className="px-2 py-1 rounded bg-slate-100 text-slate-800">SpO2: {latest?.oxygenSaturation ?? '-'}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {appointments.length === 0 && (
-                    <p className="text-sm text-slate-500">No patients today.</p>
-                  )}
+                {/* Messages */}
+                <div 
+                  onClick={() => setShowInboxModal(true)}
+                  className="bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-all cursor-pointer hover:scale-105"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <Mail className="w-8 h-8 opacity-80" />
+                    <span className="text-4xl font-bold">{unreadMessageCount}</span>
+                  </div>
+                  <div className="text-sm opacity-90">Unread Messages</div>
+                  <div className="mt-2 text-xs opacity-80">Click to open inbox</div>
+                </div>
+
+                {/* Pending Actions */}
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-center justify-between mb-4">
+                    <FileText className="w-8 h-8 opacity-80" />
+                    <span className="text-4xl font-bold">{authorizedOrders.length}</span>
+                  </div>
+                  <div className="text-sm opacity-90">Pending Orders</div>
+                  <div className="mt-2 text-xs opacity-80">Awaiting nursing execution</div>
                 </div>
               </div>
-              {/* Current Appointment moved to its own tab */}
 
-              <DoctorImagingResultsPanel
-                tenantSlug={tenantSlug!}
-                token={localStorage.getItem('ehr_token') || ''}
-                statusFilter="awaiting_ack"
-                hideTabs
-                compact
-                title="Imaging Reports Awaiting Review"
-                onOpenStudy={openImagingStudy}
-              />
-              
-              {/* Orders & Medication - side by side */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Orders Lifecycle */}
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-slate-900">Orders Lifecycle</h2>
-                    <button onClick={fetchAuthorizedOrders} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <RefreshCw className="w-4 h-4 text-slate-600" />
-                    </button>
-                  </div>
-                  {authorizedOrders.length === 0 ? (
-                    <p className="text-slate-500">No authorized orders awaiting execution.</p>
-                  ) : (
-                    <>
-                      <div className="space-y-3 max-h-96 overflow-y-auto">
-                        {(showAllOrders ? authorizedOrders : authorizedOrders.slice(0, 5)).map((o) => (
-                          <div key={o.id} className="p-4 border border-slate-200 rounded-lg flex items-center justify-between">
-                            <div>
-                              <div className="font-semibold text-slate-900">{o.orderName}</div>
-                              <div className="text-xs text-slate-600">{o.orderType} • Priority: {o.priority}</div>
-                            </div>
-                            <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">Authorized</span>
-                          </div>
-                        ))}
-                      </div>
-                      {authorizedOrders.length > 5 && (
-                        <button
-                          onClick={() => setShowAllOrders(!showAllOrders)}
-                          className="mt-3 w-full text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-2 py-2 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          {showAllOrders ? (
-                            <>
-                              <span>Show Less</span>
-                              <ArrowLeft className="w-4 h-4 rotate-90" />
-                            </>
-                          ) : (
-                            <>
-                              <span>Show {authorizedOrders.length - 5} More</span>
-                              <ArrowLeft className="w-4 h-4 -rotate-90" />
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Medication Safety (basic) */}
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-slate-900">Medication Safety</h2>
-                    <button onClick={() => { fetchAuthorizedOrders(); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <RefreshCw className="w-4 h-4 text-slate-600" />
-                    </button>
-                  </div>
-                  <div className="text-sm text-slate-700 mb-3">Active medication orders today</div>
-                  {(() => {
-                    const medications = authorizedOrders.filter(o => o.orderType === 'medication');
-                    return medications.length === 0 ? (
-                      <p className="text-slate-500">No medication orders found.</p>
-                    ) : (
-                      <>
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          {(showAllMedications ? medications : medications.slice(0, 5)).map((m) => (
-                            <div key={m.id} className="p-4 border border-slate-200 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="font-semibold text-slate-900">{m.orderName}</div>
-                                  <div className="text-xs text-slate-600">Dosage: {m.dosage || '-'} • Freq: {m.frequency || '-'}</div>
-                                </div>
-                                <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800">OK</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {medications.length > 5 && (
-                          <button
-                            onClick={() => setShowAllMedications(!showAllMedications)}
-                            className="mt-3 w-full text-sm text-emerald-600 hover:text-emerald-800 font-medium flex items-center justify-center gap-2 py-2 hover:bg-emerald-50 rounded-lg transition-colors"
-                          >
-                            {showAllMedications ? (
-                              <>
-                                <span>Show Less</span>
-                                <ArrowLeft className="w-4 h-4 rotate-90" />
-                              </>
-                            ) : (
-                              <>
-                                <span>Show {medications.length - 5} More</span>
-                                <ArrowLeft className="w-4 h-4 -rotate-90" />
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </>
-                    );
-                  })()}
+              {/* Quick Actions */}
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <button
+                    onClick={() => setActiveTab('current-appointment')}
+                    className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-xl hover:shadow-md transition-all group"
+                  >
+                    <FileText className="w-6 h-6 text-sky-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-semibold text-slate-900">Current Patient</div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('queue')}
+                    className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl hover:shadow-md transition-all group"
+                  >
+                    <Users className="w-6 h-6 text-emerald-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-semibold text-slate-900">Patient Queue</div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('schedule')}
+                    className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl hover:shadow-md transition-all group"
+                  >
+                    <Calendar className="w-6 h-6 text-purple-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-semibold text-slate-900">Schedule</div>
+                  </button>
+                  <button
+                    onClick={() => setShowInboxModal(true)}
+                    className="p-4 bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-xl hover:shadow-md transition-all group relative"
+                  >
+                    <Mail className="w-6 h-6 text-pink-600 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-semibold text-slate-900">Messages</div>
+                    {unreadMessageCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                        {unreadMessageCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1696,6 +1704,14 @@ const DoctorDashboard: React.FC = () => {
                           <Target className="w-4 h-4" />
                           Care Plans
                         </button>
+                        <button
+                          onClick={() => setShowReferralListModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-60 disabled:hover:from-blue-500 disabled:hover:to-indigo-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
+                          <Send className="w-4 h-4" />
+                          Referrals
+                        </button>
                         <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <TestTube className="w-4 h-4" />
                           Lab Results
@@ -1738,7 +1754,7 @@ const DoctorDashboard: React.FC = () => {
                           className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
                         >
                           <Stethoscope className="w-4 h-4" />
-                          Refer
+                          Return to Nurse
                         </button>
                         <button
                           onClick={() => handleAppointmentAction(currentAppointment.id, 'complete')}
@@ -2486,7 +2502,7 @@ const DoctorDashboard: React.FC = () => {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
                     <Stethoscope className="w-7 h-7 text-orange-600" />
-                    Refer Patient to Nurse
+                    Return Patient to Nurse
                   </h2>
                   <p className="text-slate-600 mt-1">
                     {currentReferralAppointment.patient.firstName} {currentReferralAppointment.patient.lastName} • {currentReferralAppointment.patient.patientNumber}
@@ -2872,6 +2888,206 @@ const DoctorDashboard: React.FC = () => {
             setShowCarePlanViewer(false);
             setShowCarePlanBuilder(true);
           }}
+        />
+      )}
+
+      {/* Referral List Modal */}
+      {showReferralListModal && tenantSlug && currentAppointment?.patient?.id && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <ReferralList
+              patientId={currentAppointment.patient.id}
+              tenantSlug={tenantSlug}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+            <button
+              onClick={() => setShowReferralListModal(false)}
+              className="absolute top-4 right-4 p-2 bg-white rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Referral Form Modal */}
+      {showReferralFormModal && tenantSlug && currentAppointment?.patient && (
+        <ReferralForm
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowReferralFormModal(false)}
+          onSuccess={() => {
+            setShowReferralFormModal(false);
+            setShowReferralListModal(true);
+          }}
+        />
+      )}
+
+      {/* Referral Templates Modal */}
+      {showReferralTemplatesModal && tenantSlug && currentAppointment?.patient && (
+        <ReferralTemplates
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowReferralTemplatesModal(false)}
+          onTemplateApplied={(referralId) => {
+            setShowReferralTemplatesModal(false);
+            setShowReferralListModal(true);
+          }}
+        />
+      )}
+
+      {/* Document List Modal */}
+      {showDocumentListModal && tenantSlug && currentAppointment?.patient && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <DocumentList
+              patientId={currentAppointment.patient.id}
+              patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+              tenantSlug={tenantSlug}
+              token={localStorage.getItem('ehr_token') || ''}
+              onClose={() => setShowDocumentListModal(false)}
+            />
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Inbox Modal */}
+      {showInboxModal && tenantSlug && (
+        <Inbox
+          onClose={() => setShowInboxModal(false)}
+          onCompose={() => {
+            setShowInboxModal(false);
+            setShowMessageComposerModal(true);
+          }}
+          token={localStorage.getItem('ehr_token') || ''}
+          tenantSlug={tenantSlug}
+        />
+      )}
+
+      {/* Message Composer Modal */}
+      {showMessageComposerModal && tenantSlug && (
+        <MessageComposer
+          onClose={() => setShowMessageComposerModal(false)}
+          onSent={() => {
+            setShowMessageComposerModal(false);
+            setShowInboxModal(true);
+          }}
+          token={localStorage.getItem('ehr_token') || ''}
+          tenantSlug={tenantSlug}
+          patientId={currentAppointment?.patient?.id}
+          appointmentId={currentAppointment?.id}
+        />
+      )}
+
+      {/* Care Plan Builder Modal */}
+      {showCarePlanBuilder && tenantSlug && carePlanPatientId && (
+        <CarePlanBuilder
+          patientId={carePlanPatientId}
+          carePlanId={selectedCarePlanId || undefined}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => {
+            setShowCarePlanBuilder(false);
+            setSelectedCarePlanId(null);
+          }}
+          onSave={() => {
+            setShowCarePlanBuilder(false);
+            // Optionally refresh patient care plans
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default DoctorDashboard;
+              tenantSlug={tenantSlug}
+              token={localStorage.getItem('ehr_token') || ''}
+            />
+            <button
+              onClick={() => setShowReferralListModal(false)}
+              className="absolute top-4 right-4 p-2 bg-white rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Referral Form Modal */}
+      {showReferralFormModal && tenantSlug && currentAppointment?.patient && (
+        <ReferralForm
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowReferralFormModal(false)}
+          onSuccess={() => {
+            setShowReferralFormModal(false);
+            setShowReferralListModal(true);
+          }}
+        />
+      )}
+
+      {/* Referral Templates Modal */}
+      {showReferralTemplatesModal && tenantSlug && currentAppointment?.patient && (
+        <ReferralTemplates
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          tenantSlug={tenantSlug}
+          token={localStorage.getItem('ehr_token') || ''}
+          onClose={() => setShowReferralTemplatesModal(false)}
+          onTemplateApplied={(referralId) => {
+            setShowReferralTemplatesModal(false);
+            setShowReferralListModal(true);
+          }}
+        />
+      )}
+
+      {/* Document List Modal */}
+      {showDocumentListModal && tenantSlug && currentAppointment?.patient && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <DocumentList
+              patientId={currentAppointment.patient.id}
+              patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+              tenantSlug={tenantSlug}
+              token={localStorage.getItem('ehr_token') || ''}
+              onClose={() => setShowDocumentListModal(false)}
+            />
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Inbox Modal */}
+      {showInboxModal && tenantSlug && (
+        <Inbox
+          onClose={() => setShowInboxModal(false)}
+          onCompose={() => {
+            setShowInboxModal(false);
+            setShowMessageComposerModal(true);
+          }}
+          token={localStorage.getItem('ehr_token') || ''}
+          tenantSlug={tenantSlug}
+        />
+      )}
+
+      {/* Message Composer Modal */}
+      {showMessageComposerModal && tenantSlug && (
+        <MessageComposer
+          onClose={() => setShowMessageComposerModal(false)}
+          onSent={() => {
+            setShowMessageComposerModal(false);
+            setShowInboxModal(true);
+          }}
+          token={localStorage.getItem('ehr_token') || ''}
+          tenantSlug={tenantSlug}
+          patientId={currentAppointment?.patient?.id}
+          appointmentId={currentAppointment?.id}
         />
       )}
 

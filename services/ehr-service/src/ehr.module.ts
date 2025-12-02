@@ -66,6 +66,9 @@ import { MedicalAidApiController } from './controllers/medical-aid-api.controlle
 import { TenantsController } from './controllers/tenants.controller';
 import { WorkflowController } from './controllers/workflow.controller';
 import { CarePlanController } from './controllers/care-plan.controller';
+import { ReferralController } from './controllers/referral.controller';
+import { DocumentController } from './controllers/document.controller';
+import { ProviderMessagingController } from './controllers/provider-messaging.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -163,6 +166,12 @@ import { MedicalAidApiService } from './services/medical-aid-api.service';
 import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { CarePlanService } from './services/care-plan.service';
 import { CarePlanTemplateService } from './services/care-plan-template.service';
+import { ReferralService } from './services/referral.service';
+import { ReferralTemplateService } from './services/referral-template.service';
+import { ReferralFacilityService } from './services/referral-facility.service';
+import { DocumentService } from './services/document.service';
+import { ProviderMessagingService } from './services/provider-messaging.service';
+import { MessageTemplateService } from './services/message-template.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -245,6 +254,9 @@ import { RolesGuard } from './guards/roles.guard';
     TenantsController,
     WorkflowController,
     CarePlanController,
+    ReferralController,
+    DocumentController,
+    ProviderMessagingController,
   ],
   providers: [
     AuthService,
@@ -346,6 +358,30 @@ import { RolesGuard } from './guards/roles.guard';
     ClinicalWorkflowService,
     CarePlanService,
     CarePlanTemplateService,
+    ReferralService,
+    ReferralTemplateService,
+    ReferralFacilityService,
+    DocumentService,
+    ProviderMessagingService,
+    MessageTemplateService,
+    RolesGuard,
+    JwtStrategy,
+  ],
+})
+export class EhrModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TenantMiddleware)
+      .exclude(
+        { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
+      )
+      .forRoutes('*');
+  }
+}
+    ReferralFacilityService,
+    DocumentService,
+    ProviderMessagingService,
+    MessageTemplateService,
     RolesGuard,
     JwtStrategy,
   ],

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Eye, Edit, Trash2, FileText, X, CheckCircle, Clock, Activity, AlertCircle } from 'lucide-react';
+import { Search, Plus, Eye, Edit, Trash2, FileText, X, CheckCircle, Clock, Activity, AlertCircle, Target } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import CarePlanBuilder from './CarePlanBuilder';

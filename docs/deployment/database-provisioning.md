@@ -73,6 +73,52 @@ POST /tenants/provision-database/:tenantId/:bundleId
 - Status history
 - API configurations
 
+### Document Management Bundle (Sprint 19)
+- **Bundle ID**: `sprint19_documents`
+- **Script**: `scripts/provision-sprint19-documents.ts`
+- **Tables**:
+  - `documents` - Main document storage
+  - `document_versions` - Version history
+  - `document_sharing` - Sharing permissions
+  - `document_tags` - Tag organization
+  - `document_access_log` - Audit trail
+- **Features**:
+  - File upload and storage
+  - Version control
+  - Document sharing with permissions
+  - Tag-based organization
+  - Complete audit logging
+- **Provisioning**:
+  ```bash
+  npm run ts-node scripts/provision-sprint19-documents.ts
+  ```
+
+### Provider Messaging Bundle (Sprint 20)
+- **Bundle ID**: `sprint20_provider_messaging`
+- **Script**: `scripts/provision-sprint20-messaging.ts`
+- **Tables**:
+  - `provider_messages` - Message storage
+  - `message_threads` - Thread management
+  - `message_read_receipts` - Read tracking
+  - `message_attachments` - File attachments
+  - `message_tasks` - Task assignment
+  - `message_templates` - Reusable templates
+- **Features**:
+  - Secure provider-to-provider messaging
+  - Message threading
+  - Priority levels and message types
+  - Read receipts
+  - Task assignment
+  - Template system
+- **Provisioning**:
+  ```bash
+  npm run ts-node scripts/provision-sprint20-messaging.ts
+  ```
+- **Seed Data**:
+  ```bash
+  npm run ts-node scripts/seed-message-templates.ts
+  ```
+
 ## Schema Versioning
 
 ### Version Tracking
@@ -86,6 +132,18 @@ POST /tenants/provision-database/:tenantId/:bundleId
 // Example: Apply new bundle version
 await provisioningService.applyClinicSchema(connectionString, {
   bundles: ['sprint14_2_claims_enhancement'],
+  appliedBy: 'admin',
+});
+
+// Apply Sprint 19 (Document Management)
+await provisioningService.applyClinicSchema(connectionString, {
+  bundles: ['sprint19_documents'],
+  appliedBy: 'admin',
+});
+
+// Apply Sprint 20 (Provider Messaging)
+await provisioningService.applyClinicSchema(connectionString, {
+  bundles: ['sprint20_provider_messaging'],
   appliedBy: 'admin',
 });
 ```

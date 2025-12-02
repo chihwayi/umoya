@@ -25,8 +25,7 @@ export class MedicationReminderService {
 
     try {
       // Get all active tenants
-      const tenants = await this.tenantService.getAllTenants();
-      const activeTenants = tenants.filter((t) => t.status === 'active');
+      const activeTenants = await this.tenantService.getAllActiveTenants();
 
       for (const tenant of activeTenants) {
         try {

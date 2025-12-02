@@ -1615,4 +1615,314 @@ export class PatientPortalService {
 
     return nextDate;
   }
+
+  // ==================== Care Plans ====================
+  async getPatientCarePlans(patientId: string, tenantId: string, filters?: { status?: string }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        cp.*,
+        (SELECT json_agg(g.*) FROM care_plan_goals g WHERE g.care_plan_id = cp.id) as goals,
+        (SELECT json_agg(i.*) FROM care_plan_interventions i WHERE i.care_plan_id = cp.id) as interventions
+      FROM care_plans cp
+      WHERE cp.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    
+    if (filters?.status) {
+      query += ` AND cp.status = $2`;
+      params.push(filters.status);
+    }
+    
+    query += ` ORDER BY cp.created_at DESC`;
+    
+    return await connection.query(query, params);
+  }
+
+  async getPatientCarePlan(patientId: string, carePlanId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const carePlans = await connection.query(
+      `SELECT 
+        cp.*,
+        (SELECT json_agg(g.*) FROM care_plan_goals g WHERE g.care_plan_id = cp.id) as goals,
+        (SELECT json_agg(i.*) FROM care_plan_interventions i WHERE i.care_plan_id = cp.id) as interventions,
+        (SELECT json_agg(p.*) FROM care_plan_progress p WHERE p.care_plan_id = cp.id ORDER BY p.recorded_at DESC) as progress
+      FROM care_plans cp
+      WHERE cp.id = $1 AND cp.patient_id = $2`,
+      [carePlanId, patientId]
+    );
+
+    if (!carePlans || carePlans.length === 0) {
+      throw new NotFoundException('Care plan not found or you do not have access to it');
+    }
+
+    return carePlans[0];
+  }
+
+  async reportCarePlanProgress(patientId: string, carePlanId: string, progressData: { notes: string; metrics?: any }, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify care plan belongs to patient
+    const carePlan = await this.getPatientCarePlan(patientId, carePlanId, tenantId);
+    if (!carePlan) {
+      throw new ForbiddenException('You do not have access to this care plan');
+    }
+
+    // Insert progress record
+    const result = await connection.query(
+      `INSERT INTO care_plan_progress (care_plan_id, recorded_by, recorded_by_type, notes, metrics, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING *`,
+      [carePlanId, patientId, 'patient', progressData.notes, JSON.stringify(progressData.metrics || {})]
+    );
+
+    return result[0];
+  }
+
+  async reportGoalProgress(patientId: string, carePlanId: string, goalId: string, progressData: { currentValue: number; notes?: string; metrics?: any }, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify care plan belongs to patient
+    const carePlan = await this.getPatientCarePlan(patientId, carePlanId, tenantId);
+    if (!carePlan) {
+      throw new ForbiddenException('You do not have access to this care plan');
+    }
+
+    // Verify goal belongs to care plan
+    const goals = await connection.query(
+      `SELECT * FROM care_plan_goals WHERE id = $1 AND care_plan_id = $2`,
+      [goalId, carePlanId]
+    );
+
+    if (!goals || goals.length === 0) {
+      throw new NotFoundException('Goal not found in this care plan');
+    }
+
+    const goal = goals[0];
+
+    // Update goal current value
+    await connection.query(
+      `UPDATE care_plan_goals 
+       SET current_value = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [progressData.currentValue, goalId]
+    );
+
+    // Check if goal is achieved
+    let goalAchieved = false;
+    if (goal.target_value && progressData.currentValue >= goal.target_value) {
+      await connection.query(
+        `UPDATE care_plan_goals 
+         SET status = 'achieved', achieved_date = NOW()
+         WHERE id = $1`,
+        [goalId]
+      );
+      goalAchieved = true;
+    }
+
+    // Insert progress record
+    const progressResult = await connection.query(
+      `INSERT INTO care_plan_progress (care_plan_id, goal_id, recorded_by, recorded_by_type, notes, metrics, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       RETURNING *`,
+      [carePlanId, goalId, patientId, 'patient', progressData.notes || 'Patient self-reported progress', JSON.stringify({ currentValue: progressData.currentValue, ...progressData.metrics })]
+    );
+
+    // Check if all goals are achieved and auto-complete care plan
+    const allGoals = await connection.query(
+      `SELECT * FROM care_plan_goals WHERE care_plan_id = $1`,
+      [carePlanId]
+    );
+
+    const allAchieved = allGoals.every((g: any) => g.status === 'achieved');
+    
+    if (allAchieved && allGoals.length > 0) {
+      // Auto-complete the care plan
+      await connection.query(
+        `UPDATE care_plans 
+         SET status = 'completed', end_date = NOW(), updated_at = NOW()
+         WHERE id = $1`,
+        [carePlanId]
+      );
+
+      // TODO: Send notification to provider about completion
+      this.logger.log(`Care plan ${carePlanId} auto-completed - all goals achieved by patient ${patientId}`);
+    }
+
+    return {
+      ...progressResult[0],
+      goalAchieved,
+      carePlanCompleted: allAchieved && allGoals.length > 0,
+    };
+  }
+}
+
+  async getPatientCarePlans(patientId: string, tenantId: string, filters?: { status?: string }): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    let query = `
+      SELECT 
+        cp.*,
+        (SELECT json_agg(g.*) FROM care_plan_goals g WHERE g.care_plan_id = cp.id) as goals,
+        (SELECT json_agg(i.*) FROM care_plan_interventions i WHERE i.care_plan_id = cp.id) as interventions
+      FROM care_plans cp
+      WHERE cp.patient_id = $1
+    `;
+    
+    const params: any[] = [patientId];
+    
+    if (filters?.status) {
+      query += ` AND cp.status = $2`;
+      params.push(filters.status);
+    }
+    
+    query += ` ORDER BY cp.created_at DESC`;
+    
+    return await connection.query(query, params);
+  }
+
+  async getPatientCarePlan(patientId: string, carePlanId: string, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const carePlans = await connection.query(
+      `SELECT 
+        cp.*,
+        (SELECT json_agg(g.*) FROM care_plan_goals g WHERE g.care_plan_id = cp.id) as goals,
+        (SELECT json_agg(i.*) FROM care_plan_interventions i WHERE i.care_plan_id = cp.id) as interventions,
+        (SELECT json_agg(p.*) FROM care_plan_progress p WHERE p.care_plan_id = cp.id ORDER BY p.recorded_at DESC) as progress
+      FROM care_plans cp
+      WHERE cp.id = $1 AND cp.patient_id = $2`,
+      [carePlanId, patientId]
+    );
+
+    if (!carePlans || carePlans.length === 0) {
+      throw new NotFoundException('Care plan not found or you do not have access to it');
+    }
+
+    return carePlans[0];
+  }
+
+  async reportCarePlanProgress(patientId: string, carePlanId: string, progressData: { notes: string; metrics?: any }, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify care plan belongs to patient
+    const carePlan = await this.getPatientCarePlan(patientId, carePlanId, tenantId);
+    if (!carePlan) {
+      throw new ForbiddenException('You do not have access to this care plan');
+    }
+
+    // Insert progress record
+    const result = await connection.query(
+      `INSERT INTO care_plan_progress (care_plan_id, recorded_by, recorded_by_type, notes, metrics, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING *`,
+      [carePlanId, patientId, 'patient', progressData.notes, JSON.stringify(progressData.metrics || {})]
+    );
+
+    return result[0];
+  }
+
+  async reportGoalProgress(patientId: string, carePlanId: string, goalId: string, progressData: { currentValue: number; notes?: string; metrics?: any }, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Verify care plan belongs to patient
+    const carePlan = await this.getPatientCarePlan(patientId, carePlanId, tenantId);
+    if (!carePlan) {
+      throw new ForbiddenException('You do not have access to this care plan');
+    }
+
+    // Verify goal belongs to care plan
+    const goals = await connection.query(
+      `SELECT * FROM care_plan_goals WHERE id = $1 AND care_plan_id = $2`,
+      [goalId, carePlanId]
+    );
+
+    if (!goals || goals.length === 0) {
+      throw new NotFoundException('Goal not found in this care plan');
+    }
+
+    const goal = goals[0];
+
+    // Update goal current value
+    await connection.query(
+      `UPDATE care_plan_goals 
+       SET current_value = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [progressData.currentValue, goalId]
+    );
+
+    // Check if goal is achieved
+    let goalAchieved = false;
+    if (goal.target_value && progressData.currentValue >= goal.target_value) {
+      await connection.query(
+        `UPDATE care_plan_goals 
+         SET status = 'achieved', achieved_date = NOW()
+         WHERE id = $1`,
+        [goalId]
+      );
+      goalAchieved = true;
+    }
+
+    // Insert progress record
+    const progressResult = await connection.query(
+      `INSERT INTO care_plan_progress (care_plan_id, goal_id, recorded_by, recorded_by_type, notes, metrics, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       RETURNING *`,
+      [carePlanId, goalId, patientId, 'patient', progressData.notes || 'Patient self-reported progress', JSON.stringify({ currentValue: progressData.currentValue, ...progressData.metrics })]
+    );
+
+    // Check if all goals are achieved and auto-complete care plan
+    const allGoals = await connection.query(
+      `SELECT * FROM care_plan_goals WHERE care_plan_id = $1`,
+      [carePlanId]
+    );
+
+    const allAchieved = allGoals.every((g: any) => g.status === 'achieved');
+    
+    if (allAchieved && allGoals.length > 0) {
+      // Auto-complete the care plan
+      await connection.query(
+        `UPDATE care_plans 
+         SET status = 'completed', end_date = NOW(), updated_at = NOW()
+         WHERE id = $1`,
+        [carePlanId]
+      );
+
+      // TODO: Send notification to provider about completion
+      this.logger.log(`Care plan ${carePlanId} auto-completed - all goals achieved by patient ${patientId}`);
+    }
+
+    return {
+      ...progressResult[0],
+      goalAchieved,
+      carePlanCompleted: allAchieved && allGoals.length > 0,
+    };
+  }
 }

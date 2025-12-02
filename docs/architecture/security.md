@@ -79,6 +79,28 @@ MediCore implements comprehensive security measures to protect patient data and 
 - **CSRF Protection**: Token-based protection
 - **Session Fixation**: Prevention measures
 
+### Document Security (Sprint 19)
+- **Access Control**: Role-based document permissions
+- **File Validation**: Type and size validation before upload
+- **Virus Scanning**: Malware detection on uploads (optional integration)
+- **Secure Storage**: Encrypted file storage (S3/MinIO)
+- **Signed URLs**: Temporary signed URLs for downloads
+- **Audit Trail**: Complete logging of document access
+- **Version Control**: Immutable version history
+- **Sharing Controls**: Granular sharing permissions with expiration
+- **Delete Protection**: Soft deletes with recovery period
+
+### Messaging Security (Sprint 20)
+- **End-to-End Encryption**: Messages encrypted in transit and at rest
+- **Access Control**: Only intended recipients can read messages
+- **Message Expiration**: Automatic archival of old messages
+- **Read Receipts**: Track message delivery and reading
+- **Audit Logging**: Complete message activity logging
+- **Secure Attachments**: Same security as document management
+- **Role-Based Sending**: Verify sender permissions
+- **Patient Context**: Enforce patient data access rules
+- **No External Forwarding**: Messages stay within the system
+
 ## Compliance
 
 ### HIPAA Compliance
@@ -100,6 +122,10 @@ MediCore implements comprehensive security measures to protect patient data and 
 - **Modifications**: Track all data changes
 - **Authentication**: Log login attempts
 - **Authorization**: Track permission checks
+- **Document Access**: Complete document access trail (Sprint 19)
+- **Message Activity**: All messaging activity logged (Sprint 20)
+- **File Operations**: Upload, download, delete operations
+- **Sharing Events**: Document and message sharing tracked
 
 ### Security Monitoring
 - **Intrusion Detection**: Monitor for threats
