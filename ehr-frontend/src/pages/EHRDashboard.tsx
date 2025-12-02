@@ -133,10 +133,9 @@ const EHRDashboard: React.FC = () => {
         ];
       case 'accounts':
         return [
+          { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial overview', color: 'from-purple-500 to-pink-500', route: 'billing' },
           { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
-          { icon: Users, label: 'Patient Directory', desc: 'Lookup patient accounts & balances', color: 'from-blue-500 to-cyan-500', route: 'patients' },
-          { icon: CreditCard, label: 'Accounts Dashboard', desc: 'Financial overview & KPIs', color: 'from-amber-500 to-orange-500', route: 'accounts' },
           { icon: BarChart3, label: 'Revenue Analytics', desc: 'Track income by service line', color: 'from-purple-500 to-pink-500', route: 'accounts/analytics' },
           { icon: FileText, label: 'Billing Queue', desc: 'Manage outstanding invoices', color: 'from-indigo-500 to-slate-500', route: 'accounts' },
         ];
