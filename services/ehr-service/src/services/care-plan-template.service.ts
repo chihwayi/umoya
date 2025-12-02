@@ -5,7 +5,7 @@ import { DataSource } from 'typeorm';
 export class CarePlanTemplateService {
   private readonly logger = new Logger(CarePlanTemplateService.name);
 
-  constructor(private carePlanService: any) {} // Will inject CarePlanService
+  constructor() {}
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
