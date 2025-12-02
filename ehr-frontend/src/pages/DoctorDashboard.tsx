@@ -1142,11 +1142,22 @@ const DoctorDashboard: React.FC = () => {
                       setShowWorkflowList(true);
                       setSidebarOpen(false);
                     } else if (action.action === 'care-plans') {
-                      // Open care plan list - if no patient selected, show error
-                      if (!currentAppointment?.patient?.id) {
-                        showError('No Patient Selected', 'Please select a patient from your appointments first, then open care plans.');
+                      // Open care plan list - auto-select first patient if none selected
+                      let patientId = currentAppointment?.patient?.id;
+                      
+                      if (!patientId && appointments.length > 0) {
+                        // Auto-select first appointment's patient
+                        patientId = appointments[0].patient?.id;
+                        if (patientId) {
+                          setCurrentAppointment(appointments[0]);
+                          showSuccess('Patient Selected', `Showing care plans for ${appointments[0].patient.firstName} ${appointments[0].patient.lastName}`);
+                        }
+                      }
+                      
+                      if (!patientId) {
+                        showError('No Patients Available', 'You have no appointments today. Care plans require a patient context.');
                       } else {
-                        setCarePlanPatientId(currentAppointment.patient.id);
+                        setCarePlanPatientId(patientId);
                         setShowCarePlanList(true);
                         setSidebarOpen(false);
                       }
