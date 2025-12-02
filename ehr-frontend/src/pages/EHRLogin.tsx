@@ -60,7 +60,7 @@ const EHRLogin: React.FC = () => {
             navigate(`/ehr/${tenantSlug}/lab`);
             break;
           case 'accounts':
-            navigate(`/ehr/${tenantSlug}/accounts`);
+            navigate(`/ehr/${tenantSlug}/dashboard`);
             break;
           default:
             navigate(`/ehr/${tenantSlug}/dashboard`);
