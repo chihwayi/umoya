@@ -208,6 +208,16 @@ const DoctorDashboard: React.FC = () => {
     setShowPrescriptionsModal(true);
   };
 
+  const openCarePlansModal = () => {
+    if (!currentAppointment?.patient?.id) return;
+    if (appointmentAwaitingPayment) {
+      notifyAppointmentPaymentBlocked('Care plans are locked until payment clears');
+      return;
+    }
+    setCarePlanPatientId(currentAppointment.patient.id);
+    setShowCarePlanList(true);
+  };
+
   const openEnhancedLabOrderModal = () => {
     if (!currentAppointment) return;
     if (appointmentAwaitingPayment) {
@@ -1677,6 +1687,14 @@ const DoctorDashboard: React.FC = () => {
                         >
                           <Camera className="w-4 h-4" />
                           🆕 Order Imaging
+                        </button>
+                        <button
+                          onClick={openCarePlansModal}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:opacity-60 disabled:hover:from-teal-500 disabled:hover:to-cyan-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
+                          <Target className="w-4 h-4" />
+                          Care Plans
                         </button>
                         <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <TestTube className="w-4 h-4" />
