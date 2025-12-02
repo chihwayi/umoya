@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, ArrowRight, Calendar, FileText } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, ArrowRight, Calendar, FileText, X } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import {
@@ -51,12 +51,14 @@ interface AdvancedResultComparisonProps {
   patientId: string;
   tenantSlug: string;
   token: string;
+  onClose?: () => void;
 }
 
 export default function AdvancedResultComparison({
   patientId,
   tenantSlug,
   token,
+  onClose,
 }: AdvancedResultComparisonProps) {
   const [results, setResults] = useState<LabResult[]>([]);
   const [componentHistory, setComponentHistory] = useState<Record<string, ComponentHistory>>({});
@@ -190,26 +192,41 @@ export default function AdvancedResultComparison({
   const selectedHistory = selectedComponent ? componentHistory[selectedComponent] : null;
 
   return (
-    <div className="space-y-6">
-      {/* Header with Date Range Selector */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-xl font-bold text-gray-900">Lab Result Trends & Comparison</h3>
-        
-        <div className="flex items-center space-x-2">
-          <Calendar className="w-4 h-4 text-gray-600" />
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="180">Last 6 months</option>
-            <option value="365">Last year</option>
-            <option value="all">All time</option>
-          </select>
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-teal-600 to-cyan-700 text-white p-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-3">
+            <TrendingUp className="w-6 h-6" />
+            Lab Result Trends & Comparison
+          </h2>
+          <p className="text-teal-100 text-sm mt-1">Track lab results over time and identify trends</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white/10 px-3 py-2 rounded-lg">
+            <Calendar className="w-4 h-4" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as any)}
+              className="bg-transparent border-none text-white text-sm focus:outline-none cursor-pointer"
+            >
+              <option value="30" className="text-gray-900">Last 30 days</option>
+              <option value="90" className="text-gray-900">Last 90 days</option>
+              <option value="180" className="text-gray-900">Last 6 months</option>
+              <option value="365" className="text-gray-900">Last year</option>
+              <option value="all" className="text-gray-900">All time</option>
+            </select>
+          </div>
+          {onClose && (
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
       {loading && (
         <div className="text-center py-12">
@@ -450,6 +467,7 @@ export default function AdvancedResultComparison({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

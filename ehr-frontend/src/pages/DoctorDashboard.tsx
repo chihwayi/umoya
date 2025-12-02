@@ -2751,11 +2751,16 @@ const DoctorDashboard: React.FC = () => {
 
       {/* Advanced Result Comparison Modal (NEW!) */}
       {showResultComparisonModal && currentAppointment && (
-        <AdvancedResultComparison
-          patientId={currentAppointment.patient.id}
-          tenantSlug={tenantSlug!}
-          token={localStorage.getItem('ehr_token') || ''}
-        />
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <AdvancedResultComparison
+              patientId={currentAppointment.patient.id}
+              tenantSlug={tenantSlug!}
+              token={localStorage.getItem('ehr_token') || ''}
+              onClose={() => setShowResultComparisonModal(false)}
+            />
+          </div>
+        </ModalPortal>
       )}
 
       {/* Doctor Availability Manager */}
