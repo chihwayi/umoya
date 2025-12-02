@@ -18,6 +18,7 @@ import {
   Pill,
   TestTube,
   Lock,
+  Target,
 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -27,6 +28,7 @@ import AppointmentNotes from './AppointmentNotes';
 import ClinicalNotesModal from './ClinicalNotesModal';
 import PrescriptionsModal from './PrescriptionsModal';
 import LabOrdersModal from './LabOrdersModal';
+import CarePlanList from './CarePlanList';
 
 interface Appointment {
   id: string;
@@ -76,6 +78,7 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
   const [showClinicalNotes, setShowClinicalNotes] = useState(false);
   const [showPrescriptions, setShowPrescriptions] = useState(false);
   const [showLabOrders, setShowLabOrders] = useState(false);
+  const [showCarePlans, setShowCarePlans] = useState(false);
   const [startingVideo, setStartingVideo] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     appointmentDate: formatDateForInput(new Date(appointment.appointmentDate)),
@@ -425,6 +428,16 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
         <TestTube className="w-4 h-4" />
         Lab Orders
       </button>,
+      <button
+        key="care-plans"
+        onClick={() => setShowCarePlans(true)}
+        disabled={awaitingPayment}
+        className="px-3 py-1 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        title={awaitingPayment ? 'Awaiting payment confirmation' : 'Manage care plans'}
+      >
+        <Target className="w-4 h-4" />
+        Care Plans
+      </button>,
       null
     );
     
@@ -708,6 +721,16 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
           appointment={appointment}
           tenantSlug={tenantSlug}
           token={token}
+        />
+      )}
+
+      {/* Care Plans Modal */}
+      {showCarePlans && (
+        <CarePlanList
+          patientId={appointment.patient.id}
+          tenantSlug={tenantSlug}
+          token={token}
+          onClose={() => setShowCarePlans(false)}
         />
       )}
     </>
