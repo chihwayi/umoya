@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Plus, Edit, Trash2, Play, Pause, Copy, Eye, X, CheckCircle, AlertCircle, Clock, Activity, Zap } from 'lucide-react';
+import { Search, Filter, Plus, Edit, Trash2, Play, Pause, Copy, Eye, X, CheckCircle, AlertCircle, Clock, Activity, Zap, BarChart3 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import WorkflowBuilder from './WorkflowBuilder';
 import WorkflowExecutionViewer from './WorkflowExecutionViewer';
+import WorkflowAnalytics from './WorkflowAnalytics';
 import ConfirmDialog from './ConfirmDialog';
 
 interface Workflow {
@@ -69,6 +70,8 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
   const [showExecutionViewer, setShowExecutionViewer] = useState(false);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(true);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsWorkflowId, setAnalyticsWorkflowId] = useState<string | undefined>(undefined);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; workflowId: string | null }>({
     open: false,
     workflowId: null,
@@ -250,6 +253,17 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
             <p className="text-blue-100 text-sm mt-1">Automate care processes and streamline workflows</p>
           </div>
           <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setAnalyticsWorkflowId(undefined);
+                setShowAnalytics(true);
+              }}
+              className="px-4 py-2 bg-white/10 text-white border border-white/30 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 text-sm font-semibold"
+              title="View Analytics"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Analytics
+            </button>
             <button
               onClick={() => {
                 setSelectedWorkflow(null);
@@ -466,6 +480,16 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
                     </button>
                     <button
                       onClick={() => {
+                        setAnalyticsWorkflowId(workflow.id);
+                        setShowAnalytics(true);
+                      }}
+                      className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                      title="View Analytics"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
                         setSelectedWorkflow(workflow);
                         setShowExecutionViewer(true);
                       }}
@@ -540,6 +564,19 @@ const WorkflowList: React.FC<WorkflowListProps> = ({ tenantSlug, token, onClose 
           onClose={() => {
             setShowExecutionViewer(false);
             setSelectedWorkflow(null);
+          }}
+        />
+      )}
+
+      {/* Analytics Modal */}
+      {showAnalytics && (
+        <WorkflowAnalytics
+          workflowId={analyticsWorkflowId}
+          tenantSlug={tenantSlug}
+          token={token}
+          onClose={() => {
+            setShowAnalytics(false);
+            setAnalyticsWorkflowId(undefined);
           }}
         />
       )}

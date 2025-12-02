@@ -214,5 +214,40 @@ export class WorkflowController {
   async addWorkflowStep(@Param('id') id: string, @Body() stepData: any, @Request() req: RequestWithTenant) {
     return this.workflowService.addWorkflowStep(id, stepData, req.tenantDb);
   }
+
+  // ==================== ANALYTICS ====================
+
+  @Get('analytics/overview')
+  @ApiOperation({ summary: 'Get overall workflow analytics' })
+  @ApiResponse({ status: 200, description: 'Analytics retrieved successfully' })
+  async getWorkflowAnalytics(@Request() req: RequestWithTenant) {
+    return this.workflowService.getWorkflowAnalytics(req.tenantDb);
+  }
+
+  @Get('analytics/:id')
+  @ApiOperation({ summary: 'Get workflow-specific analytics' })
+  @ApiParam({ name: 'id', description: 'Workflow ID' })
+  @ApiResponse({ status: 200, description: 'Workflow analytics retrieved successfully' })
+  async getWorkflowAnalyticsById(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.workflowService.getWorkflowAnalyticsById(id, req.tenantDb);
+  }
+
+  // ==================== EXECUTION MANAGEMENT ====================
+
+  @Post('executions/:id/cancel')
+  @ApiOperation({ summary: 'Cancel a running workflow execution' })
+  @ApiParam({ name: 'id', description: 'Execution ID' })
+  @ApiResponse({ status: 200, description: 'Execution cancelled successfully' })
+  async cancelExecution(@Param('id') id: string, @Body() body: { reason?: string }, @Request() req: RequestWithTenant) {
+    return this.workflowService.cancelExecution(id, req.tenantDb, body.reason);
+  }
+
+  @Post('step-executions/:id/retry')
+  @ApiOperation({ summary: 'Retry a failed workflow step' })
+  @ApiParam({ name: 'id', description: 'Step Execution ID' })
+  @ApiResponse({ status: 200, description: 'Step retry initiated successfully' })
+  async retryFailedStep(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.workflowService.retryFailedStep(id, req.tenantDb);
+  }
 }
 

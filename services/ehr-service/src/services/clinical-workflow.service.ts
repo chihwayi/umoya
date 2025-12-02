@@ -762,5 +762,289 @@ export class ClinicalWorkflowService {
       userId,
     );
   }
+
+  // ==================== ANALYTICS ====================
+
+  async getWorkflowAnalytics(tenantDb: DataSource) {
+    this.ensureTenantDb(tenantDb);
+
+    // Get total workflows
+    const totalWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows`);
+    const activeWorkflows = await tenantDb.query(`SELECT COUNT(*) as count FROM clinical_workflows WHERE is_active = true`);
+
+    // Get total executions
+    const totalExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions`);
+    const completedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'completed'`);
+    const failedExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'failed'`);
+    const runningExecutions = await tenantDb.query(`SELECT COUNT(*) as count FROM workflow_executions WHERE status = 'running'`);
+
+    // Get executions by trigger event
+    const executionsByTrigger = await tenantDb.query(`
+      SELECT trigger_event, COUNT(*) as count
+      FROM workflow_executions
+      GROUP BY trigger_event
+      ORDER BY count DESC
+      LIMIT 10
+    `);
+
+    // Get most used workflows
+    const mostUsedWorkflows = await tenantDb.query(`
+      SELECT w.id, w.name, COUNT(we.id) as execution_count
+      FROM clinical_workflows w
+      LEFT JOIN workflow_executions we ON w.id = we.workflow_id
+      GROUP BY w.id, w.name
+      ORDER BY execution_count DESC
+      LIMIT 10
+    `);
+
+    // Get average execution time
+    const avgExecutionTime = await tenantDb.query(`
+      SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
+      FROM workflow_executions
+      WHERE completed_at IS NOT NULL AND started_at IS NOT NULL
+    `);
+
+    // Get executions over time (last 30 days)
+    const executionsOverTime = await tenantDb.query(`
+      SELECT DATE(started_at) as date, COUNT(*) as count
+      FROM workflow_executions
+      WHERE started_at >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(started_at)
+      ORDER BY date DESC
+    `);
+
+    // Get success rate
+    const totalCount = parseInt(totalExecutions[0].count, 10);
+    const completedCount = parseInt(completedExecutions[0].count, 10);
+    const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+    return {
+      totalWorkflows: parseInt(totalWorkflows[0].count, 10),
+      activeWorkflows: parseInt(activeWorkflows[0].count, 10),
+      totalExecutions: totalCount,
+      completedExecutions: completedCount,
+      failedExecutions: parseInt(failedExecutions[0].count, 10),
+      runningExecutions: parseInt(runningExecutions[0].count, 10),
+      successRate: Math.round(successRate * 100) / 100,
+      avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
+      executionsByTrigger: executionsByTrigger.map((row: any) => ({
+        triggerEvent: row.trigger_event,
+        count: parseInt(row.count, 10),
+      })),
+      mostUsedWorkflows: mostUsedWorkflows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        executionCount: parseInt(row.execution_count, 10),
+      })),
+      executionsOverTime: executionsOverTime.map((row: any) => ({
+        date: row.date,
+        count: parseInt(row.count, 10),
+      })),
+    };
+  }
+
+  async getWorkflowAnalyticsById(workflowId: string, tenantDb: DataSource) {
+    this.ensureTenantDb(tenantDb);
+
+    // Get workflow details
+    const workflow = await this.getWorkflowById(workflowId, tenantDb);
+
+    // Get execution statistics
+    const totalExecutions = await tenantDb.query(
+      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1`,
+      [workflowId],
+    );
+    const completedExecutions = await tenantDb.query(
+      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'completed'`,
+      [workflowId],
+    );
+    const failedExecutions = await tenantDb.query(
+      `SELECT COUNT(*) as count FROM workflow_executions WHERE workflow_id = $1 AND status = 'failed'`,
+      [workflowId],
+    );
+
+    // Get average execution time
+    const avgExecutionTime = await tenantDb.query(
+      `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_seconds
+       FROM workflow_executions
+       WHERE workflow_id = $1 AND completed_at IS NOT NULL AND started_at IS NOT NULL`,
+      [workflowId],
+    );
+
+    // Get step failure rates
+    const stepFailures = await tenantDb.query(
+      `SELECT ws.step_type, COUNT(*) as failure_count
+       FROM workflow_step_executions wse
+       JOIN workflow_steps ws ON wse.step_id = ws.id
+       WHERE wse.execution_id IN (SELECT id FROM workflow_executions WHERE workflow_id = $1)
+       AND wse.status = 'failed'
+       GROUP BY ws.step_type
+       ORDER BY failure_count DESC`,
+      [workflowId],
+    );
+
+    // Get recent executions
+    const recentExecutions = await tenantDb.query(
+      `SELECT id, status, started_at, completed_at, trigger_event
+       FROM workflow_executions
+       WHERE workflow_id = $1
+       ORDER BY started_at DESC
+       LIMIT 10`,
+      [workflowId],
+    );
+
+    const totalCount = parseInt(totalExecutions[0].count, 10);
+    const completedCount = parseInt(completedExecutions[0].count, 10);
+    const successRate = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+    return {
+      workflow: {
+        id: workflow.id,
+        name: workflow.name,
+        triggerEvent: workflow.trigger_event,
+        isActive: workflow.is_active,
+      },
+      totalExecutions: totalCount,
+      completedExecutions: completedCount,
+      failedExecutions: parseInt(failedExecutions[0].count, 10),
+      successRate: Math.round(successRate * 100) / 100,
+      avgExecutionTimeSeconds: avgExecutionTime[0].avg_seconds ? Math.round(parseFloat(avgExecutionTime[0].avg_seconds)) : 0,
+      stepFailures: stepFailures.map((row: any) => ({
+        stepType: row.step_type,
+        failureCount: parseInt(row.failure_count, 10),
+      })),
+      recentExecutions: recentExecutions.map((row: any) => ({
+        id: row.id,
+        status: row.status,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        triggerEvent: row.trigger_event,
+      })),
+    };
+  }
+
+  // ==================== EXECUTION MANAGEMENT ====================
+
+  async cancelExecution(executionId: string, tenantDb: DataSource, reason?: string) {
+    this.ensureTenantDb(tenantDb);
+
+    const execution = await tenantDb.query(
+      `SELECT * FROM workflow_executions WHERE id = $1`,
+      [executionId],
+    );
+
+    if (execution.length === 0) {
+      throw new NotFoundException('Workflow execution not found');
+    }
+
+    if (execution[0].status === 'completed' || execution[0].status === 'failed' || execution[0].status === 'cancelled') {
+      throw new BadRequestException(`Cannot cancel execution with status: ${execution[0].status}`);
+    }
+
+    // Update execution status
+    await tenantDb.query(
+      `UPDATE workflow_executions 
+       SET status = 'cancelled', 
+           completed_at = NOW(),
+           error_message = $2
+       WHERE id = $1`,
+      [executionId, reason || 'Cancelled by user'],
+    );
+
+    // Cancel any running steps
+    await tenantDb.query(
+      `UPDATE workflow_step_executions 
+       SET status = 'cancelled', 
+           completed_at = NOW(),
+           error_message = $2
+       WHERE execution_id = $1 AND status = 'running'`,
+      [executionId, reason || 'Cancelled by user'],
+    );
+
+    this.logger.log(`Workflow execution ${executionId} cancelled: ${reason || 'User requested'}`);
+
+    return {
+      success: true,
+      message: 'Workflow execution cancelled',
+      executionId,
+    };
+  }
+
+  async retryFailedStep(stepExecutionId: string, tenantDb: DataSource) {
+    this.ensureTenantDb(tenantDb);
+
+    const stepExecution = await tenantDb.query(
+      `SELECT * FROM workflow_step_executions WHERE id = $1`,
+      [stepExecutionId],
+    );
+
+    if (stepExecution.length === 0) {
+      throw new NotFoundException('Step execution not found');
+    }
+
+    if (stepExecution[0].status !== 'failed') {
+      throw new BadRequestException(`Cannot retry step with status: ${stepExecution[0].status}`);
+    }
+
+    // Get the step details
+    const step = await tenantDb.query(
+      `SELECT * FROM workflow_steps WHERE id = $1`,
+      [stepExecution[0].step_id],
+    );
+
+    if (step.length === 0) {
+      throw new NotFoundException('Workflow step not found');
+    }
+
+    // Get the execution details
+    const execution = await tenantDb.query(
+      `SELECT * FROM workflow_executions WHERE id = $1`,
+      [stepExecution[0].execution_id],
+    );
+
+    if (execution.length === 0) {
+      throw new NotFoundException('Workflow execution not found');
+    }
+
+    // Reset the step execution
+    await tenantDb.query(
+      `UPDATE workflow_step_executions 
+       SET status = 'pending', 
+           started_at = NULL,
+           completed_at = NULL,
+           error_message = NULL,
+           retry_count = retry_count + 1
+       WHERE id = $1`,
+      [stepExecutionId],
+    );
+
+    // If the workflow execution was failed, set it back to running
+    if (execution[0].status === 'failed') {
+      await tenantDb.query(
+        `UPDATE workflow_executions 
+         SET status = 'running', 
+             completed_at = NULL,
+             error_message = NULL
+         WHERE id = $1`,
+        [execution[0].id],
+      );
+    }
+
+    this.logger.log(`Retrying failed step ${stepExecutionId}`);
+
+    // Execute the step
+    try {
+      await this.executeStep(stepExecution[0].execution_id, step[0], tenantDb);
+      
+      return {
+        success: true,
+        message: 'Step retry initiated',
+        stepExecutionId,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to retry step ${stepExecutionId}: ${error.message}`);
+      throw error;
+    }
+  }
 }
 

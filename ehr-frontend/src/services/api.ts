@@ -3739,6 +3739,39 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
+
+  // Analytics
+  getWorkflowAnalytics: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/workflows/analytics/overview', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getWorkflowAnalyticsById: async (workflowId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/workflows/analytics/${workflowId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Execution Management
+  cancelExecution: async (executionId: string, reason: string | undefined, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/executions/${executionId}/cancel`, 
+      { reason },
+      {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      }
+    );
+    return { data: response.data };
+  },
+
+  retryFailedStep: async (stepExecutionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/workflows/step-executions/${stepExecutionId}/retry`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 };
 
 // Doctor Availability API (standalone)

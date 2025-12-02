@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle, Activity } from 'lucide-react';
+import { X, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle, Activity, StopCircle, RotateCcw } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import ConfirmDialog from './ConfirmDialog';
 
 interface WorkflowExecution {
   id: string;
@@ -46,7 +47,11 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedExecution, setSelectedExecution] = useState<WorkflowExecution | null>(null);
-  const { showError } = useNotification();
+  const [cancelConfirm, setCancelConfirm] = useState<{ open: boolean; executionId: string | null }>({
+    open: false,
+    executionId: null,
+  });
+  const { showError, showSuccess } = useNotification();
 
   useEffect(() => {
     loadExecutions();
@@ -116,6 +121,26 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
+  };
+
+  const handleCancelExecution = async (executionId: string) => {
+    try {
+      await ehrApi.cancelExecution(executionId, 'Cancelled by user', token, tenantSlug);
+      showSuccess('Success', 'Workflow execution cancelled');
+      loadExecutions();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to cancel execution');
+    }
+  };
+
+  const handleRetryStep = async (stepExecutionId: string) => {
+    try {
+      await ehrApi.retryFailedStep(stepExecutionId, token, tenantSlug);
+      showSuccess('Success', 'Step retry initiated');
+      loadExecutions();
+    } catch (error: any) {
+      showError('Error', error.response?.data?.message || 'Failed to retry step');
+    }
   };
 
   return (
@@ -200,12 +225,24 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => setSelectedExecution(selectedExecution?.id === execution.id ? null : execution)}
-                      className="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm"
-                    >
-                      {selectedExecution?.id === execution.id ? 'Hide' : 'Show'} Steps
-                    </button>
+                    <div className="flex gap-2">
+                      {(execution.status === 'running' || execution.status === 'pending') && (
+                        <button
+                          onClick={() => setCancelConfirm({ open: true, executionId: execution.id })}
+                          className="px-3 py-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm flex items-center gap-1"
+                          title="Cancel execution"
+                        >
+                          <StopCircle className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelectedExecution(selectedExecution?.id === execution.id ? null : execution)}
+                        className="px-3 py-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm"
+                      >
+                        {selectedExecution?.id === execution.id ? 'Hide' : 'Show'} Steps
+                      </button>
+                    </div>
                   </div>
 
                   {selectedExecution?.id === execution.id && execution.steps && (
@@ -234,7 +271,19 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
                                 <p className="text-sm text-red-600 mt-1">{step.error_message}</p>
                               )}
                             </div>
-                            {getStatusIcon(step.status)}
+                            <div className="flex items-center gap-2">
+                              {step.status === 'failed' && (
+                                <button
+                                  onClick={() => handleRetryStep(step.id)}
+                                  className="px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors text-xs flex items-center gap-1"
+                                  title="Retry failed step"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  Retry
+                                </button>
+                              )}
+                              {getStatusIcon(step.status)}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -246,6 +295,23 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmDialog
+        open={cancelConfirm.open}
+        title="Cancel Workflow Execution"
+        message="Are you sure you want to cancel this workflow execution? This action cannot be undone."
+        confirmText="Cancel Execution"
+        cancelText="Keep Running"
+        variant="danger"
+        onConfirm={() => {
+          if (cancelConfirm.executionId) {
+            handleCancelExecution(cancelConfirm.executionId);
+          }
+          setCancelConfirm({ open: false, executionId: null });
+        }}
+        onCancel={() => setCancelConfirm({ open: false, executionId: null })}
+      />
     </div>
   );
 };
