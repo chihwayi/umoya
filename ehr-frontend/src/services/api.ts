@@ -250,6 +250,109 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getUnreadCount: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/messages/unread-count', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getDocuments: async (patientId: string, filters: any, token: string, tenantSlug: string) => {
+    const params = { patientId, ...filters };
+    const response = await ehrAxios.get('/documents', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  uploadDocument: async (formData: FormData, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/documents/upload', formData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return { data: response.data };
+  },
+
+  deleteDocument: async (documentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/documents/${documentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getDocumentById: async (documentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/documents/${documentId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  addDocumentTag: async (documentId: string, tagName: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/documents/${documentId}/tags`, { tagName }, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  removeDocumentTag: async (documentId: string, tagName: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/documents/${documentId}/tags/${encodeURIComponent(tagName)}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  viewDocument: async (documentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/documents/${documentId}/view`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  shareDocument: async (documentId: string, shareData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/documents/${documentId}/share`, shareData, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getSharedDocuments: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/documents/shared/with-me', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // User Management
   getUsers: async (token: string, tenantSlug: string, role?: string) => {
     const params = role ? { role } : {};
@@ -6028,6 +6131,34 @@ export const analyticsApi = {
     return { data: response.data };
   },
 
+  getSharedDocuments: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/documents/shared/with-me', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateDocumentSharing: async (sharingId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/documents/sharing/${sharingId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  revokeDocumentSharing: async (sharingId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/documents/sharing/${sharingId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getDocumentAccessLog: async (documentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/documents/${documentId}/access-log`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   addDocumentTag: async (documentId: string, tagName: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/documents/${documentId}/tags`, { tagName }, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
@@ -6234,9 +6365,7 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
-};
 
-  
   // Patient Care Plans
   getPatientCarePlans: async (token: string, tenantSlug: string, filters?: { status?: string }) => {
     const response = await ehrAxios.get('/patient-portal/care-plans', {
@@ -6417,6 +6546,34 @@ export const analyticsApi = {
 
   shareDocument: async (documentId: string, shareData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post(`/documents/${documentId}/share`, shareData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getSharedDocuments: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/documents/shared/with-me', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  updateDocumentSharing: async (sharingId: string, updates: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/documents/sharing/${sharingId}`, updates, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  revokeDocumentSharing: async (sharingId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/documents/sharing/${sharingId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getDocumentAccessLog: async (documentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/documents/${documentId}/access-log`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };

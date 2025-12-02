@@ -170,6 +170,7 @@ import { ReferralService } from './services/referral.service';
 import { ReferralTemplateService } from './services/referral-template.service';
 import { ReferralFacilityService } from './services/referral-facility.service';
 import { DocumentService } from './services/document.service';
+import { MinioService } from './services/minio.service';
 import { ProviderMessagingService } from './services/provider-messaging.service';
 import { MessageTemplateService } from './services/message-template.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
@@ -362,24 +363,7 @@ import { RolesGuard } from './guards/roles.guard';
     ReferralTemplateService,
     ReferralFacilityService,
     DocumentService,
-    ProviderMessagingService,
-    MessageTemplateService,
-    RolesGuard,
-    JwtStrategy,
-  ],
-})
-export class EhrModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(TenantMiddleware)
-      .exclude(
-        { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
-      )
-      .forRoutes('*');
-  }
-}
-    ReferralFacilityService,
-    DocumentService,
+    MinioService,
     ProviderMessagingService,
     MessageTemplateService,
     RolesGuard,

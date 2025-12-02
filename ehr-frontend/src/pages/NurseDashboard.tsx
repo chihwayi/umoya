@@ -6,7 +6,7 @@ import {
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
-  CreditCard, Lock
+  CreditCard, Lock, Share2, FolderOpen
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -28,6 +28,7 @@ import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
 import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
 import MaternityDashboard from '../components/MaternityDashboard';
+import SharedDocumentsList from '../components/SharedDocumentsList';
 
 interface Patient {
   id: string;
@@ -132,6 +133,8 @@ const NurseDashboard: React.FC = () => {
   const [showHivTestingModal, setShowHivTestingModal] = useState(false);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
+  const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
+  const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -311,6 +314,25 @@ const NurseDashboard: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showUserDropdown]);
+
+  // Load shared documents count
+  useEffect(() => {
+    const loadSharedCount = async () => {
+      try {
+        const response = await ehrApi.getSharedDocuments(token, tenantSlug || '');
+        setSharedDocumentsCount(response.data?.length || 0);
+      } catch (error) {
+        console.error('Error loading shared documents count:', error);
+      }
+    };
+
+    if (token && tenantSlug) {
+      loadSharedCount();
+      // Refresh count every 2 minutes
+      const interval = setInterval(loadSharedCount, 120000);
+      return () => clearInterval(interval);
+    }
+  }, [token, tenantSlug]);
 
   // Filter patients based on search term
   useEffect(() => {
@@ -524,6 +546,7 @@ const NurseDashboard: React.FC = () => {
       { icon: FileText, label: 'Care Plans', desc: 'Plan nursing care', color: 'from-emerald-500 to-teal-500', action: () => { setActiveTab('notes'); setNotesPreset('care_plans'); } },
       { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-fuchsia-500 to-pink-600', action: () => { setActiveTab('notes'); setNotesPreset('medications'); } },
       { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
+      { icon: FolderOpen, label: 'Shared Documents', desc: 'View shared patient documents', color: 'from-violet-500 to-purple-600', action: () => setShowSharedDocumentsModal(true), badge: sharedDocumentsCount > 0 ? sharedDocumentsCount : undefined },
     ];
   };
 
@@ -2269,8 +2292,41 @@ const NurseDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Shared Documents Modal */}
+      {showSharedDocumentsModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+          <div className="w-full max-w-7xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <FolderOpen className="w-6 h-6 text-white" />
+                <h2 className="text-xl font-bold text-white">Shared Documents</h2>
+                {sharedDocumentsCount > 0 && (
+                  <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold bg-white text-violet-600">
+                    {sharedDocumentsCount}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowSharedDocumentsModal(false)}
+                className="text-white hover:text-violet-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <SharedDocumentsList
+                token={token}
+                tenantSlug={tenantSlug || ''}
+                currentUser={currentUser}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default NurseDashboard;

@@ -22,8 +22,10 @@ import {
   FileText,
   Settings,
   BarChart3,
+  FolderOpen,
+  X,
 } from 'lucide-react';
-import { pharmacyApi } from '../services/api';
+import { pharmacyApi, ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import PharmacyDispensing from '../components/PharmacyDispensing';
@@ -31,6 +33,7 @@ import PharmacyInventory from '../components/PharmacyInventory';
 import PharmacyPurchaseOrders from '../components/PharmacyPurchaseOrders';
 import PharmacyReceipts from '../components/PharmacyReceipts';
 import PharmacySuppliers from '../components/PharmacySuppliers';
+import SharedDocumentsList from '../components/SharedDocumentsList';
 
 const StatCard: React.FC<{
   title: string;
@@ -78,7 +81,9 @@ const PharmacyDashboard: React.FC = () => {
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents'>('overview');
+  const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
+  const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -92,6 +97,25 @@ const PharmacyDashboard: React.FC = () => {
       }
     }
   }, []);
+
+  // Load shared documents count
+  useEffect(() => {
+    const loadSharedCount = async () => {
+      try {
+        const response = await ehrApi.getSharedDocuments(token, tenantSlug || '');
+        setSharedDocumentsCount(response.data?.length || 0);
+      } catch (error) {
+        console.error('Error loading shared documents count:', error);
+      }
+    };
+
+    if (token && tenantSlug) {
+      loadSharedCount();
+      // Refresh count every 2 minutes
+      const interval = setInterval(loadSharedCount, 120000);
+      return () => clearInterval(interval);
+    }
+  }, [token, tenantSlug]);
 
   useEffect(() => {
     if (!tenantSlug || !token) {
@@ -241,13 +265,14 @@ const PharmacyDashboard: React.FC = () => {
             { id: 'receipts', label: 'Receipts', icon: Receipt },
             { id: 'suppliers', label: 'Suppliers', icon: Users },
             { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
-          ].map((tab) => {
+            { id: 'shared-documents', label: 'Shared Documents', icon: FolderOpen, badge: sharedDocumentsCount },
+          ].map((tab: any) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition ${
+                className={`flex items-center gap-2 px-4 py-3 font-medium transition relative ${
                   activeTab === tab.id
                     ? 'text-indigo-600 border-b-2 border-indigo-600'
                     : 'text-slate-600 hover:text-slate-900'
@@ -255,6 +280,11 @@ const PharmacyDashboard: React.FC = () => {
               >
                 <Icon className="w-4 h-4" />
                 {tab.label}
+                {tab.badge && tab.badge > 0 && (
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-violet-600 text-white">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -546,6 +576,17 @@ const PharmacyDashboard: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
             <AlertTriangle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
             <p className="text-slate-500">Alerts management coming soon</p>
+          </div>
+        )}
+
+        {/* Shared Documents Tab */}
+        {activeTab === 'shared-documents' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <SharedDocumentsList
+              token={token}
+              tenantSlug={tenantSlug || ''}
+              currentUser={currentUser}
+            />
           </div>
         )}
       </div>
