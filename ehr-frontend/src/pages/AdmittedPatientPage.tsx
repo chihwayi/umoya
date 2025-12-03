@@ -7,6 +7,9 @@ import {
 import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import ClinicalNotesModal from '../components/ClinicalNotesModal';
+import PrescriptionsModal from '../components/PrescriptionsModal';
+import LabOrdersModal from '../components/LabOrdersModal';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -25,6 +28,9 @@ const AdmittedPatientPage: React.FC = () => {
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [showProgressNoteModal, setShowProgressNoteModal] = useState(false);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [showLabOrderModal, setShowLabOrderModal] = useState(false);
   
   // Forms
   const [dischargeData, setDischargeData] = useState({
@@ -232,7 +238,7 @@ const AdmittedPatientPage: React.FC = () => {
               <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Daily Rounds & Treatment</div>
               <div className="flex gap-2 flex-wrap">
                 <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openNotesFor: admission.patient_id } })}
+                  onClick={() => setShowProgressNoteModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
                 >
                   <FileText className="w-4 h-4" />
@@ -240,7 +246,7 @@ const AdmittedPatientPage: React.FC = () => {
                 </button>
                 
                 <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openPrescribeFor: admission.patient_id } })}
+                  onClick={() => setShowPrescriptionModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
                 >
                   <Pill className="w-4 h-4" />
@@ -248,7 +254,7 @@ const AdmittedPatientPage: React.FC = () => {
                 </button>
                 
                 <button
-                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openLabOrderFor: admission.patient_id } })}
+                  onClick={() => setShowLabOrderModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:shadow-lg transition font-medium"
                 >
                   <TestTube className="w-4 h-4" />
@@ -903,6 +909,51 @@ const AdmittedPatientPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Progress Note Modal */}
+      {showProgressNoteModal && (
+        <ClinicalNotesModal
+          patientId={admission.patient_id}
+          appointmentId={null}
+          tenantSlug={tenantSlug!}
+          token={token}
+          onClose={() => setShowProgressNoteModal(false)}
+          onSuccess={() => {
+            setShowProgressNoteModal(false);
+            showSuccess('Success', 'Progress note saved');
+          }}
+        />
+      )}
+
+      {/* Prescription Modal */}
+      {showPrescriptionModal && (
+        <PrescriptionsModal
+          patientId={admission.patient_id}
+          appointmentId={null}
+          tenantSlug={tenantSlug!}
+          token={token}
+          onClose={() => setShowPrescriptionModal(false)}
+          onSuccess={() => {
+            setShowPrescriptionModal(false);
+            showSuccess('Success', 'Prescription created');
+          }}
+        />
+      )}
+
+      {/* Lab Order Modal */}
+      {showLabOrderModal && (
+        <LabOrdersModal
+          patientId={admission.patient_id}
+          appointmentId={null}
+          tenantSlug={tenantSlug!}
+          token={token}
+          onClose={() => setShowLabOrderModal(false)}
+          onSuccess={() => {
+            setShowLabOrderModal(false);
+            showSuccess('Success', 'Lab order created');
+          }}
+        />
       )}
     </div>
   );

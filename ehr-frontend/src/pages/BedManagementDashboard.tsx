@@ -52,7 +52,7 @@ const BedManagementDashboard: React.FC = () => {
     try {
       if (!token || !tenantSlug) return;
 
-      const response = await ehrApi.getBedOccupancy(selectedWard, token, tenantSlug);
+      const response = await ehrApi.get('/beds/occupancy', token, tenantSlug, selectedWard ? { ward: selectedWard } : {});
       setOccupancyStats(response.data);
     } catch (error) {
       console.error('Failed to fetch occupancy stats:', error);
