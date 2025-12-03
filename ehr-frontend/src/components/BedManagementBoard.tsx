@@ -307,8 +307,20 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
 
       {/* Patient Workflow Modal */}
       {showPatientWorkflow && selectedAdmission && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+          onClick={(e) => {
+            // Close if clicking backdrop
+            if (e.target === e.currentTarget) {
+              setShowPatientWorkflow(false);
+              setSelectedAdmission(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <AdmittedPatientWorkflow
               admission={selectedAdmission}
               tenantSlug={tenantSlug}
