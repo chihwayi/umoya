@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
-import Modal Portal from './ModalPortal';
+import ModalPortal from './ModalPortal';
 import DocumentViewer from './DocumentViewer';
 
 interface SharedDocument {
