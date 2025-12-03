@@ -3,7 +3,7 @@ import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
   Heart, Thermometer, Droplets, Plus, Search, Filter,
   ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList,
-  CreditCard, Lock, Target
+  CreditCard, Lock, Target, TestTube
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from './GlobalNotification';
@@ -59,13 +59,15 @@ interface TriageQueueProps {
   onRecordVitals: (appointment: Appointment) => void;
   onTriageAssessment: (appointment: Appointment) => void;
   onViewCarePlans?: (patientId: string, patientName: string) => void;
+  onViewLabResults?: (patientId: string, patientName: string) => void;
 }
 
 const TriageQueue: React.FC<TriageQueueProps> = ({ 
   appointments, 
   onRecordVitals, 
   onTriageAssessment,
-  onViewCarePlans
+  onViewCarePlans,
+  onViewLabResults
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -512,6 +514,15 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                       >
                         <Target className="w-4 h-4" />
                         Care Plans
+                      </button>
+                    )}
+                    {onViewLabResults && (
+                      <button
+                        onClick={() => onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`)}
+                        className="px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700"
+                      >
+                        <TestTube className="w-4 h-4" />
+                        Lab Results
                       </button>
                     )}
                     {/* Status Change Buttons */}

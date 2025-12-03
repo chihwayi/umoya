@@ -30,6 +30,7 @@ import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
 import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
+import LabResultsViewer from '../components/LabResultsViewer';
 
 interface Patient {
   id: string;
@@ -139,6 +140,10 @@ const NurseDashboard: React.FC = () => {
   const [showCarePlansModal, setShowCarePlansModal] = useState(false);
   const [carePlansPatientId, setCarePlansPatientId] = useState<string | null>(null);
   const [carePlansPatientName, setCarePlansPatientName] = useState<string>('');
+  
+  const [showLabResultsModal, setShowLabResultsModal] = useState(false);
+  const [labResultsPatientId, setLabResultsPatientId] = useState<string | null>(null);
+  const [labResultsPatientName, setLabResultsPatientName] = useState<string>('');
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -916,6 +921,17 @@ const NurseDashboard: React.FC = () => {
                       >
                         <Target className="w-3 h-3" />
                         Care Plans
+                      </button>
+                      <button
+                        onClick={() => {
+                          setLabResultsPatientId(appointment.patient.id);
+                          setLabResultsPatientName(`${appointment.patient.firstName} ${appointment.patient.lastName}`);
+                          setShowLabResultsModal(true);
+                        }}
+                        className="flex-1 min-w-[100px] px-2 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs font-medium"
+                      >
+                        <TestTube className="w-3 h-3" />
+                        Lab Results
                       </button>
                     </div>
                   )}
@@ -1974,6 +1990,11 @@ const NurseDashboard: React.FC = () => {
               setCarePlansPatientName(patientName);
               setShowCarePlansModal(true);
             }}
+            onViewLabResults={(patientId, patientName) => {
+              setLabResultsPatientId(patientId);
+              setLabResultsPatientName(patientName);
+              setShowLabResultsModal(true);
+            }}
           />
         )}
         {activeTab === 'orders' && (
@@ -2557,6 +2578,45 @@ const NurseDashboard: React.FC = () => {
                   setShowCarePlansModal(false);
                   setCarePlansPatientId(null);
                   setCarePlansPatientName('');
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lab Results Modal */}
+      {showLabResultsModal && labResultsPatientId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+          <div className="w-full max-w-7xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <TestTube className="w-6 h-6 text-white" />
+                <div>
+                  <h2 className="text-xl font-bold text-white">Laboratory Results</h2>
+                  <p className="text-sm text-purple-100">{labResultsPatientName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowLabResultsModal(false);
+                  setLabResultsPatientId(null);
+                  setLabResultsPatientName('');
+                }}
+                className="text-white hover:text-purple-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <LabResultsViewer
+                patientId={labResultsPatientId}
+                tenantSlug={tenantSlug || ''}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => {
+                  setShowLabResultsModal(false);
+                  setLabResultsPatientId(null);
+                  setLabResultsPatientName('');
                 }}
               />
             </div>
