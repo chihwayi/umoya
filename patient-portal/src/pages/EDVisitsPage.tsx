@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotification } from '../components/GlobalNotification';
 import { format } from 'date-fns';
 
 interface EDVisit {
@@ -31,7 +31,7 @@ const EDVisitsPage: React.FC = () => {
   const { patient, token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showError } = useNotifications();
+  const { showError } = useNotification();
   const [visits, setVisits] = useState<EDVisit[]>([]);
   const [selectedVisit, setSelectedVisit] = useState<EDVisit | null>(null);
   const [loading, setLoading] = useState(true);

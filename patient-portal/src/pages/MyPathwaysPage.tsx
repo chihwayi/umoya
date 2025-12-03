@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotification } from '../components/GlobalNotification';
 import { format } from 'date-fns';
 
 interface PathwayEnrollment {
@@ -42,7 +42,7 @@ const MyPathwaysPage: React.FC = () => {
   const { patient, token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showError } = useNotifications();
+  const { showSuccess, showError } = useNotification();
   const [pathways, setPathways] = useState<PathwayEnrollment[]>([]);
   const [selectedPathway, setSelectedPathway] = useState<PathwayEnrollment | null>(null);
   const [pathwaySteps, setPathwaySteps] = useState<PathwayStep[]>([]);

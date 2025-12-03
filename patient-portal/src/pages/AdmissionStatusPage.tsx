@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotification } from '../components/GlobalNotification';
 import { format, differenceInDays } from 'date-fns';
 
 interface Admission {
@@ -36,7 +36,7 @@ const AdmissionStatusPage: React.FC = () => {
   const { patient, token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showError } = useNotifications();
+  const { showError } = useNotification();
   const [currentAdmission, setCurrentAdmission] = useState<Admission | null>(null);
   const [admissionHistory, setAdmissionHistory] = useState<Admission[]>([]);
   const [loading, setLoading] = useState(true);

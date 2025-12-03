@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotification } from '../components/GlobalNotification';
 import { format } from 'date-fns';
 
 interface Consent {
@@ -28,7 +28,7 @@ const PatientConsentsPage: React.FC = () => {
   const { patient, token } = usePatientAuth();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showError } = useNotifications();
+  const { showSuccess, showError } = useNotification();
   const [consents, setConsents] = useState<Consent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'signed' | 'declined'>('all');
