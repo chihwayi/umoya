@@ -235,30 +235,62 @@ export class ADTService {
   }
 
   async getActiveAdmissions(
-    filters: { wardName?: string; service?: string },
+    filters: { wardName?: string; service?: string; attendingProvider?: string; status?: string },
     tenantDb: DataSource,
-  ): Promise<Admission[]> {
-    const repository = tenantDb.getRepository(Admission);
-    const queryBuilder = repository
-      .createQueryBuilder('admission')
-      .leftJoinAndSelect('admission.patient', 'patient')
-      .leftJoinAndSelect('admission.currentBed', 'bed')
-      .leftJoinAndSelect('admission.attendingProviderUser', 'provider')
-      .where('admission.admissionStatus = :status', { status: 'active' });
+  ): Promise<any[]> {
+    // Use raw query to get all needed fields including bed details
+    let query = `
+      SELECT 
+        a.id,
+        a.admission_number,
+        a.admission_date,
+        a.admission_time,
+        a.admission_type,
+        a.admission_status,
+        a.admitting_diagnosis,
+        a.admitting_diagnosis_icd10,
+        a.admitting_diagnosis_snomed,
+        a.attending_provider,
+        a.current_ward,
+        a.current_bed_id,
+        a.estimated_discharge_date,
+        a.admission_reason,
+        p.id as patient_id,
+        p.first_name as patient_first_name,
+        p.last_name as patient_last_name,
+        b.bed_number,
+        b.room_number,
+        b.ward_name
+      FROM admissions a
+      LEFT JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN beds b ON a.current_bed_id = b.id
+      WHERE a.admission_status = $1
+    `;
+
+    const params: any[] = [filters.status || 'active'];
+    let paramIndex = 2;
+
+    if (filters.attendingProvider) {
+      query += ` AND a.attending_provider = $${paramIndex}`;
+      params.push(filters.attendingProvider);
+      paramIndex++;
+    }
 
     if (filters.wardName) {
-      queryBuilder.andWhere('admission.currentWard = :wardName', {
-        wardName: filters.wardName,
-      });
+      query += ` AND a.current_ward = $${paramIndex}`;
+      params.push(filters.wardName);
+      paramIndex++;
     }
 
     if (filters.service) {
-      queryBuilder.andWhere('admission.service = :service', { service: filters.service });
+      query += ` AND a.service = $${paramIndex}`;
+      params.push(filters.service);
+      paramIndex++;
     }
 
-    queryBuilder.orderBy('admission.admissionDate', 'DESC');
+    query += ` ORDER BY a.admission_date DESC`;
 
-    return await queryBuilder.getMany();
+    return await tenantDb.query(query, params);
   }
 
   async getCensusSnapshot(wardName?: string, tenantDb?: DataSource): Promise<any> {

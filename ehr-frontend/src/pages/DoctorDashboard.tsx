@@ -2339,8 +2339,11 @@ const DoctorDashboard: React.FC = () => {
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
                     <div className="text-3xl font-bold mb-1">
                       {admittedPatients.reduce((sum: number, p: any) => {
-                        const days = Math.floor((new Date().getTime() - new Date(p.admission_date).getTime()) / (1000 * 60 * 60 * 24));
-                        return sum + days;
+                        if (!p.admission_date) return sum;
+                        const admitDate = new Date(p.admission_date);
+                        if (isNaN(admitDate.getTime())) return sum;
+                        const days = Math.floor((new Date().getTime() - admitDate.getTime()) / (1000 * 60 * 60 * 24));
+                        return sum + (isNaN(days) ? 0 : Math.max(0, days));
                       }, 0)}
                     </div>
                     <div className="text-rose-100 text-sm">Total Patient Days</div>
@@ -2371,7 +2374,15 @@ const DoctorDashboard: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {admittedPatients.map((patient: any) => {
-                    const daysAdmitted = Math.floor((new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24));
+                    // Calculate days admitted with proper validation
+                    const admitDate = patient.admission_date ? new Date(patient.admission_date) : null;
+                    const daysAdmitted = admitDate && !isNaN(admitDate.getTime()) 
+                      ? Math.max(0, Math.floor((new Date().getTime() - admitDate.getTime()) / (1000 * 60 * 60 * 24)))
+                      : 0;
+                    
+                    const formattedDate = admitDate && !isNaN(admitDate.getTime())
+                      ? admitDate.toLocaleDateString()
+                      : 'N/A';
                     
                     return (
                       <button
@@ -2381,8 +2392,9 @@ const DoctorDashboard: React.FC = () => {
                             state: { 
                               admission: {
                                 ...patient,
-                                patient_first_name: patient.patient_first_name || patient.first_name,
-                                patient_last_name: patient.patient_last_name || patient.last_name,
+                                patient_first_name: patient.patient_first_name,
+                                patient_last_name: patient.patient_last_name,
+                                patient_id: patient.patient_id,
                               }
                             } 
                           });
@@ -2393,7 +2405,7 @@ const DoctorDashboard: React.FC = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <h3 className="text-lg font-bold text-slate-900 mb-1">
-                              {patient.patient_first_name || patient.first_name} {patient.patient_last_name || patient.last_name}
+                              {patient.patient_first_name} {patient.patient_last_name}
                             </h3>
                             <p className="text-sm text-slate-500">{patient.admission_number}</p>
                           </div>
@@ -2410,7 +2422,7 @@ const DoctorDashboard: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <Home className="w-4 h-4 text-purple-600" />
-                            <span className="font-medium text-slate-700">{patient.ward_name || 'N/A'}</span>
+                            <span className="font-medium text-slate-700">{patient.ward_name || patient.current_ward || 'N/A'}</span>
                           </div>
                         </div>
 
@@ -2418,7 +2430,7 @@ const DoctorDashboard: React.FC = () => {
                         <div className="bg-slate-50 rounded-lg p-3 mb-4">
                           <div className="text-xs text-slate-500 mb-1">Primary Diagnosis</div>
                           <div className="text-sm font-medium text-slate-900">
-                            {patient.primary_diagnosis || patient.admission_diagnosis || 'Not specified'}
+                            {patient.admitting_diagnosis || 'Not specified'}
                           </div>
                         </div>
 
@@ -2427,7 +2439,7 @@ const DoctorDashboard: React.FC = () => {
                           <div className="text-center bg-blue-50 rounded-lg p-2">
                             <div className="text-xs text-blue-600 mb-1">Admitted</div>
                             <div className="text-sm font-bold text-blue-900">
-                              {new Date(patient.admission_date).toLocaleDateString()}
+                              {formattedDate}
                             </div>
                           </div>
                           <div className="text-center bg-green-50 rounded-lg p-2">
@@ -2441,7 +2453,7 @@ const DoctorDashboard: React.FC = () => {
                         {/* Action Hint */}
                         <div className="mt-4 pt-4 border-t border-slate-200">
                           <p className="text-xs text-slate-500 text-center">
-                            Click to manage this patient →
+                            Click to view vitals, notes & discharge →
                           </p>
                         </div>
                       </button>
