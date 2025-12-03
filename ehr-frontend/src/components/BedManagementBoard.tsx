@@ -80,6 +80,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
     try {
       const response = await ehrAxios.get('/beds/occupancy', {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { wardName: selectedWard !== 'all' ? selectedWard : null },
       });
       setOccupancyStats(response.data);
     } catch (error) {
@@ -237,7 +238,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
                       if (bed.status === 'occupied' && bed.currentPatient) {
                         // Load admission details and open workflow
                         try {
-                          const response = await ehrAxios.get(`/admissions/active?patientId=${bed.currentPatient.id}`, {
+                          const response = await ehrAxios.get(`/beds/admissions/active?patientId=${bed.currentPatient.id}`, {
                             headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
                           });
                           if (response.data && response.data.length > 0) {
