@@ -1278,22 +1278,56 @@ const NurseDashboard: React.FC = () => {
     );
   };
 
-  const renderDashboard = () => (
-    <div className="space-y-8">
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {quickStats.map((stat, index) => (
-          <div key={index} className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-3 bg-gradient-to-r from-slate-100 to-slate-200 rounded-xl">
-                <stat.icon className="w-6 h-6 text-slate-600" />
+  const renderDashboard = () => {
+    const getStatGradient = (label: string) => {
+      switch (label) {
+        case 'Patients Waiting': return 'from-blue-500 to-cyan-600';
+        case 'In Progress': return 'from-yellow-500 to-orange-600';
+        case 'Vitals Recorded': return 'from-purple-500 to-pink-600';
+        case 'Urgent Cases': return 'from-red-500 to-rose-600';
+        case 'Completed Today': return 'from-green-500 to-emerald-600';
+        case 'Awaiting Payment': return 'from-amber-500 to-orange-600';
+        default: return 'from-slate-500 to-slate-600';
+      }
+    };
+
+    return (
+      <div className="space-y-6 sm:space-y-8">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
+          {quickStats.map((stat, index) => (
+            <div 
+              key={index} 
+              className="relative overflow-hidden rounded-xl sm:rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 group"
+            >
+              {/* Gradient Background */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${getStatGradient(stat.label)} opacity-90 group-hover:opacity-100 transition-opacity`}></div>
+              
+              {/* Content */}
+              <div className="relative p-4 sm:p-5 lg:p-6">
+                <div className="flex flex-col gap-2 sm:gap-3">
+                  {/* Icon */}
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <stat.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  </div>
+                  
+                  {/* Value */}
+                  <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white drop-shadow-md">
+                    {stat.value}
+                  </div>
+                  
+                  {/* Label */}
+                  <div className="text-xs sm:text-sm font-semibold text-white/90 leading-tight">
+                    {stat.label}
+                  </div>
+                </div>
               </div>
-              <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
+              
+              {/* Shimmer Effect */}
+              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
             </div>
-            <div className="text-sm font-semibold text-slate-600">{stat.label}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
