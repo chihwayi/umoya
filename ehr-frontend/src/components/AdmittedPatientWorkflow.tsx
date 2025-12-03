@@ -109,11 +109,12 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const handleRecordVitals = async () => {
     try {
-      await ehrApi.recordVitals(admission.patient_id, {
+      await ehrAxios.post(`/vitals/patient/${admission.patient_id}`, {
         ...vitalsData,
         recordedAt: new Date().toISOString(),
-        recordedBy: 'current-user', // Will be set by backend from JWT
-      }, token, tenantSlug);
+      }, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       
       showSuccess('Success', 'Vitals recorded successfully');
       setShowVitalsModal(false);
@@ -139,7 +140,9 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
     }
 
     try {
-      await ehrApi.dischargePatient(admission.id, dischargeData, token, tenantSlug);
+      await ehrAxios.post(`/beds/admissions/${admission.id}/discharge`, dischargeData, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       showSuccess('Success', `Patient discharged successfully to ${dischargeData.dischargeType}`);
       setShowDischargeModal(false);
       onUpdate();
@@ -156,7 +159,9 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
     }
 
     try {
-      await ehrApi.transferPatient(admission.id, transferData, token, tenantSlug);
+      await ehrAxios.post(`/beds/admissions/${admission.id}/transfer`, transferData, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       showSuccess('Success', `Patient transferred to ${transferData.toWard} - Bed ${transferData.toBed}`);
       setShowTransferModal(false);
       onUpdate();

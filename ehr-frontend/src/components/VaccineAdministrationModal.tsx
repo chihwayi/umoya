@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Syringe, Calendar, User, AlertTriangle, X } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import axios from 'axios';
 import { useNotification } from './GlobalNotification';
+
+const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 interface VaccineAdministrationModalProps {
   patientId: string;
@@ -67,7 +69,9 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
 
     try {
       setSubmitting(true);
-      await ehrApi.administerVaccine(patientId, formData, token, tenantSlug);
+      await ehrAxios.post(`/immunizations/patient/${patientId}/administer`, formData, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       showSuccess('Success', 'Vaccine administered and recorded successfully');
       onSuccess();
       onClose();

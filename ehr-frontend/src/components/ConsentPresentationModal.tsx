@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { FileText, User, Calendar, CheckCircle, XCircle, X, Shield } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
+
+const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 interface ConsentPresentationModalProps {
   template: any;
@@ -47,7 +49,9 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
         status: 'pending',
       };
       
-      const response = await ehrApi.createPatientConsent(consentData, token, tenantSlug);
+      await ehrAxios.post('/consents', consentData, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       showSuccess('Success', 'Consent presented to patient');
       setStep('sign');
     } catch (error) {
@@ -82,7 +86,9 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
         diagnosisSnomed: diagnosisSNOMED || undefined,
       };
       
-      await ehrApi.createPatientConsent(consentData, token, tenantSlug);
+      await ehrAxios.post('/consents', consentData, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       showSuccess('Success', 'Consent signed successfully');
       onSuccess();
       onClose();
