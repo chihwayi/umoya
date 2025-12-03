@@ -6757,35 +6757,6 @@ export const analyticsApi = {
     return { data: response.data };
   },
 
-  getMessageTemplates: async (category: string | null, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get('/messages/templates/list', {
-      params: category ? { category } : {},
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  getMessageTemplate: async (templateId: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/messages/templates/${templateId}`, {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  createMessageTemplate: async (templateData: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post('/messages/templates', templateData, {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
-  applyMessageTemplate: async (templateId: string, variables: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post(`/messages/templates/${templateId}/apply`, variables, {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
-
   // ==================== CONSENT MANAGEMENT ====================
   
   // Consent Templates
