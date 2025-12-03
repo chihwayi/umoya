@@ -7,6 +7,7 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import EDTrackingBoard from '../components/EDTrackingBoard';
+import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 
 interface EDMetrics {
   current_census: number;
@@ -34,6 +35,7 @@ const EDDashboard: React.FC = () => {
   const [registrationData, setRegistrationData] = useState({
     arrivalMode: 'walk_in',
     chiefComplaint: '',
+    chiefComplaintSnomed: null as SnomedConcept | null,
     presentingSymptoms: '',
     allergies: '',
     currentMedications: '',
@@ -105,6 +107,8 @@ const EDDashboard: React.FC = () => {
         patientId: selectedPatient.id,
         arrivalMode: registrationData.arrivalMode,
         chiefComplaint: registrationData.chiefComplaint,
+        chiefComplaintSnomed: registrationData.chiefComplaintSnomed?.conceptId || null,
+        chiefComplaintTerm: registrationData.chiefComplaintSnomed?.term || null,
         presentingSymptoms: registrationData.presentingSymptoms,
         allergies: registrationData.allergies,
         currentMedications: registrationData.currentMedications,
@@ -117,6 +121,7 @@ const EDDashboard: React.FC = () => {
       setRegistrationData({
         arrivalMode: 'walk_in',
         chiefComplaint: '',
+        chiefComplaintSnomed: null,
         presentingSymptoms: '',
         allergies: '',
         currentMedications: '',
@@ -318,6 +323,20 @@ const EDDashboard: React.FC = () => {
                   onChange={(e) => setRegistrationData({ ...registrationData, chiefComplaint: e.target.value })}
                   placeholder="e.g., Chest pain, Difficulty breathing, Trauma..."
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              {/* Chief Complaint SNOMED (Optional) */}
+              <div>
+                <SnomedConceptPicker
+                  value={registrationData.chiefComplaintSnomed}
+                  onChange={(concept) => setRegistrationData({ ...registrationData, chiefComplaintSnomed: concept })}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug!}
+                  label="Chief Complaint SNOMED Code (Optional)"
+                  placeholder="Search for SNOMED code..."
+                  helperText="Enables clinical decision support and alerts"
+                  context="symptom"
                 />
               </div>
 
