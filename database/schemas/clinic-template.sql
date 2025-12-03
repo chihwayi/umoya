@@ -61,7 +61,7 @@ CREATE TABLE appointments (
     notes TEXT,
     fee_amount NUMERIC(12,2),
     finance_transaction_id UUID,
-    payment_status VARCHAR(50) DEFAULT 'payment_confirmed' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
+    payment_status VARCHAR(50) DEFAULT 'awaiting_payment' CHECK (payment_status IN ('awaiting_payment','payment_confirmed','in_progress','completed','cancelled')),
     patient_instructions TEXT,
     priority_level VARCHAR(50) DEFAULT 'normal' CHECK (priority_level IN ('low', 'normal', 'high', 'urgent')),
     virtual_meeting_url VARCHAR(500),
