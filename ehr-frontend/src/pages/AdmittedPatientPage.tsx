@@ -24,15 +24,20 @@ const AdmittedPatientPage: React.FC = () => {
   
   // Create a pseudo-appointment object for modals that expect appointment
   const pseudoAppointment = admission ? {
+    id: admission.id,
     appointmentId: admission.id,
     patientId: admission.patient_id,
     patient: {
       id: admission.patient_id,
       firstName: admission.patient_first_name,
       lastName: admission.patient_last_name,
+      patientNumber: admission.admission_number || 'N/A',
     },
+    appointmentDate: admission.admission_date || new Date().toISOString(),
+    appointmentType: 'inpatient',
     doctorId: admission.attending_provider,
     paymentStatus: 'paid', // Inpatients are billed at discharge, not per visit
+    notes: '',
   } : null;
   
   const [activeTab, setActiveTab] = useState('overview');
