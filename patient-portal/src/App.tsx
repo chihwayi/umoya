@@ -32,6 +32,12 @@ import CardiologyManagementPage from './pages/CardiologyManagementPage';
 import SymptomCheckerPage from './pages/SymptomCheckerPage';
 import FamilyAccessPage from './pages/FamilyAccessPage';
 import FitnessIntegrationPage from './pages/FitnessIntegrationPage';
+// Tier 1 Features
+import PatientConsentsPage from './pages/PatientConsentsPage';
+import MyPathwaysPage from './pages/MyPathwaysPage';
+import ImmunizationsPage from './pages/ImmunizationsPage';
+import AdmissionStatusPage from './pages/AdmissionStatusPage';
+import EDVisitsPage from './pages/EDVisitsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -216,6 +222,47 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <FitnessIntegrationPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Tier 1 Features */}
+            <Route
+              path="/:tenantSlug/consents"
+              element={
+                <ProtectedRoute requireLinked>
+                  <PatientConsentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/pathways"
+              element={
+                <ProtectedRoute requireLinked>
+                  <MyPathwaysPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/immunizations"
+              element={
+                <ProtectedRoute requireLinked>
+                  <ImmunizationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/admission"
+              element={
+                <ProtectedRoute requireLinked>
+                  <AdmissionStatusPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/ed-visits"
+              element={
+                <ProtectedRoute requireLinked>
+                  <EDVisitsPage />
                 </ProtectedRoute>
               }
             />

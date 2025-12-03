@@ -1041,5 +1041,181 @@ export const patientPortalApi = {
     if (!response.ok) throw new Error('Failed to analyze symptoms');
     return response.json();
   },
+
+  // ==================== TIER 1: E-CONSENT MANAGEMENT ====================
+  
+  getPatientConsents: async (token: string, tenantSlug: string, filters?: { status?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents?${params.toString()}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch consents');
+    return response.json();
+  },
+
+  getConsentById: async (consentId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch consent');
+    return response.json();
+  },
+
+  signConsent: async (consentId: string, signatureData: any, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/sign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(signatureData),
+    });
+    if (!response.ok) throw new Error('Failed to sign consent');
+    return response.json();
+  },
+
+  declineConsent: async (consentId: string, reason: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/decline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.ok) throw new Error('Failed to decline consent');
+    return response.json();
+  },
+
+  downloadConsent: async (consentId: string, format: 'pdf' | 'json', token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/export?format=${format}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to download consent');
+    return response.blob();
+  },
+
+  // ==================== TIER 1: CLINICAL PATHWAYS ====================
+  
+  getPatientPathways: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch pathways');
+    return response.json();
+  },
+
+  getPathwayProgress: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways/${enrollmentId}/progress`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch pathway progress');
+    return response.json();
+  },
+
+  // ==================== TIER 1: IMMUNIZATIONS ====================
+  
+  getPatientImmunizations: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch immunizations');
+    return response.json();
+  },
+
+  getImmunizationForecast: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/forecast`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch immunization forecast');
+    return response.json();
+  },
+
+  downloadImmunizationRecord: async (format: 'pdf' | 'json', token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/export?format=${format}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to download immunization record');
+    return response.blob();
+  },
+
+  // ==================== TIER 1: ADMISSION STATUS ====================
+  
+  getCurrentAdmission: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/current`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      if (response.status === 404) return null; // Not admitted
+      throw new Error('Failed to fetch admission status');
+    }
+    return response.json();
+  },
+
+  getAdmissionHistory: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/history`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch admission history');
+    return response.json();
+  },
+
+  // ==================== TIER 1: ED VISITS ====================
+  
+  getPatientEDVisits: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch ED visits');
+    return response.json();
+  },
+
+  getEDVisitDetails: async (visitId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits/${visitId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch ED visit details');
+    return response.json();
+  },
 };
 
