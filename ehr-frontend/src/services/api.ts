@@ -6785,7 +6785,6 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
-};
 
   // ==================== CONSENT MANAGEMENT ====================
   
