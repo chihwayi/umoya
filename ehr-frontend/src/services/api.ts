@@ -6799,6 +6799,14 @@ export const analyticsApi = {
     return { data: response.data };
   },
 
+  // Patient Vitals
+  getPatientVitals: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/vitals/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   // Nursing Notes
   getNursingNotesByPatient: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/nursing-notes/patient/${patientId}`, {

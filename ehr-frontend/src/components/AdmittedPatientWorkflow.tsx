@@ -161,10 +161,11 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
   };
 
   const getDaysAdmitted = () => {
+    if (!admission || !admission.admission_date) return 0;
     const admitDate = new Date(admission.admission_date);
     const today = new Date();
     const diff = Math.floor((today.getTime() - admitDate.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
+    return isNaN(diff) ? 0 : Math.max(0, diff);
   };
 
   return (
@@ -312,15 +313,15 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-red-50 rounded-lg p-3">
                     <div className="text-xs text-red-600 mb-1">Temperature</div>
-                    <div className="text-xl font-bold text-red-700">{vitals[0].temperature}°C</div>
+                    <div className="text-xl font-bold text-red-700">{vitals[0].temperature || 'N/A'}°C</div>
                   </div>
                   <div className="bg-blue-50 rounded-lg p-3">
                     <div className="text-xs text-blue-600 mb-1">Blood Pressure</div>
-                    <div className="text-xl font-bold text-blue-700">{vitals[0].systolic}/{vitals[0].diastolic}</div>
+                    <div className="text-xl font-bold text-blue-700">{vitals[0].systolic || 'N/A'}/{vitals[0].diastolic || 'N/A'}</div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3">
                     <div className="text-xs text-green-600 mb-1">Heart Rate</div>
-                    <div className="text-xl font-bold text-green-700">{vitals[0].heartRate} bpm</div>
+                    <div className="text-xl font-bold text-green-700">{vitals[0].heartRate || 'N/A'} bpm</div>
                   </div>
                 </div>
               ) : (
