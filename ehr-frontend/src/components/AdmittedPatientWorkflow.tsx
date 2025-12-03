@@ -9,7 +9,6 @@ import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
-import axios from 'axios';
 
 interface AdmittedPatientWorkflowProps {
   admission: any;
