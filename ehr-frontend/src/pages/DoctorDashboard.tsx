@@ -498,7 +498,6 @@ const DoctorDashboard: React.FC = () => {
     if (currentUser) {
       fetchTodayAppointments();
       fetchAuthorizedOrders();
-      fetchAdmittedPatients();
     }
   }, [selectedDate, currentUser]);
 
