@@ -21,6 +21,9 @@ const AdmittedPatientPage: React.FC = () => {
   
   const admission = location.state?.admission;
   const token = localStorage.getItem('ehr_token') || '';
+  const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
+  const isDoctor = currentUser?.role === 'doctor';
+  const isNurse = currentUser?.role === 'nurse';
   
   // Create a pseudo-appointment object for modals that expect appointment
   const pseudoAppointment = admission ? {
@@ -251,34 +254,42 @@ const AdmittedPatientPage: React.FC = () => {
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="space-y-3">
-            {/* Treatment Actions */}
+            {/* Treatment Actions - Role-based */}
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Daily Rounds & Treatment</div>
+              <div className="text-xs font-semibold text-slate-500 uppercase mb-2">
+                {isDoctor ? 'Daily Rounds & Treatment' : 'Nursing Care'}
+              </div>
               <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => setShowProgressNoteModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-                >
-                  <FileText className="w-4 h-4" />
-                  Progress Note
-                </button>
+                {/* Doctor-only actions */}
+                {isDoctor && (
+                  <>
+                    <button
+                      onClick={() => setShowProgressNoteModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Progress Note
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowPrescriptionModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                    >
+                      <Pill className="w-4 h-4" />
+                      Prescribe Meds
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowLabOrderModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                    >
+                      <TestTube className="w-4 h-4" />
+                      Order Labs
+                    </button>
+                  </>
+                )}
                 
-                <button
-                  onClick={() => setShowPrescriptionModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-                >
-                  <Pill className="w-4 h-4" />
-                  Prescribe Meds
-                </button>
-                
-                <button
-                  onClick={() => setShowLabOrderModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-                >
-                  <TestTube className="w-4 h-4" />
-                  Order Labs
-                </button>
-                
+                {/* Shared actions - Both doctor and nurse */}
                 <button
                   onClick={() => setShowVitalsModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
@@ -286,30 +297,43 @@ const AdmittedPatientPage: React.FC = () => {
                   <Heart className="w-4 h-4" />
                   Record Vitals
                 </button>
+                
+                {/* Nurse-specific actions */}
+                {isNurse && (
+                  <button
+                    onClick={() => setActiveTab('nursing')}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Add Nursing Note
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* ADT Actions */}
-            <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase mb-2">ADT (Admission/Discharge/Transfer)</div>
-              <div className="flex gap-2 flex-wrap">
-                <button
-                  onClick={() => setShowTransferModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-                >
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Transfer Patient
-                </button>
-                
-                <button
-                  onClick={() => setShowDischargeModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Discharge Patient
-                </button>
+            {/* ADT Actions - Doctor only */}
+            {isDoctor && (
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase mb-2">ADT (Admission/Discharge/Transfer)</div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setShowTransferModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Transfer Patient
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowDischargeModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Discharge Patient
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
