@@ -238,8 +238,9 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
                       if (bed.status === 'occupied' && bed.currentPatient) {
                         // Load admission details and open workflow
                         try {
-                          const response = await ehrAxios.get(`/beds/admissions/active?patientId=${bed.currentPatient.id}`, {
+                          const response = await ehrAxios.get(`/beds/admissions`, {
                             headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+                            params: { patientId: bed.currentPatient.id },
                           });
                           if (response.data && response.data.length > 0) {
                             setSelectedAdmission({
