@@ -6799,7 +6799,7 @@ export const analyticsApi = {
   },
 
   getConsentTemplate: async (id: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/templates/\${id}\`, {
+    const response = await ehrAxios.get(`/consents/templates/${id}\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
@@ -6821,7 +6821,7 @@ export const analyticsApi = {
   },
 
   getPatientConsents: async (patientId: string, filters: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/patient/\${patientId}\`, {
+    const response = await ehrAxios.get(`/consents/patient/${patientId}\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       params: filters,
     });
@@ -6829,35 +6829,35 @@ export const analyticsApi = {
   },
 
   getConsentById: async (id: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/\${id}\`, {
+    const response = await ehrAxios.get(`/consents/${id}\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },
 
   signConsent: async (id: string, signatureData: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post(\`/consents/\${id}/sign\`, signatureData, {
+    const response = await ehrAxios.post(`/consents/${id}/sign\`, signatureData, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },
 
   declineConsent: async (id: string, reason: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post(\`/consents/\${id}/decline\`, { reason }, {
+    const response = await ehrAxios.post(`/consents/${id}/decline\`, { reason }, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },
 
   revokeConsent: async (id: string, reason: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post(\`/consents/\${id}/revoke\`, { reason }, {
+    const response = await ehrAxios.post(`/consents/${id}/revoke\`, { reason }, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },
 
   exportConsent: async (id: string, format: 'pdf' | 'json', token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/\${id}/export\`, {
+    const response = await ehrAxios.get(`/consents/${id}/export\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       params: { format },
     });
@@ -6865,14 +6865,14 @@ export const analyticsApi = {
   },
 
   getConsentHistory: async (patientId: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/patient/\${patientId}/history\`, {
+    const response = await ehrAxios.get(`/consents/patient/${patientId}/history\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },
 
   getActiveConsents: async (patientId: string, consentType: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(\`/consents/patient/\${patientId}/active/\${consentType}\`, {
+    const response = await ehrAxios.get(`/consents/patient/${patientId}/active/${consentType}\`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
