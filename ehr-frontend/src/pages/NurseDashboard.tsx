@@ -1301,13 +1301,18 @@ const NurseDashboard: React.FC = () => {
           <button
             key={index}
             onClick={action.action}
-            className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300 group text-left"
+            className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300 group text-left relative"
           >
             <div className={`p-3 bg-gradient-to-r ${action.color} rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform duration-200`}>
               <action.icon className="w-6 h-6 text-white" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 mb-2">{action.label}</h3>
             <p className="text-sm text-slate-600">{action.desc}</p>
+            {action.badge && action.badge > 0 && (
+              <span className="absolute top-4 right-4 inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold bg-violet-600 text-white shadow-lg ring-2 ring-white">
+                {action.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -1682,7 +1687,8 @@ const NurseDashboard: React.FC = () => {
 
       {/* Content */}
       <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 overflow-x-hidden">
-        {activeTab === 'tasks' && (
+        {activeTab === 'tasks' && activeSection === 'main' && renderDashboard()}
+        {activeTab === 'tasks' && activeSection !== 'main' && (
           <TaskManagement 
             currentUser={currentUser}
             appointments={appointments}
