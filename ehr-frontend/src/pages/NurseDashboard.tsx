@@ -6,7 +6,7 @@ import {
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
-  CreditCard, Lock, Share2, FolderOpen, Target
+  CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -103,7 +103,7 @@ const NurseDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -1433,7 +1433,7 @@ const NurseDashboard: React.FC = () => {
             <button
               onClick={() => {
                 setActiveSection('main');
-                setActiveTab('tasks');
+                setActiveTab('dashboard');
               }}
               className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
                 activeSection === 'main'
@@ -1481,6 +1481,17 @@ const NurseDashboard: React.FC = () => {
         <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           {activeSection === 'main' ? (
             <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 min-w-max pb-px">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
+                  activeTab === 'dashboard'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4 inline mr-2" />
+                Dashboard
+              </button>
               <button
                 onClick={() => setActiveTab('tasks')}
                 className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
@@ -1687,8 +1698,8 @@ const NurseDashboard: React.FC = () => {
 
       {/* Content */}
       <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 overflow-x-hidden">
-        {activeTab === 'tasks' && activeSection === 'main' && renderDashboard()}
-        {activeTab === 'tasks' && activeSection !== 'main' && (
+        {activeTab === 'dashboard' && activeSection === 'main' && renderDashboard()}
+        {activeTab === 'tasks' && (
           <TaskManagement 
             currentUser={currentUser}
             appointments={appointments}
