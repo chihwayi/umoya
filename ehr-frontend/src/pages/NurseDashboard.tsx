@@ -2457,6 +2457,7 @@ const NurseDashboard: React.FC = () => {
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <PatientCarePlansView
+                patientId={carePlansPatientId}
                 tenantSlug={tenantSlug || ''}
                 token={localStorage.getItem('ehr_token') || ''}
                 onClose={() => {

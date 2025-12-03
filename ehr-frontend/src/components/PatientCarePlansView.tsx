@@ -21,12 +21,14 @@ interface CarePlan {
 interface PatientCarePlansViewProps {
   tenantSlug: string;
   token: string;
+  patientId?: string; // If provided, load care plans for this patient (nurse/doctor view)
   onClose?: () => void;
 }
 
 const PatientCarePlansView: React.FC<PatientCarePlansViewProps> = ({
   tenantSlug,
   token,
+  patientId,
   onClose,
 }) => {
   const [carePlans, setCarePlans] = useState<CarePlan[]>([]);
@@ -43,11 +45,20 @@ const PatientCarePlansView: React.FC<PatientCarePlansViewProps> = ({
   const loadCarePlans = async () => {
     try {
       setLoading(true);
-      const response = await ehrApi.getPatientCarePlans(token, tenantSlug, { status: 'active' });
+      let response;
+      
+      if (patientId) {
+        // Nurse/Doctor viewing a specific patient's care plans
+        response = await ehrApi.getCarePlans(patientId, { status: 'active' }, token, tenantSlug);
+      } else {
+        // Patient viewing their own care plans (patient portal)
+        response = await ehrApi.getPatientCarePlans(token, tenantSlug, { status: 'active' });
+      }
+      
       setCarePlans(response.data || []);
     } catch (error: any) {
       console.error('Failed to load care plans:', error);
-      showError('Error', 'Failed to load your care plans');
+      showError('Error', patientId ? 'Failed to load patient care plans' : 'Failed to load your care plans');
     } finally {
       setLoading(false);
     }
