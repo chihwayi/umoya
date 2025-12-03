@@ -78,7 +78,7 @@ export class BedManagementController {
   }
 
   @Post(':id/cleaned')
-  @ApiOperation({ summary: 'Mark bed as cleaned' }}
+  @ApiOperation({ summary: 'Mark bed as cleaned' })
   @HttpCode(HttpStatus.OK)
   async markBedCleaned(@Param('id') bedId: string, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
