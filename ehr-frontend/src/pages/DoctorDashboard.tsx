@@ -188,6 +188,9 @@ const DoctorDashboard: React.FC = () => {
   const [showConsentLibraryModal, setShowConsentLibraryModal] = useState(false);
   const [showImmunizationsModal, setShowImmunizationsModal] = useState(false);
   const [showPathwaysModal, setShowPathwaysModal] = useState(false);
+  // Questionnaires States
+  const [showProScheduleModal, setShowProScheduleModal] = useState(false);
+  const [selectedPatientIdForPro, setSelectedPatientIdForPro] = useState<string | null>(null);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
   const appointmentFee =
