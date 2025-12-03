@@ -24,6 +24,7 @@ const BedManagementDashboard: React.FC = () => {
   const { showError, showSuccess } = useNotification();
   
   const [user, setUser] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [occupancyStats, setOccupancyStats] = useState<BedOccupancyStats | null>(null);
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,8 +33,10 @@ const BedManagementDashboard: React.FC = () => {
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
-    if (userData) {
+    const authToken = localStorage.getItem('ehr_token');
+    if (userData && authToken) {
       setUser(JSON.parse(userData));
+      setToken(authToken);
     } else {
       navigate(`/ehr/${tenantSlug}`);
     }
@@ -47,7 +50,6 @@ const BedManagementDashboard: React.FC = () => {
 
   const fetchOccupancyStats = async () => {
     try {
-      const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug) return;
 
       const response = await ehrApi.getBedOccupancy(selectedWard, token, tenantSlug);
@@ -159,10 +161,12 @@ const BedManagementDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <BedManagementBoard 
-          tenantSlug={tenantSlug!} 
-          token={localStorage.getItem('ehr_token')!}
-        />
+        {token && (
+          <BedManagementBoard 
+            tenantSlug={tenantSlug!} 
+            token={token}
+          />
+        )}
       </div>
 
       {/* Admission Workflow Modal */}
@@ -179,14 +183,16 @@ const BedManagementDashboard: React.FC = () => {
               </button>
             </div>
             <div className="p-6">
-              <AdmissionWorkflow 
-                tenantSlug={tenantSlug!}
-                token={localStorage.getItem('ehr_token')!}
-                onClose={() => {
-                  setShowAdmissionWorkflow(false);
-                  handleRefresh();
-                }}
-              />
+              {token && (
+                <AdmissionWorkflow 
+                  tenantSlug={tenantSlug!}
+                  token={token}
+                  onClose={() => {
+                    setShowAdmissionWorkflow(false);
+                    handleRefresh();
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
