@@ -8,7 +8,8 @@ import {
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2,
-  CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video
+  CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
+  AlertCircle, Bed, Baby
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -91,6 +92,8 @@ const EHRDashboard: React.FC = () => {
           { icon: Pill, label: 'Prescriptions', desc: 'Medication management', color: 'from-orange-500 to-red-500' },
           { icon: TestTube, label: 'Lab Orders', desc: 'Request & review tests', color: 'from-pink-500 to-rose-500' },
           { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-violet-500 to-purple-500' },
+          { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board, ESI triage & metrics', color: 'from-red-600 to-orange-600', route: 'emergency' },
+          { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
           { icon: FlaskConical, label: 'Oncology Center', desc: 'Regimens, tumor board, adverse events', color: 'from-rose-500 to-purple-500', route: 'doctor/oncology' },
           { icon: HeartPulse, label: 'Cardiology Hub', desc: 'Risk stratification & finance locks', color: 'from-red-500 to-rose-500', route: 'doctor/cardiology' },
           { icon: Eye, label: 'Ophthalmology Suite', desc: 'Eye exams, imaging, follow-ups', color: 'from-sky-500 to-cyan-500', route: 'doctor/ophthalmology' },
@@ -99,8 +102,11 @@ const EHRDashboard: React.FC = () => {
         return [
           { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500', route: 'patients' },
           { icon: Calendar, label: 'Nurse Dashboard', desc: 'Today\'s schedule', color: 'from-emerald-500 to-teal-500', route: 'nurse' },
+          { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board & triage', color: 'from-red-600 to-orange-600', route: 'emergency' },
+          { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', route: 'bed-management' },
           { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
+          { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
           { icon: FileText, label: 'Care Plans', desc: 'Nursing care plans', color: 'from-green-500 to-emerald-500', route: 'nurse/care-plans' },
         ];
       case 'radiologist':
