@@ -29,6 +29,12 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
   const [witnessName, setWitnessName] = useState('');
   const [witnessSignature, setWitnessSignature] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  // Medical coding fields
+  const [procedureSNOMED, setProcedureSNOMED] = useState('');
+  const [procedureCPT, setProcedureCPT] = useState('');
+  const [diagnosisICD10, setDiagnosisICD10] = useState('');
+  const [diagnosisSNOMED, setDiagnosisSNOMED] = useState('');
 
   const handlePresentConsent = async () => {
     try {
@@ -70,6 +76,10 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
         witnessName: witnessName || undefined,
         witnessSignature: witnessSignature || undefined,
         signedAt: new Date().toISOString(),
+        procedureSnomedCode: procedureSNOMED || undefined,
+        procedureCptCode: procedureCPT || undefined,
+        diagnosisIcd10: diagnosisICD10 || undefined,
+        diagnosisSnomed: diagnosisSNOMED || undefined,
       };
       
       await ehrApi.createPatientConsent(consentData, token, tenantSlug);
@@ -166,6 +176,67 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
 
           {step === 'sign' && (
             <div className="space-y-6">
+              {/* Medical Coding Section */}
+              {(template.consent_type === 'surgery' || template.consent_type === 'procedure') && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h5 className="font-semibold text-blue-900 mb-3">Medical Coding (for billing & reporting)</h5>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        CPT Code (Procedure)
+                      </label>
+                      <input
+                        type="text"
+                        value={procedureCPT}
+                        onChange={(e) => setProcedureCPT(e.target.value)}
+                        placeholder="e.g., 44950 (Appendectomy)"
+                        className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        SNOMED CT (Procedure)
+                      </label>
+                      <input
+                        type="text"
+                        value={procedureSNOMED}
+                        onChange={(e) => setProcedureSNOMED(e.target.value)}
+                        placeholder="e.g., 80146002 (Appendectomy)"
+                        className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        ICD-10 (Diagnosis)
+                      </label>
+                      <input
+                        type="text"
+                        value={diagnosisICD10}
+                        onChange={(e) => setDiagnosisICD10(e.target.value)}
+                        placeholder="e.g., K35.80 (Appendicitis)"
+                        className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
+                        SNOMED CT (Diagnosis)
+                      </label>
+                      <input
+                        type="text"
+                        value={diagnosisSNOMED}
+                        onChange={(e) => setDiagnosisSNOMED(e.target.value)}
+                        placeholder="e.g., 74400008 (Appendicitis)"
+                        className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-blue-700 mt-2">
+                    💡 <strong>Why this matters:</strong> CPT codes are required for insurance billing. 
+                    SNOMED CT enables clinical decision support and quality reporting. ICD-10 is mandatory for claims.
+                  </p>
+                </div>
+              )}
+
               {/* Patient Signature */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-3">

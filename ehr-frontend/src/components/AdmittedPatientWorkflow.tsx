@@ -37,6 +37,7 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
     dischargeTime: new Date().toTimeString().slice(0, 5),
     dischargeDiagnosis: '',
     dischargeDiagnosisICD10: '',
+    dischargeDiagnosisSNOMED: '',
     dischargeType: 'home',
     dischargeInstructions: '',
     followUpInstructions: '',
@@ -427,15 +428,33 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">ICD-10 Code</label>
-                <input
-                  type="text"
-                  value={dischargeData.dischargeDiagnosisICD10}
-                  onChange={(e) => setDischargeData({ ...dischargeData, dischargeDiagnosisICD10: e.target.value })}
-                  placeholder="e.g., A09"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    ICD-10 Code
+                    <span className="text-xs text-slate-500 ml-2">(for billing/reporting)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={dischargeData.dischargeDiagnosisICD10}
+                    onChange={(e) => setDischargeData({ ...dischargeData, dischargeDiagnosisICD10: e.target.value })}
+                    placeholder="e.g., A09 (Gastroenteritis)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    SNOMED CT Code
+                    <span className="text-xs text-slate-500 ml-2">(for clinical documentation)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={dischargeData.dischargeDiagnosisSNOMED}
+                    onChange={(e) => setDischargeData({ ...dischargeData, dischargeDiagnosisSNOMED: e.target.value })}
+                    placeholder="e.g., 25374005 (Gastroenteritis)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
               </div>
 
               <div>

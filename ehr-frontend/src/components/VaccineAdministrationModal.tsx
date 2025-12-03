@@ -22,6 +22,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
   const [formData, setFormData] = useState({
     vaccineCode: '',
     vaccineName: '',
+    cvxCode: '', // CDC CVX code
     manufacturer: '',
     lotNumber: '',
     expirationDate: '',
@@ -38,15 +39,15 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const commonVaccines = [
-    { code: 'COVID19', name: 'COVID-19 Vaccine' },
-    { code: 'FLU', name: 'Influenza Vaccine' },
-    { code: 'PNEUMO', name: 'Pneumococcal Vaccine' },
-    { code: 'HEPA', name: 'Hepatitis A Vaccine' },
-    { code: 'HEPB', name: 'Hepatitis B Vaccine' },
-    { code: 'HPV', name: 'HPV Vaccine' },
-    { code: 'MMR', name: 'MMR Vaccine' },
-    { code: 'TDAP', name: 'Tdap Vaccine' },
-    { code: 'VARICELLA', name: 'Varicella Vaccine' },
+    { code: 'COVID19', name: 'COVID-19 Vaccine', cvx: '213' },
+    { code: 'FLU', name: 'Influenza Vaccine', cvx: '141' },
+    { code: 'PNEUMO', name: 'Pneumococcal Vaccine', cvx: '133' },
+    { code: 'HEPA', name: 'Hepatitis A Vaccine', cvx: '83' },
+    { code: 'HEPB', name: 'Hepatitis B Vaccine', cvx: '08' },
+    { code: 'HPV', name: 'HPV Vaccine', cvx: '165' },
+    { code: 'MMR', name: 'MMR Vaccine', cvx: '03' },
+    { code: 'TDAP', name: 'Tdap Vaccine', cvx: '115' },
+    { code: 'VARICELLA', name: 'Varicella Vaccine', cvx: '21' },
   ];
 
   const administrationSites = [
@@ -97,9 +98,10 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
 
         <div className="p-6 space-y-4">
           {/* Vaccine Selection */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Vaccine *</label>
-            <select
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Vaccine *</label>
+              <select
               value={formData.vaccineCode}
               onChange={(e) => {
                 const vaccine = commonVaccines.find(v => v.code === e.target.value);
@@ -107,6 +109,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
                   ...formData,
                   vaccineCode: e.target.value,
                   vaccineName: vaccine?.name || '',
+                  cvxCode: vaccine?.cvx || '',
                 });
               }}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500"
@@ -118,6 +121,21 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
                 </option>
               ))}
             </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                CVX Code
+                <span className="text-xs text-slate-500 ml-1">(CDC)</span>
+              </label>
+              <input
+                type="text"
+                value={formData.cvxCode}
+                onChange={(e) => setFormData({ ...formData, cvxCode: e.target.value })}
+                placeholder="e.g., 213"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50"
+                readOnly
+              />
+            </div>
           </div>
 
           {/* Administration Details */}
