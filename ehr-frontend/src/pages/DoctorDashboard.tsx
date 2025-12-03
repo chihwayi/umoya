@@ -499,21 +499,6 @@ const DoctorDashboard: React.FC = () => {
     }
   }, [selectedDate, currentUser]);
 
-  const fetchAdmittedPatients = async () => {
-    if (!currentUser) return;
-    try {
-      setLoadingAdmitted(true);
-      const token = localStorage.getItem('ehr_token');
-      const response = await ehrApi.get('/admissions', token!, tenantSlug!, { doctorId: currentUser.id, status: 'active' });
-      setAdmittedPatients(response.data || []);
-    } catch (error) {
-      console.error('Failed to fetch admitted patients:', error);
-      setAdmittedPatients([]);
-    } finally {
-      setLoadingAdmitted(false);
-    }
-  };
-
   // Load unread message count
   useEffect(() => {
     const loadUnreadCount = async () => {
