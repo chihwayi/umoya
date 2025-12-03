@@ -1939,11 +1939,59 @@ const NurseDashboard: React.FC = () => {
             <PatientAssessment appointments={appointments} />
           </div>
         )}
-        {activeTab === 'notes' && (
-          <div className="w-full overflow-x-auto">
-            <NursingNotes appointments={appointments} preset={notesPreset} />
-          </div>
-        )}
+        {activeTab === 'notes' && (() => {
+          const appointmentsAwaitingPayment = appointments.filter(apt => apt.paymentStatus === 'awaiting_payment');
+          const hasPaymentPending = appointmentsAwaitingPayment.length > 0;
+
+          if (hasPaymentPending) {
+            return (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300 p-8 text-center">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full mb-4">
+                  <Lock className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-amber-900 mb-2">Payment Confirmation Required</h3>
+                <p className="text-amber-700 mb-6 max-w-md mx-auto">
+                  {appointmentsAwaitingPayment.length} appointment{appointmentsAwaitingPayment.length > 1 ? 's are' : ' is'} awaiting payment confirmation.
+                  Nursing notes and clinical documentation are locked until Accounts confirms payment.
+                </p>
+                <div className="bg-white rounded-lg border border-amber-200 p-4 max-w-xl mx-auto space-y-3">
+                  <p className="text-sm font-semibold text-amber-900 mb-2">Pending Appointments:</p>
+                  {appointmentsAwaitingPayment.map(apt => (
+                    <div key={apt.id} className="flex items-center justify-between py-2 px-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="text-left">
+                        <p className="font-semibold text-slate-900">
+                          {apt.patient.firstName} {apt.patient.lastName}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          {new Date(apt.appointmentDate).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {apt.feeAmount && (
+                          <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold">
+                            ${apt.feeAmount.toFixed(2)}
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-amber-600 text-white">
+                          <CreditCard className="w-3 h-3" /> AWAITING
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-amber-600 mt-6">
+                  Contact Accounts department to confirm payment and unlock clinical features
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="w-full overflow-x-auto">
+              <NursingNotes appointments={appointments} preset={notesPreset} />
+            </div>
+          );
+        })()}
         
         {/* HIV Section Tabs */}
         {activeSection === 'hiv' && activeTab === 'testing' && (
