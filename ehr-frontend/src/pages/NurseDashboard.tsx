@@ -1293,44 +1293,55 @@ const NurseDashboard: React.FC = () => {
 
     return (
       <div className="space-y-6 sm:space-y-8">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6">
-          {quickStats.map((stat, index) => (
-            <div 
-              key={index} 
-              className="relative overflow-hidden rounded-xl sm:rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 group"
-            >
-              {/* Gradient Background */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${getStatGradient(stat.label)} opacity-90 group-hover:opacity-100 transition-opacity`}></div>
-              
-              {/* Content */}
-              <div className="relative p-4 sm:p-5 lg:p-6">
-                <div className="flex flex-col gap-2 sm:gap-3">
-                  {/* Icon */}
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <stat.icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+        {/* Quick Stats - Compact Informational Section */}
+        <div className="bg-white/60 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-4 sm:p-6 shadow-md">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-slate-600" />
+            <h3 className="text-lg font-bold text-slate-900">Today's Statistics</h3>
+            <span className="text-xs text-slate-500 ml-auto">Real-time metrics</span>
+          </div>
+          
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+            {quickStats.map((stat, index) => (
+              <div 
+                key={index} 
+                className="relative overflow-hidden rounded-lg sm:rounded-xl shadow-sm hover:shadow-md transition-all duration-200 group"
+              >
+                {/* Gradient Background - Subtle */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${getStatGradient(stat.label)} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+                
+                {/* Content - Compact */}
+                <div className="relative p-3 sm:p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    {/* Small Icon */}
+                    <div className={`p-1.5 sm:p-2 bg-gradient-to-br ${getStatGradient(stat.label)} rounded-md sm:rounded-lg`}>
+                      <stat.icon className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                    </div>
+                    
+                    {/* Value - Compact */}
+                    <div className={`text-xl sm:text-2xl font-bold bg-gradient-to-br ${getStatGradient(stat.label)} bg-clip-text text-transparent`}>
+                      {stat.value}
+                    </div>
                   </div>
                   
-                  {/* Value */}
-                  <div className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white drop-shadow-md">
-                    {stat.value}
-                  </div>
-                  
-                  {/* Label */}
-                  <div className="text-xs sm:text-sm font-semibold text-white/90 leading-tight">
+                  {/* Label - Small */}
+                  <div className="text-[10px] sm:text-xs font-medium text-slate-600 leading-tight">
                     {stat.label}
                   </div>
                 </div>
               </div>
-              
-              {/* Shimmer Effect */}
-              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+      {/* Quick Actions - Prominent Clickable Cards */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-5 h-5 text-slate-600" />
+          <h3 className="text-lg font-bold text-slate-900">Quick Actions</h3>
+          <span className="text-xs text-slate-500 ml-auto">Click to navigate</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
         {getNurseActions().map((action, index) => (
           <button
             key={index}
@@ -1378,6 +1389,7 @@ const NurseDashboard: React.FC = () => {
             <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
           </button>
         ))}
+        </div>
       </div>
     </div>
     );
