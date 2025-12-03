@@ -132,7 +132,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
   return (
     <div className="space-y-6">
       {/* Ward Tabs - Glassy Design */}
-      <div className="bg-white/60 backdrop-blur-xl rounded-2xl border border-white/20 shadow-xl p-2">
+      <div className="bg-white/60 backdrop-blur-xl rounded-2xl border border-white/20 shadow-xl p-2 sticky top-0 z-10">
         <div className="flex gap-2 overflow-x-auto">
           {wardNames.map(ward => {
             const wardBeds = beds.filter((b: any) => (b.wardName || b.ward_name) === ward);
