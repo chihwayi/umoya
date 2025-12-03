@@ -35,6 +35,8 @@ import ClaimsDashboard from './pages/ClaimsDashboard';
 import TelemedicineDashboard from './pages/TelemedicineDashboard';
 import TelemedicineConsultationPage from './pages/TelemedicineConsultationPage';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import EDDashboard from './pages/EDDashboard';
+import BedManagementDashboard from './pages/BedManagementDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -287,6 +289,24 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
                   <OphthalmologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Tier 1: Emergency Department Module */}
+            <Route
+              path="/ehr/:tenantSlug/emergency"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <EDDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Tier 1: Bed Management & ADT Module */}
+            <Route
+              path="/ehr/:tenantSlug/bed-management"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <BedManagementDashboard />
                 </RoleProtectedRoute>
               }
             />
