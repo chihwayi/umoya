@@ -1759,8 +1759,8 @@ const DoctorDashboard: React.FC = () => {
                         </button>
                         <button
                           onClick={() => {
-                            if (selectedPatientData?.id) {
-                              setSelectedPatientIdForPro(selectedPatientData.id);
+                            if (currentAppointment?.patient?.id) {
+                              setSelectedPatientIdForPro(currentAppointment.patient.id);
                               setShowProScheduleModal(true);
                             }
                           }}
