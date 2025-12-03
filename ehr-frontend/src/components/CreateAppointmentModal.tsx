@@ -58,6 +58,13 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const patientDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Doctor search states
+  const [doctorSearchTerm, setDoctorSearchTerm] = useState('');
+  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const doctorDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchPatients();
     fetchDoctors();
@@ -88,11 +95,26 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
     }
   }, [patientSearchTerm, patients]);
 
-  // Close dropdown when clicking outside
+  // Filter doctors based on search term
+  useEffect(() => {
+    if (doctorSearchTerm.trim() === '') {
+      setFilteredDoctors(doctors);
+    } else {
+      const filtered = doctors.filter(doctor =>
+        `${doctor.firstName} ${doctor.lastName}`.toLowerCase().includes(doctorSearchTerm.toLowerCase())
+      );
+      setFilteredDoctors(filtered);
+    }
+  }, [doctorSearchTerm, doctors]);
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (patientDropdownRef.current && !patientDropdownRef.current.contains(event.target as Node)) {
         setShowPatientDropdown(false);
+      }
+      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
+        setShowDoctorDropdown(false);
       }
     };
 
@@ -453,26 +475,75 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
             </div>
           </div>
 
-          {/* Doctor Selection */}
+          {/* Doctor Selection - Searchable Dropdown */}
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <User className="h-4 w-4" />
               Doctor
             </label>
-            <select
-              name="doctorId"
-              value={formData.doctorId}
-              onChange={handleInputChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a doctor</option>
-              {doctors.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>
-                  Dr. {doctor.firstName} {doctor.lastName}
-                </option>
-              ))}
-            </select>
+            <div className="relative" ref={doctorDropdownRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search doctors by name..."
+                  value={doctorSearchTerm}
+                  onChange={(e) => {
+                    setDoctorSearchTerm(e.target.value);
+                    setShowDoctorDropdown(true);
+                  }}
+                  onFocus={() => setShowDoctorDropdown(true)}
+                  className="w-full border border-gray-300 rounded-lg pl-10 pr-10 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {selectedDoctor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDoctor(null);
+                      setDoctorSearchTerm('');
+                      setFormData(prev => ({ ...prev, doctorId: '' }));
+                      setShowDoctorDropdown(false);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+                {!selectedDoctor && (
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                )}
+              </div>
+
+              {/* Dropdown List */}
+              {showDoctorDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDoctors.length > 0 ? (
+                    filteredDoctors.map((doctor) => (
+                      <button
+                        key={doctor.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDoctor(doctor);
+                          setDoctorSearchTerm(`Dr. ${doctor.firstName} ${doctor.lastName}`);
+                          setFormData(prev => ({ ...prev, doctorId: doctor.id }));
+                          setShowDoctorDropdown(false);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium text-gray-900">
+                          Dr. {doctor.firstName} {doctor.lastName}
+                        </div>
+                        <div className="text-xs text-gray-500 capitalize">{doctor.role}</div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-gray-500 text-center">
+                      No doctors found
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date and Time */}
