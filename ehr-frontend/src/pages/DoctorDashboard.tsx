@@ -436,28 +436,31 @@ const DoctorDashboard: React.FC = () => {
     }
   }, []);
 
+  // Function to fetch admitted patients
+  const fetchAdmittedPatients = async () => {
+    if (!currentUser?.id || !tenantSlug) return;
+    
+    setLoadingAdmitted(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.get('/beds/admissions', token, tenantSlug, { attendingProvider: currentUser.id, status: 'active' });
+      setAdmittedPatients(response.data || []);
+    } catch (error) {
+      console.error('Failed to load admitted patients:', error);
+      showError('Error', 'Failed to load admitted patients');
+      setAdmittedPatients([]);
+    } finally {
+      setLoadingAdmitted(false);
+    }
+  };
+
   // Load admitted patients when My Patients tab is active
   useEffect(() => {
-    const fetchAdmittedPatients = async () => {
-      if (activeTab !== 'my-patients' || !currentUser?.id || !tenantSlug) return;
-      
-      setLoadingAdmitted(true);
-      try {
-        const token = localStorage.getItem('ehr_token');
-        if (!token) return;
-
-        const response = await ehrApi.get('/beds/admissions', token, tenantSlug, { attendingProvider: currentUser.id, status: 'active' });
-        setAdmittedPatients(response.data || []);
-      } catch (error) {
-        console.error('Failed to load admitted patients:', error);
-        showError('Error', 'Failed to load admitted patients');
-        setAdmittedPatients([]);
-      } finally {
-        setLoadingAdmitted(false);
-      }
-    };
-
-    fetchAdmittedPatients();
+    if (activeTab === 'my-patients') {
+      fetchAdmittedPatients();
+    }
   }, [activeTab, currentUser, tenantSlug]);
 
   // Load critical alert count on mount and refresh every 2 minutes
