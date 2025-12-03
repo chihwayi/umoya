@@ -226,34 +226,65 @@ const AdmittedPatientPage: React.FC = () => {
       {/* Action Buttons */}
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex gap-3 flex-wrap">
-            <button
-              onClick={() => setShowVitalsModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-            >
-              <Heart className="w-4 h-4" />
-              Record Vitals
-            </button>
-            
-            <button
-              onClick={() => setShowTransferModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-            >
-              <ArrowRightLeft className="w-4 h-4" />
-              Transfer Patient
-            </button>
-            
-            <button
-              onClick={() => setShowDischargeModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-            >
-              <LogOut className="w-4 h-4" />
-              Discharge Patient
-            </button>
-            
-            <div className="ml-auto text-sm text-slate-600 flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-lg">
-              <FileText className="w-4 h-4" />
-              For full treatment options, use the Doctor Dashboard
+          <div className="space-y-3">
+            {/* Treatment Actions */}
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase mb-2">Daily Rounds & Treatment</div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openNotesFor: admission.patient_id } })}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <FileText className="w-4 h-4" />
+                  Progress Note
+                </button>
+                
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openPrescribeFor: admission.patient_id } })}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <Pill className="w-4 h-4" />
+                  Prescribe Meds
+                </button>
+                
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/doctor`, { state: { openLabOrderFor: admission.patient_id } })}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <TestTube className="w-4 h-4" />
+                  Order Labs
+                </button>
+                
+                <button
+                  onClick={() => setShowVitalsModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <Heart className="w-4 h-4" />
+                  Record Vitals
+                </button>
+              </div>
+            </div>
+
+            {/* ADT Actions */}
+            <div>
+              <div className="text-xs font-semibold text-slate-500 uppercase mb-2">ADT (Admission/Discharge/Transfer)</div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setShowTransferModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <ArrowRightLeft className="w-4 h-4" />
+                  Transfer Patient
+                </button>
+                
+                <button
+                  onClick={() => setShowDischargeModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Discharge Patient
+                </button>
+              </div>
             </div>
           </div>
         </div>
