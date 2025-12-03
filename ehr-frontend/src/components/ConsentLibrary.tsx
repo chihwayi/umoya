@@ -231,7 +231,6 @@ const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
           )}
         </div>
       </div>
-    </div>
 
       {/* Consent Presentation Modal */}
       {showPresentationModal && selectedTemplate && (
