@@ -203,7 +203,9 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
       }
     } catch (error) {
       console.error('Error checking conflicts:', error);
-      // Don't show error to user, just silently fail
+      // Silently fail - don't block the user from creating appointments
+      // Just clear any existing warning
+      setConflictWarning(null);
     } finally {
       setCheckingConflict(false);
     }
