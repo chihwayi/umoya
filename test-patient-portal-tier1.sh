@@ -21,7 +21,7 @@ LOGIN_RESPONSE=$(curl -s -X POST "${API_URL}/patient-portal/login" \
     "password": "Password1#"
   }')
 
-TOKEN=$(echo $LOGIN_RESPONSE | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+TOKEN=$(echo $LOGIN_RESPONSE | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 
 if [ -z "$TOKEN" ]; then
   echo "❌ Login failed. Response:"
