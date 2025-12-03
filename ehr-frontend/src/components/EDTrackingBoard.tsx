@@ -10,6 +10,7 @@ import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 interface EDTrackingBoardProps {
   tenantSlug: string;
   token: string;
+  onRefresh?: () => void;
 }
 
 const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({

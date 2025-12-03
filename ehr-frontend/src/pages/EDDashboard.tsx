@@ -28,6 +28,16 @@ const EDDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [registrationData, setRegistrationData] = useState({
+    arrivalMode: 'walk_in',
+    chiefComplaint: '',
+    presentingSymptoms: '',
+    allergies: '',
+    currentMedications: '',
+  });
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -60,6 +70,63 @@ const EDDashboard: React.FC = () => {
     setRefreshKey(prev => prev + 1);
     fetchMetrics();
     showSuccess('Refreshed', 'ED data updated');
+  };
+
+  const searchPatients = async (term: string) => {
+    if (term.length < 2) {
+      setPatients([]);
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const response = await ehrApi.get('/patients/search', token!, tenantSlug!, { query: term, limit: 10 });
+      setPatients(response.data || []);
+    } catch (error) {
+      console.error('Failed to search patients:', error);
+    }
+  };
+
+  const handleRegisterEDPatient = async () => {
+    if (!selectedPatient) {
+      showError('Error', 'Please select a patient');
+      return;
+    }
+    if (!registrationData.chiefComplaint) {
+      showError('Error', 'Chief complaint is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      
+      await ehrApi.post('/ed/visits', {
+        patientId: selectedPatient.id,
+        arrivalMode: registrationData.arrivalMode,
+        chiefComplaint: registrationData.chiefComplaint,
+        presentingSymptoms: registrationData.presentingSymptoms,
+        allergies: registrationData.allergies,
+        currentMedications: registrationData.currentMedications,
+      }, token!, tenantSlug!);
+
+      showSuccess('Success', 'ED patient registered successfully');
+      setShowRegisterModal(false);
+      setSelectedPatient(null);
+      setSearchTerm('');
+      setRegistrationData({
+        arrivalMode: 'walk_in',
+        chiefComplaint: '',
+        presentingSymptoms: '',
+        allergies: '',
+        currentMedications: '',
+      });
+      handleRefresh();
+    } catch (error) {
+      showError('Error', 'Failed to register ED patient');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!user) return null;
@@ -183,48 +250,139 @@ const EDDashboard: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-6">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                <h4 className="text-sm font-bold text-yellow-900 mb-2">🚧 ED Registration Module - Coming Soon</h4>
-                <p className="text-sm text-yellow-800 mb-3">
-                  The full ED patient registration and triage workflow is currently under development.
-                </p>
-                <div className="text-xs text-yellow-700 space-y-1">
-                  <p><strong>Planned Features:</strong></p>
-                  <ul className="list-disc list-inside ml-2 space-y-1">
-                    <li>Patient search and quick registration</li>
-                    <li>Chief complaint and arrival mode capture</li>
-                    <li>ESI (Emergency Severity Index) triage levels 1-5</li>
-                    <li>Vital signs at arrival</li>
-                    <li>Automatic placement on ED tracking board</li>
-                    <li>Nurse-led triage workflow</li>
-                  </ul>
-                </div>
+            <div className="p-6 space-y-4">
+              {/* Patient Search */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Search Patient *
+                </label>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    searchPatients(e.target.value);
+                  }}
+                  placeholder="Search by name or patient number..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+                {patients.length > 0 && (
+                  <div className="mt-2 border border-slate-200 rounded-lg max-h-40 overflow-y-auto">
+                    {patients.map((patient) => (
+                      <button
+                        key={patient.id}
+                        onClick={() => {
+                          setSelectedPatient(patient);
+                          setSearchTerm(`${patient.firstName} ${patient.lastName}`);
+                          setPatients([]);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition"
+                      >
+                        <div className="font-medium">{patient.firstName} {patient.lastName}</div>
+                        <div className="text-xs text-slate-500">{patient.patientNumber} • DOB: {patient.dateOfBirth}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedPatient && (
+                  <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="font-medium text-green-900">✓ {selectedPatient.firstName} {selectedPatient.lastName}</div>
+                    <div className="text-xs text-green-700">{selectedPatient.patientNumber}</div>
+                  </div>
+                )}
               </div>
 
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                <h4 className="text-sm font-bold text-indigo-900 mb-2">📋 Current Workflow (Temporary)</h4>
-                <p className="text-sm text-indigo-800 mb-3">
-                  Until the full ED module is complete, you can test with seed data:
-                </p>
-                <ol className="text-xs text-indigo-700 space-y-2 list-decimal list-inside ml-2">
-                  <li>Use the seed data patients already in the system</li>
-                  <li>View them on the ED Tracking Board below</li>
-                  <li>Click patients to see their ED visit details</li>
-                  <li>Update status as they move through ED workflow</li>
-                </ol>
-                <p className="text-xs text-indigo-600 mt-3 font-medium">
-                  Expected completion: Sprint 24 Phase 2 (Frontend UI)
+              {/* Arrival Mode */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Arrival Mode *</label>
+                <select
+                  value={registrationData.arrivalMode}
+                  onChange={(e) => setRegistrationData({ ...registrationData, arrivalMode: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="walk_in">Walk-in</option>
+                  <option value="ambulance">Ambulance</option>
+                  <option value="police">Police</option>
+                  <option value="helicopter">Helicopter (Air Ambulance)</option>
+                  <option value="transfer">Transfer from Another Facility</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Chief Complaint */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Chief Complaint *</label>
+                <input
+                  type="text"
+                  value={registrationData.chiefComplaint}
+                  onChange={(e) => setRegistrationData({ ...registrationData, chiefComplaint: e.target.value })}
+                  placeholder="e.g., Chest pain, Difficulty breathing, Trauma..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              {/* Presenting Symptoms */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Presenting Symptoms</label>
+                <textarea
+                  value={registrationData.presentingSymptoms}
+                  onChange={(e) => setRegistrationData({ ...registrationData, presentingSymptoms: e.target.value })}
+                  rows={3}
+                  placeholder="Brief description of symptoms..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              {/* Allergies */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Known Allergies</label>
+                <input
+                  type="text"
+                  value={registrationData.allergies}
+                  onChange={(e) => setRegistrationData({ ...registrationData, allergies: e.target.value })}
+                  placeholder="e.g., Penicillin, Latex, None known"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              {/* Current Medications */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Current Medications</label>
+                <textarea
+                  value={registrationData.currentMedications}
+                  onChange={(e) => setRegistrationData({ ...registrationData, currentMedications: e.target.value })}
+                  rows={2}
+                  placeholder="List current medications..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="text-sm font-bold text-red-900 mb-2">🚨 After Registration</h4>
+                <p className="text-xs text-red-800">
+                  Patient will appear on ED Tracking Board with status "Waiting". 
+                  A triage nurse should assign ESI level (1-5) and initial vitals.
                 </p>
               </div>
             </div>
 
             <div className="flex gap-3 justify-end p-6 bg-slate-50 rounded-b-xl border-t border-slate-200">
               <button
-                onClick={() => setShowRegisterModal(false)}
-                className="px-6 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition"
+                onClick={() => {
+                  setShowRegisterModal(false);
+                  setSelectedPatient(null);
+                  setSearchTerm('');
+                }}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-200 rounded-lg transition"
               >
-                Close
+                Cancel
+              </button>
+              <button
+                onClick={handleRegisterEDPatient}
+                disabled={loading}
+                className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg hover:shadow-lg transition font-medium disabled:opacity-50"
+              >
+                {loading ? 'Registering...' : 'Register Patient'}
               </button>
             </div>
           </div>
