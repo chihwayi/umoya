@@ -318,21 +318,24 @@ const NurseDashboard: React.FC = () => {
   // Load shared documents count
   useEffect(() => {
     const loadSharedCount = async () => {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+      
       try {
-        const response = await ehrApi.getSharedDocuments(token, tenantSlug || '');
+        const response = await ehrApi.getSharedDocuments(token, tenantSlug);
         setSharedDocumentsCount(response.data?.length || 0);
       } catch (error) {
         console.error('Error loading shared documents count:', error);
       }
     };
 
-    if (token && tenantSlug) {
+    if (tenantSlug) {
       loadSharedCount();
       // Refresh count every 2 minutes
       const interval = setInterval(loadSharedCount, 120000);
       return () => clearInterval(interval);
     }
-  }, [token, tenantSlug]);
+  }, [tenantSlug]);
 
   // Filter patients based on search term
   useEffect(() => {
@@ -2316,7 +2319,7 @@ const NurseDashboard: React.FC = () => {
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <SharedDocumentsList
-                token={token}
+                token={localStorage.getItem('ehr_token') || ''}
                 tenantSlug={tenantSlug || ''}
                 currentUser={currentUser}
               />
