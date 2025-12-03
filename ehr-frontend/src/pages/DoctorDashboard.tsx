@@ -6,7 +6,8 @@ import {
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
-  Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route
+  Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route,
+  Bed, Hospital
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
