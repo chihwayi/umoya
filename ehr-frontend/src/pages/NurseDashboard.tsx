@@ -29,6 +29,7 @@ import HIVStockManagement from '../components/HIVStockManagement';
 import HIVMonthlyReturnForm from '../components/HIVMonthlyReturnForm';
 import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
+import PatientCarePlansView from '../components/PatientCarePlansView';
 
 interface Patient {
   id: string;
@@ -135,6 +136,9 @@ const NurseDashboard: React.FC = () => {
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
+  const [showCarePlansModal, setShowCarePlansModal] = useState(false);
+  const [carePlansPatientId, setCarePlansPatientId] = useState<string | null>(null);
+  const [carePlansPatientName, setCarePlansPatientName] = useState<string>('');
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -546,8 +550,6 @@ const NurseDashboard: React.FC = () => {
       { icon: Heart, label: 'Vitals Recording', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', action: () => setActiveTab('vitals') },
       { icon: ClipboardList, label: 'Triage Assessment', desc: 'Patient assessment', color: 'from-orange-500 to-yellow-500', action: () => setActiveTab('triage') },
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
-      { icon: FileText, label: 'Care Plans', desc: 'Plan nursing care', color: 'from-emerald-500 to-teal-500', action: () => { setActiveTab('notes'); setNotesPreset('care_plans'); } },
-      { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-fuchsia-500 to-pink-600', action: () => { setActiveTab('notes'); setNotesPreset('medications'); } },
       { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
       { icon: FolderOpen, label: 'Shared Documents', desc: 'View shared patient documents', color: 'from-violet-500 to-purple-600', action: () => setShowSharedDocumentsModal(true), badge: sharedDocumentsCount > 0 ? sharedDocumentsCount : undefined },
     ];
@@ -884,6 +886,37 @@ const NurseDashboard: React.FC = () => {
                     <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center gap-2">
                       <Lock className="w-3 h-3" />
                       Accounts must confirm payment before vitals or triage can begin.
+                    </div>
+                  )}
+                  
+                  {/* Quick Actions */}
+                  {!awaitingPayment && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleRecordVitals(appointment)}
+                        className="flex-1 min-w-[100px] px-2 py-1.5 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs font-medium"
+                      >
+                        <Heart className="w-3 h-3" />
+                        Vitals
+                      </button>
+                      <button
+                        onClick={() => handleTriageAssessment(appointment)}
+                        className="flex-1 min-w-[100px] px-2 py-1.5 bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs font-medium"
+                      >
+                        <ClipboardList className="w-3 h-3" />
+                        Triage
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCarePlansPatientId(appointment.patient.id);
+                          setCarePlansPatientName(`${appointment.patient.firstName} ${appointment.patient.lastName}`);
+                          setShowCarePlansModal(true);
+                        }}
+                        className="flex-1 min-w-[100px] px-2 py-1.5 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs font-medium"
+                      >
+                        <Target className="w-3 h-3" />
+                        Care Plans
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1838,7 +1871,18 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         )}
-        {activeTab === 'queue' && <TriageQueue appointments={appointments} onRecordVitals={handleRecordVitals} onTriageAssessment={handleTriageAssessment} />}
+        {activeTab === 'queue' && (
+          <TriageQueue 
+            appointments={appointments} 
+            onRecordVitals={handleRecordVitals} 
+            onTriageAssessment={handleTriageAssessment}
+            onViewCarePlans={(patientId, patientName) => {
+              setCarePlansPatientId(patientId);
+              setCarePlansPatientName(patientName);
+              setShowCarePlansModal(true);
+            }}
+          />
+        )}
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6">
@@ -2382,6 +2426,44 @@ const NurseDashboard: React.FC = () => {
                 token={localStorage.getItem('ehr_token') || ''}
                 tenantSlug={tenantSlug || ''}
                 currentUser={currentUser}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Care Plans Modal */}
+      {showCarePlansModal && carePlansPatientId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+          <div className="w-full max-w-7xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-teal-600 to-cyan-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <Target className="w-6 h-6 text-white" />
+                <div>
+                  <h2 className="text-xl font-bold text-white">Patient Care Plans</h2>
+                  <p className="text-sm text-teal-100">{carePlansPatientName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowCarePlansModal(false);
+                  setCarePlansPatientId(null);
+                  setCarePlansPatientName('');
+                }}
+                className="text-white hover:text-teal-100"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <PatientCarePlansView
+                tenantSlug={tenantSlug || ''}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => {
+                  setShowCarePlansModal(false);
+                  setCarePlansPatientId(null);
+                  setCarePlansPatientName('');
+                }}
               />
             </div>
           </div>
