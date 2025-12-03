@@ -4160,13 +4160,6 @@ export const ehrApi = {
     });
     return { data: response.data };
   },
-
-  getBedOccupancy: async (token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get('/beds/occupancy', {
-      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-    });
-    return { data: response.data };
-  },
 };
 
 // Doctor Availability API (standalone)
