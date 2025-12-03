@@ -50,6 +50,14 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
     setOpen(false);
   };
 
+  const selectToday = () => {
+    const today = new Date();
+    const formatted = formatDateForInput(today);
+    onChange(formatted);
+    setCurrentMonth(today);
+    setOpen(false);
+  };
+
   const goPrevMonth = () => {
     const d = new Date(currentMonth);
     d.setMonth(d.getMonth() - 1);
@@ -71,6 +79,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
 
   const monthLabel = currentMonth.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
   const selected = isValidDate(value) ? parseDateFromInput(value) : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -97,15 +107,26 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
 
       {open && (
         <div className="absolute z-20 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={goPrevMonth} className="p-1 hover:bg-gray-100 rounded">
+          {/* Header with Month Navigation */}
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={goPrevMonth} className="p-1 hover:bg-gray-100 rounded transition-colors">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="text-sm font-medium text-gray-700">{monthLabel}</div>
-            <button type="button" onClick={goNextMonth} className="p-1 hover:bg-gray-100 rounded">
+            <div className="text-sm font-semibold text-gray-700">{monthLabel}</div>
+            <button type="button" onClick={goNextMonth} className="p-1 hover:bg-gray-100 rounded transition-colors">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Today Button */}
+          <button
+            type="button"
+            onClick={selectToday}
+            className="w-full mb-3 px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+          >
+            <CalendarIcon className="h-4 w-4" />
+            Select Today
+          </button>
           <div className="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">
             {DAYS.map((d) => (
               <div key={d} className="text-center">
@@ -115,23 +136,32 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
           </div>
           <div className="grid grid-cols-7 gap-1">
             {weeks.flat().map((d, idx) => {
+              const dateOnly = new Date(d);
+              dateOnly.setHours(0, 0, 0, 0);
               const isCurrentMonth = d.getMonth() === currentMonth.getMonth();
               const isSelected = !!selected && d.toDateString() === selected.toDateString();
+              const isToday = dateOnly.getTime() === today.getTime();
+              
               return (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => selectDate(d)}
                   className={
-                    'h-8 text-sm rounded ' +
+                    'h-8 text-sm rounded font-medium transition-all duration-200 relative ' +
                     (isSelected
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300'
+                      : isToday
+                      ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold shadow-md ring-2 ring-green-300 hover:from-green-600 hover:to-emerald-700'
                       : isCurrentMonth
-                      ? 'hover:bg-gray-100 text-gray-800'
+                      ? 'hover:bg-blue-50 text-gray-800 hover:ring-1 hover:ring-blue-200'
                       : 'text-gray-400 hover:bg-gray-50')
                   }
                 >
                   {d.getDate()}
+                  {isToday && !isSelected && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full ring-2 ring-white"></span>
+                  )}
                 </button>
               );
             })}
