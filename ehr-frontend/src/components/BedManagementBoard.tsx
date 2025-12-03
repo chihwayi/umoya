@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Bed, Users, Activity, Clock, AlertCircle, CheckCircle, Loader2,
   ArrowRight, Home, Filter, RefreshCw, Maximize2
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
-import AdmittedPatientWorkflow from './AdmittedPatientWorkflow';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -19,6 +18,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
   tenantSlug,
   token,
 }) => {
+  const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
   const [beds, setBeds] = useState<any[]>([]);
   const [wards, setWards] = useState<string[]>([]);
@@ -26,8 +26,6 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
   const [occupancyStats, setOccupancyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedAdmission, setSelectedAdmission] = useState<any>(null);
-  const [showPatientWorkflow, setShowPatientWorkflow] = useState(false);
 
   useEffect(() => {
     loadBeds();
@@ -253,16 +251,16 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
                           console.log('📊 Admission response:', response.data);
                           
                           if (response.data && response.data.length > 0) {
-                            setSelectedAdmission({
+                            const admissionData = {
                               ...response.data[0],
                               patient_first_name: bed.currentPatient.firstName,
                               patient_last_name: bed.currentPatient.lastName,
                               patient_id: bed.currentPatient.id,
                               bed_number: bed.bedNumber,
                               ward_name: bed.wardName,
-                            });
-                            setShowPatientWorkflow(true);
-                            console.log('✅ Patient workflow modal opened');
+                            };
+                            console.log('✅ Navigating to patient page');
+                            navigate(`/ehr/${tenantSlug}/admitted-patient`, { state: { admission: admissionData } });
                           } else {
                             showError('Info', 'No active admission found for this patient');
                           }
@@ -302,39 +300,6 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Patient Workflow Modal */}
-      {showPatientWorkflow && selectedAdmission && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
-          onClick={(e) => {
-            // Close if clicking backdrop
-            if (e.target === e.currentTarget) {
-              setShowPatientWorkflow(false);
-              setSelectedAdmission(null);
-            }
-          }}
-        >
-          <div 
-            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col my-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <AdmittedPatientWorkflow
-              admission={selectedAdmission}
-              tenantSlug={tenantSlug}
-              token={token}
-              onUpdate={() => {
-                loadBeds();
-                loadOccupancy();
-              }}
-              onClose={() => {
-                setShowPatientWorkflow(false);
-                setSelectedAdmission(null);
-              }}
-            />
-          </div>
         </div>
       )}
     </div>
