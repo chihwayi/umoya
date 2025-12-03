@@ -167,7 +167,10 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-700"></div>
             <div className="relative p-5">
-              <div className="text-3xl font-bold text-white mb-1">{displayBeds.length}</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl font-bold text-white">{displayBeds.length}</div>
+                <Bed className="w-8 h-8 text-white/80" />
+              </div>
               <div className="text-sm text-white/90">Total Beds</div>
             </div>
           </div>
@@ -175,8 +178,11 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600"></div>
             <div className="relative p-5">
-              <div className="text-3xl font-bold text-white mb-1">
-                {displayBeds.filter(b => b.status === 'available').length}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl font-bold text-white">
+                  {displayBeds.filter(b => b.status === 'available').length}
+                </div>
+                <CheckCircle className="w-8 h-8 text-white/80" />
               </div>
               <div className="text-sm text-white/90">Available</div>
             </div>
@@ -185,8 +191,11 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-red-500 to-rose-600"></div>
             <div className="relative p-5">
-              <div className="text-3xl font-bold text-white mb-1">
-                {displayBeds.filter(b => b.status === 'occupied').length}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl font-bold text-white">
+                  {displayBeds.filter(b => b.status === 'occupied').length}
+                </div>
+                <Users className="w-8 h-8 text-white/80" />
               </div>
               <div className="text-sm text-white/90">Occupied</div>
             </div>
@@ -195,8 +204,11 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-yellow-500 to-amber-600"></div>
             <div className="relative p-5">
-              <div className="text-3xl font-bold text-white mb-1">
-                {displayBeds.filter(b => b.status === 'cleaning').length}
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl font-bold text-white">
+                  {displayBeds.filter(b => b.status === 'cleaning').length}
+                </div>
+                <Clock className="w-8 h-8 text-white/80" />
               </div>
               <div className="text-sm text-white/90">Cleaning</div>
             </div>
@@ -205,8 +217,11 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           <div className="relative overflow-hidden rounded-xl shadow-lg">
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600"></div>
             <div className="relative p-5">
-              <div className="text-3xl font-bold text-white mb-1">
-                {displayBeds.length > 0 ? Math.round((displayBeds.filter(b => b.status === 'occupied').length / displayBeds.length) * 100) : 0}%
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-3xl font-bold text-white">
+                  {displayBeds.length > 0 ? Math.round((displayBeds.filter(b => b.status === 'occupied').length / displayBeds.length) * 100) : 0}%
+                </div>
+                <Loader2 className="w-8 h-8 text-white/80" />
               </div>
               <div className="text-sm text-white/90">Occupancy</div>
             </div>
