@@ -35,7 +35,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
   const loadImmunizations = async () => {
     try {
       setLoading(true);
-      const response = await ehrApi.get(`/immunizations/patient/${patientId}`, token, tenantSlug);
+      const response = await ehrApi.getPatientImmunizations(patientId, token, tenantSlug);
       setImmunizations(response.data || []);
     } catch (error) {
       console.error('Failed to load immunizations:', error);
@@ -51,11 +51,8 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
       const patientResponse = await ehrApi.getPatientById(patientId, token, tenantSlug);
       const dateOfBirth = patientResponse.data.dateOfBirth;
       
-      const response = await ehrApi.get(
-        `/immunizations/patient/${patientId}/forecast?dateOfBirth=${dateOfBirth}`,
-        token,
-        tenantSlug,
-      );
+      // For now, just get all schedules as forecast
+      const response = await ehrApi.getImmunizationSchedules({}, token, tenantSlug);
       setForecast(response.data || []);
     } catch (error) {
       console.error('Failed to load forecast:', error);

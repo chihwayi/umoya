@@ -34,7 +34,7 @@ const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
       if (filterType !== 'all') params.consentType = filterType;
       if (filterStatus === 'active') params.isActive = true;
       
-      const response = await ehrApi.get('/consents/templates', token, tenantSlug, params);
+      const response = await ehrApi.getConsentTemplates(params, token, tenantSlug);
       setTemplates(response.data || []);
     } catch (error) {
       console.error('Failed to load templates:', error);

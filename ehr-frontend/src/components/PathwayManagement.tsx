@@ -32,7 +32,7 @@ const PathwayManagement: React.FC<PathwayManagementProps> = ({
   const loadPathways = async () => {
     try {
       setLoading(true);
-      const response = await ehrApi.get('/clinical-pathways?isActive=true', token, tenantSlug);
+      const response = await ehrApi.getClinicalPathways({ isActive: true }, token, tenantSlug);
       setPathways(response.data || []);
     } catch (error) {
       console.error('Failed to load pathways:', error);
@@ -44,7 +44,8 @@ const PathwayManagement: React.FC<PathwayManagementProps> = ({
 
   const loadEnrollments = async () => {
     try {
-      const response = await ehrApi.get(`/clinical-pathways/patient/${patientId}/enrollments`, token, tenantSlug);
+      if (!patientId) return;
+      const response = await ehrApi.getPatientPathwayEnrollments(patientId, token, tenantSlug);
       setEnrollments(response.data || []);
     } catch (error) {
       console.error('Failed to load enrollments:', error);
