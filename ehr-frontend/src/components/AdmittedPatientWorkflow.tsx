@@ -100,7 +100,10 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const loadAvailableBeds = async (ward: string) => {
     try {
-      const response = await ehrApi.getAvailableBeds({ wardName: ward }, token, tenantSlug);
+      const response = await ehrAxios.get('/beds/available', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { wardName: ward },
+      });
       setAvailableBeds(response.data || []);
     } catch (error) {
       showError('Error', 'Failed to load available beds');
