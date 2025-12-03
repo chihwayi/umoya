@@ -70,6 +70,8 @@ import { ReferralController } from './controllers/referral.controller';
 import { DocumentController } from './controllers/document.controller';
 import { ProviderMessagingController } from './controllers/provider-messaging.controller';
 import { ConsentController } from './controllers/consent.controller';
+import { ImmunizationController } from './controllers/immunization.controller';
+import { BedManagementController } from './controllers/bed-management.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -176,6 +178,9 @@ import { ProviderMessagingService } from './services/provider-messaging.service'
 import { MessageTemplateService } from './services/message-template.service';
 import { ConsentTemplateService } from './services/consent-template.service';
 import { PatientConsentService } from './services/patient-consent.service';
+import { ImmunizationService } from './services/immunization.service';
+import { BedManagementService } from './services/bed-management.service';
+import { ADTService } from './services/adt.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -262,6 +267,8 @@ import { RolesGuard } from './guards/roles.guard';
     DocumentController,
     ProviderMessagingController,
     ConsentController,
+    ImmunizationController,
+    BedManagementController,
   ],
   providers: [
     AuthService,
@@ -372,6 +379,9 @@ import { RolesGuard } from './guards/roles.guard';
     MessageTemplateService,
     ConsentTemplateService,
     PatientConsentService,
+    ImmunizationService,
+    BedManagementService,
+    ADTService,
     RolesGuard,
     JwtStrategy,
   ],
