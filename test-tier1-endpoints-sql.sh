@@ -76,7 +76,7 @@ SELECT
   ps.description,
   ps.timing_from_start_hours,
   ps.required_actions,
-  COALESCE(pa.is_completed, false) as is_completed,
+  CASE WHEN pa.status = 'completed' THEN true ELSE false END as is_completed,
   pa.completed_date
 FROM pathway_steps ps
 LEFT JOIN pathway_enrollments pe ON pe.pathway_id = ps.pathway_id AND pe.patient_id = '$PATIENT_ID'
@@ -102,7 +102,7 @@ SELECT
   b.ward_name,
   b.room_number
 FROM admissions a
-LEFT JOIN beds b ON a.assigned_bed_id = b.id
+LEFT JOIN beds b ON a.current_bed_id = b.id
 WHERE a.patient_id = '$PATIENT_ID' 
   AND a.status = 'admitted'
   AND a.actual_discharge_date IS NULL
@@ -122,7 +122,7 @@ SELECT
   ev.ed_status,
   eta.triage_level
 FROM ed_visits ev
-LEFT JOIN ed_triage_assessments eta ON ev.id = eta.visit_id
+LEFT JOIN ed_triage_assessments eta ON ev.id = eta.ed_visit_id
 WHERE ev.patient_id = '$PATIENT_ID'
 ORDER BY ev.arrival_date DESC
 LIMIT 10;
