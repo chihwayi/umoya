@@ -2263,26 +2263,66 @@ const DoctorDashboard: React.FC = () => {
 
           {/* Imaging Tab */}
           {activeTab === 'imaging' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {currentAppointment ? (
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Imaging Results & Timeline</h2>
-                    <p className="text-slate-600">View imaging orders, reports, and acknowledgements for {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</p>
+                <>
+                  {/* Beautiful Header with Gradient */}
+                  <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 rounded-3xl p-8 text-white shadow-2xl border border-violet-400/50">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg">
+                            <Activity className="w-8 h-8 text-white" />
+                          </div>
+                          <div>
+                            <h2 className="text-3xl font-bold">Imaging Results & Timeline</h2>
+                            <p className="text-violet-100 text-sm mt-1">Radiology orders, reports & acknowledgements</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 w-fit">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            <span className="font-semibold">{currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</span>
+                          </div>
+                          <span className="text-violet-200">•</span>
+                          <span>Patient ID: {currentAppointment.patient.patientNumber}</span>
+                          <span className="text-violet-200">•</span>
+                          <span>{currentAppointment.patient.gender}, {new Date().getFullYear() - new Date(currentAppointment.patient.dateOfBirth).getFullYear()}y</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={openImagingOrderModal}
+                        disabled={appointmentAwaitingPayment}
+                        className="px-6 py-3 bg-white text-violet-600 hover:bg-violet-50 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl transition-all flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl disabled:hover:bg-white"
+                      >
+                        <Camera className="w-5 h-5" />
+                        Order New Imaging
+                      </button>
+                    </div>
                   </div>
-                  <DoctorImagingResultsPanel
-                    tenantSlug={tenantSlug!}
-                    token={localStorage.getItem('ehr_token') || ''}
-                    patientId={currentAppointment.patient.id}
-                    hideTabs={false}
-                    compact={false}
-                    title="This Patient's Imaging Timeline"
-                    onOpenStudy={openImagingStudy}
-                  />
-                </div>
+
+                  {/* Imaging Results Panel with Gradient Border */}
+                  <div className="bg-gradient-to-br from-white via-violet-50/30 to-purple-50/30 rounded-3xl shadow-xl border-2 border-violet-200/50 p-6">
+                    <DoctorImagingResultsPanel
+                      tenantSlug={tenantSlug!}
+                      token={localStorage.getItem('ehr_token') || ''}
+                      patientId={currentAppointment.patient.id}
+                      hideTabs={false}
+                      compact={false}
+                      title="Complete Imaging Timeline"
+                      onOpenStudy={openImagingStudy}
+                    />
+                  </div>
+                </>
               ) : (
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-8 text-center text-slate-600">
-                  No current appointment selected. Please select a patient to view imaging results.
+                <div className="bg-gradient-to-br from-violet-50 to-purple-50 backdrop-blur-sm rounded-3xl border-2 border-violet-200/50 p-12 text-center">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+                      <Activity className="w-10 h-10 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 mb-3">No Patient Selected</h3>
+                    <p className="text-slate-600">Please select a patient from your current appointment to view their imaging results and timeline.</p>
+                  </div>
                 </div>
               )}
             </div>
