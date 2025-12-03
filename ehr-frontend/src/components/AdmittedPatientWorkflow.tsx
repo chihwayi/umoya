@@ -4,8 +4,11 @@ import {
   Heart, ArrowRightLeft, LogOut, AlertTriangle, CheckCircle,
   Clock, MessageSquare, Plus, TrendingUp, X
 } from 'lucide-react';
+import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+
+const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 import axios from 'axios';
 
 interface AdmittedPatientWorkflowProps {
@@ -72,6 +75,14 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
       loadVitals();
       loadNotes();
     }
+    
+    // Lock body scroll when modal opens
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scroll when modal closes
+      document.body.style.overflow = 'unset';
+    };
   }, [admission]);
 
   const loadVitals = async () => {
@@ -183,9 +194,9 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+      {/* Header - Fixed */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold mb-2">Admitted Patient Management</h2>
@@ -219,8 +230,8 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="bg-white border-b border-slate-200 p-4">
+      {/* Action Buttons - Fixed */}
+      <div className="flex-shrink-0 bg-white border-b border-slate-200 p-4">
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowVitalsModal(true)}
@@ -256,8 +267,8 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-slate-200 px-6">
+      {/* Tabs - Fixed */}
+      <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6">
         <div className="flex gap-6">
           {['overview', 'vitals', 'notes', 'orders'].map((tab) => (
             <button
@@ -275,8 +286,8 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      {/* Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto p-6 min-h-0">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Admission Details */}
