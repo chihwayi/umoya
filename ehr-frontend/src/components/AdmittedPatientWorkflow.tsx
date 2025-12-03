@@ -29,9 +29,17 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
   const [activeTab, setActiveTab] = useState('overview');
   const [vitals, setVitals] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
+  const [progressNotes, setProgressNotes] = useState<any[]>([]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [labOrders, setLabOrders] = useState<any[]>([]);
+  const [imagingOrders, setImagingOrders] = useState<any[]>([]);
   const [showDischargeModal, setShowDischargeModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [showProgressNoteModal, setShowProgressNoteModal] = useState(false);
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [showLabOrderModal, setShowLabOrderModal] = useState(false);
+  const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   
   // Discharge form
   const [dischargeData, setDischargeData] = useState({
@@ -73,6 +81,10 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
     if (admission) {
       loadVitals();
       loadNotes();
+      loadProgressNotes();
+      loadPrescriptions();
+      loadLabOrders();
+      loadImagingOrders();
     }
     
     // Lock body scroll when modal opens
@@ -117,6 +129,51 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
       setAvailableBeds(response.data || []);
     } catch (error) {
       showError('Error', 'Failed to load available beds');
+    }
+  };
+
+  const loadProgressNotes = async () => {
+    try {
+      const response = await ehrAxios.get(`/medical-records/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params: { type: 'progress_note' },
+      });
+      setProgressNotes(response.data || []);
+    } catch (error) {
+      console.error('Failed to load progress notes:', error);
+    }
+  };
+
+  const loadPrescriptions = async () => {
+    try {
+      const response = await ehrAxios.get(`/prescriptions/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
+      setPrescriptions(response.data || []);
+    } catch (error) {
+      console.error('Failed to load prescriptions:', error);
+    }
+  };
+
+  const loadLabOrders = async () => {
+    try {
+      const response = await ehrAxios.get(`/lab-orders/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
+      setLabOrders(response.data || []);
+    } catch (error) {
+      console.error('Failed to load lab orders:', error);
+    }
+  };
+
+  const loadImagingOrders = async () => {
+    try {
+      const response = await ehrAxios.get(`/imaging/orders/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
+      setImagingOrders(response.data || []);
+    } catch (error) {
+      console.error('Failed to load imaging orders:', error);
     }
   };
 
@@ -233,19 +290,43 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
       <div className="flex-shrink-0 bg-white border-b border-slate-200 p-4">
         <div className="flex gap-3 flex-wrap">
           <button
-            onClick={() => setShowVitalsModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition"
+            onClick={() => setShowProgressNoteModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
           >
-            <Activity className="w-4 h-4" />
-            Record Vitals
+            <FileText className="w-4 h-4" />
+            Progress Note
           </button>
           
           <button
-            onClick={() => setActiveTab('notes')}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition"
+            onClick={() => setShowPrescriptionModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
           >
-            <FileText className="w-4 h-4" />
-            Nursing Notes
+            <Pill className="w-4 h-4" />
+            Prescribe Med
+          </button>
+          
+          <button
+            onClick={() => setShowLabOrderModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+          >
+            <TestTube className="w-4 h-4" />
+            Order Labs
+          </button>
+          
+          <button
+            onClick={() => setShowImagingOrderModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+          >
+            <Activity className="w-4 h-4" />
+            Order Imaging
+          </button>
+          
+          <button
+            onClick={() => setShowVitalsModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition"
+          >
+            <Heart className="w-4 h-4" />
+            View/Record Vitals
           </button>
           
           <button
@@ -253,15 +334,15 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-white rounded-lg hover:shadow-lg transition"
           >
             <ArrowRightLeft className="w-4 h-4" />
-            Transfer Patient
+            Transfer
           </button>
           
           <button
             onClick={() => setShowDischargeModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition font-medium"
           >
             <LogOut className="w-4 h-4" />
-            Discharge Patient
+            Discharge
           </button>
         </div>
       </div>
@@ -269,7 +350,7 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
       {/* Tabs - Fixed */}
       <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6">
         <div className="flex gap-6">
-          {['overview', 'vitals', 'notes', 'orders'].map((tab) => (
+          {['overview', 'progress', 'medications', 'labs', 'imaging', 'vitals', 'nursing'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -279,7 +360,13 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'progress' ? 'Progress Notes' : 
+               tab === 'medications' ? 'Medications' :
+               tab === 'labs' ? 'Labs' :
+               tab === 'imaging' ? 'Imaging' :
+               tab === 'vitals' ? 'Vitals' :
+               tab === 'nursing' ? 'Nursing Notes' :
+               tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -381,7 +468,135 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
           </div>
         )}
 
-        {activeTab === 'notes' && (
+        {activeTab === 'progress' && (
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Doctor Progress Notes</h3>
+              <button
+                onClick={() => setShowProgressNoteModal(true)}
+                className="text-sm px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+              >
+                + Add Note
+              </button>
+            </div>
+            {progressNotes.length > 0 ? (
+              <div className="space-y-4">
+                {progressNotes.map((note: any, index: number) => (
+                  <div key={index} className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="font-medium text-indigo-900">Progress Note</div>
+                      <div className="text-xs text-indigo-600">{formatDateToDDMMYYYY(note.created_at)}</div>
+                    </div>
+                    <p className="text-slate-700 text-sm whitespace-pre-wrap">{note.note_content}</p>
+                    <div className="text-xs text-indigo-600 mt-2">Dr. {note.doctor_name}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">No progress notes yet. Add your first assessment!</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'medications' && (
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Medications & Prescriptions</h3>
+              <button
+                onClick={() => setShowPrescriptionModal(true)}
+                className="text-sm px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+              >
+                + Prescribe
+              </button>
+            </div>
+            {prescriptions.length > 0 ? (
+              <div className="space-y-3">
+                {prescriptions.map((rx: any, index: number) => (
+                  <div key={index} className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-green-900">{rx.drug_name}</div>
+                        <div className="text-sm text-green-700">{rx.dosage} - {rx.frequency}</div>
+                        <div className="text-xs text-green-600 mt-1">Duration: {rx.duration}</div>
+                      </div>
+                      <div className="text-xs text-green-600">{formatDateToDDMMYYYY(rx.created_at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">No medications prescribed yet</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'labs' && (
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Lab Orders & Results</h3>
+              <button
+                onClick={() => setShowLabOrderModal(true)}
+                className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+              >
+                + Order Labs
+              </button>
+            </div>
+            {labOrders.length > 0 ? (
+              <div className="space-y-3">
+                {labOrders.map((order: any, index: number) => (
+                  <div key={index} className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-blue-900">{order.test_name}</div>
+                        <div className="text-sm text-blue-700 capitalize">Status: {order.status}</div>
+                        {order.result && (
+                          <div className="text-sm text-blue-800 mt-2">Result: {order.result}</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-blue-600">{formatDateToDDMMYYYY(order.created_at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">No lab orders yet</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'imaging' && (
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Imaging Orders & Reports</h3>
+              <button
+                onClick={() => setShowImagingOrderModal(true)}
+                className="text-sm px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
+              >
+                + Order Imaging
+              </button>
+            </div>
+            {imagingOrders.length > 0 ? (
+              <div className="space-y-3">
+                {imagingOrders.map((order: any, index: number) => (
+                  <div key={index} className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-teal-900">{order.exam_type}</div>
+                        <div className="text-sm text-teal-700">Body Part: {order.body_part}</div>
+                        <div className="text-sm text-teal-700 capitalize">Status: {order.status}</div>
+                      </div>
+                      <div className="text-xs text-teal-600">{formatDateToDDMMYYYY(order.created_at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-8">No imaging orders yet</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'nursing' && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
             <h3 className="text-lg font-bold text-slate-900 mb-4">Nursing Notes</h3>
             {notes.length > 0 ? (
@@ -403,10 +618,13 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
           </div>
         )}
 
-        {activeTab === 'orders' && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Orders & Prescriptions</h3>
-            <p className="text-slate-500 text-center py-8">Order management coming soon...</p>
+        {activeTab === 'overview' && progressNotes.length === 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-4">
+            <p className="text-indigo-900 font-medium">👨‍⚕️ Doctor Actions:</p>
+            <p className="text-indigo-700 text-sm mt-2">
+              Start managing this patient by adding a <strong>Progress Note</strong>, ordering <strong>Labs</strong>, 
+              prescribing <strong>Medications</strong>, or reviewing <strong>Vitals</strong>.
+            </p>
           </div>
         )}
       </div>
