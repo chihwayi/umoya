@@ -296,6 +296,22 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
               >
                 {/* Gradient Background */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${getBedStatusColor(bed.status)}`}></div>
+                
+                {/* Content */}
+                <div className="relative h-full flex flex-col items-center justify-center p-3">
+                  <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mb-2">
+                    {getBedStatusIcon(bed.status)}
+                  </div>
+                  <div className="text-white text-center">
+                    <div className="text-sm font-bold truncate w-full">{bed.bedNumber}</div>
+                    <div className="text-xs text-white/90 truncate w-full">{bed.roomNumber}</div>
+                    {bed.currentPatient && (
+                      <div className="text-xs text-white/80 mt-1 truncate w-full">
+                        {bed.currentPatient.firstName?.[0]}. {bed.currentPatient.lastName}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </button>
             ))}
           </div>
