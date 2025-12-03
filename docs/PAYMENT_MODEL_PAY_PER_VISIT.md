@@ -94,10 +94,65 @@ Week 4 (Jan 22):
 
 ## 🎯 **FREE APPOINTMENTS & FEE WAIVERS**
 
-### **Method 1: Create as Free from Start** (Automatic):
+### **⚠️ IMPORTANT: Role-Based Access**
+
+**Who Can Do What**:
+
+| Action | Receptionist/Scheduler | Nurse | Accounts/Finance | Admin |
+|--------|----------------------|-------|------------------|-------|
+| **Schedule appointment** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Set fee amount** | ❌ No (auto $20) | ❌ No (auto $20) | ✅ Yes | ✅ Yes |
+| **Waive/Free appointment** | ❌ No | ❌ **Cannot waive** | ✅ **Yes** | ✅ Yes |
+| **Record payment** | ❌ No | ❌ **Cannot record** | ✅ **Yes** | ✅ Yes |
+| **View payment status** | ✅ Yes | ✅ **Yes** | ✅ Yes | ✅ Yes |
+
+---
+
+### **FOR NURSES: What You Can See** 👩‍⚕️
+
+#### **✅ What Nurses CAN Do**:
+
+1. **Schedule Appointments**: 
+   - Click "Schedule Appointment" button
+   - Fill in patient, doctor, date/time
+   - **Fee is automatically set to $20** (default)
+   - Cannot change fee amount (not shown in form)
+
+2. **See Payment Status**:
+   - View "⚠️ Awaiting Payment" badge
+   - See locked features until payment
+   - View payment confirmation after Accounts processes
+
+3. **Refer to Accounts**:
+   - Direct patient to Accounts/Finance for payment
+   - Or for free appointment requests
+
+#### **❌ What Nurses CANNOT Do**:
+
+1. **Cannot Create Free Appointments**:
+   - No access to fee_amount field
+   - Cannot set fee to $0
+   - Cannot waive fees
+
+2. **Cannot Record Payments**:
+   - No access to Financial Management
+   - Cannot mark appointments as paid
+   - Cannot process fee waivers
+
+3. **Cannot Override Payment Blocking**:
+   - Features remain locked until Accounts confirms payment
+   - Cannot bypass payment requirement
+
+---
+
+### **FOR ACCOUNTS/FINANCE STAFF: Full Control** 💰
+
+#### **Method 1: Create as Free from Start** (Accounts Only)
 
 ```
-Schedule appointment with fee_amount = 0 or NULL
+Accounts schedules appointment
+↓
+Can manually set fee_amount = 0
 ↓
 Backend automatically sets:
 ├─ payment_status = 'payment_confirmed' ✅
@@ -105,28 +160,36 @@ Backend automatically sets:
 └─ No payment badge shown
 ↓
 All features available immediately
-No blocking at any time
+No payment required
 ```
 
 **Examples**:
-- Follow-up visits included in package
-- Insurance-covered appointments (pre-authorized)
+- Insurance pre-authorized appointments
 - Government-sponsored care
-- Promotional free health checkups
+- Pre-approved charity cases
+- Staff benefit appointments
 
 ---
 
-### **Method 2: Waive Fee After Creation** ⭐ **MOST IMPORTANT!**
+#### **Method 2: Waive Fee After Creation** ⭐ **MOST COMMON!**
 
 **Scenario**: Appointment already created with fee, but clinic decides to offer it free
 
 ```
-EXISTING APPOINTMENT:
+EXISTING APPOINTMENT (Created by Nurse/Scheduler):
 ├─ payment_status = 'awaiting_payment' ❌
 ├─ fee_amount = $20.00
 ├─ Features BLOCKED
 └─ Patient cannot be seen
 
+PATIENT ARRIVES AND SITUATION ASSESSED:
+├─ Patient cannot pay (indigent)
+├─ OR Insurance approved (bill later)
+├─ OR Staff family benefit
+├─ OR VIP courtesy
+├─ OR Emergency humanitarian care
+├─ OR Health campaign (free screening)
+↓
 ACCOUNTS/FINANCE DECIDES TO WAIVE:
 ↓
 Step 1: Go to Financial Management
@@ -144,21 +207,58 @@ SYSTEM AUTOMATICALLY UPDATES:
 ├─ Appointment: status = 'scheduled' ✅
 └─ Dashboard refreshes automatically
 ↓
-RESULT:
+NURSE DASHBOARD UPDATES:
 ├─ ✅ Payment badge changes to "Payment Confirmed"
 ├─ ✅ ALL features unlock immediately
-├─ ✅ Nurse can record vitals, triage, notes
+├─ ✅ Nurse can now record vitals, triage, notes
 └─ ✅ Patient receives full care
 ```
 
 ---
 
-### **Common Use Cases for Fee Waivers**:
+### **WORKFLOW: Nurse → Accounts → Nurse**
+
+```
+👩‍⚕️ NURSE:
+1. Sees patient with "⚠️ Awaiting Payment" badge
+2. Assesses patient situation
+3. Patient says: "I cannot afford to pay"
+↓
+4. Nurse directs patient to Accounts
+5. Explains: "Accounts will assess your case"
+↓
+
+💰 ACCOUNTS:
+6. Speaks with patient
+7. Verifies indigence / emergency / special case
+8. Gets supervisor approval (if required)
+9. Opens Financial Management
+10. Finds patient's appointment transaction
+11. Clicks "Record Payment"
+12. Enters:
+    - Method: "Complimentary"
+    - Amount: $0.00
+    - Notes: "Charity case - Patient unemployed, no resources"
+13. Submits payment
+↓
+
+👩‍⚕️ NURSE:
+14. Dashboard automatically refreshes
+15. Badge changes to: "✅ Payment Confirmed"
+16. Features unlock (Vitals, Triage, Notes)
+17. Nurse proceeds with patient care
+18. Patient receives treatment
+```
+
+---
+
+### **Common Use Cases for Fee Waivers** (Accounts Only):
 
 #### **1. Charity / Indigent Patients**:
 ```
 Poor patient arrives, cannot pay
 ├─ Clinic policy: Provide care regardless
+├─ Accounts: Verifies indigence
 ├─ Accounts: Record payment $0.00
 ├─ Notes: "Charity case - Patient unable to pay"
 └─ Result: ✅ Care provided, properly documented
@@ -168,8 +268,9 @@ Poor patient arrives, cannot pay
 ```
 Patient has insurance approval
 ├─ Insurance will pay later
+├─ Accounts: Verifies authorization
 ├─ Accounts: Record payment $0.00
-├─ Notes: "Insurance pre-authorized - Bill insurance"
+├─ Notes: "Insurance pre-authorized - Bill Aetna Policy #12345"
 └─ Result: ✅ Patient seen, bill sent to insurance
 ```
 
@@ -177,8 +278,9 @@ Patient has insurance approval
 ```
 Hospital staff family member
 ├─ Policy: Free care for staff families
+├─ Accounts: Verifies staff relationship
 ├─ Accounts: Record payment $0.00
-├─ Notes: "Staff benefit - Employee: Dr. Smith"
+├─ Notes: "Staff benefit - Employee: Dr. Smith (Cardiology)"
 └─ Result: ✅ Complimentary service documented
 ```
 
@@ -186,8 +288,9 @@ Hospital staff family member
 ```
 Board member, donor, or special guest
 ├─ Administration approves waiver
+├─ Accounts: Gets approval reference
 ├─ Accounts: Record payment $0.00
-├─ Notes: "VIP - Approved by Admin"
+├─ Notes: "VIP - Approved by CEO (Ref: VIP-2025-001)"
 └─ Result: ✅ Courtesy care tracked
 ```
 
@@ -196,7 +299,7 @@ Board member, donor, or special guest
 Free health screening campaign
 ├─ All appointments marked for campaign
 ├─ Accounts: Batch record $0.00
-├─ Notes: "World Diabetes Day free screening"
+├─ Notes: "World Diabetes Day free screening campaign"
 └─ Result: ✅ Community service documented
 ```
 
@@ -204,23 +307,22 @@ Free health screening campaign
 ```
 Emergency patient, no ability to pay
 ├─ Life-saving care priority
+├─ Patient treated immediately
 ├─ Accounts: Record payment $0.00 (post-care)
-├─ Notes: "Emergency - Humanitarian care"
+├─ Notes: "Emergency humanitarian care - MVA victim"
 └─ Result: ✅ Care first, paperwork later
 ```
 
 ---
 
-### **Financial Management Workflow**:
+### **Financial Management Workflow** (Accounts Staff Only):
 
-#### **For Accounts/Finance Staff**:
-
-**Step-by-Step Process**:
+#### **Step-by-Step Process**:
 
 1. **Navigate**: Financial Management → Transactions
 2. **Search**: Find patient by name or appointment
 3. **Review**: Verify appointment details and fee amount
-4. **Authorize**: Confirm waiver approval (if required)
+4. **Authorize**: Confirm waiver approval (if required by policy)
 5. **Record Payment**:
    - Click "Record Payment" button
    - Payment Method: Select "Complimentary" or "Waived"
@@ -229,6 +331,7 @@ Emergency patient, no ability to pay
    - Notes: **REQUIRED** - Document reason for waiver
 6. **Submit**: Click "Save Payment"
 7. **Verify**: Check appointment status changed to "Payment Confirmed"
+8. **Notify**: Inform nurse that patient is cleared
 
 **Important Notes**:
 - ✅ Always document reason in notes
@@ -335,7 +438,7 @@ Waiver/Adjustment Report:
 
 ---
 
-### **Method 3: Manual Override** (Admin/Technical):
+### **Method 3: Manual Override** (Admin/Technical Only):
 
 **For System Administrators Only**:
 
@@ -369,7 +472,7 @@ WHERE source_reference_id = '{appointment-id}';
 - ❌ Nursing Notes tab (shows payment message)
 - ❌ Appointment actions (greyed out)
 - ✅ View payment status (shows amount due)
-- ✅ Redirect to Accounts/Finance
+- ✅ **Can refer patient to Accounts**
 
 ### **Doctor Dashboard**:
 - ❌ Clinical documentation
@@ -386,13 +489,13 @@ WHERE source_reference_id = '{appointment-id}';
 ### **Accounts/Finance Staff**:
 
 ```
-1. Patient pays at reception
+1. Patient pays at reception (or fee waived)
    ↓
 2. Finance opens Financial Management
    ↓
 3. Finds patient's transaction
    ↓
-4. Marks as "Payment Received"
+4. Marks as "Payment Received" (or $0.00 waived)
    ↓
 5. System updates:
    - payment_status → 'payment_confirmed'
@@ -480,6 +583,7 @@ DEFAULT_CONSULTATION_FEE=20
 - Credit/Debit Card
 - Insurance
 - Medical Aid
+- Complimentary (Waived)
 ```
 
 ---
@@ -521,7 +625,7 @@ Patient pays $10 of $20
 ↓
 payment_status: still 'awaiting_payment' ❌
 ↓
-Must pay full amount to unlock
+Must pay full amount to unlock (or Accounts waives balance)
 ```
 
 ### **3. Payment Reversal**:
@@ -537,7 +641,7 @@ Handle via refund process separately
 ```
 Insurance approved
 ↓
-Manually set: payment_status = 'payment_confirmed'
+Accounts manually set: payment_status = 'payment_confirmed'
 ↓
 No cash payment required
 ↓
@@ -554,18 +658,21 @@ Bill insurance later
 - ✅ Clear revenue tracking
 - ✅ Enforced payment policy
 - ✅ Better cash flow
+- ✅ Flexibility for charity cases
 
 ### **For Staff**:
 - ✅ Clear payment status visibility
 - ✅ No confusion about who's paid
 - ✅ Protected from treating non-paying patients
 - ✅ Accounts handles all payment issues
+- ✅ Can provide free care when authorized
 
 ### **For Patients**:
 - ✅ Know exact cost upfront
 - ✅ Pay only when receiving service
 - ✅ No surprise charges
 - ✅ Clear payment expectations
+- ✅ Charity care available for those in need
 
 ---
 
@@ -604,18 +711,24 @@ WHERE fee_amount > 0
 - [ ] Inform patient of appointment fee
 - [ ] Explain payment required at visit
 - [ ] Book appointment (auto-sets awaiting_payment)
+- [ ] Cannot waive fees (refer to Accounts)
 
-### **Accounts/Finance**:
-- [ ] Collect payment when patient arrives
-- [ ] Issue receipt
-- [ ] Confirm payment in system
-- [ ] Verify status changed to payment_confirmed
-
-### **Nurse**:
+### **Nurse** 👩‍⚕️:
 - [ ] Check payment badge on dashboard
 - [ ] If awaiting payment: Direct to Accounts
 - [ ] If payment confirmed: Proceed with care
 - [ ] Record vitals, triage, nursing notes
+- [ ] **Cannot waive fees or record payments**
+- [ ] **Refer special cases to Accounts**
+
+### **Accounts/Finance** 💰:
+- [ ] Collect payment when patient arrives
+- [ ] Issue receipt
+- [ ] Confirm payment in system
+- [ ] **Can waive fees for approved cases**
+- [ ] **Document reason for waiver**
+- [ ] Verify status changed to payment_confirmed
+- [ ] Notify nurse that patient is cleared
 
 ### **Doctor**:
 - [ ] Verify payment status before consultation
@@ -627,5 +740,5 @@ WHERE fee_amount > 0
 **Status**: ✅ **Fully Operational**  
 **Model**: **Pay-Per-Visit**  
 **Default**: **Awaiting Payment**  
-**Enforcement**: **Strict** (Features blocked until payment)
-
+**Enforcement**: **Strict** (Features blocked until payment)  
+**Flexibility**: **Accounts can waive fees for approved cases**
