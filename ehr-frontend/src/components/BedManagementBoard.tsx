@@ -108,11 +108,12 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
     }
   };
 
-  const groupedBeds = beds.reduce((acc, bed) => {
-    if (!acc[bed.wardName]) acc[bed.wardName] = [];
-    acc[bed.wardName].push(bed);
-    return acc;
-  }, {} as Record<string, any[]>);
+  // No longer needed - we use tabs instead
+  // const groupedBeds = beds.reduce((acc, bed) => {
+  //   if (!acc[bed.wardName]) acc[bed.wardName] = [];
+  //   acc[bed.wardName].push(bed);
+  //   return acc;
+  // }, {} as Record<string, any[]>);
 
   // Get unique wards from beds  
   const wardNames = Array.from(new Set(beds.map((bed: any) => bed.wardName || bed.ward_name))).filter(Boolean).sort();
@@ -295,74 +296,6 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
               >
                 {/* Gradient Background */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${getBedStatusColor(bed.status)}`}></div>
-                {groupedBeds[wardName].map(bed => (
-                  <button
-                    key={bed.id}
-                    onClick={async () => {
-                      console.log('🔍 Bed clicked:', {
-                        bedNumber: bed.bedNumber,
-                        status: bed.status,
-                        hasCurrentPatient: !!bed.currentPatient,
-                        currentPatient: bed.currentPatient,
-                      });
-                      
-                      if (bed.status === 'occupied' && bed.currentPatient) {
-                        console.log('✅ Bed is occupied, loading admission...');
-                        // Load admission details and open workflow
-                        try {
-                          const response = await ehrAxios.get(`/beds/admissions`, {
-                            headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
-                            params: { patientId: bed.currentPatient.id },
-                          });
-                          console.log('📊 Admission response:', response.data);
-                          
-                          if (response.data && response.data.length > 0) {
-                            const admissionData = {
-                              ...response.data[0],
-                              patient_first_name: bed.currentPatient.firstName,
-                              patient_last_name: bed.currentPatient.lastName,
-                              patient_id: bed.currentPatient.id,
-                              bed_number: bed.bedNumber,
-                              ward_name: bed.wardName,
-                            };
-                            console.log('✅ Navigating to patient page');
-                            navigate(`/ehr/${tenantSlug}/admitted-patient`, { state: { admission: admissionData } });
-                          } else {
-                            showError('Info', 'No active admission found for this patient');
-                          }
-                        } catch (error) {
-                          console.error('❌ Failed to load admission:', error);
-                          showError('Error', 'Failed to load admission details');
-                        }
-                      } else {
-                        console.log('ℹ️ Bed not occupied or no patient assigned');
-                        if (bed.status === 'available') {
-                          showError('Info', 'This bed is available. Admit a patient first.');
-                        }
-                      }
-                    }}
-                    className="relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-all duration-200 group aspect-square"
-                  >
-                    {/* Gradient Background */}
-                    <div className={`absolute inset-0 bg-gradient-to-br ${getBedStatusColor(bed.status)} opacity-90 group-hover:opacity-100 transition-opacity`}></div>
-                    
-                    {/* Content */}
-                    <div className="relative h-full flex flex-col items-center justify-center p-2 sm:p-3">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mb-2">
-                        {getBedStatusIcon(bed.status)}
-                      </div>
-                      <div className="text-white text-center">
-                        <div className="text-xs sm:text-sm font-bold truncate w-full">{bed.bedNumber}</div>
-                        <div className="text-[10px] sm:text-xs text-white/90 truncate w-full">{bed.roomNumber}</div>
-                        {bed.currentPatient && (
-                          <div className="text-[10px] text-white/80 mt-1 truncate w-full">
-                            {bed.currentPatient.firstName[0]}. {bed.currentPatient.lastName}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
               </button>
             ))}
           </div>
