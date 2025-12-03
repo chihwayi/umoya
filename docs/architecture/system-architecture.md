@@ -49,10 +49,15 @@ MediCore EHR is a multi-tenant, microservices-based Electronic Health Record sys
 
 ### Medical Services
 - **Patient Service**: Patient management, demographics, history
-- **Appointment Service**: Scheduling, calendar, waitlist
+- **Appointment Service**: Scheduling, calendar, waitlist (Pay-Per-Visit model)
 - **Medical Records Service**: Clinical documentation, prescriptions
 - **Document Management Service** (Sprint 19): Document upload, versioning, sharing, access control
 - **Provider Messaging Service** (Sprint 20): Secure messaging, inbox, threads, task assignment
+- **E-Consent Management** (Sprint 21): Digital consent forms, e-signatures, version control, audit trails
+- **Immunization Registry** (Sprint 22): Vaccine tracking, CDC schedules, inventory, public health reporting
+- **Bed Management & ADT** (Sprint 23): Real-time bed tracking, admissions, discharges, transfers
+- **Emergency Department Module** (Sprint 24): ESI triage, ED tracking board, wait time management
+- **Clinical Pathways & Protocols** (Sprint 25): Evidence-based care pathways, adherence tracking
 - **Billing Service**: Invoicing, payments, financial reports
 - **Lab Service**: Lab orders, results, test catalog
 - **Imaging Service**: Imaging orders, DICOM storage

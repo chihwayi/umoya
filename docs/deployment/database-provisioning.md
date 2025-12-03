@@ -1,4 +1,7 @@
-# Database Provisioning Guide
+# Database Provisioning
+
+**Last Updated**: December 3, 2025  
+**Includes**: Sprints 1-25 (All Tier 1 features) Guide
 
 ## Overview
 MediCore uses a multi-tenant architecture where each clinic has its own isolated database. This guide covers database provisioning and schema management.
@@ -49,6 +52,28 @@ POST /tenants/provision-database/:tenantId/:bundleId
 
 ### HIV Bundle
 - HIV-specific tables
+- ARV drug catalog
+- WHO staging
+- Viral load tracking
+
+### Tier 1 Critical Features Bundle (Sprints 21-25)
+- **E-Consent Management**: Digital consent forms, e-signatures, version control, audit trails
+- **Immunization Registry**: CDC vaccine schedules, inventory, public health reporting
+- **Bed Management & ADT**: Real-time bed tracking, admissions, discharges, transfers
+- **Emergency Department**: ESI triage, ED tracking board, wait time management
+- **Clinical Pathways**: Evidence-based care protocols, adherence tracking
+
+**Migrations Applied**:
+- `003-sprint21-econsent-management.sql` - Consent templates, patient consents, signatures
+- `004-sprint22-immunization-registry.sql` - Immunizations, schedules, inventory
+- `005-sprint23-bed-management-adt.sql` - Beds, admissions, discharges, transfers
+- `006-sprint24-emergency-department.sql` - ED visits, triage, dispositions
+- `007-sprint25-clinical-pathways.sql` - Pathways, enrollments, adherence
+- `008-add-terminology-coding.sql` - SNOMED/ICD-10/CPT/LOINC/RxNorm/CVX codes
+- `009-complete-tier1-seed-data.sql` - Default templates and seed data
+
+**Total Tables Added**: 29 tables  
+**Total Seed Records**: 109 records
 - ART tracking
 - Viral load monitoring
 
