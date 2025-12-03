@@ -1465,77 +1465,77 @@ const DoctorDashboard: React.FC = () => {
 
           {/* Tab Navigation */}
           <div className="mb-8">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-2 shadow-sm sticky top-16 z-20">
-              <nav className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            <div className="bg-gradient-to-r from-slate-50 via-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-200 p-3 shadow-lg sticky top-16 z-20">
+              <nav className="flex items-center justify-between gap-2 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'dashboard'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-indigo-200 hover:text-indigo-700'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-blue-200 hover:border-blue-400 hover:text-blue-700 hover:scale-105'
                   }`}
                 >
-                  <BarChart3 className={`w-4 h-4 ${activeTab === 'dashboard' ? 'text-white' : 'text-slate-500 group-hover:text-indigo-600'}`} />
+                  <BarChart3 className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-white' : 'text-blue-500 group-hover:text-blue-700'}`} />
                   <span>Dashboard</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('queue')}
-                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'queue'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-emerald-200 hover:text-emerald-700'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-emerald-200 hover:border-emerald-400 hover:text-emerald-700 hover:scale-105'
                   }`}
                 >
-                  <Users className={`w-4 h-4 ${activeTab === 'queue' ? 'text-white' : 'text-slate-500 group-hover:text-emerald-600'}`} />
-                  <span>Patient Queue</span>
+                  <Users className={`w-5 h-5 ${activeTab === 'queue' ? 'text-white' : 'text-emerald-500 group-hover:text-emerald-700'}`} />
+                  <span>Queue</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('schedule')}
-                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'schedule'
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-purple-200 hover:text-purple-700'
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-purple-200 hover:border-purple-400 hover:text-purple-700 hover:scale-105'
                   }`}
                 >
-                  <Calendar className={`w-4 h-4 ${activeTab === 'schedule' ? 'text-white' : 'text-slate-500 group-hover:text-purple-600'}`} />
-                  <span>Schedule View</span>
+                  <Calendar className={`w-5 h-5 ${activeTab === 'schedule' ? 'text-white' : 'text-purple-500 group-hover:text-purple-700'}`} />
+                  <span>Schedule</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('current-appointment')}
-                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'current-appointment'
-                      ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-sky-200 hover:text-sky-700'
+                      ? 'bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-sky-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-sky-200 hover:border-sky-400 hover:text-sky-700 hover:scale-105'
                   }`}
               >
-                <FileText className={`w-4 h-4 ${activeTab === 'current-appointment' ? 'text-white' : 'text-slate-500 group-hover:text-sky-600'}`} />
-                <span>Current Appointment</span>
+                <FileText className={`w-5 h-5 ${activeTab === 'current-appointment' ? 'text-white' : 'text-sky-500 group-hover:text-sky-700'}`} />
+                <span>Appointment</span>
               </button>
               <button
                   onClick={() => setActiveTab('critical-alerts')}
-                  className={`group relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group relative flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'critical-alerts'
-                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-red-200 hover:text-red-700'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-red-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-red-200 hover:border-red-400 hover:text-red-700 hover:scale-105'
                   }`}
                 >
-                  <AlertTriangle className={`w-4 h-4 ${activeTab === 'critical-alerts' ? 'text-white' : 'text-slate-500 group-hover:text-red-600'}`} />
-                  <span>Critical Alerts</span>
+                  <AlertTriangle className={`w-5 h-5 ${activeTab === 'critical-alerts' ? 'text-white' : 'text-red-500 group-hover:text-red-700'}`} />
+                  <span>Alerts</span>
                   {criticalAlertCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse shadow-lg">
                       {criticalAlertCount}
                     </span>
                   )}
                 </button>
                 <button
                   onClick={() => setActiveTab('imaging')}
-                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
                     activeTab === 'imaging'
-                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow'
-                      : 'bg-white text-slate-700 border border-slate-200 hover:border-violet-200 hover:text-violet-700'
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-violet-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-violet-200 hover:border-violet-400 hover:text-violet-700 hover:scale-105'
                   }`}
                 >
-                  <Activity className={`w-4 h-4 ${activeTab === 'imaging' ? 'text-white' : 'text-slate-500 group-hover:text-violet-600'}`} />
+                  <Activity className={`w-5 h-5 ${activeTab === 'imaging' ? 'text-white' : 'text-violet-500 group-hover:text-violet-700'}`} />
                   <span>Imaging</span>
                 </button>
               </nav>
