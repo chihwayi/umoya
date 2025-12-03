@@ -1707,7 +1707,31 @@ export class PatientPortalController {
     const patientId = req.user.sub;
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     
-    return await this.immunizationService.getPatientImmunizations(patientId, {}, tenantDb);
+    const immunizations = await tenantDb.query(`
+      SELECT 
+        i.id,
+        i.immunization_number,
+        i.vaccine_code,
+        i.vaccine_name,
+        i.manufacturer,
+        i.lot_number,
+        i.administration_date,
+        i.administration_time,
+        i.dose_number,
+        i.route,
+        i.site,
+        i.completion_status,
+        i.notes,
+        i.reaction_observed,
+        i.reaction_details,
+        u.first_name || ' ' || u.last_name as administered_by_name
+      FROM immunizations i
+      LEFT JOIN users u ON i.administered_by = u.id
+      WHERE i.patient_id = $1
+      ORDER BY i.administration_date DESC
+    `, [patientId]);
+    
+    return immunizations;
   }
 
   @Get('immunizations/forecast')
@@ -1720,7 +1744,7 @@ export class PatientPortalController {
     const patientId = req.user.sub;
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     
-    // Get patient date of birth
+    // Get patient date of birth and already administered vaccines
     const [patient] = await tenantDb.query(
       'SELECT date_of_birth FROM patients WHERE id = $1',
       [patientId],
@@ -1730,7 +1754,30 @@ export class PatientPortalController {
       throw new Error('Patient not found');
     }
     
-    return await this.immunizationService.getForecast(patientId, patient.date_of_birth, tenantDb);
+    // Get all immunization schedules and check what's been done
+    const forecast = await tenantDb.query(`
+      SELECT 
+        s.id,
+        s.vaccine_name,
+        s.vaccine_code,
+        s.recommended_age_months,
+        s.dose_number,
+        s.notes as schedule_notes,
+        s.is_required,
+        CASE 
+          WHEN i.id IS NOT NULL THEN 'completed'
+          WHEN (EXTRACT(YEAR FROM age(CURRENT_DATE, $2)) * 12 + EXTRACT(MONTH FROM age(CURRENT_DATE, $2))) >= s.recommended_age_months THEN 'due'
+          ELSE 'upcoming'
+        END as status,
+        i.administration_date as completed_date
+      FROM immunization_schedules s
+      LEFT JOIN immunizations i ON i.patient_id = $1 
+        AND i.vaccine_code = s.vaccine_code 
+        AND i.dose_number = s.dose_number
+      ORDER BY s.recommended_age_months ASC, s.dose_number ASC
+    `, [patientId, patient.date_of_birth]);
+    
+    return forecast;
   }
 
   @Get('immunizations/export')
@@ -1745,7 +1792,10 @@ export class PatientPortalController {
     const patientId = req.user.sub;
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     
-    const immunizations = await this.immunizationService.getPatientImmunizations(patientId, {}, tenantDb);
+    const immunizations = await tenantDb.query(`
+      SELECT * FROM immunizations WHERE patient_id = $1 ORDER BY administration_date DESC
+    `, [patientId]);
+    
     const [patient] = await tenantDb.query(
       'SELECT first_name, last_name, patient_number, date_of_birth FROM patients WHERE id = $1',
       [patientId],
