@@ -61,6 +61,12 @@ export class ConsentTemplate {
   @Column({ name: 'procedure_codes', type: 'jsonb', default: '[]' })
   procedureCodes: string[];
 
+  @Column({ name: 'procedure_snomed_codes', type: 'jsonb', default: '[]' })
+  procedureSnomedCodes: string[];
+
+  @Column({ name: 'procedure_cpt_codes', type: 'jsonb', default: '[]' })
+  procedureCptCodes: string[];
+
   @Column({ type: 'text', nullable: true })
   notes: string;
 

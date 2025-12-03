@@ -220,6 +220,36 @@ export const terminologyApi = {
 };
 
 export const ehrApi = {
+  // Generic HTTP methods
+  get: async (endpoint: string, token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get(endpoint, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+      params
+    });
+    return { data: response.data };
+  },
+
+  post: async (endpoint: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(endpoint, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
+    });
+    return { data: response.data };
+  },
+
+  put: async (endpoint: string, data: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(endpoint, data, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
+    });
+    return { data: response.data };
+  },
+
+  delete: async (endpoint: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(endpoint, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
+    });
+    return { data: response.data };
+  },
+
   login: async (email: string, password: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/auth/login', { email, password }, {
       headers: { 'X-Tenant-ID': tenantSlug }
@@ -4068,6 +4098,75 @@ export const ehrApi = {
     );
     return { data: response.data };
   },
+
+  // Consent Templates
+  getConsentTemplates: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/consents/templates', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params
+    });
+    return { data: response.data };
+  },
+
+  // Immunizations
+  getPatientImmunizations: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/immunizations/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getImmunizationSchedules: async (params: any, token: string, tenantSlug: string) => {
+    // Note: Backend doesn't have direct schedule endpoint, returning empty array for now
+    // This should be updated when immunization schedule endpoint is implemented
+    return Promise.resolve({ data: [] });
+  },
+
+  // Clinical Pathways
+  getClinicalPathways: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinical-pathways', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params
+    });
+    return { data: response.data };
+  },
+
+  getPatientPathwayEnrollments: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinical-pathways/patient/${patientId}/enrollments`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Emergency Department
+  getEDTrackingBoard: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/ed/tracking-board', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getEDMetrics: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/ed/metrics', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Bed Management
+  get: async (endpoint: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(endpoint, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getBedOccupancy: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/beds/occupancy', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 };
 
 // Doctor Availability API (standalone)
@@ -5896,6 +5995,44 @@ export const analyticsApi = {
   },
   deleteOutcome: async (tenantSlug: string, token: string, id: string) => {
     const response = await ehrAxios.delete(`/analytics/outcomes/${id}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Consent Templates
+  getConsentTemplates: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/consent-templates', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Immunizations
+  getPatientImmunizations: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/immunizations/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getImmunizationSchedules: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/immunizations/schedules', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Clinical Pathways
+  getClinicalPathways: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinical-pathways', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getPatientPathwayEnrollments: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinical-pathways/patient/${patientId}/enrollments`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };

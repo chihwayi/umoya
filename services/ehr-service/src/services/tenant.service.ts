@@ -53,6 +53,14 @@ import { AnalyticsMetric } from '../entities/analytics-metric.entity';
 import { ReportFavorite } from '../entities/report-favorite.entity';
 import { AppointmentTemplate } from '../entities/appointment-template.entity';
 import { AppointmentResource, AppointmentResourceBooking } from '../entities/appointment-resource.entity';
+import { Immunization } from '../entities/immunization.entity';
+import { ConsentTemplate } from '../entities/consent-template.entity';
+import { ClinicalPathway } from '../entities/clinical-pathway.entity';
+import { EDVisit } from '../entities/ed-visit.entity';
+import { Bed } from '../entities/bed.entity';
+import { Admission } from '../entities/admission.entity';
+import { Discharge } from '../entities/discharge.entity';
+import { PatientTransfer } from '../entities/patient-transfer.entity';
 
 @Injectable()
 export class TenantService {
@@ -197,6 +205,14 @@ export class TenantService {
         ClinicalOutcome,
         AnalyticsMetric,
         ReportFavorite,
+        Immunization,
+        ConsentTemplate,
+        ClinicalPathway,
+        EDVisit,
+        Bed,
+        Admission,
+        Discharge,
+        PatientTransfer,
       ],
       synchronize: false,
       logging: false,

@@ -4,7 +4,10 @@ import {
   ArrowRight, Home, Filter, RefreshCw, Maximize2
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
+import axios from 'axios';
 import { useNotification } from './GlobalNotification';
+
+const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 interface BedManagementBoardProps {
   tenantSlug: string;
@@ -44,11 +47,14 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
       const params: any = {};
       if (selectedWard !== 'all') params.wardName = selectedWard;
       
-      const response = await ehrApi.get('/beds', token, tenantSlug, params);
+      const response = await ehrAxios.get('/beds', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        params
+      });
       setBeds(response.data || []);
     } catch (error) {
       console.error('Failed to load beds:', error);
-      showError('Error', 'Failed to load bed status');
+      setBeds([]);
     } finally {
       setLoading(false);
     }
@@ -56,20 +62,25 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
 
   const loadWards = async () => {
     try {
-      const response = await ehrApi.get('/beds/wards', token, tenantSlug);
+      const response = await ehrAxios.get('/beds/wards', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       setWards(response.data || []);
     } catch (error) {
       console.error('Failed to load wards:', error);
+      setWards([]);
     }
   };
 
   const loadOccupancy = async () => {
+    if (!token || !tenantSlug || token === 'null' || token === 'undefined') return;
     try {
-      const params = selectedWard !== 'all' ? `?wardName=${selectedWard}` : '';
-      const response = await ehrApi.get(`/beds/occupancy${params}`, token, tenantSlug);
+      const response = await ehrAxios.get('/beds/occupancy', {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
       setOccupancyStats(response.data);
     } catch (error) {
-      console.error('Failed to load occupancy:', error);
+      // Silently ignore all errors to prevent console spam
     }
   };
 

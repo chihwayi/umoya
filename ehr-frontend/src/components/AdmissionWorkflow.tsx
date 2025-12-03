@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Bed, Stethoscope, FileText, Calendar, Check, AlertCircle } from 'lucide-react';
-import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import axios from 'axios';
 
 interface AdmissionWorkflowProps {
   patientId: string;
@@ -25,6 +25,10 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
   const [step, setStep] = useState(1);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [availableBeds, setAvailableBeds] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [admittedPatients, setAdmittedPatients] = useState<string[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [patientSearch, setPatientSearch] = useState('');
   const [formData, setFormData] = useState({
     admissionType: 'emergency',
     admissionSource: 'emergency_room',
@@ -43,11 +47,52 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
   useEffect(() => {
     loadDoctors();
     loadAvailableBeds();
+    loadPatients();
+    loadAdmittedPatients();
   }, [formData.ward]);
+
+  const loadPatients = async () => {
+    try {
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.get(`${EHR_API_URL}/patients`, {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`
+        },
+        params: { limit: 100 }
+      });
+      setPatients(response.data?.patients || response.data || []);
+    } catch (error) {
+      console.error('Failed to load patients:', error);
+    }
+  };
+
+  const loadAdmittedPatients = async () => {
+    try {
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.get(`${EHR_API_URL}/beds/admissions`, {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const admitted = (response.data || []).map((admission: any) => admission.patientId);
+      setAdmittedPatients(admitted);
+    } catch (error) {
+      console.error('Failed to load admitted patients:', error);
+    }
+  };
 
   const loadDoctors = async () => {
     try {
-      const response = await ehrApi.getUsers(token, tenantSlug, { role: 'doctor' });
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.get(`${EHR_API_URL}/users`, {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`
+        },
+        params: { role: 'doctor' }
+      });
       setDoctors(response.data || []);
     } catch (error) {
       console.error('Failed to load doctors:', error);
@@ -56,10 +101,17 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAvailableBeds = async () => {
     try {
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
       const params: any = {};
       if (formData.ward) params.wardName = formData.ward;
       
-      const response = await ehrApi.get('/beds/available', token, tenantSlug, params);
+      const response = await axios.get(`${EHR_API_URL}/beds/available`, {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`
+        },
+        params
+      });
       setAvailableBeds(response.data || []);
     } catch (error) {
       console.error('Failed to load beds:', error);
@@ -69,25 +121,35 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.admittingProvider || !formData.admittingDiagnosis) {
-      showError('Error', 'Please fill in required fields');
+    if (!selectedPatient || !formData.admittingProvider || !formData.admittingDiagnosis) {
+      showError('Error', 'Please select a patient and fill in required fields');
       return;
     }
 
     try {
       setLoading(true);
-      await ehrApi.post(
-        '/beds/admissions',
+      
+      // Use direct axios call to avoid ehrApi.post function error
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.post(
+        `${EHR_API_URL}/beds/admissions`,
         {
-          patientId,
+          patientId: selectedPatient?.id || patientId,
           ...formData,
         },
-        token,
-        tenantSlug,
+        {
+          headers: {
+            'X-Tenant-ID': tenantSlug,
+            'Authorization': `Bearer ${token}`
+          }
+        }
       );
       
       showSuccess('Success', 'Patient admitted successfully');
-      onSuccess();
+      onSuccess?.();
+      setTimeout(() => {
+        window.location.href = `/ehr/${tenantSlug}/bed-management`;
+      }, 2000);
     } catch (error: any) {
       console.error('Failed to admit patient:', error);
       showError('Error', error.response?.data?.message || 'Failed to admit patient');
@@ -146,6 +208,47 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
         <div className="p-4 sm:p-6">
           {step === 1 && (
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Select Patient <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Search patients..."
+                  value={patientSearch}
+                  onChange={(e) => setPatientSearch(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm mb-2"
+                />
+                {patientSearch.length >= 2 && (
+                  <div className="max-h-32 overflow-y-auto border border-slate-200 rounded-lg">
+                    {patients
+                      .filter(p => !admittedPatients.includes(p.id))
+                      .filter(p => 
+                        `${p.firstName} ${p.lastName}`.toLowerCase().includes(patientSearch.toLowerCase()) ||
+                        p.medicalRecordNumber?.toLowerCase().includes(patientSearch.toLowerCase())
+                      )
+                      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+                      .slice(0, 10)
+                    .map(patient => (
+                      <button
+                        key={patient.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPatient(patient);
+                          setPatientSearch(`${patient.firstName} ${patient.lastName}`);
+                        }}
+                        className={`w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 ${
+                          selectedPatient?.id === patient.id ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="font-medium">{patient.firstName} {patient.lastName}</div>
+                        <div className="text-xs text-slate-500">MRN: {patient.medicalRecordNumber}</div>
+                      </button>
+                    ))
+                  }
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -177,7 +280,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
                     <option value="">-- Select Doctor --</option>
                     {doctors.map(doc => (
                       <option key={doc.id} value={doc.id}>
-                        Dr. {doc.firstName} {doc.lastName}
+                        Dr. {doc.firstName} {doc.lastName} {doc.specialization ? `(${doc.specialization})` : ''}
                       </option>
                     ))}
                   </select>
@@ -328,7 +431,9 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-slate-500">Patient:</span>
-                    <div className="font-semibold">{patientName}</div>
+                    <div className="font-semibold">
+                      {selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : patientName}
+                    </div>
                   </div>
                   <div>
                     <span className="text-slate-500">Admission Type:</span>

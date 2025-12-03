@@ -36,21 +36,34 @@ export class ADTService {
     userId: string,
     tenantDb: DataSource,
   ): Promise<Admission> {
+    this.logger.log(`Admitting patient with data: ${JSON.stringify(admissionData)}`);
+    
     const repository = tenantDb.getRepository(Admission);
 
     // Generate admission number
     const admissionNumber = await this.generateAdmissionNumber(tenantDb);
 
     const admission = repository.create({
-      ...admissionData,
+      patientId: admissionData.patientId,
       admissionNumber,
       admissionDate: new Date(),
       admissionTime: new Date(),
+      admissionType: admissionData.admissionType,
+      admissionSource: admissionData.admissionSource,
+      admittingProvider: admissionData.admittingProvider,
+      admittingDiagnosis: admissionData.admittingDiagnosis,
+      admittingDiagnosisIcd10: admissionData.admittingDiagnosisIcd10,
+      admittingDiagnosisSnomed: admissionData.admittingDiagnosisSnomed,
       attendingProvider: admissionData.admittingProvider,
       initialWard: admissionData.ward,
       currentWard: admissionData.ward,
       initialBedId: admissionData.bedId,
       currentBedId: admissionData.bedId,
+      service: admissionData.service,
+      expectedLosDays: admissionData.expectedLosDays,
+      isolationRequired: admissionData.isolationRequired,
+      codeStatus: admissionData.codeStatus,
+      notes: admissionData.notes,
       admissionStatus: 'active',
     });
 

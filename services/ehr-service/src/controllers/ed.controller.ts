@@ -68,7 +68,8 @@ export class EDController {
   @ApiOperation({ summary: 'Get ED metrics' })
   async getMetrics(@Query('date') date: string, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.edService.getEDMetrics(new Date(date), tenantDb);
+    const targetDate = date ? new Date(date) : new Date();
+    return await this.edService.getEDMetrics(targetDate, tenantDb);
   }
 }
 

@@ -42,7 +42,7 @@ export class TenantMiddleware implements NestMiddleware {
       return next();
     }
 
-    const tenantId = (req as any).headers['x-tenant-id'] as string;
+    const tenantId = req.headers['x-tenant-id'] as string;
     
     if (!tenantId) {
       throw new BadRequestException('Tenant ID is required');

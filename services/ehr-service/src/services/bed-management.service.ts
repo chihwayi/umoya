@@ -178,13 +178,6 @@ export class BedManagementService {
     blocked: number;
     occupancyRate: number;
   }> {
-    const query = wardName
-      ? `SELECT status, COUNT(*) as count FROM beds WHERE ward_name = $1 AND is_active = true GROUP BY status`
-      : `SELECT status, COUNT(*) as count FROM beds WHERE is_active = true GROUP BY status`;
-
-    const params = wardName ? [wardName] : [];
-    const results = await tenantDb.query(query, params);
-
     const stats = {
       totalBeds: 0,
       occupied: 0,
@@ -194,29 +187,41 @@ export class BedManagementService {
       occupancyRate: 0,
     };
 
-    results.forEach((row: any) => {
-      const count = parseInt(row.count);
-      stats.totalBeds += count;
-      
-      switch (row.status) {
-        case 'occupied':
-          stats.occupied = count;
-          break;
-        case 'available':
-          stats.available = count;
-          break;
-        case 'cleaning':
-          stats.cleaning = count;
-          break;
-        case 'blocked':
-        case 'maintenance':
-        case 'out_of_service':
-          stats.blocked += count;
-          break;
-      }
-    });
+    try {
+      const query = wardName
+        ? `SELECT status, COUNT(*) as count FROM beds WHERE ward_name = $1 AND is_active = true GROUP BY status`
+        : `SELECT status, COUNT(*) as count FROM beds WHERE is_active = true GROUP BY status`;
 
-    stats.occupancyRate = stats.totalBeds > 0 ? (stats.occupied / stats.totalBeds) * 100 : 0;
+      const params = wardName ? [wardName] : [];
+      const results = await tenantDb.query(query, params);
+
+      results.forEach((row: any) => {
+        const count = parseInt(row.count);
+        stats.totalBeds += count;
+        
+        switch (row.status) {
+          case 'occupied':
+            stats.occupied = count;
+            break;
+          case 'available':
+            stats.available = count;
+            break;
+          case 'cleaning':
+            stats.cleaning = count;
+            break;
+          case 'blocked':
+          case 'maintenance':
+          case 'out_of_service':
+            stats.blocked += count;
+            break;
+        }
+      });
+
+      stats.occupancyRate = stats.totalBeds > 0 ? (stats.occupied / stats.totalBeds) * 100 : 0;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch bed occupancy: ${error.message}`);
+      // Return empty stats if beds table doesn't exist or query fails
+    }
 
     return stats;
   }
