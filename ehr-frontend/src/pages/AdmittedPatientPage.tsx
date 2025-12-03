@@ -52,6 +52,11 @@ const AdmittedPatientPage: React.FC = () => {
   const [showProgressNoteModal, setShowProgressNoteModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [showLabOrderModal, setShowLabOrderModal] = useState(false);
+  const [showNursingNoteModal, setShowNursingNoteModal] = useState(false);
+  const [nursingNoteData, setNursingNoteData] = useState({
+    noteType: 'general',
+    noteContent: '',
+  });
   
   // Forms
   const [dischargeData, setDischargeData] = useState({
@@ -301,7 +306,7 @@ const AdmittedPatientPage: React.FC = () => {
                 {/* Nurse-specific actions */}
                 {isNurse && (
                   <button
-                    onClick={() => setActiveTab('nursing')}
+                    onClick={() => setShowNursingNoteModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
                   >
                     <FileText className="w-4 h-4" />
@@ -996,6 +1001,102 @@ const AdmittedPatientPage: React.FC = () => {
           tenantSlug={tenantSlug!}
           token={token}
         />
+      )}
+
+      {/* Nursing Note Modal */}
+      {showNursingNoteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
+            <div className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white p-6 rounded-t-xl">
+              <h3 className="text-xl font-bold">Add Nursing Note</h3>
+              <p className="text-teal-100 mt-1">{admission.patient_first_name} {admission.patient_last_name}</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Note Type *</label>
+                <select
+                  value={nursingNoteData.noteType}
+                  onChange={(e) => setNursingNoteData({ ...nursingNoteData, noteType: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="general">General Note</option>
+                  <option value="assessment">Nursing Assessment</option>
+                  <option value="intervention">Intervention</option>
+                  <option value="medication">Medication Administration</option>
+                  <option value="wound_care">Wound Care</option>
+                  <option value="patient_education">Patient Education</option>
+                  <option value="discharge_planning">Discharge Planning</option>
+                  <option value="fall_risk">Fall Risk Assessment</option>
+                  <option value="pain_assessment">Pain Assessment</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Note Content *</label>
+                <textarea
+                  value={nursingNoteData.noteContent}
+                  onChange={(e) => setNursingNoteData({ ...nursingNoteData, noteContent: e.target.value })}
+                  rows={8}
+                  placeholder="Document nursing observations, interventions, patient response..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-teal-900 mb-2">💡 Nursing Documentation Tips</h4>
+                <ul className="text-xs text-teal-800 space-y-1 list-disc list-inside">
+                  <li>Use objective, factual language</li>
+                  <li>Include time-specific observations</li>
+                  <li>Document patient responses to interventions</li>
+                  <li>Note any changes in condition</li>
+                  <li>Record patient/family education provided</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end p-6 bg-slate-50 rounded-b-xl border-t border-slate-200">
+              <button
+                onClick={() => {
+                  setShowNursingNoteModal(false);
+                  setNursingNoteData({ noteType: 'general', noteContent: '' });
+                }}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-200 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!nursingNoteData.noteContent.trim()) {
+                    showError('Error', 'Note content is required');
+                    return;
+                  }
+                  
+                  try {
+                    await ehrAxios.post(`/nursing-notes`, {
+                      patientId: admission.patient_id,
+                      appointmentId: null,
+                      noteType: nursingNoteData.noteType,
+                      noteContent: nursingNoteData.noteContent,
+                    }, {
+                      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+                    });
+                    
+                    showSuccess('Success', 'Nursing note saved');
+                    setShowNursingNoteModal(false);
+                    setNursingNoteData({ noteType: 'general', noteContent: '' });
+                    loadNotes();
+                  } catch (error) {
+                    showError('Error', 'Failed to save nursing note');
+                  }
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition"
+              >
+                Save Note
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
