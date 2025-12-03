@@ -1282,10 +1282,10 @@ const NurseDashboard: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-x-hidden">
       {/* Slim Top Bar: system title + notifications + user */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex justify-between items-center h-14">
             {/* Left Section - System Title */}
             <div className="flex items-center space-x-4">
@@ -1389,9 +1389,9 @@ const NurseDashboard: React.FC = () => {
       </header>
 
       {/* Section Navigation Bar */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 border-b-2 border-emerald-800 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-6">
+      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 border-b-2 border-emerald-800 shadow-lg overflow-x-auto">
+        <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+          <nav className="flex space-x-2 sm:space-x-4 lg:space-x-6 min-w-max">
             <button
               onClick={() => {
                 setActiveSection('main');
@@ -1439,13 +1439,13 @@ const NurseDashboard: React.FC = () => {
       </div>
 
       {/* Page Tabs (in-content) */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 overflow-x-auto">
+        <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           {activeSection === 'main' ? (
-            <nav className="flex space-x-8">
+            <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 min-w-max pb-px">
               <button
                 onClick={() => setActiveTab('tasks')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
+                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
                   activeTab === 'tasks'
                     ? 'border-indigo-500 text-indigo-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -1461,7 +1461,7 @@ const NurseDashboard: React.FC = () => {
               </button>
               <button
                 onClick={() => setActiveTab('alerts')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 relative ${
+                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
                   activeTab === 'alerts'
                     ? 'border-red-500 text-red-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -1538,7 +1538,7 @@ const NurseDashboard: React.FC = () => {
               </button>
             </nav>
           ) : activeSection === 'hiv' ? (
-            <nav className="flex space-x-8 overflow-x-auto" aria-label="HIV Tabs">
+            <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 min-w-max pb-px" aria-label="HIV Tabs">
               <button
                 onClick={() => setActiveTab('testing')}
                 className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
@@ -1648,7 +1648,7 @@ const NurseDashboard: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 overflow-x-hidden">
         {activeTab === 'tasks' && (
           <TaskManagement 
             currentUser={currentUser}
@@ -1929,9 +1929,21 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         )}
-        {activeTab === 'vitals' && <VitalsPanel appointments={appointments} />}
-        {activeTab === 'triage' && <PatientAssessment appointments={appointments} />}
-        {activeTab === 'notes' && <NursingNotes appointments={appointments} preset={notesPreset} />}
+        {activeTab === 'vitals' && (
+          <div className="w-full overflow-x-auto">
+            <VitalsPanel appointments={appointments} />
+          </div>
+        )}
+        {activeTab === 'triage' && (
+          <div className="w-full overflow-x-auto">
+            <PatientAssessment appointments={appointments} />
+          </div>
+        )}
+        {activeTab === 'notes' && (
+          <div className="w-full overflow-x-auto">
+            <NursingNotes appointments={appointments} preset={notesPreset} />
+          </div>
+        )}
         
         {/* HIV Section Tabs */}
         {activeSection === 'hiv' && activeTab === 'testing' && (

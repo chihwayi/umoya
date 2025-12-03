@@ -290,33 +290,35 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
       return (
         <div className="space-y-6">
           {/* Patient Header */}
-          <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-200/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+          <div className="w-full bg-gradient-to-r from-pink-50 to-rose-50 rounded-lg sm:rounded-xl p-3 sm:p-4 lg:p-6 border border-pink-200/50">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg sm:rounded-xl flex items-center justify-center text-white font-bold text-base sm:text-lg lg:text-xl flex-shrink-0">
                   {selectedPatient.firstName.charAt(0)}{selectedPatient.lastName.charAt(0)}
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg lg:text-xl font-bold text-slate-900 truncate">
                     {selectedPatient.firstName} {selectedPatient.lastName}
                   </h3>
-                  <p className="text-slate-600">ID: {selectedPatient.patientNumber}</p>
+                  <p className="text-xs sm:text-sm text-slate-600 truncate">ID: {selectedPatient.patientNumber}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                 <button
                   onClick={() => navigate(`/ehr/${tenantSlug}/nurse/patients/${selectedPatient.id}`)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-semibold"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 font-semibold text-xs sm:text-sm"
                 >
-                  <Eye className="w-4 h-4" />
-                  View Patient Summary
+                  <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">View Patient Summary</span>
+                  <span className="sm:hidden">View</span>
                 </button>
                 <button
                   onClick={() => setSelectedPatient(null)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-4 py-2 bg-white rounded-lg border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all duration-200 text-xs sm:text-sm"
                 >
-                  <X className="w-4 h-4" />
-                  Back to All Patients
+                  <X className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Back to All Patients</span>
+                  <span className="sm:hidden">Back</span>
                 </button>
               </div>
             </div>
@@ -324,7 +326,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
 
           {/* New Note Form */}
           {showNewNote && (
-            <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-8">
+            <div className="w-full bg-gradient-to-br from-white to-slate-50 rounded-lg sm:rounded-xl lg:rounded-2xl shadow-lg border border-slate-200/50 p-3 sm:p-5 lg:p-8">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
                   <Plus className="w-5 h-5 text-white" />
@@ -361,7 +363,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                       <textarea
                         value={newNote.content}
                         onChange={(e) => setNewNote(prev => ({ ...prev, content: e.target.value }))}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                        className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-3 border border-slate-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none text-sm sm:text-base"
                         rows={6}
                         placeholder="Enter your quick observation note here..."
                       />
@@ -629,7 +631,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
           {/* Notes List */}
           <div className="space-y-4">
             {filteredNotes.map((note) => (
-              <div key={note.id} className="bg-gradient-to-r from-white to-slate-50 rounded-xl p-6 border border-slate-200/50 hover:shadow-md transition-all duration-200">
+              <div key={note.id} className="w-full bg-gradient-to-r from-white to-slate-50 rounded-lg sm:rounded-xl p-3 sm:p-4 lg:p-6 border border-slate-200/50 hover:shadow-md transition-all duration-200">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-xl border ${getNoteTypeColor(note.noteType)}`}>
@@ -910,9 +912,9 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full space-y-4 sm:space-y-6 overflow-x-hidden">
       {cdssInsights && (
-        <div className="rounded-2xl border border-indigo-200 bg-white shadow-sm p-5 space-y-3">
+        <div className="w-full rounded-xl sm:rounded-2xl border border-indigo-200 bg-white shadow-sm p-3 sm:p-5 space-y-2 sm:space-y-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-600 rounded-xl">
               <Brain className="w-5 h-5 text-white" />
