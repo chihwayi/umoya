@@ -37,6 +37,7 @@ import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
 import ProAlerts from '../components/ProAlerts';
 import PatientProViewer from '../components/PatientProViewer';
 import QuestionnaireLibrary from '../components/QuestionnaireLibrary';
+import PatientProSchedules from '../components/PatientProSchedules';
 import WorkflowList from '../components/WorkflowList';
 import CarePlanTemplates from '../components/CarePlanTemplates';
 import CarePlanViewer from '../components/CarePlanViewer';
@@ -3171,6 +3172,39 @@ const DoctorDashboard: React.FC = () => {
                 patientId={currentAppointment.patient.id}
                 tenantSlug={tenantSlug!}
                 token={localStorage.getItem('ehr_token') || ''}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Questionnaires (PRO) Modal */}
+      {showProScheduleModal && selectedPatientIdForPro && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold">Questionnaires & PRO Schedules</h2>
+                <p className="text-indigo-100 mt-1">Patient-Reported Outcomes scheduling and management</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProScheduleModal(false);
+                  setSelectedPatientIdForPro(null);
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <PatientProSchedules
+                patientId={selectedPatientIdForPro}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                onScheduleCreated={() => {
+                  console.log('PRO schedule created');
+                }}
               />
             </div>
           </div>
