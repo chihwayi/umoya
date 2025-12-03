@@ -104,6 +104,58 @@ const BedManagementDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Statistics Cards */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Total Beds</p>
+                <p className="text-2xl font-bold text-slate-900">{occupancyStats?.total_beds || 0}</p>
+              </div>
+              <Bed className="w-8 h-8 text-blue-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-emerald-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Available</p>
+                <p className="text-2xl font-bold text-emerald-600">{occupancyStats?.available || 0}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-emerald-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-red-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Occupied</p>
+                <p className="text-2xl font-bold text-red-600">{occupancyStats?.occupied || 0}</p>
+              </div>
+              <Users className="w-8 h-8 text-red-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-orange-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Cleaning</p>
+                <p className="text-2xl font-bold text-orange-600">{occupancyStats?.cleaning || 0}</p>
+              </div>
+              <Clock className="w-8 h-8 text-orange-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-purple-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">Occupancy Rate</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {occupancyStats?.occupancy_rate ? `${(occupancyStats.occupancy_rate * 100).toFixed(1)}%` : '0%'}
+                </p>
+              </div>
+              <BarChart3 className="w-8 h-8 text-purple-500" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
