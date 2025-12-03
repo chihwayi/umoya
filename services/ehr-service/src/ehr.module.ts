@@ -72,6 +72,8 @@ import { ProviderMessagingController } from './controllers/provider-messaging.co
 import { ConsentController } from './controllers/consent.controller';
 import { ImmunizationController } from './controllers/immunization.controller';
 import { BedManagementController } from './controllers/bed-management.controller';
+import { EDController } from './controllers/ed.controller';
+import { ClinicalPathwayController } from './controllers/clinical-pathway.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -181,6 +183,8 @@ import { PatientConsentService } from './services/patient-consent.service';
 import { ImmunizationService } from './services/immunization.service';
 import { BedManagementService } from './services/bed-management.service';
 import { ADTService } from './services/adt.service';
+import { EDService } from './services/ed.service';
+import { ClinicalPathwayService } from './services/clinical-pathway.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -269,6 +273,8 @@ import { RolesGuard } from './guards/roles.guard';
     ConsentController,
     ImmunizationController,
     BedManagementController,
+    EDController,
+    ClinicalPathwayController,
   ],
   providers: [
     AuthService,
@@ -382,6 +388,8 @@ import { RolesGuard } from './guards/roles.guard';
     ImmunizationService,
     BedManagementService,
     ADTService,
+    EDService,
+    ClinicalPathwayService,
     RolesGuard,
     JwtStrategy,
   ],
