@@ -304,6 +304,27 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
           ))}
         </div>
       )}
+
+      {/* Patient Workflow Modal */}
+      {showPatientWorkflow && selectedAdmission && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+            <AdmittedPatientWorkflow
+              admission={selectedAdmission}
+              tenantSlug={tenantSlug}
+              token={token}
+              onUpdate={() => {
+                loadBeds();
+                loadOccupancy();
+              }}
+              onClose={() => {
+                setShowPatientWorkflow(false);
+                setSelectedAdmission(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
