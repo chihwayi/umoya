@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { X, FileText, Check, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
 
 interface ConsentFormProps {
   patientId: string;
+  patientName: string;
   templateId: string;
   appointmentId?: string;
+  procedureId?: string;
   tenantSlug: string;
   token: string;
   onClose: () => void;
@@ -16,8 +18,10 @@ interface ConsentFormProps {
 
 const ConsentForm: React.FC<ConsentFormProps> = ({
   patientId,
+  patientName,
   templateId,
   appointmentId,
+  procedureId,
   tenantSlug,
   token,
   onClose,
@@ -27,48 +31,77 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
   const [template, setTemplate] = useState<any>(null);
   const [consent, setConsent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [filledFields, setFilledFields] = useState<Record<string, string>>({});
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [currentSignerRole, setCurrentSignerRole] = useState<string>('');
   const [signatures, setSignatures] = useState<any[]>([]);
-  const [filledFields, setFilledFields] = useState<Record<string, string>>({});
+  const [renderedContent, setRenderedContent] = useState('');
 
   useEffect(() => {
     loadTemplate();
-  }, [templateId]);
+  }, []);
 
   const loadTemplate = async () => {
     try {
       setLoading(true);
-      const response = await ehrApi.getConsentTemplate(templateId, token, tenantSlug);
+      const response = await ehrApi.get(`/consents/templates/${templateId}`, token, tenantSlug);
       setTemplate(response.data);
+      
+      // Initialize filled fields
+      const fields: Record<string, string> = {};
+      response.data.requiredFields?.forEach((field: any) => {
+        fields[field.name] = '';
+      });
+      
+      // Auto-fill known fields
+      fields['patient_name'] = patientName;
+      fields['consent_date'] = new Date().toLocaleDateString();
+      fields['facility_name'] = 'MediCore Health System';
+      
+      setFilledFields(fields);
+      renderContent(response.data.content, fields);
     } catch (error) {
+      console.error('Failed to load template:', error);
       showError('Error', 'Failed to load consent template');
-      onClose();
     } finally {
       setLoading(false);
     }
   };
 
+  const renderContent = (content: string, fields: Record<string, string>) => {
+    let rendered = content;
+    Object.keys(fields).forEach(key => {
+      const placeholder = `{{${key}}}`;
+      rendered = rendered.replace(new RegExp(placeholder, 'g'), fields[key] || `[${key}]`);
+    });
+    setRenderedContent(rendered);
+  };
+
+  const handleFieldChange = (fieldName: string, value: string) => {
+    const updated = { ...filledFields, [fieldName]: value };
+    setFilledFields(updated);
+    renderContent(template.content, updated);
+  };
+
   const createConsent = async () => {
     try {
-      setSubmitting(true);
-      const response = await ehrApi.createPatientConsent(
+      const response = await ehrApi.post(
+        '/consents',
         {
           patientId,
           templateId,
           appointmentId,
+          procedureId,
           filledFields,
         },
         token,
         tenantSlug,
       );
       setConsent(response.data);
-      showSuccess('Success', 'Consent form created');
+      showSuccess('Success', 'Consent form created. Please collect signatures.');
     } catch (error) {
+      console.error('Failed to create consent:', error);
       showError('Error', 'Failed to create consent');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -79,246 +112,269 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
 
   const saveSignature = async (signatureData: string) => {
     try {
-      if (!consent) {
-        await createConsent();
-      }
-
-      const consentId = consent?.id;
-      if (!consentId) {
-        showError('Error', 'Consent not created yet');
-        return;
-      }
-
-      await ehrApi.signConsent(
-        consentId,
+      await ehrApi.post(
+        `/consents/${consent.id}/sign`,
         {
           signerRole: currentSignerRole,
-          signerName: getCurrentUserName(),
+          signerName: currentSignerRole === 'patient' ? patientName : 'Provider',
           signatureType: 'electronic',
           signatureData,
-          signatureMethod: 'canvas',
         },
         token,
         tenantSlug,
       );
-
-      setSignatures([...signatures, { role: currentSignerRole, signed: true }]);
-      setShowSignaturePad(false);
-      showSuccess('Success', 'Signature captured');
-
-      // Check if all required signatures collected
-      const requirements = template.signatureRequirements;
-      const allSigned = checkAllSignaturesComplete(requirements, [...signatures, { role: currentSignerRole }]);
       
-      if (allSigned) {
-        showSuccess('Complete', 'All required signatures collected');
+      // Reload consent to get updated signatures
+      const response = await ehrApi.get(`/consents/${consent.id}`, token, tenantSlug);
+      setConsent(response.data);
+      setSignatures(response.data.signatures || []);
+      
+      setShowSignaturePad(false);
+      showSuccess('Success', `${currentSignerRole} signature captured`);
+      
+      // Check if all required signatures collected
+      if (response.data.status === 'signed') {
+        showSuccess('Complete', 'All required signatures collected!');
         setTimeout(() => onSuccess(), 1500);
       }
     } catch (error) {
+      console.error('Failed to save signature:', error);
       showError('Error', 'Failed to save signature');
     }
   };
 
-  const getCurrentUserName = () => {
-    // Get from localStorage or context
-    const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
-    return `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
-  };
-
-  const checkAllSignaturesComplete = (requirements: any, currentSignatures: any[]) => {
-    if (requirements.patient && !currentSignatures.some(s => s.role === 'patient')) return false;
-    if (requirements.guardian && !currentSignatures.some(s => s.role === 'guardian')) return false;
-    if (requirements.witness && !currentSignatures.some(s => s.role === 'witness')) return false;
-    if (requirements.provider && !currentSignatures.some(s => s.role === 'provider')) return false;
-    return true;
-  };
-
-  const handleDecline = async () => {
+  const declineConsent = async () => {
     if (!consent) return;
-
+    
     const reason = prompt('Please provide a reason for declining:');
     if (!reason) return;
-
+    
     try {
-      await ehrApi.declineConsent(consent.id, reason, token, tenantSlug);
-      showSuccess('Declined', 'Consent has been declined');
+      await ehrApi.post(`/consents/${consent.id}/decline`, { reason }, token, tenantSlug);
+      showSuccess('Declined', 'Consent declined');
       onClose();
     } catch (error) {
+      console.error('Failed to decline consent:', error);
       showError('Error', 'Failed to decline consent');
     }
-  };
-
-  const renderContent = () => {
-    if (!template) return null;
-
-    let content = template.content;
-    
-    // Replace placeholders with filled values
-    Object.keys(filledFields).forEach(key => {
-      const placeholder = `{{${key}}}`;
-      content = content.replace(new RegExp(placeholder, 'g'), filledFields[key] || '');
-    });
-
-    return <div dangerouslySetInnerHTML={{ __html: content }} />;
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading consent form...</p>
+        </div>
       </div>
     );
   }
 
   if (!template) return null;
 
+  const requiresSignature = (role: string) => {
+    return template.signatureRequirements?.[role] === true;
+  };
+
+  const hasSignature = (role: string) => {
+    return signatures.some(sig => sig.signerRole === role);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
-      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl my-8 max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-700 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-          <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-white" />
-            <div>
-              <h2 className="text-xl font-bold text-white">{template.title}</h2>
-              <p className="text-sm text-indigo-100">{template.consentType} - v{template.version}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-white hover:text-indigo-100">
-            <X className="w-6 h-6" />
-          </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200">
+        <div className="flex items-center gap-3 mb-2">
+          <FileText className="w-6 h-6 text-indigo-600" />
+          <h2 className="text-2xl font-bold text-slate-900">{template.title}</h2>
         </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
-          {/* Consent Content */}
-          <div className="prose max-w-none mb-6 p-6 bg-slate-50 rounded-xl border border-slate-200">
-            {renderContent()}
-          </div>
-
-          {/* Signature Requirements */}
-          <div className="bg-white border-2 border-indigo-200 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Required Signatures</h3>
-            
-            <div className="space-y-3">
-              {template.signatureRequirements.patient && (
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      signatures.some(s => s.role === 'patient') 
-                        ? 'bg-green-100' 
-                        : 'bg-slate-200'
-                    }`}>
-                      {signatures.some(s => s.role === 'patient') ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <FileText className="w-5 h-5 text-slate-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-900">Patient Signature</div>
-                      <div className="text-sm text-slate-600">Required</div>
-                    </div>
-                  </div>
-                  {!signatures.some(s => s.role === 'patient') && (
-                    <button
-                      onClick={() => handleSignature('patient')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                      Sign
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {template.signatureRequirements.provider && (
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      signatures.some(s => s.role === 'provider') 
-                        ? 'bg-green-100' 
-                        : 'bg-slate-200'
-                    }`}>
-                      {signatures.some(s => s.role === 'provider') ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <FileText className="w-5 h-5 text-slate-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-900">Provider Signature</div>
-                      <div className="text-sm text-slate-600">Required</div>
-                    </div>
-                  </div>
-                  {!signatures.some(s => s.role === 'provider') && (
-                    <button
-                      onClick={() => handleSignature('provider')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                      Sign
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {template.signatureRequirements.witness && (
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      signatures.some(s => s.role === 'witness') 
-                        ? 'bg-green-100' 
-                        : 'bg-slate-200'
-                    }`}>
-                      {signatures.some(s => s.role === 'witness') ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <FileText className="w-5 h-5 text-slate-600" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-900">Witness Signature</div>
-                      <div className="text-sm text-slate-600">Required</div>
-                    </div>
-                  </div>
-                  {!signatures.some(s => s.role === 'witness') && (
-                    <button
-                      onClick={() => handleSignature('witness')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                      Sign
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-200">
-            <button
-              onClick={handleDecline}
-              className="flex items-center gap-2 px-6 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-            >
-              <XCircle className="w-4 h-4" />
-              Decline Consent
-            </button>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={onClose}
-                className="px-6 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+        <div className="flex items-center gap-6 text-sm text-slate-600">
+          <span>Patient: <strong>{patientName}</strong></span>
+          <span>Type: <strong>{template.consentType}</strong></span>
+          <span>Version: <strong>{template.version}</strong></span>
         </div>
       </div>
+
+      {/* Dynamic Fields */}
+      {template.requiredFields && template.requiredFields.length > 0 && !consent && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-4">Required Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {template.requiredFields.map((field: any) => (
+              <div key={field.name}>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <input
+                  type={field.type || 'text'}
+                  value={filledFields[field.name] || ''}
+                  onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={field.placeholder}
+                  disabled={field.name === 'patient_name' || field.name === 'consent_date'}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Consent Content */}
+      <div className="bg-white rounded-xl border border-slate-200 p-8">
+        <div 
+          className="prose prose-slate max-w-none"
+          dangerouslySetInnerHTML={{ __html: renderedContent }}
+        />
+      </div>
+
+      {/* Actions */}
+      {!consent ? (
+        <div className="flex items-center justify-end gap-4">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={createConsent}
+            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-700 text-white rounded-lg hover:from-indigo-700 hover:to-purple-800 transition-colors font-medium flex items-center gap-2"
+          >
+            <Check className="w-5 h-5" />
+            Proceed to Signatures
+          </button>
+        </div>
+      ) : (
+        <div>
+          {/* Signature Collection */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Required Signatures</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {requiresSignature('patient') && (
+                <div className={`p-4 rounded-lg border-2 ${hasSignature('patient') ? 'border-green-500 bg-green-50' : 'border-slate-300 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-900">Patient Signature</span>
+                    {hasSignature('patient') ? (
+                      <Check className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  {!hasSignature('patient') && (
+                    <button
+                      onClick={() => handleSignature('patient')}
+                      className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                    >
+                      Sign as Patient
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {requiresSignature('provider') && (
+                <div className={`p-4 rounded-lg border-2 ${hasSignature('provider') ? 'border-green-500 bg-green-50' : 'border-slate-300 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-900">Provider Signature</span>
+                    {hasSignature('provider') ? (
+                      <Check className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  {!hasSignature('provider') && (
+                    <button
+                      onClick={() => handleSignature('provider')}
+                      className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                    >
+                      Sign as Provider
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {requiresSignature('witness') && (
+                <div className={`p-4 rounded-lg border-2 ${hasSignature('witness') ? 'border-green-500 bg-green-50' : 'border-slate-300 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-900">Witness Signature</span>
+                    {hasSignature('witness') ? (
+                      <Check className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  {!hasSignature('witness') && (
+                    <button
+                      onClick={() => handleSignature('witness')}
+                      className="w-full px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm font-medium"
+                    >
+                      Sign as Witness
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {requiresSignature('guardian') && (
+                <div className={`p-4 rounded-lg border-2 ${hasSignature('guardian') ? 'border-green-500 bg-green-50' : 'border-slate-300 bg-slate-50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-900">Guardian Signature</span>
+                    {hasSignature('guardian') ? (
+                      <Check className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  {!hasSignature('guardian') && (
+                    <button
+                      onClick={() => handleSignature('guardian')}
+                      className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
+                    >
+                      Sign as Guardian
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Status */}
+          {consent.status === 'signed' && (
+            <div className="bg-green-50 border-2 border-green-500 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <Check className="w-8 h-8 text-green-600" />
+                <div>
+                  <h3 className="text-lg font-bold text-green-900">Consent Completed</h3>
+                  <p className="text-sm text-green-700">All required signatures have been collected.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={declineConsent}
+              className="px-6 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium flex items-center gap-2"
+            >
+              <XCircle className="w-5 h-5" />
+              Decline Consent
+            </button>
+            
+            <button
+              onClick={onClose}
+              className="px-6 py-3 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Signature Pad Modal */}
       {showSignaturePad && (
         <SignaturePad
-          signerName={getCurrentUserName()}
+          signerName={currentSignerRole === 'patient' ? patientName : currentSignerRole}
           signerRole={currentSignerRole}
           onSave={saveSignature}
           onCancel={() => setShowSignaturePad(false)}
@@ -329,4 +385,3 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
 };
 
 export default ConsentForm;
-

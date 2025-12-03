@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, CheckCircle, XCircle, Clock, AlertTriangle, Eye, Download, Ban } from 'lucide-react';
+import { FileText, Check, XCircle, Clock, AlertTriangle, Eye, Download, Ban } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
@@ -20,20 +20,21 @@ const PatientConsentList: React.FC<PatientConsentListProps> = ({
   const { showSuccess, showError } = useNotification();
   const [consents, setConsents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
 
   useEffect(() => {
     loadConsents();
-  }, [patientId, filter]);
+  }, [patientId]);
 
   const loadConsents = async () => {
     try {
       setLoading(true);
-      const filters = filter !== 'all' ? { status: filter } : {};
-      const response = await ehrApi.getPatientConsents(patientId, filters, token, tenantSlug);
+      const response = await ehrApi.get(`/consents/patient/${patientId}`, token, tenantSlug);
       setConsents(response.data.consents || []);
     } catch (error) {
-      showError('Error', 'Failed to load consents');
+      console.error('Failed to load consents:', error);
+      showError('Error', 'Failed to load patient consents');
     } finally {
       setLoading(false);
     }
@@ -41,137 +42,132 @@ const PatientConsentList: React.FC<PatientConsentListProps> = ({
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'signed':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'pending':
-        return <Clock className="w-5 h-5 text-yellow-600" />;
-      case 'declined':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-      case 'expired':
-        return <AlertTriangle className="w-5 h-5 text-orange-600" />;
-      case 'revoked':
-        return <Ban className="w-5 h-5 text-red-600" />;
-      default:
-        return <FileText className="w-5 h-5 text-slate-600" />;
+      case 'signed': return <Check className="w-5 h-5 text-green-600" />;
+      case 'declined': return <XCircle className="w-5 h-5 text-red-600" />;
+      case 'pending': return <Clock className="w-5 h-5 text-amber-600" />;
+      case 'expired': return <AlertTriangle className="w-5 h-5 text-orange-600" />;
+      case 'revoked': return <Ban className="w-5 h-5 text-red-600" />;
+      default: return <FileText className="w-5 h-5 text-slate-600" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'signed':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'declined':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'expired':
-        return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'revoked':
-        return 'bg-red-100 text-red-800 border-red-300';
-      default:
-        return 'bg-slate-100 text-slate-800 border-slate-300';
+      case 'signed': return 'bg-green-100 text-green-800 border-green-300';
+      case 'declined': return 'bg-red-100 text-red-800 border-red-300';
+      case 'pending': return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'expired': return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'revoked': return 'bg-red-100 text-red-800 border-red-300';
+      default: return 'bg-slate-100 text-slate-800 border-slate-300';
     }
   };
 
-  const handleExport = async (consentId: string) => {
-    try {
-      const response = await ehrApi.exportConsent(consentId, 'pdf', token, tenantSlug);
-      showSuccess('Success', 'Consent exported');
-      // Handle PDF download
-    } catch (error) {
-      showError('Error', 'Failed to export consent');
-    }
-  };
+  const filteredConsents = consents.filter(consent => {
+    if (filterStatus !== 'all' && consent.status !== filterStatus) return false;
+    if (filterType !== 'all' && consent.consentType !== filterType) return false;
+    return true;
+  });
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading consents...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-        {['all', 'signed', 'pending', 'declined'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === status
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </button>
-        ))}
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex items-center gap-4">
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="signed">Signed</option>
+          <option value="declined">Declined</option>
+          <option value="expired">Expired</option>
+          <option value="revoked">Revoked</option>
+        </select>
+
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">All Types</option>
+          <option value="treatment">Treatment</option>
+          <option value="surgery">Surgery</option>
+          <option value="procedure">Procedure</option>
+          <option value="hipaa">HIPAA</option>
+          <option value="telehealth">Telehealth</option>
+          <option value="research">Research</option>
+        </select>
       </div>
 
-      {/* Consents List */}
-      {consents.length === 0 ? (
-        <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
-          <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-          <p className="text-slate-600">No consents found</p>
+      {/* Consent List */}
+      {filteredConsents.length === 0 ? (
+        <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+          <FileText className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <p className="text-lg font-medium text-slate-600">No consents found</p>
+          <p className="text-sm text-slate-500">No consent forms match the selected filters</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {consents.map((consent) => (
+        <div className="grid grid-cols-1 gap-4">
+          {filteredConsents.map(consent => (
             <div
               key={consent.id}
-              className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+              className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3 flex-1">
+                <div className="flex items-start gap-4 flex-1">
                   {getStatusIcon(consent.status)}
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900">{consent.title}</h4>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
-                      <span>{consent.consentType}</span>
-                      <span>•</span>
-                      <span>{consent.consentNumber}</span>
+                    <h4 className="text-lg font-bold text-slate-900 mb-1">{consent.title}</h4>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 mb-3">
+                      <span>Number: <strong>{consent.consentNumber}</strong></span>
+                      <span>Type: <strong>{consent.consentType}</strong></span>
                       {consent.signedAt && (
-                        <>
-                          <span>•</span>
-                          <span>Signed: {formatDateTimeToDDMMYYYYHHMM(consent.signedAt)}</span>
-                        </>
+                        <span>Signed: <strong>{formatDateTimeToDDMMYYYYHHMM(consent.signedAt)}</strong></span>
                       )}
                     </div>
-                    {consent.validUntil && (
-                      <div className="mt-1 text-xs text-slate-500">
-                        Valid until: {new Date(consent.validUntil).toLocaleDateString()}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold border-2 ${getStatusColor(consent.status)}`}>
+                        {consent.status.toUpperCase()}
+                      </span>
+                      {consent.validUntil && new Date(consent.validUntil) < new Date() && consent.status === 'signed' && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold border-2 bg-orange-100 text-orange-800 border-orange-300">
+                          EXPIRED
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(consent.status)}`}>
-                    {consent.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
-                {onViewConsent && (
+                  {onViewConsent && (
+                    <button
+                      onClick={() => onViewConsent(consent.id)}
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="View Consent"
+                    >
+                      <Eye className="w-5 h-5" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => onViewConsent(consent.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200"
+                    onClick={() => {/* Download */}}
+                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="Download"
                   >
-                    <Eye className="w-4 h-4" />
-                    View
+                    <Download className="w-5 h-5" />
                   </button>
-                )}
-                <button
-                  onClick={() => handleExport(consent.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
-                >
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
+                </div>
               </div>
             </div>
           ))}
@@ -182,4 +178,3 @@ const PatientConsentList: React.FC<PatientConsentListProps> = ({
 };
 
 export default PatientConsentList;
-
