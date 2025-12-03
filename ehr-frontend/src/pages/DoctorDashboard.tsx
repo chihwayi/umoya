@@ -3061,6 +3061,12 @@ const DoctorDashboard: React.FC = () => {
         <ConsentLibrary
           patientId={currentAppointment.patient.id}
           appointmentId={currentAppointment.id}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onSelectTemplate={(templateId) => {
+            console.log('Selected template:', templateId);
+            setShowConsentLibraryModal(false);
+          }}
           onClose={() => setShowConsentLibraryModal(false)}
         />
       )}
@@ -3068,16 +3074,19 @@ const DoctorDashboard: React.FC = () => {
       {showImmunizationsModal && currentAppointment && (
         <ImmunizationHistory
           patientId={currentAppointment.patient.id}
-          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
-          onClose={() => setShowImmunizationsModal(false)}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
+          onAddImmunization={() => {
+            console.log('Add immunization clicked');
+          }}
         />
       )}
 
       {showPathwaysModal && currentAppointment && (
         <PathwayManagement
           patientId={currentAppointment.patient.id}
-          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
-          onClose={() => setShowPathwaysModal(false)}
+          tenantSlug={tenantSlug!}
+          token={localStorage.getItem('ehr_token') || ''}
         />
       )}
     </div>
