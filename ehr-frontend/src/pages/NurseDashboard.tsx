@@ -6,7 +6,8 @@ import {
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
-  CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard
+  CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
+  Bed, AlertCircle
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -550,6 +551,8 @@ const NurseDashboard: React.FC = () => {
     return [
       { icon: Activity, label: 'My Tasks', desc: 'Epic-style task management', color: 'from-indigo-500 to-purple-600', action: () => setActiveTab('tasks') },
       { icon: Calendar, label: 'Today\'s Schedule', desc: 'View today\'s appointments', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('calendar') },
+      { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board & triage', color: 'from-red-500 to-orange-600', action: () => navigate(`/ehr/${tenantSlug}/emergency`) },
+      { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', action: () => navigate(`/ehr/${tenantSlug}/bed-management`) },
       { icon: Users, label: 'Patients', desc: 'Browse & schedule', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('patients') },
       { icon: Users, label: 'Patient Queue', desc: 'Manage patient flow', color: 'from-indigo-500 to-purple-500', action: () => setActiveTab('queue') },
       { icon: Heart, label: 'Vitals Recording', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', action: () => setActiveTab('vitals') },
