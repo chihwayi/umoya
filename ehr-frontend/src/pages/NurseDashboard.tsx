@@ -6,7 +6,7 @@ import {
   Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
-  CreditCard, Lock, Share2, FolderOpen
+  CreditCard, Lock, Share2, FolderOpen, Target
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import CreatePatientModal from '../components/CreatePatientModal';
