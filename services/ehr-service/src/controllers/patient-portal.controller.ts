@@ -16,6 +16,13 @@ import { AssignQuestionnaireDto, SubmitQuestionnaireDto } from '../dto/patient-p
 import { HealthGoalsService, CreateGoalDto, UpdateGoalDto, LogProgressDto } from '../services/health-goals.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+// Tier 1 Services
+import { PatientConsentService } from '../services/patient-consent.service';
+import { ClinicalPathwayService } from '../services/clinical-pathway.service';
+import { ImmunizationService } from '../services/immunization.service';
+import { ADTService } from '../services/adt.service';
+import { EDService } from '../services/ed.service';
+import { TenantService } from '../services/tenant.service';
 
 @ApiTags('Patient Portal')
 @Controller('patient-portal')
@@ -34,6 +41,13 @@ export class PatientPortalController {
     private readonly healthRecordsExportService: HealthRecordsExportService,
     private readonly patientProService: PatientProService,
     private readonly healthGoalsService: HealthGoalsService,
+    // Tier 1 Services
+    private readonly patientConsentService: PatientConsentService,
+    private readonly clinicalPathwayService: ClinicalPathwayService,
+    private readonly immunizationService: ImmunizationService,
+    private readonly adtService: ADTService,
+    private readonly edService: EDService,
+    private readonly tenantService: TenantService,
   ) {}
 
   @Post('register')
@@ -1442,6 +1456,453 @@ export class PatientPortalController {
   ) {
     const patientId = req.user.sub;
     return this.patientPortalService.reportGoalProgress(patientId, carePlanId, goalId, progressData, req.tenantId);
+  }
+
+  // ==================== TIER 1: E-CONSENT MANAGEMENT ====================
+
+  @Get('consents')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient consents' })
+  async getPatientConsents(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Query('status') status?: string,
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const repository = tenantDb.getRepository('patient_consents');
+    const queryBuilder = repository.createQueryBuilder('consent');
+    
+    queryBuilder.where('consent.patient_id = :patientId', { patientId });
+    
+    if (status) {
+      queryBuilder.andWhere('consent.status = :status', { status });
+    }
+    
+    queryBuilder.orderBy('consent.created_at', 'DESC');
+    
+    return await queryBuilder.getMany();
+  }
+
+  @Get('consents/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get consent by ID' })
+  async getConsentById(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('id') consentId: string,
+  ) {
+    const patientId = req.user.sub;
+    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    
+    // Verify patient owns this consent
+    if (consent.patientId !== patientId) {
+      throw new Error('Access denied');
+    }
+    
+    return consent;
+  }
+
+  @Post('consents/:id/sign')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sign consent' })
+  async signConsent(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('id') consentId: string,
+    @Body() signatureData: { signatureData: string; signedBy: string },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    // Verify patient owns this consent
+    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    if (consent.patientId !== patientId) {
+      throw new Error('Access denied');
+    }
+    
+    return await this.patientConsentService.signConsent(
+      consentId,
+      {
+        signatureData: signatureData.signatureData,
+        signedBy: patientId,
+        signedByRole: 'patient',
+        signatureMethod: 'typed',
+      },
+      patientId,
+      tenantDb,
+    );
+  }
+
+  @Post('consents/:id/decline')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Decline consent' })
+  async declineConsent(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('id') consentId: string,
+    @Body() declineData: { reason: string },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    // Verify patient owns this consent
+    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    if (consent.patientId !== patientId) {
+      throw new Error('Access denied');
+    }
+    
+    return await this.patientConsentService.declineConsent(
+      consentId,
+      declineData.reason,
+      patientId,
+      tenantDb,
+    );
+  }
+
+  @Get('consents/:id/export')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export consent as PDF' })
+  async exportConsent(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('id') consentId: string,
+    @Query('format') format: 'pdf' | 'json' = 'pdf',
+    @Res() res: Response,
+  ) {
+    const patientId = req.user.sub;
+    
+    // Verify patient owns this consent
+    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    if (consent.patientId !== patientId) {
+      throw new Error('Access denied');
+    }
+    
+    const exported = await this.patientConsentService.exportConsent(consentId, format, req.tenantId);
+    
+    if (format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="consent-${consentId}.pdf"`);
+      res.send(exported);
+    } else {
+      res.json(exported);
+    }
+  }
+
+  // ==================== TIER 1: CLINICAL PATHWAYS ====================
+
+  @Get('pathways')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient pathway enrollments' })
+  async getPatientPathways(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const enrollments = await tenantDb.query(`
+      SELECT 
+        pe.id,
+        pe.pathway_id,
+        cp.pathway_name,
+        cp.condition,
+        cp.specialty,
+        cp.description,
+        pe.enrollment_date,
+        pe.expected_completion_date,
+        pe.actual_completion_date,
+        pe.status,
+        pe.adherence_score,
+        pe.current_step,
+        (SELECT COUNT(*) FROM pathway_steps WHERE pathway_id = pe.pathway_id) as total_steps,
+        (SELECT COUNT(*) FROM pathway_adherence WHERE enrollment_id = pe.id AND is_completed = true) as completed_steps
+      FROM pathway_enrollments pe
+      JOIN clinical_pathways cp ON pe.pathway_id = cp.id
+      WHERE pe.patient_id = $1
+      ORDER BY pe.enrollment_date DESC
+    `, [patientId]);
+    
+    return enrollments;
+  }
+
+  @Get('pathways/:enrollmentId/progress')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pathway progress details' })
+  async getPathwayProgress(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('enrollmentId') enrollmentId: string,
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    // Verify patient owns this enrollment
+    const [enrollment] = await tenantDb.query(
+      'SELECT patient_id FROM pathway_enrollments WHERE id = $1',
+      [enrollmentId],
+    );
+    
+    if (!enrollment || enrollment.patient_id !== patientId) {
+      throw new Error('Access denied');
+    }
+    
+    const steps = await tenantDb.query(`
+      SELECT 
+        ps.id,
+        ps.step_number,
+        ps.description,
+        ps.timing_from_start_hours,
+        ps.required_actions,
+        ps.decision_criteria,
+        ps.step_type,
+        COALESCE(pa.is_completed, false) as is_completed,
+        pa.completed_date
+      FROM pathway_steps ps
+      LEFT JOIN pathway_adherence pa ON ps.id = pa.step_id AND pa.enrollment_id = $1
+      WHERE ps.pathway_id = (SELECT pathway_id FROM pathway_enrollments WHERE id = $1)
+      ORDER BY ps.step_number ASC
+    `, [enrollmentId]);
+    
+    return { enrollmentId, steps };
+  }
+
+  // ==================== TIER 1: IMMUNIZATIONS ====================
+
+  @Get('immunizations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient immunization history' })
+  async getPatientImmunizations(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    return await this.immunizationService.getPatientImmunizations(patientId, {}, tenantDb);
+  }
+
+  @Get('immunizations/forecast')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get immunization forecast' })
+  async getImmunizationForecast(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    // Get patient date of birth
+    const [patient] = await tenantDb.query(
+      'SELECT date_of_birth FROM patients WHERE id = $1',
+      [patientId],
+    );
+    
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+    
+    return await this.immunizationService.getForecast(patientId, patient.date_of_birth, tenantDb);
+  }
+
+  @Get('immunizations/export')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export immunization record' })
+  async exportImmunizationRecord(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Query('format') format: 'pdf' | 'json' = 'pdf',
+    @Res() res: Response,
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const immunizations = await this.immunizationService.getPatientImmunizations(patientId, {}, tenantDb);
+    const [patient] = await tenantDb.query(
+      'SELECT first_name, last_name, patient_number, date_of_birth FROM patients WHERE id = $1',
+      [patientId],
+    );
+    
+    if (format === 'pdf') {
+      // Simple PDF generation (you can enhance this with a proper PDF library)
+      const pdfContent = `
+        IMMUNIZATION RECORD
+        
+        Patient: ${patient.first_name} ${patient.last_name}
+        Patient Number: ${patient.patient_number}
+        Date of Birth: ${patient.date_of_birth}
+        
+        Immunizations:
+        ${immunizations.map((imm: any) => `
+        - ${imm.vaccineName} (${imm.vaccineCode})
+          Date: ${imm.administrationDate}
+          Dose: ${imm.doseNumber || 'N/A'}
+          Administered by: ${imm.administeredByName || 'N/A'}
+        `).join('\n')}
+      `;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="immunization-record-${patient.patient_number}.pdf"`);
+      res.send(Buffer.from(pdfContent));
+    } else {
+      res.json({ patient, immunizations });
+    }
+  }
+
+  // ==================== TIER 1: ADMISSION STATUS ====================
+
+  @Get('admission/current')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current admission status' })
+  async getCurrentAdmission(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const [admission] = await tenantDb.query(`
+      SELECT 
+        a.id,
+        a.admission_number,
+        a.admission_date,
+        a.expected_discharge_date,
+        a.actual_discharge_date,
+        a.admission_type,
+        a.admission_source,
+        a.admission_diagnosis,
+        a.admission_diagnosis_icd10,
+        a.admission_reason,
+        a.status,
+        a.length_of_stay_days,
+        json_build_object(
+          'bed_number', b.bed_number,
+          'room_number', b.room_number,
+          'ward_name', b.ward_name,
+          'floor', b.floor,
+          'bed_type', b.bed_type
+        ) as assigned_bed,
+        u.first_name || ' ' || u.last_name as attending_doctor_name
+      FROM admissions a
+      LEFT JOIN beds b ON a.assigned_bed_id = b.id
+      LEFT JOIN users u ON a.attending_doctor_id = u.id
+      WHERE a.patient_id = $1 
+        AND a.status = 'admitted'
+        AND a.actual_discharge_date IS NULL
+      ORDER BY a.admission_date DESC
+      LIMIT 1
+    `, [patientId]);
+    
+    return admission || null;
+  }
+
+  @Get('admission/history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get admission history' })
+  async getAdmissionHistory(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const admissions = await tenantDb.query(`
+      SELECT 
+        id,
+        admission_number,
+        admission_date,
+        expected_discharge_date,
+        actual_discharge_date,
+        admission_type,
+        admission_diagnosis,
+        admission_reason,
+        status,
+        length_of_stay_days
+      FROM admissions
+      WHERE patient_id = $1
+        AND status IN ('discharged', 'transferred')
+      ORDER BY admission_date DESC
+      LIMIT 20
+    `, [patientId]);
+    
+    return admissions;
+  }
+
+  // ==================== TIER 1: ED VISITS ====================
+
+  @Get('ed-visits')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient ED visit history' })
+  async getPatientEDVisits(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const visits = await tenantDb.query(`
+      SELECT 
+        ev.id,
+        ev.ed_visit_number,
+        ev.arrival_date,
+        ev.arrival_time,
+        ev.arrival_mode,
+        ev.chief_complaint,
+        ev.chief_complaint_snomed,
+        ev.ed_status,
+        ev.discharge_time,
+        ev.total_ed_time_minutes,
+        eta.triage_level,
+        eta.triage_assessment,
+        ed.disposition,
+        ed.discharge_diagnosis,
+        ed.discharge_diagnosis_icd10,
+        ed.discharge_instructions
+      FROM ed_visits ev
+      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.visit_id
+      LEFT JOIN ed_dispositions ed ON ev.id = ed.visit_id
+      WHERE ev.patient_id = $1
+      ORDER BY ev.arrival_date DESC, ev.arrival_time DESC
+      LIMIT 20
+    `, [patientId]);
+    
+    return visits;
+  }
+
+  @Get('ed-visits/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get ED visit details' })
+  async getEDVisitDetails(
+    @Req() req: RequestWithTenant & { user: { sub: string } },
+    @Param('id') visitId: string,
+  ) {
+    const patientId = req.user.sub;
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    
+    const [visit] = await tenantDb.query(`
+      SELECT 
+        ev.*,
+        eta.triage_level,
+        eta.triage_assessment,
+        eta.chief_complaint_details,
+        ed.disposition,
+        ed.discharge_diagnosis,
+        ed.discharge_diagnosis_icd10,
+        ed.discharge_instructions,
+        ed.follow_up_instructions
+      FROM ed_visits ev
+      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.visit_id
+      LEFT JOIN ed_dispositions ed ON ev.id = ed.visit_id
+      WHERE ev.id = $1 AND ev.patient_id = $2
+    `, [visitId, patientId]);
+    
+    if (!visit) {
+      throw new Error('ED visit not found or access denied');
+    }
+    
+    return visit;
   }
 }
 
