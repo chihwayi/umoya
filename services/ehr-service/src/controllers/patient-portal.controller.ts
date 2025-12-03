@@ -1657,7 +1657,7 @@ export class PatientPortalController {
         ps.required_actions,
         ps.decision_criteria,
         ps.step_type,
-        COALESCE(pa.is_completed, false) as is_completed,
+        CASE WHEN pa.status = 'completed' THEN true ELSE false END as is_completed,
         pa.completed_date
       FROM pathway_steps ps
       LEFT JOIN pathway_adherence pa ON ps.id = pa.step_id AND pa.enrollment_id = $1
@@ -1785,7 +1785,7 @@ export class PatientPortalController {
         ) as assigned_bed,
         u.first_name || ' ' || u.last_name as attending_doctor_name
       FROM admissions a
-      LEFT JOIN beds b ON a.assigned_bed_id = b.id
+      LEFT JOIN beds b ON a.current_bed_id = b.id
       LEFT JOIN users u ON a.attending_doctor_id = u.id
       WHERE a.patient_id = $1 
         AND a.status = 'admitted'
@@ -1851,7 +1851,6 @@ export class PatientPortalController {
         ev.chief_complaint,
         ev.chief_complaint_snomed,
         ev.ed_status,
-        ev.discharge_time,
         ev.total_ed_time_minutes,
         eta.triage_level,
         eta.triage_assessment,
@@ -1860,8 +1859,8 @@ export class PatientPortalController {
         ed.discharge_diagnosis_icd10,
         ed.discharge_instructions
       FROM ed_visits ev
-      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.visit_id
-      LEFT JOIN ed_dispositions ed ON ev.id = ed.visit_id
+      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.ed_visit_id
+      LEFT JOIN ed_dispositions ed ON ev.id = ed.ed_visit_id
       WHERE ev.patient_id = $1
       ORDER BY ev.arrival_date DESC, ev.arrival_time DESC
       LIMIT 20
@@ -1893,8 +1892,8 @@ export class PatientPortalController {
         ed.discharge_instructions,
         ed.follow_up_instructions
       FROM ed_visits ev
-      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.visit_id
-      LEFT JOIN ed_dispositions ed ON ev.id = ed.visit_id
+      LEFT JOIN ed_triage_assessments eta ON ev.id = eta.ed_visit_id
+      LEFT JOIN ed_dispositions ed ON ev.id = ed.ed_visit_id
       WHERE ev.id = $1 AND ev.patient_id = $2
     `, [visitId, patientId]);
     
