@@ -241,141 +241,101 @@ const PatientDashboard: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        {/* Compact Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
           <Link
             to={`/${tenantSlug}/appointments`}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-4">
-              <Calendar className="w-8 h-8 opacity-90" />
-              <TrendingUp className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-blue-100 text-sm mb-1">Appointments</p>
-            <p className="text-3xl font-bold">{stats.upcomingAppointments}</p>
+            <Calendar className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-blue-100 text-xs mb-1">Appointments</p>
+            <p className="text-2xl font-bold">{stats.upcomingAppointments}</p>
           </Link>
 
           <Link
             to={`/${tenantSlug}/bills`}
-            className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-4">
-              <CreditCard className="w-8 h-8 opacity-90" />
-              <Clock className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-yellow-100 text-sm mb-1">Pending Bills</p>
-            <p className="text-3xl font-bold">{stats.pendingBills}</p>
+            <CreditCard className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-yellow-100 text-xs mb-1">Pending Bills</p>
+            <p className="text-2xl font-bold">{stats.pendingBills}</p>
           </Link>
 
-          <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
-            <div className="flex items-center justify-between mb-4">
-              <Bell className="w-8 h-8 opacity-90" />
-              <TrendingUp className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-indigo-100 text-sm mb-1">Notifications</p>
-            <p className="text-3xl font-bold">{unreadCount}</p>
+          <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform">
+            <Bell className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-indigo-100 text-xs mb-1">Notifications</p>
+            <p className="text-2xl font-bold">{unreadCount}</p>
           </div>
 
           <Link
             to={`/${tenantSlug}/prescriptions`}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-4">
-              <Pill className="w-8 h-8 opacity-90" />
-              <Activity className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-purple-100 text-sm mb-1">Prescriptions</p>
-            <p className="text-3xl font-bold">{stats.activePrescriptions}</p>
+            <Pill className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-purple-100 text-xs mb-1">Prescriptions</p>
+            <p className="text-2xl font-bold">{stats.activePrescriptions}</p>
           </Link>
 
           <Link
             to={`/${tenantSlug}/records`}
-            className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-4">
-              <FileText className="w-8 h-8 opacity-90" />
-              <TrendingUp className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-green-100 text-sm mb-1">Medical Records</p>
-            <p className="text-3xl font-bold">{stats.medicalRecords}</p>
+            <FileText className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-green-100 text-xs mb-1">Medical Records</p>
+            <p className="text-2xl font-bold">{stats.medicalRecords}</p>
           </Link>
 
+          {/* Merged Vitals Card - Shows both count and latest vitals */}
           <Link
             to={`/${tenantSlug}/vitals`}
-            className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer relative group"
           >
-            <div className="flex items-center justify-between mb-4">
-              <Activity className="w-8 h-8 opacity-90" />
-              <TrendingUp className="w-5 h-5 opacity-75" />
-            </div>
-            <p className="text-red-100 text-sm mb-1">Vitals</p>
-            <p className="text-3xl font-bold">{stats.vitalsRecords}</p>
+            <Activity className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-red-100 text-xs mb-1">Total Vitals</p>
+            <p className="text-2xl font-bold mb-1">{stats.vitalsRecords}</p>
+            {dashboardData?.latestVitals && (
+              <div className="text-xs text-red-100 space-y-0.5 border-t border-red-400/30 pt-2 mt-2">
+                <div className="flex items-center justify-between">
+                  <span className="opacity-75">BP:</span>
+                  <span className="font-semibold">{dashboardData.latestVitals.bloodPressure || '—'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="opacity-75">HR:</span>
+                  <span className="font-semibold">{dashboardData.latestVitals.heartRate || '—'} bpm</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="opacity-75">Temp:</span>
+                  <span className="font-semibold">{dashboardData.latestVitals.temperature || '—'}°C</span>
+                </div>
+              </div>
+            )}
           </Link>
         </div>
 
-        {/* Upcoming Appointment & Latest Vitals */}
-        {(dashboardData?.upcomingAppointment || dashboardData?.latestVitals) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {dashboardData.upcomingAppointment && (
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  Upcoming Appointment
-                </h3>
-                <p className="text-blue-100 mb-2">
-                  {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'EEEE, MMMM dd, yyyy')}
-                </p>
-                <p className="text-blue-100 mb-2">
-                  {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'h:mm a')}
-                </p>
-                {dashboardData.upcomingAppointment.reason && (
-                  <p className="text-blue-200 text-sm mt-2">Reason: {dashboardData.upcomingAppointment.reason}</p>
-                )}
-                <Link
-                  to={`/${tenantSlug}/appointments`}
-                  className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
-                >
-                  View All Appointments →
-                </Link>
-              </div>
-            )}
-
-            {dashboardData.latestVitals && (
-              <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl shadow-lg p-6 text-white">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Activity className="w-5 h-5" />
-                  Latest Vitals
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {dashboardData.latestVitals.bloodPressure && (
-                    <div>
-                      <p className="text-red-100 text-xs mb-1">Blood Pressure</p>
-                      <p className="text-lg font-bold">{dashboardData.latestVitals.bloodPressure}</p>
-                    </div>
-                  )}
-                  {dashboardData.latestVitals.heartRate && (
-                    <div>
-                      <p className="text-red-100 text-xs mb-1">Heart Rate</p>
-                      <p className="text-lg font-bold">{dashboardData.latestVitals.heartRate} bpm</p>
-                    </div>
-                  )}
-                  {dashboardData.latestVitals.temperature && (
-                    <div>
-                      <p className="text-red-100 text-xs mb-1">Temperature</p>
-                      <p className="text-lg font-bold">{dashboardData.latestVitals.temperature}°C</p>
-                    </div>
-                  )}
-                </div>
-                <p className="text-red-200 text-xs mt-3">
-                  {format(new Date(dashboardData.latestVitals.recordedAt), 'MMM dd, yyyy')}
-                </p>
-                <Link
-                  to={`/${tenantSlug}/vitals`}
-                  className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
-                >
-                  View All Vitals →
-                </Link>
-              </div>
-            )}
+        {/* Upcoming Appointment */}
+        {dashboardData?.upcomingAppointment && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-6 text-white">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Upcoming Appointment
+              </h3>
+              <p className="text-blue-100 mb-2">
+                {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'EEEE, MMMM dd, yyyy')}
+              </p>
+              <p className="text-blue-100 mb-2">
+                {format(new Date(dashboardData.upcomingAppointment.appointmentDate), 'h:mm a')}
+              </p>
+              {dashboardData.upcomingAppointment.reason && (
+                <p className="text-blue-200 text-sm mt-2">Reason: {dashboardData.upcomingAppointment.reason}</p>
+              )}
+              <Link
+                to={`/${tenantSlug}/appointments`}
+                className="inline-block mt-4 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-semibold"
+              >
+                View All Appointments →
+              </Link>
+            </div>
           </div>
         )}
 
