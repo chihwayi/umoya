@@ -22,6 +22,19 @@ const AdmittedPatientPage: React.FC = () => {
   const admission = location.state?.admission;
   const token = localStorage.getItem('ehr_token') || '';
   
+  // Create a pseudo-appointment object for modals that expect appointment
+  const pseudoAppointment = admission ? {
+    appointmentId: admission.id,
+    patientId: admission.patient_id,
+    patient: {
+      id: admission.patient_id,
+      firstName: admission.patient_first_name,
+      lastName: admission.patient_last_name,
+    },
+    doctorId: admission.attending_provider,
+    paymentStatus: 'paid', // Inpatients are billed at discharge, not per visit
+  } : null;
+  
   const [activeTab, setActiveTab] = useState('overview');
   const [vitals, setVitals] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
@@ -912,47 +925,47 @@ const AdmittedPatientPage: React.FC = () => {
       )}
 
       {/* Progress Note Modal */}
-      {showProgressNoteModal && (
+      {showProgressNoteModal && pseudoAppointment && (
         <ClinicalNotesModal
-          patientId={admission.patient_id}
-          appointmentId={null}
-          tenantSlug={tenantSlug!}
-          token={token}
+          open={true}
           onClose={() => setShowProgressNoteModal(false)}
-          onSuccess={() => {
+          onSaved={() => {
             setShowProgressNoteModal(false);
             showSuccess('Success', 'Progress note saved');
           }}
+          appointment={pseudoAppointment as any}
+          tenantSlug={tenantSlug!}
+          token={token}
         />
       )}
 
       {/* Prescription Modal */}
-      {showPrescriptionModal && (
+      {showPrescriptionModal && pseudoAppointment && (
         <PrescriptionsModal
-          patientId={admission.patient_id}
-          appointmentId={null}
-          tenantSlug={tenantSlug!}
-          token={token}
+          open={true}
           onClose={() => setShowPrescriptionModal(false)}
-          onSuccess={() => {
+          onSaved={() => {
             setShowPrescriptionModal(false);
             showSuccess('Success', 'Prescription created');
           }}
+          appointment={pseudoAppointment as any}
+          tenantSlug={tenantSlug!}
+          token={token}
         />
       )}
 
       {/* Lab Order Modal */}
-      {showLabOrderModal && (
+      {showLabOrderModal && pseudoAppointment && (
         <LabOrdersModal
-          patientId={admission.patient_id}
-          appointmentId={null}
-          tenantSlug={tenantSlug!}
-          token={token}
+          open={true}
           onClose={() => setShowLabOrderModal(false)}
-          onSuccess={() => {
+          onSaved={() => {
             setShowLabOrderModal(false);
             showSuccess('Success', 'Lab order created');
           }}
+          appointment={pseudoAppointment as any}
+          tenantSlug={tenantSlug!}
+          token={token}
         />
       )}
     </div>
