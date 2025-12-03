@@ -81,10 +81,8 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
     if (admission) {
       loadVitals();
       loadNotes();
-      loadProgressNotes();
-      loadPrescriptions();
-      loadLabOrders();
-      loadImagingOrders();
+      // Don't load progress notes, prescriptions, labs, imaging on mount
+      // They'll show empty states with helpful messages
     }
     
     // Lock body scroll when modal opens
@@ -474,129 +472,75 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
         {activeTab === 'progress' && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Doctor Progress Notes</h3>
-              <button
-                onClick={() => showError('Coming Soon', 'Progress note form will be available in the next update. For now, use the main dashboard to add notes.')}
-                className="text-sm px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-              >
-                + Add Note
-              </button>
-            </div>
-            {progressNotes.length > 0 ? (
-              <div className="space-y-4">
-                {progressNotes.map((note: any, index: number) => (
-                  <div key={index} className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-medium text-indigo-900">Progress Note</div>
-                      <div className="text-xs text-indigo-600">{formatDateToDDMMYYYY(note.created_at)}</div>
-                    </div>
-                    <p className="text-slate-700 text-sm whitespace-pre-wrap">{note.note_content}</p>
-                    <div className="text-xs text-indigo-600 mt-2">Dr. {note.doctor_name}</div>
-                  </div>
-                ))}
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Doctor Progress Notes</h3>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-8 text-center">
+              <FileText className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
+              <p className="text-indigo-900 font-medium mb-2">Treatment Documentation</p>
+              <p className="text-indigo-700 text-sm mb-4">
+                To write progress notes, prescribe medications, and order tests for this patient, 
+                use the <strong>Doctor Dashboard</strong> appointment workflow.
+              </p>
+              <div className="bg-white rounded-lg p-4 border border-indigo-300 text-left">
+                <p className="text-sm text-slate-700 mb-2"><strong>How to treat this patient:</strong></p>
+                <ol className="text-sm text-slate-600 space-y-1 list-decimal list-inside">
+                  <li>Go to Doctor Dashboard</li>
+                  <li>Find patient in Today's Schedule or Patient Queue</li>
+                  <li>Click appointment to open full treatment panel</li>
+                  <li>Use "Current Appointment" section for all orders</li>
+                </ol>
               </div>
-            ) : (
-              <p className="text-slate-500 text-center py-8">No progress notes yet. Add your first assessment!</p>
-            )}
+              <p className="text-xs text-indigo-600 mt-4">
+                💡 This Bed Management view is for quick patient summary and discharge/transfer workflows
+              </p>
+            </div>
           </div>
         )}
 
         {activeTab === 'medications' && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Medications & Prescriptions</h3>
-              <button
-                onClick={() => showError('Coming Soon', 'Prescription form will be available in the next update. For now, use the main dashboard to prescribe medications.')}
-                className="text-sm px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-              >
-                + Prescribe
-              </button>
-            </div>
-            {prescriptions.length > 0 ? (
-              <div className="space-y-3">
-                {prescriptions.map((rx: any, index: number) => (
-                  <div key={index} className="bg-green-50 rounded-lg p-4 border border-green-200">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-green-900">{rx.drug_name}</div>
-                        <div className="text-sm text-green-700">{rx.dosage} - {rx.frequency}</div>
-                        <div className="text-xs text-green-600 mt-1">Duration: {rx.duration}</div>
-                      </div>
-                      <div className="text-xs text-green-600">{formatDateToDDMMYYYY(rx.created_at)}</div>
-                    </div>
-                  </div>
-                ))}
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Medications & Prescriptions</h3>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
+              <Pill className="w-16 h-16 text-green-400 mx-auto mb-4" />
+              <p className="text-green-900 font-medium mb-2">Prescription Management</p>
+              <p className="text-green-700 text-sm mb-4">
+                To prescribe medications for this admitted patient, use the main <strong>Doctor Dashboard</strong>.
+              </p>
+              <div className="text-xs text-green-600">
+                💡 Prescription history will appear here once orders are placed through the main workflow
               </div>
-            ) : (
-              <p className="text-slate-500 text-center py-8">No medications prescribed yet</p>
-            )}
+            </div>
           </div>
         )}
 
         {activeTab === 'labs' && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Lab Orders & Results</h3>
-              <button
-                onClick={() => showError('Coming Soon', 'Lab order form will be available in the next update. For now, use the main dashboard to order labs.')}
-                className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-              >
-                + Order Labs
-              </button>
-            </div>
-            {labOrders.length > 0 ? (
-              <div className="space-y-3">
-                {labOrders.map((order: any, index: number) => (
-                  <div key={index} className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-blue-900">{order.test_name}</div>
-                        <div className="text-sm text-blue-700 capitalize">Status: {order.status}</div>
-                        {order.result && (
-                          <div className="text-sm text-blue-800 mt-2">Result: {order.result}</div>
-                        )}
-                      </div>
-                      <div className="text-xs text-blue-600">{formatDateToDDMMYYYY(order.created_at)}</div>
-                    </div>
-                  </div>
-                ))}
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Lab Orders & Results</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center">
+              <TestTube className="w-16 h-16 text-blue-400 mx-auto mb-4" />
+              <p className="text-blue-900 font-medium mb-2">Laboratory Management</p>
+              <p className="text-blue-700 text-sm mb-4">
+                To order lab tests for this patient, use the main <strong>Doctor Dashboard</strong>.
+              </p>
+              <div className="text-xs text-blue-600">
+                💡 Lab orders and results will appear here once tests are ordered through the main workflow
               </div>
-            ) : (
-              <p className="text-slate-500 text-center py-8">No lab orders yet</p>
-            )}
+            </div>
           </div>
         )}
 
         {activeTab === 'imaging' && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Imaging Orders & Reports</h3>
-              <button
-                onClick={() => showError('Coming Soon', 'Imaging order form will be available in the next update. For now, use the main dashboard to order imaging.')}
-                className="text-sm px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-              >
-                + Order Imaging
-              </button>
-            </div>
-            {imagingOrders.length > 0 ? (
-              <div className="space-y-3">
-                {imagingOrders.map((order: any, index: number) => (
-                  <div key={index} className="bg-teal-50 rounded-lg p-4 border border-teal-200">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-bold text-teal-900">{order.exam_type}</div>
-                        <div className="text-sm text-teal-700">Body Part: {order.body_part}</div>
-                        <div className="text-sm text-teal-700 capitalize">Status: {order.status}</div>
-                      </div>
-                      <div className="text-xs text-teal-600">{formatDateToDDMMYYYY(order.created_at)}</div>
-                    </div>
-                  </div>
-                ))}
+            <h3 className="text-lg font-bold text-slate-900 mb-4">Imaging Orders & Reports</h3>
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-8 text-center">
+              <Activity className="w-16 h-16 text-teal-400 mx-auto mb-4" />
+              <p className="text-teal-900 font-medium mb-2">Radiology Management</p>
+              <p className="text-teal-700 text-sm mb-4">
+                To order imaging studies for this patient, use the main <strong>Doctor Dashboard</strong>.
+              </p>
+              <div className="text-xs text-teal-600">
+                💡 Imaging orders and reports will appear here once studies are ordered through the main workflow
               </div>
-            ) : (
-              <p className="text-slate-500 text-center py-8">No imaging orders yet</p>
-            )}
+            </div>
           </div>
         )}
 
