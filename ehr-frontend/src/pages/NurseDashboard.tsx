@@ -1296,23 +1296,52 @@ const NurseDashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
         {getNurseActions().map((action, index) => (
           <button
             key={index}
             onClick={action.action}
-            className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6 hover:shadow-xl transition-all duration-300 group text-left relative"
+            className="relative overflow-hidden rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 group text-left transform hover:-translate-y-1"
           >
-            <div className={`p-3 bg-gradient-to-r ${action.color} rounded-xl w-fit mb-4 group-hover:scale-110 transition-transform duration-200`}>
-              <action.icon className="w-6 h-6 text-white" />
+            {/* Gradient Background */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${action.color} opacity-90 group-hover:opacity-100 transition-opacity`}></div>
+            
+            {/* Content */}
+            <div className="relative p-6">
+              {/* Icon */}
+              <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg">
+                <action.icon className="w-7 h-7 text-white" />
+              </div>
+              
+              {/* Text */}
+              <h3 className="text-lg font-bold text-white mb-1.5 drop-shadow-sm">{action.label}</h3>
+              <p className="text-sm text-white/90 leading-relaxed">{action.desc}</p>
+              
+              {/* Badge */}
+              {action.badge && action.badge > 0 && (
+                <div className="absolute top-4 right-4 flex items-center justify-center">
+                  <span className="relative inline-flex">
+                    <span className="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-bold bg-white text-slate-900 shadow-lg ring-2 ring-white/30">
+                      {action.badge}
+                    </span>
+                    <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                    </span>
+                  </span>
+                </div>
+              )}
+              
+              {/* Hover Arrow */}
+              <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">{action.label}</h3>
-            <p className="text-sm text-slate-600">{action.desc}</p>
-            {action.badge && action.badge > 0 && (
-              <span className="absolute top-4 right-4 inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold bg-violet-600 text-white shadow-lg ring-2 ring-white">
-                {action.badge}
-              </span>
-            )}
+            
+            {/* Shimmer Effect */}
+            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
           </button>
         ))}
       </div>
