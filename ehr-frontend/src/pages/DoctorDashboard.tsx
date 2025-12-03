@@ -1096,16 +1096,15 @@ const DoctorDashboard: React.FC = () => {
   const getDoctorActions = () => {
     return [
       { icon: Users, label: 'Patients', desc: 'Patient management', color: 'from-emerald-500 to-teal-500', route: 'doctor/patients' },
-      { icon: FileText, label: 'Questionnaires', desc: 'Assign & manage PROs', color: 'from-indigo-500 to-purple-500', action: 'questionnaires' },
       { icon: Activity, label: 'Workflows', desc: 'Automate care processes', color: 'from-violet-500 to-purple-500', action: 'workflows' },
-      { icon: Target, label: 'Care Plans', desc: 'Structured care management', color: 'from-teal-500 to-cyan-500', action: 'care-plans' },
-      { icon: Send, label: 'Referrals', desc: 'Refer patients to specialists', color: 'from-blue-500 to-indigo-500', action: 'referrals' },
-      { icon: FileText, label: 'Documents', desc: 'Upload & manage patient documents', color: 'from-purple-500 to-pink-500', action: 'documents' },
       { icon: Mail, label: 'Messages', desc: 'Provider messaging & inbox', color: 'from-indigo-500 to-purple-500', action: 'messages' },
       { icon: Calendar, label: 'Appointments', desc: 'Schedule & manage', color: 'from-purple-500 to-indigo-500', route: 'doctor/appointments' },
       { icon: FileText, label: 'Treatment History', desc: 'Past treatments by you', color: 'from-blue-500 to-cyan-500', route: 'doctor/treatments' },
       { icon: Activity, label: 'HIV/AIDS Care', desc: 'HIV patient management & ARV', color: 'from-red-500 to-orange-500', route: 'doctor/hiv' },
       { icon: Baby, label: 'Maternity & Obstetrics', desc: 'High-risk pregnancies & deliveries', color: 'from-pink-500 to-rose-500', route: 'doctor/maternity' },
+      { icon: Heart, label: 'Oncology', desc: 'Cancer care & treatment', color: 'from-violet-500 to-purple-500', route: 'doctor/oncology' },
+      { icon: Heart, label: 'Cardiology', desc: 'Heart & cardiovascular care', color: 'from-red-500 to-pink-500', route: 'doctor/cardiology' },
+      { icon: Eye, label: 'Ophthalmology', desc: 'Eye care & vision', color: 'from-blue-500 to-cyan-500', route: 'doctor/ophthalmology' },
       { icon: BarChart3, label: 'Analytics', desc: 'Patient insights', color: 'from-green-500 to-emerald-500' },
     ];
   };
@@ -1711,6 +1710,27 @@ const DoctorDashboard: React.FC = () => {
                         >
                           <Send className="w-4 h-4" />
                           Referrals
+                        </button>
+                        <button
+                          onClick={() => setShowDocumentListModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-60 disabled:hover:from-purple-500 disabled:hover:to-pink-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Documents
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (selectedPatientData?.id) {
+                              setSelectedPatientIdForPro(selectedPatientData.id);
+                              setShowProScheduleModal(true);
+                            }
+                          }}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-60 disabled:hover:from-indigo-500 disabled:hover:to-purple-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Questionnaires
                         </button>
                         <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <TestTube className="w-4 h-4" />
