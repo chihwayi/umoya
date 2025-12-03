@@ -33,7 +33,7 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
 
   const loadTrackingBoard = async () => {
     try {
-      const response = await ehrApi.get('/ed/tracking-board', token, tenantSlug);
+      const response = await ehrApi.getEDTrackingBoard(token, tenantSlug);
       setVisits(response.data || []);
       setLoading(false);
     } catch (error) {
