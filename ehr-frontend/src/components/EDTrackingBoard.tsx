@@ -6,6 +6,7 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import EDDispositionModal from './EDDispositionModal';
 
 interface EDTrackingBoardProps {
   tenantSlug: string;
@@ -22,6 +23,8 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
   const [loading, setLoading] = useState(true);
   const [filterESI, setFilterESI] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedVisit, setSelectedVisit] = useState<any>(null);
+  const [showDispositionModal, setShowDispositionModal] = useState(false);
 
   useEffect(() => {
     loadTrackingBoard();
@@ -151,9 +154,13 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
             const isDelayed = waitTime > 60;
             
             return (
-              <div
+              <button
                 key={visit.id}
-                className="relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 group"
+                onClick={() => {
+                  setSelectedVisit(visit);
+                  setShowDispositionModal(true);
+                }}
+                className="relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 group w-full text-left cursor-pointer"
               >
                 {/* ESI Gradient Background */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${getESIColor(visit.triageLevel)} opacity-10 group-hover:opacity-20 transition-opacity`}></div>
@@ -263,10 +270,29 @@ const EDTrackingBoard: React.FC<EDTrackingBoardProps> = ({
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
+      )}
+
+      {/* ED Disposition Modal */}
+      {showDispositionModal && selectedVisit && (
+        <EDDispositionModal
+          visit={selectedVisit}
+          tenantSlug={tenantSlug}
+          token={token}
+          onClose={() => {
+            setShowDispositionModal(false);
+            setSelectedVisit(null);
+          }}
+          onSuccess={() => {
+            setShowDispositionModal(false);
+            setSelectedVisit(null);
+            loadTrackingBoard();
+            if (onRefresh) onRefresh();
+          }}
+        />
       )}
     </div>
   );
