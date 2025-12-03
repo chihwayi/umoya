@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, LogOut, ArrowRight, Home, Ambulance, FileText } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import ICD10Picker from './ICD10Picker';
 import axios from 'axios';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
@@ -35,6 +36,16 @@ const EDDispositionModal: React.FC<EDDispositionModalProps> = ({
     prescriptionsGiven: '',
     referrals: '',
   });
+  
+  const handleICD10Change = (code: string, description: string) => {
+    setDispositionData({
+      ...dispositionData,
+      dischargeDiagnosisICD10: code,
+      dischargeDiagnosisICD10Term: description,
+      // Auto-fill diagnosis text if empty
+      dischargeDiagnosis: dispositionData.dischargeDiagnosis || description,
+    });
+  };
 
   const [procedures, setProcedures] = useState<Array<{
     procedure: string;
@@ -149,21 +160,25 @@ const EDDispositionModal: React.FC<EDDispositionModalProps> = ({
             />
           </div>
 
-          {/* ICD-10 Code - REQUIRED FOR BILLING */}
+          {/* ICD-10 Code - REQUIRED FOR BILLING - SEARCHABLE */}
           <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
-            <label className="block text-sm font-bold text-yellow-900 mb-2">
-              🚨 ICD-10 Code * (REQUIRED FOR BILLING)
-            </label>
-            <input
-              type="text"
+            <ICD10Picker
               value={dispositionData.dischargeDiagnosisICD10}
-              onChange={(e) => setDispositionData({ ...dispositionData, dischargeDiagnosisICD10: e.target.value.toUpperCase() })}
-              placeholder="e.g., I21.0, S06.0, J18.9"
-              className="w-full px-3 py-2 border-2 border-yellow-400 rounded-lg focus:ring-2 focus:ring-yellow-500 font-mono"
+              onChange={handleICD10Change}
+              token={token}
+              tenantSlug={tenantSlug}
+              label="🚨 ICD-10 Code (REQUIRED FOR BILLING)"
+              placeholder="Search: chest pain, stroke, pneumonia..."
+              helperText="⚠️ Without ICD-10, this ED visit CANNOT be billed to insurance!"
+              required={true}
             />
-            <p className="text-xs text-yellow-800 mt-2">
-              ⚠️ Without ICD-10, this ED visit CANNOT be billed to insurance!
-            </p>
+            {dispositionData.dischargeDiagnosisICD10 && (
+              <div className="mt-2 bg-green-50 border border-green-300 rounded-lg p-2">
+                <div className="text-xs text-green-700">
+                  ✓ Selected: <strong className="font-mono">{dispositionData.dischargeDiagnosisICD10}</strong> - {dispositionData.dischargeDiagnosisICD10Term}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SNOMED Code - For Clinical Documentation */}
