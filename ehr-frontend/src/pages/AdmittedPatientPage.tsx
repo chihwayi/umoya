@@ -259,37 +259,73 @@ const AdmittedPatientPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-6 overflow-x-auto">
-            {['overview', 'vitals', 'nursing'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`py-4 px-4 border-b-2 transition whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'border-indigo-600 text-indigo-600 font-semibold'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {tab === 'overview' ? 'Overview' : 
-                 tab === 'vitals' ? 'Vitals History' :
-                 'Nursing Notes'}
-              </button>
-            ))}
+      {/* Tabs - Glassy Design with Icons */}
+      <div className="bg-gradient-to-r from-slate-50 to-indigo-50 border-b border-indigo-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex gap-3 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
+                activeTab === 'overview'
+                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg scale-105'
+                  : 'bg-white/60 backdrop-blur-sm text-slate-700 hover:bg-white/80 hover:shadow-md'
+              }`}
+            >
+              <Bed className={`w-5 h-5 ${activeTab === 'overview' ? 'text-white' : 'text-indigo-600'}`} />
+              <span>Overview</span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('vitals')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
+                activeTab === 'vitals'
+                  ? 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-lg scale-105'
+                  : 'bg-white/60 backdrop-blur-sm text-slate-700 hover:bg-white/80 hover:shadow-md'
+              }`}
+            >
+              <Heart className={`w-5 h-5 ${activeTab === 'vitals' ? 'text-white' : 'text-blue-600'}`} />
+              <span>Vitals History</span>
+              {vitals.length > 0 && (
+                <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+                  activeTab === 'vitals' ? 'bg-white/20' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {vitals.length}
+                </span>
+              )}
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('nursing')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
+                activeTab === 'nursing'
+                  ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-lg scale-105'
+                  : 'bg-white/60 backdrop-blur-sm text-slate-700 hover:bg-white/80 hover:shadow-md'
+              }`}
+            >
+              <FileText className={`w-5 h-5 ${activeTab === 'nursing' ? 'text-white' : 'text-green-600'}`} />
+              <span>Nursing Notes</span>
+              {notes.length > 0 && (
+                <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+                  activeTab === 'nursing' ? 'bg-white/20' : 'bg-green-100 text-green-700'
+                }`}>
+                  {notes.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 min-h-screen">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Admission Details */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
               <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <Bed className="w-5 h-5 text-indigo-600" />
+                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+                  <Bed className="w-5 h-5 text-white" />
+                </div>
                 Admission Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -323,10 +359,12 @@ const AdmittedPatientPage: React.FC = () => {
             </div>
 
             {/* Latest Vitals */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+            <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-red-600" />
+                  <div className="p-2 bg-gradient-to-br from-red-500 to-rose-600 rounded-lg">
+                    <Heart className="w-5 h-5 text-white" />
+                  </div>
                   Latest Vitals
                 </h3>
                 <button
@@ -338,29 +376,47 @@ const AdmittedPatientPage: React.FC = () => {
               </div>
               {vitals.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <div className="bg-red-50 rounded-lg p-4">
-                    <div className="text-xs text-red-600 mb-1">Temperature</div>
-                    <div className="text-2xl font-bold text-red-700">{vitals[0].temperature || 'N/A'}°C</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-500 to-rose-600"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">Temperature</div>
+                      <div className="text-2xl font-bold text-white">{vitals[0].temperature || 'N/A'}°C</div>
+                    </div>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <div className="text-xs text-blue-600 mb-1">Blood Pressure</div>
-                    <div className="text-2xl font-bold text-blue-700">{vitals[0].systolic || 'N/A'}/{vitals[0].diastolic || 'N/A'}</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">Blood Pressure</div>
+                      <div className="text-2xl font-bold text-white">{vitals[0].systolic || 'N/A'}/{vitals[0].diastolic || 'N/A'}</div>
+                    </div>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-4">
-                    <div className="text-xs text-green-600 mb-1">Heart Rate</div>
-                    <div className="text-2xl font-bold text-green-700">{vitals[0].heartRate || 'N/A'} bpm</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">Heart Rate</div>
+                      <div className="text-2xl font-bold text-white">{vitals[0].heartRate || 'N/A'} bpm</div>
+                    </div>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-4">
-                    <div className="text-xs text-purple-600 mb-1">Resp. Rate</div>
-                    <div className="text-2xl font-bold text-purple-700">{vitals[0].respiratoryRate || 'N/A'} /min</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-violet-600"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">Resp. Rate</div>
+                      <div className="text-2xl font-bold text-white">{vitals[0].respiratoryRate || 'N/A'} /min</div>
+                    </div>
                   </div>
-                  <div className="bg-cyan-50 rounded-lg p-4">
-                    <div className="text-xs text-cyan-600 mb-1">SpO2</div>
-                    <div className="text-2xl font-bold text-cyan-700">{vitals[0].oxygenSaturation || 'N/A'}%</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500 to-blue-500"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">SpO2</div>
+                      <div className="text-2xl font-bold text-white">{vitals[0].oxygenSaturation || 'N/A'}%</div>
+                    </div>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <div className="text-xs text-slate-600 mb-1">Recorded</div>
-                    <div className="text-sm font-medium text-slate-700">{vitals[0].recorded_at ? formatDateToDDMMYYYY(vitals[0].recorded_at) : 'N/A'}</div>
+                  <div className="relative overflow-hidden rounded-xl shadow-lg">
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-700"></div>
+                    <div className="relative p-4">
+                      <div className="text-xs text-white/90 mb-1">Recorded</div>
+                      <div className="text-sm font-medium text-white">{vitals[0].recorded_at ? formatDateToDDMMYYYY(vitals[0].recorded_at) : 'N/A'}</div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -369,7 +425,7 @@ const AdmittedPatientPage: React.FC = () => {
             </div>
 
             {/* Treatment Info Card */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-6">
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
               <h3 className="text-lg font-bold text-indigo-900 mb-3">📋 Complete Treatment Workflow</h3>
               <p className="text-indigo-700 mb-4">
                 For full patient treatment (progress notes, prescriptions, lab orders, imaging), use the <strong>Doctor Dashboard</strong>:
@@ -391,9 +447,11 @@ const AdmittedPatientPage: React.FC = () => {
         )}
 
         {activeTab === 'vitals' && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
             <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-600" />
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
               Vitals History
             </h3>
             {vitals.length > 0 ? (
@@ -432,9 +490,11 @@ const AdmittedPatientPage: React.FC = () => {
         )}
 
         {activeTab === 'nursing' && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-300">
             <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-green-600" />
+              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
               Nursing Notes
             </h3>
             {notes.length > 0 ? (
