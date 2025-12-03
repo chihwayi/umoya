@@ -4,9 +4,9 @@ import {
   Heart, ArrowRightLeft, LogOut, AlertTriangle, CheckCircle,
   Clock, MessageSquare, Plus, TrendingUp, X
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import axios from 'axios';
 
 interface AdmittedPatientWorkflowProps {
   admission: any;
@@ -76,7 +76,10 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const loadVitals = async () => {
     try {
-      const response = await ehrApi.getPatientVitals(admission.patient_id, token, tenantSlug);
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.get(`${EHR_API_URL}/vitals/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
+      });
       setVitals(response.data || []);
     } catch (error) {
       console.error('Failed to load vitals:', error);
@@ -85,7 +88,10 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const loadNotes = async () => {
     try {
-      const response = await ehrApi.getNursingNotesByPatient(admission.patient_id, token, tenantSlug);
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const response = await axios.get(`${EHR_API_URL}/nursing-notes/patient/${admission.patient_id}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
+      });
       setNotes(response.data || []);
     } catch (error) {
       console.error('Failed to load notes:', error);
