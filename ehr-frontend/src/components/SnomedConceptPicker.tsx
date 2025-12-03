@@ -123,7 +123,12 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
         semanticTags: effectiveSemanticTags,
         ecl: effectiveEcl,
       });
-      setResults(data.concepts || []);
+      // Remove duplicates by conceptId
+      const concepts = data.concepts || [];
+      const uniqueConcepts = concepts.filter((concept, index, self) =>
+        index === self.findIndex((c) => c.conceptId === concept.conceptId)
+      );
+      setResults(uniqueConcepts);
       setHasSearched(true);
     } catch (err: any) {
       console.error('SNOMED search failed', err);
@@ -183,9 +188,9 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
           </div>
         ) : (
           <ul className="max-h-56 overflow-y-auto py-1">
-            {results.map((concept) => (
+            {results.map((concept, index) => (
               <li
-                key={concept.conceptId}
+                key={`${concept.conceptId}-${index}`}
                 className="cursor-pointer px-4 py-2 text-sm hover:bg-indigo-50"
                 onMouseDown={(event) => {
                   event.preventDefault();
