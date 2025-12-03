@@ -378,18 +378,73 @@ export class DocumentService {
   async getSharedDocuments(userId: string, role: string, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
-    return tenantDb.query(
-      `SELECT d.*, ds.permission_level, ds.shared_at, ds.expires_at,
-        u.first_name as shared_by_first_name, u.last_name as shared_by_last_name
+    const results = await tenantDb.query(
+      `SELECT 
+        ds.id,
+        ds.document_id,
+        ds.permission_level,
+        ds.shared_at,
+        ds.expires_at,
+        ds.shared_with_role,
+        d.id as doc_id,
+        d.document_name as file_name,
+        d.document_type,
+        d.description,
+        d.file_size,
+        d.uploaded_at,
+        d.uploaded_by,
+        d.patient_id,
+        u.id as shared_by_id,
+        u.first_name as shared_by_first_name,
+        u.last_name as shared_by_last_name,
+        u.role as shared_by_role,
+        p.first_name as patient_first_name,
+        p.last_name as patient_last_name,
+        p.patient_number,
+        (SELECT json_agg(json_build_object('tag_name', tag_name))
+         FROM document_tags dt 
+         WHERE dt.document_id = d.id) as tags
        FROM document_sharing ds
        JOIN patient_documents d ON ds.document_id = d.id
        LEFT JOIN users u ON ds.shared_by = u.id
+       LEFT JOIN patients p ON d.patient_id = p.id
        WHERE ds.is_active = true
          AND (ds.shared_with_user_id = $1 OR ds.shared_with_role = $2)
          AND (ds.expires_at IS NULL OR ds.expires_at > NOW())
        ORDER BY ds.shared_at DESC`,
       [userId, role],
     );
+
+    // Transform results to match frontend expected format
+    return results.map((row: any) => ({
+      id: row.id,
+      document_id: row.document_id,
+      document: {
+        id: row.doc_id,
+        file_name: row.file_name,
+        document_type: row.document_type,
+        description: row.description,
+        file_size: row.file_size,
+        uploaded_at: row.uploaded_at,
+        uploaded_by: row.uploaded_by,
+        patient_id: row.patient_id,
+        tags: row.tags || [],
+      },
+      shared_by: {
+        id: row.shared_by_id,
+        first_name: row.shared_by_first_name,
+        last_name: row.shared_by_last_name,
+        role: row.shared_by_role,
+      },
+      shared_at: row.shared_at,
+      permission_level: row.permission_level,
+      expires_at: row.expires_at,
+      patient: row.patient_first_name ? {
+        first_name: row.patient_first_name,
+        last_name: row.patient_last_name,
+        patient_number: row.patient_number,
+      } : null,
+    }));
   }
 
   async revokeSharing(sharingId: string, tenantDb: DataSource) {
