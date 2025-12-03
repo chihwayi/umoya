@@ -3088,36 +3088,90 @@ const DoctorDashboard: React.FC = () => {
       )}
       {/* Tier 1 Feature Modals */}
       {showConsentLibraryModal && currentAppointment && (
-        <ConsentLibrary
-          patientId={currentAppointment.patient.id}
-          appointmentId={currentAppointment.id}
-          tenantSlug={tenantSlug!}
-          token={localStorage.getItem('ehr_token') || ''}
-          onSelectTemplate={(templateId) => {
-            console.log('Selected template:', templateId);
-            setShowConsentLibraryModal(false);
-          }}
-          onClose={() => setShowConsentLibraryModal(false)}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold">Consent Library</h2>
+                <p className="text-indigo-100 mt-1">Select a consent template for {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</p>
+              </div>
+              <button
+                onClick={() => setShowConsentLibraryModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <ConsentLibrary
+                patientId={currentAppointment.patient.id}
+                appointmentId={currentAppointment.id}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                onSelectTemplate={(templateId) => {
+                  console.log('Selected template:', templateId);
+                  setShowConsentLibraryModal(false);
+                }}
+                onClose={() => setShowConsentLibraryModal(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {showImmunizationsModal && currentAppointment && (
-        <ImmunizationHistory
-          patientId={currentAppointment.patient.id}
-          tenantSlug={tenantSlug!}
-          token={localStorage.getItem('ehr_token') || ''}
-          onAddImmunization={() => {
-            console.log('Add immunization clicked');
-          }}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold">Immunization History</h2>
+                <p className="text-emerald-100 mt-1">Vaccine records for {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</p>
+              </div>
+              <button
+                onClick={() => setShowImmunizationsModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <ImmunizationHistory
+                patientId={currentAppointment.patient.id}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                onAddImmunization={() => {
+                  console.log('Add immunization clicked');
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {showPathwaysModal && currentAppointment && (
-        <PathwayManagement
-          patientId={currentAppointment.patient.id}
-          tenantSlug={tenantSlug!}
-          token={localStorage.getItem('ehr_token') || ''}
-        />
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-2xl font-bold">Clinical Pathways</h2>
+                <p className="text-blue-100 mt-1">Evidence-based care pathways for {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</p>
+              </div>
+              <button
+                onClick={() => setShowPathwaysModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <PathwayManagement
+                patientId={currentAppointment.patient.id}
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
