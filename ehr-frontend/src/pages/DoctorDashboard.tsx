@@ -446,7 +446,7 @@ const DoctorDashboard: React.FC = () => {
         const token = localStorage.getItem('ehr_token');
         if (!token) return;
 
-        const response = await ehrApi.getAdmissions({ attendingProvider: currentUser.id, status: 'active' }, token, tenantSlug);
+        const response = await ehrApi.get('/beds/admissions', token, tenantSlug, { attendingProvider: currentUser.id, status: 'active' });
         setAdmittedPatients(response.data || []);
       } catch (error) {
         console.error('Failed to load admitted patients:', error);
@@ -504,7 +504,7 @@ const DoctorDashboard: React.FC = () => {
     try {
       setLoadingAdmitted(true);
       const token = localStorage.getItem('ehr_token');
-      const response = await ehrApi.getActiveAdmissions({ doctorId: currentUser.id }, token!, tenantSlug!);
+      const response = await ehrApi.get('/admissions', token!, tenantSlug!, { doctorId: currentUser.id, status: 'active' });
       setAdmittedPatients(response.data || []);
     } catch (error) {
       console.error('Failed to fetch admitted patients:', error);
