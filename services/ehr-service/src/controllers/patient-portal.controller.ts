@@ -1745,14 +1745,17 @@ export class PatientPortalController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     
     // Get patient date of birth and already administered vaccines
-    const [patient] = await tenantDb.query(
+    const patients = await tenantDb.query(
       'SELECT date_of_birth FROM patients WHERE id = $1',
       [patientId],
     );
     
-    if (!patient) {
-      throw new Error('Patient not found');
+    if (!patients || patients.length === 0) {
+      // Return empty forecast if patient not found
+      return [];
     }
+    
+    const patient = patients[0];
     
     // Get all immunization schedules and check what's been done
     const forecast = await tenantDb.query(`
