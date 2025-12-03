@@ -193,6 +193,9 @@ const DoctorDashboard: React.FC = () => {
   // Questionnaires States
   const [showProScheduleModal, setShowProScheduleModal] = useState(false);
   const [selectedPatientIdForPro, setSelectedPatientIdForPro] = useState<string | null>(null);
+  // My Patients (Admitted Patients) States
+  const [admittedPatients, setAdmittedPatients] = useState<any[]>([]);
+  const [loadingAdmitted, setLoadingAdmitted] = useState(false);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
   const appointmentFee =
@@ -416,7 +419,7 @@ const DoctorDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment' | 'critical-alerts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'schedule' | 'current-appointment' | 'critical-alerts' | 'imaging' | 'my-patients'>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [criticalAlertCount, setCriticalAlertCount] = useState(0);
   const [criticalImagingCount, setCriticalImagingCount] = useState(0);
@@ -432,6 +435,30 @@ const DoctorDashboard: React.FC = () => {
       setCurrentUser(JSON.parse(userData));
     }
   }, []);
+
+  // Load admitted patients when My Patients tab is active
+  useEffect(() => {
+    const fetchAdmittedPatients = async () => {
+      if (activeTab !== 'my-patients' || !currentUser?.id || !tenantSlug) return;
+      
+      setLoadingAdmitted(true);
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) return;
+
+        const response = await ehrApi.getAdmissions({ attendingProvider: currentUser.id, status: 'active' }, token, tenantSlug);
+        setAdmittedPatients(response.data || []);
+      } catch (error) {
+        console.error('Failed to load admitted patients:', error);
+        showError('Error', 'Failed to load admitted patients');
+        setAdmittedPatients([]);
+      } finally {
+        setLoadingAdmitted(false);
+      }
+    };
+
+    fetchAdmittedPatients();
+  }, [activeTab, currentUser, tenantSlug]);
 
   // Load critical alert count on mount and refresh every 2 minutes
   useEffect(() => {
