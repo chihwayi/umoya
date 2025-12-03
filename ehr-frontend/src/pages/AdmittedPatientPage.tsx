@@ -508,25 +508,6 @@ const AdmittedPatientPage: React.FC = () => {
               )}
             </div>
 
-            {/* Treatment Info Card */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
-              <h3 className="text-lg font-bold text-indigo-900 mb-3">📋 Complete Treatment Workflow</h3>
-              <p className="text-indigo-700 mb-4">
-                For full patient treatment (progress notes, prescriptions, lab orders, imaging), use the <strong>Doctor Dashboard</strong>:
-              </p>
-              <ol className="text-sm text-indigo-800 space-y-2 list-decimal list-inside bg-white rounded-lg p-4">
-                <li>Go to Doctor Dashboard</li>
-                <li>Find patient in Today's Schedule or Patient Queue</li>
-                <li>Click appointment card to open "Current Appointment" section</li>
-                <li>Use action buttons to prescribe, order tests, write notes</li>
-              </ol>
-              <button
-                onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="mt-4 w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition font-medium"
-              >
-                Go to Doctor Dashboard →
-              </button>
-            </div>
           </div>
         )}
 
