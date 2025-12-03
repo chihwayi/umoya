@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
   Play, Pause, Square, FileText, Pill, TestTube, Bell, 
   Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
-  Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail
+  Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
@@ -29,6 +29,10 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import { chartApi } from '../services/api';
 import ClinicalAlerts from '../components/ClinicalAlerts';
 import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
+// Tier 1 Components
+import ConsentLibrary from '../components/ConsentLibrary';
+import ImmunizationHistory from '../components/ImmunizationHistory';
+import PathwayManagement from '../components/PathwayManagement';
 import CriticalResultAlertPanel from '../components/CriticalResultAlertPanel';
 import ProAlerts from '../components/ProAlerts';
 import PatientProViewer from '../components/PatientProViewer';
@@ -180,6 +184,10 @@ const DoctorDashboard: React.FC = () => {
   const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(null);
   const [carePlanPatientId, setCarePlanPatientId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  // Tier 1 Feature States
+  const [showConsentLibraryModal, setShowConsentLibraryModal] = useState(false);
+  const [showImmunizationsModal, setShowImmunizationsModal] = useState(false);
+  const [showPathwaysModal, setShowPathwaysModal] = useState(false);
   const appointmentAwaitingPayment = currentAppointment?.paymentStatus === 'awaiting_payment';
   const appointmentFinanceReference = currentAppointment?.financeTransactionId || null;
   const appointmentFee =
@@ -1732,6 +1740,34 @@ const DoctorDashboard: React.FC = () => {
                           <FileText className="w-4 h-4" />
                           Questionnaires
                         </button>
+                        {/* Tier 1 Feature Buttons */}
+                        <button
+                          onClick={() => setShowConsentLibraryModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                          title="Manage patient consents"
+                        >
+                          <Shield className="w-4 h-4" />
+                          Consents
+                        </button>
+                        <button
+                          onClick={() => setShowImmunizationsModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                          title="View immunization history"
+                        >
+                          <Syringe className="w-4 h-4" />
+                          Immunizations
+                        </button>
+                        <button
+                          onClick={() => setShowPathwaysModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                          title="Manage clinical pathways"
+                        >
+                          <Route className="w-4 h-4" />
+                          Pathways
+                        </button>
                         <button onClick={() => setShowLabResultsModal(true)} className="px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm">
                           <TestTube className="w-4 h-4" />
                           Lab Results
@@ -3018,6 +3054,30 @@ const DoctorDashboard: React.FC = () => {
             setShowCarePlanBuilder(false);
             // Optionally refresh patient care plans
           }}
+        />
+      )}
+      {/* Tier 1 Feature Modals */}
+      {showConsentLibraryModal && currentAppointment && (
+        <ConsentLibrary
+          patientId={currentAppointment.patient.id}
+          appointmentId={currentAppointment.id}
+          onClose={() => setShowConsentLibraryModal(false)}
+        />
+      )}
+
+      {showImmunizationsModal && currentAppointment && (
+        <ImmunizationHistory
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          onClose={() => setShowImmunizationsModal(false)}
+        />
+      )}
+
+      {showPathwaysModal && currentAppointment && (
+        <PathwayManagement
+          patientId={currentAppointment.patient.id}
+          patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+          onClose={() => setShowPathwaysModal(false)}
         />
       )}
     </div>
