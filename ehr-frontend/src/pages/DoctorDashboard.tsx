@@ -467,8 +467,24 @@ const DoctorDashboard: React.FC = () => {
     if (currentUser) {
       fetchTodayAppointments();
       fetchAuthorizedOrders();
+      fetchAdmittedPatients();
     }
   }, [selectedDate, currentUser]);
+
+  const fetchAdmittedPatients = async () => {
+    if (!currentUser) return;
+    try {
+      setLoadingAdmitted(true);
+      const token = localStorage.getItem('ehr_token');
+      const response = await ehrApi.getActiveAdmissions({ doctorId: currentUser.id }, token!, tenantSlug!);
+      setAdmittedPatients(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch admitted patients:', error);
+      setAdmittedPatients([]);
+    } finally {
+      setLoadingAdmitted(false);
+    }
+  };
 
   // Load unread message count
   useEffect(() => {
@@ -1499,6 +1515,22 @@ const DoctorDashboard: React.FC = () => {
                 >
                   <Calendar className={`w-5 h-5 ${activeTab === 'schedule' ? 'text-white' : 'text-purple-500 group-hover:text-purple-700'}`} />
                   <span>Schedule</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('my-patients')}
+                  className={`group flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap shadow-md hover:shadow-lg ${
+                    activeTab === 'my-patients'
+                      ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-rose-200 scale-105'
+                      : 'bg-white text-slate-700 border-2 border-rose-200 hover:border-rose-400 hover:text-rose-700 hover:scale-105'
+                  }`}
+                >
+                  <Bed className={`w-5 h-5 ${activeTab === 'my-patients' ? 'text-white' : 'text-rose-500 group-hover:text-rose-700'}`} />
+                  <span>My Patients</span>
+                  {admittedPatients.length > 0 && (
+                    <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                      {admittedPatients.length}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setActiveTab('current-appointment')}

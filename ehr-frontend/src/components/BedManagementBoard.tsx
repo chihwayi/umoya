@@ -114,8 +114,8 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
     return acc;
   }, {} as Record<string, any[]>);
 
-  // Get unique wards from beds
-  const wardNames = Array.from(new Set(beds.map(bed => bed.wardName))).sort();
+  // Get unique wards from beds  
+  const wardNames = Array.from(new Set(beds.map((bed: any) => bed.wardName || bed.ward_name))).filter(Boolean).sort();
   const [activeWardTab, setActiveWardTab] = useState<string>('');
 
   // Set first ward as active on load
@@ -126,7 +126,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
   }, [wardNames]);
 
   // Filter beds by active ward tab
-  const displayBeds = activeWardTab ? beds.filter(bed => bed.wardName === activeWardTab) : beds;
+  const displayBeds = activeWardTab ? beds.filter((bed: any) => (bed.wardName || bed.ward_name) === activeWardTab) : beds;
 
   return (
     <div className="space-y-6">
@@ -134,7 +134,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
       <div className="bg-white/60 backdrop-blur-xl rounded-2xl border border-white/20 shadow-xl p-2">
         <div className="flex gap-2 overflow-x-auto">
           {wardNames.map(ward => {
-            const wardBeds = beds.filter(b => b.wardName === ward);
+            const wardBeds = beds.filter((b: any) => (b.wardName || b.ward_name) === ward);
             const occupied = wardBeds.filter(b => b.status === 'occupied').length;
             const available = wardBeds.filter(b => b.status === 'available').length;
             
