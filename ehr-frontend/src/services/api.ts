@@ -6799,7 +6799,7 @@ export const analyticsApi = {
   },
 
   getConsentTemplate: async (id: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/consents/templates/${id}\`, {
+    const response = await ehrAxios.get(`/consents/templates/${id}`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
@@ -6872,7 +6872,7 @@ export const analyticsApi = {
   },
 
   getActiveConsents: async (patientId: string, consentType: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/consents/patient/${patientId}/active/${consentType}\`, {
+    const response = await ehrAxios.get(`/consents/patient/${patientId}/active/${consentType}`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
