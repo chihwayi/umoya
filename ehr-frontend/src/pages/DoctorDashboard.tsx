@@ -2294,6 +2294,168 @@ const DoctorDashboard: React.FC = () => {
           )}
 
           {/* Imaging Tab */}
+          {activeTab === 'my-patients' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="bg-gradient-to-br from-rose-600 via-pink-600 to-fuchsia-600 rounded-3xl p-8 text-white shadow-2xl">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-white/20 backdrop-blur-sm rounded-2xl">
+                    <Bed className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2">My Admitted Patients</h2>
+                    <p className="text-rose-100">
+                      Patients currently under your care • No appointments needed for inpatient rounds
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4 mt-6">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                    <div className="text-3xl font-bold mb-1">{admittedPatients.length}</div>
+                    <div className="text-rose-100 text-sm">Total Patients</div>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                    <div className="text-3xl font-bold mb-1">
+                      {admittedPatients.filter((p: any) => p.admission_status === 'active').length}
+                    </div>
+                    <div className="text-rose-100 text-sm">Active Admissions</div>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                    <div className="text-3xl font-bold mb-1">
+                      {admittedPatients.reduce((sum: number, p: any) => {
+                        const days = Math.floor((new Date().getTime() - new Date(p.admission_date).getTime()) / (1000 * 60 * 60 * 24));
+                        return sum + days;
+                      }, 0)}
+                    </div>
+                    <div className="text-rose-100 text-sm">Total Patient Days</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Admitted Patients List */}
+              {loadingAdmitted ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600 mx-auto mb-4"></div>
+                  <p className="text-slate-600">Loading your patients...</p>
+                </div>
+              ) : admittedPatients.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+                  <Bed className="w-20 h-20 text-slate-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-slate-700 mb-2">No Admitted Patients</h3>
+                  <p className="text-slate-500 mb-6">
+                    You don't have any patients currently admitted under your care.
+                  </p>
+                  <button
+                    onClick={() => navigate(`/ehr/${tenantSlug}/bed-management`)}
+                    className="px-6 py-3 bg-gradient-to-r from-rose-600 to-pink-600 text-white rounded-xl hover:shadow-lg transition font-medium"
+                  >
+                    Go to Bed Management
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {admittedPatients.map((patient: any) => {
+                    const daysAdmitted = Math.floor((new Date().getTime() - new Date(patient.admission_date).getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    return (
+                      <button
+                        key={patient.id}
+                        onClick={() => {
+                          navigate(`/ehr/${tenantSlug}/admitted-patient`, { 
+                            state: { 
+                              admission: {
+                                ...patient,
+                                patient_first_name: patient.patient_first_name || patient.first_name,
+                                patient_last_name: patient.patient_last_name || patient.last_name,
+                              }
+                            } 
+                          });
+                        }}
+                        className="bg-white rounded-2xl shadow-md hover:shadow-xl border border-slate-200 p-6 text-left transition-all hover:scale-105 hover:border-rose-300"
+                      >
+                        {/* Patient Header */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">
+                              {patient.patient_first_name || patient.first_name} {patient.patient_last_name || patient.last_name}
+                            </h3>
+                            <p className="text-sm text-slate-500">{patient.admission_number}</p>
+                          </div>
+                          <div className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">
+                            Day {daysAdmitted}
+                          </div>
+                        </div>
+
+                        {/* Bed & Ward */}
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Bed className="w-4 h-4 text-indigo-600" />
+                            <span className="font-medium text-slate-700">{patient.bed_number || 'Unassigned'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Home className="w-4 h-4 text-purple-600" />
+                            <span className="font-medium text-slate-700">{patient.ward_name || 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        {/* Diagnosis */}
+                        <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                          <div className="text-xs text-slate-500 mb-1">Primary Diagnosis</div>
+                          <div className="text-sm font-medium text-slate-900">
+                            {patient.primary_diagnosis || patient.admission_diagnosis || 'Not specified'}
+                          </div>
+                        </div>
+
+                        {/* Quick Stats */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center bg-blue-50 rounded-lg p-2">
+                            <div className="text-xs text-blue-600 mb-1">Admitted</div>
+                            <div className="text-sm font-bold text-blue-900">
+                              {new Date(patient.admission_date).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="text-center bg-green-50 rounded-lg p-2">
+                            <div className="text-xs text-green-600 mb-1">Status</div>
+                            <div className="text-sm font-bold text-green-900 capitalize">
+                              {patient.admission_status || 'Active'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Hint */}
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                          <p className="text-xs text-slate-500 text-center">
+                            Click to manage this patient →
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Info Card */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-6">
+                <h3 className="text-lg font-bold text-indigo-900 mb-3">💡 About Inpatient Care</h3>
+                <div className="space-y-2 text-sm text-indigo-800">
+                  <p>
+                    <strong>Inpatient vs Outpatient:</strong> Admitted patients don't need appointments. 
+                    They appear in this "My Patients" list automatically when you're assigned as their attending physician.
+                  </p>
+                  <p>
+                    <strong>Daily Rounds:</strong> Click any patient card to review their status, write progress notes, 
+                    order tests, prescribe medications, and manage their care.
+                  </p>
+                  <p>
+                    <strong>Billing:</strong> Inpatient billing is per admission (DRG-based), not per visit. 
+                    One bill is generated at discharge covering the entire hospital stay.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'imaging' && (
             <div className="space-y-6">
               {currentAppointment ? (
