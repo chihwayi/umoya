@@ -295,6 +295,7 @@ const PatientDashboard: React.FC = () => {
             <p className="text-2xl font-bold mb-1">{stats.vitalsRecords}</p>
             {dashboardData?.latestVitals && (
               <div className="text-xs text-red-100 space-y-0.5 border-t border-red-400/30 pt-2 mt-2">
+                <p className="font-semibold text-red-100 mb-1.5">Latest Vitals:</p>
                 <div className="flex items-center justify-between">
                   <span className="opacity-75">BP:</span>
                   <span className="font-semibold">{dashboardData.latestVitals.bloodPressure || '—'}</span>
@@ -363,70 +364,6 @@ const PatientDashboard: React.FC = () => {
             );
           })}
         </div>
-
-        {/* Advanced Features */}
-        {advancedFeatures.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Advanced Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {advancedFeatures.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.path}
-                    to={`/${tenantSlug}${item.path}`}
-                    className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                        <Icon className="w-7 h-7 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {item.label}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">AI-powered health insights</p>
-                      </div>
-                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Advanced Features */}
-        {advancedFeatures.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Advanced Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {advancedFeatures.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.path}
-                    to={`/${tenantSlug}${item.path}`}
-                    className="group bg-white rounded-2xl shadow-sm p-6 border border-gray-200 hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                        <Icon className="w-7 h-7 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {item.label}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">AI-powered health insights</p>
-                      </div>
-                      <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Chronic Disease Management */}
         <div className="mb-8">
