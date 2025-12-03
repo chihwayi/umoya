@@ -74,24 +74,19 @@ const PatientDashboard: React.FC = () => {
 
   const menuItems = [
     { icon: Calendar, label: 'Appointments', path: '/appointments', color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-50', textColor: 'text-blue-600' },
+    { icon: Shield, label: 'My Consents', path: '/consents', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: FileText, label: 'Medical Records', path: '/records', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50', textColor: 'text-green-600' },
+    { icon: Route, label: 'My Care Pathways', path: '/pathways', color: 'from-cyan-500 to-cyan-600', bgColor: 'bg-cyan-50', textColor: 'text-cyan-600' },
     { icon: Pill, label: 'Prescriptions', path: '/prescriptions', color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-50', textColor: 'text-purple-600' },
+    { icon: Syringe, label: 'Immunizations', path: '/immunizations', color: 'from-emerald-500 to-emerald-600', bgColor: 'bg-emerald-50', textColor: 'text-emerald-600' },
     { icon: AlarmClock, label: 'Medication Reminders', path: '/medication-reminders', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50', textColor: 'text-orange-600' },
     { icon: CheckCircle2, label: 'Adherence Tracking', path: '/medication-adherence', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50', textColor: 'text-teal-600' },
     { icon: CreditCard, label: 'Bills & Payments', path: '/bills', color: 'from-yellow-500 to-yellow-600', bgColor: 'bg-yellow-50', textColor: 'text-yellow-600' },
     { icon: MessageSquare, label: 'Messages', path: '/messages', color: 'from-indigo-500 to-indigo-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-600' },
     { icon: Activity, label: 'Vitals Monitoring', path: '/vitals', color: 'from-red-500 to-red-600', bgColor: 'bg-red-50', textColor: 'text-red-600' },
     { icon: ClipboardList, label: 'Questionnaires', path: '/questionnaires', color: 'from-pink-500 to-pink-600', bgColor: 'bg-pink-50', textColor: 'text-pink-600' },
+    { icon: AlertCircle, label: 'ED Visits', path: '/ed-visits', color: 'from-rose-500 to-rose-600', bgColor: 'bg-rose-50', textColor: 'text-rose-600' },
     { icon: Download, label: 'Export Records', path: '/export', color: 'from-gray-500 to-gray-600', bgColor: 'bg-gray-50', textColor: 'text-gray-600' },
-  ];
-
-  // Tier 1 Features (NEW)
-  const tier1Items = [
-    { icon: Shield, label: 'My Consents', path: '/consents', color: 'from-indigo-600 to-purple-600', bgColor: 'bg-indigo-50', textColor: 'text-indigo-700', badge: 0, description: 'Sign and view consent forms' },
-    { icon: Route, label: 'My Care Pathways', path: '/pathways', color: 'from-blue-600 to-cyan-600', bgColor: 'bg-blue-50', textColor: 'text-blue-700', badge: 0, description: 'Track treatment progress' },
-    { icon: Syringe, label: 'Immunizations', path: '/immunizations', color: 'from-emerald-600 to-teal-600', bgColor: 'bg-emerald-50', textColor: 'text-emerald-700', badge: 0, description: 'View vaccination history' },
-    { icon: Bed, label: 'Admission Status', path: '/admission', color: 'from-violet-600 to-purple-600', bgColor: 'bg-violet-50', textColor: 'text-violet-700', badge: 0, description: 'View hospital admission', conditional: true },
-    { icon: AlertCircle, label: 'ED Visits', path: '/ed-visits', color: 'from-red-600 to-rose-600', bgColor: 'bg-red-50', textColor: 'text-red-700', badge: 0, description: 'Emergency visit history' },
   ];
 
   const chronicDiseaseItems = [
@@ -315,38 +310,6 @@ const PatientDashboard: React.FC = () => {
             <p className="text-red-100 text-sm mb-1">Vitals</p>
             <p className="text-3xl font-bold">{stats.vitalsRecords}</p>
           </Link>
-        </div>
-
-        {/* Tier 1 Features Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-1 h-6 bg-gradient-to-b from-indigo-600 to-purple-600 rounded-full"></div>
-            <h2 className="text-2xl font-bold text-gray-900">My Health Management</h2>
-            <span className="px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded-full shadow-md">NEW</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tier1Items.filter(item => !item.conditional).map((item) => (
-              <Link
-                key={item.path}
-                to={`/${tenantSlug}${item.path}`}
-                className="bg-white rounded-2xl shadow-md hover:shadow-xl border-2 border-gray-200 hover:border-indigo-300 p-6 transition-all transform hover:scale-105 group"
-              >
-                <div className={`w-14 h-14 bg-gradient-to-br ${item.color} rounded-2xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
-                  <item.icon className="w-7 h-7 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">{item.label}</h3>
-                <p className="text-sm text-gray-600 mb-3">{item.description}</p>
-                <div className="flex items-center justify-between">
-                  <ArrowRight className={`w-5 h-5 ${item.textColor} group-hover:translate-x-1 transition-transform`} />
-                  {item.badge > 0 && (
-                    <span className={`px-2 py-1 bg-gradient-to-r ${item.color} text-white text-xs font-bold rounded-full shadow`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
         </div>
 
         {/* Upcoming Appointment & Latest Vitals */}
