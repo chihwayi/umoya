@@ -1527,6 +1527,17 @@ const DoctorDashboard: React.FC = () => {
                     </span>
                   )}
                 </button>
+                <button
+                  onClick={() => setActiveTab('imaging')}
+                  className={`group flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                    activeTab === 'imaging'
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-violet-200 hover:text-violet-700'
+                  }`}
+                >
+                  <Activity className={`w-4 h-4 ${activeTab === 'imaging' ? 'text-white' : 'text-slate-500 group-hover:text-violet-600'}`} />
+                  <span>Imaging</span>
+                </button>
               </nav>
             </div>
           </div>
@@ -1857,16 +1868,6 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                     </div>
                   </div>
-
-                  <DoctorImagingResultsPanel
-                    tenantSlug={tenantSlug!}
-                    token={localStorage.getItem('ehr_token') || ''}
-                    patientId={currentAppointment.patient.id}
-                    hideTabs
-                    compact
-                    title="This Patient's Imaging Timeline"
-                    onOpenStudy={openImagingStudy}
-                  />
 
                   {/* Compact Grid Layout - 3 Columns */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2255,6 +2256,33 @@ const DoctorDashboard: React.FC = () => {
               ) : (
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-8 text-center text-slate-600">
                   No in-progress appointment found for you today.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Imaging Tab */}
+          {activeTab === 'imaging' && (
+            <div className="space-y-4">
+              {currentAppointment ? (
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Imaging Results & Timeline</h2>
+                    <p className="text-slate-600">View imaging orders, reports, and acknowledgements for {currentAppointment.patient.firstName} {currentAppointment.patient.lastName}</p>
+                  </div>
+                  <DoctorImagingResultsPanel
+                    tenantSlug={tenantSlug!}
+                    token={localStorage.getItem('ehr_token') || ''}
+                    patientId={currentAppointment.patient.id}
+                    hideTabs={false}
+                    compact={false}
+                    title="This Patient's Imaging Timeline"
+                    onOpenStudy={openImagingStudy}
+                  />
+                </div>
+              ) : (
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-8 text-center text-slate-600">
+                  No current appointment selected. Please select a patient to view imaging results.
                 </div>
               )}
             </div>
