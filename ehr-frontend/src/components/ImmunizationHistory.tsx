@@ -6,6 +6,7 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import VaccineAdministrationModal from './VaccineAdministrationModal';
 
 interface ImmunizationHistoryProps {
   patientId: string;
@@ -26,6 +27,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [showAdminModal, setShowAdminModal] = useState(false);
 
   useEffect(() => {
     loadImmunizations();
@@ -112,7 +114,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
           
           {onAddImmunization && (
             <button
-              onClick={onAddImmunization}
+              onClick={() => setShowAdminModal(true)}
               className="flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-lg hover:from-purple-700 hover:to-indigo-800 transition-all duration-200 shadow-lg font-medium text-sm sm:text-base w-full sm:w-auto"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -271,6 +273,20 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Vaccine Administration Modal */}
+      {showAdminModal && (
+        <VaccineAdministrationModal
+          patientId={patientId}
+          tenantSlug={tenantSlug}
+          token={token}
+          onSuccess={() => {
+            loadImmunizations();
+            loadForecast();
+          }}
+          onClose={() => setShowAdminModal(false)}
+        />
       )}
     </div>
   );

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Search, Filter, Eye, CheckCircle, XCircle, Globe } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import ConsentPresentationModal from './ConsentPresentationModal';
 
 interface ConsentLibraryProps {
+  patientId: string;
+  appointmentId: string;
   tenantSlug: string;
   token: string;
   onSelectTemplate: (templateId: string) => void;
@@ -11,6 +14,8 @@ interface ConsentLibraryProps {
 }
 
 const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
+  patientId,
+  appointmentId,
   tenantSlug,
   token,
   onSelectTemplate,
@@ -22,6 +27,8 @@ const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('active');
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [showPresentationModal, setShowPresentationModal] = useState(false);
 
   useEffect(() => {
     loadTemplates();
@@ -151,7 +158,10 @@ const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
           {filteredTemplates.map(template => (
             <button
               key={template.id}
-              onClick={() => onSelectTemplate(template.id)}
+              onClick={() => {
+                setSelectedTemplate(template);
+                setShowPresentationModal(true);
+              }}
               className="relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 group text-left"
             >
               {/* Gradient Background */}
@@ -221,6 +231,27 @@ const ConsentLibrary: React.FC<ConsentLibraryProps> = ({
           )}
         </div>
       </div>
+    </div>
+
+      {/* Consent Presentation Modal */}
+      {showPresentationModal && selectedTemplate && (
+        <ConsentPresentationModal
+          template={selectedTemplate}
+          patientId={patientId}
+          appointmentId={appointmentId}
+          tenantSlug={tenantSlug}
+          token={token}
+          onSuccess={() => {
+            setShowPresentationModal(false);
+            setSelectedTemplate(null);
+            onSelectTemplate(selectedTemplate.id);
+          }}
+          onClose={() => {
+            setShowPresentationModal(false);
+            setSelectedTemplate(null);
+          }}
+        />
+      )}
     </div>
   );
 };

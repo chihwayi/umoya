@@ -6,6 +6,7 @@ import {
 import { ehrApi } from '../services/api';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
+import AdmittedPatientWorkflow from './AdmittedPatientWorkflow';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -25,6 +26,8 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
   const [occupancyStats, setOccupancyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedAdmission, setSelectedAdmission] = useState<any>(null);
+  const [showPatientWorkflow, setShowPatientWorkflow] = useState(false);
 
   useEffect(() => {
     loadBeds();
@@ -230,7 +233,29 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
                 {groupedBeds[wardName].map(bed => (
                   <button
                     key={bed.id}
-                    onClick={() => {/* Handle bed click */}}
+                    onClick={async () => {
+                      if (bed.status === 'occupied' && bed.currentPatient) {
+                        // Load admission details and open workflow
+                        try {
+                          const response = await ehrAxios.get(`/admissions/active?patientId=${bed.currentPatient.id}`, {
+                            headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+                          });
+                          if (response.data && response.data.length > 0) {
+                            setSelectedAdmission({
+                              ...response.data[0],
+                              patient_first_name: bed.currentPatient.firstName,
+                              patient_last_name: bed.currentPatient.lastName,
+                              patient_id: bed.currentPatient.id,
+                              bed_number: bed.bedNumber,
+                              ward_name: bed.wardName,
+                            });
+                            setShowPatientWorkflow(true);
+                          }
+                        } catch (error) {
+                          showError('Error', 'Failed to load admission details');
+                        }
+                      }
+                    }}
                     className="relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-all duration-200 group aspect-square"
                   >
                     {/* Gradient Background */}

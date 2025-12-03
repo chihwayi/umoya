@@ -6790,4 +6790,20 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+
+  // Vaccine Administration
+  administerVaccine: async (patientId: string, vaccineData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/immunizations/patient/${patientId}/administer`, vaccineData, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  // Nursing Notes
+  getNursingNotesByPatient: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/nursing-notes/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 };
