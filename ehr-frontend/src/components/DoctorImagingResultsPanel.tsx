@@ -456,13 +456,13 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
         compact ? 'p-4' : 'p-6'
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-            <Camera className="w-5 h-5 text-indigo-600" />
-            {title || 'Imaging Results'}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="bg-gradient-to-r from-violet-50 via-purple-50 to-fuchsia-50 rounded-2xl px-5 py-3 border border-violet-200/50">
+          <h3 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+            <Camera className="w-6 h-6 text-violet-600" />
+            <span>{title || 'Imaging Results'}</span>
           </h3>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-purple-700 font-medium mt-1 ml-8">
             Track imaging orders, reports, and acknowledgements
           </p>
         </div>
@@ -473,26 +473,44 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
               <button
                 key={key}
                 onClick={() => setInternalFilter(key)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
+                className={`px-4 py-2 text-xs font-bold rounded-xl border-2 transition-all shadow-md hover:shadow-lg ${
                   appliedFilter === key
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                    ? key === 'all'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-600 shadow-indigo-200'
+                      : key === 'awaiting_payment'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-500 shadow-amber-200'
+                      : key === 'awaiting_ack'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-600 shadow-red-200 animate-pulse'
+                      : key === 'critical'
+                      ? 'bg-gradient-to-r from-red-700 to-pink-600 text-white border-red-700 shadow-red-200 animate-pulse'
+                      : key === 'recent'
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-500 shadow-emerald-200'
+                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-600 shadow-indigo-200'
+                    : key === 'awaiting_payment'
+                    ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border-amber-300 hover:from-amber-200 hover:to-orange-200'
+                    : key === 'awaiting_ack'
+                    ? 'bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border-red-300 hover:from-red-200 hover:to-rose-200'
+                    : key === 'critical'
+                    ? 'bg-gradient-to-r from-red-100 to-pink-100 text-red-700 border-red-300 hover:from-red-200 hover:to-pink-200'
+                    : key === 'recent'
+                    ? 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 border-emerald-300 hover:from-emerald-200 hover:to-teal-200'
+                    : 'bg-gradient-to-r from-violet-100 to-purple-100 text-violet-700 border-violet-300 hover:from-violet-200 hover:to-purple-200'
                 }`}
                 disabled={!!statusFilter}
               >
                 {label}
                 {key === 'awaiting_payment' && counts.awaiting_payment > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px]">
+                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-amber-700 text-[10px] font-bold shadow">
                     {counts.awaiting_payment}
                   </span>
                 )}
                 {key === 'awaiting_ack' && counts.awaiting_ack > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600 text-white text-[10px]">
+                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-red-700 text-[10px] font-bold shadow animate-bounce">
                     {counts.awaiting_ack}
                   </span>
                 )}
                 {key === 'critical' && counts.critical > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600 text-white text-[10px]">
+                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-red-700 text-[10px] font-bold shadow animate-bounce">
                     {counts.critical}
                   </span>
                 )}
