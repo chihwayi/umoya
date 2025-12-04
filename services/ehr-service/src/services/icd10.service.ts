@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/typeorm';
-import { Connection } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 export interface ICD10Code {
   code: string;
@@ -30,12 +29,16 @@ export interface SnomedToIcd10Mapping {
 
 @Injectable()
 export class Icd10Service {
-  constructor(@InjectConnection('tenant') private readonly tenantConnection: Connection) {}
-
   /**
    * Search ICD-10 codes using full-text search
    */
-  async searchIcd10Codes(term: string, limit: number = 20, offset: number = 0, billableOnly: boolean | null = null): Promise<ICD10Code[]> {
+  async searchIcd10Codes(
+    term: string,
+    limit: number = 20,
+    offset: number = 0,
+    billableOnly: boolean | null = null,
+    tenantDb: DataSource,
+  ): Promise<ICD10Code[]> {
     if (!term || term.trim().length < 2) {
       return [];
     }
@@ -44,14 +47,14 @@ export class Icd10Service {
       SELECT * FROM search_icd10_codes($1, $2, $3, $4)
     `;
 
-    const results = await this.tenantConnection.query(query, [term.trim(), limit, offset, billableOnly]);
+    const results = await tenantDb.query(query, [term.trim(), limit, offset, billableOnly]);
     return results;
   }
 
   /**
    * Get detailed ICD-10 code information
    */
-  async getIcd10CodeDetails(code: string): Promise<ICD10CodeDetails | null> {
+  async getIcd10CodeDetails(code: string, tenantDb: DataSource): Promise<ICD10CodeDetails | null> {
     const query = `
       SELECT 
         code,
@@ -67,26 +70,26 @@ export class Icd10Service {
       WHERE code = $1
     `;
 
-    const results = await this.tenantConnection.query(query, [code.toUpperCase()]);
+    const results = await tenantDb.query(query, [code.toUpperCase()]);
     return results.length > 0 ? results[0] : null;
   }
 
   /**
    * Get ICD-10 codes by category
    */
-  async getIcd10ByCategory(category: string, limit: number = 100): Promise<ICD10Code[]> {
+  async getIcd10ByCategory(category: string, limit: number = 100, tenantDb: DataSource): Promise<ICD10Code[]> {
     const query = `
       SELECT * FROM get_icd10_by_category($1, $2)
     `;
 
-    const results = await this.tenantConnection.query(query, [category.toUpperCase(), limit]);
+    const results = await tenantDb.query(query, [category.toUpperCase(), limit]);
     return results;
   }
 
   /**
    * Get SNOMED to ICD-10 mappings for a given SNOMED code
    */
-  async getSnomedToIcd10Mappings(snomedCode: string): Promise<SnomedToIcd10Mapping[]> {
+  async getSnomedToIcd10Mappings(snomedCode: string, tenantDb: DataSource): Promise<SnomedToIcd10Mapping[]> {
     const query = `
       SELECT 
         m.snomed_code,
@@ -103,14 +106,14 @@ export class Icd10Service {
       ORDER BY m.map_priority ASC, m.correlation ASC
     `;
 
-    const results = await this.tenantConnection.query(query, [snomedCode]);
+    const results = await tenantDb.query(query, [snomedCode]);
     return results;
   }
 
   /**
    * Cache ICD-10 search results
    */
-  async cacheSearchResults(term: string, limit: number, offset: number, data: any): Promise<void> {
+  async cacheSearchResults(term: string, limit: number, offset: number, data: any, tenantDb: DataSource): Promise<void> {
     const query = `
       INSERT INTO icd10_search_cache (search_term, result_limit, result_offset, data)
       VALUES ($1, $2, $3, $4)
@@ -118,13 +121,13 @@ export class Icd10Service {
       DO UPDATE SET data = EXCLUDED.data, created_at = NOW()
     `;
 
-    await this.tenantConnection.query(query, [term, limit, offset, JSON.stringify(data)]);
+    await tenantDb.query(query, [term, limit, offset, JSON.stringify(data)]);
   }
 
   /**
    * Get cached search results
    */
-  async getCachedSearchResults(term: string, limit: number, offset: number): Promise<any | null> {
+  async getCachedSearchResults(term: string, limit: number, offset: number, tenantDb: DataSource): Promise<any | null> {
     const query = `
       SELECT data FROM icd10_search_cache
       WHERE search_term = $1 
@@ -133,7 +136,7 @@ export class Icd10Service {
         AND created_at > NOW() - INTERVAL '7 days'
     `;
 
-    const results = await this.tenantConnection.query(query, [term, limit, offset]);
+    const results = await tenantDb.query(query, [term, limit, offset]);
     return results.length > 0 ? results[0].data : null;
   }
 }
