@@ -38,6 +38,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import EDDashboard from './pages/EDDashboard';
 import BedManagementDashboard from './pages/BedManagementDashboard';
 import AdmittedPatientPage from './pages/AdmittedPatientPage';
+import ORDashboard from './pages/ORDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -316,6 +317,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <AdmittedPatientPage />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 1: Operating Room Management */}
+            <Route
+              path="/ehr/:tenantSlug/operating-room"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <ORDashboard />
                 </RoleProtectedRoute>
               }
             />
