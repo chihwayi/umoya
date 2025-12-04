@@ -75,6 +75,7 @@ import { ImmunizationController } from './controllers/immunization.controller';
 import { BedManagementController } from './controllers/bed-management.controller';
 import { EDController } from './controllers/ed.controller';
 import { ClinicalPathwayController } from './controllers/clinical-pathway.controller';
+import { OperatingRoomController } from './controllers/operating-room.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -187,6 +188,7 @@ import { BedManagementService } from './services/bed-management.service';
 import { ADTService } from './services/adt.service';
 import { EDService } from './services/ed.service';
 import { ClinicalPathwayService } from './services/clinical-pathway.service';
+import { OperatingRoomService } from './services/operating-room.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -278,6 +280,7 @@ import { RolesGuard } from './guards/roles.guard';
     BedManagementController,
     EDController,
     ClinicalPathwayController,
+    OperatingRoomController,
   ],
   providers: [
     AuthService,
@@ -394,6 +397,7 @@ import { RolesGuard } from './guards/roles.guard';
     ADTService,
     EDService,
     ClinicalPathwayService,
+    OperatingRoomService,
     RolesGuard,
     JwtStrategy,
   ],
