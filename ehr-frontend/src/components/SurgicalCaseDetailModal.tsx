@@ -59,7 +59,6 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
         });
       }
     } catch (error) {
-      console.error('Failed to load case:', error);
       showError('Error', 'Failed to load surgical case');
     } finally {
       setLoading(false);

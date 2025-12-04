@@ -56,7 +56,6 @@ const ORDashboard: React.FC = () => {
         setMetrics(metricsResponse.data);
       }
     } catch (error) {
-      console.error('Failed to load OR data:', error);
       showError('Error', 'Failed to load operating room data');
     } finally {
       setLoading(false);

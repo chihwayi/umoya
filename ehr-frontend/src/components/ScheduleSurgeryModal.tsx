@@ -73,7 +73,7 @@ const ScheduleSurgeryModal: React.FC<ScheduleSurgeryModalProps> = ({
       });
       setPatients(patientsResponse.data || []);
     } catch (error) {
-      console.error('Failed to load data:', error);
+      // Silent fail - data will be empty
     }
   };
 
@@ -110,7 +110,6 @@ const ScheduleSurgeryModal: React.FC<ScheduleSurgeryModalProps> = ({
       showSuccess('Success', 'Surgery scheduled successfully');
       onSuccess();
     } catch (error: any) {
-      console.error('Failed to schedule surgery:', error);
       showError('Error', error.response?.data?.message || 'Failed to schedule surgery');
     } finally {
       setLoading(false);
