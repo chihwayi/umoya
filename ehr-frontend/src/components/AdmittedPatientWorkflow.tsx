@@ -7,6 +7,7 @@ import {
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import ICD10Picker from './ICD10Picker';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -621,16 +622,21 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ICD-10 Code
-                    <span className="text-xs text-slate-500 ml-2">(for billing/reporting)</span>
-                  </label>
-                  <input
-                    type="text"
+                  <ICD10Picker
                     value={dischargeData.dischargeDiagnosisICD10}
-                    onChange={(e) => setDischargeData({ ...dischargeData, dischargeDiagnosisICD10: e.target.value })}
-                    placeholder="e.g., A09 (Gastroenteritis)"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                    onChange={(code, description) => {
+                      setDischargeData({
+                        ...dischargeData,
+                        dischargeDiagnosisICD10: code,
+                        // Auto-fill diagnosis if empty
+                        dischargeDiagnosis: dischargeData.dischargeDiagnosis || description,
+                      });
+                    }}
+                    token={token}
+                    tenantSlug={tenantSlug}
+                    label="ICD-10 Code (for billing/reporting)"
+                    placeholder="Search: gastroenteritis, pneumonia, MI..."
+                    required={true}
                   />
                 </div>
                 <div>

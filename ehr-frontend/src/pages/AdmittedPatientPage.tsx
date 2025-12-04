@@ -10,6 +10,7 @@ import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ClinicalNotesModal from '../components/ClinicalNotesModal';
 import PrescriptionsModal from '../components/PrescriptionsModal';
 import LabOrdersModal from '../components/LabOrdersModal';
+import ICD10Picker from '../components/ICD10Picker';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -742,16 +743,21 @@ const AdmittedPatientPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ICD-10 Code
-                    <span className="text-xs text-slate-500 ml-2">(for billing)</span>
-                  </label>
-                  <input
-                    type="text"
+                  <ICD10Picker
                     value={dischargeData.dischargeDiagnosisICD10}
-                    onChange={(e) => setDischargeData({ ...dischargeData, dischargeDiagnosisICD10: e.target.value })}
-                    placeholder="e.g., A09"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                    onChange={(code, description) => {
+                      setDischargeData({
+                        ...dischargeData,
+                        dischargeDiagnosisICD10: code,
+                        // Auto-fill diagnosis if empty
+                        dischargeDiagnosis: dischargeData.dischargeDiagnosis || description,
+                      });
+                    }}
+                    token={token}
+                    tenantSlug={tenantSlug || ''}
+                    label="ICD-10 Code (for billing)"
+                    placeholder="Search: pneumonia, heart failure, diabetes..."
+                    required={true}
                   />
                 </div>
                 <div>

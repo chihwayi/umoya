@@ -3,6 +3,8 @@ import { FileText, User, Calendar, CheckCircle, XCircle, X, Shield } from 'lucid
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
+import ICD10Picker from './ICD10Picker';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -212,15 +214,16 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-blue-800 mb-1">
-                        ICD-10 (Diagnosis)
-                      </label>
-                      <input
-                        type="text"
+                      <ICD10Picker
                         value={diagnosisICD10}
-                        onChange={(e) => setDiagnosisICD10(e.target.value)}
-                        placeholder="e.g., K35.80 (Appendicitis)"
-                        className="w-full px-2 py-1.5 text-sm border border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                        onChange={(code, description) => {
+                          setDiagnosisICD10(code);
+                        }}
+                        token={token}
+                        tenantSlug={tenantSlug}
+                        label="ICD-10 (Diagnosis)"
+                        placeholder="Search: appendicitis, cholecystitis, hernia..."
+                        required={false}
                       />
                     </div>
                     <div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Bed, Stethoscope, FileText, Calendar, Check, AlertCircle } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import axios from 'axios';
+import ICD10Picker from './ICD10Picker';
 
 interface AdmissionWorkflowProps {
   patientId: string;
@@ -303,15 +304,21 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    ICD-10 Code
-                  </label>
-                  <input
-                    type="text"
+                  <ICD10Picker
                     value={formData.admittingDiagnosisIcd10}
-                    onChange={(e) => setFormData({ ...formData, admittingDiagnosisIcd10: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="e.g., I50.9"
+                    onChange={(code, description) => {
+                      setFormData({
+                        ...formData,
+                        admittingDiagnosisIcd10: code,
+                        // Auto-fill diagnosis if empty
+                        admittingDiagnosis: formData.admittingDiagnosis || description,
+                      });
+                    }}
+                    token={token}
+                    tenantSlug={tenantSlug}
+                    label="ICD-10 Code"
+                    placeholder="Search: heart failure, diabetes, pneumonia..."
+                    required={false}
                   />
                 </div>
 
