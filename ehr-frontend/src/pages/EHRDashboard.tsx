@@ -7,7 +7,7 @@ import {
   Shield, Database, Server, Key, Eye, AlertTriangle, 
   Monitor, HardDrive, Wifi, Lock, RefreshCw, Download,
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
-  Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan,
+  Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan, Droplet,
   CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
   AlertCircle, Bed, Baby
 } from 'lucide-react';
@@ -109,6 +109,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Activity, label: 'Operating Room', desc: 'OR scheduling & surgical cases', color: 'from-indigo-600 to-purple-600', route: 'operating-room' },
           { icon: Bed, label: 'PACU', desc: 'Post-anesthesia care unit monitoring', color: 'from-purple-600 to-violet-600', route: 'pacu' },
           { icon: Scan, label: 'MAR (BCMA)', desc: 'Barcode medication administration & 5 Rights', color: 'from-blue-600 to-cyan-600', route: 'mar' },
+          { icon: Droplet, label: 'Blood Bank', desc: 'Blood inventory, cross-match & transfusions', color: 'from-red-600 to-rose-600', route: 'blood-bank' },
           { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
