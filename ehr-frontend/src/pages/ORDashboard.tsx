@@ -8,6 +8,7 @@ import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 import ScheduleSurgeryModal from '../components/ScheduleSurgeryModal';
 import SurgicalCaseDetailModal from '../components/SurgicalCaseDetailModal';
+import ORBoardView from '../components/ORBoardView';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -24,6 +25,7 @@ const ORDashboard: React.FC = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedCase, setSelectedCase] = useState<any>(null);
   const [showCaseDetail, setShowCaseDetail] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
 
   useEffect(() => {
     loadORData();
@@ -124,7 +126,7 @@ const ORDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* Date Selector */}
+        {/* Date Selector & View Toggle */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm">
             <Calendar className="w-5 h-5 text-indigo-600" />
@@ -134,6 +136,28 @@ const ORDashboard: React.FC = () => {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="border-0 bg-transparent focus:outline-none focus:ring-0 font-medium text-slate-900"
             />
+          </div>
+          <div className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-xl p-1 border border-slate-200 shadow-sm">
+            <button
+              onClick={() => setViewMode('board')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                viewMode === 'board'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Board View
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                viewMode === 'list'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              List View
+            </button>
           </div>
         </div>
       </div>
@@ -195,15 +219,21 @@ const ORDashboard: React.FC = () => {
       )}
 
       {/* OR Board */}
-      <div className="space-y-4">
-        {orAvailability.length === 0 ? (
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">
-            <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No Operating Rooms Available</h3>
-            <p className="text-slate-600">Contact administrator to configure operating rooms.</p>
-          </div>
-        ) : (
-          orAvailability.map((or) => (
+      {orAvailability.length === 0 ? (
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">
+          <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-slate-900 mb-2">No Operating Rooms Available</h3>
+          <p className="text-slate-600">Contact administrator to configure operating rooms.</p>
+        </div>
+      ) : viewMode === 'board' ? (
+        <ORBoardView
+          orAvailability={orAvailability}
+          onCaseClick={handleCaseClick}
+          selectedDate={selectedDate}
+        />
+      ) : (
+        <div className="space-y-4">
+          {orAvailability.map((or) => (
             <div
               key={or.id}
               className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden"
@@ -271,9 +301,9 @@ const ORDashboard: React.FC = () => {
                 )}
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Modals */}
       {showScheduleModal && (
