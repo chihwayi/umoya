@@ -92,6 +92,11 @@ export class PatientConsentService {
       presentedBy: userId,
       presentedAt: new Date(),
       notes: consentData.notes,
+      // Medical coding fields
+      procedureSnomedCode: consentData.procedureSnomedCode,
+      procedureCptCode: consentData.procedureCptCode,
+      diagnosisIcd10: consentData.diagnosisIcd10,
+      diagnosisSnomed: consentData.diagnosisSnomed,
     });
 
     const saved = await consentRepo.save(consent);

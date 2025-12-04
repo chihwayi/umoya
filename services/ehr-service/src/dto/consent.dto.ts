@@ -229,6 +229,27 @@ export class CreatePatientConsentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Medical coding fields
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  procedureSnomedCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  procedureCptCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  diagnosisIcd10?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  diagnosisSnomed?: string;
 }
 
 export class SignConsentDto {

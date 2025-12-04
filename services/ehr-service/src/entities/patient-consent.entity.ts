@@ -125,6 +125,22 @@ export class PatientConsent {
   @Column({ type: 'jsonb', default: '{}' })
   metadata: Record<string, any>;
 
+  // Medical coding fields (added in migration 008)
+  @Column({ name: 'procedure_snomed_code', length: 20, nullable: true })
+  procedureSnomedCode: string;
+
+  @Column({ name: 'procedure_snomed_term', type: 'text', nullable: true })
+  procedureSnomedTerm: string;
+
+  @Column({ name: 'procedure_cpt_code', length: 10, nullable: true })
+  procedureCptCode: string;
+
+  @Column({ name: 'diagnosis_icd10', length: 10, nullable: true })
+  diagnosisIcd10: string;
+
+  @Column({ name: 'diagnosis_snomed', length: 20, nullable: true })
+  diagnosisSnomed: string;
+
   @OneToMany(() => ConsentSignature, signature => signature.consent)
   signatures: ConsentSignature[];
 

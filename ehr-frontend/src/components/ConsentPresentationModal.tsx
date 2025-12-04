@@ -33,6 +33,7 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
   const [witnessName, setWitnessName] = useState('');
   const [witnessSignature, setWitnessSignature] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [createdConsentId, setCreatedConsentId] = useState<string | null>(null);
   
   // Medical coding fields
   const [procedureSNOMED, setProcedureSNOMED] = useState('');
@@ -43,20 +44,28 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
   const handlePresentConsent = async () => {
     try {
       setSubmitting(true);
-      // Create patient consent from template
+      // Create patient consent from template with medical coding
       const consentData = {
         patientId,
         templateId: template.id,
         appointmentId,
         status: 'pending',
+        procedureSnomedCode: procedureSNOMED || undefined,
+        procedureCptCode: procedureCPT || undefined,
+        diagnosisIcd10: diagnosisICD10 || undefined,
+        diagnosisSnomed: diagnosisSNOMED || undefined,
       };
       
-      await ehrAxios.post('/consents', consentData, {
+      const response = await ehrAxios.post('/consents', consentData, {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
+      
+      // Save the consent ID for signing
+      setCreatedConsentId(response.data.id);
       showSuccess('Success', 'Consent presented to patient');
       setStep('sign');
     } catch (error) {
+      console.error('Failed to present consent:', error);
       showError('Error', 'Failed to present consent');
     } finally {
       setSubmitting(false);
@@ -69,32 +78,47 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
       return;
     }
 
+    if (!createdConsentId) {
+      showError('Error', 'Consent not found. Please present the consent first.');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      // In a real implementation, you'd get the consent ID from the previous step
-      // For now, we'll create and sign in one go
-      const consentData = {
-        patientId,
-        templateId: template.id,
-        appointmentId,
-        status: 'signed',
-        patientSignature,
-        witnessName: witnessName || undefined,
-        witnessSignature: witnessSignature || undefined,
-        signedAt: new Date().toISOString(),
-        procedureSnomedCode: procedureSNOMED || undefined,
-        procedureCptCode: procedureCPT || undefined,
-        diagnosisIcd10: diagnosisICD10 || undefined,
-        diagnosisSnomed: diagnosisSNOMED || undefined,
+      
+      // Step 1: Submit patient signature
+      const patientSignaturePayload = {
+        signerRole: 'patient',
+        signerName: 'Patient', // TODO: Get actual patient name from patient data
+        signatureType: 'electronic',
+        signatureData: patientSignature,
+        signatureMethod: 'touch_screen',
       };
       
-      await ehrAxios.post('/consents', consentData, {
+      await ehrAxios.post(`/consents/${createdConsentId}/sign`, patientSignaturePayload, {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
+
+      // Step 2: Submit witness signature if provided
+      if (witnessName && witnessSignature) {
+        const witnessSignaturePayload = {
+          signerRole: 'witness',
+          signerName: witnessName,
+          signatureType: 'electronic',
+          signatureData: witnessSignature,
+          signatureMethod: 'touch_screen',
+        };
+        
+        await ehrAxios.post(`/consents/${createdConsentId}/sign`, witnessSignaturePayload, {
+          headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+        });
+      }
+      
       showSuccess('Success', 'Consent signed successfully');
       onSuccess();
       onClose();
     } catch (error) {
+      console.error('Failed to sign consent:', error);
       showError('Error', 'Failed to sign consent');
     } finally {
       setSubmitting(false);
