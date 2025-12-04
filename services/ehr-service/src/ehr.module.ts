@@ -46,6 +46,7 @@ import { TaxManagementController } from './controllers/tax-management.controller
 import { PaymentReconciliationController } from './controllers/payment-reconciliation.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
 import { TerminologyController } from './controllers/terminology.controller';
+import { Icd10Controller } from './controllers/icd10.controller';
 import { MetricsController } from './controllers/metrics.controller';
 import { MedicationHistoryController } from './controllers/medication-history.controller';
 import { PrescriptionTemplateController } from './controllers/prescription-template.controller';
@@ -129,6 +130,7 @@ import { InvoicePdfService } from './services/invoice-pdf.service';
 import { InvoiceTemplateService } from './services/invoice-template.service';
 import { CardiologyService } from './services/cardiology.service';
 import { TerminologyService } from './services/terminology.service';
+import { Icd10Service } from './services/icd10.service';
 import { CdssHookService } from './services/cdss-hook.service';
 import { SpecialtyAutomationService } from './services/specialty-automation.service';
 import { MetricsService } from './services/metrics.service';
@@ -247,6 +249,7 @@ import { RolesGuard } from './guards/roles.guard';
     TaxManagementController,
     PaymentReconciliationController,
     TerminologyController,
+    Icd10Controller,
     MetricsController,
     MedicationHistoryController,
     PrescriptionTemplateController,
@@ -330,6 +333,7 @@ import { RolesGuard } from './guards/roles.guard';
     InvoicePdfService,
     InvoiceTemplateService,
     TerminologyService,
+    Icd10Service,
     CdssHookService,
     SpecialtyAutomationService,
     MetricsService,
