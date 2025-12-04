@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
+import ImplantTrackingModal from './ImplantTrackingModal';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -24,6 +25,7 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   const [surgicalCase, setSurgicalCase] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showDocumentation, setShowDocumentation] = useState(false);
+  const [showImplantModal, setShowImplantModal] = useState(false);
   const [documentation, setDocumentation] = useState({
     findings: '',
     procedurePerformed: '',
@@ -349,13 +351,22 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
 
             {surgicalCase.status === 'in_progress' && (
               <div className="space-y-3">
-                <button
-                  onClick={() => setShowDocumentation(!showDocumentation)}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold"
-                >
-                  <FileText className="w-5 h-5" />
-                  {showDocumentation ? 'Hide Documentation' : 'Document Procedure'}
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setShowDocumentation(!showDocumentation)}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-semibold"
+                  >
+                    <FileText className="w-5 h-5" />
+                    {showDocumentation ? 'Hide Documentation' : 'Document Procedure'}
+                  </button>
+                  <button
+                    onClick={() => setShowImplantModal(true)}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all font-semibold"
+                  >
+                    <Package className="w-5 h-5" />
+                    Track Implant
+                  </button>
+                </div>
 
                 {showDocumentation && (
                   <div className="bg-slate-50 rounded-xl p-6 border border-slate-200 space-y-4">
@@ -524,6 +535,21 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Implant Tracking Modal */}
+      {showImplantModal && (
+        <ImplantTrackingModal
+          surgicalCaseId={caseId}
+          tenantSlug={tenantSlug}
+          token={token}
+          onSuccess={() => {
+            setShowImplantModal(false);
+            showSuccess('Success', 'Implant tracked successfully');
+            loadCaseDetails();
+          }}
+          onClose={() => setShowImplantModal(false)}
+        />
+      )}
     </div>
   );
 };
