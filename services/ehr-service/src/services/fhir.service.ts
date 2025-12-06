@@ -2769,20 +2769,11 @@ export class FhirService {
     const savedDispensing = await dispensingRepository.save(dispensing);
 
     // Load items for response (if any exist)
+    // Note: Items may not exist yet for a new dispensing, so we load empty array
     const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
-    let items: PharmacyDispensingItem[] = [];
-    try {
-      items = await itemsRepository.find({
-        where: { dispensingId: savedDispensing.id },
-        relations: ['drug', 'inventory'],
-      });
-    } catch (error) {
-      // If relations fail, try without relations
-      this.logger.warn('Failed to load items with relations, trying without:', error);
-      items = await itemsRepository.find({
-        where: { dispensingId: savedDispensing.id },
-      });
-    }
+    const items: PharmacyDispensingItem[] = await itemsRepository.find({
+      where: { dispensingId: savedDispensing.id },
+    });
 
     // Load prescription if available
     const prescriptionRepository = tenantDb.getRepository(Prescription);
