@@ -34,8 +34,8 @@ echo "✅ Login successful"
 echo ""
 
 # Test 1: Search Medications (all active)
-echo "2️⃣ Testing GET /fhir/Medication (search all)..."
-SEARCH_RESPONSE=$(curl -s -X GET "$BASE_URL/fhir/Medication" \
+echo "2️⃣ Testing GET /api/fhir/Medication (search all)..."
+SEARCH_RESPONSE=$(curl -s -X GET "$BASE_URL/api/fhir/Medication" \
   -H "Authorization: Bearer $TOKEN" \
   -H "x-tenant-id: $TENANT_ID" \
   -H "Content-Type: application/json")
@@ -52,11 +52,11 @@ fi
 echo ""
 
 # Test 2: Search by code (RxNorm)
-echo "3️⃣ Testing GET /fhir/Medication?code=... (search by RxNorm code)..."
+echo "3️⃣ Testing GET /api/fhir/Medication?code=... (search by RxNorm code)..."
 # Get first medication's RxNorm code
 FIRST_MED=$(echo $SEARCH_RESPONSE | jq -r '.entry[0].resource.code.coding[]? | select(.system | contains("rxnorm")) | .code' | head -1)
 if [ -n "$FIRST_MED" ] && [ "$FIRST_MED" != "null" ]; then
-  CODE_SEARCH=$(curl -s -X GET "$BASE_URL/fhir/Medication?code=$FIRST_MED" \
+  CODE_SEARCH=$(curl -s -X GET "$BASE_URL/api/fhir/Medication?code=$FIRST_MED" \
     -H "Authorization: Bearer $TOKEN" \
     -H "x-tenant-id: $TENANT_ID")
   CODE_COUNT=$(echo $CODE_SEARCH | jq -r '.entry | length // 0')
@@ -67,8 +67,8 @@ fi
 echo ""
 
 # Test 3: Search by status
-echo "4️⃣ Testing GET /fhir/Medication?status=active..."
-STATUS_SEARCH=$(curl -s -X GET "$BASE_URL/fhir/Medication?status=active" \
+echo "4️⃣ Testing GET /api/fhir/Medication?status=active..."
+STATUS_SEARCH=$(curl -s -X GET "$BASE_URL/api/fhir/Medication?status=active" \
   -H "Authorization: Bearer $TOKEN" \
   -H "x-tenant-id: $TENANT_ID")
 STATUS_COUNT=$(echo $STATUS_SEARCH | jq -r '.entry | length // 0')
@@ -76,10 +76,10 @@ echo "✅ Status search successful - Found $STATUS_COUNT active medications"
 echo ""
 
 # Test 4: Get Medication by ID
-echo "5️⃣ Testing GET /fhir/Medication/:id..."
+echo "5️⃣ Testing GET /api/fhir/Medication/:id..."
 FIRST_ID=$(echo $SEARCH_RESPONSE | jq -r '.entry[0].resource.id // empty' | head -1)
 if [ -n "$FIRST_ID" ] && [ "$FIRST_ID" != "null" ]; then
-  GET_RESPONSE=$(curl -s -X GET "$BASE_URL/fhir/Medication/$FIRST_ID" \
+  GET_RESPONSE=$(curl -s -X GET "$BASE_URL/api/fhir/Medication/$FIRST_ID" \
     -H "Authorization: Bearer $TOKEN" \
     -H "x-tenant-id: $TENANT_ID")
   GET_TYPE=$(echo $GET_RESPONSE | jq -r '.resourceType // "error"')
@@ -96,8 +96,8 @@ fi
 echo ""
 
 # Test 5: Search by name
-echo "6️⃣ Testing GET /fhir/Medication?name=... (search by name)..."
-NAME_SEARCH=$(curl -s -X GET "$BASE_URL/fhir/Medication?name=aspirin" \
+echo "6️⃣ Testing GET /api/fhir/Medication?name=... (search by name)..."
+NAME_SEARCH=$(curl -s -X GET "$BASE_URL/api/fhir/Medication?name=aspirin" \
   -H "Authorization: Bearer $TOKEN" \
   -H "x-tenant-id: $TENANT_ID")
 NAME_COUNT=$(echo $NAME_SEARCH | jq -r '.entry | length // 0')
@@ -105,7 +105,7 @@ echo "✅ Name search successful - Found $NAME_COUNT medication(s) matching 'asp
 echo ""
 
 # Test 6: Create Medication
-echo "7️⃣ Testing POST /fhir/Medication (create)..."
+echo "7️⃣ Testing POST /api/fhir/Medication (create)..."
 CREATE_MEDICATION='{
   "resourceType": "Medication",
   "code": {
@@ -139,14 +139,14 @@ CREATE_MEDICATION='{
   ]
 }'
 
-CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/fhir/Medication" \
+CREATE_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/fhir/Medication" \
   -H "Authorization: Bearer $TOKEN" \
   -H "x-tenant-id: $TENANT_ID" \
   -H "Content-Type: application/json" \
   -d "$CREATE_MEDICATION")
 
-HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
-CREATE_BODY=$(echo "$CREATE_RESPONSE" | head -n -1)
+HTTP_CODE=$(echo "$CREATE_RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+CREATE_BODY=$(echo "$CREATE_RESPONSE" | sed '/HTTP_CODE:/d')
 
 if [ "$HTTP_CODE" == "201" ]; then
   CREATED_ID=$(echo $CREATE_BODY | jq -r '.id // empty')
@@ -154,16 +154,16 @@ if [ "$HTTP_CODE" == "201" ]; then
   
   # Test 7: Update Medication
   echo ""
-  echo "8️⃣ Testing PUT /fhir/Medication/:id (update)..."
+  echo "8️⃣ Testing PUT /api/fhir/Medication/:id (update)..."
   UPDATE_MEDICATION=$(echo $CREATE_BODY | jq '.code.text = "Updated Test Medication"')
-  UPDATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/fhir/Medication/$CREATED_ID" \
+  UPDATE_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X PUT "$BASE_URL/api/fhir/Medication/$CREATED_ID" \
     -H "Authorization: Bearer $TOKEN" \
     -H "x-tenant-id: $TENANT_ID" \
     -H "Content-Type: application/json" \
     -d "$UPDATE_MEDICATION")
   
-  UPDATE_HTTP_CODE=$(echo "$UPDATE_RESPONSE" | tail -1)
-  UPDATE_BODY=$(echo "$UPDATE_RESPONSE" | head -n -1)
+  UPDATE_HTTP_CODE=$(echo "$UPDATE_RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
+  UPDATE_BODY=$(echo "$UPDATE_RESPONSE" | sed '/HTTP_CODE:/d')
   
   if [ "$UPDATE_HTTP_CODE" == "200" ]; then
     UPDATED_NAME=$(echo $UPDATE_BODY | jq -r '.code.text // "Unknown"')
@@ -171,12 +171,12 @@ if [ "$HTTP_CODE" == "201" ]; then
     
     # Test 8: Delete Medication
     echo ""
-    echo "9️⃣ Testing DELETE /fhir/Medication/:id (delete)..."
-    DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE "$BASE_URL/fhir/Medication/$CREATED_ID" \
+    echo "9️⃣ Testing DELETE /api/fhir/Medication/:id (delete)..."
+    DELETE_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X DELETE "$BASE_URL/api/fhir/Medication/$CREATED_ID" \
       -H "Authorization: Bearer $TOKEN" \
       -H "x-tenant-id: $TENANT_ID")
     
-    DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -1)
+    DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
     if [ "$DELETE_HTTP_CODE" == "200" ]; then
       echo "✅ Delete successful"
     else
