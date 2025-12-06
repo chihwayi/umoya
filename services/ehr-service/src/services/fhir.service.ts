@@ -2703,7 +2703,6 @@ export class FhirService {
       dispensings.map(async (dispensing) => {
         const items = await itemsRepository.find({
           where: { dispensingId: dispensing.id },
-          relations: ['drug', 'inventory'],
         });
         return {
           dispensing,
@@ -2739,11 +2738,10 @@ export class FhirService {
       throw new NotFoundException(`MedicationDispense with ID ${id} not found`);
     }
 
-    // Load items
+    // Load items (without relations to avoid TypeORM issues)
     const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
     const items = await itemsRepository.find({
       where: { dispensingId: dispensing.id },
-      relations: ['drug', 'inventory'],
     });
 
     return MedicationDispenseMapper.toFhir(
@@ -2818,7 +2816,6 @@ export class FhirService {
     const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
     const items = await itemsRepository.find({
       where: { dispensingId: updatedDispensing.id },
-      relations: ['drug', 'inventory'],
     });
 
     return MedicationDispenseMapper.toFhir(

@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Generated } from 'typeorm';
 import { PharmacyDispensing } from './pharmacy-dispensing.entity';
 import { PharmacyInventory } from './pharmacy-inventory.entity';
-import { Drug } from './drug.entity';
+// Note: Drug entity removed from imports since drug_id column doesn't exist in DB
 
 @Entity('pharmacy_dispensing_items')
 export class PharmacyDispensingItem {
@@ -22,21 +22,16 @@ export class PharmacyDispensingItem {
   @Column({ name: 'inventory_id', type: 'uuid' })
   inventoryId: string;
 
-  @ManyToOne(() => Drug, { onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'drug_id' })
-  drug: Drug;
+  // Note: drug_id column doesn't exist in database schema
+  // Drug information is accessed via inventory -> drug relationship
+  // drugId?: string;
+  // drug?: Drug;
 
-  @Column({ name: 'drug_id', type: 'uuid' })
-  drugId: string;
-
-  @Column({ name: 'rxnorm_code', type: 'varchar', length: 50, nullable: true })
-  rxnormCode?: string;
-
-  @Column({ name: 'batch_number', type: 'varchar', length: 100, nullable: true })
-  batchNumber?: string;
-
-  @Column({ name: 'expiry_date', type: 'date', nullable: true })
-  expiryDate?: Date;
+  // Note: These columns don't exist in database schema - they're virtual properties
+  // rxnormCode?: string;
+  // batchNumber?: string;
+  // expiryDate?: Date;
+  // instructions?: string;
 
   @Column({ name: 'quantity_dispensed', type: 'int' })
   quantityDispensed: number;
@@ -45,9 +40,6 @@ export class PharmacyDispensingItem {
   unitPrice: number;
   @Column({ name: 'total_price', type: 'decimal', precision: 12, scale: 2, generatedType: 'STORED', asExpression: 'quantity_dispensed * unit_price' })
   totalPrice: number;
-
-  @Column({ type: 'text', nullable: true })
-  instructions?: string;
 
   @Column({ type: 'text', nullable: true })
   notes?: string;

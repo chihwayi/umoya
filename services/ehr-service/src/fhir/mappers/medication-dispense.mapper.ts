@@ -20,15 +20,18 @@ export class MedicationDispenseMapper {
     const medicationReference: fhir.Reference[] = [];
     if (items && items.length > 0) {
       items.forEach(item => {
-        if (item.drug) {
+        // Safely access drug - it may not be loaded
+        const drug = (item as any).drug;
+        if (drug && drug.id) {
           medicationReference.push({
-            reference: `Medication/${item.drug.id}`,
-            display: item.drug.genericName || item.drug.rxnormName,
+            reference: `Medication/${drug.id}`,
+            display: drug.genericName || drug.rxnormName || 'Unknown Medication',
           });
-        } else if (item.rxnormCode) {
+        } else {
+          // No drug or rxnormCode available - use generic reference
           medicationReference.push({
-            reference: `Medication?code=${item.rxnormCode}`,
-            display: item.drug?.genericName || 'Unknown Medication',
+            reference: `Medication?name=Unknown`,
+            display: 'Unknown Medication',
           });
         }
       });
@@ -68,11 +71,13 @@ export class MedicationDispenseMapper {
     // Build quantity dispensed from items
     let quantity: fhir.Quantity | undefined;
     if (items && items.length > 0) {
-      const totalQuantity = items.reduce((sum, item) => sum + item.quantityDispensed, 0);
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantityDispensed || 0), 0);
       const firstItem = items[0];
+      // Safely access drug - it may not be loaded
+      const drug = (firstItem as any).drug;
       quantity = {
         value: totalQuantity,
-        unit: this.getUnitFromDrug(firstItem.drug) || 'unit',
+        unit: this.getUnitFromDrug(drug) || 'unit',
         system: 'http://unitsofmeasure.org',
       };
     }
@@ -149,12 +154,13 @@ export class MedicationDispenseMapper {
             time: item.updatedAt?.toISOString() || item.createdAt.toISOString(),
           });
         }
-        if (item.instructions) {
-          note.push({
-            text: `Instructions: ${item.instructions}`,
-            time: item.updatedAt?.toISOString() || item.createdAt.toISOString(),
-          });
-        }
+        // Note: instructions column doesn't exist in database
+        // if (item.instructions) {
+        //   note.push({
+        //     text: `Instructions: ${item.instructions}`,
+        //     time: item.updatedAt?.toISOString() || item.createdAt.toISOString(),
+        //   });
+        // }
       });
     }
 
@@ -172,9 +178,17 @@ export class MedicationDispenseMapper {
       authorizingPrescription: authorizingPrescription.length > 0 ? authorizingPrescription : undefined,
       quantity,
       daysSupply,
-      whenPrepared: dispensing.dispensingDate?.toISOString() || dispensing.createdAt.toISOString(),
+      whenPrepared: dispensing.dispensingDate 
+        ? (typeof dispensing.dispensingDate === 'string' 
+            ? dispensing.dispensingDate 
+            : new Date(dispensing.dispensingDate).toISOString())
+        : dispensing.createdAt.toISOString(),
       whenHandedOver: dispensing.status === 'dispensed' 
-        ? (dispensing.updatedAt?.toISOString() || dispensing.createdAt.toISOString())
+        ? (dispensing.updatedAt 
+            ? (typeof dispensing.updatedAt === 'string' 
+                ? dispensing.updatedAt 
+                : dispensing.updatedAt.toISOString())
+            : dispensing.createdAt.toISOString())
         : undefined,
       destination: {
         reference: `Location/pharmacy`,
@@ -323,7 +337,10 @@ export class MedicationDispenseMapper {
    */
   private static getUnitFromDrug(drug: any): string | undefined {
     if (!drug) return undefined;
-    return drug.unit || (drug.dosageForms?.[0] === 'tablet' ? 'tablet' : 'unit');
+    // Safely access drug properties
+    const safeDrug = drug && typeof drug === 'object' ? drug : null;
+    if (!safeDrug) return undefined;
+    return safeDrug.unit || (safeDrug.dosageForms?.[0] === 'tablet' ? 'tablet' : 'unit');
   }
 
   /**
