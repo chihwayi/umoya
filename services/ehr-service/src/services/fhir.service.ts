@@ -15,6 +15,7 @@ import { EncounterMapper } from '../fhir/mappers/encounter.mapper';
 import { ObservationMapper } from '../fhir/mappers/observation.mapper';
 import { MedicationRequestMapper } from '../fhir/mappers/medication-request.mapper';
 import { DiagnosticReportMapper } from '../fhir/mappers/diagnostic-report.mapper';
+import { ConditionMapper } from '../fhir/mappers/condition.mapper';
 import { FhirValidatorService } from '../fhir/validators/fhir-validator.service';
 
 type BundleEntry = {
@@ -931,28 +932,164 @@ export class FhirService {
     return DiagnosticReportMapper.toFhir(saved, tenantId);
   }
 
-  async searchConditions(query: any, tenantDb: DataSource) {
+  async searchConditions(query: any, tenantDb: DataSource, tenantId: string) {
     const problemRepository = tenantDb.getRepository(Problem);
-    const where: Record<string, any> = {};
+    let queryBuilder = problemRepository.createQueryBuilder('problem');
 
     if (query.patient) {
-      where.patientId = this.extractId(query.patient);
-    }
-    if (query.status) {
-      where.status = query.status;
+      const patientId = this.fhirValidator?.extractIdFromReference(query.patient) || this.extractId(query.patient);
+      if (patientId) {
+        queryBuilder.andWhere('problem.patient_id = :patientId', { patientId });
+      }
     }
 
-    const problems = await problemRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+    if (query['clinical-status']) {
+      // Map FHIR clinical status to Problem status
+      const clinicalStatus = query['clinical-status'];
+      if (clinicalStatus === 'resolved' || clinicalStatus === 'inactive') {
+        queryBuilder.andWhere('problem.status = :status', { status: 'resolved' });
+      } else if (clinicalStatus === 'active' || clinicalStatus === 'recurrence' || clinicalStatus === 'relapse') {
+        queryBuilder.andWhere('problem.status = :status', { status: 'active' });
+      }
+    }
+
+    if (query.category) {
+      // Category filtering - for now we only support problem-list-item
+      // Could be extended to filter by encounter-diagnosis if we add that field
+      if (query.category !== 'problem-list-item') {
+        // Return empty bundle if category doesn't match
+        return {
+          resourceType: 'Bundle',
+          id: `search-conditions-${Date.now()}`,
+          type: 'searchset',
+          total: 0,
+          entry: [],
+        };
+      }
+    }
+
+    if (query.severity) {
+      // Severity is stored in notes, so we search in notes
+      const severityValue = query.severity.toLowerCase();
+      queryBuilder.andWhere('LOWER(problem.notes) LIKE :severity', { severity: `%${severityValue}%` });
+    }
+
+    if (query['onset-date']) {
+      // Support date ranges: onset-date=le2020-01-01, onset-date=ge2020-01-01, onset-date=2020-01-01
+      const dateParam = query['onset-date'];
+      if (dateParam.startsWith('le')) {
+        const date = dateParam.substring(2);
+        queryBuilder.andWhere('problem.onset_date <= :date', { date });
+      } else if (dateParam.startsWith('ge')) {
+        const date = dateParam.substring(2);
+        queryBuilder.andWhere('problem.onset_date >= :date', { date });
+      } else {
+        queryBuilder.andWhere('DATE(problem.onset_date) = :date', { date: dateParam });
+      }
+    }
+
+    // Pagination
+    const page = parseInt(query._page) || 1;
+    const count = Math.min(parseInt(query._count) || 10, 100);
+    const offset = (page - 1) * count;
+
+    queryBuilder.orderBy('problem.created_at', 'DESC').skip(offset).take(count);
+    const [problems, total] = await queryBuilder.getManyAndCount();
 
     const entries = problems.map((problem) => ({
-      resource: this.problemToCondition(problem),
+      resource: ConditionMapper.toFhir(problem, tenantId),
       search: { mode: 'match' as const },
     }));
 
-    return this.buildBundle(entries);
+    return {
+      resourceType: 'Bundle',
+      id: `search-conditions-${Date.now()}`,
+      type: 'searchset',
+      total,
+      link: [
+        {
+          relation: 'self',
+          url: `Condition?${new URLSearchParams(query).toString()}`,
+        },
+      ],
+      entry: entries,
+    };
+  }
+
+  async getCondition(id: string, tenantDb: DataSource, tenantId: string) {
+    const problemRepository = tenantDb.getRepository(Problem);
+    const problem = await problemRepository.findOne({ where: { id } });
+
+    if (!problem) {
+      throw new NotFoundException(`Condition with ID ${id} not found`);
+    }
+
+    return ConditionMapper.toFhir(problem, tenantId);
+  }
+
+  async createCondition(fhirCondition: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirCondition.resourceType !== 'Condition') {
+      throw new BadRequestException('Resource must be of type Condition');
+    }
+
+    const problemData = ConditionMapper.fromFhir(fhirCondition, tenantId);
+    
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirCondition.subject?.reference) ||
+                      this.extractId(fhirCondition.subject?.reference) ||
+                      fhirCondition.subject?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    const problemRepository = tenantDb.getRepository(Problem);
+    const problem = problemRepository.create({
+      ...problemData,
+      patientId,
+    } as any);
+
+    const saved = await problemRepository.save(problem);
+    return ConditionMapper.toFhir(saved, tenantId);
+  }
+
+  async updateCondition(id: string, fhirCondition: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirCondition.resourceType !== 'Condition') {
+      throw new BadRequestException('Resource must be of type Condition');
+    }
+
+    const problemRepository = tenantDb.getRepository(Problem);
+    const existing = await problemRepository.findOne({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException(`Condition with ID ${id} not found`);
+    }
+
+    const updates = ConditionMapper.fromFhir(fhirCondition, tenantId);
+    
+    // Update only fields that exist in database schema
+    const updateData: any = {
+      code: updates.code || existing.code,
+      codeSystem: updates.codeSystem || existing.codeSystem,
+      snomedConceptId: updates.snomedConceptId,
+      snomedTerm: updates.snomedTerm,
+      description: updates.description || existing.description,
+      status: updates.status || existing.status,
+      onsetDate: updates.onsetDate,
+      resolvedDate: updates.resolvedDate,
+      notes: updates.notes,
+    };
+    
+    await problemRepository.update(id, updateData);
+    const saved = await problemRepository
+      .createQueryBuilder('problem')
+      .where('problem.id = :id', { id })
+      .getOne();
+
+    if (!saved) {
+      throw new NotFoundException(`Condition with ID ${id} not found after update`);
+    }
+
+    return ConditionMapper.toFhir(saved, tenantId);
   }
 
   async searchAllergyIntolerances(query: any, tenantDb: DataSource) {

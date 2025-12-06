@@ -303,6 +303,75 @@ export class FhirController {
 
   // ========== New FHIR Resources ==========
 
+  @Get('Condition')
+  @ApiOperation({ summary: 'Search FHIR conditions' })
+  @ApiResponse({ status: 200, description: 'FHIR condition bundle' })
+  async searchConditions(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchConditions(query, tenantDb, tenantId);
+  }
+
+  @Get('Condition/:id')
+  @ApiOperation({ summary: 'Get FHIR condition by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR condition resource' })
+  async getCondition(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getCondition(id, tenantDb, tenantId);
+  }
+
+  @Post('Condition')
+  @ApiOperation({ summary: 'Create FHIR condition' })
+  @ApiResponse({ status: 201, description: 'FHIR condition created' })
+  async createCondition(
+    @Body() fhirCondition: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createCondition(fhirCondition, tenantDb, tenantId);
+  }
+
+  @Put('Condition/:id')
+  @ApiOperation({ summary: 'Update FHIR condition' })
+  @ApiResponse({ status: 200, description: 'FHIR condition updated' })
+  async updateCondition(
+    @Param('id') id: string,
+    @Body() fhirCondition: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateCondition(id, fhirCondition, tenantDb, tenantId);
+  }
+
   @Get('Immunization')
   @ApiOperation({ summary: 'Search FHIR immunizations' })
   @ApiResponse({ status: 200, description: 'FHIR immunization bundle' })
