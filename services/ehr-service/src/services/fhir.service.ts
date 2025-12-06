@@ -17,7 +17,10 @@ import { MedicationRequestMapper } from '../fhir/mappers/medication-request.mapp
 import { DiagnosticReportMapper } from '../fhir/mappers/diagnostic-report.mapper';
 import { ConditionMapper } from '../fhir/mappers/condition.mapper';
 import { MedicationMapper } from '../fhir/mappers/medication.mapper';
+import { MedicationDispenseMapper } from '../fhir/mappers/medication-dispense.mapper';
 import { Drug } from '../entities/drug.entity';
+import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
+import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
 import { FhirValidatorService } from '../fhir/validators/fhir-validator.service';
 
 type BundleEntry = {
@@ -77,6 +80,7 @@ export class FhirService {
           this.buildResourceCapability('Encounter'),
           this.buildResourceCapability('MedicationRequest'),
           this.buildResourceCapability('Medication'),
+          this.buildResourceCapability('MedicationDispense'),
           this.buildResourceCapability('DiagnosticReport'),
           this.buildResourceCapability('Condition'),
           this.buildResourceCapability('AllergyIntolerance'),
@@ -2638,6 +2642,211 @@ export class FhirService {
     drug.status = 'inactive';
     drug.isActive = false;
     await drugRepository.save(drug);
+
+    return { status: 'deleted', id };
+  }
+
+  // ========== MedicationDispense Resource ==========
+
+  async searchMedicationDispenses(query: any, tenantDb: DataSource, tenantId: string) {
+    const dispensingRepository = tenantDb.getRepository(PharmacyDispensing);
+    const queryBuilder = dispensingRepository.createQueryBuilder('dispensing')
+      .leftJoinAndSelect('dispensing.patient', 'patient')
+      .leftJoinAndSelect('dispensing.prescription', 'prescription')
+      .leftJoinAndSelect('dispensing.dispensedBy', 'dispensedBy')
+      .leftJoin('pharmacy_dispensing_items', 'items', 'items.dispensing_id = dispensing.id')
+      .leftJoinAndSelect('items.drug', 'drug')
+      .leftJoinAndSelect('items.inventory', 'inventory');
+
+    // Search by patient
+    if (query.patient) {
+      const patientId = this.extractId(query.patient);
+      if (patientId) {
+        queryBuilder.andWhere('dispensing.patientId = :patientId', { patientId });
+      }
+    }
+
+    // Search by status
+    if (query.status) {
+      queryBuilder.andWhere('dispensing.status = :status', { status: query.status });
+    }
+
+    // Search by prescription (MedicationRequest)
+    if (query.prescription) {
+      const prescriptionId = this.extractId(query.prescription);
+      if (prescriptionId) {
+        queryBuilder.andWhere('dispensing.prescriptionId = :prescriptionId', { prescriptionId });
+      }
+    }
+
+    // Search by performer (pharmacist)
+    if (query.performer) {
+      const performerId = this.extractId(query.performer);
+      if (performerId) {
+        queryBuilder.andWhere('dispensing.dispensedById = :performerId', { performerId });
+      }
+    }
+
+    // Search by medication (via items)
+    if (query.medication) {
+      const medicationId = this.extractId(query.medication);
+      if (medicationId) {
+        queryBuilder.andWhere('items.drugId = :medicationId', { medicationId });
+      }
+    }
+
+    // Search by code (RxNorm code in items)
+    if (query.code) {
+      queryBuilder.andWhere('items.rxnormCode = :code', { code: query.code });
+    }
+
+    // Limit results
+    const limit = query._count ? parseInt(query._count) : 50;
+    queryBuilder.limit(Math.min(limit, 100));
+    queryBuilder.orderBy('dispensing.dispensingDate', 'DESC');
+
+    const dispensings = await queryBuilder.getMany();
+
+    // Load items for each dispensing
+    const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
+    const results = await Promise.all(
+      dispensings.map(async (dispensing) => {
+        const items = await itemsRepository.find({
+          where: { dispensingId: dispensing.id },
+          relations: ['drug', 'inventory'],
+        });
+        return {
+          dispensing,
+          items,
+        };
+      })
+    );
+
+    return this.buildBundle(
+      results.map(({ dispensing, items }) => ({
+        resource: MedicationDispenseMapper.toFhir(
+          dispensing,
+          items,
+          dispensing.prescription,
+          tenantId
+        ),
+        search: { mode: 'match' as const },
+      }))
+    );
+  }
+
+  async getMedicationDispense(id: string, tenantDb: DataSource, tenantId: string) {
+    const dispensingRepository = tenantDb.getRepository(PharmacyDispensing);
+    const dispensing = await dispensingRepository.findOne({
+      where: { id },
+      relations: ['patient', 'prescription', 'dispensedBy'],
+    });
+
+    if (!dispensing) {
+      throw new NotFoundException(`MedicationDispense with ID ${id} not found`);
+    }
+
+    // Load items
+    const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
+    const items = await itemsRepository.find({
+      where: { dispensingId: dispensing.id },
+      relations: ['drug', 'inventory'],
+    });
+
+    return MedicationDispenseMapper.toFhir(
+      dispensing,
+      items,
+      dispensing.prescription,
+      tenantId
+    );
+  }
+
+  async createMedicationDispense(fhirDispense: any, tenantDb: DataSource, tenantId: string) {
+    // Validate FHIR resource
+    if (this.fhirValidator) {
+      await this.fhirValidator.validateResource(fhirDispense, 'MedicationDispense');
+    }
+
+    // Map to entity
+    const dispensingRepository = tenantDb.getRepository(PharmacyDispensing);
+    const dispensingData = MedicationDispenseMapper.fromFhir(fhirDispense);
+
+    // Create dispensing
+    const dispensing = dispensingRepository.create(dispensingData);
+    const savedDispensing = await dispensingRepository.save(dispensing);
+
+    // Load items for response
+    const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
+    const items = await itemsRepository.find({
+      where: { dispensingId: savedDispensing.id },
+      relations: ['drug', 'inventory'],
+    });
+
+    // Load prescription if available
+    const prescriptionRepository = tenantDb.getRepository(Prescription);
+    const prescription = savedDispensing.prescriptionId
+      ? await prescriptionRepository.findOne({
+          where: { id: savedDispensing.prescriptionId },
+        })
+      : undefined;
+
+    return MedicationDispenseMapper.toFhir(
+      savedDispensing,
+      items,
+      prescription as any,
+      tenantId
+    );
+  }
+
+  async updateMedicationDispense(id: string, fhirDispense: any, tenantDb: DataSource, tenantId: string) {
+    // Validate FHIR resource
+    if (this.fhirValidator) {
+      await this.fhirValidator.validateResource(fhirDispense, 'MedicationDispense');
+    }
+
+    const dispensingRepository = tenantDb.getRepository(PharmacyDispensing);
+    const dispensing = await dispensingRepository.findOne({
+      where: { id },
+      relations: ['patient', 'prescription', 'dispensedBy'],
+    });
+
+    if (!dispensing) {
+      throw new NotFoundException(`MedicationDispense with ID ${id} not found`);
+    }
+
+    // Map to entity
+    const dispensingData = MedicationDispenseMapper.fromFhir(fhirDispense);
+
+    // Update dispensing
+    Object.assign(dispensing, dispensingData);
+    const updatedDispensing = await dispensingRepository.save(dispensing);
+
+    // Load items for response
+    const itemsRepository = tenantDb.getRepository(PharmacyDispensingItem);
+    const items = await itemsRepository.find({
+      where: { dispensingId: updatedDispensing.id },
+      relations: ['drug', 'inventory'],
+    });
+
+    return MedicationDispenseMapper.toFhir(
+      updatedDispensing,
+      items,
+      updatedDispensing.prescription,
+      tenantId
+    );
+  }
+
+  async deleteMedicationDispense(id: string, tenantDb: DataSource) {
+    const dispensingRepository = tenantDb.getRepository(PharmacyDispensing);
+    const dispensing = await dispensingRepository.findOne({ where: { id } });
+
+    if (!dispensing) {
+      throw new NotFoundException(`MedicationDispense with ID ${id} not found`);
+    }
+
+    // Soft delete by setting status to cancelled
+    dispensing.status = 'cancelled';
+    await dispensingRepository.save(dispensing);
 
     return { status: 'deleted', id };
   }

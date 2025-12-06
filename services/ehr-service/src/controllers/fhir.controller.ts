@@ -318,6 +318,92 @@ export class FhirController {
     return this.fhirService.deleteMedication(id, tenantDb);
   }
 
+  @Get('MedicationDispense')
+  @ApiOperation({ summary: 'Search FHIR medication dispenses' })
+  @ApiResponse({ status: 200, description: 'FHIR medication dispense bundle' })
+  async searchMedicationDispenses(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchMedicationDispenses(query, tenantDb, tenantId);
+  }
+
+  @Get('MedicationDispense/:id')
+  @ApiOperation({ summary: 'Get FHIR medication dispense by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR medication dispense resource' })
+  async getMedicationDispense(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getMedicationDispense(id, tenantDb, tenantId);
+  }
+
+  @Post('MedicationDispense')
+  @ApiOperation({ summary: 'Create FHIR medication dispense' })
+  @ApiResponse({ status: 201, description: 'FHIR medication dispense created' })
+  async createMedicationDispense(
+    @Body() fhirDispense: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createMedicationDispense(fhirDispense, tenantDb, tenantId);
+  }
+
+  @Put('MedicationDispense/:id')
+  @ApiOperation({ summary: 'Update FHIR medication dispense' })
+  @ApiResponse({ status: 200, description: 'FHIR medication dispense updated' })
+  async updateMedicationDispense(
+    @Param('id') id: string,
+    @Body() fhirDispense: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateMedicationDispense(id, fhirDispense, tenantDb, tenantId);
+  }
+
+  @Delete('MedicationDispense/:id')
+  @ApiOperation({ summary: 'Delete FHIR medication dispense' })
+  @ApiResponse({ status: 200, description: 'FHIR medication dispense deleted' })
+  async deleteMedicationDispense(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.deleteMedicationDispense(id, tenantDb);
+  }
+
   @Get('DiagnosticReport')
   @ApiOperation({ summary: 'Search FHIR diagnostic reports' })
   @ApiResponse({ status: 200, description: 'FHIR diagnostic report bundle' })
