@@ -6736,6 +6736,14 @@ export const analyticsApi = {
     return { data: response.data };
   },
 
+  getPatientAdmissions: async (patientId: string, token: string, tenantSlug: string, includeDischarged: boolean = false) => {
+    const response = await ehrAxios.get(`/beds/admissions/patient/${patientId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { includeDischarged: includeDischarged.toString() },
+    });
+    return { data: response.data };
+  },
+
   getCensusSnapshot: async (wardName: string | null, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get('/beds/census', {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },

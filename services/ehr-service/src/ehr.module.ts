@@ -79,6 +79,12 @@ import { OperatingRoomController } from './controllers/operating-room.controller
 import { AnesthesiaController } from './controllers/anesthesia.controller';
 import { BcmaController } from './controllers/bcma.controller';
 import { BloodBankController } from './controllers/blood-bank.controller';
+import { InfectionControlController } from './controllers/infection-control.controller';
+import { RevenueCycleController } from './controllers/revenue-cycle.controller';
+import { CdiController } from './controllers/cdi.controller';
+import { CaseManagementController } from './controllers/case-management.controller';
+import { SepsisController } from './controllers/sepsis.controller';
+import { DietaryController } from './controllers/dietary.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -146,6 +152,7 @@ import { DiabetesCdsService } from './services/diabetes-cds.service';
 import { DiabetesDeviceIntegrationService } from './services/diabetes-device-integration.service';
 import { CcdaService } from './services/ccda.service';
 import { HipaaAuditService } from './services/hipaa-audit.service';
+import { FhirValidatorService } from './fhir/validators/fhir-validator.service';
 import { PharmacyService } from './services/pharmacy.service';
 import { DoctorAvailabilityService } from './services/doctor-availability.service';
 import { TelemedicineService } from './services/telemedicine.service';
@@ -195,6 +202,12 @@ import { OperatingRoomService } from './services/operating-room.service';
 import { AnesthesiaService } from './services/anesthesia.service';
 import { BcmaService } from './services/bcma.service';
 import { BloodBankService } from './services/blood-bank.service';
+import { InfectionControlService } from './services/infection-control.service';
+import { RevenueCycleService } from './services/revenue-cycle.service';
+import { CdiService } from './services/cdi.service';
+import { CaseManagementService } from './services/case-management.service';
+import { SepsisService } from './services/sepsis.service';
+import { DietaryService } from './services/dietary.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -290,6 +303,12 @@ import { RolesGuard } from './guards/roles.guard';
     AnesthesiaController,
     BcmaController,
     BloodBankController,
+    InfectionControlController,
+    RevenueCycleController,
+    CdiController,
+    CaseManagementController,
+    SepsisController,
+    DietaryController,
   ],
   providers: [
     AuthService,
@@ -302,6 +321,7 @@ import { RolesGuard } from './guards/roles.guard';
     LabOrderService,
     BillingService,
     FhirService,
+    FhirValidatorService,
     Hl7Service,
     TenantService,
     ClaimsService,
@@ -410,6 +430,12 @@ import { RolesGuard } from './guards/roles.guard';
     AnesthesiaService,
     BcmaService,
     BloodBankService,
+    InfectionControlService,
+    RevenueCycleService,
+    CdiService,
+    CaseManagementService,
+    SepsisService,
+    DietaryService,
     RolesGuard,
     JwtStrategy,
   ],

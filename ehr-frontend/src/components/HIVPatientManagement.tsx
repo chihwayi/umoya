@@ -258,12 +258,12 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                   <p className="text-xs text-slate-500">Patient ID: {enrollment.patient_number}</p>
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                  enrollment.enrollment_status === 'active' ? 'bg-green-100 text-green-800' :
-                  enrollment.enrollment_status === 'transferred_out' ? 'bg-blue-100 text-blue-800' :
-                  enrollment.enrollment_status === 'lost_to_followup' ? 'bg-yellow-100 text-yellow-800' :
+                  (enrollment.enrollment_status || enrollment.status) === 'active' ? 'bg-green-100 text-green-800' :
+                  (enrollment.enrollment_status || enrollment.status) === 'transferred_out' ? 'bg-blue-100 text-blue-800' :
+                  (enrollment.enrollment_status || enrollment.status) === 'lost_to_followup' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-red-100 text-red-800'
                 }`}>
-                  {enrollment.enrollment_status.replace('_', ' ')}
+                  {(enrollment.enrollment_status || enrollment.status || 'active').replace(/_/g, ' ')}
                 </span>
               </div>
 

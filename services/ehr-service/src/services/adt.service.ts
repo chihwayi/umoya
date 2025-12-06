@@ -293,6 +293,27 @@ export class ADTService {
     return await tenantDb.query(query, params);
   }
 
+  async getPatientAdmissions(
+    patientId: string,
+    tenantDb: DataSource,
+    includeDischarged: boolean = true,
+  ): Promise<Admission[]> {
+    const repository = tenantDb.getRepository(Admission);
+    const queryBuilder = repository
+      .createQueryBuilder('admission')
+      .leftJoinAndSelect('admission.patient', 'patient')
+      .leftJoinAndSelect('admission.currentBed', 'currentBed')
+      .where('admission.patientId = :patientId', { patientId });
+
+    if (!includeDischarged) {
+      queryBuilder.andWhere('admission.admissionStatus = :status', { status: 'active' });
+    }
+
+    queryBuilder.orderBy('admission.admissionDate', 'DESC');
+
+    return await queryBuilder.getMany();
+  }
+
   async getCensusSnapshot(wardName?: string, tenantDb?: DataSource): Promise<any> {
     const occupancy = await this.bedManagementService.getBedOccupancy(wardName, tenantDb);
     

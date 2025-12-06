@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Scan, Loader2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Scan, Loader2, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -8,8 +8,17 @@ const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const MARDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const navigate = useNavigate();
   const { showError } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('ehr_user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -47,14 +56,22 @@ const MARDashboard: React.FC = () => {
   const loadMARs = async () => {
     if (!selectedPatient) return;
 
+    // Handle both camelCase and snake_case patient ID
+    const patientId = selectedPatient.patientId || selectedPatient.patient_id;
+    if (!patientId) {
+      console.warn('No patient ID found in selectedPatient:', selectedPatient);
+      return;
+    }
+
     try {
-      const response = await ehrAxios.get(`/bcma/mar/patient/${selectedPatient.patientId}`, {
+      const response = await ehrAxios.get(`/bcma/mar/patient/${patientId}`, {
         params: { date: selectedDate },
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
       setMarRecords(response.data || []);
     } catch (error) {
       // Silent fail - might be no MARs
+      console.error('Error loading MARs:', error);
     }
   };
 
@@ -88,36 +105,55 @@ const MARDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 p-6">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Scan className="w-7 h-7 text-white" />
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-700 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold flex items-center gap-3">
+                  <Scan className="w-8 h-8" />
+                  Medication Administration Record (MAR)
+                </h1>
+                <p className="text-blue-100 mt-1">Barcode medication safety system</p>
               </div>
-              Medication Administration Record (MAR)
-            </h1>
-            <p className="text-slate-600 mt-1">Barcode medication safety system</p>
+            </div>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
         {/* Filters */}
-        <div className="flex items-center gap-4 mt-4">
+        <div className="flex items-center gap-4 mb-6">
           <div className="flex-1">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Patient</label>
             <select
-              value={selectedPatient?.id || ''}
-              onChange={(e) => setSelectedPatient(patients.find(p => p.id === e.target.value))}
+              value={selectedPatient?.id || selectedPatient?.patient_id || ''}
+              onChange={(e) => {
+                const patient = patients.find(p => (p.id === e.target.value) || (p.patient_id === e.target.value));
+                setSelectedPatient(patient || null);
+              }}
               className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select patient...</option>
-              {patients.map((patient) => (
-                <option key={patient.id} value={patient.id}>
-                  {patient.patientFirstName} {patient.patientLastName} - Bed {patient.bedNumber}
-                </option>
-              ))}
+              {patients.map((patient) => {
+                const patientId = patient.id || patient.patient_id;
+                const firstName = patient.patient_first_name || patient.patientFirstName || patient.firstName || '';
+                const lastName = patient.patient_last_name || patient.patientLastName || patient.lastName || '';
+                const bedNumber = patient.bed_number || patient.bedNumber || 'N/A';
+                return (
+                  <option key={patientId} value={patientId}>
+                    {firstName} {lastName} - Bed {bedNumber}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div>
@@ -130,9 +166,8 @@ const MARDashboard: React.FC = () => {
             />
           </div>
         </div>
-      </div>
 
-      {/* MAR Grid */}
+        {/* MAR Grid */}
       {!selectedPatient ? (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">
           <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
@@ -199,6 +234,7 @@ const MARDashboard: React.FC = () => {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -155,6 +155,16 @@ export class AnesthesiaController {
 
   // ==================== PACU ====================
 
+  @Get('pacu/active')
+  @ApiOperation({ summary: 'Get active PACU patients' })
+  @ApiResponse({ status: 200, description: 'Active PACU patients retrieved' })
+  async getActivePACUPatients(
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    return this.anesthesiaService.getActivePACUPatients(tenantDb);
+  }
+
   @Post('pacu/admit')
   @ApiOperation({ summary: 'Admit patient to PACU' })
   @ApiResponse({ status: 201, description: 'Patient admitted to PACU' })
@@ -199,16 +209,6 @@ export class AnesthesiaController {
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return this.anesthesiaService.dischargePACU(id, dischargeData, req.user.id, tenantDb);
-  }
-
-  @Get('pacu/active')
-  @ApiOperation({ summary: 'Get active PACU patients' })
-  @ApiResponse({ status: 200, description: 'Active PACU patients retrieved' })
-  async getActivePACUPatients(
-    @Req() req: RequestWithTenant,
-  ) {
-    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.anesthesiaService.getActivePACUPatients(tenantDb);
   }
 
   // ==================== BILLING ====================

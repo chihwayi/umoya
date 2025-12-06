@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -8,8 +8,17 @@ const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const BloodBankDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const navigate = useNavigate();
   const { showError } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('ehr_user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [stats, setStats] = useState<any[]>([]);
@@ -87,23 +96,33 @@ const BloodBankDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 p-6">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Droplet className="w-7 h-7 text-white" />
+      <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold flex items-center gap-3">
+                  <Droplet className="w-8 h-8" />
+                  Blood Bank Dashboard
+                </h1>
+                <p className="text-red-100 mt-1">Inventory & transfusion management</p>
               </div>
-              Blood Bank Dashboard
-            </h1>
-            <p className="text-slate-600 mt-1">Inventory & transfusion management</p>
+            </div>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
         {/* Component Filter */}
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
+        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
           {components.map((comp) => (
             <button
               key={comp.value}
@@ -118,9 +137,8 @@ const BloodBankDashboard: React.FC = () => {
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Active Transfusions */}
+        {/* Active Transfusions */}
       {activeTransfusions.length > 0 && (
         <div className="mb-6">
           <h2 className="text-xl font-bold text-slate-900 mb-3 flex items-center gap-2">
@@ -198,6 +216,7 @@ const BloodBankDashboard: React.FC = () => {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

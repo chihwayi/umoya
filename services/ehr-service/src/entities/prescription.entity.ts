@@ -27,31 +27,28 @@ export class Prescription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  prescriptionNumber: string;
-
-  @Column()
+  @Column({ name: 'patient_id' })
   patientId: string;
 
   @ManyToOne(() => Patient)
-  @JoinColumn({ name: 'patientId' })
+  @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @Column()
+  @Column({ name: 'doctor_id' })
   prescriberId: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'prescriberId' })
+  @JoinColumn({ name: 'doctor_id' })
   prescriber: User;
 
-  @Column({ nullable: true })
-  medicalRecordId: string;
+  @Column({ name: 'medical_record_id', nullable: true })
+  medicalRecordId?: string;
 
-  @ManyToOne(() => MedicalRecord)
-  @JoinColumn({ name: 'medicalRecordId' })
-  medicalRecord: MedicalRecord;
+  @ManyToOne(() => MedicalRecord, { nullable: true })
+  @JoinColumn({ name: 'medical_record_id' })
+  medicalRecord?: MedicalRecord;
 
-  @Column()
+  @Column({ name: 'medication_name' })
   medicationName: string;
 
   @Column({ name: 'medication_name_snomed_code', type: 'varchar', length: 50, nullable: true })
@@ -66,23 +63,11 @@ export class Prescription {
   @Column({ name: 'medication_name_snomed_definition_status', type: 'varchar', length: 50, nullable: true })
   medicationNameSnomedDefinitionStatus?: string;
 
-  @Column({ name: 'medication_name_rxnorm_code', type: 'varchar', length: 50, nullable: true })
+  // Note: RxNorm columns (medication_name_rxnorm_code, medication_name_rxnorm_name, medication_name_rxnorm_tty) 
+  // do not exist in the database schema. These are virtual fields only.
   medicationNameRxnormCode?: string;
-
-  @Column({ name: 'medication_name_rxnorm_name', type: 'text', nullable: true })
   medicationNameRxnormName?: string;
-
-  @Column({ name: 'medication_name_rxnorm_tty', type: 'varchar', length: 20, nullable: true })
   medicationNameRxnormTty?: string;
-
-  @Column({ nullable: true })
-  genericName: string;
-
-  @Column()
-  strength: string;
-
-  @Column({ type: 'enum', enum: MedicationForm })
-  form: MedicationForm;
 
   @Column()
   dosage: string;
@@ -90,60 +75,50 @@ export class Prescription {
   @Column()
   frequency: string;
 
-  @Column()
-  route: string;
+  @Column({ nullable: true })
+  duration?: string;
 
   @Column()
   quantity: number;
 
-  @Column({ nullable: true })
-  refills: number;
-
-  @Column({ type: 'date' })
-  startDate: Date;
-
-  @Column({ type: 'date', nullable: true })
-  endDate: Date;
-
   @Column({ type: 'text', nullable: true })
-  instructions: string;
-
-  @Column({ type: 'text', nullable: true })
-  indication: string;
+  instructions?: string;
 
   @Column({ type: 'enum', enum: PrescriptionStatus, default: PrescriptionStatus.ACTIVE })
   status: PrescriptionStatus;
 
-  @Column({ type: 'text', nullable: true })
-  pharmacyNotes: string;
+  @Column({ name: 'prescribed_date', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  prescribedDate: Date;
 
-  @Column({ nullable: true })
-  dispensedById: string;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'dispensedById' })
-  dispensedBy: User;
+  // Note: updated_at column doesn't exist in database schema
+  // Updates are handled by trigger update_prescriptions_updated_at
+  // @UpdateDateColumn({ name: 'updated_at' })
+  // updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  dispensedAt: Date;
-
-  @Column({ type: 'json', nullable: true })
-  interactions: Array<{
+  // Virtual/optional fields that don't exist in database but may be used in code
+  // These are handled via type assertions when needed
+  form?: MedicationForm;
+  strength?: string;
+  route?: string;
+  refills?: number;
+  startDate?: Date;
+  endDate?: Date;
+  indication?: string;
+  pharmacyNotes?: string;
+  genericName?: string;
+  dispensedById?: string;
+  dispensedAt?: Date;
+  interactions?: Array<{
     medicationName: string;
     severity: 'minor' | 'moderate' | 'major';
     description: string;
   }>;
-
-  @Column({ type: 'json', nullable: true })
-  allergies: Array<{
+  allergies?: Array<{
     allergen: string;
     reaction: string;
     severity: 'mild' | 'moderate' | 'severe';
   }>;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

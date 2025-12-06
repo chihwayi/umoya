@@ -131,6 +131,19 @@ export class BedManagementController {
     return await this.adtService.transferPatient(admissionId, transferData, req.user.userId, tenantDb);
   }
 
+  // Specific routes must come before general routes
+  @Get('admissions/patient/:patientId')
+  @ApiOperation({ summary: 'Get admissions for a patient' })
+  async getPatientAdmissions(
+    @Param('patientId') patientId: string,
+    @Query('includeDischarged') includeDischarged: string,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const includeDischargedBool = includeDischarged === 'true';
+    return await this.adtService.getPatientAdmissions(patientId, tenantDb, includeDischargedBool);
+  }
+
   @Get('admissions')
   @ApiOperation({ summary: 'Get active admissions' })
   async getActiveAdmissions(@Query() filters: any, @Req() req: RequestWithTenant) {

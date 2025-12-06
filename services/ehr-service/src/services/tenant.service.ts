@@ -61,6 +61,28 @@ import { Bed } from '../entities/bed.entity';
 import { Admission } from '../entities/admission.entity';
 import { Discharge } from '../entities/discharge.entity';
 import { PatientTransfer } from '../entities/patient-transfer.entity';
+import { OperatingRoom } from '../entities/operating-room.entity';
+import { SurgicalCase } from '../entities/surgical-case.entity';
+import { SurgicalPreferenceCard } from '../entities/surgical-preference-card.entity';
+import { SurgicalImplant } from '../entities/surgical-implant.entity';
+import { PreAnesthesiaAssessment } from '../entities/pre-anesthesia-assessment.entity';
+import { AnesthesiaRecord } from '../entities/anesthesia-record.entity';
+import { AnesthesiaVitals } from '../entities/anesthesia-vitals.entity';
+import { PacuRecord } from '../entities/pacu-record.entity';
+import { AnesthesiaBilling } from '../entities/anesthesia-billing.entity';
+import { MedicationAdministrationRecord } from '../entities/medication-administration-record.entity';
+import { MedicationAlert } from '../entities/medication-alert.entity';
+import { BloodDonor } from '../entities/blood-donor.entity';
+import { BloodInventory } from '../entities/blood-inventory.entity';
+import { BloodTransfusion } from '../entities/blood-transfusion.entity';
+import { InfectionSurveillance } from '../entities/infection-surveillance.entity';
+import { IsolationPrecaution } from '../entities/isolation-precaution.entity';
+import { AntimicrobialStewardship } from '../entities/antimicrobial-stewardship.entity';
+import { ChargeMaster } from '../entities/charge-master.entity';
+import { PatientCharge } from '../entities/patient-charge.entity';
+import { ChargeApprovalNotification } from '../entities/charge-approval-notification.entity';
+import { PatientConsent } from '../entities/patient-consent.entity';
+import { ConsentSignature } from '../entities/consent-signature.entity';
 
 @Injectable()
 export class TenantService {
@@ -213,6 +235,28 @@ export class TenantService {
         Admission,
         Discharge,
         PatientTransfer,
+        OperatingRoom,
+        SurgicalCase,
+        SurgicalPreferenceCard,
+        SurgicalImplant,
+        PreAnesthesiaAssessment,
+        AnesthesiaRecord,
+        AnesthesiaVitals,
+        PacuRecord,
+        AnesthesiaBilling,
+        MedicationAdministrationRecord,
+        MedicationAlert,
+        BloodDonor,
+        BloodInventory,
+        BloodTransfusion,
+        InfectionSurveillance,
+        IsolationPrecaution,
+        AntimicrobialStewardship,
+        ChargeMaster,
+        PatientCharge,
+        ChargeApprovalNotification,
+        PatientConsent,
+        ConsentSignature,
       ],
       synchronize: false,
       logging: false,

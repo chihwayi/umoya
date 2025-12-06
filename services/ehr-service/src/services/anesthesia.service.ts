@@ -27,7 +27,7 @@ export class AnesthesiaService {
       assessedAt: new Date(),
     });
 
-    return await repository.save(assessment);
+    return await repository.save(assessment) as unknown as PreAnesthesiaAssessment;
   }
 
   async getPreAnesthesiaAssessment(
@@ -79,7 +79,7 @@ export class AnesthesiaService {
       anesthesiaStartTime: new Date(),
     });
 
-    return await repository.save(record);
+    return await repository.save(record) as unknown as AnesthesiaRecord;
   }
 
   async getAnesthesiaRecord(
@@ -148,7 +148,7 @@ export class AnesthesiaService {
       chartTime: vitalsData.chartTime || new Date(),
     });
 
-    return await repository.save(vitals);
+    return await repository.save(vitals) as unknown as AnesthesiaVitals;
   }
 
   async getVitalsByRecord(
@@ -223,7 +223,7 @@ export class AnesthesiaService {
       arrivalTime: new Date(),
     });
 
-    return await repository.save(pacuRecord);
+    return await repository.save(pacuRecord) as unknown as PacuRecord;
   }
 
   async getPACURecord(
@@ -295,11 +295,19 @@ export class AnesthesiaService {
   ): Promise<PacuRecord[]> {
     const repository = tenantDb.getRepository(PacuRecord);
 
-    return await repository.find({
-      where: { dischargeTime: null },
-      relations: ['patient', 'pacuNurse'],
-      order: { arrivalTime: 'ASC' },
-    });
+    try {
+      return await repository.find({
+        where: { dischargeTime: null },
+        relations: ['patient', 'pacuNurse', 'surgicalCase'],
+        order: { arrivalTime: 'ASC' },
+      });
+    } catch (error) {
+      // Fallback: try without relations if there's an issue
+      return await repository.find({
+        where: { dischargeTime: null },
+        order: { arrivalTime: 'ASC' },
+      });
+    }
   }
 
   // ==================== BILLING ====================

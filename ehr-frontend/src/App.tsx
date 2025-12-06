@@ -42,6 +42,12 @@ import ORDashboard from './pages/ORDashboard';
 import PACUDashboard from './pages/PACUDashboard';
 import MARDashboard from './pages/MARDashboard';
 import BloodBankDashboard from './pages/BloodBankDashboard';
+import InfectionControlDashboard from './pages/InfectionControlDashboard';
+import RevenueCycleDashboard from './pages/RevenueCycleDashboard';
+import CdiDashboard from './pages/CdiDashboard';
+import CaseManagementDashboard from './pages/CaseManagementDashboard';
+import SepsisDashboard from './pages/SepsisDashboard';
+import HIPAAComplianceDashboard from './pages/HIPAAComplianceDashboard';
 
 const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; children: React.ReactElement }> = ({ allowedRoles, children }) => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -92,6 +98,14 @@ function App() {
             <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />
             <Route path="/ehr/:tenantSlug/dashboard" element={<EHRDashboard />} />
             <Route path="/ehr/:tenantSlug/users" element={<UserManagement />} />
+            <Route
+              path="/ehr/:tenantSlug/hipaa-compliance"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <HIPAAComplianceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="/ehr/:tenantSlug/patients" element={<PatientManagement />} />
             <Route path="/ehr/:tenantSlug/patients/:patientId" element={<PatientDetail />} />
             <Route path="/ehr/:tenantSlug/appointments" element={<AppointmentManagement />} />
@@ -356,6 +370,51 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'lab_tech', 'admin']}>
                   <BloodBankDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 2: Infection Control */}
+            <Route
+              path="/ehr/:tenantSlug/infection-control"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <InfectionControlDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 2: Revenue Cycle */}
+            <Route
+              path="/ehr/:tenantSlug/revenue-cycle"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'accounts', 'doctor']}>
+                  <RevenueCycleDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 2: CDI */}
+            <Route
+              path="/ehr/:tenantSlug/cdi"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'admin']}>
+                  <CdiDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 2: Case Management */}
+            <Route
+              path="/ehr/:tenantSlug/case-management"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse', 'admin']}>
+                  <CaseManagementDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Phase 3: Sepsis Management */}
+            <Route
+              path="/ehr/:tenantSlug/sepsis"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <SepsisDashboard />
                 </RoleProtectedRoute>
               }
             />

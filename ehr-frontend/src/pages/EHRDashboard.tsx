@@ -12,6 +12,7 @@ import {
   AlertCircle, Bed, Baby
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
+import { ehrApi } from '../services/api';
 
 interface User {
   id: string;
@@ -110,6 +111,10 @@ const EHRDashboard: React.FC = () => {
           { icon: Bed, label: 'PACU', desc: 'Post-anesthesia care unit monitoring', color: 'from-purple-600 to-violet-600', route: 'pacu' },
           { icon: Scan, label: 'MAR (BCMA)', desc: 'Barcode medication administration & 5 Rights', color: 'from-blue-600 to-cyan-600', route: 'mar' },
           { icon: Droplet, label: 'Blood Bank', desc: 'Blood inventory, cross-match & transfusions', color: 'from-red-600 to-rose-600', route: 'blood-bank' },
+          { icon: Shield, label: 'Infection Control', desc: 'HAI surveillance, isolation & antimicrobial stewardship', color: 'from-green-600 to-emerald-600', route: 'infection-control' },
+          { icon: DollarSign, label: 'Revenue Cycle', desc: 'Charge capture, DRG optimization & billing', color: 'from-green-600 to-emerald-600', route: 'revenue-cycle' },
+          { icon: FileText, label: 'CDI Program', desc: 'Physician queries, DRG impact & documentation quality', color: 'from-blue-600 to-indigo-600', route: 'cdi' },
+          { icon: AlertTriangle, label: 'Sepsis Management', desc: 'SEP-1 bundle tracking, qSOFA & SIRS screening', color: 'from-red-600 to-orange-600', route: 'sepsis' },
           { icon: Activity, label: 'Vitals', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', route: 'nurse/vitals' },
           { icon: Pill, label: 'Medications', desc: 'Administer & track', color: 'from-orange-500 to-amber-500', route: 'nurse/medications' },
           { icon: Baby, label: 'Maternity', desc: 'Obstetric care & deliveries', color: 'from-pink-500 to-rose-500', route: 'nurse/maternity' },
@@ -153,30 +158,78 @@ const EHRDashboard: React.FC = () => {
         ];
       case 'admin':
         return [
-          { icon: CreditCard, label: 'Billing Dashboard', desc: 'Bills, payments & financial management', color: 'from-purple-500 to-pink-500', route: 'billing' },
-          { icon: FileText, label: 'Medical Aid Claims', desc: 'File, track & manage claims', color: 'from-emerald-500 to-teal-500', route: 'claims' },
-          { icon: Video, label: 'Telemedicine', desc: 'Video consultations & remote monitoring', color: 'from-purple-500 to-pink-500', route: 'telemedicine' },
-          { icon: Users, label: 'Staff Management', desc: 'Manage clinic staff & roles', color: 'from-slate-500 to-gray-500', route: 'users' },
-          { icon: Shield, label: 'Security & Access', desc: 'User permissions & security', color: 'from-red-500 to-rose-500', route: 'security' },
-          { icon: Eye, label: 'Audit Logs', desc: 'System activity & compliance', color: 'from-indigo-500 to-blue-500', route: 'audit' },
-          { icon: Database, label: 'Data Management', desc: 'Backup, restore & migration', color: 'from-purple-500 to-violet-500', route: 'data' },
-          { icon: Building, label: 'Tenant Settings', desc: 'Clinic configuration', color: 'from-emerald-500 to-teal-500', route: 'tenant-settings' },
-          { icon: Server, label: 'System Health', desc: 'Performance & monitoring', color: 'from-orange-500 to-amber-500', route: 'health' },
-          { icon: BarChart3, label: 'Analytics & Reports', desc: 'Business intelligence', color: 'from-cyan-500 to-blue-500', route: 'reports' },
-          { icon: Settings, label: 'System Settings', desc: 'Global configuration', color: 'from-gray-500 to-slate-500', route: 'settings' },
+          { icon: Users, label: 'User Management', desc: 'Manage staff accounts, roles & permissions', color: 'from-slate-500 to-gray-500', route: 'users' },
+          { icon: Shield, label: 'HIPAA Compliance', desc: 'Audit logs, breach detection & compliance', color: 'from-indigo-500 to-blue-500', route: 'hipaa-compliance' },
+          { icon: Eye, label: 'Audit Logs', desc: 'System activity & access logs', color: 'from-purple-500 to-violet-500', route: 'hipaa-compliance' },
+          { icon: Database, label: 'Data Management', desc: 'Backup, restore & data migration', color: 'from-blue-500 to-cyan-500', route: 'data' },
+          { icon: Server, label: 'System Health', desc: 'Performance monitoring & diagnostics', color: 'from-orange-500 to-amber-500', route: 'health' },
+          { icon: Building, label: 'Tenant Settings', desc: 'Clinic configuration & preferences', color: 'from-emerald-500 to-teal-500', route: 'tenant-settings' },
+          { icon: Settings, label: 'System Settings', desc: 'Global system configuration', color: 'from-gray-500 to-slate-500', route: 'settings' },
+          { icon: BarChart3, label: 'System Analytics', desc: 'Usage statistics & performance metrics', color: 'from-cyan-500 to-blue-500', route: 'analytics' },
         ];
       default:
         return baseActions;
     }
   };
 
+  const [adminStats, setAdminStats] = useState({
+    activeUsers: 0,
+    totalPatients: 0,
+    systemUptime: '99.9%',
+    securityAlerts: 0,
+  });
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadAdminStats();
+    }
+  }, [user]);
+
+  const loadAdminStats = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      // Load users count
+      try {
+        const usersRes = await ehrApi.getUsers(token, tenantSlug, '');
+        const activeUsers = (usersRes.data || []).filter((u: any) => u.isActive !== false).length;
+        setAdminStats(prev => ({ ...prev, activeUsers }));
+      } catch (err) {
+        console.error('Failed to load users:', err);
+      }
+
+      // Load patients count
+      try {
+        const patientsRes = await ehrApi.getPatients(token, tenantSlug, 1, 1);
+        setAdminStats(prev => ({ ...prev, totalPatients: patientsRes.data?.total || 0 }));
+      } catch (err) {
+        console.error('Failed to load patients:', err);
+      }
+
+      // Load security alerts (HIPAA breaches)
+      try {
+        if (ehrApi.detectBreaches && typeof ehrApi.detectBreaches === 'function') {
+          const breachesRes = await ehrApi.detectBreaches(token, tenantSlug, 7);
+          setAdminStats(prev => ({ ...prev, securityAlerts: breachesRes.data?.breaches?.length || breachesRes.data?.length || 0 }));
+        } else {
+          console.warn('detectBreaches method not available - frontend may need rebuild');
+        }
+      } catch (err) {
+        console.error('Failed to load breaches:', err);
+      }
+    } catch (error) {
+      console.error('Failed to load admin stats:', error);
+    }
+  };
+
   const getQuickStats = (role: string) => {
     if (role === 'admin') {
       return [
-        { label: 'Active Users', value: '24', icon: Users2, color: 'text-blue-600' },
-        { label: 'System Uptime', value: '99.9%', icon: Server, color: 'text-emerald-600' },
-        { label: 'Storage Used', value: '2.4GB', icon: HardDrive, color: 'text-orange-600' },
-        { label: 'Security Alerts', value: '0', icon: Shield, color: 'text-red-600' },
+        { label: 'Active Users', value: adminStats.activeUsers.toString(), icon: Users2, color: 'text-blue-600' },
+        { label: 'Total Patients', value: adminStats.totalPatients.toLocaleString(), icon: Users, color: 'text-emerald-600' },
+        { label: 'System Uptime', value: adminStats.systemUptime, icon: Server, color: 'text-green-600' },
+        { label: 'Security Alerts', value: adminStats.securityAlerts.toString(), icon: Shield, color: adminStats.securityAlerts > 0 ? 'text-red-600' : 'text-green-600' },
       ];
     }
     if (role === 'radiologist') {
@@ -365,14 +418,25 @@ const EHRDashboard: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="relative hidden sm:block">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search patients..."
-                  className="pl-9 pr-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30 text-white placeholder-blue-200 w-64"
-                />
-              </div>
+              {user.role !== 'admin' && (
+                <div className="relative hidden sm:block">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-300 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search patients..."
+                    className="pl-9 pr-4 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30 text-white placeholder-blue-200 w-64"
+                  />
+                </div>
+              )}
+              {user.role === 'admin' && (
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/hipaa-compliance`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-semibold text-sm"
+                >
+                  <Shield className="w-4 h-4" />
+                  HIPAA Compliance
+                </button>
+              )}
               <button className="p-2 hover:bg-white/20 rounded-lg relative transition-colors">
                 <Bell className="w-5 h-5 text-white" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
@@ -401,11 +465,15 @@ const EHRDashboard: React.FC = () => {
           {/* Quick Actions */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-800">Quick Actions</h2>
-              <button onClick={() => navigate(`/ehr/${tenantSlug}/patients`)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all">
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Patient</span>
-              </button>
+              <h2 className="text-xl font-bold text-slate-800">
+                {user.role === 'admin' ? 'System Administration' : 'Quick Actions'}
+              </h2>
+              {user.role !== 'admin' && (
+                <button onClick={() => navigate(`/ehr/${tenantSlug}/patients`)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Patient</span>
+                </button>
+              )}
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -428,7 +496,16 @@ const EHRDashboard: React.FC = () => {
           {/* System Status - Admin Only */}
           {user.role === 'admin' && (
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 mb-8">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">System Status</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">System Status</h3>
+                <button
+                  onClick={loadAdminStats}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw className="w-4 h-4 text-slate-600" />
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200">
                   <div className="p-2 bg-green-500 rounded-lg">
@@ -448,51 +525,45 @@ const EHRDashboard: React.FC = () => {
                     <p className="text-sm text-green-600">All Systems Operational</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-                  <div className="p-2 bg-yellow-500 rounded-lg">
-                    <HardDrive className="w-5 h-5 text-white" />
+                <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-200">
+                  <div className="p-2 bg-green-500 rounded-lg">
+                    <Shield className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-semibold text-yellow-800">Storage</p>
-                    <p className="text-sm text-yellow-600">75% Used (2.4GB/3.2GB)</p>
+                    <p className="font-semibold text-green-800">HIPAA Compliance</p>
+                    <p className="text-sm text-green-600">Audit Logging Active</p>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Recent Activity */}
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activity</h3>
-            <div className="space-y-4">
-              {(user.role === 'admin' ? [
-                { time: '5 minutes ago', action: 'User Dr. Smith logged in', user: 'System', Icon: Users, color: 'bg-green-500' },
-                { time: '15 minutes ago', action: 'Database backup completed', user: 'System', Icon: Database, color: 'bg-blue-500' },
-                { time: '1 hour ago', action: 'Security scan completed', user: 'System', Icon: Shield, color: 'bg-emerald-500' },
-                { time: '2 hours ago', action: 'New user account created', user: 'Admin', Icon: User, color: 'bg-purple-500' },
-                { time: '3 hours ago', action: 'System settings updated', user: 'Admin', Icon: Settings, color: 'bg-orange-500' },
-              ] : [
-                { time: '10 minutes ago', action: 'Patient consultation completed', user: 'John Doe', Icon: Stethoscope, color: 'bg-blue-500' },
-                { time: '25 minutes ago', action: 'Lab results reviewed', user: 'Sarah Smith', Icon: TestTube, color: 'bg-orange-500' },
-                { time: '1 hour ago', action: 'Prescription issued', user: 'Mike Johnson', Icon: Pill, color: 'bg-green-500' },
-              ]).map((item, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 hover:bg-slate-50 rounded-lg transition-colors">
-                  <div className={`w-2 h-2 ${item.color} rounded-full`}></div>
-                  <div className="flex items-center gap-3">
-                    <item.Icon className="w-4 h-4 text-slate-500" />
-                    <div className="flex-1">
-                      <p className="text-slate-800 font-medium">{item.action}</p>
-                      <p className="text-slate-600 text-sm">{user.role === 'admin' ? `By: ${item.user}` : `Patient: ${item.user}`}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-slate-500 text-sm">
-                    <Clock className="w-4 h-4" />
-                    <span>{item.time}</span>
-                  </div>
+          {/* Recent Activity - Admin Only */}
+          {user.role === 'admin' && (
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Recent System Activity</h3>
+                <button
+                  onClick={() => navigate(`/ehr/${tenantSlug}/hipaa-compliance`)}
+                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  View All Audit Logs →
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="text-center py-8 text-slate-500">
+                  <Eye className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                  <p className="text-sm">Recent activity is tracked in the HIPAA Compliance Dashboard</p>
+                  <button
+                    onClick={() => navigate(`/ehr/${tenantSlug}/hipaa-compliance`)}
+                    className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                  >
+                    View Compliance Dashboard
+                  </button>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
     </div>

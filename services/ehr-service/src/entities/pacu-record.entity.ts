@@ -58,7 +58,7 @@ export class PacuRecord {
   painManagement: any[];
 
   // Nausea/Vomiting
-  @Column({ nullable: true })
+  @Column({ name: 'ponv_score', nullable: true })
   ponvScore: number;
 
   @Column({ name: 'antiemetics_given', type: 'jsonb', default: [] })

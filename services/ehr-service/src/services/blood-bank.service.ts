@@ -18,7 +18,7 @@ export class BloodBankService {
   ): Promise<BloodDonor> {
     const repository = tenantDb.getRepository(BloodDonor);
     const donor = repository.create(donorData);
-    return await repository.save(donor);
+    return await repository.save(donor) as unknown as BloodDonor;
   }
 
   async getDonors(
@@ -109,7 +109,7 @@ export class BloodBankService {
       transfusionStatus: 'ordered',
     });
 
-    return await repository.save(transfusion);
+    return await repository.save(transfusion) as unknown as BloodTransfusion;
   }
 
   async startTransfusion(

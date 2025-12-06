@@ -278,6 +278,125 @@ export class DatabaseProvisioningService {
         description: 'Secure provider-to-provider messaging with threads, attachments, tasks, and templates',
         statements: () => this.getSprint20ProviderMessagingSchemaStatements(),
       },
+      {
+        id: 'sprint31_revenue_cycle',
+        label: 'Sprint 31 - Revenue Cycle & Charge Capture',
+        version: '2025.12.05',
+        description: 'Charge master, patient charges, DRG assignments, missed charges detection, and approval workflow',
+        statements: () => this.getSprint31RevenueCycleSchemaStatements(),
+      },
+      {
+        id: 'sprint26_operating_room',
+        label: 'Sprint 26 - Operating Room Management',
+        version: '2025.12.05',
+        description: 'OR scheduling, surgical cases, preference cards, block time, implant tracking, supply usage, and turnover',
+        statements: () => this.getSprint26OperatingRoomSchemaStatements(),
+      },
+      {
+        id: 'sprint27_anesthesia',
+        label: 'Sprint 27 - Anesthesia Module',
+        version: '2025.12.05',
+        description: 'Pre-anesthesia assessments, anesthesia records, vitals charting, PACU records, and ASA billing',
+        statements: () => this.getSprint27AnesthesiaSchemaStatements(),
+      },
+      {
+        id: 'sprint28_bcma',
+        label: 'Sprint 28 - BCMA Medication Safety',
+        version: '2025.12.05',
+        description: 'Barcode medication administration, 5 Rights verification, medication alerts, and audit logging',
+        statements: () => this.getSprint28BCMASchemaStatements(),
+      },
+      {
+        id: 'sprint29_blood_bank',
+        label: 'Sprint 29 - Blood Bank Management',
+        version: '2025.12.05',
+        description: 'Donor registry, blood inventory, cross-matching, and transfusion documentation',
+        statements: () => this.getSprint29BloodBankSchemaStatements(),
+      },
+      {
+        id: 'sprint30_infection_control',
+        label: 'Sprint 30 - Infection Control',
+        version: '2025.12.05',
+        description: 'HAI surveillance, isolation precautions, antimicrobial stewardship, outbreak alerts, and hand hygiene',
+        statements: () => this.getSprint30InfectionControlSchemaStatements(),
+      },
+      {
+        id: 'sprint32_cdi',
+        label: 'Sprint 32 - Clinical Documentation Improvement',
+        version: '2025.12.05',
+        description: 'CDI reviews, physician queries, documentation completeness, and DRG impact analysis',
+        statements: () => this.getSprint32CDISchemaStatements(),
+      },
+      {
+        id: 'sprint33_case_management',
+        label: 'Sprint 33 - Case Management & Discharge Planning',
+        version: '2025.12.05',
+        description: 'Case management assessments, discharge plans, utilization reviews, and care coordination',
+        statements: () => this.getSprint33CaseManagementSchemaStatements(),
+      },
+      {
+        id: 'sprint34_dietary',
+        label: 'Sprint 34 - Dietary & Nutrition',
+        version: '2025.12.05',
+        description: 'Diet orders, nutritional assessments, meal planning, and tube feeding management',
+        statements: () => this.getSprint34DietarySchemaStatements(),
+      },
+      {
+        id: 'sprint35_respiratory',
+        label: 'Sprint 35 - Respiratory Therapy',
+        version: '2025.12.05',
+        description: 'Respiratory orders, oxygen therapy, nebulizer treatments, and ventilator management',
+        statements: () => this.getSprint35RespiratorySchemaStatements(),
+      },
+      {
+        id: 'sprint36_physical_therapy',
+        label: 'Sprint 36 - Physical Therapy',
+        version: '2025.12.05',
+        description: 'Therapy orders, PT/OT/Speech therapy documentation, and rehabilitation tracking',
+        statements: () => this.getSprint36PhysicalTherapySchemaStatements(),
+      },
+      {
+        id: 'sprint37_supply_chain',
+        label: 'Sprint 37 - Supply Chain Management',
+        version: '2025.12.05',
+        description: 'Supply inventory, par levels, ordering, and usage tracking',
+        statements: () => this.getSprint37SupplyChainSchemaStatements(),
+      },
+      {
+        id: 'sprint38_sepsis',
+        label: 'Sprint 38 - Sepsis Management',
+        version: '2025.12.05',
+        description: 'Sepsis screening, SEP-1 bundle tracking, and outcomes monitoring',
+        statements: () => this.getSprint38SepsisSchemaStatements(),
+      },
+      {
+        id: 'sprint39_advanced_nursing',
+        label: 'Sprint 39 - Advanced Nursing',
+        version: '2025.12.05',
+        description: 'Falls risk assessments, wound care, and advanced nursing documentation',
+        statements: () => this.getSprint39AdvancedNursingSchemaStatements(),
+      },
+      {
+        id: 'sprint40_patient_safety',
+        label: 'Sprint 40 - Patient Safety Reporting',
+        version: '2025.12.05',
+        description: 'Safety incident reporting, investigation tracking, and root cause analysis',
+        statements: () => this.getSprint40PatientSafetySchemaStatements(),
+      },
+      {
+        id: 'sprint41_quality_reporting',
+        label: 'Sprint 41 - Quality Reporting',
+        version: '2025.12.05',
+        description: 'Quality measures, core measures tracking, and compliance reporting',
+        statements: () => this.getSprint41QualityReportingSchemaStatements(),
+      },
+      {
+        id: 'sprint42_advanced_analytics',
+        label: 'Sprint 42 - Advanced Analytics',
+        version: '2025.12.05',
+        description: 'Analytics reports, executive metrics, and business intelligence',
+        statements: () => this.getSprint42AdvancedAnalyticsSchemaStatements(),
+      },
     ];
   }
 
@@ -7559,27 +7678,6 @@ RECOMMENDATIONS:
 
     return statements;
   }
-}
-
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plans_patient_id ON care_plans(patient_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plans_status ON care_plans(status)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plans_primary_provider ON care_plans(primary_provider_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plans_start_date ON care_plans(start_date)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_goals_care_plan_id ON care_plan_goals(care_plan_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_goals_status ON care_plan_goals(status)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_goals_target_date ON care_plan_goals(target_date)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_interventions_care_plan_id ON care_plan_interventions(care_plan_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_interventions_goal_id ON care_plan_interventions(goal_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_interventions_status ON care_plan_interventions(status)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_interventions_assigned_to ON care_plan_interventions(assigned_to)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_progress_care_plan_id ON care_plan_progress_log(care_plan_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_progress_goal_id ON care_plan_progress_log(goal_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_progress_date ON care_plan_progress_log(progress_date)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_outcomes_care_plan_id ON care_plan_outcomes(care_plan_id)`);
-    statements.push(`CREATE INDEX IF NOT EXISTS idx_care_plan_outcomes_date ON care_plan_outcomes(outcome_date)`);
-
-    return statements;
-  }
 
   private getSprint18ReferralManagementSchemaStatements(): string[] {
     const statements: string[] = [];
@@ -8035,6 +8133,1822 @@ RECOMMENDATIONS:
     // Indexes for Message Templates
     statements.push(`CREATE INDEX IF NOT EXISTS idx_message_templates_category ON message_templates(category)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_message_templates_is_active ON message_templates(is_active)`);
+
+    return statements;
+  }
+
+  private getSprint31RevenueCycleSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Charge Master Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS charge_master (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        charge_code VARCHAR(50) UNIQUE NOT NULL,
+        charge_description TEXT NOT NULL,
+        cpt_code VARCHAR(10),
+        hcpcs_code VARCHAR(10),
+        revenue_code VARCHAR(10),
+        standard_charge DECIMAL(10, 2) NOT NULL,
+        medicare_rate DECIMAL(10, 2),
+        medicaid_rate DECIMAL(10, 2),
+        department VARCHAR(100),
+        service_category VARCHAR(100),
+        billable BOOLEAN DEFAULT true,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Patient Charges Table (with approval workflow columns from Migration 028)
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_charges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        charge_code VARCHAR(50) NOT NULL,
+        charge_description TEXT NOT NULL,
+        quantity DECIMAL(10, 2) DEFAULT 1,
+        unit_price DECIMAL(10, 2) NOT NULL,
+        total_charge DECIMAL(10, 2) GENERATED ALWAYS AS (quantity * unit_price) STORED,
+        service_date DATE NOT NULL,
+        source_type VARCHAR(100),
+        source_id UUID,
+        cpt_code VARCHAR(10),
+        icd10_code VARCHAR(10),
+        department VARCHAR(100),
+        ordering_provider UUID REFERENCES users(id),
+        charge_status VARCHAR(50) DEFAULT 'pending' CHECK (charge_status IN 
+          ('pending', 'reviewed', 'approved', 'rejected', 'billed', 'paid', 'adjusted', 'written_off')),
+        capture_method VARCHAR(50) CHECK (capture_method IN ('automatic', 'manual', 'imported')),
+        captured_by UUID REFERENCES users(id),
+        captured_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        reviewed_by UUID REFERENCES users(id),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        approved_by UUID REFERENCES users(id),
+        approved_at TIMESTAMP WITH TIME ZONE,
+        approval_notes TEXT,
+        rejection_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // DRG Assignments Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS drg_assignments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        drg_code VARCHAR(10) NOT NULL,
+        drg_description TEXT NOT NULL,
+        drg_weight DECIMAL(6, 4),
+        principal_diagnosis_icd10 VARCHAR(10) NOT NULL,
+        principal_diagnosis_description TEXT,
+        secondary_diagnoses JSONB DEFAULT '[]'::jsonb,
+        procedures JSONB DEFAULT '[]'::jsonb,
+        has_cc BOOLEAN DEFAULT false,
+        has_mcc BOOLEAN DEFAULT false,
+        cc_mcc_list JSONB DEFAULT '[]'::jsonb,
+        severity_of_illness VARCHAR(20) CHECK (severity_of_illness IN ('minor', 'moderate', 'major', 'extreme')),
+        risk_of_mortality VARCHAR(20) CHECK (risk_of_mortality IN ('minor', 'moderate', 'major', 'extreme')),
+        base_rate DECIMAL(10, 2),
+        calculated_payment DECIMAL(10, 2) GENERATED ALWAYS AS (base_rate * drg_weight) STORED,
+        assigned_date DATE DEFAULT CURRENT_DATE,
+        assigned_by UUID REFERENCES users(id),
+        assignment_method VARCHAR(50) CHECK (assignment_method IN ('automatic', 'coder_assigned', 'cdi_assigned')),
+        status VARCHAR(50) DEFAULT 'working' CHECK (status IN ('working', 'final', 'appealed', 'adjusted')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Missed Charges Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS missed_charges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        potential_charge_code VARCHAR(50),
+        potential_charge_description TEXT,
+        estimated_amount DECIMAL(10, 2),
+        source_type VARCHAR(100) NOT NULL,
+        source_id UUID,
+        service_date DATE NOT NULL,
+        detected_by VARCHAR(50) DEFAULT 'system' CHECK (detected_by IN ('system', 'auditor', 'cdi_specialist')),
+        detected_date DATE DEFAULT CURRENT_DATE,
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'added', 'not_billable', 'duplicate', 'ignored')),
+        resolved_date DATE,
+        resolved_by UUID REFERENCES users(id),
+        resolution_notes TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Charge Capture Rules Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS charge_capture_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rule_name VARCHAR(255) NOT NULL,
+        rule_description TEXT,
+        trigger_type VARCHAR(100) NOT NULL,
+        trigger_conditions JSONB,
+        charge_code VARCHAR(50) NOT NULL,
+        quantity_formula VARCHAR(255),
+        department VARCHAR(100),
+        active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Charge Approval Notifications Table (from Migration 028)
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS charge_approval_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        notification_type VARCHAR(50) DEFAULT 'charge_approved' CHECK (notification_type IN ('charge_approved', 'charges_ready_for_billing')),
+        notification_status VARCHAR(50) DEFAULT 'unread' CHECK (notification_status IN ('unread', 'read', 'dismissed')),
+        total_charges_count INTEGER DEFAULT 0,
+        total_charges_amount DECIMAL(10, 2) DEFAULT 0,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        read_by UUID REFERENCES users(id),
+        read_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb
+      )
+    `);
+
+    // Indexes for Charge Master
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_master_code ON charge_master(charge_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_master_cpt ON charge_master(cpt_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_master_department ON charge_master(department)`);
+
+    // Indexes for Patient Charges
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_patient ON patient_charges(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_admission ON patient_charges(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_service_date ON patient_charges(service_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_status ON patient_charges(charge_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_reviewed_by ON patient_charges(reviewed_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_approved_by ON patient_charges(approved_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_patient_charges_approval_status ON patient_charges(charge_status) WHERE charge_status IN ('pending', 'reviewed', 'approved', 'rejected')`);
+
+    // Indexes for DRG Assignments
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drg_admission ON drg_assignments(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drg_patient ON drg_assignments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drg_code ON drg_assignments(drg_code)`);
+
+    // Indexes for Missed Charges
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_missed_charges_patient ON missed_charges(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_missed_charges_status ON missed_charges(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_missed_charges_service_date ON missed_charges(service_date)`);
+
+    // Indexes for Charge Capture Rules
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_rules_trigger ON charge_capture_rules(trigger_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_rules_active ON charge_capture_rules(active)`);
+
+    // Indexes for Charge Approval Notifications
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_notifications_admission ON charge_approval_notifications(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_notifications_patient ON charge_approval_notifications(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_notifications_status ON charge_approval_notifications(notification_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_charge_notifications_created_at ON charge_approval_notifications(created_at DESC)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE charge_master IS 'Hospital charge master (fee schedule) with CPT/HCPCS codes'`);
+    statements.push(`COMMENT ON TABLE patient_charges IS 'Individual charges posted to patient accounts with auto-capture and approval workflow tracking'`);
+    statements.push(`COMMENT ON TABLE drg_assignments IS 'DRG assignments for inpatient billing with CC/MCC tracking'`);
+    statements.push(`COMMENT ON TABLE missed_charges IS 'Potentially missed charges for reconciliation and recovery'`);
+    statements.push(`COMMENT ON TABLE charge_capture_rules IS 'Rules for automatic charge capture from clinical activities'`);
+    statements.push(`COMMENT ON TABLE charge_approval_notifications IS 'Notifications sent to accounts department when charges are approved by doctors'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 26: Operating Room Management
+  // =====================================================================================================================
+  private getSprint26OperatingRoomSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Operating Rooms Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS operating_rooms (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        room_number VARCHAR(20) UNIQUE NOT NULL,
+        room_name VARCHAR(100) NOT NULL,
+        location VARCHAR(100),
+        room_type VARCHAR(50) CHECK (room_type IN ('general', 'cardiac', 'ortho', 'neuro', 'vascular', 'minor_procedure')),
+        status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'occupied', 'cleaning', 'maintenance', 'offline')),
+        has_laminar_flow BOOLEAN DEFAULT false,
+        has_c_arm BOOLEAN DEFAULT false,
+        has_microscope BOOLEAN DEFAULT false,
+        has_robot BOOLEAN DEFAULT false,
+        equipment_list JSONB DEFAULT '[]'::jsonb,
+        capacity INTEGER DEFAULT 1,
+        notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Surgical Cases Table
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS surgical_cases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        case_number VARCHAR(50) UNIQUE NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        appointment_id UUID REFERENCES appointments(id),
+        admission_id UUID REFERENCES admissions(id),
+        operating_room_id UUID REFERENCES operating_rooms(id),
+        scheduled_date DATE NOT NULL,
+        scheduled_start_time TIME NOT NULL,
+        scheduled_end_time TIME NOT NULL,
+        actual_start_time TIMESTAMP WITH TIME ZONE,
+        actual_end_time TIMESTAMP WITH TIME ZONE,
+        patient_in_room_time TIMESTAMP WITH TIME ZONE,
+        patient_out_room_time TIMESTAMP WITH TIME ZONE,
+        procedure_name TEXT NOT NULL,
+        procedure_code_cpt VARCHAR(10),
+        procedure_code_snomed VARCHAR(20),
+        procedure_type VARCHAR(50) CHECK (procedure_type IN ('elective', 'urgent', 'emergent', 'trauma')),
+        surgical_approach VARCHAR(50) CHECK (surgical_approach IN ('open', 'laparoscopic', 'robotic', 'endoscopic', 'minimally_invasive')),
+        laterality VARCHAR(20) CHECK (laterality IN ('left', 'right', 'bilateral', 'not_applicable')),
+        primary_diagnosis TEXT NOT NULL,
+        primary_diagnosis_icd10 VARCHAR(10),
+        primary_diagnosis_snomed VARCHAR(20),
+        secondary_diagnoses JSONB DEFAULT '[]'::jsonb,
+        primary_surgeon_id UUID REFERENCES users(id),
+        assistant_surgeon_id UUID REFERENCES users(id),
+        anesthesiologist_id UUID REFERENCES users(id),
+        scrub_nurse_id UUID REFERENCES users(id),
+        circulating_nurse_id UUID REFERENCES users(id),
+        additional_staff JSONB DEFAULT '[]'::jsonb,
+        status VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'confirmed', 'patient_arrived', 'in_progress', 'completed', 'cancelled', 'postponed', 'no_show')),
+        case_priority INTEGER DEFAULT 3 CHECK (case_priority BETWEEN 1 AND 5),
+        pre_op_diagnosis TEXT,
+        post_op_diagnosis TEXT,
+        findings TEXT,
+        procedure_performed TEXT,
+        complications TEXT,
+        estimated_blood_loss INTEGER,
+        specimens_sent JSONB DEFAULT '[]'::jsonb,
+        drains_placed JSONB DEFAULT '[]'::jsonb,
+        implants_used JSONB DEFAULT '[]'::jsonb,
+        anesthesia_type VARCHAR(50) CHECK (anesthesia_type IN ('general', 'regional', 'local', 'MAC', 'spinal', 'epidural')),
+        anesthesia_start_time TIMESTAMP WITH TIME ZONE,
+        anesthesia_end_time TIMESTAMP WITH TIME ZONE,
+        disposition VARCHAR(50) CHECK (disposition IN ('pacu', 'icu', 'floor', 'home', 'observation')),
+        consent_id UUID REFERENCES patient_consents(id),
+        case_cancelled_reason TEXT,
+        case_postponed_reason TEXT,
+        notes TEXT,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Surgical Preference Cards
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS surgical_preference_cards (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgeon_id UUID NOT NULL REFERENCES users(id),
+        procedure_name VARCHAR(255) NOT NULL,
+        procedure_code_cpt VARCHAR(10),
+        preferred_or_type VARCHAR(50),
+        preferred_position VARCHAR(50) CHECK (preferred_position IN ('supine', 'prone', 'lateral', 'lithotomy', 'trendelenburg', 'reverse_trendelenburg')),
+        preferred_anesthesia VARCHAR(50),
+        required_equipment JSONB DEFAULT '[]'::jsonb,
+        preferred_instruments JSONB DEFAULT '[]'::jsonb,
+        suture_preferences JSONB DEFAULT '[]'::jsonb,
+        supply_list JSONB DEFAULT '[]'::jsonb,
+        implant_options JSONB DEFAULT '[]'::jsonb,
+        preferred_scrub_tech VARCHAR(255),
+        special_instructions TEXT,
+        is_active BOOLEAN DEFAULT true,
+        version INTEGER DEFAULT 1,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(surgeon_id, procedure_name, version)
+      )
+    `);
+
+    // OR Block Schedule
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS or_block_schedule (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        operating_room_id UUID NOT NULL REFERENCES operating_rooms(id),
+        surgeon_id UUID REFERENCES users(id),
+        service_name VARCHAR(100),
+        day_of_week INTEGER CHECK (day_of_week BETWEEN 0 AND 6),
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        effective_date DATE NOT NULL,
+        expiration_date DATE,
+        block_type VARCHAR(50) CHECK (block_type IN ('dedicated', 'shared', 'open', 'emergency_only')),
+        is_recurring BOOLEAN DEFAULT true,
+        notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Surgical Implants
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS surgical_implants (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        implant_name VARCHAR(255) NOT NULL,
+        implant_type VARCHAR(100),
+        manufacturer VARCHAR(255),
+        catalog_number VARCHAR(100),
+        lot_number VARCHAR(100),
+        serial_number VARCHAR(100),
+        expiration_date DATE,
+        udi VARCHAR(255),
+        udi_di VARCHAR(100),
+        udi_pi VARCHAR(100),
+        charge_code VARCHAR(50),
+        unit_cost DECIMAL(10, 2),
+        billable BOOLEAN DEFAULT true,
+        implanted_by UUID REFERENCES users(id),
+        implanted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        body_site VARCHAR(100),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // OR Supply Usage
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS or_supply_usage (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        supply_name VARCHAR(255) NOT NULL,
+        supply_code VARCHAR(50),
+        quantity_used INTEGER NOT NULL,
+        unit_of_measure VARCHAR(20),
+        unit_cost DECIMAL(10, 2),
+        total_cost DECIMAL(10, 2),
+        charged_to_patient BOOLEAN DEFAULT true,
+        charge_code VARCHAR(50),
+        recorded_by UUID REFERENCES users(id),
+        recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // OR Turnover Log
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS or_turnover_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        operating_room_id UUID NOT NULL REFERENCES operating_rooms(id),
+        surgical_case_id UUID REFERENCES surgical_cases(id),
+        patient_out_time TIMESTAMP WITH TIME ZONE,
+        cleaning_start_time TIMESTAMP WITH TIME ZONE,
+        cleaning_end_time TIMESTAMP WITH TIME ZONE,
+        next_patient_in_time TIMESTAMP WITH TIME ZONE,
+        turnover_minutes INTEGER,
+        delay_reason TEXT,
+        delay_minutes INTEGER,
+        cleaned_by UUID REFERENCES users(id),
+        verified_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_operating_rooms_status ON operating_rooms(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_operating_rooms_type ON operating_rooms(room_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_operating_rooms_active ON operating_rooms(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_patient ON surgical_cases(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_date ON surgical_cases(scheduled_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_status ON surgical_cases(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_surgeon ON surgical_cases(primary_surgeon_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_or ON surgical_cases(operating_room_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_procedure_cpt ON surgical_cases(procedure_code_cpt)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_surgical_cases_diagnosis_icd10 ON surgical_cases(primary_diagnosis_icd10)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preference_cards_surgeon ON surgical_preference_cards(surgeon_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preference_cards_procedure ON surgical_preference_cards(procedure_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_or_block_room ON or_block_schedule(operating_room_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_or_block_surgeon ON or_block_schedule(surgeon_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_or_block_dow ON or_block_schedule(day_of_week)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_implants_case ON surgical_implants(surgical_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_implants_udi ON surgical_implants(udi)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_implants_lot ON surgical_implants(lot_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_implants_serial ON surgical_implants(serial_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_supply_usage_case ON or_supply_usage(surgical_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_turnover_room ON or_turnover_log(operating_room_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_turnover_case ON or_turnover_log(surgical_case_id)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE operating_rooms IS 'Operating room configuration and equipment tracking'`);
+    statements.push(`COMMENT ON TABLE surgical_cases IS 'Complete surgical case tracking from scheduling to completion'`);
+    statements.push(`COMMENT ON TABLE surgical_preference_cards IS 'Surgeon preferences for specific procedures'`);
+    statements.push(`COMMENT ON TABLE surgical_implants IS 'FDA-compliant implant tracking with UDI (Unique Device Identifier)'`);
+    statements.push(`COMMENT ON TABLE or_supply_usage IS 'Surgical supply usage and charge capture'`);
+    statements.push(`COMMENT ON TABLE or_block_schedule IS 'OR block time scheduling for surgeons/services'`);
+    statements.push(`COMMENT ON TABLE or_turnover_log IS 'OR efficiency tracking and turnover times'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 27: Anesthesia Module
+  // =====================================================================================================================
+  private getSprint27AnesthesiaSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Pre-Anesthesia Assessments
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS pre_anesthesia_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        asa_status VARCHAR(10) CHECK (asa_status IN ('I', 'II', 'III', 'IV', 'V', 'VI', 'E')),
+        asa_modifier VARCHAR(10),
+        mallampati_score INTEGER CHECK (mallampati_score BETWEEN 1 AND 4),
+        mouth_opening VARCHAR(20),
+        neck_mobility VARCHAR(50),
+        thyromental_distance VARCHAR(20),
+        dentition VARCHAR(100),
+        airway_risk VARCHAR(20) CHECK (airway_risk IN ('low', 'moderate', 'high')),
+        cardiac_history TEXT,
+        cardiac_exam_findings TEXT,
+        ecg_findings TEXT,
+        recent_ecg_date DATE,
+        respiratory_history TEXT,
+        respiratory_exam_findings TEXT,
+        chest_xray_findings TEXT,
+        recent_cxr_date DATE,
+        hemoglobin DECIMAL(4, 1),
+        platelet_count INTEGER,
+        inr DECIMAL(3, 2),
+        creatinine DECIMAL(4, 2),
+        glucose INTEGER,
+        recent_labs_date DATE,
+        drug_allergies JSONB DEFAULT '[]'::jsonb,
+        current_medications JSONB DEFAULT '[]'::jsonb,
+        last_oral_intake TIMESTAMP WITH TIME ZONE,
+        npo_status BOOLEAN DEFAULT false,
+        planned_anesthesia_type VARCHAR(50) CHECK (planned_anesthesia_type IN ('general', 'regional', 'spinal', 'epidural', 'MAC', 'local', 'combined')),
+        planned_airway VARCHAR(50) CHECK (planned_airway IN ('ETT', 'LMA', 'spontaneous', 'mask', 'nasal_cannula')),
+        special_considerations TEXT,
+        anesthesia_risk VARCHAR(20) CHECK (anesthesia_risk IN ('low', 'moderate', 'high', 'very_high')),
+        risk_factors TEXT,
+        comorbidities JSONB DEFAULT '[]'::jsonb,
+        anesthesia_consent_obtained BOOLEAN DEFAULT false,
+        consent_obtained_by UUID REFERENCES users(id),
+        consent_obtained_at TIMESTAMP WITH TIME ZONE,
+        assessed_by UUID NOT NULL REFERENCES users(id),
+        assessed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Anesthesia Records
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS anesthesia_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        anesthesia_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        anesthesia_end_time TIMESTAMP WITH TIME ZONE,
+        surgery_start_time TIMESTAMP WITH TIME ZONE,
+        surgery_end_time TIMESTAMP WITH TIME ZONE,
+        anesthesia_type VARCHAR(50) NOT NULL,
+        airway_management VARCHAR(50),
+        ett_size VARCHAR(10),
+        ett_depth VARCHAR(10),
+        induction_medications JSONB DEFAULT '[]'::jsonb,
+        induction_notes TEXT,
+        maintenance_technique VARCHAR(50) CHECK (maintenance_technique IN ('inhalational', 'TIVA', 'balanced', 'regional')),
+        maintenance_agents JSONB DEFAULT '[]'::jsonb,
+        monitors_used JSONB DEFAULT '["ECG", "NIBP", "SpO2", "EtCO2", "Temp"]'::jsonb,
+        medications_administered JSONB DEFAULT '[]'::jsonb,
+        crystalloids_ml INTEGER DEFAULT 0,
+        colloids_ml INTEGER DEFAULT 0,
+        blood_products JSONB DEFAULT '[]'::jsonb,
+        estimated_blood_loss INTEGER,
+        urine_output INTEGER,
+        drain_output INTEGER,
+        ventilation_mode VARCHAR(50),
+        fio2 DECIMAL(3, 2),
+        tidal_volume INTEGER,
+        respiratory_rate INTEGER,
+        peep INTEGER,
+        intraop_events JSONB DEFAULT '[]'::jsonb,
+        complications TEXT,
+        emergence_time TIMESTAMP WITH TIME ZONE,
+        extubation_time TIMESTAMP WITH TIME ZONE,
+        emergence_medications JSONB DEFAULT '[]'::jsonb,
+        emergence_notes TEXT,
+        anesthesiologist_id UUID NOT NULL REFERENCES users(id),
+        crna_id UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Anesthesia Vitals
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS anesthesia_vitals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        anesthesia_record_id UUID NOT NULL REFERENCES anesthesia_records(id) ON DELETE CASCADE,
+        chart_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        heart_rate INTEGER,
+        blood_pressure_systolic INTEGER,
+        blood_pressure_diastolic INTEGER,
+        blood_pressure_mean INTEGER,
+        respiratory_rate INTEGER,
+        spo2 INTEGER,
+        etco2 INTEGER,
+        temperature DECIMAL(4, 2),
+        bis_value INTEGER,
+        mac DECIMAL(3, 2),
+        notes TEXT,
+        recorded_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(anesthesia_record_id, chart_time)
+      )
+    `);
+
+    // PACU Records
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS pacu_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        anesthesia_record_id UUID REFERENCES anesthesia_records(id),
+        arrival_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        arrival_from VARCHAR(50) DEFAULT 'OR',
+        aldrete_score_admission INTEGER CHECK (aldrete_score_admission BETWEEN 0 AND 10),
+        aldrete_score_discharge INTEGER CHECK (aldrete_score_discharge BETWEEN 0 AND 10),
+        aldrete_components JSONB,
+        pain_score_admission INTEGER CHECK (pain_score_admission BETWEEN 0 AND 10),
+        pain_score_discharge INTEGER CHECK (pain_score_discharge BETWEEN 0 AND 10),
+        pain_management JSONB DEFAULT '[]'::jsonb,
+        ponv_score INTEGER CHECK (ponv_score BETWEEN 0 AND 3),
+        antiemetics_given JSONB DEFAULT '[]'::jsonb,
+        complications TEXT,
+        interventions JSONB DEFAULT '[]'::jsonb,
+        discharge_time TIMESTAMP WITH TIME ZONE,
+        discharged_to VARCHAR(50) CHECK (discharged_to IN ('floor', 'icu', 'stepdown', 'home', 'observation')),
+        discharge_criteria_met BOOLEAN DEFAULT false,
+        pacu_nurse_id UUID REFERENCES users(id),
+        discharge_approved_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Anesthesia Billing
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS anesthesia_billing (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        surgical_case_id UUID NOT NULL REFERENCES surgical_cases(id),
+        anesthesia_record_id UUID REFERENCES anesthesia_records(id),
+        base_units INTEGER NOT NULL,
+        time_units DECIMAL(4, 2) NOT NULL,
+        modifying_units INTEGER DEFAULT 0,
+        total_units DECIMAL(5, 2) GENERATED ALWAYS AS (base_units + time_units + modifying_units) STORED,
+        anesthesia_cpt_code VARCHAR(10),
+        modifiers VARCHAR(20),
+        anesthesia_start TIMESTAMP WITH TIME ZONE NOT NULL,
+        anesthesia_end TIMESTAMP WITH TIME ZONE NOT NULL,
+        total_minutes INTEGER GENERATED ALWAYS AS (EXTRACT(EPOCH FROM (anesthesia_end - anesthesia_start))/60) STORED,
+        additional_procedures JSONB DEFAULT '[]'::jsonb,
+        conversion_factor DECIMAL(8, 2) DEFAULT 22.00,
+        total_charge DECIMAL(10, 2) GENERATED ALWAYS AS ((base_units + time_units + modifying_units) * conversion_factor) STORED,
+        billed_at TIMESTAMP WITH TIME ZONE,
+        billed_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preanesthesia_case ON pre_anesthesia_assessments(surgical_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preanesthesia_patient ON pre_anesthesia_assessments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_preanesthesia_assessor ON pre_anesthesia_assessments(assessed_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_record_case ON anesthesia_records(surgical_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_record_patient ON anesthesia_records(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_record_provider ON anesthesia_records(anesthesiologist_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_vitals_record ON anesthesia_vitals(anesthesia_record_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_vitals_time ON anesthesia_vitals(chart_time)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pacu_case ON pacu_records(surgical_case_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pacu_patient ON pacu_records(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pacu_nurse ON pacu_records(pacu_nurse_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anesthesia_billing_case ON anesthesia_billing(surgical_case_id)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE pre_anesthesia_assessments IS 'Pre-operative anesthesia evaluation and planning'`);
+    statements.push(`COMMENT ON TABLE anesthesia_records IS 'Intraoperative anesthesia documentation'`);
+    statements.push(`COMMENT ON TABLE anesthesia_vitals IS 'Real-time vitals charting during anesthesia (every 5 minutes)'`);
+    statements.push(`COMMENT ON TABLE pacu_records IS 'Post-anesthesia care unit documentation with Aldrete scoring'`);
+    statements.push(`COMMENT ON TABLE anesthesia_billing IS 'Anesthesia billing with ASA base units and time units'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 28: BCMA Medication Safety
+  // =====================================================================================================================
+  private getSprint28BCMASchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Medication Administration Records
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS medication_administration_records (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prescription_id UUID NOT NULL REFERENCES prescriptions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        medication_name VARCHAR(255) NOT NULL,
+        medication_barcode VARCHAR(100),
+        dose VARCHAR(100) NOT NULL,
+        unit VARCHAR(50) NOT NULL,
+        route VARCHAR(50) NOT NULL,
+        right_patient_verified BOOLEAN DEFAULT false,
+        right_medication_verified BOOLEAN DEFAULT false,
+        right_dose_verified BOOLEAN DEFAULT false,
+        right_route_verified BOOLEAN DEFAULT false,
+        right_time_verified BOOLEAN DEFAULT false,
+        patient_wristband_scanned BOOLEAN DEFAULT false,
+        patient_barcode VARCHAR(100),
+        medication_barcode_scanned BOOLEAN DEFAULT false,
+        scan_timestamp TIMESTAMP WITH TIME ZONE,
+        scheduled_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        actual_administration_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        administration_status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (administration_status IN ('pending', 'administered', 'refused', 'omitted', 'held', 'not_available')),
+        administered_by UUID NOT NULL REFERENCES users(id),
+        witnessed_by UUID REFERENCES users(id),
+        administration_site VARCHAR(100),
+        patient_response TEXT,
+        adverse_reaction BOOLEAN DEFAULT false,
+        adverse_reaction_details TEXT,
+        refusal_reason TEXT,
+        omission_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Medication Barcode Master
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS medication_barcode_master (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        medication_name VARCHAR(255) NOT NULL,
+        generic_name VARCHAR(255),
+        brand_name VARCHAR(255),
+        barcode VARCHAR(100) NOT NULL UNIQUE,
+        ndc_code VARCHAR(20),
+        strength VARCHAR(100),
+        unit VARCHAR(50),
+        form VARCHAR(100),
+        route VARCHAR(50),
+        manufacturer VARCHAR(255),
+        is_high_alert BOOLEAN DEFAULT false,
+        is_controlled BOOLEAN DEFAULT false,
+        look_alike_sound_alike JSONB DEFAULT '[]'::jsonb,
+        contraindications TEXT,
+        allergies_to_check JSONB DEFAULT '[]'::jsonb,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Patient Wristbands
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS patient_wristbands (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        barcode VARCHAR(100) NOT NULL UNIQUE,
+        wristband_type VARCHAR(50) DEFAULT 'standard' CHECK (wristband_type IN ('standard', 'allergy', 'fall_risk', 'dnr', 'isolation')),
+        issued_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        issued_by UUID REFERENCES users(id),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN DEFAULT true,
+        deactivated_at TIMESTAMP WITH TIME ZONE,
+        deactivated_by UUID REFERENCES users(id),
+        deactivation_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Medication Alerts
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS medication_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        prescription_id UUID REFERENCES prescriptions(id),
+        mar_id UUID REFERENCES medication_administration_records(id),
+        alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('allergy', 'interaction', 'duplicate_therapy', 'high_alert', 'dose_range', 'contraindication', 'renal_dosing', 'hepatic_dosing')),
+        severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'moderate', 'high', 'critical')),
+        alert_message TEXT NOT NULL,
+        alert_details JSONB,
+        acknowledged BOOLEAN DEFAULT false,
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        override_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // BCMA Audit Log
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS bcma_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        mar_id UUID REFERENCES medication_administration_records(id),
+        action VARCHAR(100) NOT NULL,
+        action_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        user_id UUID NOT NULL REFERENCES users(id),
+        patient_id UUID REFERENCES patients(id),
+        barcode_scanned VARCHAR(100),
+        scan_result VARCHAR(50),
+        ip_address VARCHAR(50),
+        device_id VARCHAR(100),
+        location VARCHAR(100),
+        details JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_mar_prescription ON medication_administration_records(prescription_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_mar_patient ON medication_administration_records(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_mar_scheduled_time ON medication_administration_records(scheduled_time)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_mar_status ON medication_administration_records(administration_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_mar_administered_by ON medication_administration_records(administered_by)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_barcode_code ON medication_barcode_master(barcode)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_barcode_name ON medication_barcode_master(medication_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_barcode_high_alert ON medication_barcode_master(is_high_alert)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_wristband_patient ON patient_wristbands(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_wristband_barcode ON patient_wristbands(barcode)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_wristband_active ON patient_wristbands(is_active)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_alert_patient ON medication_alerts(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_alert_prescription ON medication_alerts(prescription_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_alert_severity ON medication_alerts(severity)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_med_alert_acknowledged ON medication_alerts(acknowledged)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_bcma_audit_mar ON bcma_audit_log(mar_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_bcma_audit_user ON bcma_audit_log(user_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_bcma_audit_timestamp ON bcma_audit_log(action_timestamp)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_bcma_audit_action ON bcma_audit_log(action)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE medication_administration_records IS 'Complete medication administration documentation with 5 Rights verification'`);
+    statements.push(`COMMENT ON TABLE medication_barcode_master IS 'Master list of medication barcodes for verification'`);
+    statements.push(`COMMENT ON TABLE patient_wristbands IS 'Patient identification wristbands with barcodes'`);
+    statements.push(`COMMENT ON TABLE medication_alerts IS 'Real-time medication safety alerts'`);
+    statements.push(`COMMENT ON TABLE bcma_audit_log IS 'Complete audit trail for all BCMA activities'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 29: Blood Bank Management
+  // =====================================================================================================================
+  private getSprint29BloodBankSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Blood Donors
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS blood_donors (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID REFERENCES patients(id),
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        date_of_birth DATE NOT NULL,
+        gender VARCHAR(20) NOT NULL,
+        national_id VARCHAR(50),
+        phone VARCHAR(50),
+        email VARCHAR(100),
+        address TEXT,
+        blood_group VARCHAR(5) NOT NULL CHECK (blood_group IN ('A', 'B', 'AB', 'O')),
+        rh_factor VARCHAR(10) NOT NULL CHECK (rh_factor IN ('positive', 'negative')),
+        donor_type VARCHAR(50) DEFAULT 'voluntary' CHECK (donor_type IN ('voluntary', 'replacement', 'directed', 'autologous')),
+        donor_status VARCHAR(50) DEFAULT 'active' CHECK (donor_status IN ('active', 'deferred', 'permanently_deferred', 'inactive')),
+        last_donation_date DATE,
+        total_donations INTEGER DEFAULT 0,
+        deferral_reason TEXT,
+        deferral_until DATE,
+        willing_to_donate BOOLEAN DEFAULT true,
+        preferred_contact VARCHAR(50) DEFAULT 'phone',
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Blood Donations
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS blood_donations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        donation_number VARCHAR(50) UNIQUE NOT NULL,
+        donor_id UUID NOT NULL REFERENCES blood_donors(id),
+        donation_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        donation_type VARCHAR(50) NOT NULL CHECK (donation_type IN ('whole_blood', 'plasma', 'platelets', 'double_red_cells')),
+        volume_collected INTEGER NOT NULL,
+        hemoglobin DECIMAL(4, 1),
+        blood_pressure VARCHAR(20),
+        pulse INTEGER,
+        temperature DECIMAL(4, 2),
+        weight DECIMAL(5, 2),
+        screening_passed BOOLEAN DEFAULT true,
+        screening_notes TEXT,
+        collection_site VARCHAR(100),
+        phlebotomist_id UUID REFERENCES users(id),
+        adverse_event BOOLEAN DEFAULT false,
+        adverse_event_details TEXT,
+        bag_number VARCHAR(50) UNIQUE,
+        anticoagulant VARCHAR(50) DEFAULT 'CPDA-1',
+        abo_group_confirmed VARCHAR(5),
+        rh_factor_confirmed VARCHAR(10),
+        infection_screening_status VARCHAR(50) CHECK (infection_screening_status IN ('pending', 'cleared', 'rejected')),
+        hiv_test_result VARCHAR(20),
+        hbsag_test_result VARCHAR(20),
+        hcv_test_result VARCHAR(20),
+        syphilis_test_result VARCHAR(20),
+        malaria_test_result VARCHAR(20),
+        donation_status VARCHAR(50) DEFAULT 'collected' CHECK (donation_status IN ('collected', 'tested', 'cleared', 'quarantined', 'discarded', 'issued')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Blood Inventory
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS blood_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        donation_id UUID NOT NULL REFERENCES blood_donations(id),
+        component_type VARCHAR(50) NOT NULL CHECK (component_type IN ('whole_blood', 'packed_rbc', 'ffp', 'platelets', 'cryoprecipitate', 'plasma')),
+        unit_number VARCHAR(50) UNIQUE NOT NULL,
+        blood_group VARCHAR(5) NOT NULL,
+        rh_factor VARCHAR(10) NOT NULL,
+        volume_ml INTEGER NOT NULL,
+        collection_date DATE NOT NULL,
+        expiry_date DATE NOT NULL,
+        storage_location VARCHAR(100),
+        storage_temperature DECIMAL(4, 2),
+        status VARCHAR(50) DEFAULT 'available' CHECK (status IN ('available', 'reserved', 'issued', 'expired', 'discarded', 'transfused')),
+        visual_inspection_passed BOOLEAN DEFAULT true,
+        inspection_notes TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Blood Cross Match
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS blood_cross_match (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        inventory_id UUID NOT NULL REFERENCES blood_inventory(id),
+        requested_by UUID NOT NULL REFERENCES users(id),
+        requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        urgency VARCHAR(50) DEFAULT 'routine' CHECK (urgency IN ('routine', 'urgent', 'emergency')),
+        patient_blood_group VARCHAR(5) NOT NULL,
+        patient_rh_factor VARCHAR(10) NOT NULL,
+        major_cross_match VARCHAR(50) CHECK (major_cross_match IN ('compatible', 'incompatible', 'pending')),
+        minor_cross_match VARCHAR(50) CHECK (minor_cross_match IN ('compatible', 'incompatible', 'pending')),
+        antibody_screen VARCHAR(50) CHECK (antibody_screen IN ('negative', 'positive', 'pending')),
+        cross_match_result VARCHAR(50) DEFAULT 'pending' CHECK (cross_match_result IN ('pending', 'compatible', 'incompatible', 'conditional')),
+        result_date TIMESTAMP WITH TIME ZONE,
+        result_notes TEXT,
+        performed_by UUID REFERENCES users(id),
+        verified_by UUID REFERENCES users(id),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Blood Transfusions
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS blood_transfusions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        inventory_id UUID NOT NULL REFERENCES blood_inventory(id),
+        cross_match_id UUID REFERENCES blood_cross_match(id),
+        ordered_by UUID NOT NULL REFERENCES users(id),
+        order_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        indication TEXT NOT NULL,
+        urgency VARCHAR(50) DEFAULT 'routine',
+        pre_transfusion_vitals JSONB,
+        consent_obtained BOOLEAN DEFAULT false,
+        consent_obtained_by UUID REFERENCES users(id),
+        start_time TIMESTAMP WITH TIME ZONE,
+        end_time TIMESTAMP WITH TIME ZONE,
+        volume_transfused INTEGER,
+        transfusion_vitals JSONB DEFAULT '[]'::jsonb,
+        administered_by UUID NOT NULL REFERENCES users(id),
+        monitored_by UUID REFERENCES users(id),
+        transfusion_reaction BOOLEAN DEFAULT false,
+        reaction_type VARCHAR(100),
+        reaction_severity VARCHAR(50) CHECK (reaction_severity IN ('mild', 'moderate', 'severe', 'life_threatening')),
+        reaction_time TIMESTAMP WITH TIME ZONE,
+        reaction_management TEXT,
+        transfusion_status VARCHAR(50) DEFAULT 'ordered' CHECK (transfusion_status IN ('ordered', 'in_progress', 'completed', 'stopped', 'reaction_occurred')),
+        completion_notes TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donors_group ON blood_donors(blood_group, rh_factor)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donors_status ON blood_donors(donor_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donors_phone ON blood_donors(phone)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donations_donor ON blood_donations(donor_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donations_date ON blood_donations(donation_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donations_status ON blood_donations(donation_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_donations_bag ON blood_donations(bag_number)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_inventory_component ON blood_inventory(component_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_inventory_group ON blood_inventory(blood_group, rh_factor)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_inventory_status ON blood_inventory(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_blood_inventory_expiry ON blood_inventory(expiry_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cross_match_patient ON blood_cross_match(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cross_match_inventory ON blood_cross_match(inventory_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cross_match_result ON blood_cross_match(cross_match_result)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transfusion_patient ON blood_transfusions(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transfusion_inventory ON blood_transfusions(inventory_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transfusion_status ON blood_transfusions(transfusion_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_transfusion_start_time ON blood_transfusions(start_time)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE blood_donors IS 'Blood donor registry with screening and deferral tracking'`);
+    statements.push(`COMMENT ON TABLE blood_donations IS 'Individual blood donation events with testing results'`);
+    statements.push(`COMMENT ON TABLE blood_inventory IS 'Blood component inventory with expiry tracking'`);
+    statements.push(`COMMENT ON TABLE blood_cross_match IS 'Cross-matching for transfusion compatibility (valid 72 hours)'`);
+    statements.push(`COMMENT ON TABLE blood_transfusions IS 'Complete transfusion documentation with reaction monitoring'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 30: Infection Control
+  // =====================================================================================================================
+  private getSprint30InfectionControlSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Infection Surveillance
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS infection_surveillance (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        infection_type VARCHAR(100) NOT NULL CHECK (infection_type IN ('CAUTI', 'CLABSI', 'SSI', 'VAP', 'CDI', 'MRSA', 'VRE', 'CRE', 'Other')),
+        infection_site VARCHAR(100),
+        infection_date DATE NOT NULL,
+        onset_type VARCHAR(50) CHECK (onset_type IN ('community_acquired', 'hospital_acquired', 'healthcare_associated')),
+        days_since_admission INTEGER,
+        organism VARCHAR(255),
+        culture_source VARCHAR(100),
+        culture_date DATE,
+        antibiotic_resistance JSONB DEFAULT '[]'::jsonb,
+        risk_factors JSONB DEFAULT '[]'::jsonb,
+        device_associated BOOLEAN DEFAULT false,
+        device_type VARCHAR(100),
+        infection_icd10 VARCHAR(10),
+        severity VARCHAR(50) CHECK (severity IN ('mild', 'moderate', 'severe', 'sepsis', 'septic_shock')),
+        resolved BOOLEAN DEFAULT false,
+        resolution_date DATE,
+        outcome VARCHAR(50) CHECK (outcome IN ('resolved', 'ongoing', 'transferred', 'deceased')),
+        reported_to_cdc BOOLEAN DEFAULT false,
+        reported_date DATE,
+        investigated BOOLEAN DEFAULT false,
+        investigation_notes TEXT,
+        root_cause TEXT,
+        detected_by UUID REFERENCES users(id),
+        detected_date DATE DEFAULT CURRENT_DATE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Isolation Precautions
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS isolation_precautions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        isolation_type VARCHAR(50) NOT NULL CHECK (isolation_type IN ('standard', 'contact', 'droplet', 'airborne', 'contact_plus', 'protective')),
+        reason TEXT NOT NULL,
+        organism VARCHAR(255),
+        infection_icd10 VARCHAR(10),
+        start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        end_date TIMESTAMP WITH TIME ZONE,
+        room_number VARCHAR(50),
+        bed_number VARCHAR(50),
+        ppe_required JSONB DEFAULT '[]'::jsonb,
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'discontinued', 'transferred')),
+        ordered_by UUID NOT NULL REFERENCES users(id),
+        discontinued_by UUID REFERENCES users(id),
+        discontinuation_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Antimicrobial Stewardship
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS antimicrobial_stewardship (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        prescription_id UUID REFERENCES prescriptions(id),
+        antibiotic_name VARCHAR(255) NOT NULL,
+        antibiotic_class VARCHAR(100),
+        dose VARCHAR(100),
+        route VARCHAR(50),
+        frequency VARCHAR(100),
+        indication TEXT NOT NULL,
+        indication_icd10 VARCHAR(10),
+        empiric_or_targeted VARCHAR(50) CHECK (empiric_or_targeted IN ('empiric', 'targeted', 'prophylactic')),
+        culture_sent BOOLEAN DEFAULT false,
+        culture_source VARCHAR(100),
+        culture_result TEXT,
+        organism_identified VARCHAR(255),
+        sensitivity_profile JSONB,
+        start_date DATE NOT NULL,
+        planned_duration_days INTEGER,
+        actual_stop_date DATE,
+        total_days_given INTEGER,
+        review_required BOOLEAN DEFAULT false,
+        review_date DATE,
+        reviewed_by UUID REFERENCES users(id),
+        stewardship_recommendation TEXT,
+        recommendation_followed BOOLEAN,
+        appropriate_indication BOOLEAN,
+        appropriate_dose BOOLEAN,
+        appropriate_duration BOOLEAN,
+        de_escalation_opportunity BOOLEAN DEFAULT false,
+        de_escalation_notes TEXT,
+        prescribed_by UUID NOT NULL REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Outbreak Alerts
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS outbreak_alerts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        outbreak_name VARCHAR(255) NOT NULL,
+        organism VARCHAR(255),
+        infection_type VARCHAR(100),
+        detection_date DATE NOT NULL,
+        detection_method VARCHAR(100),
+        ward_location VARCHAR(100),
+        affected_patient_count INTEGER DEFAULT 0,
+        staff_affected_count INTEGER DEFAULT 0,
+        alert_level VARCHAR(50) CHECK (alert_level IN ('watch', 'alert', 'outbreak', 'resolved')),
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'monitoring', 'contained', 'resolved')),
+        investigation_started BOOLEAN DEFAULT false,
+        investigation_lead UUID REFERENCES users(id),
+        root_cause TEXT,
+        interventions_implemented JSONB DEFAULT '[]'::jsonb,
+        resolved_date DATE,
+        lessons_learned TEXT,
+        reported_to_health_department BOOLEAN DEFAULT false,
+        report_date DATE,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Hand Hygiene Compliance
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS hand_hygiene_compliance (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        observation_date DATE NOT NULL,
+        observation_time TIME NOT NULL,
+        location VARCHAR(100) NOT NULL,
+        staff_id UUID REFERENCES users(id),
+        staff_role VARCHAR(50),
+        opportunity_type VARCHAR(50) CHECK (opportunity_type IN ('before_patient_contact', 'before_aseptic_procedure', 'after_body_fluid_exposure', 'after_patient_contact', 'after_patient_surroundings')),
+        hand_hygiene_performed BOOLEAN NOT NULL,
+        method_used VARCHAR(50) CHECK (method_used IN ('soap_and_water', 'alcohol_rub', 'none')),
+        observed_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_infection_patient ON infection_surveillance(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_infection_type ON infection_surveillance(infection_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_infection_date ON infection_surveillance(infection_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_infection_onset ON infection_surveillance(onset_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_isolation_patient ON isolation_precautions(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_isolation_type ON isolation_precautions(isolation_type)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_isolation_status ON isolation_precautions(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_antimicrobial_patient ON antimicrobial_stewardship(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_antimicrobial_antibiotic ON antimicrobial_stewardship(antibiotic_name)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_antimicrobial_start_date ON antimicrobial_stewardship(start_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_outbreak_date ON outbreak_alerts(detection_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_outbreak_status ON outbreak_alerts(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_outbreak_level ON outbreak_alerts(alert_level)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hand_hygiene_date ON hand_hygiene_compliance(observation_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hand_hygiene_staff ON hand_hygiene_compliance(staff_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_hand_hygiene_compliance ON hand_hygiene_compliance(hand_hygiene_performed)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE infection_surveillance IS 'Hospital-acquired infection tracking and surveillance'`);
+    statements.push(`COMMENT ON TABLE isolation_precautions IS 'Isolation tracking for infectious patients with PPE requirements'`);
+    statements.push(`COMMENT ON TABLE antimicrobial_stewardship IS 'Antibiotic usage tracking and stewardship program'`);
+    statements.push(`COMMENT ON TABLE outbreak_alerts IS 'Outbreak detection and management'`);
+    statements.push(`COMMENT ON TABLE hand_hygiene_compliance IS 'Hand hygiene monitoring and compliance tracking (WHO 5 Moments)'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 32: Clinical Documentation Improvement (CDI)
+  // =====================================================================================================================
+  private getSprint32CDISchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // CDI Reviews
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS cdi_reviews (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        review_date DATE DEFAULT CURRENT_DATE,
+        review_type VARCHAR(50) CHECK (review_type IN ('concurrent', 'retrospective', 'post_discharge')),
+        current_drg VARCHAR(10),
+        current_drg_weight DECIMAL(6, 4),
+        potential_drg VARCHAR(10),
+        potential_drg_weight DECIMAL(6, 4),
+        potential_impact DECIMAL(10, 2),
+        documentation_issues JSONB DEFAULT '[]'::jsonb,
+        severity_of_illness VARCHAR(20) CHECK (severity_of_illness IN ('minor', 'moderate', 'major', 'extreme')),
+        risk_of_mortality VARCHAR(20) CHECK (risk_of_mortality IN ('minor', 'moderate', 'major', 'extreme')),
+        cc_mcc_opportunities JSONB DEFAULT '[]'::jsonb,
+        query_needed BOOLEAN DEFAULT false,
+        query_reason TEXT,
+        reviewed_by UUID NOT NULL REFERENCES users(id),
+        review_status VARCHAR(50) DEFAULT 'in_progress' CHECK (review_status IN ('in_progress', 'query_sent', 'query_answered', 'completed', 'no_action_needed')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Physician Queries
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS physician_queries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        query_number VARCHAR(50) UNIQUE NOT NULL,
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        cdi_review_id UUID REFERENCES cdi_reviews(id),
+        query_type VARCHAR(50) CHECK (query_type IN ('clinical_clarification', 'documentation_improvement', 'coding_question', 'conflicting_documentation')),
+        query_text TEXT NOT NULL,
+        clinical_indicators TEXT,
+        physician_id UUID NOT NULL REFERENCES users(id),
+        query_date DATE DEFAULT CURRENT_DATE,
+        priority VARCHAR(20) CHECK (priority IN ('routine', 'urgent', 'stat')),
+        due_date DATE,
+        potential_drg_change VARCHAR(10),
+        financial_impact DECIMAL(10, 2),
+        response_text TEXT,
+        response_date DATE,
+        response_action VARCHAR(50) CHECK (response_action IN ('documented', 'not_clinically_present', 'unable_to_determine', 'no_response')),
+        query_status VARCHAR(50) DEFAULT 'sent' CHECK (query_status IN ('draft', 'sent', 'answered', 'closed', 'escalated')),
+        documentation_improved BOOLEAN DEFAULT false,
+        drg_changed BOOLEAN DEFAULT false,
+        created_by UUID NOT NULL REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Documentation Completeness
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS documentation_completeness (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        history_physical_score INTEGER CHECK (history_physical_score BETWEEN 0 AND 100),
+        progress_notes_score INTEGER CHECK (progress_notes_score BETWEEN 0 AND 100),
+        discharge_summary_score INTEGER CHECK (discharge_summary_score BETWEEN 0 AND 100),
+        procedure_notes_score INTEGER CHECK (procedure_notes_score BETWEEN 0 AND 100),
+        overall_score INTEGER CHECK (overall_score BETWEEN 0 AND 100),
+        missing_elements JSONB DEFAULT '[]'::jsonb,
+        principal_diagnosis_documented BOOLEAN DEFAULT false,
+        secondary_diagnoses_count INTEGER DEFAULT 0,
+        procedures_documented_count INTEGER DEFAULT 0,
+        poa_indicators_complete BOOLEAN DEFAULT false,
+        discharge_disposition VARCHAR(100),
+        discharge_summary_complete BOOLEAN DEFAULT false,
+        discharge_summary_date DATE,
+        compliant_with_cms BOOLEAN DEFAULT false,
+        compliance_issues JSONB DEFAULT '[]'::jsonb,
+        last_checked_date DATE DEFAULT CURRENT_DATE,
+        checked_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // CDI Opportunities
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS cdi_opportunities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        opportunity_type VARCHAR(100) CHECK (opportunity_type IN ('cc_mcc', 'soi_rom', 'poa_indicator', 'principal_diagnosis', 'secondary_diagnosis', 'procedure_documentation')),
+        opportunity_description TEXT NOT NULL,
+        supporting_data JSONB,
+        icd10_code_suggested VARCHAR(10),
+        estimated_impact DECIMAL(10, 2),
+        impact_type VARCHAR(50) CHECK (impact_type IN ('drg_change', 'case_mix_index', 'severity_adjustment', 'documentation_quality')),
+        status VARCHAR(50) DEFAULT 'identified' CHECK (status IN ('identified', 'query_sent', 'documented', 'declined', 'not_applicable')),
+        detected_by VARCHAR(50) DEFAULT 'system' CHECK (detected_by IN ('system', 'cdi_specialist', 'coder')),
+        detected_date DATE DEFAULT CURRENT_DATE,
+        resolved_date DATE,
+        resolution_notes TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_reviews_admission ON cdi_reviews(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_reviews_patient ON cdi_reviews(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_reviews_status ON cdi_reviews(review_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_reviews_date ON cdi_reviews(review_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_physician_queries_admission ON physician_queries(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_physician_queries_physician ON physician_queries(physician_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_physician_queries_status ON physician_queries(query_status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_physician_queries_date ON physician_queries(query_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_doc_completeness_admission ON documentation_completeness(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_doc_completeness_patient ON documentation_completeness(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_doc_completeness_score ON documentation_completeness(overall_score)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_opportunities_admission ON cdi_opportunities(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_opportunities_status ON cdi_opportunities(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_cdi_opportunities_type ON cdi_opportunities(opportunity_type)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE cdi_reviews IS 'CDI specialist reviews with DRG impact analysis'`);
+    statements.push(`COMMENT ON TABLE physician_queries IS 'Queries sent to physicians for documentation clarification'`);
+    statements.push(`COMMENT ON TABLE documentation_completeness IS 'Documentation completeness tracking for CMS compliance'`);
+    statements.push(`COMMENT ON TABLE cdi_opportunities IS 'Potential documentation improvement opportunities with financial impact'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 33: Case Management & Discharge Planning
+  // =====================================================================================================================
+  private getSprint33CaseManagementSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Case Management Assessments
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS case_management_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        assessment_date DATE DEFAULT CURRENT_DATE,
+        assessment_type VARCHAR(50) CHECK (assessment_type IN ('initial', 'ongoing', 'discharge', 'post_discharge')),
+        medical_complexity VARCHAR(50) CHECK (medical_complexity IN ('low', 'moderate', 'high', 'very_high')),
+        functional_status VARCHAR(50),
+        cognitive_status VARCHAR(50),
+        psychosocial_needs TEXT,
+        discharge_barriers JSONB DEFAULT '[]'::jsonb,
+        home_health_needed BOOLEAN DEFAULT false,
+        dme_needed BOOLEAN DEFAULT false,
+        skilled_nursing_facility BOOLEAN DEFAULT false,
+        rehabilitation_needed BOOLEAN DEFAULT false,
+        housing_status VARCHAR(100),
+        support_system VARCHAR(100),
+        financial_concerns BOOLEAN DEFAULT false,
+        insurance_issues BOOLEAN DEFAULT false,
+        readmission_risk VARCHAR(50) CHECK (readmission_risk IN ('low', 'moderate', 'high')),
+        risk_factors JSONB DEFAULT '[]'::jsonb,
+        case_manager_id UUID NOT NULL REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Discharge Plans
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS discharge_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        target_discharge_date DATE,
+        actual_discharge_date DATE,
+        discharge_disposition VARCHAR(100) CHECK (discharge_disposition IN ('home', 'home_with_services', 'skilled_nursing_facility', 'rehab', 'hospice', 'ama', 'deceased', 'transferred')),
+        discharge_instructions TEXT,
+        medication_reconciliation_complete BOOLEAN DEFAULT false,
+        follow_up_appointments JSONB DEFAULT '[]'::jsonb,
+        dme_orders JSONB DEFAULT '[]'::jsonb,
+        home_health_orders JSONB DEFAULT '[]'::jsonb,
+        prescriptions_sent BOOLEAN DEFAULT false,
+        transportation_arranged BOOLEAN DEFAULT false,
+        transportation_type VARCHAR(100),
+        patient_education_completed BOOLEAN DEFAULT false,
+        education_topics JSONB DEFAULT '[]'::jsonb,
+        education_materials_provided JSONB DEFAULT '[]'::jsonb,
+        barriers_resolved BOOLEAN DEFAULT false,
+        remaining_barriers TEXT,
+        readmission_prevention_plan TEXT,
+        high_risk_follow_up BOOLEAN DEFAULT false,
+        physician_approval BOOLEAN DEFAULT false,
+        approved_by UUID REFERENCES users(id),
+        approval_date DATE,
+        case_manager_id UUID REFERENCES users(id),
+        plan_status VARCHAR(50) DEFAULT 'planning' CHECK (plan_status IN ('planning', 'ready', 'executed', 'delayed')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Utilization Reviews
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS utilization_reviews (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        review_date DATE DEFAULT CURRENT_DATE,
+        review_type VARCHAR(50) CHECK (review_type IN ('admission', 'continued_stay', 'discharge')),
+        medical_necessity_met BOOLEAN,
+        necessity_criteria TEXT,
+        current_level_of_care VARCHAR(100),
+        appropriate_level_of_care BOOLEAN,
+        recommended_level VARCHAR(100),
+        current_los INTEGER,
+        expected_los INTEGER,
+        los_variance INTEGER GENERATED ALWAYS AS (current_los - expected_los) STORED,
+        recommendations TEXT,
+        discharge_plan_in_place BOOLEAN DEFAULT false,
+        next_review_date DATE,
+        reviewed_by UUID NOT NULL REFERENCES users(id),
+        review_status VARCHAR(50) DEFAULT 'approved' CHECK (review_status IN ('approved', 'denied', 'pending', 'appeal')),
+        denial_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_case_mgmt_admission ON case_management_assessments(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_case_mgmt_patient ON case_management_assessments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_case_mgmt_manager ON case_management_assessments(case_manager_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_discharge_plans_admission ON discharge_plans(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_discharge_plans_patient ON discharge_plans(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_discharge_plans_target_date ON discharge_plans(target_discharge_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_util_review_admission ON utilization_reviews(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_util_review_patient ON utilization_reviews(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_util_review_date ON utilization_reviews(review_date)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE case_management_assessments IS 'Case management assessments with social determinants and discharge barriers'`);
+    statements.push(`COMMENT ON TABLE discharge_plans IS 'Comprehensive discharge planning with medication reconciliation and follow-up'`);
+    statements.push(`COMMENT ON TABLE utilization_reviews IS 'Utilization management and continued stay reviews for medical necessity'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 34: Dietary & Nutrition
+  // =====================================================================================================================
+  private getSprint34DietarySchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Diet Orders
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS diet_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        diet_type VARCHAR(100) NOT NULL CHECK (diet_type IN ('regular', 'NPO', 'clear_liquid', 'full_liquid', 'soft', 'diabetic', 'cardiac', 'renal', 'low_sodium', 'low_fat', 'gluten_free', 'pureed', 'mechanical_soft')),
+        diet_texture VARCHAR(50) CHECK (diet_texture IN ('regular', 'chopped', 'minced', 'pureed')),
+        food_allergies JSONB DEFAULT '[]'::jsonb,
+        food_restrictions JSONB DEFAULT '[]'::jsonb,
+        nutritional_supplements JSONB DEFAULT '[]'::jsonb,
+        tube_feeding BOOLEAN DEFAULT false,
+        tube_feeding_formula VARCHAR(255),
+        tube_feeding_rate VARCHAR(100),
+        tpn_ordered BOOLEAN DEFAULT false,
+        tpn_formula TEXT,
+        start_date DATE DEFAULT CURRENT_DATE,
+        end_date DATE,
+        ordered_by UUID NOT NULL REFERENCES users(id),
+        order_date DATE DEFAULT CURRENT_DATE,
+        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'discontinued', 'completed')),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Nutritional Assessments
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS nutritional_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        assessment_date DATE DEFAULT CURRENT_DATE,
+        height_cm DECIMAL(5, 2),
+        weight_kg DECIMAL(5, 2),
+        bmi DECIMAL(4, 2) GENERATED ALWAYS AS (weight_kg / ((height_cm / 100) * (height_cm / 100))) STORED,
+        nutritional_risk VARCHAR(50) CHECK (nutritional_risk IN ('low', 'moderate', 'high')),
+        malnutrition_diagnosis VARCHAR(100),
+        oral_intake_percentage INTEGER CHECK (oral_intake_percentage BETWEEN 0 AND 100),
+        swallowing_difficulty BOOLEAN DEFAULT false,
+        albumin DECIMAL(3, 2),
+        prealbumin DECIMAL(4, 2),
+        dietary_recommendations TEXT,
+        calorie_needs INTEGER,
+        protein_needs INTEGER,
+        assessed_by UUID NOT NULL REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_diet_orders_patient ON diet_orders(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_diet_orders_admission ON diet_orders(admission_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_diet_orders_status ON diet_orders(status)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_nutrition_assessment_patient ON nutritional_assessments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_nutrition_assessment_date ON nutritional_assessments(assessment_date)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE diet_orders IS 'Diet orders for inpatients with allergies and restrictions'`);
+    statements.push(`COMMENT ON TABLE nutritional_assessments IS 'Nutritional assessments by dietitians with malnutrition screening'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 35: Respiratory Therapy
+  // =====================================================================================================================
+  private getSprint35RespiratorySchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Respiratory Orders
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS respiratory_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        order_type VARCHAR(100) NOT NULL CHECK (order_type IN ('oxygen', 'nebulizer', 'ventilator', 'cpap', 'bipap', 'chest_pt')),
+        oxygen_flow_rate VARCHAR(50),
+        fio2 DECIMAL(3, 2),
+        ordered_by UUID NOT NULL REFERENCES users(id),
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_resp_orders_patient ON respiratory_orders(patient_id)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 36: Physical Therapy
+  // =====================================================================================================================
+  private getSprint36PhysicalTherapySchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Therapy Orders
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS therapy_orders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        therapy_type VARCHAR(50) CHECK (therapy_type IN ('PT', 'OT', 'speech')),
+        frequency VARCHAR(100),
+        ordered_by UUID NOT NULL REFERENCES users(id),
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_therapy_orders_patient ON therapy_orders(patient_id)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 37: Supply Chain Management
+  // =====================================================================================================================
+  private getSprint37SupplyChainSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Supply Inventory
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS supply_inventory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        item_name VARCHAR(255) NOT NULL,
+        item_code VARCHAR(50) UNIQUE NOT NULL,
+        category VARCHAR(100),
+        quantity INTEGER DEFAULT 0,
+        par_level INTEGER DEFAULT 10,
+        unit_cost DECIMAL(10, 2),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_supply_inventory_code ON supply_inventory(item_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_supply_inventory_category ON supply_inventory(category)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 38: Sepsis Management
+  // =====================================================================================================================
+  private getSprint38SepsisSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Sepsis Screenings
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS sepsis_screenings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        screening_datetime TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        screening_location VARCHAR(100),
+        qsofa_altered_mental_status BOOLEAN DEFAULT false,
+        qsofa_systolic_bp_low BOOLEAN DEFAULT false,
+        qsofa_respiratory_rate_high BOOLEAN DEFAULT false,
+        qsofa_score INTEGER CHECK (qsofa_score BETWEEN 0 AND 3),
+        sirs_temp_abnormal BOOLEAN DEFAULT false,
+        sirs_heart_rate_high BOOLEAN DEFAULT false,
+        sirs_respiratory_rate_high BOOLEAN DEFAULT false,
+        sirs_wbc_abnormal BOOLEAN DEFAULT false,
+        sirs_score INTEGER CHECK (sirs_score BETWEEN 0 AND 4),
+        temperature DECIMAL(4, 2),
+        heart_rate INTEGER,
+        respiratory_rate INTEGER,
+        systolic_bp INTEGER,
+        oxygen_saturation INTEGER,
+        wbc_count DECIMAL(5, 2),
+        lactate DECIMAL(4, 2),
+        sepsis_suspected BOOLEAN DEFAULT false,
+        severe_sepsis BOOLEAN DEFAULT false,
+        septic_shock BOOLEAN DEFAULT false,
+        sepsis_alert_triggered BOOLEAN DEFAULT false,
+        sepsis_bundle_initiated BOOLEAN DEFAULT false,
+        screened_by UUID NOT NULL REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Sepsis Bundles
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS sepsis_bundles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        sepsis_screening_id UUID REFERENCES sepsis_screenings(id),
+        bundle_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        lactate_measured BOOLEAN DEFAULT false,
+        lactate_measurement_time TIMESTAMP WITH TIME ZONE,
+        lactate_value DECIMAL(4, 2),
+        blood_cultures_drawn BOOLEAN DEFAULT false,
+        blood_cultures_time TIMESTAMP WITH TIME ZONE,
+        broad_spectrum_antibiotics_given BOOLEAN DEFAULT false,
+        antibiotics_time TIMESTAMP WITH TIME ZONE,
+        antibiotic_name VARCHAR(255),
+        fluid_bolus_given BOOLEAN DEFAULT false,
+        fluid_bolus_time TIMESTAMP WITH TIME ZONE,
+        fluid_volume_ml INTEGER,
+        vasopressors_initiated BOOLEAN DEFAULT false,
+        vasopressors_time TIMESTAMP WITH TIME ZONE,
+        vasopressor_name VARCHAR(255),
+        repeat_lactate_measured BOOLEAN DEFAULT false,
+        repeat_lactate_time TIMESTAMP WITH TIME ZONE,
+        repeat_lactate_value DECIMAL(4, 2),
+        three_hour_bundle_complete BOOLEAN DEFAULT false,
+        three_hour_compliance_time TIMESTAMP WITH TIME ZONE,
+        six_hour_bundle_complete BOOLEAN DEFAULT false,
+        six_hour_compliance_time TIMESTAMP WITH TIME ZONE,
+        overall_compliance BOOLEAN DEFAULT false,
+        patient_outcome VARCHAR(50) CHECK (patient_outcome IN ('improved', 'stable', 'deteriorated', 'deceased', 'transferred')),
+        outcome_date DATE,
+        managed_by UUID REFERENCES users(id),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_screening_patient ON sepsis_screenings(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_screening_datetime ON sepsis_screenings(screening_datetime)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_screening_suspected ON sepsis_screenings(sepsis_suspected)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_bundle_patient ON sepsis_bundles(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_bundle_start ON sepsis_bundles(bundle_start_time)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_sepsis_bundle_compliance ON sepsis_bundles(overall_compliance)`);
+
+    // Comments
+    statements.push(`COMMENT ON TABLE sepsis_screenings IS 'Sepsis screening using qSOFA and SIRS criteria'`);
+    statements.push(`COMMENT ON TABLE sepsis_bundles IS 'SEP-1 bundle tracking for CMS core measure compliance'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 39: Advanced Nursing
+  // =====================================================================================================================
+  private getSprint39AdvancedNursingSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Falls Risk Assessments
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS falls_risk_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        assessment_date DATE DEFAULT CURRENT_DATE,
+        morse_falls_score INTEGER CHECK (morse_falls_score BETWEEN 0 AND 125),
+        risk_level VARCHAR(50) CHECK (risk_level IN ('low', 'moderate', 'high')),
+        interventions JSONB DEFAULT '[]'::jsonb,
+        assessed_by UUID NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Wound Assessments
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS wound_assessments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        wound_location VARCHAR(255) NOT NULL,
+        wound_type VARCHAR(100) CHECK (wound_type IN ('pressure_injury', 'surgical', 'traumatic', 'diabetic', 'venous', 'arterial')),
+        stage VARCHAR(50),
+        length_cm DECIMAL(5, 2),
+        width_cm DECIMAL(5, 2),
+        depth_cm DECIMAL(5, 2),
+        braden_score INTEGER CHECK (braden_score BETWEEN 6 AND 23),
+        treatment_plan TEXT,
+        assessed_by UUID NOT NULL REFERENCES users(id),
+        assessment_date DATE DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_falls_risk_patient ON falls_risk_assessments(patient_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_wound_patient ON wound_assessments(patient_id)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 40: Patient Safety Reporting
+  // =====================================================================================================================
+  private getSprint40PatientSafetySchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Safety Incidents
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS safety_incidents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        incident_number VARCHAR(50) UNIQUE NOT NULL,
+        patient_id UUID REFERENCES patients(id),
+        incident_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        incident_type VARCHAR(100) CHECK (incident_type IN ('medication_error', 'fall', 'pressure_injury', 'wrong_site', 'device_malfunction', 'other')),
+        severity VARCHAR(50) CHECK (severity IN ('minor', 'moderate', 'severe', 'catastrophic')),
+        description TEXT NOT NULL,
+        harm_occurred BOOLEAN DEFAULT false,
+        reported_by UUID NOT NULL REFERENCES users(id),
+        status VARCHAR(50) DEFAULT 'reported' CHECK (status IN ('reported', 'investigating', 'resolved', 'closed')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_safety_incidents_date ON safety_incidents(incident_date)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_safety_incidents_type ON safety_incidents(incident_type)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 41: Quality Reporting
+  // =====================================================================================================================
+  private getSprint41QualityReportingSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Quality Measures
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS quality_measures (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        measure_code VARCHAR(50) NOT NULL,
+        measure_name VARCHAR(255) NOT NULL,
+        measure_type VARCHAR(50) CHECK (measure_type IN ('cms_core', 'hedis', 'jci', 'custom')),
+        numerator_criteria TEXT,
+        denominator_criteria TEXT,
+        target_percentage DECIMAL(5, 2),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Quality Measure Results
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS quality_measure_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        measure_id UUID NOT NULL REFERENCES quality_measures(id),
+        reporting_period_start DATE NOT NULL,
+        reporting_period_end DATE NOT NULL,
+        numerator_count INTEGER DEFAULT 0,
+        denominator_count INTEGER DEFAULT 0,
+        compliance_percentage DECIMAL(5, 2) GENERATED ALWAYS AS ((numerator_count::decimal / NULLIF(denominator_count, 0)) * 100) STORED,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_quality_results_measure ON quality_measure_results(measure_id)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_quality_results_period ON quality_measure_results(reporting_period_start, reporting_period_end)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 42: Advanced Analytics
+  // =====================================================================================================================
+  private getSprint42AdvancedAnalyticsSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Analytics Reports
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS analytics_reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        report_name VARCHAR(255) NOT NULL,
+        report_type VARCHAR(100) CHECK (report_type IN ('operational', 'financial', 'clinical', 'quality')),
+        report_query TEXT NOT NULL,
+        parameters JSONB DEFAULT '{}'::jsonb,
+        schedule VARCHAR(50),
+        is_active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Executive Metrics
+    statements.push(`
+      CREATE TABLE IF NOT EXISTS executive_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        metric_date DATE DEFAULT CURRENT_DATE,
+        total_admissions INTEGER DEFAULT 0,
+        total_discharges INTEGER DEFAULT 0,
+        average_los DECIMAL(5, 2),
+        bed_occupancy_rate DECIMAL(5, 2),
+        total_surgeries INTEGER DEFAULT 0,
+        total_ed_visits INTEGER DEFAULT 0,
+        total_revenue DECIMAL(12, 2),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Indexes
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_exec_metrics_date ON executive_metrics(metric_date)`);
 
     return statements;
   }

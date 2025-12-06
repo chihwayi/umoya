@@ -5,6 +5,7 @@ import * as bodyParser from 'body-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
+import { AllExceptionsFilter } from './filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(EhrModule);
@@ -24,6 +25,9 @@ async function bootstrap() {
   // and log access accordingly, while skipping non-PHI endpoints
   const hipaaAuditInterceptor = app.get(HipaaAuditInterceptor);
   app.useGlobalInterceptors(hipaaAuditInterceptor);
+
+  // Enable global exception filter for detailed error logging
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Enable CORS
   app.enableCors({

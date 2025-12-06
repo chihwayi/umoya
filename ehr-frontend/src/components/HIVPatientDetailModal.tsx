@@ -307,12 +307,12 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                   <div>
                     <p className="text-sm text-slate-600">Status</p>
                     <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-                      enrollment.enrollment_status === 'active' ? 'bg-green-100 text-green-800' :
-                      enrollment.enrollment_status === 'transferred_out' ? 'bg-blue-100 text-blue-800' :
-                      enrollment.enrollment_status === 'lost_to_followup' ? 'bg-yellow-100 text-yellow-800' :
+                      (enrollment.enrollment_status || enrollment.status) === 'active' ? 'bg-green-100 text-green-800' :
+                      (enrollment.enrollment_status || enrollment.status) === 'transferred_out' ? 'bg-blue-100 text-blue-800' :
+                      (enrollment.enrollment_status || enrollment.status) === 'lost_to_followup' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-red-100 text-red-800'
                     }`}>
-                      {enrollment.enrollment_status.replace('_', ' ').toUpperCase()}
+                      {(enrollment.enrollment_status || enrollment.status || 'active').replace(/_/g, ' ').toUpperCase()}
                     </span>
                   </div>
                 </div>

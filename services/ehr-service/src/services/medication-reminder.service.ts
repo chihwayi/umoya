@@ -51,7 +51,54 @@ export class MedicationReminderService {
 
     const now = new Date();
 
-    // Find reminders that need to be sent (next_send_at <= now and is_active = true)
+    // Check which columns exist in the medication_reminders table
+    const medicationRemindersColumns = await connection.query(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = 'medication_reminders' 
+       AND column_name IN ('reminder_type', 'timezone', 'next_reminder_at', 'next_send_at')`,
+    );
+    
+    const hasReminderType = medicationRemindersColumns.some((c: any) => c.column_name === 'reminder_type');
+    const hasTimezone = medicationRemindersColumns.some((c: any) => c.column_name === 'timezone');
+    const hasNextReminderAt = medicationRemindersColumns.some((c: any) => c.column_name === 'next_reminder_at');
+    const hasNextSendAt = medicationRemindersColumns.some((c: any) => c.column_name === 'next_send_at');
+    
+    // Determine which timestamp column to use
+    const timestampColumn = hasNextReminderAt ? 'next_reminder_at' : (hasNextSendAt ? 'next_send_at' : null);
+    
+    if (!timestampColumn) {
+      this.logger.warn(`medication_reminders table missing timestamp column for tenant ${tenantId}`);
+      return;
+    }
+
+    // Check which columns exist in the prescriptions table
+    const prescriptionsColumns = await connection.query(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = 'prescriptions' 
+       AND column_name IN ('is_active', 'status')`,
+    );
+    
+    const hasPrescriptionIsActive = prescriptionsColumns.some((c: any) => c.column_name === 'is_active');
+    const hasPrescriptionStatus = prescriptionsColumns.some((c: any) => c.column_name === 'status');
+    
+    // Build WHERE clause for prescriptions
+    let prescriptionWhereClause = '';
+    if (hasPrescriptionIsActive) {
+      prescriptionWhereClause = 'pr.is_active = true';
+    } else if (hasPrescriptionStatus) {
+      prescriptionWhereClause = "pr.status = 'active'";
+    } else {
+      // If neither column exists, don't filter by prescription status
+      prescriptionWhereClause = '1=1';
+    }
+
+    // Build SELECT clause based on available columns
+    const reminderTypeSelect = hasReminderType ? 'm.reminder_type' : "'all' as reminder_type";
+    const timezoneSelect = hasTimezone ? 'm.timezone' : "'Africa/Harare' as timezone";
+
+    // Find reminders that need to be sent
     const reminders = await connection.query(
       `SELECT 
         m.id,
@@ -60,8 +107,8 @@ export class MedicationReminderService {
         m.medication_name,
         m.reminder_time,
         m.reminder_days,
-        m.reminder_type,
-        m.timezone,
+        ${reminderTypeSelect},
+        ${timezoneSelect},
         p.first_name,
         p.last_name,
         p.phone,
@@ -72,9 +119,9 @@ export class MedicationReminderService {
       JOIN patients p ON m.patient_id = p.id
       JOIN prescriptions pr ON m.prescription_id = pr.id
       WHERE m.is_active = true 
-        AND m.next_send_at <= $1
-        AND pr.status = 'active'
-      ORDER BY m.next_send_at ASC
+        AND m.${timestampColumn} <= $1
+        AND ${prescriptionWhereClause}
+      ORDER BY m.${timestampColumn} ASC
       LIMIT 50`,
       [now],
     );
@@ -173,8 +220,7 @@ export class MedicationReminderService {
       `UPDATE medication_reminders 
        SET 
          last_sent_at = NOW(),
-         next_send_at = $1,
-         sent_count = sent_count + 1,
+         next_reminder_at = $1,
          updated_at = NOW()
        WHERE id = $2`,
       [nextSendAt, reminder.id],

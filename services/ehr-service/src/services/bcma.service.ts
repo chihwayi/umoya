@@ -143,7 +143,7 @@ export class BcmaService {
       administrationStatus: 'administered',
     });
 
-    return await repository.save(mar);
+    return await repository.save(mar) as unknown as MedicationAdministrationRecord;
   }
 
   async getMARsByPatient(
@@ -158,14 +158,32 @@ export class BcmaService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    return await repository
-      .createQueryBuilder('mar')
-      .where('mar.patientId = :patientId', { patientId })
-      .andWhere('mar.scheduledTime >= :startOfDay', { startOfDay })
-      .andWhere('mar.scheduledTime <= :endOfDay', { endOfDay })
-      .leftJoinAndSelect('mar.administeredBy', 'administeredBy')
-      .orderBy('mar.scheduledTime', 'ASC')
-      .getMany();
+    try {
+      return await repository
+        .createQueryBuilder('mar')
+        .where('mar.patient_id = :patientId', { patientId })
+        .andWhere('mar.scheduled_time >= :startOfDay', { startOfDay })
+        .andWhere('mar.scheduled_time <= :endOfDay', { endOfDay })
+        .leftJoinAndSelect('mar.administeredBy', 'administeredBy')
+        .leftJoinAndSelect('mar.witnessedBy', 'witnessedBy')
+        .orderBy('mar.scheduled_time', 'ASC')
+        .getMany();
+    } catch (error) {
+      // Fallback: use raw query if TypeORM has issues
+      return await tenantDb.query(
+        `SELECT mar.*, 
+         u1.first_name as administered_by_first_name, u1.last_name as administered_by_last_name,
+         u2.first_name as witnessed_by_first_name, u2.last_name as witnessed_by_last_name
+         FROM medication_administration_records mar
+         LEFT JOIN users u1 ON mar.administered_by = u1.id
+         LEFT JOIN users u2 ON mar.witnessed_by = u2.id
+         WHERE mar.patient_id = $1 
+         AND mar.scheduled_time >= $2 
+         AND mar.scheduled_time <= $3
+         ORDER BY mar.scheduled_time ASC`,
+        [patientId, startOfDay, endOfDay]
+      );
+    }
   }
 
   async holdMedication(
@@ -214,7 +232,7 @@ export class BcmaService {
     const repository = tenantDb.getRepository(MedicationAlert);
 
     const alert = repository.create(alertData);
-    return await repository.save(alert);
+    return await repository.save(alert) as unknown as MedicationAlert;
   }
 
   async getActiveAlerts(

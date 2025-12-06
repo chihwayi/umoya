@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Bed, Activity, TrendingUp, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Bed, Activity, TrendingUp, Clock, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -8,11 +8,20 @@ const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const PACUDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const navigate = useNavigate();
   const { showError } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
 
+  const [user, setUser] = useState<any>(null);
   const [pacuPatients, setPacuPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('ehr_user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
 
   useEffect(() => {
     loadPACUPatients();
@@ -64,30 +73,39 @@ const PACUDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-violet-50 to-pink-50 p-6">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Bed className="w-7 h-7 text-white" />
+      <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold flex items-center gap-3">
+                  <Bed className="w-8 h-8" />
+                  PACU Dashboard
+                </h1>
+                <p className="text-purple-100 mt-1">Post-Anesthesia Care Unit monitoring</p>
               </div>
-              PACU Dashboard
-            </h1>
-            <p className="text-slate-600 mt-1">Post-Anesthesia Care Unit monitoring</p>
-          </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl px-6 py-3 border border-slate-200 shadow-sm">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{pacuPatients.length}</p>
-              <p className="text-sm text-slate-600">Active Patients</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-6 py-3">
+              <div className="text-center">
+                <p className="text-2xl font-bold">{pacuPatients.length}</p>
+                <p className="text-sm text-purple-100">Active Patients</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* PACU Beds */}
-      {pacuPatients.length === 0 ? (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8">
+        {/* PACU Beds */}
+        {pacuPatients.length === 0 ? (
         <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-slate-200 p-12 text-center shadow-sm">
           <Bed className="w-16 h-16 text-slate-400 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-slate-900 mb-2">No Patients in PACU</h3>
@@ -191,7 +209,8 @@ const PACUDashboard: React.FC = () => {
             </div>
           ))}
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

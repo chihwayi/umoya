@@ -173,7 +173,7 @@ const HIVPatientSummaryCard: React.FC<HIVPatientSummaryCardProps> = ({
                   </div>
                   <div>
                     <span className="text-slate-600">Status: </span>
-                    <span className="font-semibold capitalize">{enrollment.enrollment_status || 'Active'}</span>
+                    <span className="font-semibold capitalize">{(enrollment.enrollment_status || enrollment.status || 'active').replace(/_/g, ' ')}</span>
                   </div>
                 </div>
               </div>

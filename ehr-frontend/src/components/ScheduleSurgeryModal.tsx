@@ -71,7 +71,12 @@ const ScheduleSurgeryModal: React.FC<ScheduleSurgeryModalProps> = ({
         params: { limit: 100 },
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
-      setPatients(patientsResponse.data || []);
+      // Handle different response structures
+      const patientsData = patientsResponse.data;
+      const patientsList = Array.isArray(patientsData) 
+        ? patientsData 
+        : (patientsData?.patients || patientsData?.data || []);
+      setPatients(Array.isArray(patientsList) ? patientsList : []);
     } catch (error) {
       // Silent fail - data will be empty
     }
@@ -116,11 +121,11 @@ const ScheduleSurgeryModal: React.FC<ScheduleSurgeryModalProps> = ({
     }
   };
 
-  const filteredPatients = patients.filter((p) => {
+  const filteredPatients = (Array.isArray(patients) ? patients : []).filter((p) => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
-    const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
-    return fullName.includes(search) || p.medicalRecordNumber?.includes(search);
+    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase();
+    return fullName.includes(search) || p.medicalRecordNumber?.toLowerCase().includes(search) || p.patientNumber?.toLowerCase().includes(search);
   });
 
   return (
