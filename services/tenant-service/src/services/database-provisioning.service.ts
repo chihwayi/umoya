@@ -404,6 +404,13 @@ export class DatabaseProvisioningService {
         description: 'Enhanced drug entity with RxNorm, SNOMED CT, NDC codes, strength, unit, and status fields for FHIR Medication support',
         statements: () => this.getSprint45DrugEnhancementSchemaStatements(),
       },
+      {
+        id: 'sprint45_pharmacy_dispensing_enhancement',
+        label: 'Sprint 45 - Pharmacy Dispensing Enhancement',
+        version: '2025.12.06',
+        description: 'Add dispensing_number, total_amount, amount_paid, discount_amount columns to pharmacy_dispensings table',
+        statements: () => this.getSprint45PharmacyDispensingEnhancementSchemaStatements(),
+      },
     ];
   }
 
@@ -10023,6 +10030,36 @@ RECOMMENDATIONS:
     statements.push(`COMMENT ON COLUMN drugs.strength IS 'Drug strength (e.g., "500", "10mg")'`);
     statements.push(`COMMENT ON COLUMN drugs.unit IS 'Unit of measurement (e.g., "mg", "ml", "tablet")'`);
     statements.push(`COMMENT ON COLUMN drugs.status IS 'FHIR Medication status: active, inactive, entered-in-error'`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 45: Pharmacy Dispensing Enhancement
+  // =====================================================================================================================
+  private getSprint45PharmacyDispensingEnhancementSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Add dispensing_number column (unique identifier for dispensing)
+    statements.push(`ALTER TABLE pharmacy_dispensings ADD COLUMN IF NOT EXISTS dispensing_number VARCHAR(50) UNIQUE`);
+
+    // Add total_amount column (total cost of dispensing)
+    statements.push(`ALTER TABLE pharmacy_dispensings ADD COLUMN IF NOT EXISTS total_amount NUMERIC(12,2) DEFAULT 0`);
+
+    // Add amount_paid column (amount paid by patient)
+    statements.push(`ALTER TABLE pharmacy_dispensings ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) DEFAULT 0`);
+
+    // Add discount_amount column (discount applied)
+    statements.push(`ALTER TABLE pharmacy_dispensings ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0`);
+
+    // Create index on dispensing_number for faster lookups
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_dispensings_dispensing_number ON pharmacy_dispensings(dispensing_number)`);
+
+    // Add comments
+    statements.push(`COMMENT ON COLUMN pharmacy_dispensings.dispensing_number IS 'Unique dispensing number/identifier'`);
+    statements.push(`COMMENT ON COLUMN pharmacy_dispensings.total_amount IS 'Total amount for the dispensing'`);
+    statements.push(`COMMENT ON COLUMN pharmacy_dispensings.amount_paid IS 'Amount paid by patient'`);
+    statements.push(`COMMENT ON COLUMN pharmacy_dispensings.discount_amount IS 'Discount amount applied'`);
 
     return statements;
   }
