@@ -397,6 +397,13 @@ export class DatabaseProvisioningService {
         description: 'Analytics reports, executive metrics, and business intelligence',
         statements: () => this.getSprint42AdvancedAnalyticsSchemaStatements(),
       },
+      {
+        id: 'sprint45_drug_enhancement',
+        label: 'Sprint 45 - Drug Database Enhancement (RxNorm)',
+        version: '2025.12.06',
+        description: 'Enhanced drug entity with RxNorm, SNOMED CT, NDC codes, strength, unit, and status fields for FHIR Medication support',
+        statements: () => this.getSprint45DrugEnhancementSchemaStatements(),
+      },
     ];
   }
 
@@ -1462,15 +1469,21 @@ export class DatabaseProvisioningService {
         generic_name VARCHAR(255) NOT NULL,
         brand_names TEXT[],
         atc_code VARCHAR(20),
-        rxnorm_code VARCHAR(50),
+        rxnorm_code VARCHAR(20),
         rxnorm_name TEXT,
         rxnorm_tty VARCHAR(20),
+        snomed_code VARCHAR(50),
+        snomed_term TEXT,
+        ndc_code VARCHAR(50),
+        strength VARCHAR(100),
+        unit VARCHAR(50),
         drug_class VARCHAR(100),
         active_ingredients TEXT[],
         dosage_forms TEXT[],
         route_of_administration TEXT[],
         description TEXT,
         is_active BOOLEAN DEFAULT true,
+        status VARCHAR(20) DEFAULT 'active',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
@@ -1478,6 +1491,9 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_rxnorm_code ON drugs(rxnorm_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_snomed_code ON drugs(snomed_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_ndc_code ON drugs(ndc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_status ON drugs(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
@@ -1675,11 +1691,14 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_snomed_concept ON lab_orders(snomed_concept_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_lab_orders_loinc_code ON lab_orders(loinc_code)`);
     
-    // Add drugs table (medication catalog)
-    statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), rxnorm_code VARCHAR(50), rxnorm_name TEXT, rxnorm_tty VARCHAR(20), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    // Add drugs table (medication catalog) - Enhanced with RxNorm, SNOMED, NDC, strength, unit, status
+    statements.push(`CREATE TABLE IF NOT EXISTS drugs (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), generic_name VARCHAR(255) NOT NULL, brand_names TEXT[], atc_code VARCHAR(20), rxnorm_code VARCHAR(20), rxnorm_name TEXT, rxnorm_tty VARCHAR(20), snomed_code VARCHAR(50), snomed_term TEXT, ndc_code VARCHAR(50), strength VARCHAR(100), unit VARCHAR(50), drug_class VARCHAR(100), active_ingredients TEXT[], dosage_forms TEXT[], route_of_administration TEXT[], description TEXT, is_active BOOLEAN DEFAULT true, status VARCHAR(20) DEFAULT 'active', created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_generic_name ON drugs(generic_name)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_atc_code ON drugs(atc_code)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_rxnorm_code ON drugs(rxnorm_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_snomed_code ON drugs(snomed_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_ndc_code ON drugs(ndc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_status ON drugs(status)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_drug_class ON drugs(drug_class)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_is_active ON drugs(is_active)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_brand_names ON drugs USING GIN(brand_names)`);
@@ -9949,6 +9968,61 @@ RECOMMENDATIONS:
 
     // Indexes
     statements.push(`CREATE INDEX IF NOT EXISTS idx_exec_metrics_date ON executive_metrics(metric_date)`);
+
+    return statements;
+  }
+
+  // =====================================================================================================================
+  // Sprint 45: Drug Database Enhancement (RxNorm, SNOMED, NDC, Strength, Unit, Status)
+  // =====================================================================================================================
+  private getSprint45DrugEnhancementSchemaStatements(): string[] {
+    const statements: string[] = [];
+
+    // Add RxNorm fields (if not already present)
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_code VARCHAR(20)`);
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_name TEXT`);
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_tty VARCHAR(20)`);
+
+    // Add SNOMED CT fields
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS snomed_term TEXT`);
+
+    // Add NDC (National Drug Code) field
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS ndc_code VARCHAR(50)`);
+
+    // Add strength and unit fields
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS strength VARCHAR(100)`);
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS unit VARCHAR(50)`);
+
+    // Add status field (FHIR standard: active, inactive, entered-in-error)
+    statements.push(`ALTER TABLE drugs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'`);
+
+    // Update existing rxnorm_code column size if it exists (from VARCHAR(50) to VARCHAR(20))
+    statements.push(`DO $$ 
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'drugs' AND column_name = 'rxnorm_code' 
+                   AND character_maximum_length > 20) THEN
+          ALTER TABLE drugs ALTER COLUMN rxnorm_code TYPE VARCHAR(20);
+        END IF;
+      END $$`);
+
+    // Create indexes for faster lookups
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_rxnorm_code ON drugs(rxnorm_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_snomed_code ON drugs(snomed_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_ndc_code ON drugs(ndc_code)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_drugs_status ON drugs(status)`);
+
+    // Add comments for documentation
+    statements.push(`COMMENT ON COLUMN drugs.rxnorm_code IS 'RxNorm Concept Unique Identifier (RXCUI)'`);
+    statements.push(`COMMENT ON COLUMN drugs.rxnorm_name IS 'RxNorm preferred name or normalized drug name'`);
+    statements.push(`COMMENT ON COLUMN drugs.rxnorm_tty IS 'RxNorm Term Type (SCD=Semantic Clinical Drug, SCDC=Semantic Clinical Drug Component)'`);
+    statements.push(`COMMENT ON COLUMN drugs.snomed_code IS 'SNOMED CT concept code for medication'`);
+    statements.push(`COMMENT ON COLUMN drugs.snomed_term IS 'SNOMED CT preferred term'`);
+    statements.push(`COMMENT ON COLUMN drugs.ndc_code IS 'National Drug Code (US FDA)'`);
+    statements.push(`COMMENT ON COLUMN drugs.strength IS 'Drug strength (e.g., "500", "10mg")'`);
+    statements.push(`COMMENT ON COLUMN drugs.unit IS 'Unit of measurement (e.g., "mg", "ml", "tablet")'`);
+    statements.push(`COMMENT ON COLUMN drugs.status IS 'FHIR Medication status: active, inactive, entered-in-error'`);
 
     return statements;
   }

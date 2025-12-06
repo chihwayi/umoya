@@ -53,5 +53,26 @@ export declare class DatabaseProvisioningService {
     deleteDatabase(databaseName: string): Promise<void>;
     private getProSchemaStatements;
     private getHealthGoalsSchemaStatements;
+    private getSprint14_2ClaimsEnhancementStatements;
+    private getSprint16WorkflowSchemaStatements;
+    private getSprint17CarePlansSchemaStatements;
+    private getSprint31RevenueCycleSchemaStatements;
+    private getSprint26OperatingRoomSchemaStatements;
+    private getSprint27AnesthesiaSchemaStatements;
+    private getSprint28BCMASchemaStatements;
+    private getSprint29BloodBankSchemaStatements;
+    private getSprint30InfectionControlSchemaStatements;
+    private getSprint32CDISchemaStatements;
+    private getSprint33CaseManagementSchemaStatements;
+    private getSprint34DietarySchemaStatements;
+    private getSprint35RespiratorySchemaStatements;
+    private getSprint36PhysicalTherapySchemaStatements;
+    private getSprint37SupplyChainSchemaStatements;
+    private getSprint38SepsisSchemaStatements;
+    private getSprint39AdvancedNursingSchemaStatements;
+    private getSprint40PatientSafetySchemaStatements;
+    private getSprint41QualityReportingSchemaStatements;
+    private getSprint42AdvancedAnalyticsSchemaStatements;
+    private getSprint45DrugEnhancementSchemaStatements;
 }
 export {};
