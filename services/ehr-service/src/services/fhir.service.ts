@@ -14,6 +14,7 @@ import { PatientMapper } from '../fhir/mappers/patient.mapper';
 import { EncounterMapper } from '../fhir/mappers/encounter.mapper';
 import { ObservationMapper } from '../fhir/mappers/observation.mapper';
 import { MedicationRequestMapper } from '../fhir/mappers/medication-request.mapper';
+import { DiagnosticReportMapper } from '../fhir/mappers/diagnostic-report.mapper';
 import { FhirValidatorService } from '../fhir/validators/fhir-validator.service';
 
 type BundleEntry = {
@@ -759,28 +760,175 @@ export class FhirService {
     return MedicationRequestMapper.toFhir(saved, tenantId);
   }
 
-  async searchDiagnosticReports(query: any, tenantDb: DataSource) {
+  async searchDiagnosticReports(query: any, tenantDb: DataSource, tenantId: string) {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
-    const where: Record<string, any> = {};
+    let queryBuilder = labOrderRepository.createQueryBuilder('labOrder');
 
     if (query.patient) {
-      where.patientId = this.extractId(query.patient);
+      const patientId = this.fhirValidator?.extractIdFromReference(query.patient) || this.extractId(query.patient);
+      if (patientId) {
+        queryBuilder.andWhere('labOrder.patient_id = :patientId', { patientId });
+      }
     }
+
     if (query.status) {
-      where.status = query.status;
+      // Map FHIR status to LabOrderStatus
+      const statusMap: Record<string, LabOrderStatus> = {
+        'registered': LabOrderStatus.ORDERED,
+        'partial': LabOrderStatus.COLLECTED,
+        'preliminary': LabOrderStatus.IN_PROGRESS,
+        'final': LabOrderStatus.COMPLETED,
+        'amended': LabOrderStatus.COMPLETED,
+        'corrected': LabOrderStatus.COMPLETED,
+        'appended': LabOrderStatus.COMPLETED,
+        'cancelled': LabOrderStatus.CANCELLED,
+      };
+      const mappedStatus = statusMap[query.status] || LabOrderStatus.ORDERED;
+      queryBuilder.andWhere('labOrder.status = :status', { status: mappedStatus });
     }
 
-    const labOrders = await labOrderRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+    if (query.date) {
+      // Support date ranges: date=le2020-01-01, date=ge2020-01-01, date=2020-01-01
+      if (query.date.startsWith('le')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('labOrder.collected_at <= :date OR labOrder.scheduled_date_time <= :date', { date });
+      } else if (query.date.startsWith('ge')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('labOrder.collected_at >= :date OR labOrder.scheduled_date_time >= :date', { date });
+      } else {
+        queryBuilder.andWhere('DATE(labOrder.collected_at) = :date OR DATE(labOrder.scheduled_date_time) = :date', { date: query.date });
+      }
+    }
 
-    const entries = labOrders.map((order) => ({
-      resource: this.labOrderToDiagnosticReport(order),
+    if (query.code) {
+      // Search by LOINC, SNOMED, or CPT code
+      const codeValue = this.extractId(query.code) || query.code;
+      queryBuilder.andWhere(
+        '(labOrder.loinc_code = :code OR labOrder.snomed_concept_id = :code OR labOrder.cpt_code = :code)',
+        { code: codeValue }
+      );
+    }
+
+    // Pagination
+    const page = parseInt(query._page) || 1;
+    const count = Math.min(parseInt(query._count) || 10, 100);
+    const offset = (page - 1) * count;
+
+    queryBuilder.orderBy('labOrder.created_at', 'DESC').skip(offset).take(count);
+    const [labOrders, total] = await queryBuilder.getManyAndCount();
+
+    const entries = labOrders.map((labOrder) => ({
+      resource: DiagnosticReportMapper.toFhir(labOrder, tenantId),
       search: { mode: 'match' as const },
     }));
 
-    return this.buildBundle(entries);
+    return {
+      resourceType: 'Bundle',
+      id: `search-diagnostic-reports-${Date.now()}`,
+      type: 'searchset',
+      total,
+      link: [
+        {
+          relation: 'self',
+          url: `DiagnosticReport?${new URLSearchParams(query).toString()}`,
+        },
+      ],
+      entry: entries,
+    };
+  }
+
+  async getDiagnosticReport(id: string, tenantDb: DataSource, tenantId: string) {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrder = await labOrderRepository.findOne({ where: { id } });
+
+    if (!labOrder) {
+      throw new NotFoundException(`DiagnosticReport with ID ${id} not found`);
+    }
+
+    return DiagnosticReportMapper.toFhir(labOrder, tenantId);
+  }
+
+  async createDiagnosticReport(fhirDiagnosticReport: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirDiagnosticReport.resourceType !== 'DiagnosticReport') {
+      throw new BadRequestException('Resource must be of type DiagnosticReport');
+    }
+
+    const labOrderData = DiagnosticReportMapper.fromFhir(fhirDiagnosticReport, tenantId);
+    
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirDiagnosticReport.subject?.reference) ||
+                      this.extractId(fhirDiagnosticReport.subject?.reference) ||
+                      fhirDiagnosticReport.subject?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    const orderingProviderId = this.fhirValidator?.extractIdFromReference(fhirDiagnosticReport.performer?.[0]?.reference) ||
+                               this.extractId(fhirDiagnosticReport.performer?.[0]?.reference) ||
+                               fhirDiagnosticReport.performer?.[0]?.reference?.split('/')[1];
+    
+    if (!orderingProviderId) {
+      throw new BadRequestException('Performer (ordering provider) reference is required');
+    }
+
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrder = labOrderRepository.create({
+      ...labOrderData,
+      patientId,
+      orderingProviderId,
+    } as any);
+
+    const saved = await labOrderRepository.save(labOrder);
+    return DiagnosticReportMapper.toFhir(saved, tenantId);
+  }
+
+  async updateDiagnosticReport(id: string, fhirDiagnosticReport: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirDiagnosticReport.resourceType !== 'DiagnosticReport') {
+      throw new BadRequestException('Resource must be of type DiagnosticReport');
+    }
+
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const existing = await labOrderRepository.findOne({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException(`DiagnosticReport with ID ${id} not found`);
+    }
+
+    const updates = DiagnosticReportMapper.fromFhir(fhirDiagnosticReport, tenantId);
+    
+    // Update only fields that exist in database schema
+    const updateData: any = {
+      tests: updates.tests || existing.tests,
+      loincCode: updates.loincCode,
+      loincLongName: updates.loincLongName,
+      snomedConceptId: updates.snomedConceptId,
+      snomedTerm: updates.snomedTerm,
+      cptCode: updates.cptCode,
+      status: updates.status || existing.status,
+      priority: updates.priority || existing.priority,
+      clinicalInfo: updates.clinicalInfo,
+      specialInstructions: updates.specialInstructions,
+      scheduledDateTime: updates.scheduledDateTime,
+      collectedAt: updates.collectedAt,
+      collectedById: updates.collectedById,
+      results: updates.results,
+      interpretation: updates.interpretation,
+      reviewedById: updates.reviewedById,
+      reviewedAt: updates.reviewedAt,
+      attachments: updates.attachments,
+    };
+    
+    await labOrderRepository.update(id, updateData);
+    const saved = await labOrderRepository
+      .createQueryBuilder('labOrder')
+      .where('labOrder.id = :id', { id })
+      .getOne();
+
+    if (!saved) {
+      throw new NotFoundException(`DiagnosticReport with ID ${id} not found after update`);
+    }
+
+    return DiagnosticReportMapper.toFhir(saved, tenantId);
   }
 
   async searchConditions(query: any, tenantDb: DataSource) {
@@ -1410,73 +1558,7 @@ export class FhirService {
     };
   }
 
-  labOrderToDiagnosticReport(order: LabOrder): any {
-    const tests = order.tests || [];
-    const primaryTest = tests[0];
-
-    const conclusionParts: string[] = [];
-    if (order.results) {
-      order.results.forEach((result) => {
-        const summary = `${result.testName || result.testCode}: ${result.value} ${result.unit || ''} (${result.flag || 'normal'})`;
-        conclusionParts.push(summary.trim());
-      });
-    }
-    if (order.interpretation) {
-      conclusionParts.push(order.interpretation);
-    }
-
-    return {
-      resourceType: 'DiagnosticReport',
-      id: order.id,
-      status: this.mapDiagnosticReportStatus(order.status),
-      category: [
-        {
-          coding: [
-            {
-              system: 'http://terminology.hl7.org/CodeSystem/v2-0074',
-              code: 'LAB',
-              display: 'Laboratory',
-            },
-          ],
-          text: 'Laboratory',
-        },
-      ],
-      code: primaryTest
-        ? {
-            coding: [
-              {
-                system: 'http://loinc.org',
-                code: primaryTest.testCode,
-                display: primaryTest.testName,
-              },
-            ],
-            text: primaryTest.testName || primaryTest.testCode,
-          }
-        : {
-            text: 'Laboratory Report',
-          },
-      subject: {
-        reference: `Patient/${order.patientId}`,
-      },
-      effectiveDateTime: (order.collectedAt || order.scheduledDateTime || order.createdAt)?.toISOString(),
-      issued: (order.reviewedAt || order.createdAt)?.toISOString(),
-      performer: order.orderingProviderId
-        ? [
-            {
-              reference: `Practitioner/${order.orderingProviderId}`,
-            },
-          ]
-        : undefined,
-      conclusion: conclusionParts.length > 0 ? conclusionParts.join('\n') : undefined,
-      presentedForm: order.attachments
-        ? order.attachments.map((attachment, index) => ({
-            contentType: attachment.type || 'application/pdf',
-            url: attachment.url,
-            title: attachment.filename || `Attachment ${index + 1}`,
-          }))
-        : undefined,
-    };
-  }
+  // Removed: labOrderToDiagnosticReport - now using DiagnosticReportMapper
 
   private problemToCondition(problem: Problem): any {
     return {
@@ -1606,19 +1688,7 @@ export class FhirService {
     }
   }
 
-  private mapDiagnosticReportStatus(status: LabOrderStatus | string) {
-    switch (status) {
-      case LabOrderStatus.COMPLETED:
-        return 'final';
-      case LabOrderStatus.IN_PROGRESS:
-      case 'in_progress':
-        return 'preliminary';
-      case LabOrderStatus.CANCELLED:
-        return 'cancelled';
-      default:
-        return 'registered';
-    }
-  }
+  // Removed: mapDiagnosticReportStatus - now using DiagnosticReportMapper
 
   private medicalRecordToDocumentReference(record: MedicalRecord) {
     const narrative =

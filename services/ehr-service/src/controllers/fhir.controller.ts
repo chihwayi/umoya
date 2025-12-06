@@ -246,7 +246,59 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.searchDiagnosticReports(query, tenantDb);
+    return this.fhirService.searchDiagnosticReports(query, tenantDb, tenantId);
+  }
+
+  @Get('DiagnosticReport/:id')
+  @ApiOperation({ summary: 'Get FHIR diagnostic report by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR diagnostic report resource' })
+  async getDiagnosticReport(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getDiagnosticReport(id, tenantDb, tenantId);
+  }
+
+  @Post('DiagnosticReport')
+  @ApiOperation({ summary: 'Create FHIR diagnostic report' })
+  @ApiResponse({ status: 201, description: 'FHIR diagnostic report created' })
+  async createDiagnosticReport(
+    @Body() fhirDiagnosticReport: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createDiagnosticReport(fhirDiagnosticReport, tenantDb, tenantId);
+  }
+
+  @Put('DiagnosticReport/:id')
+  @ApiOperation({ summary: 'Update FHIR diagnostic report' })
+  @ApiResponse({ status: 200, description: 'FHIR diagnostic report updated' })
+  async updateDiagnosticReport(
+    @Param('id') id: string,
+    @Body() fhirDiagnosticReport: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateDiagnosticReport(id, fhirDiagnosticReport, tenantDb, tenantId);
   }
 
   // ========== New FHIR Resources ==========
