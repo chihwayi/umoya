@@ -23,6 +23,40 @@ export class FhirController {
     return this.fhirService.getCapabilityStatement();
   }
 
+  @Post('$batch')
+  @ApiOperation({ summary: 'Process FHIR batch operation' })
+  @ApiResponse({ status: 200, description: 'FHIR batch response bundle' })
+  async processBatch(
+    @Body() bundle: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.processBatch(bundle, tenantDb, tenantId);
+  }
+
+  @Post('$transaction')
+  @ApiOperation({ summary: 'Process FHIR transaction operation' })
+  @ApiResponse({ status: 200, description: 'FHIR transaction response bundle' })
+  async processTransaction(
+    @Body() bundle: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.processTransaction(bundle, tenantDb, tenantId);
+  }
+
   @Get('Patient')
   @ApiOperation({ summary: 'Search FHIR patients' })
   @ApiResponse({ status: 200, description: 'FHIR patient bundle' })
@@ -110,6 +144,23 @@ export class FhirController {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
     return this.fhirService.updatePatient(id, fhirPatient, tenantDb, tenantId);
+  }
+
+  @Get('Patient/:id/$everything')
+  @ApiOperation({ summary: 'Get all resources for a patient (Patient $everything operation)' })
+  @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
+  async getPatientEverything(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getPatientEverything(id, tenantDb, tenantId);
   }
 
   @Get('Observation')
@@ -954,5 +1005,299 @@ export class FhirController {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
     return this.fhirService.getCarePlan(id, tenantDb);
+  }
+
+  // ========== AllergyIntolerance Resource ==========
+
+  @Get('AllergyIntolerance')
+  @ApiOperation({ summary: 'Search FHIR allergy intolerances' })
+  @ApiResponse({ status: 200, description: 'FHIR allergy intolerance bundle' })
+  async searchAllergyIntolerances(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchAllergyIntolerances(query, tenantDb, tenantId);
+  }
+
+  @Get('AllergyIntolerance/:id')
+  @ApiOperation({ summary: 'Get FHIR allergy intolerance by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR allergy intolerance resource' })
+  async getAllergyIntolerance(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getAllergyIntolerance(id, tenantDb, tenantId);
+  }
+
+  @Post('AllergyIntolerance')
+  @ApiOperation({ summary: 'Create FHIR allergy intolerance' })
+  @ApiResponse({ status: 201, description: 'FHIR allergy intolerance created' })
+  async createAllergyIntolerance(
+    @Body() fhirAllergy: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createAllergyIntolerance(fhirAllergy, tenantDb, tenantId);
+  }
+
+  @Put('AllergyIntolerance/:id')
+  @ApiOperation({ summary: 'Update FHIR allergy intolerance' })
+  @ApiResponse({ status: 200, description: 'FHIR allergy intolerance updated' })
+  async updateAllergyIntolerance(
+    @Param('id') id: string,
+    @Body() fhirAllergy: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateAllergyIntolerance(id, fhirAllergy, tenantDb, tenantId);
+  }
+
+  @Delete('AllergyIntolerance/:id')
+  @ApiOperation({ summary: 'Delete FHIR allergy intolerance' })
+  @ApiResponse({ status: 200, description: 'FHIR allergy intolerance deleted' })
+  async deleteAllergyIntolerance(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.deleteAllergyIntolerance(id, tenantDb);
+  }
+
+  // ========== ServiceRequest Resource ==========
+
+  @Get('ServiceRequest')
+  @ApiOperation({ summary: 'Search FHIR service requests' })
+  @ApiResponse({ status: 200, description: 'FHIR service request bundle' })
+  async searchServiceRequests(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchServiceRequests(query, tenantDb, tenantId);
+  }
+
+  @Get('ServiceRequest/:id')
+  @ApiOperation({ summary: 'Get FHIR service request by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR service request resource' })
+  async getServiceRequest(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getServiceRequest(id, tenantDb, tenantId);
+  }
+
+  @Post('ServiceRequest')
+  @ApiOperation({ summary: 'Create FHIR service request' })
+  @ApiResponse({ status: 201, description: 'FHIR service request created' })
+  async createServiceRequest(
+    @Body() fhirServiceRequest: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createServiceRequest(fhirServiceRequest, tenantDb, tenantId);
+  }
+
+  @Put('ServiceRequest/:id')
+  @ApiOperation({ summary: 'Update FHIR service request' })
+  @ApiResponse({ status: 200, description: 'FHIR service request updated' })
+  async updateServiceRequest(
+    @Param('id') id: string,
+    @Body() fhirServiceRequest: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateServiceRequest(id, fhirServiceRequest, tenantDb, tenantId);
+  }
+
+  @Delete('ServiceRequest/:id')
+  @ApiOperation({ summary: 'Delete FHIR service request' })
+  @ApiResponse({ status: 200, description: 'FHIR service request deleted' })
+  async deleteServiceRequest(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.deleteServiceRequest(id, tenantDb);
+  }
+
+  // ========== DocumentReference Resource ==========
+
+  @Get('DocumentReference')
+  @ApiOperation({ summary: 'Search FHIR document references' })
+  @ApiResponse({ status: 200, description: 'FHIR document reference bundle' })
+  async searchDocumentReferences(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchDocumentReferences(query, tenantDb, tenantId);
+  }
+
+  @Get('DocumentReference/:id')
+  @ApiOperation({ summary: 'Get FHIR document reference by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR document reference resource' })
+  async getDocumentReference(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getDocumentReference(id, tenantDb, tenantId);
+  }
+
+  @Post('DocumentReference')
+  @ApiOperation({ summary: 'Create FHIR document reference' })
+  @ApiResponse({ status: 201, description: 'FHIR document reference created' })
+  async createDocumentReference(
+    @Body() fhirDocRef: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createDocumentReference(fhirDocRef, tenantDb, tenantId);
+  }
+
+  @Put('DocumentReference/:id')
+  @ApiOperation({ summary: 'Update FHIR document reference' })
+  @ApiResponse({ status: 200, description: 'FHIR document reference updated' })
+  async updateDocumentReference(
+    @Param('id') id: string,
+    @Body() fhirDocRef: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateDocumentReference(id, fhirDocRef, tenantDb, tenantId);
+  }
+
+  @Delete('DocumentReference/:id')
+  @ApiOperation({ summary: 'Delete FHIR document reference' })
+  @ApiResponse({ status: 200, description: 'FHIR document reference deleted' })
+  async deleteDocumentReference(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.deleteDocumentReference(id, tenantDb);
+  }
+
+  // ========== FHIR Operations ==========
+
+  @Get(':resourceType/:id/_history')
+  @ApiOperation({ summary: 'Get resource history ($history operation)' })
+  @ApiResponse({ status: 200, description: 'FHIR history bundle' })
+  async getResourceHistory(
+    @Param('resourceType') resourceType: string,
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getResourceHistory(resourceType, id, tenantDb, tenantId);
+  }
+
+  @Post('$validate')
+  @ApiOperation({ summary: 'Validate a FHIR resource ($validate operation)' })
+  @ApiResponse({ status: 200, description: 'Validation result as OperationOutcome' })
+  async validateResource(
+    @Body() fhirResource: any,
+    @Query('profile') profile?: string
+  ) {
+    return this.fhirService.validateResource(fhirResource, profile);
   }
 }

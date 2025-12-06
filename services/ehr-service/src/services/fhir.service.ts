@@ -20,6 +20,9 @@ import { MedicationMapper } from '../fhir/mappers/medication.mapper';
 import { MedicationDispenseMapper } from '../fhir/mappers/medication-dispense.mapper';
 import { ImmunizationMapper } from '../fhir/mappers/immunization.mapper';
 import { ProcedureMapper } from '../fhir/mappers/procedure.mapper';
+import { AllergyIntoleranceMapper } from '../fhir/mappers/allergy-intolerance.mapper';
+import { ServiceRequestMapper } from '../fhir/mappers/service-request.mapper';
+import { OperationOutcomeUtil } from '../fhir/utils/operation-outcome.util';
 import { Drug } from '../entities/drug.entity';
 import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
 import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
@@ -250,10 +253,145 @@ export class FhirService {
     const patient = await patientRepository.findOne({ where: { id, isActive: true } });
     
     if (!patient) {
-      throw new NotFoundException(`Patient with ID ${id} not found`);
+      throw new NotFoundException(OperationOutcomeUtil.notFound('Patient', id));
     }
 
     return PatientMapper.toFhir(patient, tenantId);
+  }
+
+  /**
+   * Patient $everything operation
+   * Returns all resources related to a patient
+   */
+  async getPatientEverything(patientId: string, tenantDb: DataSource, tenantId: string) {
+    const patientRepository = tenantDb.getRepository(Patient);
+    const patient = await patientRepository.findOne({ where: { id: patientId, isActive: true } });
+    
+    if (!patient) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('Patient', patientId));
+    }
+
+    const entries: BundleEntry[] = [];
+
+    // Add Patient resource
+    entries.push({
+      resource: PatientMapper.toFhir(patient, tenantId),
+      search: { mode: 'match' },
+    });
+
+    // Get all Observations (Vitals + Lab Orders)
+    const vitalsRepository = tenantDb.getRepository(Vitals);
+    const vitals = await vitalsRepository.find({ where: { patientId } });
+    vitals.forEach(vital => {
+      const observations = ObservationMapper.vitalsToFhir(vital, tenantId);
+      observations.forEach(obs => {
+        entries.push({
+          resource: obs,
+          search: { mode: 'include' },
+        });
+      });
+    });
+
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrders = await labOrderRepository.find({ where: { patientId } });
+    labOrders.forEach(labOrder => {
+      const observations = ObservationMapper.labOrderToFhir(labOrder, tenantId);
+      observations.forEach(obs => {
+        entries.push({
+          resource: obs,
+          search: { mode: 'include' },
+        });
+      });
+    });
+
+    // Get all Encounters (Appointments + Admissions)
+    const appointmentRepository = tenantDb.getRepository(Appointment);
+    const appointments = await appointmentRepository.find({ where: { patientId } });
+    appointments.forEach(appointment => {
+      entries.push({
+        resource: EncounterMapper.appointmentToFhir(appointment, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    const admissionRepository = tenantDb.getRepository(Admission);
+    const admissions = await admissionRepository.find({ where: { patientId } });
+    admissions.forEach(admission => {
+      entries.push({
+        resource: EncounterMapper.admissionToFhir(admission, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all Conditions
+    const problemRepository = tenantDb.getRepository(Problem);
+    const problems = await problemRepository.find({ where: { patientId } });
+    problems.forEach(problem => {
+      entries.push({
+        resource: ConditionMapper.toFhir(problem, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all AllergyIntolerances
+    const allergyRepository = tenantDb.getRepository(Allergy);
+    const allergies = await allergyRepository.find({ where: { patientId } });
+    allergies.forEach(allergy => {
+      entries.push({
+        resource: AllergyIntoleranceMapper.toFhir(allergy, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all MedicationRequests
+    const prescriptionRepository = tenantDb.getRepository(Prescription);
+    const prescriptions = await prescriptionRepository.find({ where: { patientId } });
+    prescriptions.forEach(prescription => {
+      entries.push({
+        resource: MedicationRequestMapper.toFhir(prescription, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all Procedures
+    const surgicalCaseRepository = tenantDb.getRepository(SurgicalCase);
+    const surgicalCases = await surgicalCaseRepository.find({ where: { patientId } });
+    surgicalCases.forEach(surgicalCase => {
+      entries.push({
+        resource: ProcedureMapper.toFhir(surgicalCase, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all Immunizations
+    const immunizationRepository = tenantDb.getRepository(Immunization);
+    const immunizations = await immunizationRepository.find({ where: { patientId } });
+    immunizations.forEach(immunization => {
+      entries.push({
+        resource: ImmunizationMapper.toFhir(immunization, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    // Get all DiagnosticReports
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const diagnosticReports = await medicalRecordRepository.find({
+      where: { patientId, type: RecordType.LAB_RESULT },
+    });
+    diagnosticReports.forEach(record => {
+      entries.push({
+        resource: DiagnosticReportMapper.toFhir(record, tenantId),
+        search: { mode: 'include' },
+      });
+    });
+
+    return {
+      resourceType: 'Bundle',
+      id: `patient-everything-${patientId}-${Date.now()}`,
+      type: 'searchset',
+      total: entries.length,
+      entry: entries,
+    };
   }
 
   async createPatient(fhirPatient: any, tenantDb: DataSource, tenantId: string) {
@@ -1402,12 +1540,20 @@ export class FhirService {
     return ConditionMapper.toFhir(saved, tenantId);
   }
 
-  async searchAllergyIntolerances(query: any, tenantDb: DataSource) {
+  async searchAllergyIntolerances(query: any, tenantDb: DataSource, tenantId: string) {
     const allergyRepository = tenantDb.getRepository(Allergy);
     const where: Record<string, any> = {};
 
     if (query.patient) {
       where.patientId = this.extractId(query.patient);
+    }
+
+    if (query.clinical-status) {
+      where.clinicalStatus = query['clinical-status'];
+    }
+
+    if (query.verification-status) {
+      where.verificationStatus = query['verification-status'];
     }
 
     const allergies = await allergyRepository.find({
@@ -1416,14 +1562,97 @@ export class FhirService {
     });
 
     const entries = allergies.map((allergy) => ({
-      resource: this.allergyToFhir(allergy),
+      resource: AllergyIntoleranceMapper.toFhir(allergy, tenantId),
       search: { mode: 'match' as const },
     }));
 
     return this.buildBundle(entries);
   }
 
-  async searchServiceRequests(query: any, tenantDb: DataSource) {
+  async getAllergyIntolerance(id: string, tenantDb: DataSource, tenantId: string) {
+    const allergyRepository = tenantDb.getRepository(Allergy);
+    const allergy = await allergyRepository.findOne({ where: { id } });
+    
+    if (!allergy) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('AllergyIntolerance', id));
+    }
+
+    return AllergyIntoleranceMapper.toFhir(allergy, tenantId);
+  }
+
+  async createAllergyIntolerance(fhirAllergy: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirAllergy.resourceType !== 'AllergyIntolerance') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type AllergyIntolerance')
+      );
+    }
+
+    const allergyData = AllergyIntoleranceMapper.fromFhir(fhirAllergy, tenantId);
+    
+    // Ensure recordedBy is provided
+    if (!allergyData.recordedBy) {
+      const userRepository = tenantDb.getRepository(User);
+      const defaultUser = await userRepository.findOne({ where: { role: 'nurse' } });
+      if (defaultUser) {
+        allergyData.recordedBy = defaultUser.id;
+      } else {
+        throw new BadRequestException(
+          OperationOutcomeUtil.badRequest('recordedBy is required for creating allergies')
+        );
+      }
+    }
+
+    const allergyRepository = tenantDb.getRepository(Allergy);
+    const allergy = allergyRepository.create(allergyData as any);
+    const saved = await allergyRepository.save(allergy);
+
+    return AllergyIntoleranceMapper.toFhir(saved, tenantId);
+  }
+
+  async updateAllergyIntolerance(id: string, fhirAllergy: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirAllergy.resourceType !== 'AllergyIntolerance') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type AllergyIntolerance')
+      );
+    }
+
+    const allergyRepository = tenantDb.getRepository(Allergy);
+    const existing = await allergyRepository.findOne({ where: { id } });
+    
+    if (!existing) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('AllergyIntolerance', id));
+    }
+
+    const allergyData = AllergyIntoleranceMapper.fromFhir(fhirAllergy, tenantId);
+    
+    // Remove empty recordedBy if not provided
+    if (!allergyData.recordedBy) {
+      delete allergyData.recordedBy;
+    }
+
+    await allergyRepository.update(id, allergyData);
+    
+    const updated = await allergyRepository.findOne({ where: { id } });
+    if (!updated) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('AllergyIntolerance', id));
+    }
+
+    return AllergyIntoleranceMapper.toFhir(updated, tenantId);
+  }
+
+  async deleteAllergyIntolerance(id: string, tenantDb: DataSource) {
+    const allergyRepository = tenantDb.getRepository(Allergy);
+    const allergy = await allergyRepository.findOne({ where: { id } });
+    
+    if (!allergy) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('AllergyIntolerance', id));
+    }
+
+    await allergyRepository.remove(allergy);
+    return { success: true };
+  }
+
+  async searchServiceRequests(query: any, tenantDb: DataSource, tenantId: string) {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
     const where: Record<string, any> = {};
 
@@ -1431,7 +1660,18 @@ export class FhirService {
       where.patientId = this.extractId(query.patient);
     }
     if (query.status) {
-      where.status = query.status;
+      // Map FHIR status to internal status
+      const statusMap: Record<string, string> = {
+        draft: 'ordered',
+        active: 'in_progress',
+        completed: 'completed',
+        revoked: 'cancelled',
+        'on-hold': 'on_hold',
+      };
+      where.status = statusMap[query.status] || query.status;
+    }
+    if (query.priority) {
+      where.priority = query.priority;
     }
 
     const labOrders = await labOrderRepository.find({
@@ -1440,14 +1680,100 @@ export class FhirService {
     });
 
     const entries = labOrders.map((order) => ({
-      resource: this.labOrderToServiceRequest(order),
+      resource: ServiceRequestMapper.toFhir(order, tenantId),
       search: { mode: 'match' as const },
     }));
 
     return this.buildBundle(entries);
   }
 
-  async searchDocumentReferences(query: any, tenantDb: DataSource) {
+  async getServiceRequest(id: string, tenantDb: DataSource, tenantId: string) {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrder = await labOrderRepository.findOne({ where: { id } });
+    
+    if (!labOrder) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('ServiceRequest', id));
+    }
+
+    return ServiceRequestMapper.toFhir(labOrder, tenantId);
+  }
+
+  async createServiceRequest(fhirServiceRequest: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirServiceRequest.resourceType !== 'ServiceRequest') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type ServiceRequest')
+      );
+    }
+
+    const labOrderData = ServiceRequestMapper.fromFhir(fhirServiceRequest, tenantId);
+    
+    // Ensure orderingProviderId is provided
+    if (!labOrderData.orderingProviderId) {
+      const userRepository = tenantDb.getRepository(User);
+      const defaultUser = await userRepository.findOne({ where: { role: 'doctor' } });
+      if (defaultUser) {
+        labOrderData.orderingProviderId = defaultUser.id;
+      } else {
+        throw new BadRequestException(
+          OperationOutcomeUtil.badRequest('orderingProviderId is required for creating service requests')
+        );
+      }
+    }
+
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrder = labOrderRepository.create(labOrderData as any);
+    const saved = await labOrderRepository.save(labOrder);
+
+    return ServiceRequestMapper.toFhir(saved, tenantId);
+  }
+
+  async updateServiceRequest(id: string, fhirServiceRequest: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirServiceRequest.resourceType !== 'ServiceRequest') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type ServiceRequest')
+      );
+    }
+
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const existing = await labOrderRepository.findOne({ where: { id } });
+    
+    if (!existing) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('ServiceRequest', id));
+    }
+
+    const labOrderData = ServiceRequestMapper.fromFhir(fhirServiceRequest, tenantId);
+    
+    // Remove empty orderingProviderId if not provided
+    if (!labOrderData.orderingProviderId) {
+      delete labOrderData.orderingProviderId;
+    }
+
+    await labOrderRepository.update(id, labOrderData);
+    
+    const updated = await labOrderRepository.findOne({ where: { id } });
+    if (!updated) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('ServiceRequest', id));
+    }
+
+    return ServiceRequestMapper.toFhir(updated, tenantId);
+  }
+
+  async deleteServiceRequest(id: string, tenantDb: DataSource) {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const labOrder = await labOrderRepository.findOne({ where: { id } });
+    
+    if (!labOrder) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('ServiceRequest', id));
+    }
+
+    // Soft delete by setting status to cancelled
+    labOrder.status = 'cancelled';
+    await labOrderRepository.save(labOrder);
+
+    return { success: true };
+  }
+
+  async searchDocumentReferences(query: any, tenantDb: DataSource, tenantId: string) {
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
     const where: Record<string, any> = {};
 
@@ -1455,7 +1781,26 @@ export class FhirService {
       where.patientId = this.extractId(query.patient);
     }
     if (query.type) {
-      where.type = query.type;
+      // Map FHIR document type codes to internal record types
+      const typeMap: Record<string, string> = {
+        '51848-0': 'consultation',
+        '11502-2': 'diagnosis',
+        '18726-0': 'treatment',
+        '28570-0': 'procedure',
+        '26436-6': 'lab_result',
+        '18748-4': 'imaging',
+        '57833-6': 'prescription',
+        '11369-6': 'vaccination',
+        '18842-5': 'discharge',
+      };
+      where.type = typeMap[query.type] || query.type;
+    }
+    if (query.status) {
+      if (query.status === 'entered-in-error') {
+        where.isConfidential = true;
+      } else if (query.status === 'current') {
+        where.isConfidential = false;
+      }
     }
 
     const records = await medicalRecordRepository.find({
@@ -1464,11 +1809,86 @@ export class FhirService {
     });
 
     const entries = records.map((record) => ({
-      resource: this.medicalRecordToDocumentReference(record),
+      resource: DocumentReferenceMapper.toFhir(record, tenantId),
       search: { mode: 'match' as const },
     }));
 
     return this.buildBundle(entries);
+  }
+
+  async getDocumentReference(id: string, tenantDb: DataSource, tenantId: string) {
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const record = await medicalRecordRepository.findOne({ where: { id } });
+    
+    if (!record) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
+    }
+
+    return DocumentReferenceMapper.toFhir(record, tenantId);
+  }
+
+  async createDocumentReference(fhirDocRef: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirDocRef.resourceType !== 'DocumentReference') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type DocumentReference')
+      );
+    }
+
+    const recordData = DocumentReferenceMapper.fromFhir(fhirDocRef, tenantId);
+    
+    // Generate record number if not provided
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const count = await medicalRecordRepository.count();
+    const recordNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+
+    const record = medicalRecordRepository.create({
+      ...recordData,
+      recordNumber,
+    } as any);
+    const saved = await medicalRecordRepository.save(record);
+
+    return DocumentReferenceMapper.toFhir(saved, tenantId);
+  }
+
+  async updateDocumentReference(id: string, fhirDocRef: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirDocRef.resourceType !== 'DocumentReference') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Resource must be of type DocumentReference')
+      );
+    }
+
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const existing = await medicalRecordRepository.findOne({ where: { id } });
+    
+    if (!existing) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
+    }
+
+    const recordData = DocumentReferenceMapper.fromFhir(fhirDocRef, tenantId);
+    
+    await medicalRecordRepository.update(id, recordData);
+    
+    const updated = await medicalRecordRepository.findOne({ where: { id } });
+    if (!updated) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
+    }
+
+    return DocumentReferenceMapper.toFhir(updated, tenantId);
+  }
+
+  async deleteDocumentReference(id: string, tenantDb: DataSource) {
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const record = await medicalRecordRepository.findOne({ where: { id } });
+    
+    if (!record) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
+    }
+
+    // Soft delete by marking as confidential/entered-in-error
+    record.isConfidential = true;
+    await medicalRecordRepository.save(record);
+
+    return { success: true };
   }
 
   patientToFhir(patient: Patient): any {
@@ -2137,6 +2557,9 @@ export class FhirService {
 
   // Removed: mapDiagnosticReportStatus - now using DiagnosticReportMapper
 
+  // Removed: medicalRecordToDocumentReference - now using DocumentReferenceMapper
+
+  // Legacy method - kept for backward compatibility but should use DocumentReferenceMapper
   private medicalRecordToDocumentReference(record: MedicalRecord) {
     const narrative =
       [record.chiefComplaint, record.historyOfPresentIllness, record.assessment, record.plan]
@@ -2253,6 +2676,9 @@ export class FhirService {
     };
   }
 
+  // Removed: labOrderToServiceRequest - now using ServiceRequestMapper
+
+  // Legacy method - kept for backward compatibility but should use ServiceRequestMapper
   private labOrderToServiceRequest(order: LabOrder): any {
     const tests = order.tests ?? [];
     const primaryTest = tests[0];
@@ -3074,6 +3500,300 @@ export class FhirService {
     const savedDrug = await drugRepository.save(drug);
 
     return MedicationMapper.toFhir(savedDrug, tenantId);
+  }
+
+  /**
+   * Process FHIR Batch operation
+   * Processes entries independently - continues on errors
+   */
+  async processBatch(bundle: any, tenantDb: DataSource, tenantId: string): Promise<any> {
+    if (bundle.resourceType !== 'Bundle' || bundle.type !== 'batch') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Bundle must be of type "batch"')
+      );
+    }
+
+    const entries = bundle.entry || [];
+    const results: any[] = [];
+
+    for (const entry of entries) {
+      try {
+        const result = await this.processBundleEntry(entry, tenantDb, tenantId);
+        results.push({
+          response: {
+            status: result.status || '200',
+            location: result.location,
+            ...(result.resource && { resource: result.resource }),
+          },
+        });
+      } catch (error: any) {
+        // In batch, continue processing even on errors
+        results.push({
+          response: {
+            status: error.status || '400',
+            outcome: OperationOutcomeUtil.error(
+              error.message || 'Processing failed',
+              OperationOutcomeUtil.IssueType.EXCEPTION
+            ),
+          },
+        });
+      }
+    }
+
+    return {
+      resourceType: 'Bundle',
+      id: `batch-response-${Date.now()}`,
+      type: 'batch-response',
+      entry: results,
+    };
+  }
+
+  /**
+   * Process FHIR Transaction operation
+   * Processes entries atomically - rolls back on any error
+   */
+  async processTransaction(bundle: any, tenantDb: DataSource, tenantId: string): Promise<any> {
+    if (bundle.resourceType !== 'Bundle' || bundle.type !== 'transaction') {
+      throw new BadRequestException(
+        OperationOutcomeUtil.badRequest('Bundle must be of type "transaction"')
+      );
+    }
+
+    const entries = bundle.entry || [];
+    const results: any[] = [];
+    const queryRunner = tenantDb.createQueryRunner();
+    
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const entry of entries) {
+        const result = await this.processBundleEntry(entry, tenantDb, tenantId, queryRunner);
+        results.push({
+          response: {
+            status: result.status || '200',
+            location: result.location,
+            ...(result.resource && { resource: result.resource }),
+          },
+        });
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        resourceType: 'Bundle',
+        id: `transaction-response-${Date.now()}`,
+        type: 'transaction-response',
+        entry: results,
+      };
+    } catch (error: any) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        OperationOutcomeUtil.error(
+          `Transaction failed: ${error.message}`,
+          OperationOutcomeUtil.IssueType.EXCEPTION
+        )
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Process a single bundle entry
+   */
+  private async processBundleEntry(
+    entry: any,
+    tenantDb: DataSource,
+    tenantId: string,
+    queryRunner?: any
+  ): Promise<{ status: string; location?: string; resource?: any }> {
+    const request = entry.request;
+    if (!request) {
+      throw new BadRequestException(OperationOutcomeUtil.badRequest('Entry must have a request'));
+    }
+
+    const method = request.method;
+    const url = request.url;
+    const resource = entry.resource;
+
+    // Parse URL to determine resource type and ID
+    const urlParts = url.split('/');
+    const resourceType = urlParts[0];
+    const resourceId = urlParts.length > 1 ? urlParts[1] : null;
+
+    switch (method.toUpperCase()) {
+      case 'GET':
+        return await this.handleGetRequest(resourceType, resourceId, tenantDb, tenantId);
+      
+      case 'POST':
+        if (!resource) {
+          throw new BadRequestException(OperationOutcomeUtil.badRequest('POST requires a resource'));
+        }
+        return await this.handlePostRequest(resourceType, resource, tenantDb, tenantId);
+      
+      case 'PUT':
+        if (!resource || !resourceId) {
+          throw new BadRequestException(OperationOutcomeUtil.badRequest('PUT requires resource and ID'));
+        }
+        return await this.handlePutRequest(resourceType, resourceId, resource, tenantDb, tenantId);
+      
+      case 'DELETE':
+        if (!resourceId) {
+          throw new BadRequestException(OperationOutcomeUtil.badRequest('DELETE requires an ID'));
+        }
+        return await this.handleDeleteRequest(resourceType, resourceId, tenantDb);
+      
+      default:
+        throw new BadRequestException(
+          OperationOutcomeUtil.notSupported(`Method ${method}`)
+        );
+    }
+  }
+
+  private async handleGetRequest(
+    resourceType: string,
+    resourceId: string | null,
+    tenantDb: DataSource,
+    tenantId: string
+  ): Promise<{ status: string; location?: string; resource?: any }> {
+    // Handle search requests (no ID)
+    if (!resourceId) {
+      const searchMethods: Record<string, (query: any, db: DataSource, tid: string) => Promise<any>> = {
+        Patient: (q, db, tid) => this.searchPatients(q, db, tid),
+        Observation: (q, db, tid) => this.searchObservations(q, db, tid),
+        Encounter: (q, db, tid) => this.searchEncounters(q, db, tid),
+        Condition: (q, db, tid) => this.searchConditions(q, db, tid),
+        AllergyIntolerance: (q, db, tid) => this.searchAllergyIntolerances(q, db, tid),
+      };
+
+      const searchMethod = searchMethods[resourceType];
+      if (!searchMethod) {
+        throw new BadRequestException(
+          OperationOutcomeUtil.notSupported(`Search for ${resourceType}`)
+        );
+      }
+
+      const result = await searchMethod({}, tenantDb, tenantId);
+      return { status: '200', resource: result };
+    }
+
+    // Handle get by ID
+    const getMethods: Record<string, (id: string, db: DataSource, tid: string) => Promise<any>> = {
+      Patient: (id, db, tid) => this.getPatient(id, db, tid),
+      Observation: (id, db, tid) => this.getObservation(id, db, tid),
+      Encounter: (id, db, tid) => this.getEncounter(id, db, tid),
+      Condition: (id, db, tid) => this.getCondition(id, db, tid),
+      AllergyIntolerance: (id, db, tid) => this.getAllergyIntolerance(id, db, tid),
+      Medication: (id, db, tid) => this.getMedication(id, db, tid),
+      MedicationRequest: (id, db, tid) => this.getMedicationRequest(id, db, tid),
+      MedicationDispense: (id, db, tid) => this.getMedicationDispense(id, db, tid),
+      DiagnosticReport: (id, db, tid) => this.getDiagnosticReport(id, db, tid),
+      Procedure: (id, db, tid) => this.getProcedure(id, db, tid),
+      Immunization: (id, db, tid) => this.getImmunization(id, db, tid),
+    };
+
+    const getMethod = getMethods[resourceType];
+    if (!getMethod) {
+      throw new BadRequestException(
+        OperationOutcomeUtil.notSupported(`GET for ${resourceType}`)
+      );
+    }
+
+    const resource = await getMethod(resourceId, tenantDb, tenantId);
+    return { status: '200', location: `${resourceType}/${resourceId}`, resource };
+  }
+
+  private async handlePostRequest(
+    resourceType: string,
+    resource: any,
+    tenantDb: DataSource,
+    tenantId: string
+  ): Promise<{ status: string; location?: string; resource?: any }> {
+    const createMethods: Record<string, (resource: any, db: DataSource, tid: string) => Promise<any>> = {
+      Patient: (r, db, tid) => this.createPatient(r, db, tid),
+      Observation: (r, db, tid) => this.createObservation(r, db, tid),
+      Encounter: (r, db, tid) => this.createEncounter(r, db, tid),
+      Condition: (r, db, tid) => this.createCondition(r, db, tid),
+      AllergyIntolerance: (r, db, tid) => this.createAllergyIntolerance(r, db, tid),
+      Medication: (r, db, tid) => this.createMedication(r, db, tid),
+      MedicationRequest: (r, db, tid) => this.createMedicationRequest(r, db, tid),
+      MedicationDispense: (r, db, tid) => this.createMedicationDispense(r, db, tid),
+      DiagnosticReport: (r, db, tid) => this.createDiagnosticReport(r, db, tid),
+      Procedure: (r, db, tid) => this.createProcedure(r, db, tid),
+      Immunization: (r, db, tid) => this.createImmunization(r, db, tid),
+    };
+
+    const createMethod = createMethods[resourceType];
+    if (!createMethod) {
+      throw new BadRequestException(
+        OperationOutcomeUtil.notSupported(`POST for ${resourceType}`)
+      );
+    }
+
+    const created = await createMethod(resource, tenantDb, tenantId);
+    return {
+      status: '201',
+      location: `${resourceType}/${created.id}`,
+      resource: created,
+    };
+  }
+
+  private async handlePutRequest(
+    resourceType: string,
+    resourceId: string,
+    resource: any,
+    tenantDb: DataSource,
+    tenantId: string
+  ): Promise<{ status: string; location?: string; resource?: any }> {
+    const updateMethods: Record<string, (id: string, resource: any, db: DataSource, tid: string) => Promise<any>> = {
+      Patient: (id, r, db, tid) => this.updatePatient(id, r, db, tid),
+      Observation: (id, r, db, tid) => this.updateObservation(id, r, db, tid),
+      Encounter: (id, r, db, tid) => this.updateEncounter(id, r, db, tid),
+      Condition: (id, r, db, tid) => this.updateCondition(id, r, db, tid),
+      AllergyIntolerance: (id, r, db, tid) => this.updateAllergyIntolerance(id, r, db, tid),
+      Medication: (id, r, db, tid) => this.updateMedication(id, r, db, tid),
+      MedicationRequest: (id, r, db, tid) => this.updateMedicationRequest(id, r, db, tid),
+      MedicationDispense: (id, r, db, tid) => this.updateMedicationDispense(id, r, db, tid),
+      DiagnosticReport: (id, r, db, tid) => this.updateDiagnosticReport(id, r, db, tid),
+      Procedure: (id, r, db, tid) => this.updateProcedure(id, r, db, tid),
+      Immunization: (id, r, db, tid) => this.updateImmunization(id, r, db, tid),
+    };
+
+    const updateMethod = updateMethods[resourceType];
+    if (!updateMethod) {
+      throw new BadRequestException(
+        OperationOutcomeUtil.notSupported(`PUT for ${resourceType}`)
+      );
+    }
+
+    const updated = await updateMethod(resourceId, resource, tenantDb, tenantId);
+    return {
+      status: '200',
+      location: `${resourceType}/${resourceId}`,
+      resource: updated,
+    };
+  }
+
+  private async handleDeleteRequest(
+    resourceType: string,
+    resourceId: string,
+    tenantDb: DataSource
+  ): Promise<{ status: string }> {
+    const deleteMethods: Record<string, (id: string, db: DataSource) => Promise<any>> = {
+      AllergyIntolerance: (id, db) => this.deleteAllergyIntolerance(id, db),
+      Medication: (id, db) => this.deleteMedication(id, db),
+    };
+
+    const deleteMethod = deleteMethods[resourceType];
+    if (!deleteMethod) {
+      throw new BadRequestException(
+        OperationOutcomeUtil.notSupported(`DELETE for ${resourceType}`)
+      );
+    }
+
+    await deleteMethod(resourceId, tenantDb);
+    return { status: '204' };
   }
 
   async updateMedication(id: string, fhirMedication: any, tenantDb: DataSource, tenantId: string) {
