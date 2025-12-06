@@ -83,6 +83,22 @@ import { PatientCharge } from '../entities/patient-charge.entity';
 import { ChargeApprovalNotification } from '../entities/charge-approval-notification.entity';
 import { PatientConsent } from '../entities/patient-consent.entity';
 import { ConsentSignature } from '../entities/consent-signature.entity';
+import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
+import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
+import { PharmacyInventory } from '../entities/pharmacy-inventory.entity';
+import { PharmacySupplier } from '../entities/pharmacy-supplier.entity';
+import { PharmacyPurchaseOrder } from '../entities/pharmacy-purchase-order.entity';
+import { PharmacyPurchaseOrderItem } from '../entities/pharmacy-purchase-order-item.entity';
+import { PharmacyReceipt } from '../entities/pharmacy-receipt.entity';
+import { PharmacyReceiptItem } from '../entities/pharmacy-receipt-item.entity';
+import { PharmacyReturn } from '../entities/pharmacy-return.entity';
+import { PharmacyReturnItem } from '../entities/pharmacy-return-item.entity';
+import { PharmacyStockAdjustment } from '../entities/pharmacy-stock-adjustment.entity';
+import { PharmacyStockAdjustmentItem } from '../entities/pharmacy-stock-adjustment-item.entity';
+import { PharmacyStockMovement } from '../entities/pharmacy-stock-movement.entity';
+import { PharmacyPricingRule } from '../entities/pharmacy-pricing-rule.entity';
+import { PharmacyFormulary } from '../entities/pharmacy-formulary.entity';
+import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
 
 @Injectable()
 export class TenantService {
@@ -257,6 +273,22 @@ export class TenantService {
         ChargeApprovalNotification,
         PatientConsent,
         ConsentSignature,
+        PharmacyDispensing,
+        PharmacyDispensingItem,
+        PharmacyInventory,
+        PharmacySupplier,
+        PharmacyPurchaseOrder,
+        PharmacyPurchaseOrderItem,
+        PharmacyReceipt,
+        PharmacyReceiptItem,
+        PharmacyReturn,
+        PharmacyReturnItem,
+        PharmacyStockAdjustment,
+        PharmacyStockAdjustmentItem,
+        PharmacyStockMovement,
+        PharmacyPricingRule,
+        PharmacyFormulary,
+        PharmacyAlert,
       ],
       synchronize: false,
       logging: false,
