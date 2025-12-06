@@ -153,26 +153,44 @@ class RxNormImporter {
       
       const { strength, unit } = this.parseStrength(strengthStr);
       
-      // Extract generic name
+      // Extract generic name - clean up the RxNorm name
       let genericName = concept.name;
-      if (strengthStr) {
-        genericName = genericName.replace(new RegExp(strengthStr, 'gi'), '').trim();
-      }
-      if (doseForm) {
-        genericName = genericName.replace(new RegExp(doseForm, 'gi'), '').trim();
+      // Remove strength patterns (e.g., "300 MG/ML", "50 MG")
+      genericName = genericName.replace(/\d+(\.\d+)?\s*(MG|ML|G|MCG|UNITS?|%|MEQ)\/?\s*(MG|ML|G|MCG|UNITS?|%|MEQ)?/gi, '').trim();
+      // Remove common dosage form suffixes
+      genericName = genericName.replace(/\s+(Tablet|Capsule|Injection|Solution|Ointment|Cream|Gel|Syringe|Liquid|Suspension|Drops|Inhaler|Patch)$/gi, '').trim();
+      // Remove route of administration
+      genericName = genericName.replace(/\s+(Oral|Topical|Intravenous|Intramuscular|Subcutaneous|Rectal|Vaginal|Ophthalmic|Otic|Nasal)$/gi, '').trim();
+      
+      // Fallback: if name is too long or empty, use first part
+      if (!genericName || genericName.length > 200) {
+        genericName = concept.name.split(' ').slice(0, 5).join(' ').trim();
       }
       
+      // Ensure it's not empty
+      if (!genericName) {
+        genericName = concept.name.substring(0, 200);
+      }
+      
+      // Truncate fields to match database constraints
+      const safeGenericName = genericName.substring(0, 255).toLowerCase();
+      const safeRxnormName = concept.name.substring(0, 1000); // TEXT field, but limit for safety
+      const safeTty = (concept.tty || '').substring(0, 20);
+      const safeNdc = ndc ? ndc.substring(0, 50) : null;
+      const safeStrength = strength ? strength.substring(0, 100) : null;
+      const safeUnit = unit ? unit.substring(0, 50) : null;
+      
       batch.push({
-        generic_name: genericName.toLowerCase(),
+        generic_name: safeGenericName,
         rxnorm_code: rxcui,
-        rxnorm_name: concept.name,
-        rxnorm_tty: concept.tty,
-        ndc_code: ndc,
-        strength,
-        unit,
+        rxnorm_name: safeRxnormName,
+        rxnorm_tty: safeTty,
+        ndc_code: safeNdc,
+        strength: safeStrength,
+        unit: safeUnit,
         dosage_forms: doseForm ? [doseForm.toLowerCase()] : this.mapTTYToDosageForm(concept.tty),
         route_of_administration: route ? [route.toLowerCase()] : ['oral'],
-        description: `RxNorm: ${concept.name} (${concept.tty})`,
+        description: `RxNorm: ${concept.name.substring(0, 500)} (${concept.tty})`,
         is_active: true,
         status: 'active',
       });

@@ -5,18 +5,18 @@
 -- Add RxNorm fields
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_code VARCHAR(20);
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_name TEXT;
-ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_tty VARCHAR(10); -- Term Type (SCD, SCDC, etc.)
+ALTER TABLE drugs ADD COLUMN IF NOT EXISTS rxnorm_tty VARCHAR(20); -- Term Type (SCD, SCDC, etc.) - increased for longer types
 
 -- Add SNOMED CT fields
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS snomed_code VARCHAR(50);
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS snomed_term TEXT;
 
 -- Add NDC (National Drug Code) field
-ALTER TABLE drugs ADD COLUMN IF NOT EXISTS ndc_code VARCHAR(20);
+ALTER TABLE drugs ADD COLUMN IF NOT EXISTS ndc_code VARCHAR(50); -- Increased for formatted NDC codes
 
 -- Add strength and unit fields
-ALTER TABLE drugs ADD COLUMN IF NOT EXISTS strength VARCHAR(50);
-ALTER TABLE drugs ADD COLUMN IF NOT EXISTS unit VARCHAR(20);
+ALTER TABLE drugs ADD COLUMN IF NOT EXISTS strength VARCHAR(100); -- Increased for complex strengths
+ALTER TABLE drugs ADD COLUMN IF NOT EXISTS unit VARCHAR(50); -- Increased for complex units
 
 -- Add status field (FHIR standard: active, inactive, entered-in-error)
 ALTER TABLE drugs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
