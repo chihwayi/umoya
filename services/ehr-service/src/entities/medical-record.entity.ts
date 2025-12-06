@@ -20,8 +20,8 @@ export class MedicalRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  recordNumber: string;
+  @Column({ nullable: true })
+  recordNumber?: string;
 
   @Column()
   patientId: string;

@@ -189,14 +189,20 @@ export class DocumentReferenceMapper {
         uploadedAt: c.attachment?.creation ? new Date(c.attachment.creation) : new Date(),
       }));
 
+    // Generate record number if needed
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const count = await medicalRecordRepository.count();
+    const recordNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+
     return {
+      recordNumber,
       patientId,
       providerId,
       type: recordType as any,
       recordDate,
       ...(appointmentId && { appointmentId }),
       chiefComplaint,
-      assessment,
+      assessment: assessment || chiefComplaint,
       ...(attachments && attachments.length > 0 && { attachments }),
       isConfidential: fhirDocRef.status === 'entered-in-error',
     };

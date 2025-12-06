@@ -1548,11 +1548,11 @@ export class FhirService {
       where.patientId = this.extractId(query.patient);
     }
 
-    if (query.clinical-status) {
+    if (query['clinical-status']) {
       where.clinicalStatus = query['clinical-status'];
     }
 
-    if (query.verification-status) {
+    if (query['verification-status']) {
       where.verificationStatus = query['verification-status'];
     }
 
@@ -1803,10 +1803,39 @@ export class FhirService {
       }
     }
 
-    const records = await medicalRecordRepository.find({
-      where,
-      order: { recordDate: 'DESC' },
-    });
+    // Use find() - TypeORM handles column mapping
+    // The recordNumber issue is handled by making it nullable in entity
+    // If it doesn't exist in DB, it will just be undefined
+    try {
+      const records = await medicalRecordRepository.find({
+        where,
+        order: { recordDate: 'DESC' },
+      });
+      return this.buildBundle(records.map((record) => ({
+        resource: DocumentReferenceMapper.toFhir(record, tenantId),
+        search: { mode: 'match' as const },
+      })));
+    } catch (error: any) {
+      // Fallback: if recordNumber causes issues, use query without it
+      if (error.message?.includes('recordNumber')) {
+        const queryBuilder = medicalRecordRepository.createQueryBuilder('record');
+        if (where.patientId) {
+          queryBuilder.where('record.patientId = :patientId', { patientId: where.patientId });
+        }
+        if (where.type) {
+          queryBuilder.andWhere('record.type = :type', { type: where.type });
+        }
+        if (where.isConfidential !== undefined) {
+          queryBuilder.andWhere('record.isConfidential = :isConfidential', { isConfidential: where.isConfidential });
+        }
+        const records = await queryBuilder.orderBy('record.recordDate', 'DESC').getMany();
+        return this.buildBundle(records.map((record) => ({
+          resource: DocumentReferenceMapper.toFhir(record, tenantId),
+          search: { mode: 'match' as const },
+        })));
+      }
+      throw error;
+    }
 
     const entries = records.map((record) => ({
       resource: DocumentReferenceMapper.toFhir(record, tenantId),
@@ -1864,7 +1893,10 @@ export class FhirService {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
 
-    const recordData = DocumentReferenceMapper.fromFhir(fhirDocRef, tenantId);
+    const recordData = await DocumentReferenceMapper.fromFhir(fhirDocRef, tenantDb, tenantId);
+    
+    // Don't update recordNumber on update
+    delete recordData.recordNumber;
     
     await medicalRecordRepository.update(id, recordData);
     

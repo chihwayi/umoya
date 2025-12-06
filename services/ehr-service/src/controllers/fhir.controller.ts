@@ -99,6 +99,7 @@ export class FhirController {
   @ApiResponse({ status: 200, description: 'FHIR patient resource' })
   async getPatient(
     @Param('id') id: string,
+    @Query('_everything') everything: string,
     @Headers('x-tenant-id') tenantId: string
   ) {
     if (!tenantId) {
@@ -108,7 +109,31 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
+    
+    // Handle $everything operation via query parameter
+    if (everything !== undefined || id.includes('everything')) {
+      const patientId = id.replace('/everything', '').replace('everything', '');
+      return this.fhirService.getPatientEverything(patientId || id, tenantDb, tenantId);
+    }
+    
     return this.fhirService.getPatient(id, tenantDb, tenantId);
+  }
+
+  @Get('Patient/:id/everything')
+  @ApiOperation({ summary: 'Get all resources for a patient (Patient $everything operation)' })
+  @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
+  async getPatientEverythingRoute(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getPatientEverything(id, tenantDb, tenantId);
   }
 
   @Post('Patient')
@@ -146,7 +171,7 @@ export class FhirController {
     return this.fhirService.updatePatient(id, fhirPatient, tenantDb, tenantId);
   }
 
-  @Get('Patient/:id/$everything')
+  @Get('Patient/:id/everything')
   @ApiOperation({ summary: 'Get all resources for a patient (Patient $everything operation)' })
   @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
   async getPatientEverything(

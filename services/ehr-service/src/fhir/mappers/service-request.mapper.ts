@@ -152,7 +152,6 @@ export class ServiceRequestMapper {
       ...(scheduledDateTime && { scheduledDateTime }),
       ...(clinicalInfo && { clinicalInfo }),
       ...(notes && { notes }),
-      specimenType: fhirServiceRequest.specimen?.[0]?.type?.text || 'Blood',
     };
   }
 }
