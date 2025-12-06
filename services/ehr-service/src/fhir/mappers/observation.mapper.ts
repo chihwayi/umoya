@@ -573,10 +573,12 @@ export class ObservationMapper {
 
     const vitalData = loincToVital[code] || {};
 
+    const recordedBy = fhirObservation.performer?.[0]?.reference?.split('/')[1];
+    
     return {
       ...vitalData,
       recordedAt: effectiveDate,
-      recordedBy: fhirObservation.performer?.[0]?.reference?.split('/')[1] || '',
+      ...(recordedBy ? { recordedBy } : {}),
     };
   }
 

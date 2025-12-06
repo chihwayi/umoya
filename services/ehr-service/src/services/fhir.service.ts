@@ -563,11 +563,33 @@ export class FhirService {
 
     if (category === 'vital-signs') {
       // Update vital
+      // Extract UUID from observation ID (format: {vitalsId}-{type})
+      // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars = 5 parts)
       const parts = id.split('-');
-      const vitalsId = parts.slice(0, -1).join('-');
+      let vitalsId: string;
+      
+      if (parts.length >= 5) {
+        // Reconstruct UUID (first 5 parts)
+        vitalsId = parts.slice(0, 5).join('-');
+      } else {
+        // Fallback: try first part as UUID
+        vitalsId = parts[0];
+      }
+      
       const vitalData = ObservationMapper.fromFhirToVitals(fhirObservation, tenantId);
       
+      // Remove empty recordedBy if not provided
+      if (!vitalData.recordedBy) {
+        delete vitalData.recordedBy;
+      }
+      
       const vitalsRepository = tenantDb.getRepository(Vitals);
+      const existing = await vitalsRepository.findOne({ where: { id: vitalsId } });
+      
+      if (!existing) {
+        throw new NotFoundException(`Observation with ID ${id} not found`);
+      }
+      
       await vitalsRepository.update(vitalsId, vitalData);
       
       const updated = await vitalsRepository.findOne({ where: { id: vitalsId } });
@@ -576,14 +598,23 @@ export class FhirService {
       }
       
       const observations = ObservationMapper.vitalsToFhir(updated, tenantId);
-      return observations.find(obs => obs.id === id) || observations[0];
+      // Find observation matching the code from input
+      const code = fhirObservation.code?.coding?.[0]?.code;
+      return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations.find(obs => obs.id === id) || observations[0];
     } else {
       // Update lab order
       const parts = id.split('-');
       const labOrderId = parts[0];
+      
       const labData = ObservationMapper.fromFhirToLabOrder(fhirObservation, tenantId);
       
       const labOrderRepository = tenantDb.getRepository(LabOrder);
+      const existing = await labOrderRepository.findOne({ where: { id: labOrderId } });
+      
+      if (!existing) {
+        throw new NotFoundException(`Observation with ID ${id} not found`);
+      }
+      
       await labOrderRepository.update(labOrderId, labData);
       
       const updated = await labOrderRepository.findOne({ where: { id: labOrderId } });
@@ -592,7 +623,9 @@ export class FhirService {
       }
       
       const observations = ObservationMapper.labOrderToFhir(updated, tenantId);
-      return observations.find(obs => obs.id === id) || observations[0];
+      // Find observation matching the code from input
+      const code = fhirObservation.code?.coding?.[0]?.code;
+      return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations.find(obs => obs.id === id) || observations[0];
     }
   }
 

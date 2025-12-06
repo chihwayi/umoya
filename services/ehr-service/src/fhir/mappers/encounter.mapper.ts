@@ -267,6 +267,9 @@ export class EncounterMapper {
       ext => ext.url?.includes('referring-facility')
     )?.valueString;
 
+    const admittingProvider = fhirEncounter.participant?.[0]?.individual?.reference?.split('/')[1];
+    const currentBedId = fhirEncounter.location?.[0]?.location?.reference?.split('/')[1];
+    
     return {
       admissionNumber: admissionNumber || `ADM-${Date.now()}`,
       admissionDate: startDate,
@@ -276,10 +279,10 @@ export class EncounterMapper {
       admittingDiagnosis: fhirEncounter.reasonCode?.[0]?.text || fhirEncounter.reasonCode?.[0]?.coding?.[0]?.display,
       admittingDiagnosisIcd10: fhirEncounter.reasonCode?.[0]?.coding?.find(c => c.system?.includes('icd-10'))?.code,
       admittingDiagnosisSnomed: fhirEncounter.type?.[0]?.coding?.find(c => c.system?.includes('snomed'))?.code,
-      admittingProvider: fhirEncounter.participant?.[0]?.individual?.reference?.split('/')[1] || '',
+      ...(admittingProvider ? { admittingProvider } : {}),
       admissionSource,
       referringFacility,
-      currentBedId: fhirEncounter.location?.[0]?.location?.reference?.split('/')[1],
+      ...(currentBedId ? { currentBedId } : {}),
     };
   }
 
