@@ -106,17 +106,19 @@ echo ""
 
 # Test 6: Create Medication
 echo "7️⃣ Testing POST /api/fhir/Medication (create)..."
-CREATE_MEDICATION='{
+UNIQUE_CODE=$(date +%s)
+CREATE_MEDICATION=$(cat <<EOF
+{
   "resourceType": "Medication",
   "code": {
     "coding": [
       {
         "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-        "code": "999999",
-        "display": "Test Medication"
+        "code": "$UNIQUE_CODE",
+        "display": "Test Medication $UNIQUE_CODE"
       }
     ],
-    "text": "Test Medication"
+    "text": "Test Medication $UNIQUE_CODE"
   },
   "status": "active",
   "form": {
@@ -137,7 +139,9 @@ CREATE_MEDICATION='{
       "isActive": true
     }
   ]
-}'
+}
+EOF
+)
 
 CREATE_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "$BASE_URL/api/fhir/Medication" \
   -H "Authorization: Bearer $TOKEN" \
