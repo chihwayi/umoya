@@ -228,8 +228,9 @@ export class MedicationDispenseMapper {
       status: status || 'pending',
       paymentStatus: paymentStatus || 'pending',
       notes,
-      // Generate dispensing number if not provided
-      dispensingNumber: fhirDispense.identifier?.[0]?.value || `DISP-${Date.now()}`,
+      // Generate dispensing number if not provided (optional field)
+      // Note: dispensing_number column may not exist in all tenant databases
+      // dispensingNumber: fhirDispense.identifier?.[0]?.value || `DISP-${Date.now()}`,
     };
   }
 

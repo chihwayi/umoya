@@ -26,8 +26,9 @@ export class PharmacyDispensing {
   @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
-  @Column({ name: 'dispensing_number', type: 'varchar', length: 50, unique: true })
-  dispensingNumber: string;
+  // Note: dispensing_number column doesn't exist in database schema
+  // This is a virtual property that can be generated when needed
+  dispensingNumber?: string;
 
   @Column({ name: 'dispensing_date', type: 'date', default: () => 'CURRENT_DATE' })
   dispensingDate: Date;
@@ -48,14 +49,10 @@ export class PharmacyDispensing {
   @Column({ name: 'payment_method', type: 'varchar', length: 50, nullable: true })
   paymentMethod?: string;
 
-  @Column({ name: 'total_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
-  totalAmount: number;
-
-  @Column({ name: 'amount_paid', type: 'decimal', precision: 12, scale: 2, default: 0 })
-  amountPaid: number;
-
-  @Column({ name: 'discount_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
-  discountAmount: number;
+  // Note: These columns don't exist in database schema - they're virtual properties
+  // totalAmount?: number;
+  // amountPaid?: number;
+  // discountAmount?: number;
 
   @Column({ name: 'bill_id', type: 'uuid', nullable: true })
   billId?: string;
