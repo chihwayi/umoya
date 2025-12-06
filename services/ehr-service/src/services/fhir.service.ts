@@ -16,6 +16,8 @@ import { ObservationMapper } from '../fhir/mappers/observation.mapper';
 import { MedicationRequestMapper } from '../fhir/mappers/medication-request.mapper';
 import { DiagnosticReportMapper } from '../fhir/mappers/diagnostic-report.mapper';
 import { ConditionMapper } from '../fhir/mappers/condition.mapper';
+import { MedicationMapper } from '../fhir/mappers/medication.mapper';
+import { Drug } from '../entities/drug.entity';
 import { FhirValidatorService } from '../fhir/validators/fhir-validator.service';
 
 type BundleEntry = {
@@ -74,6 +76,7 @@ export class FhirService {
           this.buildResourceCapability('Observation'),
           this.buildResourceCapability('Encounter'),
           this.buildResourceCapability('MedicationRequest'),
+          this.buildResourceCapability('Medication'),
           this.buildResourceCapability('DiagnosticReport'),
           this.buildResourceCapability('Condition'),
           this.buildResourceCapability('AllergyIntolerance'),
@@ -2499,5 +2502,143 @@ export class FhirService {
   async getCarePlan(id: string, tenantDb: DataSource) {
     // Placeholder - can be extended to fetch from diabetes_registry, oncology_cases, etc.
     throw new Error('CarePlan not found');
+  }
+
+  // ========== Medication Resource ==========
+
+  async searchMedications(query: any, tenantDb: DataSource, tenantId: string) {
+    const drugRepository = tenantDb.getRepository(Drug);
+    const queryBuilder = drugRepository.createQueryBuilder('drug');
+
+    // Search by code (RxNorm, SNOMED, ATC, NDC)
+    if (query.code) {
+      queryBuilder.andWhere(
+        '(drug.rxnormCode = :code OR drug.snomedCode = :code OR drug.atcCode = :code OR drug.ndcCode = :code)',
+        { code: query.code }
+      );
+    }
+
+    // Search by status
+    if (query.status) {
+      queryBuilder.andWhere('drug.status = :status', { status: query.status });
+    } else {
+      // Default to active medications
+      queryBuilder.andWhere('(drug.status = :status OR drug.isActive = :isActive)', {
+        status: 'active',
+        isActive: true,
+      });
+    }
+
+    // Search by form (dosage form)
+    if (query.form) {
+      queryBuilder.andWhere('drug.dosageForms @> ARRAY[:form]', { form: query.form });
+    }
+
+    // Search by ingredient (active ingredient)
+    if (query.ingredient) {
+      queryBuilder.andWhere('drug.activeIngredients @> ARRAY[:ingredient]', {
+        ingredient: query.ingredient,
+      });
+    }
+
+    // Search by name (generic name or RxNorm name)
+    if (query.name) {
+      queryBuilder.andWhere(
+        '(LOWER(drug.genericName) LIKE LOWER(:name) OR LOWER(drug.rxnormName) LIKE LOWER(:name))',
+        { name: `%${query.name}%` }
+      );
+    }
+
+    // Limit results
+    const limit = query._count ? parseInt(query._count) : 50;
+    queryBuilder.limit(Math.min(limit, 100));
+
+    const drugs = await queryBuilder.getMany();
+
+    return this.buildBundle(
+      drugs.map(drug => ({
+        resource: MedicationMapper.toFhir(drug, tenantId),
+        search: { mode: 'match' as const },
+      }))
+    );
+  }
+
+  async getMedication(id: string, tenantDb: DataSource, tenantId: string) {
+    const drugRepository = tenantDb.getRepository(Drug);
+    const drug = await drugRepository.findOne({ where: { id } });
+
+    if (!drug) {
+      throw new NotFoundException(`Medication with ID ${id} not found`);
+    }
+
+    return MedicationMapper.toFhir(drug, tenantId);
+  }
+
+  async createMedication(fhirMedication: any, tenantDb: DataSource, tenantId: string) {
+    // Validate FHIR resource
+    if (this.fhirValidator) {
+      await this.fhirValidator.validateResource(fhirMedication, 'Medication');
+    }
+
+    // Map to entity
+    const drugRepository = tenantDb.getRepository(Drug);
+    const drugData = MedicationMapper.fromFhir(fhirMedication);
+
+    // Check if drug with same RxNorm code already exists
+    if (drugData.rxnormCode) {
+      const existing = await drugRepository.findOne({
+        where: { rxnormCode: drugData.rxnormCode },
+      });
+      if (existing) {
+        throw new BadRequestException(
+          `Medication with RxNorm code ${drugData.rxnormCode} already exists`
+        );
+      }
+    }
+
+    // Create and save
+    const drug = drugRepository.create(drugData);
+    const savedDrug = await drugRepository.save(drug);
+
+    return MedicationMapper.toFhir(savedDrug, tenantId);
+  }
+
+  async updateMedication(id: string, fhirMedication: any, tenantDb: DataSource, tenantId: string) {
+    // Validate FHIR resource
+    if (this.fhirValidator) {
+      await this.fhirValidator.validateResource(fhirMedication, 'Medication');
+    }
+
+    const drugRepository = tenantDb.getRepository(Drug);
+    const drug = await drugRepository.findOne({ where: { id } });
+
+    if (!drug) {
+      throw new NotFoundException(`Medication with ID ${id} not found`);
+    }
+
+    // Map to entity
+    const drugData = MedicationMapper.fromFhir(fhirMedication);
+
+    // Update drug
+    Object.assign(drug, drugData);
+    const updatedDrug = await drugRepository.save(drug);
+
+    return MedicationMapper.toFhir(updatedDrug, tenantId);
+  }
+
+  async deleteMedication(id: string, tenantDb: DataSource) {
+    const drugRepository = tenantDb.getRepository(Drug);
+    const drug = await drugRepository.findOne({ where: { id } });
+
+    if (!drug) {
+      throw new NotFoundException(`Medication with ID ${id} not found`);
+    }
+
+    // Soft delete by setting status to inactive
+    drug.status = 'inactive';
+    drug.isActive = false;
+    await drugRepository.save(drug);
+
+    return { status: 'deleted', id };
   }
 }
