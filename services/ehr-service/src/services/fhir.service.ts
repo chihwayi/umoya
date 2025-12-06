@@ -18,9 +18,13 @@ import { DiagnosticReportMapper } from '../fhir/mappers/diagnostic-report.mapper
 import { ConditionMapper } from '../fhir/mappers/condition.mapper';
 import { MedicationMapper } from '../fhir/mappers/medication.mapper';
 import { MedicationDispenseMapper } from '../fhir/mappers/medication-dispense.mapper';
+import { ImmunizationMapper } from '../fhir/mappers/immunization.mapper';
+import { ProcedureMapper } from '../fhir/mappers/procedure.mapper';
 import { Drug } from '../entities/drug.entity';
 import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
 import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
+import { Immunization } from '../entities/immunization.entity';
+import { SurgicalCase } from '../entities/surgical-case.entity';
 import { FhirValidatorService } from '../fhir/validators/fhir-validator.service';
 
 type BundleEntry = {
@@ -2067,112 +2071,278 @@ export class FhirService {
 
   // ========== Immunization Resource ==========
 
-  async searchImmunizations(query: any, tenantDb: DataSource) {
-    // Use raw SQL since medical_records doesn't have a 'type' column
-    // For now, return empty bundle - immunizations would need to be tracked separately
-    // or added to medical_records schema
-    return this.buildBundle([]);
-  }
+  async searchImmunizations(query: any, tenantDb: DataSource, tenantId: string) {
+    const immunizationRepository = tenantDb.getRepository(Immunization);
+    let queryBuilder = immunizationRepository.createQueryBuilder('immunization');
 
-  async getImmunization(id: string, tenantDb: DataSource) {
-    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const record = await medicalRecordRepository.findOne({
-      where: { id, type: RecordType.VACCINATION }
-    });
-
-    if (!record) {
-      throw new Error('Immunization not found');
+    if (query.patient) {
+      const patientId = this.fhirValidator?.extractIdFromReference(query.patient) || this.extractId(query.patient);
+      if (patientId) {
+        queryBuilder.andWhere('immunization.patient_id = :patientId', { patientId });
+      }
     }
 
-    return this.medicalRecordToImmunization(record);
-  }
+    if (query.status) {
+      // Map FHIR status to completionStatus
+      const statusMap: Record<string, string> = {
+        'completed': 'completed',
+        'entered-in-error': 'entered-in-error',
+        'not-done': 'not-done',
+      };
+      const mappedStatus = statusMap[query.status] || 'completed';
+      queryBuilder.andWhere('immunization.completion_status = :status', { status: mappedStatus });
+    }
 
-  private medicalRecordToImmunization(record: MedicalRecord): any {
-    // Extract vaccination details from medical record
-    // Assuming vaccination name is in chiefComplaint or plan field
-    const vaccineName = record.chiefComplaint || record.plan || 'Unknown vaccine';
+    if (query.date) {
+      // Support date ranges: date=le2020-01-01, date=ge2020-01-01, date=2020-01-01
+      if (query.date.startsWith('le')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('immunization.administration_date <= :date', { date });
+      } else if (query.date.startsWith('ge')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('immunization.administration_date >= :date', { date });
+      } else {
+        queryBuilder.andWhere('DATE(immunization.administration_date) = :date', { date: query.date });
+      }
+    }
+
+    if (query['vaccine-code']) {
+      // Search by vaccine code (CVX) or name
+      const vaccineValue = this.extractId(query['vaccine-code']) || query['vaccine-code'];
+      queryBuilder.andWhere(
+        '(immunization.vaccine_code = :vaccineCode OR immunization.vaccine_name ILIKE :vaccineName)',
+        { vaccineCode: vaccineValue, vaccineName: `%${vaccineValue}%` }
+      );
+    }
+
+    // Pagination
+    const page = parseInt(query._page) || 1;
+    const count = Math.min(parseInt(query._count) || 10, 100);
+    const offset = (page - 1) * count;
+
+    queryBuilder.orderBy('immunization.administration_date', 'DESC').skip(offset).take(count);
+    const [immunizations, total] = await queryBuilder.getManyAndCount();
+
+    const entries = immunizations.map((immunization) => ({
+      resource: ImmunizationMapper.toFhir(immunization, tenantId),
+      search: { mode: 'match' as const },
+    }));
 
     return {
-      resourceType: 'Immunization',
-      id: record.id,
-      status: 'completed',
-      vaccineCode: {
-        text: vaccineName,
-      },
-      patient: {
-        reference: `Patient/${record.patientId}`,
-      },
-      occurrenceDateTime: record.recordDate?.toISOString(),
-      recorded: record.createdAt?.toISOString(),
-      primarySource: true,
-      location: record.appointmentId ? {
-        reference: `Location/clinic`,
-      } : undefined,
-      performer: record.providerId ? [
+      resourceType: 'Bundle',
+      id: `search-immunizations-${Date.now()}`,
+      type: 'searchset',
+      total,
+      link: [
         {
-          actor: {
-            reference: `Practitioner/${record.providerId}`,
-          },
+          relation: 'self',
+          url: `Immunization?${new URLSearchParams(query).toString()}`,
         },
-      ] : undefined,
-      note: record.plan ? [
-        {
-          text: record.plan,
-        },
-      ] : undefined,
+      ],
+      entry: entries,
     };
+  }
+
+  async getImmunization(id: string, tenantDb: DataSource, tenantId: string) {
+    const immunizationRepository = tenantDb.getRepository(Immunization);
+    const immunization = await immunizationRepository.findOne({ where: { id } });
+
+    if (!immunization) {
+      throw new NotFoundException(`Immunization with ID ${id} not found`);
+    }
+
+    return ImmunizationMapper.toFhir(immunization, tenantId);
+  }
+
+  async createImmunization(fhirImmunization: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirImmunization.resourceType !== 'Immunization') {
+      throw new BadRequestException('Resource must be of type Immunization');
+    }
+
+    const immunizationData = ImmunizationMapper.fromFhir(fhirImmunization, tenantId);
+    
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirImmunization.patient?.reference) ||
+                      this.extractId(fhirImmunization.patient?.reference) ||
+                      fhirImmunization.patient?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    const immunizationRepository = tenantDb.getRepository(Immunization);
+    const immunization = immunizationRepository.create({
+      ...immunizationData,
+      patientId,
+    } as any);
+
+    const saved = await immunizationRepository.save(immunization);
+    return ImmunizationMapper.toFhir(saved, tenantId);
+  }
+
+  async updateImmunization(id: string, fhirImmunization: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirImmunization.resourceType !== 'Immunization') {
+      throw new BadRequestException('Resource must be of type Immunization');
+    }
+
+    const immunizationRepository = tenantDb.getRepository(Immunization);
+    const existing = await immunizationRepository.findOne({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException(`Immunization with ID ${id} not found`);
+    }
+
+    const updates = ImmunizationMapper.fromFhir(fhirImmunization, tenantId);
+    await immunizationRepository.update(id, updates);
+    
+    const saved = await immunizationRepository
+      .createQueryBuilder('immunization')
+      .where('immunization.id = :id', { id })
+      .getOne();
+
+    if (!saved) {
+      throw new NotFoundException(`Immunization with ID ${id} not found after update`);
+    }
+
+    return ImmunizationMapper.toFhir(saved, tenantId);
   }
 
   // ========== Procedure Resource ==========
 
-  async searchProcedures(query: any, tenantDb: DataSource) {
-    // Use raw SQL since medical_records doesn't have a 'type' column
-    // For now, return empty bundle - procedures would need to be tracked separately
-    // or added to medical_records schema
-    return this.buildBundle([]);
-  }
+  async searchProcedures(query: any, tenantDb: DataSource, tenantId: string) {
+    const surgicalCaseRepository = tenantDb.getRepository(SurgicalCase);
+    let queryBuilder = surgicalCaseRepository.createQueryBuilder('surgicalCase');
 
-  async getProcedure(id: string, tenantDb: DataSource) {
-    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const record = await medicalRecordRepository.findOne({
-      where: { id, type: RecordType.PROCEDURE }
-    });
-
-    if (!record) {
-      throw new Error('Procedure not found');
+    if (query.patient) {
+      const patientId = this.fhirValidator?.extractIdFromReference(query.patient) || this.extractId(query.patient);
+      if (patientId) {
+        queryBuilder.andWhere('surgicalCase.patient_id = :patientId', { patientId });
+      }
     }
 
-    return this.medicalRecordToProcedure(record);
+    if (query.status) {
+      // Map FHIR status to SurgicalCase status
+      const statusMap: Record<string, string> = {
+        'preparation': 'scheduled',
+        'in-progress': 'in-progress',
+        'completed': 'completed',
+        'not-done': 'cancelled',
+        'on-hold': 'on-hold',
+      };
+      const mappedStatus = statusMap[query.status] || 'scheduled';
+      queryBuilder.andWhere('surgicalCase.status = :status', { status: mappedStatus });
+    }
+
+    if (query.date) {
+      // Support date ranges: date=le2020-01-01, date=ge2020-01-01, date=2020-01-01
+      if (query.date.startsWith('le')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('surgicalCase.scheduled_date <= :date OR surgicalCase.actual_start_time <= :date', { date });
+      } else if (query.date.startsWith('ge')) {
+        const date = query.date.substring(2);
+        queryBuilder.andWhere('surgicalCase.scheduled_date >= :date OR surgicalCase.actual_start_time >= :date', { date });
+      } else {
+        queryBuilder.andWhere('DATE(surgicalCase.scheduled_date) = :date OR DATE(surgicalCase.actual_start_time) = :date', { date: query.date });
+      }
+    }
+
+    if (query.code) {
+      // Search by CPT or SNOMED code
+      const codeValue = this.extractId(query.code) || query.code;
+      queryBuilder.andWhere(
+        '(surgicalCase.procedure_code_cpt = :code OR surgicalCase.procedure_code_snomed = :code)',
+        { code: codeValue }
+      );
+    }
+
+    // Pagination
+    const page = parseInt(query._page) || 1;
+    const count = Math.min(parseInt(query._count) || 10, 100);
+    const offset = (page - 1) * count;
+
+    queryBuilder.orderBy('surgicalCase.scheduled_date', 'DESC').skip(offset).take(count);
+    const [surgicalCases, total] = await queryBuilder.getManyAndCount();
+
+    const entries = surgicalCases.map((surgicalCase) => ({
+      resource: ProcedureMapper.toFhir(surgicalCase, tenantId),
+      search: { mode: 'match' as const },
+    }));
+
+    return {
+      resourceType: 'Bundle',
+      id: `search-procedures-${Date.now()}`,
+      type: 'searchset',
+      total,
+      link: [
+        {
+          relation: 'self',
+          url: `Procedure?${new URLSearchParams(query).toString()}`,
+        },
+      ],
+      entry: entries,
+    };
   }
 
-  private medicalRecordToProcedure(record: MedicalRecord): any {
-    return {
-      resourceType: 'Procedure',
-      id: record.id,
-      status: 'completed',
-      code: {
-        text: record.chiefComplaint || 'Procedure',
-      },
-      subject: {
-        reference: `Patient/${record.patientId}`,
-      },
-      performedDateTime: record.recordDate?.toISOString(),
-      recorder: record.providerId ? {
-        reference: `Practitioner/${record.providerId}`,
-      } : undefined,
-      performer: record.providerId ? [
-        {
-          actor: {
-            reference: `Practitioner/${record.providerId}`,
-          },
-        },
-      ] : undefined,
-      note: record.plan ? [
-        {
-          text: record.plan,
-        },
-      ] : undefined,
-    };
+  async getProcedure(id: string, tenantDb: DataSource, tenantId: string) {
+    const surgicalCaseRepository = tenantDb.getRepository(SurgicalCase);
+    const surgicalCase = await surgicalCaseRepository.findOne({ where: { id } });
+
+    if (!surgicalCase) {
+      throw new NotFoundException(`Procedure with ID ${id} not found`);
+    }
+
+    return ProcedureMapper.toFhir(surgicalCase, tenantId);
+  }
+
+  async createProcedure(fhirProcedure: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirProcedure.resourceType !== 'Procedure') {
+      throw new BadRequestException('Resource must be of type Procedure');
+    }
+
+    const procedureData = ProcedureMapper.fromFhir(fhirProcedure, tenantId);
+    
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirProcedure.subject?.reference) ||
+                      this.extractId(fhirProcedure.subject?.reference) ||
+                      fhirProcedure.subject?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    const surgicalCaseRepository = tenantDb.getRepository(SurgicalCase);
+    const surgicalCase = surgicalCaseRepository.create({
+      ...procedureData,
+      patientId,
+    } as any);
+
+    const saved = await surgicalCaseRepository.save(surgicalCase);
+    return ProcedureMapper.toFhir(saved, tenantId);
+  }
+
+  async updateProcedure(id: string, fhirProcedure: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirProcedure.resourceType !== 'Procedure') {
+      throw new BadRequestException('Resource must be of type Procedure');
+    }
+
+    const surgicalCaseRepository = tenantDb.getRepository(SurgicalCase);
+    const existing = await surgicalCaseRepository.findOne({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException(`Procedure with ID ${id} not found`);
+    }
+
+    const updates = ProcedureMapper.fromFhir(fhirProcedure, tenantId);
+    await surgicalCaseRepository.update(id, updates);
+    
+    const saved = await surgicalCaseRepository
+      .createQueryBuilder('surgicalCase')
+      .where('surgicalCase.id = :id', { id })
+      .getOne();
+
+    if (!saved) {
+      throw new NotFoundException(`Procedure with ID ${id} not found after update`);
+    }
+
+    return ProcedureMapper.toFhir(saved, tenantId);
   }
 
   private procedureToFhir(proc: any, record: MedicalRecord): any {

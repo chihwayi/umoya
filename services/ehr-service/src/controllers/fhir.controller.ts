@@ -558,7 +558,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.searchImmunizations(query, tenantDb);
+    return this.fhirService.searchImmunizations(query, tenantDb, tenantId);
   }
 
   @Get('Immunization/:id')
@@ -575,7 +575,42 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getImmunization(id, tenantDb);
+    return this.fhirService.getImmunization(id, tenantDb, tenantId);
+  }
+
+  @Post('Immunization')
+  @ApiOperation({ summary: 'Create FHIR immunization' })
+  @ApiResponse({ status: 201, description: 'FHIR immunization created' })
+  async createImmunization(
+    @Body() fhirImmunization: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createImmunization(fhirImmunization, tenantDb, tenantId);
+  }
+
+  @Put('Immunization/:id')
+  @ApiOperation({ summary: 'Update FHIR immunization' })
+  @ApiResponse({ status: 200, description: 'FHIR immunization updated' })
+  async updateImmunization(
+    @Param('id') id: string,
+    @Body() fhirImmunization: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateImmunization(id, fhirImmunization, tenantDb, tenantId);
   }
 
   @Get('Procedure')
@@ -592,7 +627,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.searchProcedures(query, tenantDb);
+    return this.fhirService.searchProcedures(query, tenantDb, tenantId);
   }
 
   @Get('Procedure/:id')
@@ -609,7 +644,42 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getProcedure(id, tenantDb);
+    return this.fhirService.getProcedure(id, tenantDb, tenantId);
+  }
+
+  @Post('Procedure')
+  @ApiOperation({ summary: 'Create FHIR procedure' })
+  @ApiResponse({ status: 201, description: 'FHIR procedure created' })
+  async createProcedure(
+    @Body() fhirProcedure: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createProcedure(fhirProcedure, tenantDb, tenantId);
+  }
+
+  @Put('Procedure/:id')
+  @ApiOperation({ summary: 'Update FHIR procedure' })
+  @ApiResponse({ status: 200, description: 'FHIR procedure updated' })
+  async updateProcedure(
+    @Param('id') id: string,
+    @Body() fhirProcedure: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateProcedure(id, fhirProcedure, tenantDb, tenantId);
   }
 
   @Get('Location')
