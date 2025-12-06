@@ -33,6 +33,38 @@ export class Drug {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  // RxNorm fields
+  @Column({ name: 'rxnorm_code', nullable: true, length: 20 })
+  rxnormCode?: string;
+
+  @Column({ name: 'rxnorm_name', type: 'text', nullable: true })
+  rxnormName?: string;
+
+  @Column({ name: 'rxnorm_tty', nullable: true, length: 10 })
+  rxnormTty?: string; // Term Type: SCD, SCDC, etc.
+
+  // SNOMED CT fields
+  @Column({ name: 'snomed_code', nullable: true, length: 50 })
+  snomedCode?: string;
+
+  @Column({ name: 'snomed_term', type: 'text', nullable: true })
+  snomedTerm?: string;
+
+  // NDC (National Drug Code)
+  @Column({ name: 'ndc_code', nullable: true, length: 20 })
+  ndcCode?: string;
+
+  // Strength and unit
+  @Column({ nullable: true, length: 50 })
+  strength?: string;
+
+  @Column({ nullable: true, length: 20 })
+  unit?: string;
+
+  // FHIR status
+  @Column({ nullable: true, length: 20, default: 'active' })
+  status?: string; // active, inactive, entered-in-error
+
   @OneToMany(() => DrugInteraction, interaction => interaction.drug1)
   interactionsAsDrug1: DrugInteraction[];
 
