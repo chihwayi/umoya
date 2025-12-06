@@ -129,6 +129,58 @@ export class FhirController {
     return this.fhirService.searchObservations(query, tenantDb, tenantId);
   }
 
+  @Get('Observation/:id')
+  @ApiOperation({ summary: 'Get FHIR observation by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR observation resource' })
+  async getObservation(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getObservation(id, tenantDb, tenantId);
+  }
+
+  @Post('Observation')
+  @ApiOperation({ summary: 'Create FHIR observation' })
+  @ApiResponse({ status: 201, description: 'FHIR observation created' })
+  async createObservation(
+    @Body() fhirObservation: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createObservation(fhirObservation, tenantDb, tenantId);
+  }
+
+  @Put('Observation/:id')
+  @ApiOperation({ summary: 'Update FHIR observation' })
+  @ApiResponse({ status: 200, description: 'FHIR observation updated' })
+  async updateObservation(
+    @Param('id') id: string,
+    @Body() fhirObservation: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateObservation(id, fhirObservation, tenantDb, tenantId);
+  }
+
   @Get('Encounter')
   @ApiOperation({ summary: 'Search FHIR encounters' })
   @ApiResponse({ status: 200, description: 'FHIR encounter bundle' })
@@ -144,6 +196,58 @@ export class FhirController {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
     return this.fhirService.searchEncounters(query, tenantDb, tenantId);
+  }
+
+  @Get('Encounter/:id')
+  @ApiOperation({ summary: 'Get FHIR encounter by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR encounter resource' })
+  async getEncounter(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getEncounter(id, tenantDb, tenantId);
+  }
+
+  @Post('Encounter')
+  @ApiOperation({ summary: 'Create FHIR encounter' })
+  @ApiResponse({ status: 201, description: 'FHIR encounter created' })
+  async createEncounter(
+    @Body() fhirEncounter: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.createEncounter(fhirEncounter, tenantDb, tenantId);
+  }
+
+  @Put('Encounter/:id')
+  @ApiOperation({ summary: 'Update FHIR encounter' })
+  @ApiResponse({ status: 200, description: 'FHIR encounter updated' })
+  async updateEncounter(
+    @Param('id') id: string,
+    @Body() fhirEncounter: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.updateEncounter(id, fhirEncounter, tenantDb, tenantId);
   }
 
   @Get('MedicationRequest')

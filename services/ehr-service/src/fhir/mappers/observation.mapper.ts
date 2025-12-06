@@ -545,5 +545,91 @@ export class ObservationMapper {
     };
     return flagMap[flag?.toLowerCase()] || 'N';
   }
+
+  /**
+   * Convert FHIR Observation to Vitals entity data (for vital signs)
+   */
+  static fromFhirToVitals(fhirObservation: fhir.Observation, tenantId?: string): Partial<Vitals> {
+    const code = fhirObservation.code?.coding?.[0]?.code || fhirObservation.code?.text;
+    const value = fhirObservation.valueQuantity?.value;
+    const effectiveDate = fhirObservation.effectiveDateTime
+      ? new Date(fhirObservation.effectiveDateTime)
+      : new Date();
+
+    // Map LOINC codes to vital fields
+    const loincToVital: Record<string, Partial<Vitals>> = {
+      '8480-6': { bloodPressure: value ? `${value}/` : undefined }, // Systolic
+      '8462-4': { bloodPressure: value ? `/${value}` : undefined }, // Diastolic
+      '8867-4': { heartRate: value ? Math.round(value) : undefined },
+      '8310-5': { temperature: value ? Number(value) : undefined },
+      '59408-5': { oxygenSaturation: value ? Math.round(value) : undefined },
+      '9279-1': { respiratoryRate: value ? Math.round(value) : undefined },
+      '29463-7': { weight: value ? Number(value) : undefined },
+      '8302-2': { height: value ? Number(value) : undefined },
+      '39156-5': { bmi: value ? Number(value) : undefined },
+      '2339-0': { bloodGlucose: value ? Number(value) : undefined },
+      '72514-3': { painLevel: value ? Math.round(value) : undefined },
+    };
+
+    const vitalData = loincToVital[code] || {};
+
+    return {
+      ...vitalData,
+      recordedAt: effectiveDate,
+      recordedBy: fhirObservation.performer?.[0]?.reference?.split('/')[1] || '',
+    };
+  }
+
+  /**
+   * Convert FHIR Observation to LabOrder entity data (for lab results)
+   */
+  static fromFhirToLabOrder(fhirObservation: fhir.Observation, tenantId?: string): Partial<LabOrder> {
+    const code = fhirObservation.code?.coding?.find(c => c.system?.includes('loinc'))?.code;
+    const testName = fhirObservation.code?.text || fhirObservation.code?.coding?.[0]?.display || 'Unknown Test';
+    const effectiveDate = fhirObservation.effectiveDateTime
+      ? new Date(fhirObservation.effectiveDateTime)
+      : new Date();
+
+    const test = {
+      testCode: code || 'UNKNOWN',
+      testName,
+      category: 'chemistry' as any,
+      specimenType: fhirObservation.specimen?.type?.text || 'Blood',
+    };
+
+    const value = fhirObservation.valueQuantity?.value;
+    const unit = fhirObservation.valueQuantity?.unit;
+    const interpretation = fhirObservation.interpretation?.[0]?.coding?.[0]?.code;
+
+    // Map interpretation back to flag
+    const interpretationToFlag: Record<string, string> = {
+      'N': 'normal',
+      'H': 'high',
+      'L': 'low',
+      'LL': 'critical',
+      'HH': 'critical',
+    };
+
+    const result = value ? {
+      value: value.toString(),
+      unit: unit || '',
+      flag: interpretationToFlag[interpretation || 'N'] || 'normal',
+      referenceRange: fhirObservation.referenceRange?.[0]
+        ? `${fhirObservation.referenceRange[0].low?.value || ''}-${fhirObservation.referenceRange[0].high?.value || ''}`
+        : undefined,
+    } : undefined;
+
+    return {
+      orderNumber: `LAB-${Date.now()}`,
+      tests: [test],
+      status: fhirObservation.status === 'final' ? 'completed' as any :
+              fhirObservation.status === 'preliminary' ? 'in_progress' as any :
+              fhirObservation.status === 'cancelled' ? 'cancelled' as any :
+              'ordered' as any,
+      scheduledDateTime: effectiveDate,
+      results: result ? [result] : undefined,
+      orderingProviderId: fhirObservation.performer?.[0]?.reference?.split('/')[1] || '',
+    };
+  }
 }
 

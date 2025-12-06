@@ -194,5 +194,132 @@ export class EncounterMapper {
     };
     return typeMap[admissionType?.toLowerCase()] || 'IMP';
   }
+
+  /**
+   * Convert FHIR Encounter to Appointment entity data
+   */
+  static fromFhirToAppointment(fhirEncounter: fhir.Encounter, tenantId?: string): Partial<Appointment> {
+    const startDate = fhirEncounter.period?.start
+      ? new Date(fhirEncounter.period.start)
+      : new Date();
+    
+    const endDate = fhirEncounter.period?.end
+      ? new Date(fhirEncounter.period.end)
+      : undefined;
+
+    const durationMinutes = endDate
+      ? Math.round((endDate.getTime() - startDate.getTime()) / 60000)
+      : 30; // Default 30 minutes
+
+    const status = this.mapStatusFromFhir(fhirEncounter.status);
+    const isTelehealth = fhirEncounter.class?.code === 'VR';
+
+    // Extract virtual meeting URL from extension
+    const virtualMeetingUrl = fhirEncounter.extension?.find(
+      ext => ext.url?.includes('virtual-meeting-url')
+    )?.valueString;
+
+    // Extract priority from extension
+    const priorityLevel = fhirEncounter.extension?.find(
+      ext => ext.url?.includes('priority-level')
+    )?.valueString || 'normal';
+
+    return {
+      appointmentDate: startDate,
+      durationMinutes,
+      appointmentType: fhirEncounter.type?.[0]?.text || fhirEncounter.type?.[0]?.coding?.[0]?.display || 'Consultation',
+      status,
+      reason: fhirEncounter.reasonCode?.[0]?.text,
+      isTelehealth,
+      virtualMeetingUrl,
+      priorityLevel,
+      doctorId: fhirEncounter.participant?.[0]?.individual?.reference?.split('/')[1] || '',
+    };
+  }
+
+  /**
+   * Convert FHIR Encounter to Admission entity data
+   */
+  static fromFhirToAdmission(fhirEncounter: fhir.Encounter, tenantId?: string): Partial<Admission> {
+    const startDate = fhirEncounter.period?.start
+      ? new Date(fhirEncounter.period.start)
+      : new Date();
+
+    const endDate = fhirEncounter.period?.end
+      ? new Date(fhirEncounter.period.end)
+      : undefined;
+
+    const status = this.mapAdmissionStatusFromFhir(fhirEncounter.status);
+    const admissionType = this.mapClassToAdmissionType(fhirEncounter.class?.code);
+
+    // Extract admission number from extension
+    const admissionNumber = fhirEncounter.extension?.find(
+      ext => ext.url?.includes('admission-number')
+    )?.valueString;
+
+    // Extract admission source from extension
+    const admissionSource = fhirEncounter.extension?.find(
+      ext => ext.url?.includes('admission-source')
+    )?.valueString;
+
+    // Extract referring facility from extension
+    const referringFacility = fhirEncounter.extension?.find(
+      ext => ext.url?.includes('referring-facility')
+    )?.valueString;
+
+    return {
+      admissionNumber: admissionNumber || `ADM-${Date.now()}`,
+      admissionDate: startDate,
+      estimatedDischargeDate: endDate,
+      admissionType,
+      admissionStatus: status,
+      admittingDiagnosis: fhirEncounter.reasonCode?.[0]?.text || fhirEncounter.reasonCode?.[0]?.coding?.[0]?.display,
+      admittingDiagnosisIcd10: fhirEncounter.reasonCode?.[0]?.coding?.find(c => c.system?.includes('icd-10'))?.code,
+      admittingDiagnosisSnomed: fhirEncounter.type?.[0]?.coding?.find(c => c.system?.includes('snomed'))?.code,
+      admittingProvider: fhirEncounter.participant?.[0]?.individual?.reference?.split('/')[1] || '',
+      admissionSource,
+      referringFacility,
+      currentBedId: fhirEncounter.location?.[0]?.location?.reference?.split('/')[1],
+    };
+  }
+
+  /**
+   * Map FHIR encounter status to appointment status
+   */
+  private static mapStatusFromFhir(status?: fhir.Encounter['status']): string {
+    const statusMap: Record<string, string> = {
+      'planned': 'scheduled',
+      'arrived': 'checked-in',
+      'in-progress': 'in-progress',
+      'finished': 'completed',
+      'cancelled': 'cancelled',
+    };
+    return statusMap[status || 'planned'] || 'scheduled';
+  }
+
+  /**
+   * Map FHIR encounter status to admission status
+   */
+  private static mapAdmissionStatusFromFhir(status?: fhir.Encounter['status']): string {
+    const statusMap: Record<string, string> = {
+      'in-progress': 'active',
+      'finished': 'discharged',
+      'cancelled': 'cancelled',
+    };
+    return statusMap[status || 'in-progress'] || 'active';
+  }
+
+  /**
+   * Map FHIR encounter class code to admission type
+   */
+  private static mapClassToAdmissionType(classCode?: string): string {
+    const typeMap: Record<string, string> = {
+      'EMER': 'emergency',
+      'IMP': 'inpatient',
+      'AMB': 'outpatient',
+      'OBSENC': 'observation',
+    };
+    return typeMap[classCode || 'IMP'] || 'inpatient';
+  }
 }
 

@@ -432,6 +432,170 @@ export class FhirService {
     };
   }
 
+  async getObservation(id: string, tenantDb: DataSource, tenantId: string) {
+    // Observation IDs can be in format: {vitalsId}-{type} or {labOrderId}-{index}
+    // Extract the base ID (UUID part before the last hyphen)
+    const parts = id.split('-');
+    
+    // Try to find as vitals observation
+    // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars)
+    // So we need to take first 5 parts (36 chars) for UUID
+    if (parts.length >= 5) {
+      // Reconstruct UUID (first 5 parts)
+      const uuidParts = parts.slice(0, 5);
+      const vitalsId = uuidParts.join('-');
+      const observationType = parts.slice(5).join('-');
+      
+      try {
+        const vitalsRepository = tenantDb.getRepository(Vitals);
+        const vital = await vitalsRepository.findOne({ where: { id: vitalsId } });
+        
+        if (vital) {
+          const observations = ObservationMapper.vitalsToFhir(vital, tenantId);
+          const observation = observations.find(obs => obs.id === id);
+          if (observation) {
+            return observation;
+          }
+        }
+      } catch (e) {
+        // UUID parsing failed, continue to try lab order
+      }
+    }
+
+    // Try to find as lab order observation
+    // Lab order ID format: {labOrderId}-{index}
+    if (parts.length >= 2) {
+      // Try first part as UUID
+      const labOrderId = parts[0];
+      try {
+        const labOrderRepository = tenantDb.getRepository(LabOrder);
+        const labOrder = await labOrderRepository.findOne({ where: { id: labOrderId } });
+        
+        if (labOrder) {
+          const observations = ObservationMapper.labOrderToFhir(labOrder, tenantId);
+          const observation = observations.find(obs => obs.id === id);
+          if (observation) {
+            return observation;
+          }
+        }
+      } catch (e) {
+        // UUID parsing failed
+      }
+    }
+
+    throw new NotFoundException(`Observation with ID ${id} not found`);
+  }
+
+  async createObservation(fhirObservation: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirObservation.resourceType !== 'Observation') {
+      throw new BadRequestException('Resource must be of type Observation');
+    }
+
+    const category = fhirObservation.category?.[0]?.coding?.[0]?.code;
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirObservation.subject?.reference) ||
+                      this.extractId(fhirObservation.subject?.reference) ||
+                      fhirObservation.subject?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    // Determine if it's a vital sign or lab result
+    if (category === 'vital-signs') {
+      const vitalData = ObservationMapper.fromFhirToVitals(fhirObservation, tenantId);
+      const vitalsRepository = tenantDb.getRepository(Vitals);
+      
+      // Check if there's an existing vital record for the same time
+      const existing = await vitalsRepository.findOne({
+        where: {
+          patientId,
+          recordedAt: vitalData.recordedAt,
+        },
+      });
+
+      if (existing) {
+        // Update existing vital
+        await vitalsRepository.update(existing.id, vitalData);
+        const updated = await vitalsRepository.findOne({ where: { id: existing.id } });
+        if (!updated) {
+          throw new NotFoundException('Vital not found after update');
+        }
+        const observations = ObservationMapper.vitalsToFhir(updated, tenantId);
+        // Find observation matching the code from the input
+        const code = fhirObservation.code?.coding?.[0]?.code;
+        return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations[0];
+      } else {
+        // Create new vital
+        const vital = vitalsRepository.create({
+          ...vitalData,
+          patientId,
+        } as any);
+        const saved = await vitalsRepository.save(vital);
+        const observations = ObservationMapper.vitalsToFhir(saved, tenantId);
+        // Return observation matching the code from input
+        const code = fhirObservation.code?.coding?.[0]?.code;
+        return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations[0];
+      }
+    } else {
+      // Lab result
+      const labData = ObservationMapper.fromFhirToLabOrder(fhirObservation, tenantId);
+      const labOrderRepository = tenantDb.getRepository(LabOrder);
+      
+      const labOrder = labOrderRepository.create({
+        ...labData,
+        patientId,
+      } as any);
+      
+      const saved = await labOrderRepository.save(labOrder);
+      const observations = ObservationMapper.labOrderToFhir(saved, tenantId);
+      return observations[0];
+    }
+  }
+
+  async updateObservation(id: string, fhirObservation: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirObservation.resourceType !== 'Observation') {
+      throw new BadRequestException('Resource must be of type Observation');
+    }
+
+    // Get existing observation to determine type
+    const existing = await this.getObservation(id, tenantDb, tenantId);
+    const category = existing.category?.[0]?.coding?.[0]?.code || fhirObservation.category?.[0]?.coding?.[0]?.code;
+
+    if (category === 'vital-signs') {
+      // Update vital
+      const parts = id.split('-');
+      const vitalsId = parts.slice(0, -1).join('-');
+      const vitalData = ObservationMapper.fromFhirToVitals(fhirObservation, tenantId);
+      
+      const vitalsRepository = tenantDb.getRepository(Vitals);
+      await vitalsRepository.update(vitalsId, vitalData);
+      
+      const updated = await vitalsRepository.findOne({ where: { id: vitalsId } });
+      if (!updated) {
+        throw new NotFoundException(`Observation with ID ${id} not found after update`);
+      }
+      
+      const observations = ObservationMapper.vitalsToFhir(updated, tenantId);
+      return observations.find(obs => obs.id === id) || observations[0];
+    } else {
+      // Update lab order
+      const parts = id.split('-');
+      const labOrderId = parts[0];
+      const labData = ObservationMapper.fromFhirToLabOrder(fhirObservation, tenantId);
+      
+      const labOrderRepository = tenantDb.getRepository(LabOrder);
+      await labOrderRepository.update(labOrderId, labData);
+      
+      const updated = await labOrderRepository.findOne({ where: { id: labOrderId } });
+      if (!updated) {
+        throw new NotFoundException(`Observation with ID ${id} not found after update`);
+      }
+      
+      const observations = ObservationMapper.labOrderToFhir(updated, tenantId);
+      return observations.find(obs => obs.id === id) || observations[0];
+    }
+  }
+
   async searchEncounters(query: any, tenantDb: DataSource, tenantId: string) {
     const appointmentRepository = tenantDb.getRepository(Appointment);
     const admissionRepository = tenantDb.getRepository(Admission);
@@ -549,6 +713,108 @@ export class FhirService {
       ],
       entry: paginatedEntries,
     };
+  }
+
+  async getEncounter(id: string, tenantDb: DataSource, tenantId: string) {
+    // Try appointment first
+    const appointmentRepository = tenantDb.getRepository(Appointment);
+    const appointment = await appointmentRepository.findOne({ where: { id } });
+    
+    if (appointment) {
+      return EncounterMapper.appointmentToFhir(appointment, tenantId);
+    }
+
+    // Try admission
+    const admissionRepository = tenantDb.getRepository(Admission);
+    const admission = await admissionRepository.findOne({ where: { id } });
+    
+    if (admission) {
+      return EncounterMapper.admissionToFhir(admission, tenantId);
+    }
+
+    throw new NotFoundException(`Encounter with ID ${id} not found`);
+  }
+
+  async createEncounter(fhirEncounter: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirEncounter.resourceType !== 'Encounter') {
+      throw new BadRequestException('Resource must be of type Encounter');
+    }
+
+    const classCode = fhirEncounter.class?.code;
+    const patientId = this.fhirValidator?.extractIdFromReference(fhirEncounter.subject?.reference) ||
+                      this.extractId(fhirEncounter.subject?.reference) ||
+                      fhirEncounter.subject?.reference?.split('/')[1];
+    
+    if (!patientId) {
+      throw new BadRequestException('Patient reference is required');
+    }
+
+    // Determine if it's an appointment (AMB/VR) or admission (IMP/EMER/OBSENC)
+    if (classCode === 'AMB' || classCode === 'VR') {
+      // Create appointment
+      const appointmentData = EncounterMapper.fromFhirToAppointment(fhirEncounter, tenantId);
+      const appointmentRepository = tenantDb.getRepository(Appointment);
+      
+      const appointment = appointmentRepository.create({
+        ...appointmentData,
+        patientId,
+      } as any);
+      
+      const saved = await appointmentRepository.save(appointment);
+      return EncounterMapper.appointmentToFhir(saved, tenantId);
+    } else {
+      // Create admission
+      const admissionData = EncounterMapper.fromFhirToAdmission(fhirEncounter, tenantId);
+      const admissionRepository = tenantDb.getRepository(Admission);
+      
+      const admission = admissionRepository.create({
+        ...admissionData,
+        patientId,
+      } as any);
+      
+      const saved = await admissionRepository.save(admission);
+      return EncounterMapper.admissionToFhir(saved, tenantId);
+    }
+  }
+
+  async updateEncounter(id: string, fhirEncounter: any, tenantDb: DataSource, tenantId: string) {
+    if (fhirEncounter.resourceType !== 'Encounter') {
+      throw new BadRequestException('Resource must be of type Encounter');
+    }
+
+    // Try appointment first
+    const appointmentRepository = tenantDb.getRepository(Appointment);
+    const existingAppointment = await appointmentRepository.findOne({ where: { id } });
+    
+    if (existingAppointment) {
+      const appointmentData = EncounterMapper.fromFhirToAppointment(fhirEncounter, tenantId);
+      await appointmentRepository.update(id, appointmentData);
+      
+      const updated = await appointmentRepository.findOne({ where: { id } });
+      if (!updated) {
+        throw new NotFoundException(`Encounter with ID ${id} not found after update`);
+      }
+      
+      return EncounterMapper.appointmentToFhir(updated, tenantId);
+    }
+
+    // Try admission
+    const admissionRepository = tenantDb.getRepository(Admission);
+    const existingAdmission = await admissionRepository.findOne({ where: { id } });
+    
+    if (existingAdmission) {
+      const admissionData = EncounterMapper.fromFhirToAdmission(fhirEncounter, tenantId);
+      await admissionRepository.update(id, admissionData);
+      
+      const updated = await admissionRepository.findOne({ where: { id } });
+      if (!updated) {
+        throw new NotFoundException(`Encounter with ID ${id} not found after update`);
+      }
+      
+      return EncounterMapper.admissionToFhir(updated, tenantId);
+    }
+
+    throw new NotFoundException(`Encounter with ID ${id} not found`);
   }
 
   async searchMedicationRequests(query: any, tenantDb: DataSource, tenantId: string) {
