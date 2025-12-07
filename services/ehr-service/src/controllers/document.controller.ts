@@ -34,7 +34,7 @@ export class DocumentController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(
     @Body() body: { patientId: string; documentType: string; documentName: string; description?: string },
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Req() req: RequestWithTenant & { user: any },
   ) {
     try {
@@ -147,7 +147,7 @@ export class DocumentController {
   async uploadNewVersion(
     @Param('id') id: string,
     @Body() body: { changeSummary: string },
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Req() req: RequestWithTenant & { user: any },
   ) {
     const fileData = {
@@ -268,8 +268,3 @@ export class DocumentController {
     return this.documentService.getDocumentStats(patientId, req.tenantDb);
   }
 }
-
-
-
-
-

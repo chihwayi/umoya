@@ -1,5 +1,6 @@
 import { MedicalRecord } from '../../entities/medical-record.entity';
 import * as fhir from 'fhir/r4';
+import { DataSource } from 'typeorm';
 
 /**
  * DocumentReference FHIR Mapper
@@ -66,7 +67,7 @@ export class DocumentReferenceMapper {
     };
 
     // Map status
-    const status: fhir.DocumentReferenceStatus = medicalRecord.isConfidential ? 'entered-in-error' : 'current';
+    const status = medicalRecord.isConfidential ? 'entered-in-error' : 'current';
 
     const fhirDocRef: fhir.DocumentReference = {
       resourceType: 'DocumentReference',
@@ -92,7 +93,7 @@ export class DocumentReferenceMapper {
         {
           attachment: {
             contentType: 'text/plain',
-            title: `${docType.display} - ${medicalRecord.recordNumber}`,
+            title: `${docType.display}${medicalRecord.recordNumber ? ` - ${medicalRecord.recordNumber}` : ''}`,
             creation: medicalRecord.recordDate?.toISOString() || medicalRecord.createdAt?.toISOString(),
             ...(medicalRecord.attachments && medicalRecord.attachments.length > 0 && {
               url: medicalRecord.attachments[0].url,
@@ -130,9 +131,25 @@ export class DocumentReferenceMapper {
   }
 
   /**
-   * Convert FHIR DocumentReference to MedicalRecord entity data
+   * Convert FHIR DocumentReference to MedicalRecord entity data (async version with tenantDb)
    */
-  static fromFhir(fhirDocRef: fhir.DocumentReference, tenantId?: string): Partial<MedicalRecord> {
+  static fromFhir(fhirDocRef: fhir.DocumentReference, tenantDb: DataSource, tenantId?: string): Promise<Partial<MedicalRecord>>;
+  
+  /**
+   * Convert FHIR DocumentReference to MedicalRecord entity data (sync version)
+   */
+  static async fromFhir(fhirDocRef: fhir.DocumentReference, tenantDb: DataSource, tenantId?: string): Promise<Partial<MedicalRecord>>;
+  
+  static async fromFhir(
+    fhirDocRef: fhir.DocumentReference, 
+    tenantDbOrTenantId?: DataSource | string, 
+    tenantId?: string
+  ): Promise<Partial<MedicalRecord>> {
+    // Determine if first param is DataSource or tenantId
+    const isDataSource = tenantDbOrTenantId instanceof DataSource;
+    const tenantDb = isDataSource ? tenantDbOrTenantId : undefined;
+    const actualTenantId = isDataSource ? tenantId : (tenantDbOrTenantId as string | undefined);
+    
     const patientId = fhirDocRef.subject?.reference?.split('/')[1] || 
                      fhirDocRef.subject?.reference;
     
@@ -189,13 +206,16 @@ export class DocumentReferenceMapper {
         uploadedAt: c.attachment?.creation ? new Date(c.attachment.creation) : new Date(),
       }));
 
-    // Generate record number if needed
-    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const count = await medicalRecordRepository.count();
-    const recordNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+    // Generate record number if tenantDb is provided
+    let recordNumber: string | undefined;
+    if (tenantDb) {
+      const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+      const count = await medicalRecordRepository.count();
+      recordNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+    }
 
     return {
-      recordNumber,
+      ...(recordNumber && { recordNumber }),
       patientId,
       providerId,
       type: recordType as any,

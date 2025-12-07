@@ -323,14 +323,7 @@ export class CarePlanService {
       values,
     );
 
-    const updatedGoal = result[0];
-
-    // Check if goal was marked as achieved and auto-complete care plan if all goals achieved
-    if (updates.status === 'achieved') {
-      await this.checkAndAutoCompletePlan(updatedGoal.care_plan_id, tenantDb);
-    }
-
-    return updatedGoal;
+    return result[0];
   }
 
   async getGoals(planId: string, tenantDb: DataSource) {
@@ -581,57 +574,5 @@ export class CarePlanService {
       `SELECT * FROM care_plan_outcomes WHERE care_plan_id = $1 ORDER BY outcome_date DESC, created_at DESC`,
       [planId],
     );
-  }
-
-  // ==================== AUTO-COMPLETION LOGIC ====================
-  
-  private async checkAndAutoCompletePlan(planId: string, tenantDb: DataSource): Promise<boolean> {
-    this.ensureTenantDb(tenantDb);
-
-    // Get all goals for this care plan
-    const goals = await tenantDb.query(
-      `SELECT * FROM care_plan_goals WHERE care_plan_id = $1`,
-      [planId]
-    );
-
-    if (goals.length === 0) {
-      return false;
-    }
-
-    // Check if all goals are achieved
-    const allAchieved = goals.every((goal: any) => goal.status === 'achieved');
-
-    if (allAchieved) {
-      // Auto-complete the care plan
-      await tenantDb.query(
-        `UPDATE care_plans 
-         SET status = 'completed', end_date = CURRENT_DATE, updated_at = NOW()
-         WHERE id = $1`,
-        [planId]
-      );
-
-      // Create an outcome record
-      await tenantDb.query(
-        `INSERT INTO care_plan_outcomes (
-          care_plan_id, outcome_type, outcome_text, outcome_date, 
-          success_level, created_at, updated_at
-        )
-        VALUES ($1, $2, $3, CURRENT_DATE, $4, NOW(), NOW())`,
-        [
-          planId,
-          'completion',
-          'Care plan completed successfully - all goals achieved',
-          'high'
-        ]
-      );
-
-      this.logger.log(`Care plan ${planId} auto-completed - all goals achieved`);
-      
-      // TODO: Send notification to patient and care team
-      
-      return true;
-    }
-
-    return false;
   }
 }

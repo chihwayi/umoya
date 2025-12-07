@@ -226,7 +226,7 @@ export class ProviderMessagingController {
   @UseInterceptors(FileInterceptor('file'))
   async addAttachment(
     @Param('id') messageId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Body() metadata: any,
     @Headers('x-tenant-id') tenantSlug: string,
   ) {
@@ -386,8 +386,3 @@ export class ProviderMessagingController {
     return this.templateService.applyTemplate(templateId, variables, tenantDb);
   }
 }
-
-
-
-
-

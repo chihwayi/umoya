@@ -17,6 +17,10 @@ interface CarePlan {
   start_date: string;
   end_date?: string;
   target_completion_date?: string;
+  primary_provider_id?: string;
+  care_team?: string[];
+  diagnosis_codes?: string[];
+  notes?: string;
   goals: any[];
   interventions: any[];
   created_at: string;
@@ -293,7 +297,12 @@ const CarePlanList: React.FC<CarePlanListProps> = ({
       {showBuilder && (
         <CarePlanBuilder
           patientId={patientId}
-          carePlan={selectedCarePlan}
+          carePlan={selectedCarePlan ? {
+            ...selectedCarePlan,
+            care_team: selectedCarePlan.care_team || [],
+            diagnosis_codes: selectedCarePlan.diagnosis_codes || [],
+            notes: selectedCarePlan.notes || '',
+          } : null}
           tenantSlug={tenantSlug}
           token={token}
           onClose={() => {

@@ -70,7 +70,7 @@ const HIVReferralManagement: React.FC<HIVReferralManagementProps> = ({
         return;
       }
 
-      await ehrApi.createReferral({
+      await ehrApi.createHivReferral({
         enrollmentId,
         referralDate: new Date().toISOString().split('T')[0],
         ...form

@@ -22,7 +22,8 @@ import { ImmunizationMapper } from '../fhir/mappers/immunization.mapper';
 import { ProcedureMapper } from '../fhir/mappers/procedure.mapper';
 import { AllergyIntoleranceMapper } from '../fhir/mappers/allergy-intolerance.mapper';
 import { ServiceRequestMapper } from '../fhir/mappers/service-request.mapper';
-import { OperationOutcomeUtil } from '../fhir/utils/operation-outcome.util';
+import { DocumentReferenceMapper } from '../fhir/mappers/document-reference.mapper';
+import { OperationOutcomeUtil, IssueType } from '../fhir/utils/operation-outcome.util';
 import { Drug } from '../entities/drug.entity';
 import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
 import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
@@ -74,13 +75,19 @@ export class FhirService {
               { code: 'read' },
               { code: 'create' },
               { code: 'update' },
-              { code: 'search-type' }
+              { code: 'search-type' },
+              { code: 'delete' }
             ],
             searchParam: [
-              { name: 'identifier', type: 'token' },
-              { name: 'name', type: 'string' },
-              { name: 'birthdate', type: 'date' },
-              { name: 'gender', type: 'token' }
+              { name: 'identifier', type: 'token', documentation: 'Search by patient number or national ID' },
+              { name: 'name', type: 'string', documentation: 'Search by patient name (first or last)' },
+              { name: 'birthdate', type: 'date', documentation: 'Search by date of birth (supports ranges: ge, le, eq)' },
+              { name: 'gender', type: 'token', documentation: 'Search by gender (male, female, other)' },
+              { name: 'phone', type: 'string', documentation: 'Search by phone number' },
+              { name: 'email', type: 'string', documentation: 'Search by email address' },
+              { name: '_sort', type: 'string', documentation: 'Sort results (name, -name, birthdate, -birthdate, _id, -_id, _lastUpdated, -_lastUpdated)' },
+              { name: '_count', type: 'number', documentation: 'Number of results per page (max 100)' },
+              { name: '_page', type: 'number', documentation: 'Page number for pagination' }
             ]
           },
           this.buildResourceCapability('Observation'),
@@ -156,6 +163,37 @@ export class FhirService {
         queryBuilder.andWhere('patient.email = :email', { email: query.email });
       }
 
+      // Sorting (FHIR _sort parameter)
+      if (query._sort) {
+        const sortParams = query._sort.split(',');
+        for (const sortParam of sortParams) {
+          const direction = sortParam.startsWith('-') ? 'DESC' : 'ASC';
+          const field = sortParam.replace(/^-/, '');
+          
+          // Map FHIR sort parameters to entity fields
+          const sortMap: Record<string, string> = {
+            'name': 'patient.lastName',
+            '-name': 'patient.lastName',
+            'birthdate': 'patient.dateOfBirth',
+            '-birthdate': 'patient.dateOfBirth',
+            '_id': 'patient.id',
+            '-_id': 'patient.id',
+            '_lastUpdated': 'patient.updatedAt',
+            '-_lastUpdated': 'patient.updatedAt',
+          };
+          
+          const dbField = sortMap[sortParam] || sortMap[field] || `patient.${field}`;
+          if (sortParam === sortParams[0]) {
+            queryBuilder.orderBy(dbField, direction as 'ASC' | 'DESC');
+          } else {
+            queryBuilder.addOrderBy(dbField, direction as 'ASC' | 'DESC');
+          }
+        }
+      } else {
+        // Default sorting by last name
+        queryBuilder.orderBy('patient.lastName', 'ASC');
+      }
+
       // Pagination
       const page = parseInt(query._page) || 1;
       const count = Math.min(parseInt(query._count) || 10, 100); // Max 100 per page
@@ -180,6 +218,12 @@ export class FhirService {
         hasKeys: Object.keys(patients[0]).length
       } : 'No patients');
 
+      // Build pagination links with all query parameters
+      const buildLink = (pageNum: number) => {
+        const linkQuery = { ...query, _page: pageNum.toString(), _count: count.toString() };
+        return `?${new URLSearchParams(linkQuery).toString()}`;
+      };
+
       return {
         resourceType: 'Bundle',
         id: `search-patients-${Date.now()}`,
@@ -188,15 +232,23 @@ export class FhirService {
         link: [
           {
             relation: 'self',
-            url: `?${new URLSearchParams(query).toString()}`,
+            url: buildLink(page),
           },
           ...(page > 1 ? [{
             relation: 'previous',
-            url: `?_page=${page - 1}&_count=${count}`,
+            url: buildLink(page - 1),
           }] : []),
           ...(offset + count < total ? [{
             relation: 'next',
-            url: `?_page=${page + 1}&_count=${count}`,
+            url: buildLink(page + 1),
+          }] : []),
+          {
+            relation: 'first',
+            url: buildLink(1),
+          },
+          ...(total > 0 ? [{
+            relation: 'last',
+            url: buildLink(Math.ceil(total / count)),
           }] : []),
         ],
         entry: patients.map((patient, index) => {
@@ -373,10 +425,16 @@ export class FhirService {
       });
     });
 
-    // Get all DiagnosticReports
+    // Get all DiagnosticReports - use raw query to avoid recordNumber issue
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const diagnosticReports = await medicalRecordRepository.find({
-      where: { patientId, type: RecordType.LAB_RESULT },
+    const rawDiagnosticReports = await medicalRecordRepository.query(
+      'SELECT id, "patientId", "appointmentId", "providerId", type, "recordDate", "chiefComplaint", "historyOfPresentIllness", "physicalExamination", assessment, plan, "vitalSigns", diagnoses, procedures, "followUpInstructions", attachments, "isConfidential", "createdAt", "updatedAt" FROM medical_records WHERE "patientId" = $1 AND type = $2',
+      [patientId, RecordType.LAB_RESULT]
+    );
+    const diagnosticReports = rawDiagnosticReports.map((raw: any) => {
+      const record = new MedicalRecord();
+      Object.assign(record, raw);
+      return record;
     });
     diagnosticReports.forEach(record => {
       entries.push({
@@ -669,7 +727,9 @@ export class FhirService {
           patientId,
         } as any);
         const saved = await vitalsRepository.save(vital);
-        const observations = ObservationMapper.vitalsToFhir(saved, tenantId);
+        // TypeORM save() can return array, but we passed single entity, so ensure single
+        const savedVital = Array.isArray(saved) ? saved[0] : saved;
+        const observations = ObservationMapper.vitalsToFhir(savedVital, tenantId);
         // Return observation matching the code from input
         const code = fhirObservation.code?.coding?.[0]?.code;
         return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations[0];
@@ -685,7 +745,9 @@ export class FhirService {
       } as any);
       
       const saved = await labOrderRepository.save(labOrder);
-      const observations = ObservationMapper.labOrderToFhir(saved, tenantId);
+      // TypeORM save() can return array, but we passed single entity, so ensure single
+      const savedLabOrder = Array.isArray(saved) ? saved[0] : saved;
+      const observations = ObservationMapper.labOrderToFhir(savedLabOrder, tenantId);
       return observations[0];
     }
   }
@@ -932,7 +994,9 @@ export class FhirService {
       } as any);
       
       const saved = await appointmentRepository.save(appointment);
-      return EncounterMapper.appointmentToFhir(saved, tenantId);
+      // TypeORM save() can return array, but we passed single entity, so ensure single
+      const savedAppointment = Array.isArray(saved) ? saved[0] : saved;
+      return EncounterMapper.appointmentToFhir(savedAppointment, tenantId);
     } else {
       // Create admission
       const admissionData = EncounterMapper.fromFhirToAdmission(fhirEncounter, tenantId);
@@ -944,7 +1008,9 @@ export class FhirService {
       } as any);
       
       const saved = await admissionRepository.save(admission);
-      return EncounterMapper.admissionToFhir(saved, tenantId);
+      // TypeORM save() can return array, but we passed single entity, so ensure single
+      const savedAdmission = Array.isArray(saved) ? saved[0] : saved;
+      return EncounterMapper.admissionToFhir(savedAdmission, tenantId);
     }
   }
 
@@ -1135,7 +1201,9 @@ export class FhirService {
     } as any);
 
     const saved = await prescriptionRepository.save(prescription);
-    return MedicationRequestMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedPrescription = Array.isArray(saved) ? saved[0] : saved;
+    return MedicationRequestMapper.toFhir(savedPrescription, tenantId);
   }
 
   async updateMedicationRequest(id: string, fhirMedicationRequest: any, tenantDb: DataSource, tenantId: string) {
@@ -1328,7 +1396,9 @@ export class FhirService {
     } as any);
 
     const saved = await labOrderRepository.save(labOrder);
-    return DiagnosticReportMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedLabOrder = Array.isArray(saved) ? saved[0] : saved;
+    return DiagnosticReportMapper.toFhir(savedLabOrder, tenantId);
   }
 
   async updateDiagnosticReport(id: string, fhirDiagnosticReport: any, tenantDb: DataSource, tenantId: string) {
@@ -1497,7 +1567,9 @@ export class FhirService {
     } as any);
 
     const saved = await problemRepository.save(problem);
-    return ConditionMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedProblem = Array.isArray(saved) ? saved[0] : saved;
+    return ConditionMapper.toFhir(savedProblem, tenantId);
   }
 
   async updateCondition(id: string, fhirCondition: any, tenantDb: DataSource, tenantId: string) {
@@ -1605,8 +1677,9 @@ export class FhirService {
     const allergyRepository = tenantDb.getRepository(Allergy);
     const allergy = allergyRepository.create(allergyData as any);
     const saved = await allergyRepository.save(allergy);
-
-    return AllergyIntoleranceMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedAllergy = Array.isArray(saved) ? saved[0] : saved;
+    return AllergyIntoleranceMapper.toFhir(savedAllergy, tenantId);
   }
 
   async updateAllergyIntolerance(id: string, fhirAllergy: any, tenantDb: DataSource, tenantId: string) {
@@ -1723,8 +1796,9 @@ export class FhirService {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
     const labOrder = labOrderRepository.create(labOrderData as any);
     const saved = await labOrderRepository.save(labOrder);
-
-    return ServiceRequestMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedLabOrder = Array.isArray(saved) ? saved[0] : saved;
+    return ServiceRequestMapper.toFhir(savedLabOrder, tenantId);
   }
 
   async updateServiceRequest(id: string, fhirServiceRequest: any, tenantDb: DataSource, tenantId: string) {
@@ -1767,7 +1841,7 @@ export class FhirService {
     }
 
     // Soft delete by setting status to cancelled
-    labOrder.status = 'cancelled';
+    labOrder.status = LabOrderStatus.CANCELLED;
     await labOrderRepository.save(labOrder);
 
     return { success: true };
@@ -1816,19 +1890,42 @@ export class FhirService {
         search: { mode: 'match' as const },
       })));
     } catch (error: any) {
-      // Fallback: if recordNumber causes issues, use query without it
-      if (error.message?.includes('recordNumber')) {
-        const queryBuilder = medicalRecordRepository.createQueryBuilder('record');
+      // If recordNumber column doesn't exist, use raw query with correct column names
+      if (error.message?.includes('recordNumber') || error.message?.includes('column')) {
+        // Database schema: patient_id, doctor_id, visit_date, chief_complaint, etc.
+        // Entity expects: patientId, providerId, recordDate, chiefComplaint, etc.
+        // Map actual database columns to entity properties
+        // diagnosis_codes is TEXT[] not JSONB, convert it
+        // Convert diagnosis_codes TEXT[] to JSONB array format
+        let sql = `SELECT id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", 'consultation'::varchar as type, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", 
+          COALESCE(
+            (SELECT jsonb_agg(jsonb_build_object('code', code, 'description', code, 'type', 'primary'))
+             FROM unnest(diagnosis_codes) code),
+            '[]'::jsonb
+          ) as diagnoses,
+          NULL::jsonb as procedures, NULL::text as "followUpInstructions", NULL::jsonb as attachments, false as "isConfidential", created_at as "createdAt", updated_at as "updatedAt" 
+          FROM medical_records WHERE 1=1`;
+        const params: any[] = [];
+        let paramIndex = 1;
+
         if (where.patientId) {
-          queryBuilder.where('record.patientId = :patientId', { patientId: where.patientId });
+          sql += ` AND patient_id = $${paramIndex}`;
+          params.push(where.patientId);
+          paramIndex++;
         }
-        if (where.type) {
-          queryBuilder.andWhere('record.type = :type', { type: where.type });
-        }
-        if (where.isConfidential !== undefined) {
-          queryBuilder.andWhere('record.isConfidential = :isConfidential', { isConfidential: where.isConfidential });
-        }
-        const records = await queryBuilder.orderBy('record.recordDate', 'DESC').getMany();
+        // Note: type and is_confidential columns don't exist in medical_records table
+        // All records are treated as 'consultation' type and non-confidential in the SELECT above
+        sql += ' ORDER BY visit_date DESC';
+
+        const rawRecords = await medicalRecordRepository.query(sql, params);
+        // Map to entity instances, setting recordNumber to undefined
+        const records = rawRecords.map((raw: any) => {
+          const record = new MedicalRecord();
+          Object.assign(record, raw);
+          record.recordNumber = undefined; // Column doesn't exist
+          return record;
+        });
+        
         return this.buildBundle(records.map((record) => ({
           resource: DocumentReferenceMapper.toFhir(record, tenantId),
           search: { mode: 'match' as const },
@@ -1836,22 +1933,31 @@ export class FhirService {
       }
       throw error;
     }
-
-    const entries = records.map((record) => ({
-      resource: DocumentReferenceMapper.toFhir(record, tenantId),
-      search: { mode: 'match' as const },
-    }));
-
-    return this.buildBundle(entries);
   }
 
   async getDocumentReference(id: string, tenantDb: DataSource, tenantId: string) {
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const record = await medicalRecordRepository.findOne({ where: { id } });
     
-    if (!record) {
+    // Use raw query to avoid recordNumber column issue
+    const sql = `SELECT id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", 'consultation'::varchar as type, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", 
+      COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object('code', code, 'description', code, 'type', 'primary'))
+         FROM unnest(diagnosis_codes) code),
+        '[]'::jsonb
+      ) as diagnoses,
+      NULL::jsonb as procedures, NULL::text as "followUpInstructions", NULL::jsonb as attachments, false as "isConfidential", created_at as "createdAt", updated_at as "updatedAt" 
+      FROM medical_records WHERE id = $1`;
+    
+    const result = await medicalRecordRepository.query(sql, [id]);
+    
+    if (!result || result.length === 0) {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
+
+    // Map to entity instance
+    const record = new MedicalRecord();
+    Object.assign(record, result[0]);
+    record.recordNumber = undefined; // Column doesn't exist
 
     return DocumentReferenceMapper.toFhir(record, tenantId);
   }
@@ -1863,18 +1969,37 @@ export class FhirService {
       );
     }
 
-    const recordData = DocumentReferenceMapper.fromFhir(fhirDocRef, tenantId);
-    
-    // Generate record number if not provided
-    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const count = await medicalRecordRepository.count();
-    const recordNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+    const recordData = await DocumentReferenceMapper.fromFhir(fhirDocRef, tenantDb, tenantId);
 
-    const record = medicalRecordRepository.create({
-      ...recordData,
-      recordNumber,
-    } as any);
-    const saved = await medicalRecordRepository.save(record);
+    // Remove recordNumber if it exists (column doesn't exist in database)
+    const { recordNumber, isConfidential, ...dataWithoutRecordNumber } = recordData;
+
+    // Map entity property names to database column names
+    const dbData: any = {
+      patient_id: dataWithoutRecordNumber.patientId,
+      doctor_id: dataWithoutRecordNumber.providerId,
+      visit_date: dataWithoutRecordNumber.recordDate,
+      chief_complaint: dataWithoutRecordNumber.chiefComplaint,
+      history_present_illness: dataWithoutRecordNumber.historyOfPresentIllness || null,
+      physical_examination: dataWithoutRecordNumber.physicalExamination || null,
+      assessment: dataWithoutRecordNumber.assessment || null,
+      plan: dataWithoutRecordNumber.plan || null,
+      vital_signs: dataWithoutRecordNumber.vitalSigns || null,
+      ...(dataWithoutRecordNumber.appointmentId && { appointment_id: dataWithoutRecordNumber.appointmentId }),
+    };
+
+    // Use raw query to insert (avoids TypeORM trying to save recordNumber column)
+    const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
+    const result = await medicalRecordRepository.query(
+      `INSERT INTO medical_records (${Object.keys(dbData).join(', ')}) 
+       VALUES (${Object.keys(dbData).map((_, i) => `$${i + 1}`).join(', ')}) 
+       RETURNING id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", created_at as "createdAt", updated_at as "updatedAt"`,
+      Object.values(dbData)
+    );
+    
+    // Map raw result to entity-like object
+    const saved = new MedicalRecord();
+    Object.assign(saved, result[0]);
 
     return DocumentReferenceMapper.toFhir(saved, tenantId);
   }
@@ -1887,38 +2012,115 @@ export class FhirService {
     }
 
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const existing = await medicalRecordRepository.findOne({ where: { id } });
     
-    if (!existing) {
+    // Check if record exists using raw query
+    const checkSql = `SELECT id FROM medical_records WHERE id = $1`;
+    const existing = await medicalRecordRepository.query(checkSql, [id]);
+    
+    if (!existing || existing.length === 0) {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
 
     const recordData = await DocumentReferenceMapper.fromFhir(fhirDocRef, tenantDb, tenantId);
     
-    // Don't update recordNumber on update
-    delete recordData.recordNumber;
+    // Remove recordNumber and isConfidential (columns don't exist)
+    const { recordNumber, isConfidential, ...dataWithoutRecordNumber } = recordData;
+
+    // Map entity property names to database column names
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
+    let paramIndex = 1;
+
+    if (dataWithoutRecordNumber.patientId) {
+      updateFields.push(`patient_id = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.patientId);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.providerId) {
+      updateFields.push(`doctor_id = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.providerId);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.recordDate) {
+      updateFields.push(`visit_date = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.recordDate);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.chiefComplaint !== undefined) {
+      updateFields.push(`chief_complaint = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.chiefComplaint);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.historyOfPresentIllness !== undefined) {
+      updateFields.push(`history_present_illness = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.historyOfPresentIllness);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.physicalExamination !== undefined) {
+      updateFields.push(`physical_examination = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.physicalExamination);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.assessment !== undefined) {
+      updateFields.push(`assessment = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.assessment);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.plan !== undefined) {
+      updateFields.push(`plan = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.plan);
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.vitalSigns !== undefined) {
+      updateFields.push(`vital_signs = $${paramIndex}`);
+      updateValues.push(JSON.stringify(dataWithoutRecordNumber.vitalSigns));
+      paramIndex++;
+    }
+    if (dataWithoutRecordNumber.appointmentId !== undefined) {
+      updateFields.push(`appointment_id = $${paramIndex}`);
+      updateValues.push(dataWithoutRecordNumber.appointmentId);
+      paramIndex++;
+    }
+
+    if (updateFields.length === 0) {
+      // No fields to update, just return existing record
+      return this.getDocumentReference(id, tenantDb, tenantId);
+    }
+
+    // Add updated_at
+    updateFields.push(`updated_at = NOW()`);
+    updateValues.push(id);
+
+    // Use raw query to update
+    const updateSql = `UPDATE medical_records SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", created_at as "createdAt", updated_at as "updatedAt"`;
     
-    await medicalRecordRepository.update(id, recordData);
+    const result = await medicalRecordRepository.query(updateSql, updateValues);
     
-    const updated = await medicalRecordRepository.findOne({ where: { id } });
-    if (!updated) {
+    if (!result || result.length === 0) {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
+
+    // Map to entity instance
+    const updated = new MedicalRecord();
+    Object.assign(updated, result[0]);
+    updated.recordNumber = undefined; // Column doesn't exist
 
     return DocumentReferenceMapper.toFhir(updated, tenantId);
   }
 
   async deleteDocumentReference(id: string, tenantDb: DataSource) {
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
-    const record = await medicalRecordRepository.findOne({ where: { id } });
     
-    if (!record) {
+    // Check if record exists using raw query
+    const checkSql = `SELECT id FROM medical_records WHERE id = $1`;
+    const existing = await medicalRecordRepository.query(checkSql, [id]);
+    
+    if (!existing || existing.length === 0) {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
 
-    // Soft delete by marking as confidential/entered-in-error
-    record.isConfidential = true;
-    await medicalRecordRepository.save(record);
+    // Hard delete using raw query (is_confidential column doesn't exist for soft delete)
+    await medicalRecordRepository.query(`DELETE FROM medical_records WHERE id = $1`, [id]);
 
     return { success: true };
   }
@@ -2543,6 +2745,72 @@ export class FhirService {
     return parts[parts.length - 1] || undefined;
   }
 
+  /**
+   * Helper method to build pagination links for FHIR bundles
+   */
+  private buildPaginationLinks(query: any, page: number, count: number, total: number) {
+    const buildLink = (pageNum: number) => {
+      const linkQuery = { ...query, _page: pageNum.toString(), _count: count.toString() };
+      return `?${new URLSearchParams(linkQuery).toString()}`;
+    };
+
+    const links: any[] = [
+      {
+        relation: 'self',
+        url: buildLink(page),
+      },
+      {
+        relation: 'first',
+        url: buildLink(1),
+      },
+    ];
+
+    if (page > 1) {
+      links.push({
+        relation: 'previous',
+        url: buildLink(page - 1),
+      });
+    }
+
+    if (page * count < total) {
+      links.push({
+        relation: 'next',
+        url: buildLink(page + 1),
+      });
+    }
+
+    if (total > 0) {
+      links.push({
+        relation: 'last',
+        url: buildLink(Math.ceil(total / count)),
+      });
+    }
+
+    return links;
+  }
+
+  /**
+   * Helper method to apply FHIR sorting to query builder
+   */
+  private applySorting(queryBuilder: any, query: any, sortMap: Record<string, string>, defaultSort: { field: string; direction: 'ASC' | 'DESC' }) {
+    if (query._sort) {
+      const sortParams = query._sort.split(',');
+      for (const sortParam of sortParams) {
+        const direction = sortParam.startsWith('-') ? 'DESC' : 'ASC';
+        const field = sortParam.replace(/^-/, '');
+        const dbField = sortMap[sortParam] || sortMap[field] || field;
+        
+        if (sortParam === sortParams[0]) {
+          queryBuilder.orderBy(dbField, direction);
+        } else {
+          queryBuilder.addOrderBy(dbField, direction);
+        }
+      }
+    } else {
+      queryBuilder.orderBy(defaultSort.field, defaultSort.direction);
+    }
+  }
+
   private buildBundle(entries: BundleEntry[], type: 'searchset' | 'collection' = 'searchset') {
     return {
       resourceType: 'Bundle',
@@ -2933,7 +3201,9 @@ export class FhirService {
     } as any);
 
     const saved = await immunizationRepository.save(immunization);
-    return ImmunizationMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedImmunization = Array.isArray(saved) ? saved[0] : saved;
+    return ImmunizationMapper.toFhir(savedImmunization, tenantId);
   }
 
   async updateImmunization(id: string, fhirImmunization: any, tenantDb: DataSource, tenantId: string) {
@@ -3072,7 +3342,9 @@ export class FhirService {
     } as any);
 
     const saved = await surgicalCaseRepository.save(surgicalCase);
-    return ProcedureMapper.toFhir(saved, tenantId);
+    // TypeORM save() can return array, but we passed single entity, so ensure single
+    const savedSurgicalCase = Array.isArray(saved) ? saved[0] : saved;
+    return ProcedureMapper.toFhir(savedSurgicalCase, tenantId);
   }
 
   async updateProcedure(id: string, fhirProcedure: any, tenantDb: DataSource, tenantId: string) {
@@ -3565,7 +3837,7 @@ export class FhirService {
             status: error.status || '400',
             outcome: OperationOutcomeUtil.error(
               error.message || 'Processing failed',
-              OperationOutcomeUtil.IssueType.EXCEPTION
+              IssueType.EXCEPTION
             ),
           },
         });
@@ -3623,7 +3895,7 @@ export class FhirService {
       throw new BadRequestException(
         OperationOutcomeUtil.error(
           `Transaction failed: ${error.message}`,
-          OperationOutcomeUtil.IssueType.EXCEPTION
+          IssueType.EXCEPTION
         )
       );
     } finally {
