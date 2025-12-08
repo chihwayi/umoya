@@ -170,7 +170,7 @@ const FinanceDashboard: React.FC = () => {
               await ehrApi.post(API_ENDPOINTS.FINANCE.RECORD_PAYMENT(transactionId), {
                 amount: feeAmount,
                 paymentMethod: 'cash',
-                notes: 'Payment confirmed at front desk',
+                note: 'Payment confirmed at front desk',
               });
             } else {
               // If no transaction exists, create one first
@@ -189,7 +189,6 @@ const FinanceDashboard: React.FC = () => {
                     description: `Appointment: ${appointment?.appointmentType || 'Consultation'}`,
                     quantity: 1,
                     unitPrice: feeAmount,
-                    amount: feeAmount,
                   },
                 ],
                 dueDate: new Date().toISOString(),
@@ -207,7 +206,7 @@ const FinanceDashboard: React.FC = () => {
               await ehrApi.post(API_ENDPOINTS.FINANCE.RECORD_PAYMENT(transactionId), {
                 amount: feeAmount,
                 paymentMethod: 'cash',
-                notes: 'Payment confirmed at front desk',
+                note: 'Payment confirmed at front desk',
               });
             }
 
