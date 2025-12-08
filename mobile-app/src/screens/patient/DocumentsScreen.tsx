@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,16 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import documentService, { Document, DocumentFilters } from '../../services/document.service';
 import { format } from 'date-fns';
+import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
 
 const DocumentsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -25,9 +29,15 @@ const DocumentsScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<string>('all');
   const [documentTypes, setDocumentTypes] = useState<string[]>([]);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadDocuments();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, [filter]);
 
   const loadDocuments = async () => {
@@ -39,7 +49,6 @@ const DocumentsScreen: React.FC = () => {
         const data = await documentService.getDocuments(patientId, filters);
         setDocuments(data);
         
-        // Extract unique document types
         const types = Array.from(new Set(data.map(doc => doc.documentType)));
         setDocumentTypes(types);
       }
@@ -77,120 +86,152 @@ const DocumentsScreen: React.FC = () => {
     }
   };
 
-  const renderDocument = ({ item }: { item: Document }) => {
+  const renderDocument = ({ item, index }: { item: Document; index: number }) => {
     const uploadDate = new Date(item.uploadedAt);
     const formattedDate = format(uploadDate, 'MMM dd, yyyy');
     const fileIcon = documentService.getFileIcon(item.mimeType);
     const fileSize = documentService.formatFileSize(item.fileSize);
 
     return (
-      <TouchableOpacity
-        style={styles.documentCard}
-        onPress={() => (navigation as any).navigate('DocumentViewer', { documentId: item.id })}
+      <Animated.View
+        style={[
+          {
+            opacity: fadeAnim,
+            transform: [
+              {
+                translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
-        <View style={styles.documentHeader}>
-          <Text style={styles.documentIcon}>{fileIcon}</Text>
-          <View style={styles.documentInfo}>
-            <Text style={styles.documentName} numberOfLines={2}>
-              {item.documentName}
-            </Text>
-            <Text style={styles.documentType}>{item.documentType}</Text>
-          </View>
-        </View>
-        <View style={styles.documentMeta}>
-          <Text style={styles.metaText}>
-            {fileSize} • {formattedDate}
-          </Text>
-          {item.uploadedByFirstName && (
-            <Text style={styles.metaText}>
-              Uploaded by {item.uploadedByFirstName} {item.uploadedByLastName}
-            </Text>
-          )}
-        </View>
-        {item.tags && item.tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            {item.tags.slice(0, 3).map((tag, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('DocumentViewer', { documentId: item.id })}
+          activeOpacity={0.8}
+        >
+          <GlassCard style={styles.documentCard} padding={spacing.lg}>
+            <View style={styles.documentHeader}>
+              <View style={styles.documentIconContainer}>
+                <Text style={styles.documentIcon}>{fileIcon}</Text>
               </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
+              <View style={styles.documentInfo}>
+                <Text style={styles.documentName} numberOfLines={2}>
+                  {item.documentName}
+                </Text>
+                <Text style={styles.documentType}>{item.documentType}</Text>
+              </View>
+            </View>
+            <View style={styles.documentMeta}>
+              <Text style={styles.metaText}>
+                {fileSize} • {formattedDate}
+              </Text>
+              {item.uploadedByFirstName && (
+                <Text style={styles.metaText}>
+                  Uploaded by {item.uploadedByFirstName} {item.uploadedByLastName}
+                </Text>
+              )}
+            </View>
+            {item.tags && item.tags.length > 0 && (
+              <View style={styles.tagsContainer}>
+                {item.tags.slice(0, 3).map((tag, index) => (
+                  <View key={index} style={styles.tag}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </GlassCard>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
   if (loading && documents.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading documents...</Text>
+      <View style={styles.container}>
+        <ScreenHeader title="Documents" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading documents...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Documents</Text>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search documents..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-          <Text style={styles.searchButtonText}>Search</Text>
-        </TouchableOpacity>
-      </View>
-
-      {documentTypes.length > 0 && (
-        <View style={styles.filterContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-              onPress={() => setFilter('all')}
-            >
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
-                All
-              </Text>
+      <ScreenHeader title="Documents" subtitle="View your medical documents" />
+      <View style={styles.content}>
+        <GlassCard style={styles.searchContainer} padding={spacing.md}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search documents..."
+              placeholderTextColor={colors.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+            <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.7}>
+              <Text style={styles.searchButtonText}>Search</Text>
             </TouchableOpacity>
-            {documentTypes.map((type) => (
+          </View>
+        </GlassCard>
+
+        {documentTypes.length > 0 && (
+          <View style={styles.filterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               <TouchableOpacity
-                key={type}
-                style={[styles.filterButton, filter === type && styles.filterButtonActive]}
-                onPress={() => setFilter(type)}
+                style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+                onPress={() => setFilter('all')}
+                activeOpacity={0.7}
               >
-                <Text style={[styles.filterText, filter === type && styles.filterTextActive]}>
-                  {type}
+                <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
+                  All
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+              {documentTypes.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.filterButton, filter === type && styles.filterButtonActive]}
+                  onPress={() => setFilter(type)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterText, filter === type && styles.filterTextActive]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
-      {documents.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No documents found</Text>
-          <Text style={styles.emptySubtext}>
-            {searchQuery ? 'Try a different search term' : 'You have no documents at this time'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={documents}
-          renderItem={renderDocument}
-          keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={styles.listContent}
-        />
-      )}
+        {documents.length === 0 ? (
+          <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
+            <GlassCard style={styles.emptyState} padding={spacing.xl}>
+              <Text style={styles.emptyIcon}>📄</Text>
+              <Text style={styles.emptyTitle}>No Documents</Text>
+              <Text style={styles.emptySubtext}>
+                {searchQuery ? 'Try a different search term' : 'You have no documents at this time'}
+              </Text>
+            </GlassCard>
+          </Animated.View>
+        ) : (
+          <FlatList
+            data={documents}
+            renderItem={renderDocument}
+            keyExtractor={(item) => item.id}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
     </View>
   );
 };
@@ -198,7 +239,10 @@ const DocumentsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
   },
   centerContainer: {
     flex: 1,
@@ -206,154 +250,157 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 12,
-    color: '#6b7280',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+    ...typography.body,
+    color: colors.textTertiary,
+    marginTop: spacing.md,
   },
   searchContainer: {
+    margin: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  searchInputContainer: {
     flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    gap: 8,
+    alignItems: 'center',
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+    paddingHorizontal: spacing.md,
+  },
+  searchIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.textPrimary,
   },
   searchButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginLeft: spacing.sm,
   },
   searchButtonText: {
-    color: '#ffffff',
+    ...typography.bodySmall,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   filterContainer: {
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.glassBorder,
+  },
+  filterScroll: {
+    paddingHorizontal: spacing.lg,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-    marginHorizontal: 4,
-    marginLeft: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.glassCard,
+    marginRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
   },
   filterButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   filterTextActive: {
-    color: '#ffffff',
+    color: colors.textPrimary,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xl,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 8,
+  emptyState: {
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
+    ...typography.body,
+    color: colors.textTertiary,
     textAlign: 'center',
   },
   listContent: {
-    padding: 16,
+    padding: spacing.lg,
   },
   documentCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: spacing.md,
   },
   documentHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: spacing.md,
+  },
+  documentIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   documentIcon: {
-    fontSize: 32,
-    marginRight: 12,
+    fontSize: 24,
   },
   documentInfo: {
     flex: 1,
   },
   documentName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+    ...typography.h4,
+    marginBottom: spacing.xs,
   },
   documentType: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
     textTransform: 'capitalize',
   },
   documentMeta: {
-    paddingTop: 12,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: colors.glassBorder,
   },
   metaText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginBottom: 4,
+    ...typography.bodySmall,
+    color: colors.textTertiary,
+    marginBottom: spacing.xs,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 6,
+    marginTop: spacing.md,
+    gap: spacing.xs,
   },
   tag: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: `${colors.primary}20`,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   tagText: {
-    fontSize: 12,
-    color: '#3b82f6',
+    ...typography.bodySmall,
+    color: colors.primary,
   },
 });
 
 export default DocumentsScreen;
-

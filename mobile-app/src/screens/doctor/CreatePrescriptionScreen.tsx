@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,14 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import prescriptionService from '../../services/prescription.service';
+import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
+import PrimaryButton from '../../components/shared/PrimaryButton';
 
 const CreatePrescriptionScreen: React.FC = () => {
   const route = useRoute();
@@ -24,6 +29,15 @@ const CreatePrescriptionScreen: React.FC = () => {
   const [instructions, setInstructions] = useState('');
   const [quantity, setQuantity] = useState('');
   const [loading, setLoading] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const handleSubmit = async () => {
     if (!medication || !dosage || !frequency || !duration) {
@@ -35,7 +49,7 @@ const CreatePrescriptionScreen: React.FC = () => {
       setLoading(true);
       await prescriptionService.createPrescription({
         patientId,
-        medicationId: medication, // In real app, this would be selected from drug list
+        medicationId: medication,
         dosage,
         frequency,
         duration,
@@ -54,146 +68,159 @@ const CreatePrescriptionScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>New Prescription</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title="New Prescription" subtitle="Create a new medication prescription" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim }}>
+          <GlassCard style={styles.form} padding={spacing.lg}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Medication *</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>💊</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter medication name"
+                  placeholderTextColor={colors.textTertiary}
+                  value={medication}
+                  onChangeText={setMedication}
+                />
+              </View>
+            </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Medication *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter medication name"
-            value={medication}
-            onChangeText={setMedication}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Dosage *</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>📏</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 500mg"
+                  placeholderTextColor={colors.textTertiary}
+                  value={dosage}
+                  onChangeText={setDosage}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Dosage *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., 500mg"
-            value={dosage}
-            onChangeText={setDosage}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Frequency *</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>⏰</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Twice daily"
+                  placeholderTextColor={colors.textTertiary}
+                  value={frequency}
+                  onChangeText={setFrequency}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Frequency *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., Twice daily"
-            value={frequency}
-            onChangeText={setFrequency}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Duration *</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>📅</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 7 days"
+                  placeholderTextColor={colors.textTertiary}
+                  value={duration}
+                  onChangeText={setDuration}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Duration *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., 7 days"
-            value={duration}
-            onChangeText={setDuration}
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quantity</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>🔢</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Number of tablets/capsules"
+                  placeholderTextColor={colors.textTertiary}
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Quantity</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Number of tablets/capsules"
-            value={quantity}
-            onChangeText={setQuantity}
-            keyboardType="numeric"
-          />
-        </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Instructions</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Additional instructions for patient"
+                  placeholderTextColor={colors.textTertiary}
+                  value={instructions}
+                  onChangeText={setInstructions}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Instructions</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Additional instructions for patient"
-            value={instructions}
-            onChangeText={setInstructions}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Create Prescription</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            <PrimaryButton
+              title="Create Prescription"
+              onPress={handleSubmit}
+              loading={loading}
+              icon="💊"
+            />
+          </GlassCard>
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
-  header: {
-    backgroundColor: '#2563eb',
-    padding: 20,
-    paddingTop: 60,
+  scrollView: {
+    flex: 1,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+  scrollContent: {
+    padding: spacing.lg,
   },
   form: {
-    padding: 15,
+    marginBottom: spacing.xl,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    ...typography.label,
+    marginBottom: spacing.sm,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+    paddingHorizontal: spacing.md,
+  },
+  inputIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
   },
   input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    flex: 1,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.textPrimary,
   },
   textArea: {
-    height: 100,
+    minHeight: 100,
     textAlignVertical: 'top',
-  },
-  submitButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    paddingTop: spacing.md,
   },
 });
 
 export default CreatePrescriptionScreen;
-

@@ -20,11 +20,12 @@ class MARService {
    */
   async getPatientMAR(patientId: string, date?: string): Promise<MAREntry[]> {
     try {
-      const params = date ? { date } : {};
-      const response = await ehrApi.get(`/mar/patient/${patientId}`, { params });
-      return response.data;
+      const url = date ? `/mar/patient/${patientId}?date=${date}` : `/mar/patient/${patientId}`;
+      const response = await ehrApi.get(url);
+      return response.data || response.entries || response || [];
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch MAR');
+      console.error('Error getting MAR:', error);
+      return []; // Return empty array on error
     }
   }
 
@@ -48,8 +49,9 @@ class MARService {
   ): Promise<MAREntry> {
     try {
       const response = await ehrApi.post(`/mar/${entryId}/administer`, data);
-      return response.data;
+      return response.data || response.entry || response;
     } catch (error: any) {
+      console.error('Error recording administration:', error);
       throw new Error(error.response?.data?.message || 'Failed to record administration');
     }
   }
@@ -60,8 +62,9 @@ class MARService {
   async markMissed(entryId: string, reason?: string): Promise<MAREntry> {
     try {
       const response = await ehrApi.post(`/mar/${entryId}/missed`, { reason });
-      return response.data;
+      return response.data || response.entry || response;
     } catch (error: any) {
+      console.error('Error marking as missed:', error);
       throw new Error(error.response?.data?.message || 'Failed to mark as missed');
     }
   }

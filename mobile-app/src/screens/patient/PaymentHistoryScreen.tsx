@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import billingService from '../../services/billing.service';
 import { format } from 'date-fns';
+import { colors, typography, spacing, borderRadius } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
 
 interface Payment {
   id: string;
@@ -31,9 +35,15 @@ const PaymentHistoryScreen: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadPayments();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const loadPayments = async () => {
@@ -59,73 +69,92 @@ const PaymentHistoryScreen: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status.toUpperCase()) {
-      case 'COMPLETED':
-        return '#10b981';
-      case 'PENDING':
-        return '#f59e0b';
-      case 'FAILED':
-        return '#ef4444';
-      default:
-        return '#6b7280';
+      case 'COMPLETED': return colors.success;
+      case 'PENDING': return colors.warning;
+      case 'FAILED': return colors.error;
+      default: return colors.textTertiary;
     }
   };
 
-  const renderPayment = ({ item }: { item: Payment }) => (
-    <TouchableOpacity
-      style={styles.paymentItem}
-      onPress={() => {
-        if (item.billId) {
-          (navigation as any).navigate('PaymentStatus', { transactionId: item.transactionId });
-        }
-      }}
-      activeOpacity={0.7}
+  const renderPayment = ({ item, index }: { item: Payment; index: number }) => (
+    <Animated.View
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [
+            {
+              translateY: fadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            },
+          ],
+        },
+      ]}
     >
-      <View style={styles.paymentHeader}>
-        <View>
-          <Text style={styles.paymentMethod}>{item.paymentMethod || 'Mobile Money'}</Text>
-          <Text style={styles.paymentDate}>
-            {format(new Date(item.createdAt), 'MMM d, yyyy HH:mm')}
-          </Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status}</Text>
-        </View>
-      </View>
-      <View style={styles.paymentAmount}>
-        <Text style={styles.amountText}>
-          {item.currency} {item.amount.toFixed(2)}
-        </Text>
-        <Text style={styles.transactionId}>Ref: {item.transactionId.slice(0, 8)}...</Text>
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => {
+          if (item.billId) {
+            (navigation as any).navigate('PaymentStatus', { transactionId: item.transactionId });
+          }
+        }}
+        activeOpacity={0.8}
+      >
+        <GlassCard style={styles.paymentCard} padding={spacing.lg}>
+          <View style={styles.paymentHeader}>
+            <View style={styles.paymentInfo}>
+              <Text style={styles.paymentMethod}>{item.paymentMethod || 'Mobile Money'}</Text>
+              <Text style={styles.paymentDate}>
+                {format(new Date(item.createdAt), 'MMM d, yyyy HH:mm')}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}20` }]}>
+              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                {item.status}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.paymentAmount}>
+            <Text style={styles.amountText}>
+              {item.currency} {item.amount.toFixed(2)}
+            </Text>
+            <Text style={styles.transactionId}>Ref: {item.transactionId.slice(0, 8)}...</Text>
+          </View>
+        </GlassCard>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Payment History" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Payment History</Text>
-      </View>
-
+      <ScreenHeader title="Payment History" subtitle="View your payment transactions" />
       <FlatList
         data={payments}
         renderItem={renderPayment}
         keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No payment history</Text>
-          </View>
+          <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
+            <GlassCard style={styles.emptyState} padding={spacing.xl}>
+              <Text style={styles.emptyIcon}>💳</Text>
+              <Text style={styles.emptyTitle}>No Payment History</Text>
+              <Text style={styles.emptySubtext}>Your payment transactions will appear here</Text>
+            </GlassCard>
+          </Animated.View>
         }
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -134,89 +163,83 @@ const PaymentHistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+  listContent: {
+    padding: spacing.lg,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  paymentItem: {
-    backgroundColor: '#fff',
-    padding: 15,
-    marginHorizontal: 15,
-    marginTop: 10,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  paymentCard: {
+    marginBottom: spacing.md,
   },
   paymentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: spacing.md,
+  },
+  paymentInfo: {
+    flex: 1,
   },
   paymentMethod: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
-    color: '#1f2937',
+    marginBottom: spacing.xs,
   },
   paymentDate: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
+    ...typography.bodySmall,
+    color: colors.textTertiary,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
+    ...typography.labelSmall,
+    fontSize: 10,
     textTransform: 'uppercase',
   },
   paymentAmount: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: colors.glassBorder,
   },
   amountText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    ...typography.h4,
   },
   transactionId: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    paddingTop: spacing.xl * 2,
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
+  emptyState: {
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    ...typography.body,
+    color: colors.textTertiary,
+    textAlign: 'center',
   },
 });
 

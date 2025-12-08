@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import billingService from '../../services/billing.service';
+import { colors, typography, spacing, borderRadius } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
+import PrimaryButton from '../../components/shared/PrimaryButton';
 
 const PaymentStatusScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -19,11 +24,17 @@ const PaymentStatusScreen: React.FC = () => {
   const [status, setStatus] = useState<string>('PENDING');
   const [checking, setChecking] = useState(false);
   const [autoCheck, setAutoCheck] = useState(true);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+
     if (autoCheck && transactionId) {
       checkStatus();
-      // Auto-check every 5 seconds
       const interval = setInterval(() => {
         checkStatus();
       }, 5000);
@@ -78,122 +89,107 @@ const PaymentStatusScreen: React.FC = () => {
 
   const getStatusColor = () => {
     switch (status) {
-      case 'COMPLETED':
-        return '#10b981';
-      case 'PENDING':
-        return '#f59e0b';
+      case 'COMPLETED': return colors.success;
+      case 'PENDING': return colors.warning;
       case 'FAILED':
-      case 'EXPIRED':
-        return '#ef4444';
-      default:
-        return '#6b7280';
+      case 'EXPIRED': return colors.error;
+      default: return colors.textTertiary;
     }
   };
 
   const getStatusMessage = () => {
     switch (status) {
-      case 'COMPLETED':
-        return 'Payment completed successfully!';
-      case 'PENDING':
-        return 'Waiting for payment confirmation...';
-      case 'FAILED':
-        return 'Payment failed. Please try again.';
-      case 'EXPIRED':
-        return 'Payment request expired. Please create a new payment.';
-      default:
-        return 'Checking payment status...';
+      case 'COMPLETED': return 'Payment completed successfully!';
+      case 'PENDING': return 'Waiting for payment confirmation...';
+      case 'FAILED': return 'Payment failed. Please try again.';
+      case 'EXPIRED': return 'Payment request expired. Please create a new payment.';
+      default: return 'Checking payment status...';
     }
   };
 
+  const statusColor = getStatusColor();
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Payment Status</Text>
-      </View>
-
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusIcon, { backgroundColor: getStatusColor() + '20' }]}>
-          {status === 'PENDING' && checking ? (
-            <ActivityIndicator size="large" color={getStatusColor()} />
-          ) : (
-            <Text style={[styles.statusIconText, { color: getStatusColor() }]}>
-              {status === 'COMPLETED' ? '✓' : status === 'FAILED' || status === 'EXPIRED' ? '✗' : '⏳'}
+    <View style={styles.container}>
+      <ScreenHeader title="Payment Status" />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim }}>
+          <GlassCard style={styles.statusContainer} padding={spacing.xl}>
+            <View style={[styles.statusIcon, { backgroundColor: `${statusColor}20` }]}>
+              {status === 'PENDING' && checking ? (
+                <ActivityIndicator size="large" color={statusColor} />
+              ) : (
+                <Text style={[styles.statusIconText, { color: statusColor }]}>
+                  {status === 'COMPLETED' ? '✓' : status === 'FAILED' || status === 'EXPIRED' ? '✗' : '⏳'}
+                </Text>
+              )}
+            </View>
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {status}
             </Text>
+            <Text style={styles.statusMessage}>{getStatusMessage()}</Text>
+          </GlassCard>
+
+          {instructions && (
+            <GlassCard style={styles.instructionsCard} padding={spacing.lg}>
+              <Text style={styles.instructionsTitle}>Payment Instructions</Text>
+              <Text style={styles.instructionsText}>{instructions}</Text>
+            </GlassCard>
           )}
-        </View>
-        <Text style={[styles.statusText, { color: getStatusColor() }]}>
-          {status}
-        </Text>
-        <Text style={styles.statusMessage}>{getStatusMessage()}</Text>
-      </View>
 
-      {instructions && (
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>Payment Instructions</Text>
-          <Text style={styles.instructionsText}>{instructions}</Text>
-        </View>
-      )}
+          {status === 'PENDING' && (
+            <GlassCard style={styles.infoCard} padding={spacing.lg}>
+              <Text style={styles.infoTitle}>What to do next:</Text>
+              <Text style={styles.infoText}>
+                1. Follow the payment instructions above{'\n'}
+                2. Complete the payment on your mobile money app{'\n'}
+                3. Wait for confirmation (usually within 2-3 minutes){'\n'}
+                4. This page will automatically update when payment is confirmed
+              </Text>
+            </GlassCard>
+          )}
 
-      {status === 'PENDING' && (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>What to do next:</Text>
-          <Text style={styles.infoText}>
-            1. Follow the payment instructions above{'\n'}
-            2. Complete the payment on your mobile money app{'\n'}
-            3. Wait for confirmation (usually within 2-3 minutes){'\n'}
-            4. This page will automatically update when payment is confirmed
-          </Text>
-        </View>
-      )}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => navigation.navigate('Billing' as never)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>Back to Billing</Text>
+            </TouchableOpacity>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
-          onPress={() => navigation.navigate('Billing' as never)}
-        >
-          <Text style={styles.secondaryButtonText}>Back to Billing</Text>
-        </TouchableOpacity>
-
-        {status === 'PENDING' && (
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={checkStatus}
-            disabled={checking}
-          >
-            {checking ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Check Status</Text>
+            {status === 'PENDING' && (
+              <PrimaryButton
+                title="Check Status"
+                onPress={checkStatus}
+                loading={checking}
+              />
             )}
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
   },
-  header: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+  scrollView: {
+    flex: 1,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+  scrollContent: {
+    padding: spacing.lg,
   },
   statusContainer: {
     alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#ffffff',
-    margin: 16,
-    borderRadius: 12,
+    marginBottom: spacing.lg,
   },
   statusIcon: {
     width: 80,
@@ -201,89 +197,60 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   statusIconText: {
     fontSize: 40,
   },
   statusText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    ...typography.h2,
+    marginBottom: spacing.sm,
   },
   statusMessage: {
-    fontSize: 16,
-    color: '#6b7280',
+    ...typography.body,
     textAlign: 'center',
   },
   instructionsCard: {
-    backgroundColor: '#ffffff',
-    margin: 16,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: spacing.lg,
   },
   instructionsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
+    ...typography.h4,
+    marginBottom: spacing.md,
   },
   instructionsText: {
-    fontSize: 15,
-    color: '#4b5563',
-    lineHeight: 22,
+    ...typography.body,
+    lineHeight: 24,
   },
   infoCard: {
-    backgroundColor: '#eff6ff',
-    margin: 16,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: spacing.lg,
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: colors.primary,
   },
   infoTitle: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   infoText: {
-    fontSize: 14,
-    color: '#4b5563',
-    lineHeight: 20,
+    ...typography.bodySmall,
+    lineHeight: 22,
   },
   actions: {
-    padding: 16,
-    gap: 12,
-  },
-  button: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  primaryButton: {
-    backgroundColor: '#3b82f6',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    gap: spacing.md,
   },
   secondaryButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.glassBorder,
   },
   secondaryButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
+    color: colors.textTertiary,
   },
 });
 
 export default PaymentStatusScreen;
-
-
-

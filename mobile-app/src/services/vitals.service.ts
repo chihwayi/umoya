@@ -24,8 +24,9 @@ class VitalsService {
   async recordVitals(data: Vitals): Promise<Vitals> {
     try {
       const response = await ehrApi.post('/vitals', data);
-      return response.data;
+      return response.vitals || response.data || response;
     } catch (error: any) {
+      console.error('Error recording vitals:', error);
       throw new Error(error.response?.data?.message || 'Failed to record vitals');
     }
   }
@@ -36,9 +37,10 @@ class VitalsService {
   async getPatientVitals(patientId: string): Promise<Vitals[]> {
     try {
       const response = await ehrApi.get(`/vitals/patient/${patientId}`);
-      return response.data;
+      return response.vitals || response.data || response || [];
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch vitals');
+      console.error('Error getting vitals:', error);
+      return []; // Return empty array on error
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,15 @@ import {
   Alert,
   Linking,
   Share,
+  Animated,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import documentService, { Document } from '../../services/document.service';
 import { format } from 'date-fns';
+import { colors, typography, spacing, borderRadius } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
+import PrimaryButton from '../../components/shared/PrimaryButton';
 
 const DocumentViewerScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -23,9 +28,15 @@ const DocumentViewerScreen: React.FC = () => {
   const [viewUrl, setViewUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [loadingUrl, setLoadingUrl] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadDocument();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, [documentId]);
 
   const loadDocument = async () => {
@@ -71,7 +82,6 @@ const DocumentViewerScreen: React.FC = () => {
       const url = await documentService.getDocumentViewUrl(documentId);
       
       if (url) {
-        // For mobile, we'll open the URL which typically triggers download
         const canOpen = await Linking.canOpenURL(url);
         if (canOpen) {
           await Linking.openURL(url);
@@ -106,23 +116,23 @@ const DocumentViewerScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading document...</Text>
+      <View style={styles.container}>
+        <ScreenHeader title="Document" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading document...</Text>
+        </View>
       </View>
     );
   }
 
   if (!document) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>Document not found</Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonTextWhite}>Go Back</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ScreenHeader title="Document" />
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorText}>Document not found</Text>
+        </View>
       </View>
     );
   }
@@ -134,273 +144,199 @@ const DocumentViewerScreen: React.FC = () => {
   const fileSize = documentService.formatFileSize(document.fileSize);
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Document
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader title="Document" subtitle={document.documentName} />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim }}>
+          <GlassCard style={styles.documentInfo} padding={spacing.xl}>
+            <Text style={styles.documentIcon}>{fileIcon}</Text>
+            <Text style={styles.documentName}>{document.documentName}</Text>
+            <Text style={styles.documentType}>{document.documentType}</Text>
+          </GlassCard>
 
-      <View style={styles.documentInfo}>
-        <Text style={styles.documentIcon}>{fileIcon}</Text>
-        <Text style={styles.documentName}>{document.documentName}</Text>
-        <Text style={styles.documentType}>{document.documentType}</Text>
-      </View>
-
-      <View style={styles.detailsSection}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>File Size</Text>
-          <Text style={styles.detailValue}>{fileSize}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>File Type</Text>
-          <Text style={styles.detailValue}>{document.mimeType || 'Unknown'}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Uploaded</Text>
-          <Text style={styles.detailValue}>
-            {formattedDate} at {formattedTime}
-          </Text>
-        </View>
-        {document.uploadedByFirstName && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Uploaded By</Text>
-            <Text style={styles.detailValue}>
-              {document.uploadedByFirstName} {document.uploadedByLastName}
-            </Text>
-          </View>
-        )}
-        {document.description && (
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.detailLabel}>Description</Text>
-            <Text style={styles.descriptionText}>{document.description}</Text>
-          </View>
-        )}
-        {document.tags && document.tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            <Text style={styles.detailLabel}>Tags</Text>
-            <View style={styles.tagsList}>
-              {document.tags.map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
+          <GlassCard style={styles.detailsSection} padding={spacing.lg}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>File Size</Text>
+              <Text style={styles.detailValue}>{fileSize}</Text>
             </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>File Type</Text>
+              <Text style={styles.detailValue}>{document.mimeType || 'Unknown'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Uploaded</Text>
+              <Text style={styles.detailValue}>
+                {formattedDate} at {formattedTime}
+              </Text>
+            </View>
+            {document.uploadedByFirstName && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Uploaded By</Text>
+                <Text style={styles.detailValue}>
+                  {document.uploadedByFirstName} {document.uploadedByLastName}
+                </Text>
+              </View>
+            )}
+            {document.description && (
+              <View style={styles.descriptionContainer}>
+                <Text style={styles.detailLabel}>Description</Text>
+                <Text style={styles.descriptionText}>{document.description}</Text>
+              </View>
+            )}
+            {document.tags && document.tags.length > 0 && (
+              <View style={styles.tagsContainer}>
+                <Text style={styles.detailLabel}>Tags</Text>
+                <View style={styles.tagsList}>
+                  {document.tags.map((tag, index) => (
+                    <View key={index} style={styles.tag}>
+                      <Text style={styles.tagText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </GlassCard>
+
+          <View style={styles.actions}>
+            <PrimaryButton
+              title="View Document"
+              onPress={handleView}
+              loading={loadingUrl}
+              icon="👁️"
+            />
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleDownload}
+              disabled={loadingUrl}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>⬇️ Download</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>📤 Share</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.viewButton]}
-          onPress={handleView}
-          disabled={loadingUrl}
-        >
-          {loadingUrl ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <>
-              <Text style={styles.actionButtonIcon}>👁️</Text>
-              <Text style={styles.actionButtonText}>View Document</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.downloadButton]}
-          onPress={handleDownload}
-          disabled={loadingUrl}
-        >
-          {loadingUrl ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <>
-              <Text style={styles.actionButtonIcon}>⬇️</Text>
-              <Text style={styles.actionButtonText}>Download</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.shareButton]}
-          onPress={handleShare}
-        >
-          <Text style={styles.actionButtonIcon}>📤</Text>
-          <Text style={styles.actionButtonText}>Share</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
   },
   loadingText: {
-    marginTop: 12,
-    color: '#6b7280',
+    ...typography.body,
+    color: colors.textTertiary,
+    marginTop: spacing.md,
   },
   errorText: {
-    fontSize: 16,
-    color: '#ef4444',
-    marginBottom: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3b82f6',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-    marginHorizontal: 16,
+    ...typography.body,
+    color: colors.error,
   },
   documentInfo: {
-    backgroundColor: '#ffffff',
-    padding: 24,
     alignItems: 'center',
-    margin: 16,
-    borderRadius: 12,
+    marginBottom: spacing.lg,
   },
   documentIcon: {
     fontSize: 64,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   documentName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+    ...typography.h3,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   documentType: {
-    fontSize: 16,
-    color: '#6b7280',
+    ...typography.body,
+    color: colors.textTertiary,
     textTransform: 'capitalize',
   },
   detailsSection: {
-    backgroundColor: '#ffffff',
-    margin: 16,
-    marginTop: 0,
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: spacing.lg,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: colors.glassBorder,
   },
   detailLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
+    ...typography.label,
+    color: colors.textTertiary,
   },
   detailValue: {
-    fontSize: 14,
-    color: '#111827',
-    fontWeight: '500',
+    ...typography.body,
     flex: 1,
     textAlign: 'right',
   },
   descriptionContainer: {
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: colors.glassBorder,
   },
   descriptionText: {
-    fontSize: 14,
-    color: '#4b5563',
-    marginTop: 8,
-    lineHeight: 20,
+    ...typography.body,
+    marginTop: spacing.sm,
+    lineHeight: 22,
   },
   tagsContainer: {
-    paddingVertical: 12,
+    paddingTop: spacing.md,
   },
   tagsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 6,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
   tag: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    backgroundColor: `${colors.primary}20`,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   tagText: {
-    fontSize: 12,
-    color: '#3b82f6',
-    fontWeight: '500',
+    ...typography.bodySmall,
+    color: colors.primary,
   },
   actions: {
-    padding: 16,
-    gap: 12,
+    gap: spacing.md,
   },
-  actionButton: {
-    flexDirection: 'row',
+  secondaryButton: {
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
   },
-  viewButton: {
-    backgroundColor: '#3b82f6',
-  },
-  downloadButton: {
-    backgroundColor: '#10b981',
-  },
-  shareButton: {
-    backgroundColor: '#6b7280',
-  },
-  actionButtonIcon: {
-    fontSize: 20,
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
+  secondaryButtonText: {
+    ...typography.body,
     fontWeight: '600',
-  },
-  backButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonTextWhite: {
-    color: '#ffffff',
-    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });
 
 export default DocumentViewerScreen;
-
-
-

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,16 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
-import { ehrApi } from '../../config/api';
+import messagingService from '../../services/messaging.service';
 import { format } from 'date-fns';
+import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
 
 interface Message {
   id: string;
@@ -36,36 +40,38 @@ interface Message {
 
 const ProviderMessagingScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { user, token } = useSelector((state: RootState) => state.auth);
-  const { currentTenant } = useSelector((state: RootState) => state.tenant);
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'archived'>('inbox');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadMessages();
     loadUnreadCount();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, [activeTab]);
 
   const loadMessages = async () => {
-    if (!token || !currentTenant?.slug) return;
-
     try {
       setLoading(true);
-      let response;
+      let messages: Message[] = [];
 
       if (activeTab === 'inbox') {
-        response = await ehrApi.getInbox({ limit: 50 }, token, currentTenant.slug);
+        messages = await messagingService.getInbox({ limit: 50 });
       } else if (activeTab === 'sent') {
-        response = await ehrApi.getSentMessages({ limit: 50 }, token, currentTenant.slug);
+        messages = await messagingService.getSentMessages({ limit: 50 });
       } else {
-        response = await ehrApi.getInbox({ status: 'archived', limit: 50 }, token, currentTenant.slug);
+        messages = await messagingService.getInbox({ status: 'archived', limit: 50 });
       }
 
-      setMessages(response.data?.messages || response.data || []);
+      setMessages(messages);
     } catch (error: any) {
       console.error('Error loading messages:', error);
       Alert.alert('Error', error.message || 'Failed to load messages');
@@ -75,11 +81,9 @@ const ProviderMessagingScreen: React.FC = () => {
   };
 
   const loadUnreadCount = async () => {
-    if (!token || !currentTenant?.slug) return;
-
     try {
-      const response = await ehrApi.getUnreadCount(token, currentTenant.slug);
-      setUnreadCount(response.data?.count || 0);
+      const count = await messagingService.getUnreadCount();
+      setUnreadCount(count);
     } catch (error) {
       console.error('Error loading unread count:', error);
     }
@@ -93,15 +97,15 @@ const ProviderMessagingScreen: React.FC = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim() || !token || !currentTenant?.slug) {
+    if (!searchQuery.trim()) {
       loadMessages();
       return;
     }
 
     try {
       setLoading(true);
-      const response = await ehrApi.searchMessages(searchQuery, token, currentTenant.slug);
-      setMessages(response.data || []);
+      const messages = await messagingService.searchMessages(searchQuery);
+      setMessages(messages);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Search failed');
     } finally {
@@ -110,17 +114,13 @@ const ProviderMessagingScreen: React.FC = () => {
   };
 
   const handleMessagePress = async (message: Message) => {
-    if (!token || !currentTenant?.slug) return;
-
     try {
-      // Mark as read if unread
       if (message.status === 'sent' || message.status === 'delivered') {
-        await ehrApi.markMessageAsRead(message.id, token, currentTenant.slug);
+        await messagingService.markAsRead(message.id);
         loadMessages();
         loadUnreadCount();
       }
 
-      // Navigate to message detail/thread
       (navigation as any).navigate('MessageThread', { messageId: message.id });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to open message');
@@ -129,115 +129,162 @@ const ProviderMessagingScreen: React.FC = () => {
 
   const getPriorityColor = (priority?: string) => {
     switch (priority) {
-      case 'urgent': return '#ef4444';
-      case 'high': return '#f97316';
-      case 'normal': return '#3b82f6';
-      case 'low': return '#6b7280';
-      default: return '#6b7280';
+      case 'urgent': return colors.error;
+      case 'high': return colors.warning;
+      case 'normal': return colors.primary;
+      case 'low': return colors.textTertiary;
+      default: return colors.textTertiary;
     }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <TouchableOpacity
-      style={[styles.messageItem, !item.isRead && item.status !== 'read' && styles.unreadMessage]}
-      onPress={() => handleMessagePress(item)}
-      activeOpacity={0.7}
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => (
+    <Animated.View
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [
+            {
+              translateY: fadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            },
+          ],
+        },
+      ]}
     >
-      <View style={styles.messageHeader}>
-        <View style={styles.messageHeaderLeft}>
-          <Text style={styles.senderName}>
-            {activeTab === 'sent' ? (item.recipientName || 'Recipient') : (item.senderName || 'Sender')}
-          </Text>
-          {item.priority && item.priority !== 'normal' && (
-            <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-              <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
+      <TouchableOpacity
+        onPress={() => handleMessagePress(item)}
+        activeOpacity={0.8}
+      >
+        <GlassCard
+          style={[
+            styles.messageCard,
+            !item.isRead && item.status !== 'read' && styles.unreadMessage,
+          ]}
+          padding={spacing.lg}
+        >
+          <View style={styles.messageHeader}>
+            <View style={styles.messageHeaderLeft}>
+              <View style={styles.messageIconContainer}>
+                <Text style={styles.messageIcon}>💬</Text>
+              </View>
+              <View style={styles.messageInfo}>
+                <Text style={styles.senderName}>
+                  {activeTab === 'sent' ? (item.recipientName || 'Recipient') : (item.senderName || 'Sender')}
+                </Text>
+                {item.priority && item.priority !== 'normal' && (
+                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
+                    <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
             </View>
-          )}
-        </View>
-        <Text style={styles.messageDate}>
-          {format(new Date(item.sentAt || item.createdAt), 'MMM d, yyyy')}
-        </Text>
-      </View>
-      <Text style={styles.subject}>{item.subject}</Text>
-      <Text style={styles.preview} numberOfLines={2}>
-        {item.messageText}
-      </Text>
-      {!item.isRead && item.status !== 'read' && <View style={styles.unreadIndicator} />}
-    </TouchableOpacity>
+            <View style={styles.messageMeta}>
+              <Text style={styles.messageDate}>
+                {format(new Date(item.sentAt || item.createdAt), 'MMM d, yyyy')}
+              </Text>
+              {!item.isRead && item.status !== 'read' && <View style={styles.unreadIndicator} />}
+            </View>
+          </View>
+          <Text style={styles.subject}>{item.subject}</Text>
+          <Text style={styles.preview} numberOfLines={2}>
+            {item.messageText}
+          </Text>
+        </GlassCard>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   if (loading && messages.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Messages" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity
-          style={styles.composeButton}
-          onPress={() => (navigation as any).navigate('ComposeMessage')}
-        >
-          <Text style={styles.composeButtonText}>+ Compose</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search messages..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-          <Text style={styles.searchButtonText}>Search</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'inbox' && styles.activeTab]}
-          onPress={() => setActiveTab('inbox')}
-        >
-          <Text style={[styles.tabText, activeTab === 'inbox' && styles.activeTabText]}>
-            Inbox {activeTab === 'inbox' && unreadCount > 0 && `(${unreadCount})`}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'sent' && styles.activeTab]}
-          onPress={() => setActiveTab('sent')}
-        >
-          <Text style={[styles.tabText, activeTab === 'sent' && styles.activeTabText]}>Sent</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'archived' && styles.activeTab]}
-          onPress={() => setActiveTab('archived')}
-        >
-          <Text style={[styles.tabText, activeTab === 'archived' && styles.activeTabText]}>Archived</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages yet</Text>
-          </View>
+      <ScreenHeader
+        title="Messages"
+        subtitle="Communicate with patients and colleagues"
+        rightAction={
+          <TouchableOpacity
+            style={styles.composeButton}
+            onPress={() => (navigation as any).navigate('ComposeMessage')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.composeButtonText}>+ Compose</Text>
+          </TouchableOpacity>
         }
       />
+      <View style={styles.content}>
+        <GlassCard style={styles.searchContainer} padding={spacing.md}>
+          <View style={styles.searchInputContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search messages..."
+              placeholderTextColor={colors.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+            <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.7}>
+              <Text style={styles.searchButtonText}>Search</Text>
+            </TouchableOpacity>
+          </View>
+        </GlassCard>
+
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'inbox' && styles.activeTab]}
+            onPress={() => setActiveTab('inbox')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'inbox' && styles.activeTabText]}>
+              Inbox {activeTab === 'inbox' && unreadCount > 0 && `(${unreadCount})`}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'sent' && styles.activeTab]}
+            onPress={() => setActiveTab('sent')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'sent' && styles.activeTabText]}>Sent</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'archived' && styles.activeTab]}
+            onPress={() => setActiveTab('archived')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'archived' && styles.activeTabText]}>Archived</Text>
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
+              <GlassCard style={styles.emptyState} padding={spacing.xl}>
+                <Text style={styles.emptyIcon}>💬</Text>
+                <Text style={styles.emptyTitle}>No Messages</Text>
+                <Text style={styles.emptySubtext}>Your messages will appear here</Text>
+              </GlassCard>
+            </Animated.View>
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
     </View>
   );
 };
@@ -245,157 +292,186 @@ const ProviderMessagingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
   composeButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   composeButtonText: {
-    color: '#ffffff',
+    ...typography.bodySmall,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   searchContainer: {
+    margin: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  searchInputContainer: {
     flexDirection: 'row',
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    alignItems: 'center',
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+    paddingHorizontal: spacing.md,
+  },
+  searchIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginRight: 8,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.textPrimary,
   },
   searchButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginLeft: spacing.sm,
   },
   searchButtonText: {
-    color: '#ffffff',
+    ...typography.bodySmall,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.glassCard,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.glassBorder,
+    paddingHorizontal: spacing.lg,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#3b82f6',
+    borderBottomColor: colors.primary,
   },
   tabText: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
     fontWeight: '500',
+    color: colors.textTertiary,
   },
   activeTabText: {
-    color: '#3b82f6',
+    color: colors.primary,
     fontWeight: '600',
   },
-  messageItem: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    position: 'relative',
+  listContent: {
+    padding: spacing.lg,
+  },
+  messageCard: {
+    marginBottom: spacing.md,
   },
   unreadMessage: {
-    backgroundColor: '#eff6ff',
+    borderColor: colors.primary,
+    borderWidth: 1,
   },
   messageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
   messageHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+  messageIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  messageIcon: {
+    fontSize: 24,
+  },
+  messageInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
   senderName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginRight: 8,
+    ...typography.h4,
+    marginRight: spacing.sm,
   },
   priorityBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   priorityText: {
-    color: '#ffffff',
+    ...typography.labelSmall,
+    color: colors.textPrimary,
     fontSize: 10,
-    fontWeight: '600',
+  },
+  messageMeta: {
+    alignItems: 'flex-end',
   },
   messageDate: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
+    marginBottom: spacing.xs,
   },
   subject: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#111827',
-    marginBottom: 4,
+    ...typography.body,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
   },
   preview: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
     lineHeight: 20,
   },
   unreadIndicator: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#3b82f6',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
   },
   emptyContainer: {
-    padding: 32,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: spacing.xl * 2,
+  },
+  emptyState: {
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    ...typography.body,
+    color: colors.textTertiary,
+    textAlign: 'center',
   },
 });
 

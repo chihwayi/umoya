@@ -1,15 +1,21 @@
-import { ehrApi } from '../config/api';
+import { ehrApi, API_ENDPOINTS } from '../config/api';
 
 export interface Message {
   id: string;
   senderId: string;
   senderName?: string;
   recipientId: string;
+  recipientName?: string;
   subject: string;
   messageText: string;
-  isRead: boolean;
+  messageType?: string;
+  priority?: string;
+  status: string;
+  isRead?: boolean;
+  sentAt: string;
   createdAt: string;
   threadId?: string;
+  patientId?: string;
   attachments?: Array<{
     id: string;
     fileName: string;
@@ -30,15 +36,70 @@ export interface MessageThread {
 
 class MessagingService {
   /**
+   * Get inbox messages
+   */
+  async getInbox(filters?: { status?: string; priority?: string; limit?: number; offset?: number }): Promise<Message[]> {
+    try {
+      const params = filters || {};
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.INBOX, { params });
+      return response.messages || response.data || response || [];
+    } catch (error: any) {
+      console.error('Error getting inbox:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get sent messages
+   */
+  async getSentMessages(filters?: { limit?: number; offset?: number }): Promise<Message[]> {
+    try {
+      const params = filters || {};
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.SENT, { params });
+      return response.messages || response.data || response || [];
+    } catch (error: any) {
+      console.error('Error getting sent messages:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get unread message count
+   */
+  async getUnreadCount(): Promise<number> {
+    try {
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.UNREAD_COUNT);
+      return response.count || response.data?.count || 0;
+    } catch (error: any) {
+      console.error('Error getting unread count:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Search messages
+   */
+  async searchMessages(query: string): Promise<Message[]> {
+    try {
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.SEARCH, { params: { q: query } });
+      return response.messages || response.data || response || [];
+    } catch (error: any) {
+      console.error('Error searching messages:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get patient messages
    */
   async getPatientMessages(patientId: string, filters?: { unreadOnly?: boolean }): Promise<Message[]> {
     try {
       const params = filters || {};
       const response = await ehrApi.get(`/messages/patient/${patientId}`, { params });
-      return response.data || response;
+      return response.messages || response.data || response || [];
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch messages');
+      console.error('Error getting patient messages:', error);
+      return [];
     }
   }
 
@@ -47,10 +108,11 @@ class MessagingService {
    */
   async getMessage(messageId: string): Promise<Message> {
     try {
-      const response = await ehrApi.get(`/messages/${messageId}`);
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.BY_ID(messageId));
       return response.data || response;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch message');
+      console.error('Error getting message:', error);
+      throw error;
     }
   }
 
@@ -59,10 +121,11 @@ class MessagingService {
    */
   async getMessageThread(threadId: string): Promise<MessageThread> {
     try {
-      const response = await ehrApi.get(`/messages/threads/${threadId}`);
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.THREAD(threadId));
       return response.data || response;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch thread');
+      console.error('Error getting thread:', error);
+      throw error;
     }
   }
 
@@ -74,12 +137,15 @@ class MessagingService {
     subject: string;
     messageText: string;
     threadId?: string;
+    priority?: string;
+    patientId?: string;
   }): Promise<Message> {
     try {
-      const response = await ehrApi.post('/messages', messageData);
+      const response = await ehrApi.post(API_ENDPOINTS.MESSAGING.SEND, messageData);
       return response.data || response;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to send message');
+      console.error('Error sending message:', error);
+      throw error;
     }
   }
 
@@ -88,10 +154,11 @@ class MessagingService {
    */
   async replyToMessage(messageId: string, replyText: string): Promise<Message> {
     try {
-      const response = await ehrApi.post(`/messages/${messageId}/reply`, { messageText: replyText });
+      const response = await ehrApi.post(API_ENDPOINTS.MESSAGING.REPLY(messageId), { messageText: replyText });
       return response.data || response;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to reply to message');
+      console.error('Error replying to message:', error);
+      throw error;
     }
   }
 
@@ -100,21 +167,49 @@ class MessagingService {
    */
   async markAsRead(messageId: string): Promise<void> {
     try {
-      await ehrApi.put(`/messages/${messageId}/read`, {});
+      await ehrApi.put(API_ENDPOINTS.MESSAGING.MARK_READ(messageId), {});
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to mark message as read');
+      console.error('Error marking message as read:', error);
+      throw error;
     }
   }
 
   /**
-   * Get unread count
+   * Archive message
    */
-  async getUnreadCount(patientId: string): Promise<number> {
+  async archiveMessage(messageId: string): Promise<void> {
     try {
-      const response = await ehrApi.get(`/messages/unread-count`, { params: { patientId } });
-      return response.data?.count || response.data || 0;
+      await ehrApi.post(API_ENDPOINTS.MESSAGING.ARCHIVE(messageId), {});
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to get unread count');
+      console.error('Error archiving message:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get message templates
+   */
+  async getTemplates(category?: string): Promise<any[]> {
+    try {
+      const params = category ? { category } : {};
+      const response = await ehrApi.get(API_ENDPOINTS.MESSAGING.TEMPLATES, { params });
+      return response.templates || response.data || response || [];
+    } catch (error: any) {
+      console.error('Error getting templates:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Apply message template
+   */
+  async applyTemplate(templateId: string, variables: any): Promise<string> {
+    try {
+      const response = await ehrApi.post(API_ENDPOINTS.MESSAGING.APPLY_TEMPLATE(templateId), { variables });
+      return response.content || response.data?.content || response;
+    } catch (error: any) {
+      console.error('Error applying template:', error);
+      throw error;
     }
   }
 }

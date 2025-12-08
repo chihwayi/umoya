@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import messagingService, { Message } from '../../services/messaging.service';
 import { format } from 'date-fns';
+import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
+import ScreenHeader from '../../components/shared/ScreenHeader';
+import GlassCard from '../../components/shared/GlassCard';
 
 const PatientMessagingScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -20,9 +24,15 @@ const PatientMessagingScreen: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadMessages();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const loadMessages = async () => {
@@ -46,58 +56,90 @@ const PatientMessagingScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <TouchableOpacity
-      style={styles.messageItem}
-      onPress={() => (navigation as any).navigate('MessageThread', { messageId: item.id })}
-      activeOpacity={0.7}
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => (
+    <Animated.View
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [
+            {
+              translateY: fadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            },
+          ],
+        },
+      ]}
     >
-      <View style={styles.messageHeader}>
-        <Text style={styles.senderName}>{item.senderName || 'Provider'}</Text>
-        <Text style={styles.messageDate}>
-          {format(new Date(item.createdAt), 'MMM d, yyyy')}
-        </Text>
-      </View>
-      <Text style={styles.subject}>{item.subject}</Text>
-      <Text style={styles.preview} numberOfLines={2}>
-        {item.messageText}
-      </Text>
-      {!item.isRead && <View style={styles.unreadIndicator} />}
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => (navigation as any).navigate('MessageThread', { messageId: item.id })}
+        activeOpacity={0.8}
+      >
+        <GlassCard style={styles.messageCard} padding={spacing.lg}>
+          <View style={styles.messageHeader}>
+            <View style={styles.messageIconContainer}>
+              <Text style={styles.messageIcon}>💬</Text>
+            </View>
+            <View style={styles.messageInfo}>
+              <Text style={styles.senderName}>{item.senderName || 'Provider'}</Text>
+              <Text style={styles.messageDate}>
+                {format(new Date(item.createdAt), 'MMM d, yyyy')}
+              </Text>
+            </View>
+            {!item.isRead && <View style={styles.unreadIndicator} />}
+          </View>
+          <Text style={styles.subject}>{item.subject}</Text>
+          <Text style={styles.preview} numberOfLines={2}>
+            {item.messageText}
+          </Text>
+        </GlassCard>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+      <View style={styles.container}>
+        <ScreenHeader title="Messages" />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity
-          style={styles.composeButton}
-          onPress={() => (navigation as any).navigate('ComposeMessage')}
-        >
-          <Text style={styles.composeButtonText}>+ Compose</Text>
-        </TouchableOpacity>
-      </View>
-
+      <ScreenHeader
+        title="Messages"
+        subtitle="Communicate with your healthcare team"
+        rightAction={
+          <TouchableOpacity
+            style={styles.composeButton}
+            onPress={() => (navigation as any).navigate('ComposeMessage')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.composeButtonText}>+ Compose</Text>
+          </TouchableOpacity>
+        }
+      />
       <FlatList
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages yet</Text>
-          </View>
+          <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
+            <GlassCard style={styles.emptyState} padding={spacing.xl}>
+              <Text style={styles.emptyIcon}>💬</Text>
+              <Text style={styles.emptyTitle}>No Messages</Text>
+              <Text style={styles.emptySubtext}>Your messages will appear here</Text>
+            </GlassCard>
+          </Animated.View>
         }
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -106,88 +148,94 @@ const PatientMessagingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
   composeButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   composeButtonText: {
-    color: '#fff',
+    ...typography.bodySmall,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
-  messageItem: {
-    backgroundColor: '#fff',
-    padding: 15,
-    marginHorizontal: 15,
-    marginTop: 10,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+  listContent: {
+    padding: spacing.lg,
+  },
+  messageCard: {
+    marginBottom: spacing.md,
   },
   messageHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 5,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  messageIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: `${colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  messageIcon: {
+    fontSize: 24,
+  },
+  messageInfo: {
+    flex: 1,
   },
   senderName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
+    ...typography.h4,
+    marginBottom: spacing.xs,
   },
   messageDate: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
   },
   subject: {
-    fontSize: 14,
+    ...typography.body,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 5,
+    marginBottom: spacing.sm,
   },
   preview: {
-    fontSize: 13,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
   },
   unreadIndicator: {
-    position: 'absolute',
-    right: 15,
-    top: 15,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#3b82f6',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
+    paddingTop: spacing.xl * 2,
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
+  emptyState: {
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    ...typography.body,
+    color: colors.textTertiary,
+    textAlign: 'center',
   },
 });
 
