@@ -11,24 +11,71 @@ import {
   Dimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
 import { format, parseISO, isToday, isPast, isFuture } from 'date-fns';
 import appointmentService, { Appointment } from '../../services/appointment.service';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
 import ScreenHeader from '../../components/shared/ScreenHeader';
 import GlassCard from '../../components/shared/GlassCard';
+import Icon from '../../components/shared/Icon';
+import { useAlert } from '../../hooks/useAlert';
+import { useToast } from '../../hooks/useToast';
+import { storageUtils } from '../../utils/storage';
+import { clearCredentials } from '../../store/slices/auth.slice';
+import { ehrApi, API_ENDPOINTS } from '../../config/api';
 
 const { width } = Dimensions.get('window');
 
 const DoctorDashboard: React.FC = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  
+  // Beautiful alerts and toasts
+  const { showAlert, AlertComponent } = useAlert();
+  const { showToast, ToastComponent } = useToast();
+
+  const handleLogout = () => {
+    showAlert(
+      'Logout',
+      'Are you sure you want to logout?',
+      'confirm',
+      {
+        confirmText: 'Logout',
+        cancelText: 'Cancel',
+        onConfirm: async () => {
+          try {
+            // Call logout API
+            try {
+              await ehrApi.post(API_ENDPOINTS.AUTH.LOGOUT);
+            } catch (error) {
+              // Continue with logout even if API call fails
+              console.log('Logout API call failed, continuing with local logout');
+            }
+
+            // Clear auth state
+            await storageUtils.clearAuth();
+            dispatch(clearCredentials());
+
+            // Navigate to login
+            (navigation as any).reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } catch (error) {
+            console.error('Logout error:', error);
+            showToast('Error during logout', 'error', 'Logout Failed');
+          }
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -152,17 +199,35 @@ const DoctorDashboard: React.FC = () => {
   const scheduledAppointments = appointments.filter((apt) => apt.status === 'scheduled');
   const checkedInAppointments = appointments.filter((apt) => apt.status === 'checked_in');
   const inProgressAppointments = appointments.filter((apt) => apt.status === 'in_progress');
-  const upcomingAppointments = scheduledAppointments.filter((apt) => {
+  // Show all scheduled appointments for today (not just future ones)
+  const todayScheduledAppointments = scheduledAppointments.filter((apt) => {
     const aptTime = parseISO(apt.appointmentDate);
-    return isFuture(aptTime) || (isToday(aptTime) && !isPast(aptTime));
+    return isToday(aptTime);
   });
 
   const stats = {
     total: appointments.length,
-    upcoming: upcomingAppointments.length,
+    upcoming: todayScheduledAppointments.length,
     checkedIn: checkedInAppointments.length,
     inProgress: inProgressAppointments.length,
   };
+
+  const logoutButton = (
+    <TouchableOpacity
+      onPress={handleLogout}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.error + '20',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      activeOpacity={0.7}
+    >
+      <Icon name="logout" size={20} color={colors.error} />
+    </TouchableOpacity>
+  );
 
   const userName = user
     ? `${(user as any).first_name || (user as any).firstName || ''} ${(user as any).last_name || (user as any).lastName || ''}`.trim()
@@ -171,7 +236,12 @@ const DoctorDashboard: React.FC = () => {
   if (loading && appointments.length === 0) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Today's Schedule" subtitle={`Welcome, Dr. ${userName}`} showBack={false} />
+        <ScreenHeader 
+          title="Today's Schedule" 
+          subtitle={`Welcome, Dr. ${userName}`} 
+          showBack={false}
+          rightAction={logoutButton}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading schedule...</Text>
@@ -182,7 +252,12 @@ const DoctorDashboard: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Today's Schedule" subtitle={`Welcome, Dr. ${userName}`} showBack={false} />
+      <ScreenHeader 
+        title="Today's Schedule" 
+        subtitle={`Welcome, Dr. ${userName}`} 
+        showBack={false}
+        rightAction={logoutButton}
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -335,8 +410,8 @@ const DoctorDashboard: React.FC = () => {
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
             </View>
-            {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.slice(0, 5).map((appointment) => {
+            {todayScheduledAppointments.length > 0 ? (
+              todayScheduledAppointments.slice(0, 5).map((appointment) => {
                 const timeStatus = getTimeStatus(appointment.appointmentDate);
                 return (
                   <GlassCard key={appointment.id} style={styles.appointmentCard}>
@@ -427,6 +502,9 @@ const DoctorDashboard: React.FC = () => {
           </View>
         </Animated.View>
       </ScrollView>
+      {/* Beautiful Alerts and Toasts */}
+      {AlertComponent}
+      {ToastComponent}
     </View>
   );
 };

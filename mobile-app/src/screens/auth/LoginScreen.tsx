@@ -26,6 +26,25 @@ import { colors, shadows } from '../../theme/designSystem';
 
 const { width, height } = Dimensions.get('window');
 
+// Calculate responsive dimensions
+const isSmallScreen = height < 700;
+const isMediumScreen = height >= 700 && height < 900;
+const isLargeScreen = height >= 900;
+
+// Dynamic spacing based on screen size
+const getResponsiveSpacing = () => {
+  if (isSmallScreen) return { small: 8, medium: 12, large: 16, xlarge: 20 };
+  if (isMediumScreen) return { small: 12, medium: 16, large: 24, xlarge: 32 };
+  return { small: 16, medium: 20, large: 32, xlarge: 40 };
+};
+
+// Dynamic font sizes
+const getResponsiveFonts = () => {
+  if (isSmallScreen) return { title: 32, subtitle: 16, formTitle: 24, input: 15 };
+  if (isMediumScreen) return { title: 38, subtitle: 17, formTitle: 26, input: 16 };
+  return { title: 42, subtitle: 18, formTitle: 28, input: 16 };
+};
+
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -187,180 +206,210 @@ const LoginScreen: React.FC = () => {
     );
   }
 
+  const spacing = getResponsiveSpacing();
+  const fonts = getResponsiveFonts();
+
+  // Calculate dynamic spacing based on screen height - Ultra compact for small screens
+  const logoSectionHeight = isSmallScreen ? Math.min(height * 0.10, 80) : isMediumScreen ? height * 0.13 : height * 0.16;
+  const formCardPadding = isSmallScreen ? 10 : isMediumScreen ? 16 : 22;
+  const inputSpacing = isSmallScreen ? 8 : isMediumScreen ? 12 : 16;
+  const logoSize = isSmallScreen ? 50 : isMediumScreen ? 80 : 110;
+  const logoMarginBottom = isSmallScreen ? 4 : isMediumScreen ? 12 : 20;
+  const tenantBadgeMarginBottom = isSmallScreen ? 6 : isMediumScreen ? 10 : 14;
+
   return (
     <>
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        enabled={Platform.OS === 'ios'}
       >
         {/* Animated Background Gradient */}
         <Animated.View style={[styles.backgroundGradient, { opacity: fadeAnim }]} />
 
-        {/* Content */}
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+        <ScrollView
+          style={styles.contentWrapper}
+          contentContainerStyle={{ height: height, flexGrow: 1 }}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Logo Section */}
+          {/* Content Container - Uses flexbox to fit content without scrolling */}
           <Animated.View
             style={[
-              styles.logoSection,
+              styles.content,
               {
-                transform: [{ scale: logoScale }],
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+                flex: 1,
+                justifyContent: 'center',
+                paddingVertical: isSmallScreen ? 4 : isMediumScreen ? 12 : 20,
+                minHeight: height,
+                maxHeight: height,
               },
             ]}
           >
+            {/* Logo Section - Dynamic sizing - More compact */}
             <Animated.View
               style={[
-                styles.logoContainer,
+                styles.logoSection,
                 {
                   transform: [{ scale: logoScale }],
+                  marginBottom: logoMarginBottom,
+                  height: logoSectionHeight,
+                  justifyContent: 'center',
                 },
               ]}
             >
-              <View style={styles.logoImageContainer}>
-                <Image
-                  source={require('../../../assets/logo.png')}
-                  style={styles.logoImage}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.logoGlow} />
-            </Animated.View>
-            <Text style={styles.title}>MediCore</Text>
-            <Text style={styles.subtitle}>Healthcare Excellence</Text>
-            <View style={styles.titleUnderline} />
-          </Animated.View>
-
-          {/* Cached Tenant Badge */}
-          {cachedTenant && (
-            <Animated.View
-              style={[
-                styles.tenantBadge,
-                {
-                  opacity: fadeAnim,
-                },
-              ]}
-            >
-              <View style={styles.tenantBadgeContent}>
-                <View style={styles.tenantIcon}>
-                  <Text style={styles.tenantIconText}>🏥</Text>
+              <Animated.View
+                style={[
+                  styles.logoContainer,
+                  {
+                    transform: [{ scale: logoScale }],
+                  },
+                ]}
+              >
+                <View style={[styles.logoImageContainer, { width: logoSize, height: logoSize }]}>
+                  <Image
+                    source={require('../../../assets/logo.png')}
+                    style={[styles.logoImage, { width: logoSize, height: logoSize }]}
+                    resizeMode="contain"
+                  />
                 </View>
-                <View style={styles.tenantInfo}>
-                  <Text style={styles.tenantLabel}>Clinic</Text>
-                  <Text style={styles.tenantName} numberOfLines={1}>
-                    {cachedTenant.name}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={handleChangeTenant}
-                  style={styles.changeButton}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.changeButtonText}>Change</Text>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
-
-          {/* Login Form Card */}
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Welcome Back</Text>
-            <Text style={styles.formSubtitle}>Sign in to continue</Text>
-
-            {/* Email Input */}
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputIcon}>✉️</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="your.email@example.com"
-                  placeholderTextColor={colors.textMuted}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            {/* Password Input */}
-            <View style={styles.inputWrapper}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputIcon}>🔒</Text>
-                <TextInput
-                  style={[styles.input, styles.passwordInput]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={colors.textMuted}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoComplete="password"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.textOnPrimary} />
-              ) : (
+                <View style={[styles.logoGlow, { width: logoSize + 20, height: logoSize + 20 }]} />
+              </Animated.View>
+              <Text style={[styles.title, { fontSize: fonts.title, marginBottom: isSmallScreen ? 2 : 6 }]}>MediCore</Text>
+              {isLargeScreen && (
                 <>
-                  <Text style={styles.loginButtonText}>Sign In</Text>
-                  <Text style={styles.loginButtonIcon}>→</Text>
+                  <Text style={[styles.subtitle, { fontSize: fonts.subtitle, marginBottom: 8 }]}>Healthcare Excellence</Text>
+                  <View style={styles.titleUnderline} />
                 </>
               )}
-            </TouchableOpacity>
+            </Animated.View>
 
-            {/* Change Clinic Link */}
+            {/* Cached Tenant Badge - Compact on small screens */}
             {cachedTenant && (
-              <TouchableOpacity
-                style={styles.tenantLink}
-                onPress={handleChangeTenant}
-                activeOpacity={0.7}
+              <Animated.View
+                style={[
+                  styles.tenantBadge,
+                  {
+                    opacity: fadeAnim,
+                    marginBottom: tenantBadgeMarginBottom,
+                  },
+                ]}
               >
-                <Text style={styles.tenantLinkText}>
-                  <Text style={styles.tenantLinkIcon}>🔄</Text> Change Clinic
-                </Text>
-              </TouchableOpacity>
+                <View style={[styles.tenantBadgeContent, { padding: isSmallScreen ? 10 : 14 }]}>
+                  <View style={[styles.tenantIcon, { width: isSmallScreen ? 36 : 44, height: isSmallScreen ? 36 : 44 }]}>
+                    <Text style={[styles.tenantIconText, { fontSize: isSmallScreen ? 20 : 24 }]}>🏥</Text>
+                  </View>
+                  <View style={styles.tenantInfo}>
+                    <Text style={[styles.tenantLabel, { fontSize: isSmallScreen ? 10 : 12 }]}>Clinic</Text>
+                    <Text style={[styles.tenantName, { fontSize: isSmallScreen ? 13 : 15 }]} numberOfLines={1}>
+                      {cachedTenant.name}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleChangeTenant}
+                    style={[styles.changeButton, { paddingHorizontal: isSmallScreen ? 12 : 16, paddingVertical: isSmallScreen ? 6 : 8 }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.changeButtonText, { fontSize: isSmallScreen ? 11 : 13 }]}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
             )}
-          </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              © {new Date().getFullYear()} MediCore Solutions
-            </Text>
-            <Text style={styles.footerSubtext}>Built for Zimbabwe's healthcare sector</Text>
-          </View>
-        </Animated.View>
+            {/* Login Form Card - Dynamic padding and spacing */}
+            <View style={[styles.formCard, { padding: formCardPadding }]}>
+              <Text style={[styles.formTitle, { fontSize: fonts.formTitle, marginBottom: isSmallScreen ? 2 : 6 }]}>Welcome Back</Text>
+              <Text style={[styles.formSubtitle, { fontSize: fonts.input, marginBottom: isSmallScreen ? 12 : 16 }]}>Sign in to continue</Text>
+
+              {/* Email Input */}
+              <View style={[styles.inputWrapper, { marginBottom: inputSpacing }]}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputIcon}>✉️</Text>
+                  <TextInput
+                    style={[styles.input, { fontSize: fonts.input }]}
+                    placeholder="your.email@example.com"
+                    placeholderTextColor={colors.textMuted}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              {/* Password Input */}
+              <View style={[styles.inputWrapper, { marginBottom: inputSpacing }]}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputIcon}>🔒</Text>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput, { fontSize: fonts.input }]}
+                    placeholder="Enter your password"
+                    placeholderTextColor={colors.textMuted}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoComplete="password"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Login Button - Always visible */}
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled, { paddingVertical: isSmallScreen ? 10 : 14 }]}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.textOnPrimary} />
+                ) : (
+                  <>
+                    <Text style={[styles.loginButtonText, { fontSize: isSmallScreen ? 15 : 17 }]}>Sign In</Text>
+                    <Text style={styles.loginButtonIcon}>→</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Change Clinic Link - Compact spacing */}
+              {cachedTenant && (
+                <TouchableOpacity
+                  style={[styles.tenantLink, { marginTop: isSmallScreen ? 6 : 10 }]}
+                  onPress={handleChangeTenant}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tenantLinkText, { fontSize: isSmallScreen ? 12 : 14 }]}>
+                    <Text style={styles.tenantLinkIcon}>🔄</Text> Change Clinic
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Footer - Only shown on large screens */}
+            {isLargeScreen && (
+              <View style={[styles.footer, { marginTop: 12 }]}>
+                <Text style={styles.footerText}>
+                  © {new Date().getFullYear()} MediCore Solutions
+                </Text>
+              </View>
+            )}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
       {/* Beautiful Alerts and Toasts */}
@@ -375,37 +424,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContent: {
-    flexGrow: 1,
+  contentWrapper: {
+    flex: 1,
   },
   backgroundGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: height * 0.6,
+    height: height * 0.5,
     backgroundColor: colors.backgroundSecondary,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
   },
   content: {
     flex: 1,
-    padding: 24,
-    paddingTop: 60,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+    overflow: 'hidden',
   },
   logoSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    justifyContent: 'center',
   },
   logoContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoImageContainer: {
-    width: 120,
-    height: 120,
     borderRadius: 24,
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 8 },
@@ -415,14 +464,10 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   logoImage: {
-    width: 120,
-    height: 120,
     borderRadius: 24,
   },
   logoGlow: {
     position: 'absolute',
-    width: 140,
-    height: 140,
     borderRadius: 30,
     backgroundColor: '#6366f1',
     opacity: 0.15,
@@ -430,14 +475,12 @@ const styles = StyleSheet.create({
     left: -10,
   },
   title: {
-    fontSize: 42,
     fontWeight: '800',
     color: colors.textPrimary,
     marginBottom: 8,
     letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 18,
     color: colors.textSecondary,
     marginBottom: 16,
     fontWeight: '300',
@@ -500,26 +543,22 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: colors.backgroundSecondary,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
+    borderRadius: 20,
+    marginBottom: 0,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.md,
   },
   formTitle: {
-    fontSize: 28,
     fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: 8,
   },
   formSubtitle: {
-    fontSize: 15,
     color: colors.textSecondary,
-    marginBottom: 24,
   },
   inputWrapper: {
-    marginBottom: 20,
+    marginBottom: 0,
   },
   inputLabel: {
     fontSize: 14,
@@ -531,10 +570,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.backgroundTertiary,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    minHeight: 44,
   },
   inputIcon: {
     fontSize: 20,
@@ -542,8 +582,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
+    paddingVertical: 10,
     color: colors.textPrimary,
   },
   passwordInput: {
@@ -557,12 +596,11 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: '#6366f1',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 6,
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -574,7 +612,6 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: colors.textOnPrimary,
-    fontSize: 18,
     fontWeight: '700',
     marginRight: 8,
   },
@@ -584,9 +621,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   tenantLink: {
-    marginTop: 20,
+    marginTop: 0,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   tenantLinkText: {
     color: colors.primary,
@@ -598,7 +635,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    marginTop: 32,
   },
   footerText: {
     fontSize: 12,
