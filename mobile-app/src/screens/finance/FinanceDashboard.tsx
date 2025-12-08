@@ -13,6 +13,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useDispatch } from 'react-redux';
 import { format } from 'date-fns';
 import { ehrApi, API_ENDPOINTS } from '../../config/api';
 import appointmentService, { Appointment } from '../../services/appointment.service';
@@ -23,6 +24,8 @@ import PrimaryButton from '../../components/shared/PrimaryButton';
 import { useAlert } from '../../hooks/useAlert';
 import { useToast } from '../../hooks/useToast';
 import Icon from '../../components/shared/Icon';
+import { storageUtils } from '../../utils/storage';
+import { clearCredentials } from '../../store/slices/auth.slice';
 
 interface FinanceSummary {
   totalRevenue: number;
@@ -43,6 +46,7 @@ interface PendingPayment {
 
 const FinanceDashboard: React.FC = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +61,42 @@ const FinanceDashboard: React.FC = () => {
   // Beautiful alerts and toasts
   const { showAlert, AlertComponent } = useAlert();
   const { showToast, ToastComponent } = useToast();
+
+  const handleLogout = () => {
+    showAlert(
+      'Logout',
+      'Are you sure you want to logout?',
+      'confirm',
+      {
+        confirmText: 'Logout',
+        cancelText: 'Cancel',
+        onConfirm: async () => {
+          try {
+            // Call logout API
+            try {
+              await ehrApi.post(API_ENDPOINTS.AUTH.LOGOUT);
+            } catch (error) {
+              // Continue with logout even if API call fails
+              console.log('Logout API call failed, continuing with local logout');
+            }
+
+            // Clear auth state
+            await storageUtils.clearAuth();
+            dispatch(clearCredentials());
+
+            // Navigate to login
+            (navigation as any).reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } catch (error) {
+            console.error('Logout error:', error);
+            showToast('Error during logout', 'error', 'Logout Failed');
+          }
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -259,10 +299,32 @@ const FinanceDashboard: React.FC = () => {
     }
   };
 
+  const logoutButton = (
+    <TouchableOpacity
+      onPress={handleLogout}
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.error + '20',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      activeOpacity={0.7}
+    >
+      <Icon name="logout" size={20} color={colors.error} />
+    </TouchableOpacity>
+  );
+
   if (loading && !summary) {
     return (
       <View style={styles.container}>
-        <ScreenHeader title="Finance Dashboard" subtitle="Payment management" />
+        <ScreenHeader 
+          title="Finance Dashboard" 
+          subtitle="Payment management" 
+          showBack={false}
+          rightAction={logoutButton}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading finance data...</Text>
@@ -273,7 +335,12 @@ const FinanceDashboard: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Finance Dashboard" subtitle="Payment management" />
+      <ScreenHeader 
+        title="Finance Dashboard" 
+        subtitle="Payment management" 
+        showBack={false}
+        rightAction={logoutButton}
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -722,6 +789,14 @@ const styles = StyleSheet.create({
   loadMoreButtonText: {
     ...typography.bodyBold,
     color: colors.primary,
+  },
+  logoutButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.error + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
