@@ -128,7 +128,7 @@ const FinanceDashboard: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleConfirmPayment = async (appointmentId: string, feeAmount: number) => {
+  const handleConfirmPayment = async (appointmentId: string, feeAmount: number, patientId?: string) => {
     showAlert(
       'Confirm Payment',
       `Record payment of $${feeAmount.toFixed(2)} for this appointment?`,
@@ -141,29 +141,73 @@ const FinanceDashboard: React.FC = () => {
             setProcessingPayment(appointmentId);
             
             // Find the financial transaction for this appointment
-            // First, try to get transactions for today
-            const transactions = await ehrApi.get(API_ENDPOINTS.FINANCE.TRANSACTIONS, {
-              params: { sourceReferenceId: appointmentId, limit: 1 },
-            });
+            let transactions;
+            try {
+              // Filter by module and then find by sourceReferenceId client-side
+              transactions = await ehrApi.get(API_ENDPOINTS.FINANCE.TRANSACTIONS, {
+                params: { module: 'appointments', limit: 50 },
+              });
+            } catch (error) {
+              console.log('Error fetching transactions, will create new one:', error);
+              transactions = { transactions: [] };
+            }
 
             let transactionId: string | null = null;
-            if (transactions.data && transactions.data.length > 0) {
-              transactionId = transactions.data[0].id;
-            } else if (Array.isArray(transactions) && transactions.length > 0) {
-              transactionId = transactions[0].id;
+            // Handle the correct response structure: { transactions: [...], total: number }
+            const transactionList = transactions?.transactions || transactions?.data || transactions?.items || (Array.isArray(transactions) ? transactions : []);
+            
+            // Find transaction matching this appointment
+            const matchingTransaction = transactionList.find(
+              (t: any) => t.source_reference_id === appointmentId || t.sourceReferenceId === appointmentId
+            );
+            
+            if (matchingTransaction) {
+              transactionId = matchingTransaction.id;
             }
 
             if (transactionId) {
-              // Record payment on the transaction
+              // Record payment on the existing transaction
               await ehrApi.post(API_ENDPOINTS.FINANCE.RECORD_PAYMENT(transactionId), {
                 amount: feeAmount,
-                method: 'cash',
+                paymentMethod: 'cash',
                 notes: 'Payment confirmed at front desk',
               });
             } else {
-              // If no transaction exists, update appointment payment status directly
-              await ehrApi.patch(API_ENDPOINTS.APPOINTMENT.UPDATE(appointmentId), {
-                paymentStatus: 'payment_confirmed',
+              // If no transaction exists, create one first
+              // Get appointment details to create proper transaction
+              const appointment = await appointmentService.getAppointmentById(appointmentId);
+              
+              const transactionData = {
+                sourceModule: 'appointments',
+                sourceReferenceId: appointmentId,
+                patientId: patientId || appointment?.patient?.id,
+                payerType: 'patient',
+                amount: feeAmount,
+                currency: 'USD',
+                lineItems: [
+                  {
+                    description: `Appointment: ${appointment?.appointmentType || 'Consultation'}`,
+                    quantity: 1,
+                    unitPrice: feeAmount,
+                    amount: feeAmount,
+                  },
+                ],
+                dueDate: new Date().toISOString(),
+              };
+
+              // Create the transaction
+              const newTransaction = await ehrApi.post(API_ENDPOINTS.FINANCE.CREATE_TRANSACTION, transactionData);
+              transactionId = newTransaction?.id || newTransaction?.transactionId;
+              
+              if (!transactionId) {
+                throw new Error('Failed to create transaction: No transaction ID returned');
+              }
+
+              // Then record the payment
+              await ehrApi.post(API_ENDPOINTS.FINANCE.RECORD_PAYMENT(transactionId), {
+                amount: feeAmount,
+                paymentMethod: 'cash',
+                notes: 'Payment confirmed at front desk',
               });
             }
 
@@ -171,7 +215,8 @@ const FinanceDashboard: React.FC = () => {
             await loadData();
           } catch (error: any) {
             console.error('Error confirming payment:', error);
-            showAlert('Payment Error', error.response?.data?.message || 'Failed to confirm payment', 'error');
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to confirm payment';
+            showAlert('Payment Error', errorMessage, 'error');
           } finally {
             setProcessingPayment(null);
           }

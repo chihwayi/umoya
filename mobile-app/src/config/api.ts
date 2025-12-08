@@ -147,6 +147,7 @@ export const API_ENDPOINTS = {
     DASHBOARD_SUMMARY: '/finance/dashboard/summary',
     TRANSACTIONS: '/finance/transactions',
     TRANSACTION: (id: string) => `/finance/transactions/${id}`,
+    CREATE_TRANSACTION: '/finance/transactions',
     RECORD_PAYMENT: (id: string) => `/finance/transactions/${id}/payments`,
     REPORTS: '/finance/reports',
   },
