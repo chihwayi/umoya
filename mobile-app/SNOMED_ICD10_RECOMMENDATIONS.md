@@ -100,3 +100,4 @@ This aligns with:
 - Improved interoperability
 
 The implementation should follow the pattern already established for prescriptions (drug search with SNOMED codes) and can leverage the existing CDSS diagnostic assistant service.
+

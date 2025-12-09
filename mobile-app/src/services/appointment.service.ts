@@ -20,7 +20,7 @@ export interface Appointment {
   appointmentDate: string;
   durationMinutes: number;
   appointmentType: string;
-  status: 'scheduled' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+  status: 'scheduled' | 'checked_in' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
   reason?: string;
   notes?: string;
   checkInTime?: string;

@@ -200,7 +200,7 @@ const LoginScreen: React.FC = () => {
       
       // Handle 401 specifically
       if (error.response?.status === 401) {
-        if (error.response?.data?.message) {
+      if (error.response?.data?.message) {
           const msg = error.response.data.message;
           errorMessage = Array.isArray(msg) ? msg.join(', ') : String(msg);
         } else {
@@ -250,12 +250,12 @@ const LoginScreen: React.FC = () => {
 
   return (
     <>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         enabled={Platform.OS === 'ios'}
-      >
+    >
         {/* Animated Background Gradient */}
         <Animated.View style={[styles.backgroundGradient, { opacity: fadeAnim }]} />
 
@@ -268,89 +268,89 @@ const LoginScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled"
         >
           {/* Content Container - Uses flexbox to fit content without scrolling */}
-          <Animated.View
-            style={[
-              styles.content,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
                 flex: 1,
                 justifyContent: 'center',
                 paddingVertical: isSmallScreen ? 4 : isMediumScreen ? 12 : 20,
                 minHeight: height,
                 maxHeight: height,
-              },
-            ]}
-          >
+            },
+          ]}
+        >
             {/* Logo Section - Dynamic sizing - More compact */}
-            <Animated.View
-              style={[
-                styles.logoSection,
-                {
-                  transform: [{ scale: logoScale }],
+          <Animated.View
+            style={[
+              styles.logoSection,
+              {
+                transform: [{ scale: logoScale }],
                   marginBottom: logoMarginBottom,
                   height: logoSectionHeight,
                   justifyContent: 'center',
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.logoContainer,
+                {
+                  transform: [{ scale: logoScale }],
                 },
               ]}
             >
-              <Animated.View
-                style={[
-                  styles.logoContainer,
-                  {
-                    transform: [{ scale: logoScale }],
-                  },
-                ]}
-              >
                 <View style={[styles.logoImageContainer, { width: logoSize, height: logoSize }]}>
-                  <Image
-                    source={require('../../../assets/logo.png')}
+                <Image
+                  source={require('../../../assets/logo.png')}
                     style={[styles.logoImage, { width: logoSize, height: logoSize }]}
-                    resizeMode="contain"
-                  />
-                </View>
+                  resizeMode="contain"
+                />
+              </View>
                 <View style={[styles.logoGlow, { width: logoSize + 20, height: logoSize + 20 }]} />
-              </Animated.View>
+            </Animated.View>
               <Text style={[styles.title, { fontSize: fonts.title, marginBottom: isSmallScreen ? 4 : 8 }]}>MediCore</Text>
               {isLargeScreen && (
                 <View style={[styles.subtitleContainer, { marginTop: isSmallScreen ? 4 : 8 }]}>
                   <Text style={[styles.subtitle, { fontSize: fonts.subtitle }]}>Healthcare Excellence</Text>
-                  <View style={styles.titleUnderline} />
+            <View style={styles.titleUnderline} />
                 </View>
               )}
-            </Animated.View>
+          </Animated.View>
 
             {/* Cached Tenant Badge - Compact on small screens */}
-            {cachedTenant && (
-              <Animated.View
-                style={[
-                  styles.tenantBadge,
-                  {
-                    opacity: fadeAnim,
+          {cachedTenant && (
+            <Animated.View
+              style={[
+                styles.tenantBadge,
+                {
+                  opacity: fadeAnim,
                     marginBottom: tenantBadgeMarginBottom,
-                  },
-                ]}
-              >
+                },
+              ]}
+            >
                 <View style={[styles.tenantBadgeContent, { padding: isSmallScreen ? 10 : 14 }]}>
                   <View style={[styles.tenantIcon, { width: isSmallScreen ? 36 : 44, height: isSmallScreen ? 36 : 44 }]}>
                     <Text style={[styles.tenantIconText, { fontSize: isSmallScreen ? 20 : 24 }]}>🏥</Text>
-                  </View>
-                  <View style={styles.tenantInfo}>
+                </View>
+                <View style={styles.tenantInfo}>
                     <Text style={[styles.tenantLabel, { fontSize: isSmallScreen ? 10 : 12 }]}>Clinic</Text>
                     <Text style={[styles.tenantName, { fontSize: isSmallScreen ? 13 : 15 }]} numberOfLines={1}>
-                      {cachedTenant.name}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleChangeTenant}
-                    style={[styles.changeButton, { paddingHorizontal: isSmallScreen ? 12 : 16, paddingVertical: isSmallScreen ? 6 : 8 }]}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.changeButtonText, { fontSize: isSmallScreen ? 11 : 13 }]}>Change</Text>
-                  </TouchableOpacity>
+                    {cachedTenant.name}
+                  </Text>
                 </View>
-              </Animated.View>
-            )}
+                <TouchableOpacity
+                  onPress={handleChangeTenant}
+                    style={[styles.changeButton, { paddingHorizontal: isSmallScreen ? 12 : 16, paddingVertical: isSmallScreen ? 6 : 8 }]}
+                  activeOpacity={0.7}
+                >
+                    <Text style={[styles.changeButtonText, { fontSize: isSmallScreen ? 11 : 13 }]}>Change</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
 
             {/* Login Form Card - Dynamic padding and spacing */}
             <View style={[styles.formCard, { padding: formCardPadding }]}>
@@ -362,90 +362,90 @@ const LoginScreen: React.FC = () => {
                 </View>
               </View>
 
-              {/* Email Input */}
+            {/* Email Input */}
               <View style={[styles.inputWrapper, { marginTop: isSmallScreen ? 16 : 20, marginBottom: inputSpacing }]}>
                 <Text style={[styles.inputLabel, { fontSize: isSmallScreen ? 13 : 14 }]}>Email Address</Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputIcon}>✉️</Text>
-                  <TextInput
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>✉️</Text>
+                <TextInput
                     style={[styles.input, { fontSize: fonts.input }]}
                     placeholder="Enter your email address"
-                    placeholderTextColor={colors.textMuted}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect={false}
-                  />
-                </View>
+                  placeholderTextColor={colors.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  autoCorrect={false}
+                />
               </View>
+            </View>
 
-              {/* Password Input */}
+            {/* Password Input */}
               <View style={[styles.inputWrapper, { marginBottom: inputSpacing }]}>
                 <Text style={[styles.inputLabel, { fontSize: isSmallScreen ? 13 : 14 }]}>Password</Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputIcon}>🔒</Text>
-                  <TextInput
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputIcon}>🔒</Text>
+                <TextInput
                     style={[styles.input, styles.passwordInput, { fontSize: fonts.input }]}
-                    placeholder="Enter your password"
-                    placeholderTextColor={colors.textMuted}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoComplete="password"
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Login Button - Always visible */}
-              <TouchableOpacity
-                style={[styles.loginButton, loading && styles.loginButtonDisabled, { paddingVertical: isSmallScreen ? 10 : 14 }]}
-                onPress={handleLogin}
-                disabled={loading}
-                activeOpacity={0.8}
-              >
-                {loading ? (
-                  <ActivityIndicator color={colors.textOnPrimary} />
-                ) : (
-                  <>
-                    <Text style={[styles.loginButtonText, { fontSize: isSmallScreen ? 15 : 17 }]}>Sign In</Text>
-                    <Text style={styles.loginButtonIcon}>→</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {/* Change Clinic Link - Compact spacing */}
-              {cachedTenant && (
+                  placeholder="Enter your password"
+                  placeholderTextColor={colors.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password"
+                />
                 <TouchableOpacity
-                  style={[styles.tenantLink, { marginTop: isSmallScreen ? 6 : 10 }]}
-                  onPress={handleChangeTenant}
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.tenantLinkText, { fontSize: isSmallScreen ? 12 : 14 }]}>
-                    <Text style={styles.tenantLinkIcon}>🔄</Text> Change Clinic
-                  </Text>
+                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
                 </TouchableOpacity>
-              )}
+              </View>
             </View>
+
+              {/* Login Button - Always visible */}
+            <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled, { paddingVertical: isSmallScreen ? 10 : 14 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.textOnPrimary} />
+              ) : (
+                <>
+                    <Text style={[styles.loginButtonText, { fontSize: isSmallScreen ? 15 : 17 }]}>Sign In</Text>
+                  <Text style={styles.loginButtonIcon}>→</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+              {/* Change Clinic Link - Compact spacing */}
+            {cachedTenant && (
+              <TouchableOpacity
+                  style={[styles.tenantLink, { marginTop: isSmallScreen ? 6 : 10 }]}
+                onPress={handleChangeTenant}
+                activeOpacity={0.7}
+              >
+                  <Text style={[styles.tenantLinkText, { fontSize: isSmallScreen ? 12 : 14 }]}>
+                  <Text style={styles.tenantLinkIcon}>🔄</Text> Change Clinic
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
             {/* Footer - Only shown on large screens */}
             {isLargeScreen && (
               <View style={[styles.footer, { marginTop: 12 }]}>
-                <Text style={styles.footerText}>
-                  © {new Date().getFullYear()} MediCore Solutions
-                </Text>
-              </View>
+            <Text style={styles.footerText}>
+              © {new Date().getFullYear()} MediCore Solutions
+            </Text>
+          </View>
             )}
-          </Animated.View>
+        </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
       {/* Beautiful Alerts and Toasts */}

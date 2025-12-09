@@ -144,3 +144,4 @@ npm run android
 - Reinstall Android Studio
 - Check React Native version compatibility
 - Check if you're editing the right files
+

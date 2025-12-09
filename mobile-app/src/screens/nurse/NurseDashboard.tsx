@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
-} from 'react-native';
+} from 'react-native'; 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
@@ -37,7 +37,7 @@ const NurseDashboard: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [patientVitals, setPatientVitals] = useState<Record<string, Vitals>>({});
+  const [patientVitals, setPatientVitals] = useState<Record<string, Vitals | null>>({});
   const [loadingVitals, setLoadingVitals] = useState<Record<string, boolean>>({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -166,7 +166,7 @@ const NurseDashboard: React.FC = () => {
   };
 
   const isPaymentPending = (appointment: Appointment) => {
-    return appointment.paymentStatus === 'awaiting_payment' && appointment.feeAmount && appointment.feeAmount > 0;
+    return appointment.paymentStatus === 'awaiting_payment' && !!(appointment.feeAmount && appointment.feeAmount > 0);
   };
 
   const formatCurrency = (amount: number | undefined) => {
@@ -323,7 +323,7 @@ const NurseDashboard: React.FC = () => {
 
           {/* Payment Alert */}
           {stats.awaitingPayment > 0 && (
-            <GlassCard style={[styles.alertCard, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
+            <GlassCard style={StyleSheet.flatten([styles.alertCard, { backgroundColor: colors.warning + '20', borderColor: colors.warning }])}>
               <View style={styles.alertContent}>
                 <Text style={styles.alertIcon}>⚠️</Text>
                 <View style={styles.alertTextContainer}>
@@ -365,7 +365,7 @@ const NurseDashboard: React.FC = () => {
                 return (
                   <GlassCard
                     key={appointment.id}
-                    style={[styles.appointmentCard, awaitingPayment && styles.paymentPendingCard]}
+                    style={StyleSheet.flatten([styles.appointmentCard, awaitingPayment ? styles.paymentPendingCard : null].filter(Boolean))}
                   >
                     <TouchableOpacity
                       onPress={() => handleAppointmentPress(appointment)}
@@ -401,37 +401,37 @@ const NurseDashboard: React.FC = () => {
                         <View style={styles.vitalsContainer}>
                           <Text style={styles.vitalsLabel}>Latest Vitals:</Text>
                           <View style={styles.vitalsRow}>
-                            {patientVitals[appointment.patient.id].temperature && (
+                            {patientVitals[appointment.patient.id]?.temperature != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="thermometer" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].temperature}°C
+                                  {patientVitals[appointment.patient.id]?.temperature ?? '--'}°C
                                 </Text>
                               </View>
                             )}
-                            {(patientVitals[appointment.patient.id].bloodPressureSystolic || 
-                              patientVitals[appointment.patient.id].bloodPressureDiastolic) && (
+                            {(patientVitals[appointment.patient.id]?.bloodPressureSystolic != null || 
+                              patientVitals[appointment.patient.id]?.bloodPressureDiastolic != null) && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="blood-pressure" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].bloodPressureSystolic || '--'}/
-                                  {patientVitals[appointment.patient.id].bloodPressureDiastolic || '--'}
+                                  {(patientVitals[appointment.patient.id]?.bloodPressureSystolic ?? '--')}/
+                                  {(patientVitals[appointment.patient.id]?.bloodPressureDiastolic ?? '--')}
                                 </Text>
                               </View>
                             )}
-                            {patientVitals[appointment.patient.id].heartRate && (
+                            {patientVitals[appointment.patient.id]?.heartRate != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="heart-pulse" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].heartRate} bpm
+                                  {(patientVitals[appointment.patient.id]?.heartRate ?? '--')} bpm
                                 </Text>
                               </View>
                             )}
-                            {patientVitals[appointment.patient.id].oxygenSaturation && (
+                            {patientVitals[appointment.patient.id]?.oxygenSaturation != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="lungs" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].oxygenSaturation}%
+                                  {patientVitals[appointment.patient.id]?.oxygenSaturation ?? '--'}%
                                 </Text>
                               </View>
                             )}
@@ -473,15 +473,15 @@ const NurseDashboard: React.FC = () => {
                             }
                           }}
                           icon={awaitingPayment ? '🔒' : '🩺'}
-                          style={[styles.actionButton, awaitingPayment && styles.disabledButton]}
-                          disabled={awaitingPayment}
+                          style={StyleSheet.flatten([styles.actionButton, awaitingPayment ? styles.disabledButton : null].filter(Boolean))}
+                          disabled={!!awaitingPayment}
                         />
                         <TouchableOpacity
-                          style={[
+                          style={StyleSheet.flatten([
                             styles.secondaryButton,
                             { borderColor: colors.primary },
-                            awaitingPayment && styles.disabledButton,
-                          ]}
+                            awaitingPayment ? styles.disabledButton : null,
+                          ].filter(Boolean))}
                           onPress={() => {
                             if (awaitingPayment) {
                               showAlert('Payment Required', 'Payment must be confirmed before accessing MAR.', 'warning');
@@ -492,7 +492,7 @@ const NurseDashboard: React.FC = () => {
                             }
                           }}
                           activeOpacity={0.7}
-                          disabled={awaitingPayment}
+                          disabled={!!awaitingPayment}
                         >
                           <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>MAR</Text>
                         </TouchableOpacity>
@@ -550,37 +550,37 @@ const NurseDashboard: React.FC = () => {
                         <View style={styles.vitalsContainer}>
                           <Text style={styles.vitalsLabel}>Latest Vitals:</Text>
                           <View style={styles.vitalsRow}>
-                            {patientVitals[appointment.patient.id].temperature && (
+                            {patientVitals[appointment.patient.id]?.temperature != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="thermometer" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].temperature}°C
+                                  {patientVitals[appointment.patient.id]?.temperature ?? '--'}°C
                                 </Text>
                               </View>
                             )}
-                            {(patientVitals[appointment.patient.id].bloodPressureSystolic || 
-                              patientVitals[appointment.patient.id].bloodPressureDiastolic) && (
+                            {(patientVitals[appointment.patient.id]?.bloodPressureSystolic != null || 
+                              patientVitals[appointment.patient.id]?.bloodPressureDiastolic != null) && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="blood-pressure" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].bloodPressureSystolic || '--'}/
-                                  {patientVitals[appointment.patient.id].bloodPressureDiastolic || '--'}
+                                  {patientVitals[appointment.patient.id]?.bloodPressureSystolic ?? '--'}/
+                                  {patientVitals[appointment.patient.id]?.bloodPressureDiastolic ?? '--'}
                                 </Text>
                               </View>
                             )}
-                            {patientVitals[appointment.patient.id].heartRate && (
+                            {patientVitals[appointment.patient.id]?.heartRate != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="heart-pulse" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].heartRate} bpm
+                                  {patientVitals[appointment.patient.id]?.heartRate ?? '--'} bpm
                                 </Text>
                               </View>
                             )}
-                            {patientVitals[appointment.patient.id].oxygenSaturation && (
+                            {patientVitals[appointment.patient.id]?.oxygenSaturation != null && (
                               <View style={styles.vitalBadge}>
                                 <Icon name="lungs" size={14} />
                                 <Text style={styles.vitalText}>
-                                  {patientVitals[appointment.patient.id].oxygenSaturation}%
+                                  {patientVitals[appointment.patient.id]?.oxygenSaturation ?? '--'}%
                                 </Text>
                               </View>
                             )}
@@ -1026,6 +1026,38 @@ const styles = StyleSheet.create({
   },
   logoutIcon: {
     fontSize: 20,
+  },
+  vitalsContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.glassBorder,
+  },
+  vitalsLabel: {
+    ...typography.label,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  vitalsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  vitalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+  },
+  vitalText: {
+    ...typography.bodySmall,
+    fontSize: 12,
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
 });
 

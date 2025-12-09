@@ -11,8 +11,8 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import appointmentService, { Appointment } from '../../services/appointment.service';
 import vitalsService, { Vitals } from '../../services/vitals.service';
-import allergyService from '../../services/allergy.service';
-import problemService from '../../services/problem.service';
+import allergyService, { Allergy } from '../../services/allergy.service';
+import problemService, { Problem } from '../../services/problem.service';
 import { ehrApi } from '../../config/api';
 import { API_ENDPOINTS } from '../../config/api';
 import { colors, typography, spacing, borderRadius } from '../../theme/designSystem';
@@ -22,20 +22,6 @@ import PrimaryButton from '../../components/shared/PrimaryButton';
 import Icon from '../../components/shared/Icon';
 import { format, parseISO } from 'date-fns';
 import { checkVitalsAlerts, hasCriticalAlerts, VitalsAlert } from '../../utils/vitalsAlerts';
-
-interface Problem {
-  id: string;
-  problem: string;
-  status: string;
-  onsetDate?: string;
-}
-
-interface Allergy {
-  id: string;
-  allergen: string;
-  reaction?: string;
-  severity?: string;
-}
 
 const VisitManagementScreen: React.FC = () => {
   const route = useRoute();
@@ -47,7 +33,7 @@ const VisitManagementScreen: React.FC = () => {
   const [updating, setUpdating] = useState(false);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
   
-  // Patient clinical data
+  // Patient clinical data 
   const [latestVitals, setLatestVitals] = useState<Vitals | null>(null);
   const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -122,8 +108,23 @@ const VisitManagementScreen: React.FC = () => {
         setVitalsAlerts([]);
       }
       
-      setProblems(Array.isArray(problemsData) ? problemsData : []);
-      setAllergies(Array.isArray(allergiesData) ? allergiesData : []);
+      // Map service Problem type to local display format
+      const mappedProblems: Problem[] = Array.isArray(problemsData) 
+        ? problemsData.map((p: Problem) => ({
+            ...p,
+            id: p.id || `temp-${Date.now()}-${Math.random()}`,
+          }))
+        : [];
+      setProblems(mappedProblems);
+      
+      // Map service Allergy type to local display format
+      const mappedAllergies: Allergy[] = Array.isArray(allergiesData)
+        ? allergiesData.map((a: Allergy) => ({
+            ...a,
+            id: a.id || `temp-${Date.now()}-${Math.random()}`,
+          }))
+        : [];
+      setAllergies(mappedAllergies);
     } catch (error) {
       console.error('Error loading patient data:', error);
       // Don't show alert - just log the error
@@ -347,7 +348,7 @@ const VisitManagementScreen: React.FC = () => {
           <>
             {/* Vitals Alerts - DANGER STYLING */}
             {vitalsAlerts.length > 0 && (
-              <GlassCard style={[styles.card, styles.dangerAlertCard]} padding={spacing.lg}>
+              <GlassCard style={StyleSheet.flatten([styles.card, styles.dangerAlertCard])} padding={spacing.lg}>
                 <View style={styles.dangerHeader}>
                   <Text style={styles.dangerTitle}>🚨 ABNORMAL VITALS ALERT 🚨</Text>
                   <View style={styles.dangerBadge}>
@@ -474,9 +475,9 @@ const VisitManagementScreen: React.FC = () => {
                 <Text style={styles.sectionTitle}>Active Problems</Text>
                 <TouchableOpacity
                   onPress={() =>
-                    navigation.navigate('ProblemList' as never, {
+                    (navigation as any).navigate('ProblemList', {
                       patientId: appointment.patient.id,
-                    } as never)
+                    })
                   }
                 >
                   <Text style={styles.viewAllText}>View All</Text>
@@ -485,8 +486,8 @@ const VisitManagementScreen: React.FC = () => {
               {problems.length > 0 ? (
                 <View style={styles.listContainer}>
                   {problems.slice(0, 3).map((problem) => (
-                    <View key={problem.id} style={styles.listItem}>
-                      <Text style={styles.listItemText}>{problem.problem}</Text>
+                    <View key={problem.id || `problem-${problem.description}`} style={styles.listItem}>
+                      <Text style={styles.listItemText}>{problem.description || problem.snomedTerm || 'Unknown problem'}</Text>
                       {problem.status && (
                         <Text style={styles.listItemStatus}>{problem.status}</Text>
                       )}
@@ -504,9 +505,9 @@ const VisitManagementScreen: React.FC = () => {
                 <Text style={styles.sectionTitle}>Allergies</Text>
                 <TouchableOpacity
                   onPress={() =>
-                    navigation.navigate('Allergies' as never, {
+                    (navigation as any).navigate('Allergies', {
                       patientId: appointment.patient.id,
-                    } as never)
+                    })
                   }
                 >
                   <Text style={styles.viewAllText}>View All</Text>
@@ -515,7 +516,7 @@ const VisitManagementScreen: React.FC = () => {
               {allergies.length > 0 ? (
                 <View style={styles.listContainer}>
                   {allergies.slice(0, 3).map((allergy) => (
-                    <View key={allergy.id} style={styles.listItem}>
+                    <View key={allergy.id || `allergy-${allergy.allergen}`} style={styles.listItem}>
                       <Text style={styles.listItemText}>{allergy.allergen}</Text>
                       {allergy.reaction && (
                         <Text style={styles.listItemSubtext}>{allergy.reaction}</Text>
@@ -537,10 +538,10 @@ const VisitManagementScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() =>
-                navigation.navigate('ClinicalNotes' as never, {
+                (navigation as any).navigate('ClinicalNotes', {
                   appointmentId,
                   patientId: appointment.patient.id,
-                } as never)
+                })
               }
               activeOpacity={0.7}
             >
@@ -574,9 +575,9 @@ const VisitManagementScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() =>
-                navigation.navigate('ChartReview' as never, {
+                (navigation as any).navigate('ChartReview', {
                   patientId: appointment.patient.id,
-                } as never)
+                })
               }
               activeOpacity={0.7}
             >

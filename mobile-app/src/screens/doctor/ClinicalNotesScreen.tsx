@@ -31,7 +31,7 @@ const ClinicalNotesScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // SOAP Note fields
+  // SOAP Note fields 
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [historyOfPresentIllness, setHistoryOfPresentIllness] = useState('');
   const [physicalExamination, setPhysicalExamination] = useState('');
@@ -51,8 +51,8 @@ const ClinicalNotesScreen: React.FC = () => {
   const [icd10Results, setIcd10Results] = useState<Icd10Code[]>([]);
   const [searchingSnomed, setSearchingSnomed] = useState(false);
   const [searchingIcd10, setSearchingIcd10] = useState(false);
-  const snomedSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const icd10SearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const snomedSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const icd10SearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadExistingNotes();

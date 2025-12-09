@@ -28,7 +28,7 @@ const PatientDetailScreen: React.FC = () => {
   const { patientId } = route.params as { patientId: string };
   const { user } = useSelector((state: RootState) => state.auth);
   
-  // Determine user role - check multiple possible locations
+  // Determine user role - check multiple possible locations 
   const userRole = (user as any)?.role || (user as any)?.user?.role || (user as any)?.userRole || 'doctor';
   const roleLower = String(userRole || '').toLowerCase();
   const isNurse = roleLower === 'nurse';
@@ -145,7 +145,7 @@ const PatientDetailScreen: React.FC = () => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Latest Vitals</Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+              onPress={() => (navigation as any).navigate('Vitals', { patientId })}
               activeOpacity={0.7}
             >
               <Text style={styles.actionButton}>
@@ -200,7 +200,7 @@ const PatientDetailScreen: React.FC = () => {
               <Text style={styles.emptyVitalsText}>No vitals recorded</Text>
               <TouchableOpacity
                 style={styles.recordVitalsButton}
-                onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('Vitals', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.recordVitalsButtonText}>Record Vitals</Text>
@@ -238,7 +238,7 @@ const PatientDetailScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Active Prescriptions</Text>
             {isDoctor && (
               <TouchableOpacity
-                onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('CreatePrescription', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.actionButton}>+ Prescribe</Text>
@@ -264,7 +264,7 @@ const PatientDetailScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Recent Lab Results</Text>
             {isDoctor && (
               <TouchableOpacity
-                onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('LabOrder', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.actionButton}>+ Order Lab</Text>
@@ -294,7 +294,7 @@ const PatientDetailScreen: React.FC = () => {
             {isNurse && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('Vitals', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>🩺</Text>
@@ -304,7 +304,7 @@ const PatientDetailScreen: React.FC = () => {
             {isNurse && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('MAR' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('MAR', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>💉</Text>
@@ -314,7 +314,7 @@ const PatientDetailScreen: React.FC = () => {
             {isDoctor && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('ClinicalNotes' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('ClinicalNotes', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>📝</Text>
@@ -324,7 +324,7 @@ const PatientDetailScreen: React.FC = () => {
             {isDoctor && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('ProblemList' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('ProblemList', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>⚠️</Text>
@@ -334,7 +334,7 @@ const PatientDetailScreen: React.FC = () => {
             {isDoctor && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('Allergies' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('Allergies', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>🚨</Text>
@@ -344,7 +344,7 @@ const PatientDetailScreen: React.FC = () => {
             {isDoctor && (
               <TouchableOpacity
                 style={styles.quickActionCard}
-                onPress={() => navigation.navigate('ChartReview' as never, { patientId } as never)}
+                onPress={() => (navigation as any).navigate('ChartReview', { patientId })}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quickActionIcon}>📋</Text>
@@ -359,17 +359,17 @@ const PatientDetailScreen: React.FC = () => {
           <View style={styles.actions}>
             <PrimaryButton
               title="Create Appointment"
-              onPress={() => navigation.navigate('CreateAppointment' as never, { patientId } as never)}
+              onPress={() => (navigation as any).navigate('CreateAppointment', { patientId })}
               icon="📅"
             />
             <PrimaryButton
               title="Prescribe Medication"
-              onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
+              onPress={() => (navigation as any).navigate('CreatePrescription', { patientId })}
               icon="💊"
             />
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
+              onPress={() => (navigation as any).navigate('LabOrder', { patientId })}
               activeOpacity={0.7}
             >
               <Text style={styles.secondaryButtonText}>Order Lab Test</Text>
@@ -382,7 +382,7 @@ const PatientDetailScreen: React.FC = () => {
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => navigation.navigate('CreateAppointment' as never, { patientId } as never)}
+              onPress={() => (navigation as any).navigate('CreateAppointment', { patientId })}
               activeOpacity={0.7}
             >
               <Text style={styles.secondaryButtonText}>Schedule Appointment</Text>

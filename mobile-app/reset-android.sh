@@ -95,3 +95,4 @@ echo -e "${YELLOW}💡 If issues persist, try:${NC}"
 echo -e "   1. Restart your computer"
 echo -e "   2. Check Android Studio > File > Invalidate Caches / Restart"
 echo -e "   3. Ensure emulator/device is running: adb devices"
+

@@ -154,3 +154,4 @@ echo -e "   2. Test the diagnosis code features in clinical notes"
 echo -e "   3. Verify that new tenants will use the updated template"
 echo ""
 echo -e "${GREEN}✨ Migration completed successfully!${NC}"
+

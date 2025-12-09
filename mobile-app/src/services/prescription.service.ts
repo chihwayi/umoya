@@ -31,7 +31,7 @@ const prescriptionService = {
       // Filter for active prescriptions - handle different status formats
       return prescriptions.filter((p: Prescription) => {
         const status = (p.status || '').toLowerCase();
-        const isActive = status === 'active' || status === PrescriptionStatus?.ACTIVE?.toLowerCase();
+        const isActive = status === 'active' || status === 'authorized' || status === 'in_progress';
         const hasEndDate = p.endDate && new Date(p.endDate) > new Date();
         const noEndDate = !p.endDate;
         return isActive || hasEndDate || noEndDate;

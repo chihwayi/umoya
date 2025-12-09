@@ -81,6 +81,7 @@ class ClinicalNotesService {
       historyOfPresentIllness?: string;
       physicalExamination?: string;
       clinicalAssessment?: string;
+      plan?: string;
       additionalNotes?: string;
     };
     notes?: string;
@@ -95,7 +96,7 @@ class ClinicalNotesService {
     try {
       // Get existing appointment notes
       const appointment = await ehrApi.get(API_ENDPOINTS.APPOINTMENT.BY_ID(appointmentId));
-      let existingNotes = {};
+      let existingNotes: any = {};
       
       if (appointment.notes) {
         try {
@@ -112,8 +113,8 @@ class ClinicalNotesService {
         ...existingNotes,
         ...notes,
         clinicalDocumentation: {
-          ...existingNotes.clinicalDocumentation,
-          ...notes.clinicalDocumentation,
+          ...(existingNotes.clinicalDocumentation || {}),
+          ...(notes.clinicalDocumentation || {}),
         },
       };
 

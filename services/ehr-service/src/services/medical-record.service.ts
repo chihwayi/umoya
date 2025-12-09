@@ -24,8 +24,8 @@ export class MedicalRecordService {
 
   async findByPatient(patientId: string, tenantDb: DataSource): Promise<any> {
     try {
-      const recordRepository = tenantDb.getRepository(MedicalRecord);
-      
+    const recordRepository = tenantDb.getRepository(MedicalRecord);
+    
       // First try without relations to avoid column errors
       const records = await recordRepository.find({
         where: { patientId },
@@ -40,9 +40,9 @@ export class MedicalRecordService {
       // Try to enrich with relations if they exist, but don't fail if they don't
       try {
         const enriched = await recordRepository.find({
-          where: { patientId },
-          relations: ['provider', 'appointment'],
-          order: { recordDate: 'DESC' }
+      where: { patientId },
+      relations: ['provider', 'appointment'],
+      order: { recordDate: 'DESC' }
         });
         return enriched || records;
       } catch (relationError) {

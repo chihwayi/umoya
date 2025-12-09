@@ -24,13 +24,13 @@ const PatientSearchScreen: React.FC = () => {
   const route = useRoute();
   const { currentTenant } = useSelector((state: RootState) => state.tenant);
   const routeParams = route.params as { source?: string; showAppointments?: boolean } | undefined;
-  const source = routeParams?.source; // 'recordVitals' or undefined
+  const source = routeParams?.source; // 'recordVitals' or undefined 
   const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {

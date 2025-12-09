@@ -26,3 +26,4 @@ COMMENT ON COLUMN appointments.diagnosis_snomed_term IS 'SNOMED CT preferred ter
 COMMENT ON COLUMN appointments.primary_diagnosis_code IS 'Primary ICD-10 diagnosis code for billing';
 COMMENT ON COLUMN appointments.primary_diagnosis_description IS 'Description of primary diagnosis';
 COMMENT ON COLUMN appointments.diagnosis_codes IS 'Array of ICD-10 diagnosis codes (primary and secondary)';
+

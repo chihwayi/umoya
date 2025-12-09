@@ -43,3 +43,4 @@ npm run reload
 ```
 
 This sends the reload command directly to your emulator!
+

@@ -24,7 +24,7 @@ import { useToast } from '../../hooks/useToast';
 import { storageUtils } from '../../utils/storage';
 import { clearCredentials } from '../../store/slices/auth.slice';
 import { ehrApi, API_ENDPOINTS } from '../../config/api';
-
+  
 const { width } = Dimensions.get('window');
 
 const DoctorDashboard: React.FC = () => {
@@ -407,7 +407,7 @@ const DoctorDashboard: React.FC = () => {
                 </View>
               </View>
               {inProgressAppointments.map((appointment) => (
-                <GlassCard key={appointment.id} style={[styles.appointmentCard, { borderColor: colors.primary, borderWidth: 2 }]}>
+                <GlassCard key={appointment.id} style={StyleSheet.flatten([styles.appointmentCard, { borderColor: colors.primary, borderWidth: 2 }])}>
                   <TouchableOpacity
                     onPress={() => handleAppointmentPress(appointment)}
                     activeOpacity={0.8}
