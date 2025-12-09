@@ -27,10 +27,27 @@ const prescriptionService = {
       
       // Filter for active prescriptions if needed, or return all
       const prescriptions = Array.isArray(response) ? response : (response.data || response.prescriptions || []);
-      return prescriptions.filter((p: Prescription) => p.status === 'active' || !p.endDate || new Date(p.endDate) > new Date());
+      
+      // Filter for active prescriptions - handle different status formats
+      return prescriptions.filter((p: Prescription) => {
+        const status = (p.status || '').toLowerCase();
+        const isActive = status === 'active' || status === PrescriptionStatus?.ACTIVE?.toLowerCase();
+        const hasEndDate = p.endDate && new Date(p.endDate) > new Date();
+        const noEndDate = !p.endDate;
+        return isActive || hasEndDate || noEndDate;
+      });
     } catch (error: any) {
       console.error('Error getting active prescriptions:', error);
-      return []; // Return empty array on error to prevent breaking the UI
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url,
+      });
+      // Return empty array on error to prevent breaking the UI
+      // The UI already handles empty arrays gracefully
+      return [];
     }
   },
 
@@ -78,6 +95,77 @@ const prescriptionService = {
     } catch (error: any) {
       console.error('Error getting all prescriptions:', error);
       return [];
+    }
+  },
+
+  /**
+   * Create a new prescription
+   * @param prescriptionData - Prescription data
+   * @returns Created prescription
+   */
+  createPrescription: async (prescriptionData: {
+    patientId: string;
+    medicationName: string;
+    medicationId?: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    instructions?: string;
+    quantity?: number;
+    medicationNameSnomed?: {
+      conceptId: string;
+      term: string;
+    };
+  }): Promise<Prescription> => {
+    try {
+      // Calculate end date from duration
+      const startDate = new Date();
+      const durationMatch = prescriptionData.duration.match(/(\d+)\s*(day|days|week|weeks|month|months)/i);
+      let endDate: Date | null = null;
+      
+      if (durationMatch) {
+        const amount = parseInt(durationMatch[1]);
+        const unit = durationMatch[2].toLowerCase();
+        endDate = new Date(startDate);
+        
+        if (unit.includes('day')) {
+          endDate.setDate(endDate.getDate() + amount);
+        } else if (unit.includes('week')) {
+          endDate.setDate(endDate.getDate() + (amount * 7));
+        } else if (unit.includes('month')) {
+          endDate.setMonth(endDate.getMonth() + amount);
+        }
+      }
+
+      const payload: any = {
+        patientId: prescriptionData.patientId,
+        medicationName: prescriptionData.medicationName,
+        dosage: prescriptionData.dosage,
+        frequency: prescriptionData.frequency,
+        startDate: startDate.toISOString(),
+        endDate: endDate ? endDate.toISOString() : null,
+        instructions: prescriptionData.instructions,
+        quantity: prescriptionData.quantity,
+        status: 'active',
+      };
+
+      // Add SNOMED code if available
+      if (prescriptionData.medicationNameSnomed) {
+        payload.medicationNameSnomed = prescriptionData.medicationNameSnomed;
+      }
+
+      const response = await ehrApi.post(API_ENDPOINTS.PRESCRIPTION.CREATE, payload);
+      return response.data || response;
+    } catch (error: any) {
+      console.error('Error creating prescription:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url,
+      });
+      throw error;
     }
   },
 };

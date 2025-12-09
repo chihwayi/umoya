@@ -127,7 +127,22 @@ const appointmentService = {
    * @returns Updated appointment
    */
   checkInPatient: async (appointmentId: string): Promise<Appointment> => {
-    return appointmentService.updateAppointmentStatus(appointmentId, 'checked_in');
+    try {
+      const response = await ehrApi.put(
+        API_ENDPOINTS.APPOINTMENT.CHECK_IN(appointmentId)
+      );
+      return response.data || response;
+    } catch (error: any) {
+      console.error('Error checking in patient:', error);
+      // Re-throw with more context for better error handling upstream
+      if (error.response?.status === 500) {
+        const errorMessage = error.response?.data?.message || 'Server error occurred during check-in';
+        const enhancedError = new Error(errorMessage);
+        (enhancedError as any).response = error.response;
+        throw enhancedError;
+      }
+      throw error;
+    }
   },
 
   /**

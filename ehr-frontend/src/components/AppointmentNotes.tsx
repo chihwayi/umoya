@@ -225,9 +225,37 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
         patientInstructions: followUpInstructions
       };
       
-      // Update the appointment with comprehensive notes
+      // Prepare diagnosis codes for database
+      const diagnosisCodes: string[] = [];
+      let primaryDiagnosisCode: string | undefined;
+      let primaryDiagnosisDescription: string | undefined;
+      let diagnosisSnomedCode: string | undefined;
+      let diagnosisSnomedTerm: string | undefined;
+
+      // Extract ICD-10 code from diagnosis if present (format: "I21.0 - Acute ST elevation myocardial infarction")
+      if (diagnosis) {
+        const icd10Match = diagnosis.match(/^([A-Z]\d{2}(?:\.\d+)?)\s*-\s*(.+)$/);
+        if (icd10Match) {
+          primaryDiagnosisCode = icd10Match[1];
+          primaryDiagnosisDescription = icd10Match[2];
+          diagnosisCodes.push(primaryDiagnosisCode);
+        }
+      }
+
+      // Extract SNOMED code if selected
+      if (diagnosisSnomedConcept) {
+        diagnosisSnomedCode = diagnosisSnomedConcept.conceptId;
+        diagnosisSnomedTerm = diagnosisSnomedConcept.term || diagnosisSnomedConcept.preferredTerm;
+      }
+
+      // Update the appointment with comprehensive notes and diagnosis codes
       await ehrApi.updateAppointment(appointment.id, {
-        notes: JSON.stringify(comprehensiveNotes)
+        notes: JSON.stringify(comprehensiveNotes),
+        ...(primaryDiagnosisCode && { primaryDiagnosisCode }),
+        ...(primaryDiagnosisDescription && { primaryDiagnosisDescription }),
+        ...(diagnosisCodes.length > 0 && { diagnosisCodes }),
+        ...(diagnosisSnomedCode && { diagnosisSnomedCode }),
+        ...(diagnosisSnomedTerm && { diagnosisSnomedTerm }),
       }, token, tenantSlug);
       
       // Create follow-up appointment if next appointment date is set

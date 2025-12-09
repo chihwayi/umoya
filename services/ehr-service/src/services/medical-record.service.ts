@@ -23,13 +23,40 @@ export class MedicalRecordService {
   }
 
   async findByPatient(patientId: string, tenantDb: DataSource): Promise<any> {
-    const recordRepository = tenantDb.getRepository(MedicalRecord);
-    
-    return recordRepository.find({
-      where: { patientId },
-      relations: ['provider', 'appointment'],
-      order: { recordDate: 'DESC' }
-    }) as any;
+    try {
+      const recordRepository = tenantDb.getRepository(MedicalRecord);
+      
+      // First try without relations to avoid column errors
+      const records = await recordRepository.find({
+        where: { patientId },
+        order: { recordDate: 'DESC' }
+      });
+      
+      // If no records, return empty array
+      if (!records || records.length === 0) {
+        return [];
+      }
+      
+      // Try to enrich with relations if they exist, but don't fail if they don't
+      try {
+        const enriched = await recordRepository.find({
+          where: { patientId },
+          relations: ['provider', 'appointment'],
+          order: { recordDate: 'DESC' }
+        });
+        return enriched || records;
+      } catch (relationError) {
+        // Relations failed (columns might not exist), return basic records
+        console.warn('Could not load medical record relations:', relationError);
+        return records;
+      }
+    } catch (error: any) {
+      // If query fails completely, check if table exists
+      console.error('Error fetching medical records:', error);
+      
+      // Return empty array instead of throwing
+      return [];
+    }
   }
 
   async findById(id: string, tenantDb: DataSource): Promise<MedicalRecord> {

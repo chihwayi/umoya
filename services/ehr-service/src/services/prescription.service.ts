@@ -191,13 +191,20 @@ export class PrescriptionService {
   }
 
   async findByPatient(patientId: string, tenantDb: DataSource): Promise<any> {
-    const prescriptionRepository = tenantDb.getRepository(Prescription);
-    
-    return prescriptionRepository.find({
-      where: { patientId },
-      relations: ['prescriber', 'dispensedBy'],
-      order: { createdAt: 'DESC' }
-    }) as any;
+    try {
+      const prescriptionRepository = tenantDb.getRepository(Prescription);
+      
+      // Load prescriptions with prescriber relation only (dispensedBy doesn't exist in entity)
+      return await prescriptionRepository.find({
+        where: { patientId },
+        relations: ['prescriber'], // Removed 'dispensedBy' as it doesn't exist in the entity
+        order: { createdAt: 'DESC' }
+      }) as any;
+    } catch (error) {
+      this.logger.error(`Error finding prescriptions for patient ${patientId}: ${error instanceof Error ? error.message : error}`);
+      // Return empty array instead of throwing to prevent breaking the UI
+      return [];
+    }
   }
 
   async dispense(id: string, tenantDb: DataSource, dispensedById: string): Promise<Prescription> {

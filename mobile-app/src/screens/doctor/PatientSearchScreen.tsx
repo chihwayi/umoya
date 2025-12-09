@@ -5,12 +5,13 @@ import {
   StyleSheet,
   TextInput,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import patientService, { Patient } from '../../services/patient.service';
@@ -20,7 +21,10 @@ import GlassCard from '../../components/shared/GlassCard';
 
 const PatientSearchScreen: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const { currentTenant } = useSelector((state: RootState) => state.tenant);
+  const routeParams = route.params as { source?: string; showAppointments?: boolean } | undefined;
+  const source = routeParams?.source; // 'recordVitals' or undefined
   const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,22 +43,34 @@ const PatientSearchScreen: React.FC = () => {
   const performSearch = useCallback(async (query: string) => {
     const trimmedQuery = query.trim();
     
+    console.log('🔍 [PatientSearchScreen] performSearch called with:', trimmedQuery);
+    
     // Require at least 2 characters to search
     if (trimmedQuery.length < 2) {
+      console.log('🔍 [PatientSearchScreen] Query too short, clearing results');
       setPatients([]);
       setError(null);
       return;
     }
 
     try {
+      console.log('🔍 [PatientSearchScreen] Starting search...');
       setLoading(true);
       setError(null);
       
       // Search with the query
+      console.log('🔍 [PatientSearchScreen] Calling patientService.searchPatients...');
       const results = await patientService.searchPatients(trimmedQuery);
+      console.log('🔍 [PatientSearchScreen] Search returned:', results?.length || 0, 'results');
       
       // If multiple words, filter to match all words
       const words = trimmedQuery.split(/\s+/).filter(w => w.length > 0);
+      console.log('🔍 [PatientSearchScreen] Search words:', words);
+      console.log('🔍 [PatientSearchScreen] Results before filtering:', results?.length || 0);
+      console.log('🔍 [PatientSearchScreen] First result:', results?.[0] ? JSON.stringify(results[0], null, 2) : 'No results');
+      
+      let finalResults = results || [];
+      
       if (words.length >= 2 && results.length > 0) {
         const filtered = results.filter(patient => {
           const fullName = `${patient.firstName || ''} ${patient.lastName || ''}`.toLowerCase();
@@ -65,13 +81,25 @@ const PatientSearchScreen: React.FC = () => {
           // Check if all words appear in the patient's information
           return words.every(word => searchText.includes(word.toLowerCase()));
         });
-        setPatients(filtered);
-      } else {
-        setPatients(results);
+        console.log('🔍 [PatientSearchScreen] After multi-word filter:', filtered.length);
+        finalResults = filtered;
       }
+      
+      console.log('🔍 [PatientSearchScreen] Setting final results:', finalResults.length);
+      console.log('🔍 [PatientSearchScreen] Final results data:', JSON.stringify(finalResults, null, 2));
+      setPatients(finalResults);
     } catch (error: any) {
-      console.error('Error searching patients:', error);
-      setError(error.response?.data?.message || error.message || 'Failed to search patients');
+      console.error('❌ Error searching patients:', error);
+      console.error('❌ Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url,
+      });
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to search patients';
+      setError(errorMessage);
       setPatients([]);
       
       // Show error alert for debugging
@@ -79,6 +107,11 @@ const PatientSearchScreen: React.FC = () => {
         Alert.alert('Search Error', 'Patient search endpoint not found. Please check API configuration.');
       } else if (error.response?.status === 401) {
         Alert.alert('Authentication Error', 'Please log in again.');
+      } else if (error.response?.status === 500) {
+        Alert.alert('Server Error', 'An error occurred on the server. Please try again later.');
+      } else {
+        // Show detailed error for debugging
+        console.log('🔍 Showing error to user:', errorMessage);
       }
     } finally {
       setLoading(false);
@@ -90,6 +123,7 @@ const PatientSearchScreen: React.FC = () => {
   };
 
   const handleTextChange = (text: string) => {
+    console.log('🔍 [PatientSearchScreen] Text changed:', text);
     setSearchQuery(text);
     setError(null);
     
@@ -100,10 +134,13 @@ const PatientSearchScreen: React.FC = () => {
     
     // Debounce: search after 500ms of no typing
     if (text.trim().length >= 2) {
+      console.log('🔍 [PatientSearchScreen] Scheduling search in 500ms...');
       searchTimeoutRef.current = setTimeout(() => {
+        console.log('🔍 [PatientSearchScreen] Debounced search triggered');
         performSearch(text);
       }, 500);
     } else {
+      console.log('🔍 [PatientSearchScreen] Query too short, clearing patients');
       setPatients([]);
     }
   };
@@ -117,53 +154,75 @@ const PatientSearchScreen: React.FC = () => {
     };
   }, []);
 
-  const renderPatient = ({ item, index }: { item: Patient; index: number }) => (
-    <Animated.View
-      style={[
-        {
-          opacity: fadeAnim,
-          transform: [
-            {
-              translateY: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [20, 0],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <TouchableOpacity
-        onPress={() => (navigation as any).navigate('PatientDetail', { patientId: item.id })}
-        activeOpacity={0.8}
+  const renderPatient = ({ item, index }: { item: Patient; index: number }) => {
+    console.log(`🔍 [PatientSearchScreen] Rendering patient ${index}:`, {
+      id: item.id,
+      firstName: item.firstName,
+      lastName: item.lastName,
+      patientNumber: item.patientNumber
+    });
+    
+    return (
+      <Animated.View
+        style={[
+          {
+            opacity: fadeAnim,
+            transform: [
+              {
+                translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
-        <GlassCard style={styles.patientCard} padding={spacing.lg}>
-          <View style={styles.patientHeader}>
-            <View style={styles.patientIconContainer}>
-              <Text style={styles.patientIcon}>👤</Text>
+        <TouchableOpacity
+          onPress={() => {
+            console.log(`🔍 [PatientSearchScreen] Patient clicked:`, item.id);
+            // If opened from "Record Vitals", navigate directly to Vitals screen
+            if (source === 'recordVitals') {
+              (navigation as any).navigate('Vitals', { patientId: item.id });
+            } else {
+              (navigation as any).navigate('PatientDetail', { patientId: item.id });
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <GlassCard style={styles.patientCard} padding={spacing.lg}>
+            <View style={styles.patientHeader}>
+              <View style={styles.patientIconContainer}>
+                <Text style={styles.patientIcon}>👤</Text>
+              </View>
+              <View style={styles.patientInfo}>
+                <Text style={styles.patientName}>
+                  {item.firstName || ''} {item.lastName || ''}
+                </Text>
+                {item.patientNumber && (
+                  <Text style={styles.patientNumber}>ID: {item.patientNumber}</Text>
+                )}
+                {item.dateOfBirth && (
+                  <Text style={styles.patientMeta}>DOB: {item.dateOfBirth}</Text>
+                )}
+              </View>
+              <Text style={styles.arrow}>→</Text>
             </View>
-            <View style={styles.patientInfo}>
-              <Text style={styles.patientName}>
-                {item.firstName} {item.lastName}
-              </Text>
-              {item.patientNumber && (
-                <Text style={styles.patientNumber}>ID: {item.patientNumber}</Text>
-              )}
-              {item.dateOfBirth && (
-                <Text style={styles.patientMeta}>DOB: {item.dateOfBirth}</Text>
-              )}
-            </View>
-            <Text style={styles.arrow}>→</Text>
-          </View>
-        </GlassCard>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+          </GlassCard>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Search Patients" subtitle="Find patient records" />
-      <View style={styles.content}>
+      <ScreenHeader 
+        title={source === 'recordVitals' ? 'Select Patient for Vitals' : 'Search Patients'} 
+        subtitle={source === 'recordVitals' ? 'Find patient to record vitals' : 'Find patient records'} 
+      />
+      
+      {/* Search Bar - Always visible */}
+      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
         <GlassCard style={styles.searchContainer} padding={spacing.md}>
           <View style={styles.searchInputContainer}>
             <Text style={styles.searchIcon}>🔍</Text>
@@ -187,22 +246,75 @@ const PatientSearchScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </GlassCard>
+      </View>
 
-        {error && (
+      {/* Error Message */}
+      {error && (
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.sm }}>
           <GlassCard style={styles.errorCard} padding={spacing.md}>
             <Text style={styles.errorIcon}>⚠️</Text>
             <Text style={styles.errorText}>{error}</Text>
+            <Text style={[styles.errorText, { marginTop: spacing.sm, fontSize: 12 }]}>
+              Please check your connection and try again. Make sure you're searching with at least 2 characters.
+            </Text>
           </GlassCard>
-        )}
-        
-        {loading && searchQuery.trim().length >= 2 && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Searching...</Text>
-          </View>
-        )}
+        </View>
+      )}
+      
+      {/* Info Card */}
+      {source === 'recordVitals' && searchQuery.trim().length === 0 && (
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.sm }}>
+          <GlassCard style={styles.infoCard} padding={spacing.md}>
+            <Text style={styles.infoIcon}>💡</Text>
+            <Text style={styles.infoText}>
+              Search for a patient by name, patient ID, or phone number. Type at least 2 characters to start searching.
+            </Text>
+          </GlassCard>
+        </View>
+      )}
 
-        {!loading && patients.length === 0 && searchQuery.trim().length >= 2 ? (
+      {/* Content Area */}
+      {loading && searchQuery.trim().length >= 2 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Searching...</Text>
+        </View>
+      ) : !loading && patients.length > 0 ? (
+        <View style={{ flex: 1 }}>
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
+            <View style={{ padding: spacing.md, backgroundColor: colors.info + '10', borderRadius: borderRadius.md }}>
+              <Text style={{ fontSize: 12, color: colors.info, fontWeight: '600' }}>
+                Found {patients.length} patient{patients.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+          </View>
+          <FlatList
+            data={patients}
+            renderItem={renderPatient}
+            keyExtractor={(item, index) => {
+              const key = item.id || `patient-${index}-${item.firstName}-${item.lastName}`;
+              console.log(`🔍 [PatientSearchScreen] KeyExtractor for item ${index}:`, key);
+              return key;
+            }}
+            contentContainerStyle={[styles.listContent, { paddingTop: 0 }]}
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+                <Text style={{ color: colors.textTertiary }}>No patients to display</Text>
+              </View>
+            }
+            onLayout={() => {
+              console.log('🔍 [PatientSearchScreen] FlatList onLayout - patients.length:', patients.length);
+            }}
+          />
+        </View>
+      ) : !loading && patients.length === 0 && searchQuery.trim().length >= 2 && !error ? (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
             <GlassCard style={styles.emptyState} padding={spacing.xl}>
               <Text style={styles.emptyIcon}>👤</Text>
@@ -213,17 +325,17 @@ const PatientSearchScreen: React.FC = () => {
               <Text style={styles.emptyHint}>
                 Search by: First Name, Last Name, Patient ID, or Phone Number
               </Text>
+              <Text style={[styles.emptyHint, { marginTop: spacing.sm, fontSize: 11, color: colors.textTertiary }]}>
+                Search query: "{searchQuery}"
+              </Text>
             </GlassCard>
           </Animated.View>
-        ) : !loading && patients.length > 0 ? (
-          <FlatList
-            data={patients}
-            renderItem={renderPatient}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
+        </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
             <GlassCard style={styles.emptyState} padding={spacing.xl}>
               <Text style={styles.emptyIcon}>🔍</Text>
@@ -236,8 +348,8 @@ const PatientSearchScreen: React.FC = () => {
               </Text>
             </GlassCard>
           </Animated.View>
-        )}
-      </View>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -386,6 +498,24 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.error,
+    flex: 1,
+  },
+  infoCard: {
+    margin: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.info + '20',
+    borderWidth: 1,
+    borderColor: colors.info,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoIcon: {
+    fontSize: 24,
+    marginRight: spacing.sm,
+  },
+  infoText: {
+    ...typography.body,
+    color: colors.info,
     flex: 1,
   },
 });

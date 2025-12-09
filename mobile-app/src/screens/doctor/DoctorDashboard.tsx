@@ -120,6 +120,7 @@ const DoctorDashboard: React.FC = () => {
   const getAppointmentStatusColor = (status: Appointment['status']) => {
     switch (status) {
       case 'checked_in':
+      case 'confirmed':
         return colors.info;
       case 'in_progress':
         return colors.primary;
@@ -136,6 +137,7 @@ const DoctorDashboard: React.FC = () => {
   const getAppointmentStatusText = (status: Appointment['status']) => {
     switch (status) {
       case 'checked_in':
+      case 'confirmed':
         return 'Checked In';
       case 'in_progress':
         return 'In Progress';
@@ -165,19 +167,62 @@ const DoctorDashboard: React.FC = () => {
   };
 
   const handleAppointmentPress = (appointment: Appointment) => {
-    (navigation as any).navigate('PatientDetail', { patientId: appointment.patient.id });
+    // If appointment is checked in or in progress, navigate to Visit Management
+    if (appointment.status === 'in_progress' || appointment.status === 'checked_in' || appointment.status === 'confirmed') {
+      (navigation as any).navigate('VisitManagement', { appointmentId: appointment.id });
+    } else {
+      (navigation as any).navigate('PatientDetail', { patientId: appointment.patient.id });
+    }
   };
 
   const handleQuickAction = (action: string, appointment?: Appointment) => {
     switch (action) {
       case 'checkin':
         if (appointment) {
-          appointmentService.checkInPatient(appointment.id).then(() => loadTodayAppointments());
+          appointmentService.checkInPatient(appointment.id)
+            .then(() => {
+              showToast('Patient checked in successfully', 'success', 'Check In');
+              loadTodayAppointments();
+            })
+            .catch((error: any) => {
+              console.error('Check-in error:', error);
+              // Extract error message from various possible formats
+              let errorMessage = 'Failed to check in patient.';
+              if (error.response?.data?.message) {
+                errorMessage = Array.isArray(error.response.data.message) 
+                  ? error.response.data.message.join(', ')
+                  : error.response.data.message;
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
+              // If it's a payment error, make it more user-friendly
+              if (errorMessage.includes('Payment') || errorMessage.includes('payment')) {
+                showAlert(
+                  'Payment Required',
+                  'Please confirm payment before checking in the patient. You can process payment from the Finance Dashboard.',
+                  'error'
+                );
+              } else {
+                showAlert('Check In Failed', errorMessage, 'error');
+              }
+            });
         }
         break;
       case 'start':
         if (appointment) {
-          appointmentService.startAppointment(appointment.id).then(() => loadTodayAppointments());
+          appointmentService.startAppointment(appointment.id)
+            .then(() => {
+              showToast('Appointment started', 'success', 'Started');
+              loadTodayAppointments();
+              // Navigate to Visit Management screen after starting
+              (navigation as any).navigate('VisitManagement', { appointmentId: appointment.id });
+            })
+            .catch((error: any) => {
+              console.error('Start appointment error:', error);
+              const errorMessage = error.response?.data?.message || error.message || 'Failed to start appointment';
+              showAlert('Start Failed', errorMessage, 'error');
+            });
         }
         break;
       case 'prescribe':
@@ -197,17 +242,17 @@ const DoctorDashboard: React.FC = () => {
 
   // Group appointments by status
   const scheduledAppointments = appointments.filter((apt) => apt.status === 'scheduled');
-  const checkedInAppointments = appointments.filter((apt) => apt.status === 'checked_in');
+  const checkedInAppointments = appointments.filter((apt) => apt.status === 'checked_in' || apt.status === 'confirmed');
   const inProgressAppointments = appointments.filter((apt) => apt.status === 'in_progress');
-  // Show all scheduled appointments for today (not just future ones)
+  // Show all scheduled appointments for today (not just future ones) - exclude checked-in/confirmed
   const todayScheduledAppointments = scheduledAppointments.filter((apt) => {
     const aptTime = parseISO(apt.appointmentDate);
-    return isToday(aptTime);
+    return isToday(aptTime) && apt.status === 'scheduled';
   });
 
   const stats = {
     total: appointments.length,
-    upcoming: todayScheduledAppointments.length,
+    upcoming: todayScheduledAppointments.length, // Only scheduled, not checked-in
     checkedIn: checkedInAppointments.length,
     inProgress: inProgressAppointments.length,
   };
@@ -387,6 +432,14 @@ const DoctorDashboard: React.FC = () => {
                       </Text>
                     </View>
                     <View style={styles.quickActions}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: colors.primary, flex: 1, marginRight: spacing.sm }]}
+                        onPress={() => {
+                          (navigation as any).navigate('VisitManagement', { appointmentId: appointment.id });
+                        }}
+                      >
+                        <Text style={styles.actionButtonText}>Manage Visit</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionButton, { backgroundColor: colors.success, flex: 1 }]}
                         onPress={() => {

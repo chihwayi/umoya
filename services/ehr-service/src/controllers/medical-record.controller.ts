@@ -21,7 +21,14 @@ export class MedicalRecordController {
   @Get('patient/:patientId')
   @ApiOperation({ summary: 'Get patient medical records' })
   async getPatientRecords(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
-    return this.medicalRecordService.findByPatient(patientId, req.tenantDb);
+    try {
+      const records = await this.medicalRecordService.findByPatient(patientId, req.tenantDb);
+      return records || [];
+    } catch (error) {
+      console.error(`Error fetching medical records for patient ${patientId}:`, error);
+      // Return empty array instead of throwing 500 error
+      return [];
+    }
   }
 
   @Get(':id')

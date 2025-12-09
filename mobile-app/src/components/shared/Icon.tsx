@@ -56,11 +56,16 @@ const iconMap: { [key: string]: string } = {
   
   // Medical
   heart: '❤️',
+  'heart-pulse': '💓',
+  'heart-beat': '💓',
+  lungs: '🫁',
   pill: '💊',
   syringe: '💉',
   thermometer: '🌡️',
   bandage: '🩹',
   hospital: '🏥',
+  'blood-pressure': '🩸',
+  weight: '⚖️',
   
   // UI
   arrowRight: '→',

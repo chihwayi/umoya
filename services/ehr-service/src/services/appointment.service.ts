@@ -308,6 +308,7 @@ export class AppointmentService {
   async update(id: string, updateAppointmentDto: UpdateAppointmentDto, tenantId: string): Promise<AppointmentSimple> {
     const appointment = await this.findOne(id, tenantId);
     const appointmentRepository = await this.getAppointmentRepository(tenantId);
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
 
     // Check for conflicts if date is being changed
     if (updateAppointmentDto.appointmentDate) {
@@ -321,6 +322,48 @@ export class AppointmentService {
     if (typeof updateAppointmentDto.feeAmount !== 'undefined') {
       appointment.feeAmount = Number(updateAppointmentDto.feeAmount);
     }
+
+    // Handle diagnosis codes - update database directly if provided
+    if (updateAppointmentDto.primaryDiagnosisCode || updateAppointmentDto.diagnosisCodes || updateAppointmentDto.diagnosisSnomedCode) {
+      const updates: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (updateAppointmentDto.primaryDiagnosisCode !== undefined) {
+        updates.push(`primary_diagnosis_code = $${paramIndex++}`);
+        params.push(updateAppointmentDto.primaryDiagnosisCode);
+      }
+
+      if (updateAppointmentDto.primaryDiagnosisDescription !== undefined) {
+        updates.push(`primary_diagnosis_description = $${paramIndex++}`);
+        params.push(updateAppointmentDto.primaryDiagnosisDescription);
+      }
+
+      if (updateAppointmentDto.diagnosisCodes !== undefined) {
+        updates.push(`diagnosis_codes = $${paramIndex++}`);
+        params.push(updateAppointmentDto.diagnosisCodes);
+      }
+
+      if (updateAppointmentDto.diagnosisSnomedCode !== undefined) {
+        updates.push(`diagnosis_snomed_code = $${paramIndex++}`);
+        params.push(updateAppointmentDto.diagnosisSnomedCode);
+      }
+
+      if (updateAppointmentDto.diagnosisSnomedTerm !== undefined) {
+        updates.push(`diagnosis_snomed_term = $${paramIndex++}`);
+        params.push(updateAppointmentDto.diagnosisSnomedTerm);
+      }
+
+      if (updates.length > 0) {
+        params.push(id);
+        await connection.query(
+          `UPDATE appointments SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+          params
+        );
+        this.logger.log(`Updated diagnosis codes for appointment ${id}`);
+      }
+    }
+
     return appointmentRepository.save(appointment);
   }
 

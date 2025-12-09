@@ -29,9 +29,19 @@ class ClinicalNotesService {
   async getPatientMedicalRecords(patientId: string): Promise<any[]> {
     try {
       const response = await ehrApi.get(API_ENDPOINTS.MEDICAL_RECORD.PATIENT(patientId));
-      return Array.isArray(response) ? response : response.data || response.records || [];
-    } catch (error) {
-      console.error('Error fetching medical records:', error);
+      const records = Array.isArray(response) ? response : response.data || response.records || [];
+      console.log(`📋 [ClinicalNotesService] Loaded ${records.length} medical records for patient ${patientId}`);
+      return records;
+    } catch (error: any) {
+      console.error('❌ [ClinicalNotesService] Error fetching medical records:', error);
+      console.error('❌ [ClinicalNotesService] Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url,
+      });
+      // Return empty array instead of throwing to prevent app crashes
       return [];
     }
   }
@@ -76,6 +86,11 @@ class ClinicalNotesService {
     notes?: string;
     problems?: any[];
     allergies?: any[];
+    diagnosisCodes?: string[];
+    primaryDiagnosisCode?: string;
+    primaryDiagnosisDescription?: string;
+    diagnosisSnomedCode?: string;
+    diagnosisSnomedTerm?: string;
   }): Promise<any> {
     try {
       // Get existing appointment notes
@@ -102,14 +117,53 @@ class ClinicalNotesService {
         },
       };
 
-      // Update appointment
-      const response = await ehrApi.put(
-        API_ENDPOINTS.APPOINTMENT.UPDATE(appointmentId),
-        { notes: JSON.stringify(updatedNotes) }
+      // Update appointment - backend uses PATCH, not PUT
+      const endpoint = API_ENDPOINTS.APPOINTMENT.UPDATE(appointmentId);
+      console.log('📝 [ClinicalNotesService] Updating appointment notes:', {
+        appointmentId,
+        endpoint,
+        notesLength: JSON.stringify(updatedNotes).length
+      });
+      
+      // Prepare update payload with both notes and diagnosis codes
+      const updatePayload: any = {
+        notes: JSON.stringify(updatedNotes)
+      };
+
+      // Add diagnosis codes if provided
+      if (notes.diagnosisCodes) {
+        updatePayload.diagnosisCodes = notes.diagnosisCodes;
+      }
+      if (notes.primaryDiagnosisCode) {
+        updatePayload.primaryDiagnosisCode = notes.primaryDiagnosisCode;
+      }
+      if (notes.primaryDiagnosisDescription) {
+        updatePayload.primaryDiagnosisDescription = notes.primaryDiagnosisDescription;
+      }
+      if (notes.diagnosisSnomedCode) {
+        updatePayload.diagnosisSnomedCode = notes.diagnosisSnomedCode;
+      }
+      if (notes.diagnosisSnomedTerm) {
+        updatePayload.diagnosisSnomedTerm = notes.diagnosisSnomedTerm;
+      }
+      
+      const response = await ehrApi.patch(
+        endpoint,
+        updatePayload
       );
+      
+      console.log('📝 [ClinicalNotesService] Notes updated successfully');
       return response.data || response;
-    } catch (error) {
-      console.error('Error updating appointment notes:', error);
+    } catch (error: any) {
+      console.error('❌ [ClinicalNotesService] Error updating appointment notes:', error);
+      console.error('❌ [ClinicalNotesService] Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: error.config?.url,
+        method: error.config?.method,
+      });
       throw error;
     }
   }

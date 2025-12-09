@@ -27,44 +27,60 @@ const patientService = {
    */
   searchPatients: async (query: string): Promise<Patient[]> => {
     try {
-      console.log('🔍 Searching patients with query:', query);
-      console.log('🔍 Using endpoint:', `${API_ENDPOINTS.PATIENT.SEARCH}?q=${encodeURIComponent(query)}`);
+      console.log('🔍 [PatientService] Searching patients with query:', query);
+      const endpoint = `${API_ENDPOINTS.PATIENT.SEARCH}?q=${encodeURIComponent(query)}`;
+      console.log('🔍 [PatientService] Using endpoint:', endpoint);
+      console.log('🔍 [PatientService] Full URL would be:', `BASE_URL${endpoint}`);
       
       // Axios interceptor automatically adds auth token and tenant header
-      const response = await ehrApi.get(
-        `${API_ENDPOINTS.PATIENT.SEARCH}?q=${encodeURIComponent(query)}`
-      );
+      const response = await ehrApi.get(endpoint);
 
-      console.log('🔍 Search response:', response);
-      console.log('🔍 Response type:', typeof response);
-      console.log('🔍 Is array?', Array.isArray(response));
+      console.log('🔍 [PatientService] Raw response:', response);
+      console.log('🔍 [PatientService] Response type:', typeof response);
+      console.log('🔍 [PatientService] Is array?', Array.isArray(response));
+      console.log('🔍 [PatientService] Response keys:', response && typeof response === 'object' ? Object.keys(response) : 'N/A');
 
-      // Backend returns array directly or wrapped in data
+      // Backend returns array directly (Promise<Patient[]>)
+      // But ehrApi.get returns response.data, so we need to check the structure
       let patients: Patient[] = [];
       
+      // The backend controller returns Patient[] directly
+      // ehrApi.get() returns response.data, so if backend returns array, response should be array
       if (Array.isArray(response)) {
         patients = response;
-      } else if (response?.data) {
-        patients = Array.isArray(response.data) ? response.data : [];
-      } else if (response?.patients) {
-        patients = Array.isArray(response.patients) ? response.patients : [];
+        console.log('🔍 [PatientService] Response is array, using directly');
+      } else if (response?.data && Array.isArray(response.data)) {
+        patients = response.data;
+        console.log('🔍 [PatientService] Response has data array');
+      } else if (response?.patients && Array.isArray(response.patients)) {
+        patients = response.patients;
+        console.log('🔍 [PatientService] Response has patients array');
       } else if (response && typeof response === 'object') {
         // Try to extract array from response object
         const keys = Object.keys(response);
+        console.log('🔍 [PatientService] Checking response keys for array:', keys);
         for (const key of keys) {
           if (Array.isArray(response[key])) {
             patients = response[key];
+            console.log(`🔍 [PatientService] Found array in key: ${key}`);
             break;
           }
         }
       }
 
-      console.log('🔍 Extracted patients:', patients.length);
+      console.log('🔍 [PatientService] Final extracted patients count:', patients.length);
+      if (patients.length > 0) {
+        console.log('🔍 [PatientService] First patient sample:', JSON.stringify(patients[0], null, 2));
+      } else {
+        console.warn('⚠️ [PatientService] No patients found. Full response:', JSON.stringify(response, null, 2));
+      }
+      
       return patients;
     } catch (error: any) {
-      console.error('❌ Error searching patients:', error);
-      console.error('❌ Error response:', error.response?.data);
-      console.error('❌ Error status:', error.response?.status);
+      console.error('❌ [PatientService] Error searching patients:', error);
+      console.error('❌ [PatientService] Error response:', error.response?.data);
+      console.error('❌ [PatientService] Error status:', error.response?.status);
+      console.error('❌ [PatientService] Error config:', error.config);
       throw error;
     }
   },

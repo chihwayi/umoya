@@ -12,7 +12,8 @@
     "strict": true,
     "target": "esnext",
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "typeRoots": ["./node_modules/@types"]
   },
   "exclude": [
     "node_modules",
@@ -21,6 +22,9 @@
     "jest.config.js",
     "android",
     "ios"
+  ],
+  "include": [
+    "src/**/*"
   ]
 }
 

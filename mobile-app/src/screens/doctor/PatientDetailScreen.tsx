@@ -9,24 +9,41 @@ import {
   Animated,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
 import patientService, { Patient } from '../../services/patient.service';
 import prescriptionService from '../../services/prescription.service';
 import labService from '../../services/lab.service';
+import vitalsService, { Vitals } from '../../services/vitals.service';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
 import ScreenHeader from '../../components/shared/ScreenHeader';
 import GlassCard from '../../components/shared/GlassCard';
 import PrimaryButton from '../../components/shared/PrimaryButton';
 import PatientSummaryCard from '../../components/patient/PatientSummaryCard';
+import Icon from '../../components/shared/Icon';
 
 const PatientDetailScreen: React.FC = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { patientId } = route.params as { patientId: string };
+  const { user } = useSelector((state: RootState) => state.auth);
+  
+  // Determine user role - check multiple possible locations
+  const userRole = (user as any)?.role || (user as any)?.user?.role || (user as any)?.userRole || 'doctor';
+  const roleLower = String(userRole || '').toLowerCase();
+  const isNurse = roleLower === 'nurse';
+  const isDoctor = roleLower === 'doctor';
+  
+  // Debug logging - ALWAYS log to help troubleshoot
+  console.log('👤 PatientDetailScreen - Full user object:', JSON.stringify(user, null, 2));
+  console.log('👤 PatientDetailScreen - User role:', userRole, 'roleLower:', roleLower, 'isNurse:', isNurse, 'isDoctor:', isDoctor);
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activePrescriptions, setActivePrescriptions] = useState<any[]>([]);
   const [recentLabs, setRecentLabs] = useState<any[]>([]);
+  const [latestVitals, setLatestVitals] = useState<Vitals | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingVitals, setLoadingVitals] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -46,6 +63,18 @@ const PatientDetailScreen: React.FC = () => {
         prescriptionService.getActivePrescriptions(patientId),
         labService.getPatientLabResults(patientId),
       ]);
+      
+      // Load vitals separately
+      try {
+        setLoadingVitals(true);
+        const vitals = await vitalsService.getLatestVitals(patientId);
+        setLatestVitals(vitals);
+      } catch (error) {
+        console.error('Error loading vitals:', error);
+        setLatestVitals(null);
+      } finally {
+        setLoadingVitals(false);
+      }
 
       if (patientData.status === 'fulfilled') {
         setPatient(patientData.value);
@@ -54,10 +83,12 @@ const PatientDetailScreen: React.FC = () => {
       }
 
       if (prescriptions.status === 'fulfilled') {
-        setActivePrescriptions(prescriptions.value);
+        setActivePrescriptions(prescriptions.value || []);
       } else {
         console.error('Error loading prescriptions:', prescriptions.reason);
-        setActivePrescriptions([]); // Set empty array on error
+        // Don't show error to user - just show empty state
+        // The prescription service already returns [] on error
+        setActivePrescriptions([]);
       }
 
       if (labs.status === 'fulfilled') {
@@ -109,6 +140,75 @@ const PatientDetailScreen: React.FC = () => {
         {/* Enhanced Patient Summary Card */}
         <PatientSummaryCard patientId={patientId} patient={patient} />
 
+        {/* Latest Vitals - Show for both nurses and doctors */}
+        <GlassCard style={styles.section} padding={spacing.lg}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Latest Vitals</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.actionButton}>
+                {latestVitals ? 'Update' : 'Record'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {loadingVitals ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : latestVitals ? (
+            <View style={styles.vitalsGrid}>
+              {latestVitals.temperature && (
+                <View style={styles.vitalItem}>
+                  <Icon name="thermometer" size={20} />
+                  <Text style={styles.vitalLabel}>Temp</Text>
+                  <Text style={styles.vitalValue}>{latestVitals.temperature}°C</Text>
+                </View>
+              )}
+              {(latestVitals.bloodPressureSystolic || latestVitals.bloodPressureDiastolic) && (
+                <View style={styles.vitalItem}>
+                  <Icon name="blood-pressure" size={20} />
+                  <Text style={styles.vitalLabel}>BP</Text>
+                  <Text style={styles.vitalValue}>
+                    {latestVitals.bloodPressureSystolic || '--'}/{latestVitals.bloodPressureDiastolic || '--'}
+                  </Text>
+                </View>
+              )}
+              {latestVitals.heartRate && (
+                <View style={styles.vitalItem}>
+                  <Icon name="heart-pulse" size={20} />
+                  <Text style={styles.vitalLabel}>HR</Text>
+                  <Text style={styles.vitalValue}>{latestVitals.heartRate} bpm</Text>
+                </View>
+              )}
+              {latestVitals.oxygenSaturation && (
+                <View style={styles.vitalItem}>
+                  <Icon name="lungs" size={20} />
+                  <Text style={styles.vitalLabel}>SpO2</Text>
+                  <Text style={styles.vitalValue}>{latestVitals.oxygenSaturation}%</Text>
+                </View>
+              )}
+              {latestVitals.weight && (
+                <View style={styles.vitalItem}>
+                  <Icon name="weight" size={20} />
+                  <Text style={styles.vitalLabel}>Weight</Text>
+                  <Text style={styles.vitalValue}>{latestVitals.weight} kg</Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.emptyVitalsContainer}>
+              <Text style={styles.emptyVitalsText}>No vitals recorded</Text>
+              <TouchableOpacity
+                style={styles.recordVitalsButton}
+                onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.recordVitalsButtonText}>Record Vitals</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </GlassCard>
+
         <GlassCard style={styles.section} padding={spacing.lg}>
           <Text style={styles.sectionTitle}>Demographics</Text>
           <View style={styles.infoRow}>
@@ -136,12 +236,14 @@ const PatientDetailScreen: React.FC = () => {
         <GlassCard style={styles.section} padding={spacing.lg}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Prescriptions</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.actionButton}>+ Prescribe</Text>
-            </TouchableOpacity>
+            {isDoctor && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionButton}>+ Prescribe</Text>
+              </TouchableOpacity>
+            )}
           </View>
           {activePrescriptions.length > 0 ? (
             activePrescriptions.map((prescription) => (
@@ -160,12 +262,14 @@ const PatientDetailScreen: React.FC = () => {
         <GlassCard style={styles.section} padding={spacing.lg}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Lab Results</Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.actionButton}>+ Order Lab</Text>
-            </TouchableOpacity>
+            {isDoctor && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionButton}>+ Order Lab</Text>
+              </TouchableOpacity>
+            )}
           </View>
           {recentLabs.length > 0 ? (
             recentLabs.map((lab) => (
@@ -181,64 +285,110 @@ const PatientDetailScreen: React.FC = () => {
           )}
         </GlassCard>
 
-        {/* Clinical Documentation Quick Access */}
+        {/* Quick Actions - Different for Nurses vs Doctors */}
         <GlassCard style={styles.section} padding={spacing.lg}>
-          <Text style={styles.sectionTitle}>Clinical Documentation</Text>
+          <Text style={styles.sectionTitle}>
+            {isNurse ? 'Quick Actions' : 'Clinical Documentation'}
+          </Text>
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('ClinicalNotes' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickActionIcon}>📝</Text>
-              <Text style={styles.quickActionText}>Clinical Notes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('ProblemList' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickActionIcon}>⚠️</Text>
-              <Text style={styles.quickActionText}>Problems</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('Allergies' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickActionIcon}>🚨</Text>
-              <Text style={styles.quickActionText}>Allergies</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('ChartReview' as never, { patientId } as never)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.quickActionIcon}>📋</Text>
-              <Text style={styles.quickActionText}>Chart Review</Text>
-            </TouchableOpacity>
+            {isNurse && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('Vitals' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>🩺</Text>
+                <Text style={styles.quickActionText}>Record Vitals</Text>
+              </TouchableOpacity>
+            )}
+            {isNurse && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('MAR' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>💉</Text>
+                <Text style={styles.quickActionText}>Medication Administration Record</Text>
+              </TouchableOpacity>
+            )}
+            {isDoctor && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('ClinicalNotes' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>📝</Text>
+                <Text style={styles.quickActionText}>Clinical Notes</Text>
+              </TouchableOpacity>
+            )}
+            {isDoctor && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('ProblemList' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>⚠️</Text>
+                <Text style={styles.quickActionText}>Problems</Text>
+              </TouchableOpacity>
+            )}
+            {isDoctor && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('Allergies' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>🚨</Text>
+                <Text style={styles.quickActionText}>Allergies</Text>
+              </TouchableOpacity>
+            )}
+            {isDoctor && (
+              <TouchableOpacity
+                style={styles.quickActionCard}
+                onPress={() => navigation.navigate('ChartReview' as never, { patientId } as never)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickActionIcon}>📋</Text>
+                <Text style={styles.quickActionText}>Chart Review</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </GlassCard>
 
-        <View style={styles.actions}>
-          <PrimaryButton
-            title="Create Appointment"
-            onPress={() => navigation.navigate('CreateAppointment' as never, { patientId } as never)}
-            icon="📅"
-          />
-          <PrimaryButton
-            title="Prescribe Medication"
-            onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
-            icon="💊"
-          />
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.secondaryButtonText}>Order Lab Test</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Actions - Only show for doctors, nurses use Quick Actions above */}
+        {isDoctor && (
+          <View style={styles.actions}>
+            <PrimaryButton
+              title="Create Appointment"
+              onPress={() => navigation.navigate('CreateAppointment' as never, { patientId } as never)}
+              icon="📅"
+            />
+            <PrimaryButton
+              title="Prescribe Medication"
+              onPress={() => navigation.navigate('CreatePrescription' as never, { patientId } as never)}
+              icon="💊"
+            />
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => navigation.navigate('LabOrder' as never, { patientId } as never)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>Order Lab Test</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* For nurses, show Schedule Appointment option */}
+        {isNurse && (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => navigation.navigate('CreateAppointment' as never, { patientId } as never)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryButtonText}>Schedule Appointment</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </Animated.View>
     </ScrollView>
   );
@@ -334,6 +484,51 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.error,
+  },
+  vitalsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  vitalItem: {
+    width: '47%',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.backgroundTertiary,
+    borderRadius: borderRadius.md,
+  },
+  vitalLabel: {
+    ...typography.label,
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  vitalValue: {
+    ...typography.bodyBold,
+    fontSize: 16,
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
+  },
+  emptyVitalsContainer: {
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  emptyVitalsText: {
+    ...typography.body,
+    color: colors.textTertiary,
+    marginBottom: spacing.md,
+  },
+  recordVitalsButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  recordVitalsButtonText: {
+    ...typography.body,
+    color: colors.textOnPrimary,
+    fontWeight: '600',
   },
   quickActionsGrid: {
     flexDirection: 'row',

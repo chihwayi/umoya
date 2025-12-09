@@ -23,7 +23,34 @@ export class VitalsService {
   async recordVitals(data: Partial<Vitals>, tenantId: string): Promise<Vitals & { cdssInsights?: any }> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     const repo = tenantDb.getRepository(Vitals);
-    const entity = repo.create(data as Vitals);
+    
+    // Convert bloodPressureSystolic/diastolic to blood_pressure string format
+    const vitalsData: any = { ...data };
+    if (vitalsData.bloodPressureSystolic !== undefined || vitalsData.bloodPressureDiastolic !== undefined) {
+      const systolic = vitalsData.bloodPressureSystolic;
+      const diastolic = vitalsData.bloodPressureDiastolic;
+      // Save BP if at least one value is provided
+      if (systolic !== undefined && systolic !== null && diastolic !== undefined && diastolic !== null) {
+        vitalsData.bloodPressure = `${systolic}/${diastolic}`;
+      } else if (systolic !== undefined && systolic !== null) {
+        vitalsData.bloodPressure = `${systolic}/--`;
+      } else if (diastolic !== undefined && diastolic !== null) {
+        vitalsData.bloodPressure = `--/${diastolic}`;
+      }
+      // Remove the separate fields as they don't exist in the entity
+      delete vitalsData.bloodPressureSystolic;
+      delete vitalsData.bloodPressureDiastolic;
+    }
+    
+    // Ensure BMI and bloodGlucose are properly set (convert from camelCase if needed)
+    if (vitalsData.bloodGlucose !== undefined) {
+      vitalsData.bloodGlucose = vitalsData.bloodGlucose;
+    }
+    if (vitalsData.bmi !== undefined) {
+      vitalsData.bmi = vitalsData.bmi;
+    }
+    
+    const entity = repo.create(vitalsData as Vitals);
     const saved = await repo.save(entity);
 
     let cdssInsights: any = null;
@@ -68,10 +95,22 @@ export class VitalsService {
 
   async getByPatient(patientId: string, tenantId: string, limit = 100): Promise<Vitals[]> {
     const repo = await this.getRepository(tenantId);
-    return repo.find({
+    const vitals = await repo.find({
       where: { patientId },
       order: { recordedAt: 'DESC' },
       take: limit,
+    });
+    
+    // Convert blood_pressure string to bloodPressureSystolic/diastolic for frontend compatibility
+    return vitals.map((v: any) => {
+      if (v.bloodPressure && typeof v.bloodPressure === 'string') {
+        const bpMatch = v.bloodPressure.match(/(\d+)\s*\/\s*(\d+)/);
+        if (bpMatch) {
+          v.bloodPressureSystolic = parseInt(bpMatch[1], 10);
+          v.bloodPressureDiastolic = parseInt(bpMatch[2], 10);
+        }
+      }
+      return v;
     });
   }
 

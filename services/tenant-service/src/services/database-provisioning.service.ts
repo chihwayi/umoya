@@ -825,7 +825,13 @@ export class DatabaseProvisioningService {
           last_reminder_sent TIMESTAMP WITH TIME ZONE,
           created_by UUID REFERENCES users(id),
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          -- Diagnosis codes (Migration 030)
+          diagnosis_snomed_code VARCHAR(50),
+          diagnosis_snomed_term TEXT,
+          primary_diagnosis_code VARCHAR(50),
+          primary_diagnosis_description TEXT,
+          diagnosis_codes TEXT[]
       );
       
       CREATE TABLE vitals (
@@ -1044,6 +1050,9 @@ export class DatabaseProvisioningService {
       CREATE INDEX idx_appointments_priority ON appointments(priority_level);
       CREATE INDEX idx_appointments_telehealth ON appointments(is_telehealth);
       CREATE INDEX idx_appointments_created_by ON appointments(created_by);
+      CREATE INDEX IF NOT EXISTS idx_appointments_diagnosis_snomed ON appointments(diagnosis_snomed_code);
+      CREATE INDEX IF NOT EXISTS idx_appointments_primary_diagnosis_code ON appointments(primary_diagnosis_code);
+      CREATE INDEX IF NOT EXISTS idx_appointments_diagnosis_codes ON appointments USING GIN(diagnosis_codes);
       
       CREATE INDEX idx_vitals_patient_id ON vitals(patient_id);
       CREATE INDEX idx_vitals_recorded_at ON vitals(recorded_at);

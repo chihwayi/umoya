@@ -10,12 +10,32 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import appointmentService, { Appointment } from '../../services/appointment.service';
+import vitalsService, { Vitals } from '../../services/vitals.service';
+import allergyService from '../../services/allergy.service';
+import problemService from '../../services/problem.service';
+import { ehrApi } from '../../config/api';
+import { API_ENDPOINTS } from '../../config/api';
 import { colors, typography, spacing, borderRadius } from '../../theme/designSystem';
 import ScreenHeader from '../../components/shared/ScreenHeader';
 import GlassCard from '../../components/shared/GlassCard';
 import PrimaryButton from '../../components/shared/PrimaryButton';
 import Icon from '../../components/shared/Icon';
 import { format, parseISO } from 'date-fns';
+import { checkVitalsAlerts, hasCriticalAlerts, VitalsAlert } from '../../utils/vitalsAlerts';
+
+interface Problem {
+  id: string;
+  problem: string;
+  status: string;
+  onsetDate?: string;
+}
+
+interface Allergy {
+  id: string;
+  allergen: string;
+  reaction?: string;
+  severity?: string;
+}
 
 const VisitManagementScreen: React.FC = () => {
   const route = useRoute();
@@ -25,10 +45,23 @@ const VisitManagementScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [loadingPatientData, setLoadingPatientData] = useState(false);
+  
+  // Patient clinical data
+  const [latestVitals, setLatestVitals] = useState<Vitals | null>(null);
+  const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [allergies, setAllergies] = useState<Allergy[]>([]);
 
   useEffect(() => {
     loadAppointment();
   }, [appointmentId]);
+
+  useEffect(() => {
+    if (appointment?.patient?.id && appointment.status === 'in_progress') {
+      loadPatientData();
+    }
+  }, [appointment?.patient?.id, appointment?.status]);
 
   const loadAppointment = async () => {
     try {
@@ -40,6 +73,62 @@ const VisitManagementScreen: React.FC = () => {
       Alert.alert('Error', 'Failed to load appointment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPatientData = async () => {
+    if (!appointment?.patient?.id) return;
+    
+    try {
+      setLoadingPatientData(true);
+      const patientId = appointment.patient.id;
+      
+      // Load vitals, problems, and allergies in parallel
+      const [vitalsData, problemsData, allergiesData] = await Promise.all([
+        vitalsService.getLatestVitals(patientId).catch((err) => {
+          console.error('Error loading vitals:', err);
+          return null;
+        }),
+        problemService.getPatientProblems(patientId).catch((err) => {
+          console.error('Error loading problems:', err);
+          return [];
+        }),
+        allergyService.getPatientAllergies(patientId).catch((err) => {
+          console.error('Error loading allergies:', err);
+          return [];
+        }),
+      ]);
+      
+      console.log('🩺 [VisitManagementScreen] Loaded vitals:', JSON.stringify(vitalsData, null, 2));
+      console.log('🩺 [VisitManagementScreen] Loaded problems:', problemsData?.length || 0);
+      console.log('🩺 [VisitManagementScreen] Loaded allergies:', allergiesData?.length || 0);
+      
+      setLatestVitals(vitalsData);
+      
+      // Check for abnormal vitals
+      if (vitalsData) {
+        const alerts = checkVitalsAlerts({
+          temperature: vitalsData.temperature,
+          bloodPressureSystolic: vitalsData.bloodPressureSystolic,
+          bloodPressureDiastolic: vitalsData.bloodPressureDiastolic,
+          heartRate: vitalsData.heartRate,
+          oxygenSaturation: vitalsData.oxygenSaturation,
+          respiratoryRate: vitalsData.respiratoryRate,
+          bloodGlucose: vitalsData.bloodGlucose,
+        });
+        setVitalsAlerts(alerts);
+        console.log('🚨 [VisitManagementScreen] Vitals alerts:', alerts.length);
+      } else {
+        setVitalsAlerts([]);
+      }
+      
+      setProblems(Array.isArray(problemsData) ? problemsData : []);
+      setAllergies(Array.isArray(allergiesData) ? allergiesData : []);
+    } catch (error) {
+      console.error('Error loading patient data:', error);
+      // Don't show alert - just log the error
+    } finally {
+      setLoadingPatientData(false);
     }
   };
 
@@ -61,6 +150,10 @@ const VisitManagementScreen: React.FC = () => {
       setUpdating(true);
       await appointmentService.startAppointment(appointmentId);
       await loadAppointment();
+      // Load patient data after starting visit
+      if (appointment?.patient?.id) {
+        await loadPatientData();
+      }
       Alert.alert('Success', 'Visit started');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to start visit');
@@ -249,6 +342,194 @@ const VisitManagementScreen: React.FC = () => {
           )}
         </GlassCard>
 
+        {/* Critical Patient Information - Only show when visit is in progress */}
+        {appointment.status === 'in_progress' && (
+          <>
+            {/* Vitals Alerts - DANGER STYLING */}
+            {vitalsAlerts.length > 0 && (
+              <GlassCard style={[styles.card, styles.dangerAlertCard]} padding={spacing.lg}>
+                <View style={styles.dangerHeader}>
+                  <Text style={styles.dangerTitle}>🚨 ABNORMAL VITALS ALERT 🚨</Text>
+                  <View style={styles.dangerBadge}>
+                    <Text style={styles.dangerBadgeText}>{vitalsAlerts.length}</Text>
+                  </View>
+                </View>
+                {vitalsAlerts.map((alert, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.dangerAlertItem,
+                      alert.type === 'critical' && styles.criticalDangerAlert,
+                      alert.type === 'warning' && styles.warningDangerAlert,
+                    ]}
+                  >
+                    <View style={styles.dangerAlertHeader}>
+                      <Text style={styles.dangerAlertIcon}>
+                        {alert.type === 'critical' ? '🔴' : '🟠'}
+                      </Text>
+                      <Text style={styles.dangerAlertVital}>{alert.vital}</Text>
+                    </View>
+                    <Text style={styles.dangerAlertMessage}>{alert.message}</Text>
+                    <View style={styles.dangerAlertDetails}>
+                      <Text style={styles.dangerAlertValueLabel}>Current Value:</Text>
+                      <Text style={styles.dangerAlertValue}>{alert.value}</Text>
+                    </View>
+                    <View style={styles.dangerAlertDetails}>
+                      <Text style={styles.dangerAlertNormalLabel}>Normal Range:</Text>
+                      <Text style={styles.dangerAlertNormal}>{alert.normalRange}</Text>
+                    </View>
+                  </View>
+                ))}
+              </GlassCard>
+            )}
+
+            {/* Recent Vitals */}
+            <GlassCard style={styles.card} padding={spacing.lg}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Vitals</Text>
+                {loadingPatientData && <ActivityIndicator size="small" color={colors.primary} />}
+              </View>
+              {latestVitals ? (
+                <View style={styles.vitalsGrid}>
+                  {latestVitals.temperature && (
+                    <View style={styles.vitalItem}>
+                      <Icon name="thermometer" size={20} />
+                      <Text style={styles.vitalLabel}>Temp</Text>
+                      <Text style={[
+                        styles.vitalValue,
+                        vitalsAlerts.find(a => a.vital === 'Temperature') && {
+                          color: vitalsAlerts.find(a => a.vital === 'Temperature')?.type === 'critical' 
+                            ? colors.error 
+                            : colors.warning
+                        }
+                      ]}>
+                        {latestVitals.temperature}°C
+                      </Text>
+                    </View>
+                  )}
+                  {(latestVitals.bloodPressureSystolic || latestVitals.bloodPressureDiastolic) ? (
+                    <View style={styles.vitalItem}>
+                      <Icon name="blood-pressure" size={20} />
+                      <Text style={styles.vitalLabel}>BP</Text>
+                      <Text style={[
+                        styles.vitalValue,
+                        vitalsAlerts.find(a => a.vital === 'Blood Pressure') && {
+                          color: vitalsAlerts.find(a => a.vital === 'Blood Pressure')?.type === 'critical' 
+                            ? colors.error 
+                            : colors.warning
+                        }
+                      ]}>
+                        {latestVitals.bloodPressureSystolic || '--'}/{latestVitals.bloodPressureDiastolic || '--'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {latestVitals.heartRate && (
+                    <View style={styles.vitalItem}>
+                      <Icon name="heart-pulse" size={20} />
+                      <Text style={styles.vitalLabel}>HR</Text>
+                      <Text style={[
+                        styles.vitalValue,
+                        vitalsAlerts.find(a => a.vital === 'Heart Rate') && {
+                          color: vitalsAlerts.find(a => a.vital === 'Heart Rate')?.type === 'critical' 
+                            ? colors.error 
+                            : colors.warning
+                        }
+                      ]}>
+                        {latestVitals.heartRate} bpm
+                      </Text>
+                    </View>
+                  )}
+                  {latestVitals.oxygenSaturation && (
+                    <View style={styles.vitalItem}>
+                      <Icon name="lungs" size={20} />
+                      <Text style={styles.vitalLabel}>SpO2</Text>
+                      <Text style={[
+                        styles.vitalValue,
+                        vitalsAlerts.find(a => a.vital === 'Oxygen Saturation') && {
+                          color: vitalsAlerts.find(a => a.vital === 'Oxygen Saturation')?.type === 'critical' 
+                            ? colors.error 
+                            : colors.warning
+                        }
+                      ]}>
+                        {latestVitals.oxygenSaturation}%
+                      </Text>
+                    </View>
+                  )}
+                  {latestVitals.weight && (
+                    <View style={styles.vitalItem}>
+                      <Icon name="weight" size={20} />
+                      <Text style={styles.vitalLabel}>Weight</Text>
+                      <Text style={styles.vitalValue}>{latestVitals.weight} kg</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.noDataText}>No vitals recorded</Text>
+              )}
+            </GlassCard>
+
+            {/* Active Problems */}
+            <GlassCard style={styles.card} padding={spacing.lg}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Active Problems</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('ProblemList' as never, {
+                      patientId: appointment.patient.id,
+                    } as never)
+                  }
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              </View>
+              {problems.length > 0 ? (
+                <View style={styles.listContainer}>
+                  {problems.slice(0, 3).map((problem) => (
+                    <View key={problem.id} style={styles.listItem}>
+                      <Text style={styles.listItemText}>{problem.problem}</Text>
+                      {problem.status && (
+                        <Text style={styles.listItemStatus}>{problem.status}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.noDataText}>No active problems</Text>
+              )}
+            </GlassCard>
+
+            {/* Allergies */}
+            <GlassCard style={styles.card} padding={spacing.lg}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Allergies</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('Allergies' as never, {
+                      patientId: appointment.patient.id,
+                    } as never)
+                  }
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              </View>
+              {allergies.length > 0 ? (
+                <View style={styles.listContainer}>
+                  {allergies.slice(0, 3).map((allergy) => (
+                    <View key={allergy.id} style={styles.listItem}>
+                      <Text style={styles.listItemText}>{allergy.allergen}</Text>
+                      {allergy.reaction && (
+                        <Text style={styles.listItemSubtext}>{allergy.reaction}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.noDataText}>No known allergies</Text>
+              )}
+            </GlassCard>
+          </>
+        )}
+
         {/* Quick Actions */}
         <GlassCard style={styles.card} padding={spacing.lg}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -269,26 +550,26 @@ const VisitManagementScreen: React.FC = () => {
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() =>
-                navigation.navigate('ProblemList' as never, {
+                (navigation as any).navigate('CreatePrescription', {
                   patientId: appointment.patient.id,
-                } as never)
+                })
               }
               activeOpacity={0.7}
             >
-              <Icon name="problem" size={24} />
-              <Text style={styles.quickActionText}>Problems</Text>
+              <Icon name="prescription" size={24} />
+              <Text style={styles.quickActionText}>Prescribe</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionCard}
               onPress={() =>
-                navigation.navigate('Allergies' as never, {
+                (navigation as any).navigate('LabOrder', {
                   patientId: appointment.patient.id,
-                } as never)
+                })
               }
               activeOpacity={0.7}
             >
-              <Icon name="allergy" size={24} />
-              <Text style={styles.quickActionText}>Allergies</Text>
+              <Icon name="lab" size={24} />
+              <Text style={styles.quickActionText}>Lab Order</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.quickActionCard}
@@ -452,6 +733,181 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.error,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  vitalsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  vitalItem: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+  },
+  vitalLabel: {
+    ...typography.labelSmall,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  vitalValue: {
+    ...typography.h5,
+    fontWeight: '700',
+    marginTop: spacing.xs,
+  },
+  listContainer: {
+    gap: spacing.sm,
+  },
+  listItem: {
+    backgroundColor: colors.glassCard,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.glassBorder,
+  },
+  listItemText: {
+    ...typography.body,
+    fontWeight: '600',
+  },
+  listItemStatus: {
+    ...typography.bodySmall,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+  listItemSubtext: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  noDataText: {
+    ...typography.body,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: spacing.md,
+  },
+  viewAllText: {
+    ...typography.label,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  dangerAlertCard: {
+    borderWidth: 3,
+    borderColor: colors.error,
+    backgroundColor: colors.error + '15',
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dangerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.error,
+  },
+  dangerTitle: {
+    ...typography.h3,
+    color: colors.error,
+    fontWeight: '900',
+    fontSize: 18,
+    letterSpacing: 0.5,
+  },
+  dangerBadge: {
+    backgroundColor: colors.error,
+    borderRadius: borderRadius.full,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerBadgeText: {
+    ...typography.bodyBold,
+    color: colors.textOnPrimary,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  dangerAlertItem: {
+    padding: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+  },
+  criticalDangerAlert: {
+    borderColor: colors.error,
+    backgroundColor: colors.error + '20',
+    borderLeftWidth: 6,
+    borderLeftColor: colors.error,
+  },
+  warningDangerAlert: {
+    borderColor: colors.warning,
+    backgroundColor: colors.warning + '20',
+    borderLeftWidth: 6,
+    borderLeftColor: colors.warning,
+  },
+  dangerAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  dangerAlertIcon: {
+    fontSize: 24,
+  },
+  dangerAlertVital: {
+    ...typography.h4,
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.textPrimary,
+  },
+  dangerAlertMessage: {
+    ...typography.bodyBold,
+    fontSize: 15,
+    marginBottom: spacing.md,
+    color: colors.textPrimary,
+    lineHeight: 22,
+  },
+  dangerAlertDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  dangerAlertValueLabel: {
+    ...typography.label,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  dangerAlertValue: {
+    ...typography.bodyBold,
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.error,
+  },
+  dangerAlertNormalLabel: {
+    ...typography.label,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  dangerAlertNormal: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.textTertiary,
   },
 });
 

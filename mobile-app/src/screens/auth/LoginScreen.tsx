@@ -178,15 +178,46 @@ const LoginScreen: React.FC = () => {
         showAlert('Login Error', 'Invalid response from server. Please try again.', 'error');
       }
     } catch (error: any) {
+      // Get tenantSlug for error logging
+      let currentTenantSlug: string | undefined;
+      try {
+        currentTenantSlug = cachedTenant?.subdomain || cachedTenant?.slug || await storageUtils.getTenantSlug() || undefined;
+      } catch (e) {
+        // Ignore errors getting tenant
+      }
+      
       console.error('Login error:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        tenantSlug: currentTenantSlug,
+      });
+      
       // Ensure message is always a string, not an array
       let errorMessage = 'Invalid credentials. Please try again.';
-      if (error.response?.data?.message) {
+      
+      // Handle 401 specifically
+      if (error.response?.status === 401) {
+        if (error.response?.data?.message) {
+          const msg = error.response.data.message;
+          errorMessage = Array.isArray(msg) ? msg.join(', ') : String(msg);
+        } else {
+          errorMessage = 'Authentication failed. Please check your email and password, and ensure the clinic is correct.';
+        }
+      } else if (error.response?.data?.message) {
         const msg = error.response.data.message;
         errorMessage = Array.isArray(msg) ? msg.join(', ') : String(msg);
       } else if (error.message) {
         errorMessage = String(error.message);
       }
+      
+      // If it's a network error, provide more helpful message
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        errorMessage = 'Cannot connect to server. Please ensure the backend is running and try again.';
+      }
+      
       showAlert('Login Failed', errorMessage, 'error');
     } finally {
       setLoading(false);
@@ -280,12 +311,12 @@ const LoginScreen: React.FC = () => {
                 </View>
                 <View style={[styles.logoGlow, { width: logoSize + 20, height: logoSize + 20 }]} />
               </Animated.View>
-              <Text style={[styles.title, { fontSize: fonts.title, marginBottom: isSmallScreen ? 2 : 6 }]}>MediCore</Text>
+              <Text style={[styles.title, { fontSize: fonts.title, marginBottom: isSmallScreen ? 4 : 8 }]}>MediCore</Text>
               {isLargeScreen && (
-                <>
-                  <Text style={[styles.subtitle, { fontSize: fonts.subtitle, marginBottom: 8 }]}>Healthcare Excellence</Text>
+                <View style={[styles.subtitleContainer, { marginTop: isSmallScreen ? 4 : 8 }]}>
+                  <Text style={[styles.subtitle, { fontSize: fonts.subtitle }]}>Healthcare Excellence</Text>
                   <View style={styles.titleUnderline} />
-                </>
+                </View>
               )}
             </Animated.View>
 
@@ -323,17 +354,22 @@ const LoginScreen: React.FC = () => {
 
             {/* Login Form Card - Dynamic padding and spacing */}
             <View style={[styles.formCard, { padding: formCardPadding }]}>
-              <Text style={[styles.formTitle, { fontSize: fonts.formTitle, marginBottom: isSmallScreen ? 2 : 6 }]}>Welcome Back</Text>
-              <Text style={[styles.formSubtitle, { fontSize: fonts.input, marginBottom: isSmallScreen ? 12 : 16 }]}>Sign in to continue</Text>
+              <View style={[styles.formHeader, { marginBottom: isSmallScreen ? 20 : 24 }]}>
+                <View style={styles.welcomeContainer}>
+                  <Text style={[styles.formTitle, { fontSize: fonts.formTitle }]}>Welcome Back</Text>
+                  <View style={styles.titleDivider} />
+                  <Text style={[styles.formSubtitle, { fontSize: fonts.input }]}>Sign in to continue</Text>
+                </View>
+              </View>
 
               {/* Email Input */}
-              <View style={[styles.inputWrapper, { marginBottom: inputSpacing }]}>
-                <Text style={styles.inputLabel}>Email Address</Text>
+              <View style={[styles.inputWrapper, { marginTop: isSmallScreen ? 16 : 20, marginBottom: inputSpacing }]}>
+                <Text style={[styles.inputLabel, { fontSize: isSmallScreen ? 13 : 14 }]}>Email Address</Text>
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputIcon}>✉️</Text>
                   <TextInput
                     style={[styles.input, { fontSize: fonts.input }]}
-                    placeholder="your.email@example.com"
+                    placeholder="Enter your email address"
                     placeholderTextColor={colors.textMuted}
                     value={email}
                     onChangeText={setEmail}
@@ -347,7 +383,7 @@ const LoginScreen: React.FC = () => {
 
               {/* Password Input */}
               <View style={[styles.inputWrapper, { marginBottom: inputSpacing }]}>
-                <Text style={styles.inputLabel}>Password</Text>
+                <Text style={[styles.inputLabel, { fontSize: isSmallScreen ? 13 : 14 }]}>Password</Text>
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputIcon}>🔒</Text>
                   <TextInput
@@ -477,19 +513,25 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 8,
     letterSpacing: -1,
+    textAlign: 'center',
+  },
+  subtitleContainer: {
+    alignItems: 'center',
   },
   subtitle: {
     color: colors.textSecondary,
-    marginBottom: 16,
-    fontWeight: '300',
+    marginBottom: 8,
+    fontWeight: '400',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   titleUnderline: {
     width: 80,
     height: 4,
     backgroundColor: '#6366f1',
     borderRadius: 2,
+    marginTop: 4,
   },
   tenantBadge: {
     marginBottom: 24,
@@ -549,13 +591,43 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.md,
   },
+  formHeader: {
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 8,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   formTitle: {
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 8,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginBottom: 10,
+    textTransform: 'none',
+  },
+  titleDivider: {
+    width: 50,
+    height: 2,
+    backgroundColor: '#6366f1',
+    borderRadius: 1,
+    marginBottom: 12,
+    opacity: 0.7,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   formSubtitle: {
     color: colors.textSecondary,
+    fontWeight: '400',
+    textAlign: 'center',
+    letterSpacing: 0.4,
+    lineHeight: 20,
   },
   inputWrapper: {
     marginBottom: 0,
@@ -565,6 +637,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
   inputContainer: {
     flexDirection: 'row',

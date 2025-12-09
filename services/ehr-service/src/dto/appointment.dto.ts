@@ -75,6 +75,25 @@ export class UpdateAppointmentDto {
   @Type(() => Number)
   @IsNumber()
   feeAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  primaryDiagnosisCode?: string;
+
+  @IsString()
+  @IsOptional()
+  primaryDiagnosisDescription?: string;
+
+  @IsOptional()
+  diagnosisCodes?: string[];
+
+  @IsString()
+  @IsOptional()
+  diagnosisSnomedCode?: string;
+
+  @IsString()
+  @IsOptional()
+  diagnosisSnomedTerm?: string;
 }
 
 export class AppointmentQueryDto {

@@ -19,10 +19,12 @@ import { storageUtils } from '../../utils/storage';
 import { ehrApi, API_ENDPOINTS } from '../../config/api';
 import { format, parseISO, isToday } from 'date-fns';
 import appointmentService, { Appointment } from '../../services/appointment.service';
+import vitalsService, { Vitals } from '../../services/vitals.service';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme/designSystem';
 import ScreenHeader from '../../components/shared/ScreenHeader';
 import GlassCard from '../../components/shared/GlassCard';
 import PrimaryButton from '../../components/shared/PrimaryButton';
+import Icon from '../../components/shared/Icon';
 import { useAlert } from '../../hooks/useAlert';
 import { useToast } from '../../hooks/useToast';
 
@@ -35,6 +37,8 @@ const NurseDashboard: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [patientVitals, setPatientVitals] = useState<Record<string, Vitals>>({});
+  const [loadingVitals, setLoadingVitals] = useState<Record<string, boolean>>({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   
@@ -103,11 +107,39 @@ const NurseDashboard: React.FC = () => {
     try {
       setLoading(true);
       const todayAppointments = await appointmentService.getTodayAppointments();
+      console.log('📅 [NurseDashboard] Loaded appointments:', todayAppointments.length);
+      console.log('📅 [NurseDashboard] Appointments:', JSON.stringify(todayAppointments.map(apt => ({
+        id: apt.id,
+        status: apt.status,
+        date: apt.appointmentDate,
+        patient: `${apt.patient.firstName} ${apt.patient.lastName}`
+      })), null, 2));
       setAppointments(todayAppointments);
+      
+      // Load vitals for all patients with appointments
+      loadVitalsForPatients(todayAppointments);
     } catch (error) {
-      console.error('Error loading appointments:', error);
+      console.error('❌ [NurseDashboard] Error loading appointments:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVitalsForPatients = async (appointmentsList: Appointment[]) => {
+    const patientIds = [...new Set(appointmentsList.map(apt => apt.patient?.id).filter(Boolean))];
+    
+    for (const patientId of patientIds) {
+      if (!patientId) continue;
+      
+      try {
+        setLoadingVitals(prev => ({ ...prev, [patientId]: true }));
+        const vitals = await vitalsService.getLatestVitals(patientId);
+        setPatientVitals(prev => ({ ...prev, [patientId]: vitals }));
+      } catch (error) {
+        console.error(`Error loading vitals for patient ${patientId}:`, error);
+      } finally {
+        setLoadingVitals(prev => ({ ...prev, [patientId]: false }));
+      }
     }
   };
 
@@ -185,9 +217,31 @@ const NurseDashboard: React.FC = () => {
   const scheduledAppointments = appointments.filter((apt) => apt.status === 'scheduled');
   const checkedInAppointments = appointments.filter((apt) => apt.status === 'checked_in');
   const inProgressAppointments = appointments.filter((apt) => apt.status === 'in_progress');
+  
+  // Show all appointments for today in "Today's Schedule" (scheduled, checked_in, in_progress, confirmed)
+  // This ensures appointments don't disappear from the schedule when their status changes
+  const todayScheduleAppointments = appointments.filter((apt) => {
+    const aptTime = parseISO(apt.appointmentDate);
+    const isTodayAppointment = isToday(aptTime);
+    // Include scheduled, checked_in, in_progress, and confirmed appointments
+    const validStatuses = ['scheduled', 'checked_in', 'in_progress', 'confirmed'];
+    const isValid = isTodayAppointment && validStatuses.includes(apt.status);
+    if (!isValid && isTodayAppointment) {
+      console.log(`📅 [NurseDashboard] Excluding appointment ${apt.id} from schedule - status: ${apt.status}, date: ${apt.appointmentDate}`);
+    }
+    return isValid;
+  });
+  
+  console.log('📅 [NurseDashboard] Today schedule appointments:', todayScheduleAppointments.length);
+  console.log('📅 [NurseDashboard] Total appointments:', appointments.length);
+  console.log('📅 [NurseDashboard] Scheduled:', scheduledAppointments.length);
+  console.log('📅 [NurseDashboard] Checked in:', checkedInAppointments.length);
+  console.log('📅 [NurseDashboard] In progress:', inProgressAppointments.length);
+  
+  // For stats, show scheduled appointments for today
   const upcomingAppointments = scheduledAppointments.filter((apt) => {
     const aptTime = parseISO(apt.appointmentDate);
-    return isToday(aptTime) && aptTime >= new Date();
+    return isToday(aptTime);
   });
 
   const awaitingPaymentCount = appointments.filter((apt) => isPaymentPending(apt)).length;
@@ -341,6 +395,56 @@ const NurseDashboard: React.FC = () => {
                           {appointment.reason}
                         </Text>
                       )}
+                      
+                      {/* Latest Vitals Display */}
+                      {appointment.patient?.id && patientVitals[appointment.patient.id] && (
+                        <View style={styles.vitalsContainer}>
+                          <Text style={styles.vitalsLabel}>Latest Vitals:</Text>
+                          <View style={styles.vitalsRow}>
+                            {patientVitals[appointment.patient.id].temperature && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="thermometer" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].temperature}°C
+                                </Text>
+                              </View>
+                            )}
+                            {(patientVitals[appointment.patient.id].bloodPressureSystolic || 
+                              patientVitals[appointment.patient.id].bloodPressureDiastolic) && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="blood-pressure" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].bloodPressureSystolic || '--'}/
+                                  {patientVitals[appointment.patient.id].bloodPressureDiastolic || '--'}
+                                </Text>
+                              </View>
+                            )}
+                            {patientVitals[appointment.patient.id].heartRate && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="heart-pulse" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].heartRate} bpm
+                                </Text>
+                              </View>
+                            )}
+                            {patientVitals[appointment.patient.id].oxygenSaturation && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="lungs" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].oxygenSaturation}%
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      )}
+                      {loadingVitals[appointment.patient?.id || ''] && (
+                        <View style={styles.vitalsContainer}>
+                          <ActivityIndicator size="small" color={colors.primary} />
+                          <Text style={styles.vitalsLabel}>Loading vitals...</Text>
+                        </View>
+                      )}
+                      
                       {awaitingPayment && (
                         <View style={styles.paymentWarning}>
                           <Text style={styles.warningIcon}>🔒</Text>
@@ -408,9 +512,8 @@ const NurseDashboard: React.FC = () => {
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
             </View>
-            {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.slice(0, 5).map((appointment) => {
-                const timeStatus = getTimeStatus(appointment.appointmentDate);
+            {todayScheduleAppointments.length > 0 ? (
+              todayScheduleAppointments.slice(0, 5).map((appointment) => {
                 return (
                   <GlassCard key={appointment.id} style={styles.appointmentCard}>
                     <TouchableOpacity
@@ -426,8 +529,8 @@ const NurseDashboard: React.FC = () => {
                             <Text style={styles.patientNumber}>ID: {appointment.patient.patientNumber}</Text>
                           )}
                         </View>
-                        <View style={[styles.timeBadge, { backgroundColor: timeStatus.color + '20' }]}>
-                          <Text style={[styles.timeText, { color: timeStatus.color }]}>{timeStatus.text}</Text>
+                        <View style={[styles.statusBadge, { backgroundColor: getAppointmentStatusColor(appointment.status) }]}>
+                          <Text style={styles.statusText}>{getAppointmentStatusText(appointment.status)}</Text>
                         </View>
                       </View>
                       <View style={styles.appointmentMeta}>
@@ -440,6 +543,49 @@ const NurseDashboard: React.FC = () => {
                         <Text style={styles.appointmentReason} numberOfLines={1}>
                           {appointment.reason}
                         </Text>
+                      )}
+                      
+                      {/* Latest Vitals Display for Today's Schedule */}
+                      {appointment.patient?.id && patientVitals[appointment.patient.id] && (
+                        <View style={styles.vitalsContainer}>
+                          <Text style={styles.vitalsLabel}>Latest Vitals:</Text>
+                          <View style={styles.vitalsRow}>
+                            {patientVitals[appointment.patient.id].temperature && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="thermometer" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].temperature}°C
+                                </Text>
+                              </View>
+                            )}
+                            {(patientVitals[appointment.patient.id].bloodPressureSystolic || 
+                              patientVitals[appointment.patient.id].bloodPressureDiastolic) && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="blood-pressure" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].bloodPressureSystolic || '--'}/
+                                  {patientVitals[appointment.patient.id].bloodPressureDiastolic || '--'}
+                                </Text>
+                              </View>
+                            )}
+                            {patientVitals[appointment.patient.id].heartRate && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="heart-pulse" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].heartRate} bpm
+                                </Text>
+                              </View>
+                            )}
+                            {patientVitals[appointment.patient.id].oxygenSaturation && (
+                              <View style={styles.vitalBadge}>
+                                <Icon name="lungs" size={14} />
+                                <Text style={styles.vitalText}>
+                                  {patientVitals[appointment.patient.id].oxygenSaturation}%
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
                       )}
                     </TouchableOpacity>
                   </GlassCard>
@@ -461,8 +607,20 @@ const NurseDashboard: React.FC = () => {
               <TouchableOpacity
                 style={styles.quickActionCard}
                 onPress={() => {
-                  // Navigate to patient search first if no patient selected
-                  (navigation as any).navigate('PatientSearch');
+                  // If there are checked-in appointments, show them first
+                  // Otherwise, navigate to patient search
+                  if (checkedInAppointments.length > 0) {
+                    // Scroll to the "Awaiting Vitals" section or navigate to a focused view
+                    // For now, navigate to patient search but with a hint
+                    (navigation as any).navigate('PatientSearch', { 
+                      showAppointments: true,
+                      source: 'recordVitals' 
+                    });
+                  } else {
+                    (navigation as any).navigate('PatientSearch', { 
+                      source: 'recordVitals' 
+                    });
+                  }
                 }}
                 activeOpacity={0.8}
               >
@@ -470,6 +628,11 @@ const NurseDashboard: React.FC = () => {
                   <Text style={styles.quickActionEmoji}>🩺</Text>
                 </View>
                 <Text style={styles.quickActionText}>Record Vitals</Text>
+                {checkedInAppointments.length > 0 && (
+                  <View style={styles.quickActionBadge}>
+                    <Text style={styles.quickActionBadgeText}>{checkedInAppointments.length}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.quickActionCard}

@@ -154,6 +154,18 @@ export const API_ENDPOINTS = {
   PRESCRIPTION: {
     PATIENT: (patientId: string) => `/prescriptions/patient/${patientId}`,
     BY_ID: (id: string) => `/prescriptions/${id}`,
+    CREATE: '/prescriptions',
+  },
+  DRUG: {
+    SEARCH: '/drugs',
+    BY_ID: (id: string) => `/drugs/${id}`,
+    CHECK_INTERACTIONS: '/drugs/check-interactions',
+  },
+  TERMINOLOGY: {
+    SNOMED_SEARCH: '/terminology/snomed/search',
+    ICD10_SEARCH: '/terminology/icd10/search',
+    ICD10_CODE: (code: string) => `/terminology/icd10/code/${code}`,
+    ICD10_MAP_FROM_SNOMED: (snomedCode: string) => `/terminology/icd10/map-from-snomed/${snomedCode}`,
   },
   DOCUMENTS: {
     PATIENT: (patientId: string) => `/documents?patientId=${patientId}`,
@@ -212,8 +224,5 @@ export const API_ENDPOINTS = {
     RISK_ASSESSMENT: '/cdss/risk-assessment',
     DOSING_RECOMMENDATION: '/cdss/dosing-recommendation',
     GUIDELINES: '/cdss/guidelines',
-  },
-  TERMINOLOGY: {
-    SNOMED_SEARCH: '/terminology/snomed/search',
   },
 };
