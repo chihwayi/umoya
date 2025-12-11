@@ -4,21 +4,41 @@ This directory stores WHO Smart Guidelines FHIR resources.
 
 ## 📋 How to Get WHO Smart Guidelines
 
-### Step 1: Contact WHO
+### ✅ Option 1: Download from GitHub (Recommended!)
+
+**WHO Smart Guidelines ARE publicly available on GitHub!**
+
+#### Quick Start:
+
+1. **Visit WHO Smart Guidelines GitHub:**
+   - **HIV:** https://github.com/WorldHealthOrganization/smart-hiv
+   - **Immunization:** https://github.com/WorldHealthOrganization/smart-immunizations
+   - **GitHub Pages:** https://worldhealthorganization.github.io/smart-hiv/
+
+2. **Clone or Download:**
+   ```bash
+   git clone https://github.com/WorldHealthOrganization/smart-hiv.git
+   cd smart-hiv/input/resources/
+   ```
+
+3. **Copy FHIR Resources:**
+   ```bash
+   # Copy PlanDefinition and Questionnaire files
+   cp PlanDefinition-*.json /path/to/services/ehr-service/who-smart-guidelines/
+   cp Questionnaire-*.json /path/to/services/ehr-service/who-smart-guidelines/
+   ```
+
+**See:** `docs/who/QUICK_START_GITHUB.md` for detailed instructions
+
+### Option 2: Contact WHO (For Support)
+
 **Email:** `SMART_DAKS@who.int`
 
-**What to request:**
-- Access to FHIR resources (PlanDefinition, Questionnaire)
-- FHIR resources for:
-  - HIV/AIDS care
-  - TB care
-  - Maternal health
-  - Child health
-  - Malaria
-  - NCDs (Non-Communicable Diseases)
-
-### Step 2: Download FHIR Resources
-Once WHO provides access, download FHIR resources in JSON format.
+**When to contact:**
+- Need help accessing resources
+- Want to join working group calls
+- Have implementation questions
+- Need access to private/beta resources
 
 ### Step 3: Place Files Here
 Place downloaded FHIR resource files (`.json`) in this directory:

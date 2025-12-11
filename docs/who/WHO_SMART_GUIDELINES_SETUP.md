@@ -25,36 +25,42 @@ This guide explains how to set up and use WHO Smart Guidelines in your EHR syste
 
 ## 🚀 Setup Steps
 
-### Step 1: Contact WHO
+### Step 1: Download from WHO GitHub
 
-**Email:** `SMART_DAKS@who.int`
+**WHO Smart Guidelines are publicly available on GitHub!**
 
-**Request:**
+#### Quick Start:
+
+1. **Visit WHO Smart Guidelines Implementation Guides:**
+   - **HIV:** https://worldhealthorganization.github.io/smart-hiv/
+   - **Immunization:** https://worldhealthorganization.github.io/smart-immunizations/
+
+2. **Download FHIR Resources:**
+   - Look for "Downloads" or "Resources" section
+   - Download FHIR bundle (usually `.json` or `.zip`)
+   - Or clone the repository:
+     ```bash
+     git clone https://github.com/WorldHealthOrganization/smart-hiv.git
+     ```
+
+3. **Extract Resources:**
+   - FHIR resources are typically in `/input/resources/` or `/package/` directories
+   - Extract `PlanDefinition` and `Questionnaire` resources
+   - Save as individual `.json` files
+
+#### Alternative: Clone Repository
+
+```bash
+# Clone WHO Smart Guidelines repositories
+git clone https://github.com/WorldHealthOrganization/smart-hiv.git
+git clone https://github.com/WorldHealthOrganization/smart-immunizations.git
+
+# Navigate to resources directory
+cd smart-hiv/input/resources/
+
+# Copy PlanDefinition and Questionnaire files
+# (Adjust paths based on repository structure)
 ```
-Subject: Request for WHO Smart Guidelines FHIR Resources
-
-Dear WHO Smart Guidelines Team,
-
-I am implementing WHO Smart Guidelines in our EHR system (MediCore).
-Could you please provide access to FHIR resources for:
-
-- HIV/AIDS care
-- TB care
-- Maternal health
-- Child health
-- Malaria
-
-We are using FHIR R4 format and would appreciate:
-- PlanDefinition resources (care plans)
-- Questionnaire resources (Smart Forms)
-- Any available documentation
-
-Thank you!
-```
-
-### Step 2: Download FHIR Resources
-
-Once WHO provides access, download FHIR resources in JSON format.
 
 ### Step 3: Place Files
 
