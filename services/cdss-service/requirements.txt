@@ -13,8 +13,9 @@ numpy==1.26.2
 pandas==2.1.3
 scikit-learn==1.3.2
 
-# Optional for advanced features (uncomment when needed)
-# tensorflow==2.15.0
-# torch==2.1.1
-# transformers==4.35.2
+# AI/ML Dependencies (for intelligent CDSS)
+torch==2.1.1
+transformers==4.35.2
+sentence-transformers==2.2.2
+accelerate==0.25.0
 

@@ -95,7 +95,7 @@ analyzer = DrugInteractionAnalyzer()
 guidelines_engine = ClinicalGuidelinesEngine()
 risk_scoring_engine = RiskScoringEngine()
 dosing_calculator = DosingCalculator()
-diagnostic_assistant = DiagnosticAssistant()
+diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
 trend_analysis_engine = TrendAnalysisEngine()
 lab_interpreter = LabResultInterpreter()
 duplicate_detector = DuplicateTherapyDetector()
@@ -453,6 +453,17 @@ class DiagnosisRequest(BaseModel):
     gender: Optional[str] = Field(None, description="Patient gender")
 
 
+class IntelligentDiagnosisRequest(BaseModel):
+    symptoms: List[str] = Field(..., description="List of presenting symptoms")
+    vitals: Optional[Dict[str, Any]] = Field(None, description="Vital signs")
+    clinical_notes: Optional[str] = Field(None, description="Free-text clinical notes, chief complaint, history")
+    patient_data: Optional[Dict[str, Any]] = Field(None, description="Structured patient data (for MedBERT)")
+    age: Optional[int] = Field(None, description="Patient age")
+    gender: Optional[str] = Field(None, description="Patient gender")
+    labs: Optional[Dict[str, Any]] = Field(None, description="Lab results")
+    conditions: Optional[List[str]] = Field(None, description="Existing conditions")
+
+
 @app.post("/diagnosis/suggest")
 async def suggest_diagnosis(request: DiagnosisRequest):
     """
@@ -462,6 +473,8 @@ async def suggest_diagnosis(request: DiagnosisRequest):
     - Patient demographics
     
     Returns differential diagnoses with probability scores, recommended tests, and clinical red flags
+    
+    Note: This endpoint uses rule-based CDSS only. For AI-enhanced diagnostics, use /diagnosis/suggest/intelligent
     """
     result = diagnostic_assistant.suggest_diagnosis(
         symptoms=request.symptoms,
@@ -475,7 +488,59 @@ async def suggest_diagnosis(request: DiagnosisRequest):
         "confidence_scores": result['confidence_scores'],
         "recommended_tests": result['recommended_tests'],
         "red_flags": result['red_flags'],
-        "vitals_clues": result.get('vitals_clues', [])
+        "vitals_clues": result.get('vitals_clues', []),
+        "source": "rule_based_cdss"
+    }
+
+
+@app.post("/diagnosis/suggest/intelligent")
+async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
+    """
+    Intelligent diagnostic assistance combining:
+    - Rule-based CDSS (pattern matching, guidelines)
+    - MedBERT (structured EHR data analysis)
+    - ClinicalBERT (clinical notes analysis)
+    
+    Returns fused recommendations with confidence scores, source attribution, and explanations
+    
+    This is the "thinking" CDSS that combines rule-based logic with AI models for enhanced accuracy.
+    """
+    # Prepare patient data for MedBERT
+    patient_data = request.patient_data or {}
+    if request.age:
+        patient_data['age'] = request.age
+    if request.gender:
+        patient_data['gender'] = request.gender
+    if request.vitals:
+        patient_data['vitals'] = request.vitals
+    if request.labs:
+        patient_data['labs'] = request.labs
+    if request.conditions:
+        patient_data['conditions'] = request.conditions
+    
+    # Get intelligent suggestions
+    result = diagnostic_assistant.intelligent_suggest(
+        symptoms=request.symptoms,
+        vitals=request.vitals,
+        clinical_notes=request.clinical_notes,
+        patient_data=patient_data if patient_data else None,
+        age=request.age,
+        gender=request.gender
+    )
+    
+    return {
+        "suggested_diagnoses": result.get('suggested_diagnoses', []),
+        "confidence": result.get('confidence', 'moderate'),
+        "recommended_tests": result.get('recommended_tests', []),
+        "red_flags": result.get('red_flags', []),
+        "vitals_clues": result.get('vitals_clues', []),
+        "source": result.get('source', 'hybrid_cdss_ai'),
+        "ai_enabled": result.get('ai_enabled', False),
+        "ai_models_used": result.get('ai_models_used', {}),
+        "rule_based_contributions": result.get('rule_based_contributions', 0),
+        "ai_contributions": result.get('ai_contributions', 0),
+        "total_sources": result.get('total_sources', 1),
+        "explanation": result.get('explanation', 'Combined results from rule-based CDSS and AI models')
     }
 
 

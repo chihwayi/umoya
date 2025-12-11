@@ -2,14 +2,46 @@
 Diagnostic Assistant
 Provides differential diagnosis suggestions based on symptoms, vitals, and patient demographics
 Uses pattern matching and clinical decision rules
+Enhanced with AI models (MedBERT, ClinicalBERT) for intelligent diagnostics
 """
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
 import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Try to import AI models (optional)
+try:
+    from ai_models.medbert_predictor import MedBERTPredictor
+    from ai_models.clinicalbert_diagnostic import ClinicalBERTDiagnostic
+    from ai_models.fusion_engine import IntelligentFusionEngine
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    logger.info("AI models not available. Using rule-based only.")
 
 
 class DiagnosticAssistant:
-    """Symptom-based diagnostic suggestion engine"""
+    """Symptom-based diagnostic suggestion engine with AI enhancement"""
+    
+    def __init__(self):
+        """Initialize diagnostic assistant with optional AI models"""
+        self.medbert = None
+        self.clinicalbert = None
+        self.fusion_engine = None
+        
+        if AI_AVAILABLE:
+            try:
+                self.medbert = MedBERTPredictor()
+                self.clinicalbert = ClinicalBERTDiagnostic()
+                self.fusion_engine = IntelligentFusionEngine()
+                logger.info("AI models initialized for intelligent diagnostics")
+            except Exception as e:
+                logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
+                self.medbert = None
+                self.clinicalbert = None
+                self.fusion_engine = None
     
     # Symptom-diagnosis mapping database (simplified clinical knowledge base)
     DIAGNOSTIC_DATABASE = {
@@ -490,4 +522,115 @@ class DiagnosticAssistant:
             'red_flags': red_flags,
             'vitals_clues': vitals_clues
         }
+    
+    def intelligent_suggest(
+        self,
+        symptoms: List[str],
+        vitals: Optional[Dict[str, Any]] = None,
+        clinical_notes: Optional[str] = None,
+        patient_data: Optional[Dict[str, Any]] = None,
+        age: Optional[int] = None,
+        gender: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Intelligent diagnostic suggestion combining rule-based CDSS + AI models
+        
+        Args:
+            symptoms: List of symptoms
+            vitals: Vital signs
+            clinical_notes: Free-text clinical notes
+            patient_data: Structured patient data (for MedBERT)
+            age: Patient age
+            gender: Patient gender
+        
+        Returns:
+            Fused recommendations from rule-based + AI models
+        """
+        # Rule-based suggestions (existing method)
+        rule_based_results = self.suggest_diagnosis(
+            symptoms=symptoms,
+            vitals=vitals,
+            age=age,
+            gender=gender
+        )
+        
+        # If AI not available, return rule-based only
+        if not AI_AVAILABLE or not self.fusion_engine:
+            logger.debug("AI models not available, using rule-based only")
+            return {
+                **rule_based_results,
+                'source': 'rule_based_only',
+                'ai_enabled': False
+            }
+        
+        medbert_results = None
+        clinicalbert_results = None
+        
+        # MedBERT predictions (structured data)
+        if self.medbert and patient_data:
+            try:
+                # Prepare patient data for MedBERT
+                medbert_input = {
+                    'age': age or patient_data.get('age'),
+                    'gender': gender or patient_data.get('gender', ''),
+                    'vitals': vitals or patient_data.get('vitals', {}),
+                    'labs': patient_data.get('labs', {}),
+                    'conditions': patient_data.get('conditions', [])
+                }
+                
+                medbert_results = self.medbert.predict_disease_risk(medbert_input)
+                logger.debug(f"MedBERT returned {len(medbert_results.get('predictions', []))} predictions")
+            except Exception as e:
+                logger.warning(f"MedBERT prediction failed: {e}")
+                medbert_results = None
+        
+        # ClinicalBERT suggestions (clinical notes)
+        if self.clinicalbert and clinical_notes:
+            try:
+                clinicalbert_results = self.clinicalbert.suggest_diagnoses(
+                    clinical_text=clinical_notes,
+                    context={'age': age, 'gender': gender}
+                )
+                logger.debug(f"ClinicalBERT returned {len(clinicalbert_results.get('suggestions', []))} suggestions")
+            except Exception as e:
+                logger.warning(f"ClinicalBERT prediction failed: {e}")
+                clinicalbert_results = None
+        
+        # If no AI results, return rule-based
+        if not medbert_results and not clinicalbert_results:
+            return {
+                **rule_based_results,
+                'source': 'rule_based_only',
+                'ai_enabled': True,
+                'ai_models_available': False
+            }
+        
+        # Fusion: Combine all results
+        try:
+            fused_results = self.fusion_engine.fuse_recommendations(
+                rule_based_results=rule_based_results,
+                medbert_results=medbert_results,
+                clinicalbert_results=clinicalbert_results
+            )
+            
+            # Merge with rule-based recommendations (tests, red flags)
+            return {
+                **fused_results,
+                'recommended_tests': rule_based_results.get('recommended_tests', []),
+                'red_flags': rule_based_results.get('red_flags', []),
+                'vitals_clues': rule_based_results.get('vitals_clues', []),
+                'ai_enabled': True,
+                'ai_models_used': {
+                    'medbert': medbert_results is not None,
+                    'clinicalbert': clinicalbert_results is not None
+                }
+            }
+        except Exception as e:
+            logger.error(f"Fusion failed: {e}. Returning rule-based results.")
+            return {
+                **rule_based_results,
+                'source': 'rule_based_fallback',
+                'ai_enabled': True,
+                'fusion_error': str(e)
+            }
 

@@ -105,8 +105,9 @@ export class CdssService {
 
   /**
    * Diagnostic assistance using Python CDSS service
+   * Uses intelligent endpoint (rule-based + AI) if available, falls back to rule-based
    */
-  async diagnosisAssist(symptoms: any) {
+  async diagnosisAssist(symptoms: any, useIntelligent: boolean = true) {
     try {
       // Handle different input formats
       let symptomList: string[] = [];
@@ -128,6 +129,62 @@ export class CdssService {
       
       this.logger.debug(`Calling CDSS with symptoms: ${JSON.stringify(normalizedSymptoms)}`);
       
+      // Try intelligent endpoint first (if enabled and data available)
+      const hasClinicalNotes = symptoms.clinicalNotes || symptoms.chiefComplaint || symptoms.historyOfPresentIllness;
+      const hasPatientData = symptoms.age || symptoms.gender || symptoms.vitals || symptoms.labs;
+      
+      if (useIntelligent && (hasClinicalNotes || hasPatientData)) {
+        try {
+          const intelligentResponse = await this.cdssClient.post('/diagnosis/suggest/intelligent', {
+            symptoms: normalizedSymptoms,
+            vitals: symptoms.vitals || undefined,
+            clinical_notes: symptoms.clinicalNotes || symptoms.chiefComplaint || symptoms.historyOfPresentIllness || undefined,
+            patient_data: {
+              age: symptoms.age,
+              gender: symptoms.gender,
+              vitals: symptoms.vitals,
+              labs: symptoms.labs,
+              conditions: symptoms.conditions || symptoms.diagnoses || []
+            },
+            age: symptoms.age || undefined,
+            gender: symptoms.gender || undefined,
+            labs: symptoms.labs || undefined,
+            conditions: symptoms.conditions || symptoms.diagnoses || undefined
+          }, {
+            timeout: 20000, // Longer timeout for AI processing
+          });
+
+          const intelligentData = intelligentResponse.data;
+          this.logger.log(`Intelligent CDSS response received (AI enabled: ${intelligentData?.ai_enabled})`);
+          
+          // Return intelligent results if available
+          if (intelligentData?.suggested_diagnoses?.length > 0) {
+            return {
+              suggested_diagnoses: intelligentData.suggested_diagnoses.map((d: any) => ({
+                diagnosis: d.diagnosis,
+                probability: d.probability,
+                icd10: d.icd10,
+                confidence: d.confidence,
+                sources: d.sources,
+                explanation: d.explanation
+              })),
+              recommendedTests: intelligentData.recommended_tests || [],
+              recommended_tests: intelligentData.recommended_tests || [],
+              urgencyLevel: intelligentData.red_flags?.length > 0 ? 'high' : 'moderate',
+              red_flags: intelligentData.red_flags || [],
+              source: intelligentData.source || 'hybrid_cdss_ai',
+              ai_enabled: intelligentData.ai_enabled || false,
+              ai_models_used: intelligentData.ai_models_used || {},
+              explanation: intelligentData.explanation
+            };
+          }
+        } catch (intelligentError: any) {
+          this.logger.warn(`Intelligent CDSS endpoint failed, falling back to rule-based: ${intelligentError.message}`);
+          // Fall through to rule-based endpoint
+        }
+      }
+      
+      // Fallback to rule-based endpoint
       const response = await this.cdssClient.post('/diagnosis/suggest', {
         symptoms: normalizedSymptoms,
         vitals: symptoms.vitals || undefined,
