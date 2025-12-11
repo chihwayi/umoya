@@ -62,23 +62,25 @@ cd smart-hiv/input/resources/
 # (Adjust paths based on repository structure)
 ```
 
-### Step 3: Place Files
+### Step 2: Place Files
 
-Place downloaded files in:
+Place downloaded FHIR resource files (`.json`) in:
 ```
 services/ehr-service/who-smart-guidelines/
 ```
 
-**Example:**
+**Example structure:**
 ```
 who-smart-guidelines/
-  ├── hiv-care-2021.json
-  ├── tb-care-2021.json
-  ├── maternal-health-2021.json
-  └── art-initiation-questionnaire.json
+  ├── hiv-care-plan.json          # PlanDefinition
+  ├── art-initiation-form.json    # Questionnaire
+  ├── tb-care-plan.json           # PlanDefinition
+  └── immunization-form.json      # Questionnaire
 ```
 
-### Step 4: Restart Service
+**Note:** Each file should contain a single FHIR resource (PlanDefinition or Questionnaire) in JSON format.
+
+### Step 3: Restart Service
 
 The service automatically loads FHIR resources on startup:
 
@@ -91,7 +93,7 @@ cd services/ehr-service
 npm run dev
 ```
 
-### Step 5: Verify
+### Step 4: Verify
 
 Check logs for successful loading:
 ```
