@@ -158,8 +158,10 @@ export class WhoSmartGuidelinesService {
       this.logger.warn('WHO Smart Guidelines directory is empty. Contact SMART_DAKS@who.int to get FHIR resources.');
     }
     
-    // Load guidelines on startup (if available)
-    this.loadGuidelines();
+    // Load guidelines on startup (if available) - fire and forget
+    this.loadGuidelines().catch(err => {
+      this.logger.error(`Failed to load WHO Smart Guidelines: ${err.message}`);
+    });
   }
   
   /**
