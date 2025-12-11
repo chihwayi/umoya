@@ -11,10 +11,14 @@
 - **Total Files:** 626 JSON files processed
 
 ### Resources Extracted
-- **PlanDefinition:** 1 resource
+- **PlanDefinition:** 11 resources
   - HIV-Testing-PlanDefinition
+  - CareAndTreatmentClinicalVisit-PlanDefinition
+  - HIV-A-Registration-PlanDefinition
+  - HIVB2DT, HIVB9DT, HIVC23DT, HIVC7DT, HIVD12DT, HIVD15DT, HIVD4DT
+  - PrEP-visit-PlanDefinition
 
-- **Questionnaire:** Multiple resources including:
+- **Questionnaire:** 56 resources including:
   - HIV.B7TestForHivUsingTestingAlgorithm
   - HIV.C1DetermineReasonForVisit
   - HIV.C21Diagnostics
