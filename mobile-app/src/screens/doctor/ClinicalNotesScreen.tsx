@@ -22,6 +22,9 @@ import ScreenHeader from '../../components/shared/ScreenHeader';
 import GlassCard from '../../components/shared/GlassCard';
 import PrimaryButton from '../../components/shared/PrimaryButton';
 import Icon from '../../components/shared/Icon';
+import VoiceConsultationButton from '../../components/voice/VoiceConsultationButton';
+import medicalEntityExtractor, { ExtractedEntities } from '../../services/medical-entity-extractor.service';
+import appointmentService, { Appointment } from '../../services/appointment.service';
 
 const ClinicalNotesScreen: React.FC = () => {
   const route = useRoute();
@@ -30,6 +33,8 @@ const ClinicalNotesScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [patientName, setPatientName] = useState<string>('');
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
   
   // SOAP Note fields 
   const [chiefComplaint, setChiefComplaint] = useState('');
@@ -216,9 +221,17 @@ const ClinicalNotesScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      const appointment = await appointmentService.getAppointmentById(appointmentId);
+      const appointmentData = await appointmentService.getAppointmentById(appointmentId);
+      setAppointment(appointmentData);
       
-      if (appointment?.notes) {
+      // Set patient name for voice consultation
+      if (appointmentData?.patient) {
+        setPatientName(
+          `${appointmentData.patient.firstName || ''} ${appointmentData.patient.lastName || ''}`.trim()
+        );
+      }
+      
+      if (appointmentData?.notes) {
         try {
           const notes = typeof appointment.notes === 'string' 
             ? JSON.parse(appointment.notes) 
@@ -233,7 +246,7 @@ const ClinicalNotesScreen: React.FC = () => {
           setAdditionalNotes(notes.notes || clinicalDoc.additionalNotes || '');
         } catch (e) {
           // If notes is plain text, put it in additionalNotes
-          setAdditionalNotes(appointment.notes);
+          setAdditionalNotes(appointmentData.notes);
         }
       }
     } catch (error) {
@@ -328,6 +341,48 @@ const ClinicalNotesScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Subjective</Text>
           </View>
           
+          {/* Voice Consultation Button */}
+          <View style={styles.voiceSection}>
+            <VoiceConsultationButton
+              patientName={patientName}
+              patientId={patientId}
+              language="auto"
+              onTranscriptionComplete={(text, entities) => {
+                // Auto-populate form fields from extracted entities
+                if (entities.chiefComplaint) {
+                  setChiefComplaint(entities.chiefComplaint);
+                }
+                if (entities.symptoms && entities.symptoms.length > 0) {
+                  const symptomsText = entities.symptoms.join(', ');
+                  setHistoryOfPresentIllness(prev => 
+                    prev ? `${prev}\n\nSymptoms: ${symptomsText}` : `Symptoms: ${symptomsText}`
+                  );
+                }
+                if (entities.problems && entities.problems.length > 0) {
+                  const problemsText = entities.problems.join(', ');
+                  setAssessment(prev => 
+                    prev ? `${prev}\n\nProblems: ${problemsText}` : `Problems: ${problemsText}`
+                  );
+                }
+                if (entities.notes) {
+                  setAdditionalNotes(prev => 
+                    prev ? `${prev}\n\nVoice Notes: ${entities.notes}` : `Voice Notes: ${entities.notes}`
+                  );
+                }
+                
+                // Show confirmation alert
+                Alert.alert(
+                  'Voice Transcription Complete',
+                  `Extracted ${Object.keys(entities.vitals || {}).length} vitals, ${entities.symptoms?.length || 0} symptoms, and ${entities.problems?.length || 0} problems.\n\nPlease review and confirm the auto-populated fields.`,
+                  [{ text: 'OK' }]
+                );
+              }}
+              onError={(error) => {
+                Alert.alert('Voice Recording Error', error);
+              }}
+            />
+          </View>
+
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Chief Complaint</Text>
             <TextInput
@@ -1024,6 +1079,11 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
   },
+  voiceSection: {
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+});
   emptyText: {
     ...typography.body,
     color: colors.textSecondary,

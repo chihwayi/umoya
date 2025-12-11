@@ -44,7 +44,8 @@
     "reflect-metadata": "^0.1.14",
     "swagger-ui-express": "^5.0.0",
     "typeorm": "^0.3.17",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "form-data": "^4.0.0"
   },
   "devDependencies": {
     "@nestjs/testing": "^10.4.20",

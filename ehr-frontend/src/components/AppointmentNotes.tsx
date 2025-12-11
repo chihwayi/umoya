@@ -10,6 +10,8 @@ import DatePicker from './DatePicker';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM, parseDDMMYYYYToDate, parseDDMMYYYYHHMMToDate } from '../utils/dateFormatting';
 import SnomedConceptPicker from './SnomedConceptPicker';
 import Icd10Suggestions from './Icd10Suggestions';
+import VoiceConsultationButton from './VoiceConsultation/VoiceConsultationButton';
+import medicalEntityExtractor, { ExtractedEntities } from '../services/medical-entity-extractor.service';
 
 interface Appointment {
   id: string;
@@ -501,40 +503,80 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
                   <label className="block text-sm font-semibold text-slate-700">
                     Chief Complaint
                   </label>
-                  {chiefComplaint && chiefComplaint.length > 10 && (
-                    <button
-                      onClick={async () => {
-                        setLoadingDiagnosis(true);
-                        try {
-                          const patientAge = appointment.patient.dateOfBirth
-                            ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
-                            : undefined;
-                          const latestVitals = vitals?.length > 0 ? vitals[0] : undefined;
-                          const result = await ehrApi.getDiagnosisSuggestions({
-                            symptoms: [chiefComplaint, ...(historyOfPresentIllness ? historyOfPresentIllness.split(/\s+/).slice(0, 5) : [])],
-                            vitals: latestVitals ? {
-                              temperature: latestVitals.temperature,
-                              bloodPressure: latestVitals.bloodPressure,
-                              heartRate: latestVitals.heartRate,
-                              oxygenSaturation: latestVitals.oxygenSaturation,
-                            } : undefined,
-                            age: patientAge,
-                            gender: appointment.patient.gender,
-                          }, token, tenantSlug);
-                          setDiagnosisSuggestions(result.data);
-                        } catch (error) {
-                          console.error('Failed to get diagnosis suggestions:', error);
-                        } finally {
-                          setLoadingDiagnosis(false);
+                  <div className="flex items-center gap-2">
+                    <VoiceConsultationButton
+                      patientName={`${appointment.patient.firstName} ${appointment.patient.lastName}`}
+                      patientId={appointment.patient.id}
+                      token={token}
+                      tenantSlug={tenantSlug}
+                      language="auto"
+                      onTranscriptionComplete={(text, entities) => {
+                        // Auto-populate form fields
+                        if (entities.chiefComplaint) {
+                          setChiefComplaint(entities.chiefComplaint);
                         }
+                        if (entities.symptoms && entities.symptoms.length > 0) {
+                          const symptomsText = entities.symptoms.join(', ');
+                          setHistoryOfPresentIllness(prev => 
+                            prev ? `${prev}\n\nSymptoms: ${symptomsText}` : `Symptoms: ${symptomsText}`
+                          );
+                        }
+                        if (entities.problems && entities.problems.length > 0) {
+                          const problemsText = entities.problems.join(', ');
+                          setAssessment(prev => 
+                            prev ? `${prev}\n\nProblems: ${problemsText}` : `Problems: ${problemsText}`
+                          );
+                        }
+                        if (entities.notes) {
+                          setNotes(prev => 
+                            prev ? `${prev}\n\nVoice Notes: ${entities.notes}` : `Voice Notes: ${entities.notes}`
+                          );
+                        }
+                        
+                        showSuccess(
+                          'Voice Transcription Complete',
+                          `Extracted ${Object.keys(entities.vitals || {}).length} vitals, ${entities.symptoms?.length || 0} symptoms, and ${entities.problems?.length || 0} problems. Please review and confirm.`
+                        );
                       }}
-                      disabled={loadingDiagnosis}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
-                    >
-                      <Stethoscope className="w-3 h-3" />
-                      {loadingDiagnosis ? 'Analyzing...' : 'Diagnostic Assistant'}
-                    </button>
-                  )}
+                      onError={(error) => {
+                        showError('Voice Recording Error', error);
+                      }}
+                    />
+                    {chiefComplaint && chiefComplaint.length > 10 && (
+                      <button
+                        onClick={async () => {
+                          setLoadingDiagnosis(true);
+                          try {
+                            const patientAge = appointment.patient.dateOfBirth
+                              ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                              : undefined;
+                            const latestVitals = vitals?.length > 0 ? vitals[0] : undefined;
+                            const result = await ehrApi.getDiagnosisSuggestions({
+                              symptoms: [chiefComplaint, ...(historyOfPresentIllness ? historyOfPresentIllness.split(/\s+/).slice(0, 5) : [])],
+                              vitals: latestVitals ? {
+                                temperature: latestVitals.temperature,
+                                bloodPressure: latestVitals.bloodPressure,
+                                heartRate: latestVitals.heartRate,
+                                oxygenSaturation: latestVitals.oxygenSaturation,
+                              } : undefined,
+                              age: patientAge,
+                              gender: appointment.patient.gender,
+                            }, token, tenantSlug);
+                            setDiagnosisSuggestions(result.data);
+                          } catch (error) {
+                            console.error('Failed to get diagnosis suggestions:', error);
+                          } finally {
+                            setLoadingDiagnosis(false);
+                          }
+                        }}
+                        disabled={loadingDiagnosis}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <Stethoscope className="w-3 h-3" />
+                        {loadingDiagnosis ? 'Analyzing...' : 'Diagnostic Assistant'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <textarea
                   value={chiefComplaint}

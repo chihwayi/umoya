@@ -1,0 +1,159 @@
+/**
+ * DHIS2 Real API Integration Example
+ * 
+ * This is a template showing how to replace mocked calls with real DHIS2 API calls.
+ * Copy this to dhis2.service.ts and implement real API integration.
+ */
+
+import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import axios, { AxiosInstance } from 'axios';
+import { Patient } from '../entities/patient.entity';
+import { AppointmentSimple } from '../entities/appointment-simple.entity';
+
+@Injectable()
+export class Dhis2RealService {
+  private readonly logger = new Logger(Dhis2RealService.name);
+  private dhis2BaseUrl = process.env.DHIS2_URL || 'https://dhis2.mohcc.gov.zw';
+  private dhis2Username = process.env.DHIS2_USERNAME;
+  private dhis2Password = process.env.DHIS2_PASSWORD;
+  private dhis2ApiVersion = process.env.DHIS2_API_VERSION || '38';
+  
+  private dhis2Client: AxiosInstance;
+
+  constructor() {
+    // Create authenticated axios instance
+    this.dhis2Client = axios.create({
+      baseURL: `${this.dhis2BaseUrl}/api/${this.dhis2ApiVersion}`,
+      auth: {
+        username: this.dhis2Username || '',
+        password: this.dhis2Password || '',
+      },
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    // Add response interceptor for error handling
+    this.dhis2Client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        this.logger.error(`DHIS2 API Error: ${error.message}`, error.response?.data);
+        throw error;
+      }
+    );
+  }
+
+  /**
+   * Sync patients to DHIS2 - REAL IMPLEMENTATION
+   */
+  async syncPatients(tenantDb: DataSource) {
+    try {
+      const patientRepository = tenantDb.getRepository(Patient);
+      const patients = await patientRepository.find({ where: { isActive: true } });
+
+      const trackedEntityType = process.env.DHIS2_TRACKED_ENTITY_TYPE || 'MCPQUTHX1Ze';
+      const orgUnit = process.env.DHIS2_ORG_UNIT || 'YOUR_ORG_UNIT_ID';
+
+      const importPayload = {
+        trackedEntityInstances: patients.map(patient => ({
+          trackedEntityType,
+          orgUnit,
+          attributes: [
+            {
+              attribute: 'w75KJ2mc4zz', // First name
+              value: patient.firstName
+            },
+            {
+              attribute: 'zDhUuAYrxNC', // Last name
+              value: patient.lastName
+            },
+            {
+              attribute: 'FO4GPuUTfQU', // Date of birth
+              value: patient.dateOfBirth.toISOString().split('T')[0]
+            },
+            {
+              attribute: 'cejWyOfXge6', // Gender
+              value: patient.gender.toUpperCase()
+            },
+            {
+              attribute: 'AuPLng5hLbE', // National ID
+              value: patient.nationalId || ''
+            }
+          ]
+        }))
+      };
+
+      // Real DHIS2 API call
+      const response = await this.dhis2Client.post('/trackedEntityInstances', importPayload);
+
+      return {
+        status: response.data.status || 'SUCCESS',
+        imported: response.data.imported || 0,
+        updated: response.data.updated || 0,
+        ignored: response.data.ignored || 0,
+        deleted: response.data.deleted || 0,
+        message: `Successfully synced ${response.data.imported || 0} patients to DHIS2`
+      };
+    } catch (error: any) {
+      this.logger.error('Error syncing patients to DHIS2:', error);
+      throw new Error(`DHIS2 sync failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send event to DHIS2 - REAL IMPLEMENTATION
+   */
+  async sendEvent(eventData: any) {
+    try {
+      const dhis2Event = {
+        program: eventData.program,
+        orgUnit: eventData.orgUnit,
+        eventDate: eventData.eventDate,
+        status: 'COMPLETED',
+        trackedEntityInstance: eventData.patientId,
+        dataValues: eventData.dataValues
+      };
+
+      // Real DHIS2 API call
+      const response = await this.dhis2Client.post('/events', dhis2Event);
+
+      return {
+        status: 'SUCCESS',
+        reference: response.data.response?.importSummaries?.[0]?.reference || `EVENT_${Date.now()}`,
+        message: 'Event sent to DHIS2 successfully'
+      };
+    } catch (error: any) {
+      this.logger.error('Error sending event to DHIS2:', error);
+      throw new Error(`DHIS2 event send failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get DHIS2 programs - REAL IMPLEMENTATION
+   */
+  async getPrograms() {
+    try {
+      const response = await this.dhis2Client.get('/programs', {
+        params: {
+          fields: 'id,name,description',
+          paging: false
+        }
+      });
+
+      return {
+        programs: response.data.programs || []
+      };
+    } catch (error: any) {
+      this.logger.error('Error fetching DHIS2 programs:', error);
+      // Return cached/default programs on error
+      return {
+        programs: [
+          { id: 'uy2gU8kT1jF', name: 'HIV Care and Treatment', description: 'HIV/AIDS care and treatment program' },
+          { id: 'M3xtLkYBlKI', name: 'TB care and treatment', description: 'Tuberculosis care and treatment program' },
+        ]
+      };
+    }
+  }
+}

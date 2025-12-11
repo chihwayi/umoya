@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  whisper-api:
+    image: onerahmet/whisper-api:latest-gpu
+    container_name: medicore-whisper-api
+    ports:
+      - "8000:8000"
+    # Uncomment if you have NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    environment:
+      - ASR_MODEL=base  # Options: tiny, base, small, medium, large
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Alternative: CPU-only version (uncomment to use)
+  # whisper-api-cpu:
+  #   image: onerahmet/whisper-api:latest-cpu
+  #   container_name: medicore-whisper-api-cpu
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - ASR_MODEL=base
+  #   restart: unless-stopped

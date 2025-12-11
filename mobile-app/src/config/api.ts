@@ -225,4 +225,7 @@ export const API_ENDPOINTS = {
     DOSING_RECOMMENDATION: '/cdss/dosing-recommendation',
     GUIDELINES: '/cdss/guidelines',
   },
+  TRANSCRIPTION: {
+    WHISPER: '/transcription/whisper',
+  },
 };

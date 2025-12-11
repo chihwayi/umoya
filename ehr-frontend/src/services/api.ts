@@ -6759,3 +6759,6 @@ export const analyticsApi = {
     return { data: response.data };
   },
 };
+
+// Export ehrAxios for use in other services
+export { ehrAxios };

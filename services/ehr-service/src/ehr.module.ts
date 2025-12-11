@@ -85,6 +85,7 @@ import { CdiController } from './controllers/cdi.controller';
 import { CaseManagementController } from './controllers/case-management.controller';
 import { SepsisController } from './controllers/sepsis.controller';
 import { DietaryController } from './controllers/dietary.controller';
+import { TranscriptionController } from './controllers/transcription.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -208,6 +209,7 @@ import { CdiService } from './services/cdi.service';
 import { CaseManagementService } from './services/case-management.service';
 import { SepsisService } from './services/sepsis.service';
 import { DietaryService } from './services/dietary.service';
+import { TranscriptionService } from './services/transcription.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
@@ -309,6 +311,7 @@ import { RolesGuard } from './guards/roles.guard';
     CaseManagementController,
     SepsisController,
     DietaryController,
+    TranscriptionController,
   ],
   providers: [
     AuthService,
@@ -436,6 +439,7 @@ import { RolesGuard } from './guards/roles.guard';
     CaseManagementService,
     SepsisService,
     DietaryService,
+    TranscriptionService,
     RolesGuard,
     JwtStrategy,
   ],
