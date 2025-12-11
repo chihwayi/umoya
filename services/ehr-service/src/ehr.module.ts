@@ -86,6 +86,7 @@ import { CaseManagementController } from './controllers/case-management.controll
 import { SepsisController } from './controllers/sepsis.controller';
 import { DietaryController } from './controllers/dietary.controller';
 import { TranscriptionController } from './controllers/transcription.controller';
+import { WhoSmartGuidelinesController } from './controllers/who-smart-guidelines.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -312,6 +313,7 @@ import { RolesGuard } from './guards/roles.guard';
     SepsisController,
     DietaryController,
     TranscriptionController,
+    WhoSmartGuidelinesController,
   ],
   providers: [
     AuthService,
@@ -440,6 +442,7 @@ import { RolesGuard } from './guards/roles.guard';
     SepsisService,
     DietaryService,
     TranscriptionService,
+    WhoSmartGuidelinesService,
     RolesGuard,
     JwtStrategy,
   ],

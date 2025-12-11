@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosInstance } from 'axios';
+import { WhoSmartGuidelinesService } from './who-smart-guidelines.service';
 
 @Injectable()
 export class CdssService {
@@ -9,7 +10,10 @@ export class CdssService {
   private readonly cdssClient: AxiosInstance;
   private readonly cdssServiceUrl: string;
 
-  constructor() {
+  constructor(
+    @Optional() @Inject(WhoSmartGuidelinesService) 
+    private readonly whoSmartGuidelinesService?: WhoSmartGuidelinesService
+  ) {
     this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,
@@ -556,14 +560,44 @@ export class CdssService {
 
   /**
    * Get clinical guidelines from Python CDSS service
+   * Now integrates WHO Smart Guidelines if available
    */
   async getGuidelines(condition: string, patientData?: any) {
+    // Try WHO Smart Guidelines first (if service available)
+    if (this.whoSmartGuidelinesService) {
+      try {
+        const whoGuidelines = await this.whoSmartGuidelinesService.getRecommendations(condition, patientData);
+        if (whoGuidelines && whoGuidelines.length > 0) {
+          this.logger.log(`Using WHO Smart Guidelines for: ${condition}`);
+          return {
+            guidelines: whoGuidelines.map(g => ({
+              title: g.title,
+              description: g.description,
+              source: 'WHO Smart Guidelines',
+              priority: g.priority
+            })),
+            recommendations: whoGuidelines.map(g => g.description),
+            contraindications: [],
+            medication_warnings: [],
+            evidence_level: 'high', // WHO Smart Guidelines are evidence-based
+            matched_condition: condition,
+            source: 'who_smart_guidelines',
+            whoGuidelines: whoGuidelines
+          };
+        }
+      } catch (error: any) {
+        this.logger.debug(`WHO Smart Guidelines not available: ${error.message}`);
+        // Continue to CDSS guidelines
+      }
+    }
+    
+    // Fallback to CDSS guidelines
     try {
       const response = await this.cdssClient.post('/guidelines/check', {
         condition,
         patient_age: patientData?.age,
         patient_gender: patientData?.gender,
-        comorbidities: patientData?.comorbidities || [],
+        comorbidities: patientData?.comorbidities || patientData?.conditions || [],
         medications: patientData?.medications || [],
       }, {
         timeout: 10000,
