@@ -211,6 +211,7 @@ import { CaseManagementService } from './services/case-management.service';
 import { SepsisService } from './services/sepsis.service';
 import { DietaryService } from './services/dietary.service';
 import { TranscriptionService } from './services/transcription.service';
+import { WhoSmartGuidelinesService } from './services/who-smart-guidelines.service';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';

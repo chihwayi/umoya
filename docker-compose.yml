@@ -257,6 +257,7 @@ services:
     volumes:
       - ./services/ehr-service/src:/app/src
       - ./services/ehr-service/package.json:/app/package.json
+      - ./services/ehr-service/who-smart-guidelines:/app/who-smart-guidelines
     depends_on:
       - postgres-master
       - cdss-service
