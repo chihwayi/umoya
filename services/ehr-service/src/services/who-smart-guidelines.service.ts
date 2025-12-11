@@ -11,6 +11,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// FHIRPath evaluator (optional - falls back to simple matching if not available)
+let fhirpath: any = null;
+try {
+  fhirpath = require('fhirpath');
+} catch (e) {
+  // FHIRPath not available - will use simple matching
+}
+
 // FHIR R4 Types (simplified - in production, use @types/fhir or fhir/r4)
 interface FHIRResource {
   resourceType: string;
@@ -364,6 +372,7 @@ export class WhoSmartGuidelinesService {
   
   /**
    * Check if a PlanDefinition action is applicable to patient
+   * Uses FHIRPath evaluator if available, falls back to simple matching
    */
   private isActionApplicable(
     action: PlanDefinitionAction,
@@ -384,12 +393,98 @@ export class WhoSmartGuidelinesService {
     // Check applicability conditions
     for (const condition of action.condition) {
       if (condition.kind === 'applicability') {
-        // Simple evaluation (in production, use FHIRPath evaluator)
-        // For now, return true if expression exists
-        // Full implementation would evaluate FHIRPath expressions
-        if (condition.expression) {
-          // TODO: Implement FHIRPath evaluation
-          // For now, assume applicable
+        if (condition.expression?.expression) {
+          // Try FHIRPath evaluation if available
+          if (fhirpath && condition.expression.language === 'text/fhirpath') {
+            try {
+              // Create a FHIR Patient resource-like object for evaluation
+              const patientResource = {
+                resourceType: 'Patient',
+                gender: patientData?.gender,
+                birthDate: patientData?.age
+                  ? new Date(new Date().getFullYear() - (patientData.age || 0), 0, 1)
+                      .toISOString()
+                      .split('T')[0]
+                  : undefined,
+                extension: [
+                  ...(patientData?.vitals
+                    ? Object.entries(patientData.vitals).map(([key, value]) => ({
+                        url: `http://example.org/vitals/${key}`,
+                        valueString: String(value),
+                      }))
+                    : []),
+                  ...(patientData?.labs
+                    ? Object.entries(patientData.labs).map(([key, value]) => ({
+                        url: `http://example.org/labs/${key}`,
+                        valueString: String(value),
+                      }))
+                    : []),
+                ],
+              };
+
+              // Evaluate FHIRPath expression
+              const result = fhirpath.evaluate(
+                patientResource,
+                condition.expression.expression
+              );
+              
+              // If result is falsy, condition not met
+              if (!result || (Array.isArray(result) && result.length === 0)) {
+                return false;
+              }
+              
+              // If result is boolean, return it
+              if (typeof result === 'boolean') {
+                return result;
+              }
+              
+              // If result is array with boolean, return first boolean
+              if (Array.isArray(result) && result.length > 0) {
+                const firstResult = result[0];
+                if (typeof firstResult === 'boolean') {
+                  return firstResult;
+                }
+              }
+              
+              // Default: if we got a result, assume applicable
+              return true;
+            } catch (error) {
+              this.logger.warn(
+                `FHIRPath evaluation failed: ${error.message}. Using fallback.`
+              );
+              // Fall through to simple matching
+            }
+          }
+          
+          // Simple pattern matching fallback
+          // Check for common patterns in expressions
+          const expression = condition.expression.expression.toLowerCase();
+          
+          // Age-based conditions
+          if (patientData?.age !== undefined) {
+            if (expression.includes('age') || expression.includes('birthdate')) {
+              // Simple age checks
+              if (expression.includes('>') && expression.includes('65')) {
+                if (patientData.age <= 65) return false;
+              }
+              if (expression.includes('<') && expression.includes('18')) {
+                if (patientData.age >= 18) return false;
+              }
+            }
+          }
+          
+          // Gender-based conditions
+          if (patientData?.gender && expression.includes('gender')) {
+            const genderLower = patientData.gender.toLowerCase();
+            if (expression.includes('female') && !['female', 'f'].includes(genderLower)) {
+              return false;
+            }
+            if (expression.includes('male') && !['male', 'm'].includes(genderLower)) {
+              return false;
+            }
+          }
+          
+          // Default: if expression exists, assume applicable (conservative approach)
           return true;
         }
       }
