@@ -1,13 +1,49 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import axios, { AxiosInstance } from 'axios';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
 
 @Injectable()
 export class Dhis2Service {
+  private readonly logger = new Logger(Dhis2Service.name);
   private dhis2BaseUrl = process.env.DHIS2_URL || 'https://dhis2.mohcc.gov.zw';
   private dhis2Username = process.env.DHIS2_USERNAME;
   private dhis2Password = process.env.DHIS2_PASSWORD;
+  private dhis2ApiVersion = process.env.DHIS2_API_VERSION || '38';
+  private useMockMode = process.env.DHIS2_USE_MOCK === 'true' || !this.dhis2Username || !this.dhis2Password;
+  
+  private dhis2Client: AxiosInstance | null = null;
+
+  constructor() {
+    // Initialize DHIS2 client only if credentials are provided
+    if (!this.useMockMode) {
+      this.dhis2Client = axios.create({
+        baseURL: `${this.dhis2BaseUrl}/api/${this.dhis2ApiVersion}`,
+        auth: {
+          username: this.dhis2Username || '',
+          password: this.dhis2Password || '',
+        },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000, // 30 seconds
+      });
+
+      // Add response interceptor for error handling
+      this.dhis2Client.interceptors.response.use(
+        (response) => response,
+        (error) => {
+          this.logger.error(`DHIS2 API Error: ${error.message}`, error.response?.data);
+          throw error;
+        }
+      );
+
+      this.logger.log('DHIS2 service initialized with real API integration');
+    } else {
+      this.logger.warn('DHIS2 service running in MOCK mode (set DHIS2_USERNAME and DHIS2_PASSWORD to enable real API)');
+    }
+  }
 
   async syncPatients(tenantDb: DataSource) {
     const patientRepository = tenantDb.getRepository(Patient);
