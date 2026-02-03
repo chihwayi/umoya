@@ -57,6 +57,7 @@ import AdvancedResultComparison from '../components/AdvancedResultComparison';
 import DoctorImagingResultsPanel from '../components/DoctorImagingResultsPanel';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
+import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 
 interface Appointment {
   id: string;
@@ -126,6 +127,7 @@ const DoctorDashboard: React.FC = () => {
   const [showComprehensiveNotes, setShowComprehensiveNotes] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [referralReason, setReferralReason] = useState('');
+  const [referralSnomed, setReferralSnomed] = useState<SnomedConcept | null>(null);
   const [referralInstructions, setReferralInstructions] = useState('');
   const [currentReferralAppointment, setCurrentReferralAppointment] = useState<Appointment | null>(null);
   const [vitalsForm, setVitalsForm] = useState({
@@ -1274,11 +1276,15 @@ const DoctorDashboard: React.FC = () => {
         patientId: currentReferralAppointment.patient.id,
         appointmentId: currentReferralAppointment.id,
         doctorId: currentUser?.id,
-        orderType: getOrderTypeFromReason(referralReason),
-        orderName: getOrderNameFromReason(referralReason),
+        orderType: 'procedure', // Default to procedure for nurse referrals via SNOMED
+        orderName: referralReason,
         description: `Doctor referral: ${referralReason}`,
         instructions: referralInstructions || `Please perform ${referralReason.toLowerCase()} as requested by doctor`,
-        priority: 'normal'
+        priority: 'normal',
+        snomedConceptId: referralSnomed?.conceptId,
+        snomedTerm: referralSnomed?.preferredTerm || referralSnomed?.term,
+        snomedModuleId: referralSnomed?.moduleId,
+        snomedDefinitionStatus: referralSnomed?.definitionStatus,
       };
 
       const created = await ehrApi.createOrder(orderData, token, tenantSlug!);
@@ -1290,6 +1296,7 @@ const DoctorDashboard: React.FC = () => {
       showSuccess('Success', 'Referral created and orders sent to nurse');
       setShowReferralModal(false);
       setReferralReason('');
+      setReferralSnomed(null);
       setReferralInstructions('');
       fetchTodayAppointments();
     } catch (error) {
@@ -3129,24 +3136,23 @@ const DoctorDashboard: React.FC = () => {
             {/* Content */}
             <div className="p-6 space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Reason for Referral *
-                </label>
-                <select
-                  value={referralReason}
-                  onChange={(e) => setReferralReason(e.target.value)}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+                <SnomedConceptPicker
+                  value={referralSnomed}
+                  onChange={(concept) => {
+                    setReferralSnomed(concept);
+                    if (concept) {
+                      setReferralReason(concept.preferredTerm || concept.term);
+                    } else {
+                      setReferralReason('');
+                    }
+                  }}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug!}
+                  label="Reason for Referral (SNOMED Procedure) *"
+                  placeholder="Search for procedure (e.g., Injection, Wound care)..."
+                  context="procedure"
                   required
-                >
-                  <option value="">Select reason...</option>
-                  <option value="Injection">Injection</option>
-                  <option value="IV Drip">IV Drip</option>
-                  <option value="Wound Dressing">Wound Dressing</option>
-                  <option value="Vital Signs">Vital Signs Monitoring</option>
-                  <option value="Medication Administration">Medication Administration</option>
-                  <option value="Blood Draw">Blood Draw</option>
-                  <option value="Other">Other</option>
-                </select>
+                />
               </div>
 
               <div>

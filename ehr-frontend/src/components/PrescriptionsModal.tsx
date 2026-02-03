@@ -88,7 +88,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [searchingDrugs, setSearchingDrugs] = useState<Record<number, boolean>>({});
   const [drugSuggestions, setDrugSuggestions] = useState<Record<number, Drug[]>>({});
   const [showSuggestions, setShowSuggestions] = useState<Record<number, boolean>>({});
-  const searchTimeouts = useRef<Record<number, NodeJS.Timeout>>({});
+  const searchTimeouts = useRef<Record<number, any>>({});
   
   type Rx = { 
     name: string; 
@@ -159,7 +159,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const selectDrug = (itemIndex: number, drug: Drug) => {
     setItems(prev => prev.map((it, i) => 
       i === itemIndex 
-        ? { ...it, name: drug.genericName, drugId: drug.id, foundDrug: drug }
+        ? { ...it, name: drug.genericName, drugId: drug.id, foundDrug: drug, medicationSnomed: null }
         : it
     ));
     setShowSuggestions(prev => ({ ...prev, [itemIndex]: false }));
@@ -616,7 +616,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                         value={rx.name} 
                         onChange={(e) => {
                           const value = e.target.value;
-                          setItems(prev => prev.map((it, i) => i===idx ? { ...it, name: value, drugId: undefined, foundDrug: undefined } : it));
+                          setItems(prev => prev.map((it, i) => i===idx ? { ...it, name: value, drugId: undefined, foundDrug: undefined, medicationSnomed: null } : it));
                           // Clear previous timeout
                           if (searchTimeouts.current[idx]) {
                             clearTimeout(searchTimeouts.current[idx]);
@@ -698,13 +698,19 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                     <div className="mt-2">
                       <SnomedConceptPicker
                         value={rx.medicationSnomed || null}
-                        onChange={(concept) => setItems(prev => prev.map((it, i) => i===idx ? { ...it, medicationSnomed: concept } : it))}
+                        onChange={(concept) => setItems(prev => prev.map((it, i) => i===idx ? { 
+                          ...it, 
+                          medicationSnomed: concept,
+                          name: concept ? (concept.preferredTerm || concept.term) : it.name,
+                          drugId: undefined, // Clear local DB ID as we are using SNOMED
+                          foundDrug: undefined
+                        } : it))}
                         token={token}
                         tenantSlug={tenantSlug}
-                        label="SNOMED CT Code (Optional)"
+                        label="Search Medication (SNOMED CT)"
                         placeholder="Search for clinical drug concept..."
                         context="medication"
-                        helperText="Select SNOMED CT concept for structured medication coding"
+                        helperText="Select standardized medication from SNOMED CT"
                       />
                     </div>
                     
