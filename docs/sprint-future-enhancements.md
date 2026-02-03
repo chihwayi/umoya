@@ -73,18 +73,12 @@ Enhanced analytics dashboard with predictive analytics and advanced reporting.
 
 ---
 
-## 5. Mobile Applications
+## 5. Mobile Applications (Planned Rewrite)
 
 ### Description
-Native mobile applications for iOS and Android.
+Native mobile applications for iOS and Android are planned for a future phase (complete rewrite).
 
-### Features
-- Patient app with full portal features
-- Provider app for clinical documentation
-- Push notifications
-- Offline mode
-
-### Estimated Effort: 14-18 weeks
+### Estimated Effort: TBD
 
 ---
 

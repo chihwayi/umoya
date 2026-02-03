@@ -3,7 +3,7 @@ import {
   Syringe, Calendar, User, Building, AlertTriangle, CheckCircle,
   Clock, Download, Plus, Search, Filter, TrendingUp
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, immunizationApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import VaccineAdministrationModal from './VaccineAdministrationModal';
@@ -37,7 +37,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
   const loadImmunizations = async () => {
     try {
       setLoading(true);
-      const response = await ehrApi.getPatientImmunizations(patientId, token, tenantSlug);
+      const response = await immunizationApi.getPatientImmunizations(patientId, token, tenantSlug);
       setImmunizations(response.data || []);
     } catch (error) {
       console.error('Failed to load immunizations:', error);
@@ -54,7 +54,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
       const dateOfBirth = patientResponse.data.dateOfBirth;
       
       // For now, just get all schedules as forecast
-      const response = await ehrApi.getImmunizationSchedules({}, token, tenantSlug);
+      const response = await immunizationApi.getImmunizationSchedules({}, token, tenantSlug);
       setForecast(response.data || []);
     } catch (error) {
       console.error('Failed to load forecast:', error);

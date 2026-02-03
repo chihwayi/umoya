@@ -21,31 +21,11 @@ The voice consultation feature has been successfully implemented. Here's what wa
 ### 3. Module Registration
 - Added to `ehr.module.ts` controllers and providers
 
-## 📱 Mobile App Implementation
-
-### 1. Core Services
-- `voice-recording.service.ts` - Audio recording
-- `transcription.service.ts` - Speech-to-text
-- `medical-entity-extractor.service.ts` - Extracts vitals, symptoms, problems
-
-### 2. UI Components
-- `ConsentModal.tsx` - Patient consent before recording
-- `VoiceConsultationButton.tsx` - Simple button component
-
-### 3. Integration
-- Added voice button to `ClinicalNotesScreen`
-- Auto-populates SOAP note fields
-- Shows extracted entities for review
-
 ## 🔧 Setup Instructions
 
 ### 1. Install Dependencies
 
 ```bash
-# Mobile App
-cd mobile-app
-npm install
-
 # Backend (if form-data not installed)
 cd ../services/ehr-service
 npm install form-data
@@ -72,19 +52,6 @@ Set environment variables:
 export USE_LOCAL_WHISPER=true
 export LOCAL_WHISPER_URL=http://localhost:8000/transcribe
 ```
-
-### 3. iOS Setup
-
-The microphone permission has been added to `Info.plist`. For iOS, you may need to:
-
-```bash
-cd mobile-app/ios
-pod install
-```
-
-### 4. Android Setup
-
-Permissions have been added to `AndroidManifest.xml`. No additional setup needed.
 
 ## 🚀 Usage
 

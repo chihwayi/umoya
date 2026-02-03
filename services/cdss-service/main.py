@@ -2,14 +2,20 @@
 MediCore Clinical Decision Support System (CDSS) Service
 Python FastAPI microservice for advanced clinical reasoning
 """
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uvicorn
 import httpx
 import os
+import shutil
+import tempfile
+import boto3
+from botocore.exceptions import NoCredentialsError, ClientError
+from fastapi import UploadFile, File, Form
 from drug_interactions import DrugInteractionAnalyzer
 from clinical_guidelines import ClinicalGuidelinesEngine
 from risk_scoring import RiskScoringEngine
@@ -20,6 +26,8 @@ from lab_interpreter import LabResultInterpreter
 from duplicate_therapy import DuplicateTherapyDetector
 from high_risk_medications import HighRiskMedicationDetector
 from food_interactions import FoodInteractionChecker
+from ai_models.voice_scribe import VoiceScribe
+from ai_models.medical_vision import MedicalVisionService
 
 app = FastAPI(
     title="MediCore CDSS Service",
@@ -98,7 +106,147 @@ risk_scoring_engine = RiskScoringEngine()
 dosing_calculator = DosingCalculator()
 diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
 trend_analysis_engine = TrendAnalysisEngine()
+
+# Initialize Voice Scribe
+voice_scribe = None
+try:
+    voice_scribe = VoiceScribe()
+except Exception as e:
+    print(f"Voice scribe initialization failed: {e}")
+
+# Initialize Medical Vision Service
+medical_vision = None
+try:
+    medical_vision = MedicalVisionService()
+except Exception as e:
+    print(f"Medical Vision initialization failed: {e}")
+
+# MinIO Configuration
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "medicore")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "medicore_password")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "medicore-documents")
+
+# Initialize S3 Client
+s3_client = boto3.client(
+    's3',
+    endpoint_url=MINIO_ENDPOINT,
+    aws_access_key_id=MINIO_ACCESS_KEY,
+    aws_secret_access_key=MINIO_SECRET_KEY,
+    config=boto3.session.Config(signature_version='s3v4')
+)
+
+@app.on_event("startup")
+async def startup_event():
+    """Ensure MinIO bucket exists on startup."""
+    try:
+        try:
+            s3_client.head_bucket(Bucket=MINIO_BUCKET)
+            print(f"Bucket '{MINIO_BUCKET}' exists.")
+        except ClientError as e:
+            # If a client error is thrown, then check that it was a 404 error.
+            # If it was a 404 error, then the bucket does not exist.
+            error_code = e.response['Error']['Code']
+            if error_code == '404':
+                s3_client.create_bucket(Bucket=MINIO_BUCKET)
+                print(f"Bucket '{MINIO_BUCKET}' created successfully.")
+            else:
+                print(f"Error checking bucket '{MINIO_BUCKET}': {e}")
+    except Exception as e:
+        print(f"Error checking MinIO connection: {e}")
+
 lab_interpreter = LabResultInterpreter()
+
+@app.post("/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    generate_soap: bool = True,
+    language: Optional[str] = Form(None)
+):
+    """
+    Transcribe audio file (English, Shona, Ndebele) and optionally generate SOAP note.
+    Stores audio in MinIO.
+    """
+    if not voice_scribe:
+        raise HTTPException(status_code=503, detail="Voice service unavailable")
+    
+    # Save uploaded file to temp file
+    suffix = f".{file.filename.split('.')[-1]}" if '.' in file.filename else ".tmp"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+        shutil.copyfileobj(file.file, temp_file)
+        temp_path = temp_file.name
+    
+    try:
+        # 1. Transcribe
+        transcription_result = await run_in_threadpool(voice_scribe.transcribe_audio, temp_path, language=language)
+        if "error" in transcription_result:
+             raise HTTPException(status_code=500, detail=transcription_result["error"])
+        
+        result = {
+            "transcription": transcription_result,
+            "soap_note": None,
+            "audio_url": None,
+            "storage_key": None
+        }
+        
+        # 2. Upload to MinIO
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = os.path.basename(temp_path)
+            file_key = f"voice-consultations/{timestamp}_{filename}"
+            
+            await run_in_threadpool(s3_client.upload_file, temp_path, MINIO_BUCKET, file_key)
+            
+            # Construct URL (accessible if bucket is public or via signed url)
+            # For internal use, we return the key
+            result["storage_key"] = file_key
+            result["audio_url"] = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{file_key}"
+        except Exception as e:
+            print(f"MinIO upload failed: {e}")
+            # Continue even if upload fails, as we have the text
+        
+        # 3. Generate SOAP Note
+        if generate_soap:
+            soap_result = await voice_scribe.generate_soap_note(transcription_result["text"])
+            result["soap_note"] = soap_result
+            
+        return result
+    finally:
+        # Cleanup temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.post("/analyze-image")
+async def analyze_medical_image(
+    file: UploadFile = File(...)
+):
+    """
+    Analyze medical images (X-Ray, DICOM) using Computer Vision.
+    Detects: Pneumonia, Tuberculosis, Pleural Effusion, etc.
+    """
+    if not medical_vision:
+        raise HTTPException(status_code=503, detail="Medical Vision service unavailable")
+
+    try:
+        content = await file.read()
+        
+        # Run inference in threadpool to avoid blocking
+        result = await run_in_threadpool(
+            medical_vision.analyze_image, 
+            content, 
+            file.filename
+        )
+        
+        if "error" in result:
+             raise HTTPException(status_code=500, detail=result["error"])
+             
+        return result
+        
+    except Exception as e:
+        print(f"Image analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 duplicate_detector = DuplicateTherapyDetector()
 high_risk_detector = HighRiskMedicationDetector()
 food_interaction_checker = FoodInteractionChecker()
@@ -880,6 +1028,48 @@ async def check_food_interactions(request: FoodInteractionRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    generate_soap: bool = True
+):
+    """
+    Transcribe audio (voice consultation) and optionally generate SOAP notes.
+    Supports English, Shona, and Ndebele.
+    """
+    if not voice_scribe:
+        raise HTTPException(status_code=503, detail="Voice service unavailable")
+    
+    # Save uploaded file to temp
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+        shutil.copyfileobj(file.file, temp_file)
+        temp_path = temp_file.name
+    
+    try:
+        # Transcribe
+        transcription_result = voice_scribe.transcribe_audio(temp_path)
+        
+        if "error" in transcription_result:
+             raise HTTPException(status_code=500, detail=transcription_result["error"])
+        
+        result = {
+            "transcription": transcription_result,
+            "soap_note": None
+        }
+        
+        # Generate SOAP if requested
+        if generate_soap:
+            soap_result = await voice_scribe.generate_soap_note(transcription_result["text"])
+            result["soap_note"] = soap_result
+            
+        return result
+        
+    finally:
+        # Clean up temp file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 if __name__ == "__main__":

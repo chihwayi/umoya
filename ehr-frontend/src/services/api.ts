@@ -3,6 +3,7 @@ import { handleAutoLogout } from '../utils/autoLogout';
 
 const TENANT_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+const CDSS_API_URL = process.env.REACT_APP_CDSS_API_URL || 'http://localhost:8000';
 
 // Create axios instance with response interceptor
 const createAxiosInstance = (baseURL: string) => {
@@ -26,6 +27,7 @@ const createAxiosInstance = (baseURL: string) => {
 // Create instances
 const tenantAxios = createAxiosInstance(TENANT_API_URL);
 const ehrAxios = createAxiosInstance(EHR_API_URL);
+export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 export const tenantApi = {
   getActiveTenants: async () => {
@@ -6317,7 +6319,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const patientPortalApi = {
   // ==================== PATIENT PORTAL ====================
   
   // Patient Care Plans
@@ -6357,7 +6361,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const documentManagementApi = {
   // ==================== DOCUMENT MANAGEMENT ====================
   
   uploadDocument: async (formData: FormData, token: string, tenantSlug: string) => {
@@ -6438,7 +6444,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const consentApi = {
   // ==================== CONSENT MANAGEMENT ====================
   
   // Consent Templates
@@ -6529,7 +6537,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const emergencyApi = {
   // ==================== EMERGENCY DEPARTMENT ====================
   
   getEDTrackingBoard: async (token: string, tenantSlug: string) => {
@@ -6566,7 +6576,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const bedManagementApi = {
   // ==================== BED MANAGEMENT & ADT ====================
   
   getBeds: async (filters: any, token: string, tenantSlug: string) => {
@@ -6665,7 +6677,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const immunizationApi = {
   // ==================== IMMUNIZATION REGISTRY ====================
   
   getImmunizationSchedules: async (filters: any, token: string, tenantSlug: string) => {
@@ -6696,7 +6710,9 @@ export const analyticsApi = {
     });
     return { data: response.data };
   },
+};
 
+export const clinicalPathwaysApi = {
   // ==================== CLINICAL PATHWAYS ====================
   
   getClinicalPathways: async (filters: any, token: string, tenantSlug: string) => {
@@ -6786,6 +6802,18 @@ export const cdssApi = {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  analyzeMedicalImage: async (formData: FormData, token: string, tenantSlug: string) => {
+    // Direct call to CDSS service for performance on large files
+    const response = await cdssAxios.post('/analyze-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        // Optional: Pass auth if CDSS service requires it eventually
+        'Authorization': `Bearer ${token}` 
       },
     });
     return { data: response.data };

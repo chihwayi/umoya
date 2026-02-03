@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Camera, LogOut, User, Brain, BookOpen, Search, RefreshCw } from 'lucide-react';
 import RadiologistWorklist from '../components/RadiologistWorklist';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
+import MedicalVisionPanel from '../components/MedicalVision/MedicalVisionPanel';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -18,8 +19,9 @@ const RadiologistDashboard: React.FC = () => {
   const [loadingStudy, setLoadingStudy] = React.useState(false);
   const [loadError, setLoadError] = React.useState(false);
 
-  // CDSS Guideline Search State
+  // CDSS State
   const [showGuidelineSearch, setShowGuidelineSearch] = React.useState(false);
+  const [showVisionPanel, setShowVisionPanel] = React.useState(false);
   const [guidelineQuery, setGuidelineQuery] = React.useState('');
   const [guidelineResults, setGuidelineResults] = React.useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = React.useState(false);
@@ -137,6 +139,15 @@ const RadiologistDashboard: React.FC = () => {
                   <Brain className="w-5 h-5" />
                   <span className="hidden sm:inline text-sm font-medium">ACR Guidelines</span>
                 </button>
+
+                <button
+                  onClick={() => setShowVisionPanel(true)}
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center gap-2 text-white"
+                  title="Open Medical Vision AI"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span className="hidden sm:inline text-sm font-medium">AI Analysis</span>
+                </button>
                 <div className="text-right">
                   <p className="font-semibold">{currentUser.firstName} {currentUser.lastName}</p>
                   <p className="text-sm text-purple-200">{currentUser.role}</p>
@@ -226,6 +237,14 @@ const RadiologistDashboard: React.FC = () => {
           isLoading={loadingStudy}
           loadError={loadError}
           currentUser={currentUser}
+        />
+      )}
+
+      {showVisionPanel && (
+        <MedicalVisionPanel
+          tenantSlug={tenantSlug!}
+          token={token}
+          onClose={() => setShowVisionPanel(false)}
         />
       )}
     </div>

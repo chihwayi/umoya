@@ -7,7 +7,8 @@ import {
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
   Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route,
-  Bed, Hospital, Home, Droplet, DollarSign, Brain, BookOpen
+  Bed, Hospital, Home, Droplet, DollarSign, Brain, BookOpen,
+  Mic
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, cdssApi } from '../services/api';
@@ -58,6 +59,7 @@ import DoctorImagingResultsPanel from '../components/DoctorImagingResultsPanel';
 import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
+import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 
 interface Appointment {
   id: string;
@@ -170,6 +172,7 @@ const DoctorDashboard: React.FC = () => {
     recommendations: false
   });
   const [showClinicalNotesModal, setShowClinicalNotesModal] = useState(false);
+  const [showVoiceConsultationModal, setShowVoiceConsultationModal] = useState(false);
   const [showPrescriptionsModal, setShowPrescriptionsModal] = useState(false);
   const [showLabOrdersModal, setShowLabOrdersModal] = useState(false);
   const [showLabResultsModal, setShowLabResultsModal] = useState(false);
@@ -1966,6 +1969,14 @@ const DoctorDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
+                          onClick={() => setShowVoiceConsultationModal(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md animate-pulse-subtle"
+                        >
+                          <Mic className="w-4 h-4" />
+                          AI Scribe
+                        </button>
+                        <button
                           onClick={openClinicalNotesModal}
                           disabled={appointmentAwaitingPayment}
                           className="px-3 py-2 bg-white/20 hover:bg-white/30 disabled:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm backdrop-blur-sm"
@@ -3019,6 +3030,29 @@ const DoctorDashboard: React.FC = () => {
           token={localStorage.getItem('ehr_token') || ''}
           searchContext="General Practice, Internal Medicine, Primary Care"
         />
+      )}
+
+      {/* Voice Consultation Modal */}
+      {showVoiceConsultationModal && currentAppointment && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100000] p-4">
+            <div className="w-full max-w-4xl h-[80vh]">
+              <VoiceConsultationPanel
+                patientName={`${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}`}
+                patientId={currentAppointment.patient.id}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={tenantSlug!}
+                onSave={(note) => {
+                  console.log('Voice note saved:', note);
+                  // Optionally save to backend as a clinical note
+                  setShowVoiceConsultationModal(false);
+                  showSuccess('Success', 'Voice consultation saved successfully');
+                }}
+                onClose={() => setShowVoiceConsultationModal(false)}
+              />
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* WHO Smart Forms Panel */}

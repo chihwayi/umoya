@@ -50,11 +50,6 @@ install_dependencies() {
         cd web-app && npm install && cd - > /dev/null
     fi
     
-    # Install mobile app dependencies
-    if [ -f "mobile-app/package.json" ]; then
-        echo "Installing mobile app dependencies..."
-        cd mobile-app && npm install && cd - > /dev/null
-    fi
     
     echo "✅ Dependencies installed"
 }

@@ -42,21 +42,21 @@ This document outlines the roadmap for transforming MediCore from a standard EHR
 ### 1. RAG Infrastructure & Knowledge Base
 - **Objective:** Enable semantic search over medical documents and patient history.
 - **Tasks:**
-  - [ ] **Data Normalization:** Integrate `scispaCy` or `John Snow Labs` to map messy notes to standard codes (ICD-10, SNOMED).
-  - [ ] **Vector Database:** Setup `ChromaDB` (local) for storing embeddings of guidelines and historical cases.
-  - [ ] **Embeddings:** Implement `sentence-transformers` (e.g., `BioBERT` or `all-MiniLM`) for converting text to vectors.
+  - [x] **Data Normalization:** Integrate `scispaCy` or `John Snow Labs` to map messy notes to standard codes (ICD-10, SNOMED).
+  - [x] **Vector Database:** Setup `ChromaDB` (local) for storing embeddings of guidelines and historical cases.
+  - [x] **Embeddings:** Implement `sentence-transformers` (e.g., `BioBERT` or `all-MiniLM`) for converting text to vectors.
 
 ### 2. Guideline Ingestion
 - **Objective:** Make the `who-smart-guidelines` folder searchable.
 - **Tasks:**
-  - [ ] Build an ingestion script to parse PDFs/Markdown files.
-  - [ ] Index WHO Guidelines into the Vector DB.
+  - [x] Build an ingestion script to parse PDFs/Markdown files.
+  - [x] Index WHO Guidelines into the Vector DB.
 
 ### 3. RAG-Enhanced Inference
 - **Objective:** Force the LLM to "look up" facts before answering.
 - **Tasks:**
-  - [ ] Update `DiagnosticAssistant` to retrieve top-3 relevant guidelines before prompting Llama.
-  - [ ] Implement "Citations" in the API response (e.g., "Source: HIV Guidelines p.4").
+  - [x] Update `DiagnosticAssistant` to retrieve top-3 relevant guidelines before prompting Llama.
+  - [x] Implement "Citations" in the API response (e.g., "Source: HIV Guidelines p.4").
 
 ---
 
@@ -66,14 +66,14 @@ This document outlines the roadmap for transforming MediCore from a standard EHR
 ### 1. Voice-to-Text Engine
 - **Objective:** Transcribe consultations securely within the backend.
 - **Tasks:**
-  - [ ] Integrate `faster-whisper` (optimized Whisper model) into `cdss-service`.
-  - [ ] Add microphone streaming/upload support to `VoiceConsultation` component in frontend.
+  - [x] Integrate `faster-whisper` (optimized Whisper model) into `cdss-service`.
+  - [x] Add microphone streaming/upload support to `VoiceConsultation` component in frontend.
 
 ### 2. Auto-SOAP Generation
 - **Objective:** Convert raw transcripts into structured medical notes.
 - **Tasks:**
-  - [ ] Design prompts to extract **S**ubjective, **O**bjective, **A**ssessment, and **P**lan from transcripts.
-  - [ ] Auto-fill the "Clinical Notes" form for physician review.
+  - [x] Design prompts to extract **S**ubjective, **O**bjective, **A**ssessment, and **P**lan from transcripts.
+  - [x] Auto-fill the "Clinical Notes" form for physician review.
 
 ---
 
@@ -83,8 +83,8 @@ This document outlines the roadmap for transforming MediCore from a standard EHR
 ### 1. AI Radiologist
 - **Objective:** Triage Chest X-Rays for TB and Pneumonia.
 - **Tasks:**
-  - [ ] Integrate a Vision-Language Model (like `MedGemma` or `CLIP`) into `cdss-service`.
-  - [ ] Create an analysis pipeline for DICOM/JPEG uploads in `ImagingDashboard`.
+  - [x] Integrate a Vision-Language Model (like `MedGemma` or `CLIP`) into `cdss-service`.
+  - [x] Create an analysis pipeline for DICOM/JPEG uploads in `ImagingDashboard`.
 
 ---
 

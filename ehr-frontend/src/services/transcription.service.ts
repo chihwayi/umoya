@@ -12,15 +12,18 @@ export interface TranscriptionOptions {
 }
 
 export interface TranscriptionResult {
-  text: string;
-  rawText: string;
-  language: string;
-  segments?: Array<{
-    start: number;
-    end: number;
+  transcription: {
     text: string;
-  }>;
-  confidence?: number;
+    language: string;
+    language_probability: number;
+    duration: number;
+  };
+  soap_note?: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+  };
 }
 
 class TranscriptionService {
@@ -41,21 +44,17 @@ class TranscriptionService {
       } = options;
 
       const formData = new FormData();
-      formData.append('audio', audioFile);
+      formData.append('file', audioFile); // Changed 'audio' to 'file' to match backend
+      formData.append('generate_soap', 'true'); // Request SOAP note generation
       
       if (language !== 'auto') {
         formData.append('language', language);
       }
       
-      if (temperature !== undefined) {
-        formData.append('temperature', temperature.toString());
-      }
-      
-      if (prompt) {
-        formData.append('prompt', prompt);
-      }
+      // Note: Backend currently might not support temperature/prompt in the simple /transcribe endpoint
+      // but we keep them for future extensibility or if we update backend to accept them.
 
-      const response = await ehrAxios.post('/transcription/whisper', formData, {
+      const response = await ehrAxios.post('/transcribe', formData, { // Changed endpoint to /transcribe
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`,
@@ -66,7 +65,7 @@ class TranscriptionService {
       return response.data;
     } catch (error: any) {
       console.error('Transcription error:', error);
-      throw new Error(`Transcription failed: ${error.response?.data?.message || error.message}`);
+      throw new Error(`Transcription failed: ${error.response?.data?.detail || error.message}`);
     }
   }
 

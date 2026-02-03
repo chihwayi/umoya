@@ -23,5 +23,13 @@ accelerate==0.25.0
 # RAG & Vector DB
 chromadb==0.4.22
 pypdf==3.17.4
-spacy==3.7.2
+spacy==3.6.1
 scispacy==0.5.3
+
+# Voice AI
+faster-whisper>=1.0.0
+boto3==1.34.0
+
+# Vision AI
+pillow==10.1.0
+pydicom==2.4.3

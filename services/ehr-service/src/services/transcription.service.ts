@@ -4,6 +4,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
+import 'multer'; // Ensure multer types are loaded
 import * as FormData from 'form-data';
 import axios from 'axios';
 import * as fs from 'fs';
@@ -25,6 +26,8 @@ export interface TranscriptionResult {
     text: string;
   }>;
   confidence?: number;
+  soap_note?: string;
+  audio_url?: string;
 }
 
 @Injectable()
@@ -32,7 +35,8 @@ export class TranscriptionService {
   private readonly logger = new Logger(TranscriptionService.name);
   private readonly WHISPER_API_URL = process.env.WHISPER_API_URL || 'https://api.openai.com/v1/audio/transcriptions';
   private readonly WHISPER_API_KEY = process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY;
-  private readonly USE_LOCAL_WHISPER = process.env.USE_LOCAL_WHISPER === 'true';
+  // Default to true for CDSS service integration
+  private readonly USE_LOCAL_WHISPER = process.env.USE_LOCAL_WHISPER !== 'false'; 
   private readonly LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL || 'http://localhost:8000/transcribe';
 
   /**
@@ -124,8 +128,7 @@ export class TranscriptionService {
   }
 
   /**
-   * Transcribe using self-hosted Whisper instance
-   * Useful for privacy-sensitive deployments or cost savings
+   * Transcribe using self-hosted Whisper instance (CDSS Service)
    */
   private async transcribeWithLocalWhisper(
     audioFile: Express.Multer.File,
@@ -133,27 +136,15 @@ export class TranscriptionService {
   ): Promise<TranscriptionResult> {
     try {
       const formData = new FormData();
-      formData.append('audio', audioFile.buffer, {
+      // CDSS Service expects 'file' parameter
+      formData.append('file', audioFile.buffer, {
         filename: audioFile.originalname || 'recording.wav',
         contentType: audioFile.mimetype || 'audio/wav',
       });
 
-      // Different local Whisper APIs use different parameter names
-      // Try 'audio' first (our custom server), then 'audio_file' (common format)
-      if (this.LOCAL_WHISPER_URL.includes('/transcribe')) {
-        // Our custom FastAPI server format
-        formData.append('audio', audioFile.buffer, {
-          filename: audioFile.originalname || 'recording.wav',
-          contentType: audioFile.mimetype || 'audio/wav',
-        });
-      } else {
-        // Generic format (whisper-asr-webservice, etc.)
-        formData.append('audio_file', audioFile.buffer, {
-          filename: audioFile.originalname || 'recording.wav',
-          contentType: audioFile.mimetype || 'audio/wav',
-        });
-      }
-
+      // CDSS Service parameters
+      formData.append('generate_soap', 'true');
+      
       if (options.language && options.language !== 'auto') {
         formData.append('language', options.language);
       }
@@ -162,19 +153,30 @@ export class TranscriptionService {
         formData.append('temperature', options.temperature.toString());
       }
 
-      if (options.prompt) {
-        formData.append('prompt', options.prompt);
-      }
+      this.logger.log(`Sending transcription request to ${this.LOCAL_WHISPER_URL}`);
 
       const response = await axios.post(this.LOCAL_WHISPER_URL, formData, {
         headers: formData.getHeaders(),
-        timeout: 120000, // 2 minute timeout for local processing
+        timeout: 300000, // 5 minute timeout for local processing
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       });
 
-      // Handle different response formats from different Whisper API implementations
       const responseData = response.data;
       
-      // Format 1: Our custom server (returns text, language, segments)
+      // Handle CDSS Service response format
+      // { "transcription": { "text": "...", "language": "...", "segments": [...] }, "soap_note": "...", "audio_url": "..." }
+      if (responseData.transcription) {
+        return {
+          text: responseData.transcription.text || '',
+          language: responseData.transcription.language || options.language || 'en',
+          segments: responseData.transcription.segments || [],
+          soap_note: responseData.soap_note,
+          audio_url: responseData.audio_url
+        };
+      }
+      
+      // Fallback for other formats (legacy/generic)
       if (responseData.text) {
         return {
           text: responseData.text || '',
@@ -184,7 +186,7 @@ export class TranscriptionService {
         };
       }
       
-      // Format 2: whisper-asr-webservice (returns text directly or in data field)
+      // Format 2: whisper-asr-webservice
       if (responseData.data && responseData.data.text) {
         return {
           text: responseData.data.text || '',
@@ -193,22 +195,10 @@ export class TranscriptionService {
         };
       }
       
-      // Format 3: Direct text response
-      if (typeof responseData === 'string') {
-        return {
-          text: responseData,
-          language: options.language || 'en',
-        };
-      }
-
-      // Fallback
-      return {
-        text: JSON.stringify(responseData),
-        language: options.language || 'en',
-      };
+      throw new Error('Unknown response format from local Whisper service');
     } catch (error: any) {
-      this.logger.error(`Local Whisper error: ${error.message}`, error.response?.data);
-      throw new Error(`Local Whisper error: ${error.message}`);
+      this.logger.error(`Local Whisper API error: ${error.message}`, error.response?.data);
+      throw new Error(`Local Whisper API error: ${error.message}`);
     }
   }
 

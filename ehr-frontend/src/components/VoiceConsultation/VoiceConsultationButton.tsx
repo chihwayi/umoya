@@ -14,7 +14,7 @@ interface VoiceConsultationButtonProps {
   token: string;
   tenantSlug: string;
   language?: 'en' | 'sn' | 'nd' | 'auto';
-  onTranscriptionComplete?: (text: string, entities: ExtractedEntities) => void;
+  onTranscriptionComplete?: (text: string, entities: ExtractedEntities, soapNote?: any) => void;
   onError?: (error: string) => void;
 }
 
@@ -36,7 +36,7 @@ const VoiceConsultationButton: React.FC<VoiceConsultationButtonProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const durationIntervalRef = useRef<any>(null);
   const startTimeRef = useRef<number>(0);
 
   const formatDuration = (ms: number): string => {
@@ -149,13 +149,13 @@ const VoiceConsultationButton: React.FC<VoiceConsultationButtonProps> = ({
       );
 
       // Extract entities
-      const entities = medicalEntityExtractor.extractEntities(transcription.text);
+      const entities = medicalEntityExtractor.extractEntities(transcription.transcription.text);
 
       // Format transcription
-      const formattedText = transcriptionService.formatTranscription(transcription.text);
+      const formattedText = transcriptionService.formatTranscription(transcription.transcription.text);
 
       // Callback
-      onTranscriptionComplete?.(formattedText, entities);
+      onTranscriptionComplete?.(formattedText, entities, transcription.soap_note);
 
       // Reset
       setRecordingDuration(0);
