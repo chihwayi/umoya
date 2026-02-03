@@ -68,7 +68,27 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
       imm.vaccineName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       imm.immunizationNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesType = filterType === 'all' || imm.vaccineCode === filterType;
+    // Improved filter logic: Match by code OR by name keywords to support both CVX and SNOMED
+    let matchesType = filterType === 'all';
+    if (!matchesType) {
+       // Direct code match (Legacy CVX or specific SNOMED)
+       if (imm.vaccineCode === filterType) {
+         matchesType = true;
+       } else {
+         // Fallback: Name matching for SNOMED entries where code doesn't match the filter's CVX expectation
+         const name = imm.vaccineName?.toLowerCase() || '';
+         switch (filterType) {
+            case '213': matchesType = name.includes('covid') || name.includes('sars-cov-2'); break;
+            case '141': matchesType = name.includes('flu') || name.includes('influenza'); break;
+            case '20': matchesType = name.includes('dtap') || name.includes('tetanus') || name.includes('diphtheria'); break;
+            case '03': matchesType = name.includes('mmr') || name.includes('measles') || name.includes('mumps') || name.includes('rubella'); break;
+            case '08': matchesType = name.includes('hep b') || name.includes('hepatitis b'); break;
+            case '10': matchesType = name.includes('polio'); break;
+            case '137': matchesType = name.includes('hpv') || name.includes('human papilloma'); break;
+            default: matchesType = false;
+         }
+       }
+    }
     
     return matchesSearch && matchesType;
   });

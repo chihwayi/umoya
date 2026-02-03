@@ -51,19 +51,31 @@ const EDDispositionModal: React.FC<EDDispositionModalProps> = ({
     procedure: string;
     cptCode: string;
     snomedCode: string;
+    snomedConcept?: SnomedConcept | null;
   }>>([]);
 
   const handleAddProcedure = () => {
-    setProcedures([...procedures, { procedure: '', cptCode: '', snomedCode: '' }]);
+    setProcedures([...procedures, { procedure: '', cptCode: '', snomedCode: '', snomedConcept: null }]);
   };
 
   const handleRemoveProcedure = (index: number) => {
     setProcedures(procedures.filter((_, i) => i !== index));
   };
 
-  const handleProcedureChange = (index: number, field: string, value: string) => {
+  const handleProcedureChange = (index: number, field: string, value: any) => {
     const updated = [...procedures];
     updated[index] = { ...updated[index], [field]: value };
+    setProcedures(updated);
+  };
+
+  const handleSnomedSelect = (index: number, concept: SnomedConcept | null) => {
+    const updated = [...procedures];
+    updated[index] = {
+      ...updated[index],
+      snomedConcept: concept,
+      snomedCode: concept?.conceptId || '',
+      procedure: concept?.term || updated[index].procedure // Auto-fill name if empty or overwrite? Let's overwrite to ensure match
+    };
     setProcedures(updated);
   };
 
@@ -228,28 +240,39 @@ const EDDispositionModal: React.FC<EDDispositionModalProps> = ({
                     </div>
                     
                     <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={proc.procedure}
-                        onChange={(e) => handleProcedureChange(index, 'procedure', e.target.value)}
-                        placeholder="Procedure name (e.g., Suturing, X-ray chest)"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
-                      />
+                      <div className="grid grid-cols-1 gap-2">
+                         <label className="text-xs font-medium text-slate-700">Procedure (SNOMED) *</label>
+                         <SnomedConceptPicker
+                            value={proc.snomedConcept || (proc.snomedCode ? { conceptId: proc.snomedCode, term: proc.procedure } : null)}
+                            onChange={(concept) => handleSnomedSelect(index, concept)}
+                            token={token}
+                            tenantSlug={tenantSlug}
+                            ecl="<< 71388002 |Procedure (procedure)|"
+                            placeholder="Search procedure (e.g. Suturing, X-ray)..."
+                         />
+                      </div>
+                      
                       <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          value={proc.cptCode}
-                          onChange={(e) => handleProcedureChange(index, 'cptCode', e.target.value.toUpperCase())}
-                          placeholder="CPT Code (e.g., 12001)"
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
-                        />
-                        <input
-                          type="text"
-                          value={proc.snomedCode}
-                          onChange={(e) => handleProcedureChange(index, 'snomedCode', e.target.value)}
-                          placeholder="SNOMED (optional)"
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
-                        />
+                        <div>
+                            <label className="text-xs font-medium text-slate-700">Procedure Name (Override)</label>
+                            <input
+                              type="text"
+                              value={proc.procedure}
+                              onChange={(e) => handleProcedureChange(index, 'procedure', e.target.value)}
+                              placeholder="Procedure name"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-slate-700">CPT Code (Billing)</label>
+                            <input
+                              type="text"
+                              value={proc.cptCode}
+                              onChange={(e) => handleProcedureChange(index, 'cptCode', e.target.value.toUpperCase())}
+                              placeholder="e.g. 12001"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono"
+                            />
+                        </div>
                       </div>
                     </div>
                   </div>
