@@ -9,7 +9,7 @@ import {
   Upload, Trash2, Edit, Copy, Archive, Globe, Mail,
   Phone, MapPin, Building, Zap, TrendingUp, Users2, Scan, Droplet,
   CheckCircle, Camera, FlaskConical, HeartPulse, Package, Video,
-  AlertCircle, Bed, Baby
+  AlertCircle, Bed, Baby, DollarSign
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';

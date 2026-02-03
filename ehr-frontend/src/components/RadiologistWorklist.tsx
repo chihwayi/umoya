@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Clock, AlertTriangle, User, FileText, CheckCircle, Eye, CreditCard, Lock } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { Camera, Clock, AlertTriangle, User, FileText, CheckCircle, Eye, CreditCard, Lock, Search, BookOpen, Loader2, Sparkles } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import { GuidelineResult } from '../types/guidelines';
 
 interface Study {
   id: string;
@@ -46,6 +47,12 @@ export default function RadiologistWorklist({
   const [activeTab, setActiveTab] = useState<'worklist' | 'my-studies'>('worklist');
   const { showSuccess, showError } = useNotification();
 
+  // CDSS / Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
   useEffect(() => {
     loadStudies();
     
@@ -81,6 +88,32 @@ export default function RadiologistWorklist({
     } catch (error) {
       console.error('Failed to assign study:', error);
       showError('Assignment failed', 'Unable to assign the study to you.');
+    }
+  };
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      // Inject context for radiology
+      const specializedQuery = `Radiology, ACR Guidelines: ${guidelineQuery}`;
+      
+      const response = await cdssApi.searchGuidelines(specializedQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
     }
   };
 
@@ -144,6 +177,75 @@ export default function RadiologistWorklist({
   return (
     <div className="space-y-4">
       {/* Header Stats */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800">Radiologist Worklist</h2>
+        <button
+          onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+            showGuidelineSearch 
+              ? 'bg-purple-500/20 text-purple-700 border-purple-500/30' 
+              : 'bg-white text-slate-500 border-slate-200 hover:text-purple-600 hover:border-purple-200'
+          }`}
+        >
+          <Search size={16} />
+          {showGuidelineSearch ? 'Hide Guidelines' : 'Imaging Guidelines'}
+        </button>
+      </div>
+
+      {showGuidelineSearch && (
+        <div className="mb-6 bg-purple-50/50 rounded-xl p-4 border border-purple-100 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={guidelineQuery}
+                onChange={(e) => setGuidelineQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                placeholder="Search imaging guidelines (e.g. 'MRI brain contrast', 'CT pulmonary angiogram', 'ACR appropriateness')..."
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              />
+            </div>
+            <button
+              onClick={handleGuidelineSearch}
+              disabled={loadingGuidelines || !guidelineQuery.trim()}
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loadingGuidelines ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                'Search'
+              )}
+            </button>
+          </div>
+
+          {guidelineResults.length > 0 && (
+            <div className="space-y-3 bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="w-4 h-4 text-purple-600" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Relevant Clinical Guidelines</p>
+              </div>
+              {guidelineResults.map((citation: any, idx: number) => (
+                <div key={`rad-search-${idx}`} className="flex items-start gap-3 p-3 bg-slate-50 rounded border border-slate-100">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                    </p>
+                    {citation.source && (
+                      <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">

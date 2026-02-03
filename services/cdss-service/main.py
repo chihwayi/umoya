@@ -73,6 +73,7 @@ class RiskScoreResponse(BaseModel):
     risk_level: str  # low, moderate, high, critical
     factors: List[Dict[str, Any]]
     recommendations: List[str]
+    guideline_citations: List[Dict[str, Any]] = []
 
 
 # Health Check
@@ -206,6 +207,33 @@ async def check_clinical_guidelines(request: ClinicalGuidelineRequest):
         "medication_warnings": result.get('medication_warnings', []),
         "evidence_level": result.get('evidence_level', 'moderate'),
         "matched_condition": result.get('matched_condition', request.condition)
+    }
+
+
+class GuidelineSearchRequest(BaseModel):
+    query: str = Field(..., description="Search query for clinical guidelines")
+    limit: int = Field(5, description="Maximum number of results to return")
+
+
+@app.post("/guidelines/search")
+async def search_guidelines(request: GuidelineSearchRequest):
+    """
+    Search for clinical guidelines using RAG (Retrieval-Augmented Generation).
+    Returns relevant guideline excerpts and citations based on the search query.
+    """
+    citations = []
+    if diagnostic_assistant.rag_engine:
+        try:
+            print(f"[CDSS] Searching guidelines for: {request.query}")
+            citations = diagnostic_assistant.rag_engine.query(request.query, n_results=request.limit)
+        except Exception as e:
+            print(f"[CDSS] Guideline search failed: {e}")
+            # Don't fail the request, just return empty list or error message
+    
+    return {
+        "query": request.query,
+        "citations": citations,
+        "count": len(citations)
     }
 
 
@@ -368,6 +396,48 @@ async def calculate_risk_score(request: RiskScoreRequest):
             import traceback
             traceback.print_exc()
     
+    # RAG-enhanced Guideline Citations
+    guideline_citations = []
+    if diagnostic_assistant.rag_engine:
+        # Collect terms to search for based on high risks and diagnoses
+        search_terms = []
+        # Add high risk diagnoses/conditions
+        for d in request.diagnoses:
+            search_terms.append(d)
+        
+        # Add high risk factors
+        for f in factors:
+            if f.get('level') in ['high', 'critical'] or f.get('impact') in ['major', 'critical']:
+                # Extract simplified term from factor text if possible
+                factor_text = f.get('factor', '')
+                if 'Hypertension' in factor_text:
+                    search_terms.append('Hypertension management')
+                elif 'Diabetes' in factor_text:
+                    search_terms.append('Diabetes management')
+                elif 'Cholesterol' in factor_text:
+                    search_terms.append('Dyslipidemia management')
+                elif 'Adherence' in factor_text:
+                    search_terms.append('Medication adherence strategies')
+                else:
+                    search_terms.append(factor_text)
+        
+        # Deduplicate terms
+        search_terms = list(dict.fromkeys(search_terms))
+        
+        if search_terms:
+            # Query for the top 3 most relevant terms
+            query_terms = search_terms[:3]
+            query = f"Clinical guidelines for {', '.join(query_terms)}"
+            try:
+                print(f"[CDSS] Querying RAG for risk guidelines: {query}")
+                retrieved_docs = diagnostic_assistant.rag_engine.query(query, n_results=3)
+                if retrieved_docs:
+                    guideline_citations = retrieved_docs
+                    # Also add a general recommendation if we found citations
+                    recommendations.append("Review AI-retrieved clinical guidelines for high-risk factors")
+            except Exception as e:
+                print(f"[CDSS] RAG query for risk guidelines failed: {e}")
+
     # Remove duplicates from recommendations
     unique_recommendations = list(dict.fromkeys(recommendations))
     
@@ -376,7 +446,8 @@ async def calculate_risk_score(request: RiskScoreRequest):
         'overall_score': round(overall_score, 2),
         'risk_level': overall_risk_level,
         'factors': factors,
-        'recommendations': unique_recommendations
+        'recommendations': unique_recommendations,
+        'guideline_citations': guideline_citations
     }
     
     # Add trend data if available (as additional fields not in response model)
@@ -464,6 +535,13 @@ class IntelligentDiagnosisRequest(BaseModel):
     conditions: Optional[List[str]] = Field(None, description="Existing conditions")
 
 
+class PatientSummaryRequest(BaseModel):
+    clinical_notes: List[str] = Field(..., description="List of historical clinical notes")
+    age: int = Field(..., description="Patient age")
+    gender: str = Field(..., description="Patient gender")
+    recent_vitals: Optional[Dict[str, Any]] = Field(None, description="Most recent vital signs")
+
+
 @app.post("/diagnosis/suggest")
 async def suggest_diagnosis(request: DiagnosisRequest):
     """
@@ -519,7 +597,7 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
         patient_data['conditions'] = request.conditions
     
     # Get intelligent suggestions
-    result = diagnostic_assistant.intelligent_suggest(
+    result = await diagnostic_assistant.intelligent_suggest(
         symptoms=request.symptoms,
         vitals=request.vitals,
         clinical_notes=request.clinical_notes,
@@ -534,6 +612,7 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
         "recommended_tests": result.get('recommended_tests', []),
         "red_flags": result.get('red_flags', []),
         "vitals_clues": result.get('vitals_clues', []),
+        "guideline_citations": result.get('guideline_citations', []),
         "source": result.get('source', 'hybrid_cdss_ai'),
         "ai_enabled": result.get('ai_enabled', False),
         "ai_models_used": result.get('ai_models_used', {}),
@@ -542,6 +621,43 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
         "total_sources": result.get('total_sources', 1),
         "explanation": result.get('explanation', 'Combined results from rule-based CDSS and AI models')
     }
+
+
+@app.post("/patient/summarize")
+async def summarize_patient_history(request: PatientSummaryRequest):
+    """
+    Generate a concise "One-Liner" summary of the patient's history using LLM.
+    Useful for patient headers and quick context.
+    """
+    demographics = {"age": request.age, "gender": request.gender}
+    
+    return await diagnostic_assistant.summarize_patient_history(
+        clinical_notes=request.clinical_notes,
+        demographics=demographics,
+        recent_vitals=request.recent_vitals
+    )
+
+
+# Forecast Glucose Endpoint
+@app.post("/forecast/glucose")
+async def forecast_glucose(request: Dict[str, Any]):
+    """
+    Forecast future glucose levels using Exponential Smoothing (Holt-Winters).
+    Requires at least 5 historical data points.
+    """
+    try:
+        historical_glucose = request.get('historical_glucose', [])
+        days = request.get('days', 7)
+        
+        return trend_analysis_engine.analyze_glucose_forecast(
+            historical_glucose=historical_glucose,
+            days_to_forecast=days
+        )
+    except Exception as e:
+        print(f"Error in glucose forecasting: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Trend Analysis Endpoint
@@ -553,6 +669,7 @@ async def analyze_trends(request: Dict[str, Any]):
     - Visit patterns
     - Care gaps
     - Treatment response
+    - Lab trends (Viral Load, CD4)
     """
     try:
         current_vitals = request.get('current_vitals', {})
@@ -562,6 +679,7 @@ async def analyze_trends(request: Dict[str, Any]):
         patient_gender = request.get('patient_gender')
         diagnoses = request.get('diagnoses', [])
         current_condition = request.get('current_condition')
+        lab_history = request.get('lab_history', []) # New field
         
         results = {}
         
@@ -570,6 +688,14 @@ async def analyze_trends(request: Dict[str, Any]):
             results['vital_trends'] = trend_analysis_engine.analyze_vital_trends(
                 current_vitals, historical_vitals
             )
+        
+        # Lab Trends (specifically for HIV/TB)
+        if lab_history:
+            results['lab_trends'] = {}
+            for lab_type in ['cd4', 'viral_load']:
+                trend = trend_analysis_engine.analyze_lab_trends(lab_history, lab_type)
+                if trend.get('has_trend'):
+                    results['lab_trends'][lab_type] = trend
         
         # Visit patterns
         if visit_history:

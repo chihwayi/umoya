@@ -21,6 +21,28 @@ except ImportError:
 
 from .model_loader import get_model_cache, is_ai_enabled
 
+# Import terminology mappers
+try:
+    from terminology.icd10_mapper import Icd10Mapper
+    from terminology.snomed_mapper import SnomedMapper
+    TERMINOLOGY_AVAILABLE = True
+except ImportError:
+    TERMINOLOGY_AVAILABLE = False
+
+# Import Zimbabwe-specific terminology
+try:
+    from .zimbabwe_terminology import (
+        translate_symptom_to_english,
+        extract_zimbabwe_conditions,
+        get_zimbabwe_disease_multiplier,
+        SHONA_SYMPTOMS,
+        NDEBELE_SYMPTOMS
+    )
+    ZIMBABWE_TERMINOLOGY_AVAILABLE = True
+except ImportError:
+    ZIMBABWE_TERMINOLOGY_AVAILABLE = False
+    logger.warning("Zimbabwe terminology not available")
+
 
 class ClinicalBERTDiagnostic:
     """
@@ -40,16 +62,31 @@ class ClinicalBERTDiagnostic:
         self.tokenizer = None
         self.classifier = None
         self._initialized = False
+        self.icd10_mapper = None
+        self.snomed_mapper = None
         
+        # Always initialize (lightweight mode works without transformers)
         if not TRANSFORMERS_AVAILABLE:
-            logger.warning("Transformers not available. ClinicalBERT will use fallback mode.")
-            return
+            logger.info("Transformers not available. ClinicalBERT will use lightweight fallback mode.")
         
         if not is_ai_enabled():
             logger.info("AI models disabled via CDSS_ENABLE_AI. ClinicalBERT will use fallback mode.")
             return
         
-        self._try_load_model()
+        # Initialize terminology mappers
+        if TERMINOLOGY_AVAILABLE:
+            try:
+                self.icd10_mapper = Icd10Mapper()
+                self.snomed_mapper = SnomedMapper()
+            except Exception as e:
+                logger.warning(f"Failed to initialize terminology mappers: {e}")
+        
+        # Always mark as initialized (lightweight mode always available)
+        self._initialized = True
+        
+        # Try to load full model if transformers available
+        if TRANSFORMERS_AVAILABLE:
+            self._try_load_model()
     
     def _try_load_model(self):
         """Try to load the model, fallback to lightweight mode if fails"""
@@ -142,7 +179,15 @@ class ClinicalBERTDiagnostic:
         """
         Analyze clinical text for semantic patterns
         This would use ClinicalBERT embeddings in full implementation
+        Enhanced with Zimbabwe-specific terminology support
         """
+        # Pre-process text: translate Shona/Ndebele symptoms to English
+        if ZIMBABWE_TERMINOLOGY_AVAILABLE:
+            # Extract Zimbabwe-specific conditions
+            zimbabwe_conditions = extract_zimbabwe_conditions(text)
+            if zimbabwe_conditions:
+                logger.debug(f"Detected Zimbabwe-specific conditions: {zimbabwe_conditions}")
+        
         entities = self._extract_entities_lightweight(text)
         
         # Extract key phrases
@@ -204,20 +249,23 @@ class ClinicalBERTDiagnostic:
         analysis = self._analyze_text_semantics(clinical_text)
         entities = analysis['entities']
         
-        # Map symptoms to potential diagnoses
+        # Map symptoms to potential diagnoses (enhanced with Zimbabwe-specific patterns)
         symptom_diagnosis_map = {
             'fever': [
-                {'diagnosis': 'Viral Upper Respiratory Infection', 'probability': 0.30},
-                {'diagnosis': 'Bacterial Pneumonia', 'probability': 0.25},
-                {'diagnosis': 'Urinary Tract Infection', 'probability': 0.15},
-                {'diagnosis': 'COVID-19', 'probability': 0.12},
-                {'diagnosis': 'Sepsis', 'probability': 0.08}
+                {'diagnosis': 'Malaria', 'probability': 0.35},  # High prevalence in Zimbabwe
+                {'diagnosis': 'Viral Upper Respiratory Infection', 'probability': 0.25},
+                {'diagnosis': 'Bacterial Pneumonia', 'probability': 0.15},
+                {'diagnosis': 'Tuberculosis', 'probability': 0.12},  # High prevalence
+                {'diagnosis': 'Urinary Tract Infection', 'probability': 0.08},
+                {'diagnosis': 'COVID-19', 'probability': 0.05}
             ],
             'cough': [
-                {'diagnosis': 'Acute Bronchitis', 'probability': 0.35},
-                {'diagnosis': 'Pneumonia', 'probability': 0.28},
-                {'diagnosis': 'Asthma Exacerbation', 'probability': 0.15},
-                {'diagnosis': 'COPD Exacerbation', 'probability': 0.12}
+                {'diagnosis': 'Tuberculosis', 'probability': 0.30},  # High prevalence in Zimbabwe
+                {'diagnosis': 'Acute Bronchitis', 'probability': 0.25},
+                {'diagnosis': 'Pneumonia', 'probability': 0.20},
+                {'diagnosis': 'Asthma Exacerbation', 'probability': 0.12},
+                {'diagnosis': 'COPD Exacerbation', 'probability': 0.08},
+                {'diagnosis': 'HIV-related Opportunistic Infection', 'probability': 0.05}  # Common in Zimbabwe
             ],
             'chest_pain': [
                 {'diagnosis': 'Acute Coronary Syndrome', 'probability': 0.25},
@@ -241,11 +289,37 @@ class ClinicalBERTDiagnostic:
         # Aggregate diagnoses from symptoms
         diagnosis_scores = {}
         
+        # Check for Zimbabwe-specific conditions first
+        if ZIMBABWE_TERMINOLOGY_AVAILABLE:
+            zimbabwe_conditions = extract_zimbabwe_conditions(clinical_text)
+            for condition in zimbabwe_conditions:
+                # Map to standard diagnosis names
+                condition_map = {
+                    'hiv': 'HIV/AIDS',
+                    'tuberculosis': 'Tuberculosis',
+                    'malaria': 'Malaria',
+                    'diabetes': 'Diabetes',
+                    'hypertension': 'Hypertension',
+                    'pneumonia': 'Pneumonia'
+                }
+                diag_name = condition_map.get(condition, condition.title())
+                if diag_name not in diagnosis_scores:
+                    diagnosis_scores[diag_name] = {
+                        'diagnosis': diag_name,
+                        'probability': 0.25,  # Base probability for detected condition
+                        'supporting_symptoms': ['zimbabwe_condition_detected']
+                    }
+        
         for symptom in entities.get('symptoms', []):
             if symptom in symptom_diagnosis_map:
                 for diag_info in symptom_diagnosis_map[symptom]:
                     diag_name = diag_info['diagnosis']
                     prob = diag_info['probability']
+                    
+                    # Apply Zimbabwe-specific multiplier
+                    if ZIMBABWE_TERMINOLOGY_AVAILABLE:
+                        multiplier = get_zimbabwe_disease_multiplier(diag_name)
+                        prob = prob * multiplier
                     
                     if diag_name not in diagnosis_scores:
                         diagnosis_scores[diag_name] = {
@@ -276,17 +350,32 @@ class ClinicalBERTDiagnostic:
         else:
             confidence = 'low'
         
+        # Enrich suggestions with ICD-10 and SNOMED CT codes
+        enriched_suggestions = []
+        for s in suggestions:
+            sugg_dict = {
+                'diagnosis': s['diagnosis'],
+                'probability': round(s['probability'], 3),
+                'confidence': 'high' if s['probability'] > 0.6 else 'moderate' if s['probability'] > 0.4 else 'low',
+                'supporting_symptoms': s['supporting_symptoms'],
+                'source': 'clinicalbert_lightweight'
+            }
+            
+            # Add ICD-10 and SNOMED CT codes
+            if self.icd10_mapper:
+                icd10_code = self.icd10_mapper.get_icd10_code(s['diagnosis'])
+                if icd10_code:
+                    sugg_dict['icd10'] = icd10_code
+            
+            if self.snomed_mapper:
+                snomed_code = self.snomed_mapper.get_snomed_code(s['diagnosis'])
+                if snomed_code:
+                    sugg_dict['snomed'] = snomed_code
+            
+            enriched_suggestions.append(sugg_dict)
+        
         return {
-            'suggestions': [
-                {
-                    'diagnosis': s['diagnosis'],
-                    'probability': round(s['probability'], 3),
-                    'confidence': 'high' if s['probability'] > 0.6 else 'moderate' if s['probability'] > 0.4 else 'low',
-                    'supporting_symptoms': s['supporting_symptoms'],
-                    'source': 'clinicalbert_lightweight'
-                }
-                for s in suggestions
-            ],
+            'suggestions': enriched_suggestions,
             'entities': entities,
             'confidence': confidence,
             'source': 'clinicalbert_lightweight',

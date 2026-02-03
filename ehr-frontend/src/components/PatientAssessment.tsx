@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus, CheckCircle, Search
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from '../components/GlobalNotification';
@@ -59,6 +59,34 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) {
+        showError('Error', 'Session expired. Please login again.');
+        return;
+      }
+      
+      const response = await Api.cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   useEffect(() => {
     setCdssInsights(null);
@@ -233,6 +261,22 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
                   {cdssInsights.risk.recommendations.slice(0, 3).join(' · ')}
                 </div>
               )}
+              {/* Guideline Citations */}
+              {cdssInsights.risk.guideline_citations && cdssInsights.risk.guideline_citations.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-indigo-100">
+                  <p className="text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-emerald-500" />
+                    Evidence & Guidelines
+                  </p>
+                  <ul className="text-[10px] text-slate-500 space-y-1.5">
+                    {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: string, idx: number) => (
+                      <li key={`cite-${idx}`} className="bg-slate-50 p-1.5 rounded border border-slate-100 italic leading-tight">
+                        "{citation.length > 120 ? citation.substring(0, 120) + '...' : citation}"
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
@@ -270,6 +314,51 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           )}
         </div>
       )}
+
+      {/* Guideline Search Section */}
+      <div className="p-6 bg-white rounded-2xl border border-indigo-200/80 shadow-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+            <Search className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Guideline Search</h3>
+            <p className="text-sm text-slate-500">
+              Search clinical guidelines and protocols using AI-powered search.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={guidelineQuery}
+            onChange={(e) => setGuidelineQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+            placeholder="e.g. hypertension treatment guidelines"
+            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <button
+            onClick={handleGuidelineSearch}
+            disabled={loadingGuidelines || !guidelineQuery.trim()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loadingGuidelines ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+
+        {guidelineResults.length > 0 && (
+          <div className="space-y-3 mt-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Results</p>
+            {guidelineResults.map((citation: any, idx: number) => (
+              <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm text-slate-600">
+                {/* Handle both string and object citations if necessary */}
+                {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Triage Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -585,6 +674,59 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
 
         {/* Right rail */}
         <div className="space-y-6">
+          {/* Guideline Search Card */}
+          <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
+                <Brain className="w-5 h-5 text-white" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-900">Clinical Guidelines</h4>
+            </div>
+            
+            <div className="flex gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={guidelineQuery}
+                  onChange={(e) => setGuidelineQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                  placeholder="Search protocols..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={handleGuidelineSearch}
+                disabled={loadingGuidelines || !guidelineQuery.trim()}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loadingGuidelines ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Go'}
+              </button>
+            </div>
+
+            {guidelineResults.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                {guidelineResults.map((citation: any, idx: number) => (
+                  <div key={idx} className="bg-white p-2 rounded border border-slate-200 text-xs">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-slate-800 leading-tight">
+                          {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                        </p>
+                        {citation.source && (
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            Src: {citation.source}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-gradient-to-r from-orange-500 to-yellow-600 rounded-xl">

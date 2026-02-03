@@ -17,9 +17,12 @@ import {
   X,
   Zap,
   ArrowLeft,
+  Brain,
+  BookOpen,
+  Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import OncologyResponseAssessment from '../components/OncologyResponseAssessment';
@@ -35,6 +38,7 @@ import OncologyResponseCharts from '../components/OncologyResponseCharts';
 import OncologyBiomarkerDashboard from '../components/OncologyBiomarkerDashboard';
 import OncologySurvivorshipDashboard from '../components/OncologySurvivorshipDashboard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
+import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 
 type OncologyCase = {
   id: string;
@@ -126,6 +130,35 @@ const OncologyDashboard: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [tumorBoardMeetings, setTumorBoardMeetings] = useState<any[]>([]);
 
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   const token = useMemo(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -173,7 +206,7 @@ const OncologyDashboard: React.FC = () => {
               grade: item?.grade ?? null,
               count: Number(item?.count ?? 0),
             }))
-            .filter((item) => item.count > 0)
+            .filter((item: { count: number; }) => item.count > 0)
         : [];
 
       setDashboardSummary({
@@ -281,7 +314,7 @@ const OncologyDashboard: React.FC = () => {
     try {
       switch (modalState.type) {
         case 'createCase': {
-          const payload = {
+          const payload: any = {
             patient_id: formData.get('patient_id'),
             primary_diagnosis: formData.get('primary_diagnosis'),
             staging_system: formData.get('staging_system') || null,
@@ -322,7 +355,7 @@ const OncologyDashboard: React.FC = () => {
           break;
         }
         case 'addRegimen': {
-          const payload = {
+          const payload: any = {
             regimen_name: formData.get('regimen_name'),
             line_of_therapy: formData.get('line_of_therapy') || null,
             intent: formData.get('intent') || null,
@@ -367,7 +400,8 @@ const OncologyDashboard: React.FC = () => {
           };
           await ehrApi.createOncologyInfusionSession(tenantSlug!, token!, modalState.regimenId, payload);
           showSuccess(
-            'Infusion session captured. Accounts will unlock the session once payment is confirmed.',
+            'Infusion Session Recorded',
+            'Accounts will unlock the session once payment is confirmed.'
           );
           if (selectedCaseId) {
             await loadCaseDetail(selectedCaseId);
@@ -375,7 +409,7 @@ const OncologyDashboard: React.FC = () => {
           break;
         }
         case 'addAdverseEvent': {
-          const payload = {
+          const payload: any = {
             regimen_id: formData.get('regimen_id') || null,
             event_date: formData.get('event_date'),
             event_type: formData.get('event_type'),
@@ -1134,6 +1168,102 @@ const OncologyDashboard: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        {/* AI Guideline Search - Oncology Context */}
+        <div className="bg-white rounded-2xl border border-fuchsia-100 shadow-sm overflow-hidden">
+          <div 
+            className="p-4 bg-fuchsia-50/50 border-b border-fuchsia-100 flex items-center justify-between cursor-pointer"
+            onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-fuchsia-100 rounded-lg">
+                <Brain className="w-5 h-5 text-fuchsia-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-800">Oncology Clinical Guidelines (NCCN/ASCO)</h2>
+                <p className="text-xs text-slate-500">AI-powered search for treatment protocols and staging criteria</p>
+              </div>
+            </div>
+            <button className="text-fuchsia-600 hover:bg-fuchsia-100 p-2 rounded-full transition-colors">
+              {showGuidelineSearch ? <BookOpen className="w-5 h-5" /> : <Search className="w-5 h-5" />}
+            </button>
+          </div>
+          
+          {showGuidelineSearch && (
+            <div className="p-4 bg-white animate-in slide-in-from-top-2 duration-200">
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guidelineQuery}
+                    onChange={(e) => setGuidelineQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                    placeholder="Search guidelines (e.g., 'Breast cancer adjuvant therapy', 'Lung cancer immunotherapy protocols')..."
+                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                  />
+                </div>
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="px-4 py-2 bg-fuchsia-600 text-white rounded-lg hover:bg-fuchsia-700 disabled:opacity-50 flex items-center gap-2 font-medium transition-colors"
+                >
+                  {loadingGuidelines ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      <span>Find Guidelines</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {guidelineResults.length > 0 && (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Relevant Citations</h3>
+                  {guidelineResults.map((result, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-fuchsia-200 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-slate-900 leading-tight text-sm">{result.source || 'Clinical Guideline'}</h4>
+                          {result.confidence && (
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                              'bg-red-50 text-red-700 border-red-100'
+                            }`}>
+                              {Math.round(result.confidence * 100)}%
+                            </span>
+                          )}
+                      </div>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2 whitespace-pre-wrap">
+                        {result.text}
+                      </p>
+                      
+                      {result.recommendation && (
+                        <div className="mb-2 p-2 bg-fuchsia-50 border border-fuchsia-100 rounded-md">
+                          <h5 className="text-xs font-bold text-fuchsia-800 uppercase tracking-wide mb-1">Recommendation</h5>
+                          <p className="text-sm text-fuchsia-900">{result.recommendation}</p>
+                        </div>
+                      )}
+
+                      {result.url && (
+                         <div className="mt-2">
+                            <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-fuchsia-600 hover:text-fuchsia-700 font-medium hover:underline">
+                              <BookOpen className="w-3 h-3 mr-1" /> View Source
+                            </a>
+                         </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <section>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             {summaryCards.map((card) => (
@@ -1853,6 +1983,16 @@ const OncologyDashboard: React.FC = () => {
       </main>
 
       {renderModal()}
+
+      {/* WHO Smart Forms Floating Button */}
+      {tenantSlug && token && (
+        <SmartFormsFloatingButton
+          token={token}
+          tenantSlug={tenantSlug}
+          moduleFilter="clinical"
+          position="bottom-right"
+        />
+      )}
     </div>
   );
 };

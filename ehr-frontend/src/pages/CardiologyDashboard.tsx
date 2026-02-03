@@ -18,11 +18,18 @@ import {
   TrendingUp,
   User,
   XCircle,
+  Brain,
+  BookOpen,
+  Loader2,
+  ArrowRight,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import CardiologyEncounterModal from '../components/CardiologyEncounterModal';
+import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
+import { GuidelineResult } from '../types/guidelines';
 
 interface CardiologyEncounter {
   id: string;
@@ -145,6 +152,35 @@ const CardiologyDashboard: React.FC = () => {
     careStatus: 'all',
   });
   const [showEncounterModal, setShowEncounterModal] = useState(false);
+
+  // CDSS / Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   const token = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -772,6 +808,99 @@ const CardiologyDashboard: React.FC = () => {
         tenantSlug={tenantSlug!}
         currentUserId={currentUser?.id}
       />
+
+      {/* WHO Smart Forms Floating Button */}
+      <SmartFormsFloatingButton
+        token={token || ''}
+        tenantSlug={tenantSlug!}
+        moduleFilter="clinical"
+        position="bottom-right"
+      />
+
+      {/* AI Guideline Search Modal */}
+      {showGuidelineSearch && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100001] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-900">
+            <div className="p-4 border-b border-rose-100 flex items-center justify-between bg-rose-50">
+              <div className="flex items-center space-x-2 text-rose-700">
+                <BookOpen className="w-5 h-5" />
+                <h3 className="font-bold">Cardiology Clinical Guidelines (AI-Powered)</h3>
+              </div>
+              <button 
+                onClick={() => setShowGuidelineSearch(false)}
+                className="p-1 hover:bg-rose-100 rounded-full text-rose-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={guidelineQuery}
+                  onChange={(e) => setGuidelineQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                  placeholder="Search cardiology guidelines, protocols, drug interactions..."
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
+                  autoFocus
+                />
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-rose-600 text-white text-sm rounded-md hover:bg-rose-700 disabled:opacity-50 transition-colors"
+                >
+                  {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
+                {guidelineResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {guidelineResults.map((result, idx) => (
+                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-gray-900 leading-tight">{result.source || 'Clinical Guideline'}</h4>
+                          {result.confidence && (
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                              'bg-red-50 text-red-700 border-red-100'
+                            }`}>
+                              Confidence: {Math.round(result.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
+                        
+                        {result.recommendation && (
+                          <div className="mb-3 p-3 bg-rose-50 border border-rose-100 rounded-md">
+                            <h5 className="text-xs font-bold text-rose-800 uppercase tracking-wide mb-1">Recommendation</h5>
+                            <p className="text-sm text-rose-900">{result.recommendation}</p>
+                          </div>
+                        )}
+
+                        {result.url && (
+                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-rose-600 hover:text-rose-700 font-medium hover:underline">
+                            View Source Document <ArrowRight className="w-3 h-3 ml-1" />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                    <BookOpen className="w-12 h-12 mb-3 text-gray-300" />
+                    <p className="font-medium">Search for clinical guidelines</p>
+                    <p className="text-sm mt-1">Access cardiology protocols, drug info, and treatment pathways</p>
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

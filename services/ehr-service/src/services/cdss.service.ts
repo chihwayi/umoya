@@ -2,7 +2,7 @@ import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosInstance } from 'axios';
-import { WhoSmartGuidelinesService } from './who-smart-guidelines.service';
+import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 
 @Injectable()
 export class CdssService {
@@ -620,6 +620,27 @@ export class CdssService {
   }
 
   /**
+   * Search for clinical guidelines using RAG
+   */
+  async searchGuidelines(query: string, limit: number = 5) {
+    try {
+      const response = await this.cdssClient.post('/guidelines/search', {
+        query,
+        limit
+      });
+      return response.data;
+    } catch (error: any) {
+      this.logger.warn(`CDSS guideline search failed: ${error.message}`);
+      return {
+        query,
+        citations: [],
+        count: 0,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Basic guidelines (fallback)
    */
   private async basicGetGuidelines(condition: string) {
@@ -739,6 +760,7 @@ export class CdssService {
         risk_level: response.data.risk_level,
         factors: response.data.factors || [],
         recommendations: response.data.recommendations || [],
+        guideline_citations: response.data.guideline_citations || [],
         source: 'advanced_cdss',
       };
 

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, X, Save, Calendar, Clock, User, Stethoscope, Brain } from 'lucide-react';
+import { FileText, X, Save, Calendar, Clock, User, Stethoscope, Brain, Activity, BookOpen, Search, CheckCircle, Sparkles } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
+import { ClinicalNotesWithSmartForms } from './ClinicalNotes/ClinicalNotesWithSmartForms';
 
 interface Appointment {
   id: string;
@@ -27,9 +28,10 @@ interface ClinicalNotesModalProps {
   appointment: Appointment;
   tenantSlug: string;
   token: string;
+  searchContext?: string;
 }
 
-const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, onSaved, appointment, tenantSlug, token }) => {
+const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, onSaved, appointment, tenantSlug, token, searchContext }) => {
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [chiefComplaint, setChiefComplaint] = useState('');
@@ -41,6 +43,38 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
   const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [showSmartForms, setShowSmartForms] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelineSearch, setLoadingGuidelineSearch] = useState(false);
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelineSearch(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      // Use provided context or default to general clinical guidelines
+      const context = searchContext || "Clinical guidelines, medical protocols";
+      const finalQuery = `${context}: ${guidelineQuery}`;
+      
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelineSearch(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -104,31 +138,82 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-300">
-        <div className="bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-300">
-          <div className="sticky top-0 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200/50 px-6 py-5 rounded-t-3xl">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-300">
+        <div className="glass-modal rounded-3xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="sticky top-0 glass-gradient border-b border-white/20 px-8 py-6 rounded-t-3xl z-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
+                <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">Clinical Notes</h3>
-                  <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
-                    <div className="flex items-center gap-2"><User className="w-4 h-4" /><span>{appointment.patient.firstName} {appointment.patient.lastName}</span></div>
-                    <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>{formatDateToDDMMYYYY(appointment.appointmentDate)}</span></div>
-                    <div className="flex items-center gap-2"><Clock className="w-4 h-4" /><span>{new Date(appointment.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
+                  <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Clinical Notes</h3>
+                  <div className="flex items-center gap-4 text-sm text-slate-600 mt-2">
+                    <div className="flex items-center gap-2 glass-section px-3 py-1 rounded-lg"><User className="w-4 h-4" /><span className="font-medium">{appointment.patient.firstName} {appointment.patient.lastName}</span></div>
+                    <div className="flex items-center gap-2 glass-section px-3 py-1 rounded-lg"><Calendar className="w-4 h-4" /><span className="font-medium">{formatDateToDDMMYYYY(appointment.appointmentDate)}</span></div>
+                    <div className="flex items-center gap-2 glass-section px-3 py-1 rounded-lg"><Clock className="w-4 h-4" /><span className="font-medium">{new Date(appointment.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
                   </div>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/50 rounded-xl transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+              <button onClick={onClose} className="glass-button-secondary p-3 rounded-xl transition-all hover:scale-110"><X className="w-5 h-5 text-slate-600" /></button>
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-slate-700">Chief Complaint</label>
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
+            {/* WHO Smart Forms Integration */}
+            {!showSmartForms && (
+              <div className="glass-gradient rounded-xl p-6 border border-indigo-200/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+                      <Activity className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-lg">Use WHO Smart Forms</h4>
+                      <p className="text-sm text-slate-600 mt-1">Standardized clinical documentation forms</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowSmartForms(true)}
+                    className="glass-button px-6 py-3 text-white rounded-xl text-sm font-semibold shadow-lg"
+                  >
+                    Use WHO Forms
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showSmartForms && (
+              <div className="glass-card rounded-xl p-6 border border-indigo-200/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold text-slate-900">WHO Smart Forms</h4>
+                  <button
+                    onClick={() => setShowSmartForms(false)}
+                    className="text-sm text-slate-600 hover:text-slate-900"
+                  >
+                    ← Use Standard Form
+                  </button>
+                </div>
+                <ClinicalNotesWithSmartForms
+                  patientId={appointment.patient.id}
+                  patientName={`${appointment.patient.firstName} ${appointment.patient.lastName}`}
+                  appointmentId={appointment.id}
+                  tenantSlug={tenantSlug}
+                  token={token}
+                  onSuccess={() => {
+                    onSaved();
+                    onClose();
+                  }}
+                  onClose={() => setShowSmartForms(false)}
+                />
+              </div>
+            )}
+
+            {!showSmartForms && (
+              <>
+            <div className="glass-section rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <label className="block text-base font-bold text-slate-800">Chief Complaint</label>
                 {chiefComplaint && chiefComplaint.length > 10 && (
                   <button
                     onClick={async () => {
@@ -178,8 +263,8 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                   setChiefComplaint(e.target.value);
                   setDiagnosisSuggestions(null);
                 }} 
-                rows={2} 
-                className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none" 
+                rows={3} 
+                className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none mt-2" 
                 placeholder="Patient's main concern or reason for visit..."
               />
               {diagnosisSuggestions && diagnosisSuggestions.suggested_diagnoses && diagnosisSuggestions.suggested_diagnoses.length > 0 && (
@@ -207,51 +292,133 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                 </div>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">History of Present Illness</label>
-              <textarea value={historyOfPresentIllness} onChange={(e) => setHistoryOfPresentIllness(e.target.value)} rows={4} className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none" />
+            <div className="glass-section rounded-xl p-6">
+              <label className="block text-base font-bold text-slate-800 mb-3">History of Present Illness</label>
+              <textarea value={historyOfPresentIllness} onChange={(e) => setHistoryOfPresentIllness(e.target.value)} rows={4} className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none" />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Physical Examination</label>
-              <textarea value={physicalExam} onChange={(e) => setPhysicalExam(e.target.value)} rows={4} className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none" />
+            <div className="glass-section rounded-xl p-6">
+              <label className="block text-base font-bold text-slate-800 mb-3">Physical Examination</label>
+              <textarea value={physicalExam} onChange={(e) => setPhysicalExam(e.target.value)} rows={4} className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none" />
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-slate-700">Clinical Assessment / Diagnosis</label>
-                {assessment && assessment.length > 3 && (
+            <div className="glass-section rounded-xl p-6">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-base font-bold text-slate-800">Clinical Assessment / Diagnosis</label>
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={async () => {
-                      setLoadingGuidelines(true);
-                      try {
-                        const patientAge = appointment.patient.dateOfBirth
-                          ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
-                          : undefined;
-                        
-                        const result = await ehrApi.getClinicalGuidelines(
-                          assessment,
-                          {
-                            age: patientAge,
-                            gender: appointment.patient.gender,
-                          },
-                          token,
-                          tenantSlug
-                        );
-                        setClinicalGuidelines(result.data);
-                      } catch (error) {
-                        console.error('Failed to fetch guidelines:', error);
-                        showError('Error', 'Failed to fetch clinical guidelines');
-                      } finally {
-                        setLoadingGuidelines(false);
-                      }
-                    }}
-                    disabled={loadingGuidelines}
-                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+                    onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                    className={`px-3 py-1.5 rounded-lg transition-colors text-xs font-medium flex items-center gap-1 ${
+                      showGuidelineSearch 
+                        ? 'bg-indigo-100 text-indigo-700' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
-                    <FileText className="w-3 h-3" />
-                    {loadingGuidelines ? 'Loading...' : 'Get Guidelines'}
+                    <Search className="w-3 h-3" />
+                    {showGuidelineSearch ? 'Hide Search' : 'Search Guidelines'}
                   </button>
-                )}
+                  {assessment && assessment.length > 3 && (
+                    <button
+                      onClick={async () => {
+                        setLoadingGuidelines(true);
+                        try {
+                          const patientAge = appointment.patient.dateOfBirth
+                            ? Math.floor((new Date().getTime() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+                            : undefined;
+                          
+                          const result = await ehrApi.getClinicalGuidelines(
+                            assessment,
+                            {
+                              age: patientAge,
+                              gender: appointment.patient.gender,
+                            },
+                            token,
+                            tenantSlug
+                          );
+                          setClinicalGuidelines(result.data);
+                        } catch (error) {
+                          console.error('Failed to fetch guidelines:', error);
+                          showError('Error', 'Failed to fetch clinical guidelines');
+                        } finally {
+                          setLoadingGuidelines(false);
+                        }
+                      }}
+                      disabled={loadingGuidelines}
+                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-medium disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <FileText className="w-3 h-3" />
+                      {loadingGuidelines ? 'Loading...' : 'Get Guidelines'}
+                    </button>
+                  )}
+                </div>
               </div>
+              
+              {showGuidelineSearch && (
+                <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200 animate-in slide-in-from-top-2">
+                  <div className="flex gap-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={guidelineQuery}
+                        onChange={(e) => setGuidelineQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                        placeholder="Search for clinical guidelines (e.g., 'Sepsis protocol')"
+                        className="w-full pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleGuidelineSearch}
+                      disabled={loadingGuidelineSearch || !guidelineQuery.trim()}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {loadingGuidelineSearch ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Search'}
+                    </button>
+                  </div>
+
+                  {guidelineResults.length > 0 && (
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                      {guidelineResults.map((result, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm text-sm">
+                           <div className="flex items-start gap-2">
+                            <BookOpen className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold text-slate-700">{result.source || 'Clinical Guideline'}</span>
+                                {result.confidence && (
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                                    result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                                    result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                    'bg-red-50 text-red-700 border-red-100'
+                                  }`}>
+                                    {Math.round(result.confidence * 100)}%
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-800 mb-1">
+                                {result.text}
+                              </p>
+                              {result.recommendation && (
+                                <div className="mt-2 p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-800">
+                                  <strong>Recommendation:</strong> {result.recommendation}
+                                </div>
+                              )}
+                              {result.url && (
+                                <a 
+                                  href={result.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-indigo-600 hover:underline mt-1 inline-block"
+                                >
+                                  View Source
+                                </a>
+                              )}
+                            </div>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <textarea 
                 value={assessment} 
                 onChange={(e) => {
@@ -259,7 +426,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                   setClinicalGuidelines(null);
                 }} 
                 rows={3} 
-                className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none"
+                className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none mt-2"
                 placeholder="Enter diagnosis or clinical assessment..."
               />
               {clinicalGuidelines && (
@@ -282,17 +449,19 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                 </div>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Additional Notes</label>
-              <textarea value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} rows={4} className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors resize-none" />
+            <div className="glass-section rounded-xl p-6">
+              <label className="block text-base font-bold text-slate-800 mb-3">Additional Notes</label>
+              <textarea value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} rows={4} className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none" />
             </div>
+            </>
+            )}
           </div>
 
-          <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl">
-            <div className="flex gap-3">
-              <button onClick={onClose} className="flex-1 px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-medium">Cancel</button>
-              <button onClick={handleSave} disabled={loading} className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-medium shadow-lg disabled:opacity-50 flex items-center gap-2">
-                <Save className="w-4 h-4" />
+          <div className="sticky bottom-0 glass-gradient border-t border-white/20 px-8 py-5 rounded-b-3xl">
+            <div className="flex gap-4">
+              <button onClick={onClose} className="glass-button-secondary flex-1 px-6 py-3 text-slate-700 rounded-xl font-semibold">Cancel</button>
+              <button onClick={handleSave} disabled={loading} className="glass-button flex-1 px-6 py-3 text-white rounded-xl font-semibold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
+                <Save className="w-5 h-5" />
                 {loading ? 'Saving...' : 'Save Clinical Notes'}
               </button>
             </div>

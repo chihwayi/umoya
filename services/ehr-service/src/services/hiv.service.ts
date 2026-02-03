@@ -314,6 +314,7 @@ export class HivService {
       test_concept,
       specimenConcept,
       specimen_concept,
+      whoSmartFormData,
     } = body;
 
     if (!patientId || !testedBy) {
@@ -437,14 +438,15 @@ export class HivService {
         stis_results,
         follow_up_actions,
         testing_context,
-        next_test_due_date
+        next_test_due_date,
+        who_smart_form_data
       )
       VALUES (
         $1, $2, NOW(), $3, $4, $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
         $20, $21, $22, $23, false, NULL, $24, NULL, $25, NULL, NULL, $26,
         false, false, NULL, $27, $28, $29, $30, $31, $32, $33, $34, $35,
-        $36::jsonb, $37::jsonb, $38::jsonb, $39::jsonb, $40
+        $36::jsonb, $37::jsonb, $38::jsonb, $39::jsonb, $40, $41::jsonb
       )
       RETURNING *
     `,
@@ -489,6 +491,7 @@ export class HivService {
         JSON.stringify(serializedFollowUps),
         JSON.stringify(normalizedContext),
         nextTestDateValue,
+        whoSmartFormData ? JSON.stringify(whoSmartFormData) : null,
       ],
     );
 
@@ -654,17 +657,17 @@ export class HivService {
   }
 
   async enrollInCare(body: any, tenantDb: DataSource) {
-    const { patientId, enrollmentDate, dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy } = body;
+    const { patientId, enrollmentDate, dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy, whoSmartFormData } = body;
     const enrollmentNumber = `ENR-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     
     const result = await tenantDb.query(`
       INSERT INTO hiv_care_enrollments (
         patient_id, enrollment_date, enrollment_number, date_confirmed_positive,
-        baseline_cd4, baseline_viral_load, baseline_clinical_stage, baseline_who_stage, enrollment_notes, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        baseline_cd4, baseline_viral_load, baseline_clinical_stage, baseline_who_stage, enrollment_notes, created_by, who_smart_form_data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
       RETURNING *
     `, [patientId, enrollmentDate || new Date().toISOString().split('T')[0], enrollmentNumber, 
-        dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy]);
+        dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy, whoSmartFormData ? JSON.stringify(whoSmartFormData) : null]);
     
     // Update test enrollment status
     await tenantDb.query(
@@ -983,7 +986,9 @@ export class HivService {
       referredTo, referredToDetails, nextReviewDate,
       visitStatus, followUpStatus, followUpDetails,
       // Notes
-      visitNotes, clinicianInitials, pharmacyDispenserInitials
+      visitNotes, clinicianInitials, pharmacyDispenserInitials,
+      // WHO Smart Forms
+      whoSmartFormData
     } = body;
 
     // Role-based validation for regimen changes
@@ -1132,7 +1137,8 @@ export class HivService {
         mental_health_management_snomed_code, mental_health_management_snomed_term,
         adverse_events_snomed,
         referral_reason_snomed_code, referral_reason_snomed_term,
-        follow_up_actions_snomed
+        follow_up_actions_snomed,
+        who_smart_form_data
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
@@ -1162,7 +1168,8 @@ export class HivService {
         $80, $81,
         $82,
         $83, $84,
-        $85
+        $85,
+        $86::jsonb
       )
       RETURNING *
     `, [
@@ -1208,6 +1215,7 @@ export class HivService {
       resolvedReferralReasonConcept?.conceptId ?? null,
       resolvedReferralReasonConcept?.term ?? null,
       JSON.stringify(followUpActionConceptsResolved ?? []),
+      whoSmartFormData ? JSON.stringify(whoSmartFormData) : null,
     ]);
 
     // Update enrollment with latest regimen if changed
@@ -1650,6 +1658,7 @@ export class HivService {
       symptomConcepts,
       diagnosisConcept,
       treatmentConcept,
+      whoSmartFormData,
     } = body;
 
     const resolvedScreeningReasonConcept = await this.resolveConcept(
@@ -1695,13 +1704,14 @@ export class HivService {
         diagnosis_snomed_code,
         diagnosis_snomed_term,
         treatment_snomed_code,
-        treatment_snomed_term
+        treatment_snomed_term,
+        who_smart_form_data
       ) VALUES (
         $1, $2, $3, $4,
         $5, $6, $7, $8,
         $9, $10, $11,
         $12, $13, $14, $15,
-        $16, $17, $18, $19, $20
+        $16, $17, $18, $19, $20, $21::jsonb
       )
       RETURNING *
     `,
@@ -1726,8 +1736,12 @@ export class HivService {
         resolvedDiagnosisConcept?.term ?? null,
         resolvedTreatmentConcept?.conceptId ?? null,
         resolvedTreatmentConcept?.term ?? null,
+        whoSmartFormData ? JSON.stringify(whoSmartFormData) : null,
       ],
     );
+
+    this.logger.log(`Created TB screening for patient ${patientId}${whoSmartFormData ? ' with WHO Smart Form data' : ''}`);
+    return result[0];
 
     return result[0];
   }

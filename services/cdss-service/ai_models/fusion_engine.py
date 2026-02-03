@@ -2,6 +2,7 @@
 Intelligent Fusion Engine
 Combines rule-based CDSS + AI model results
 Resolves conflicts, ranks recommendations, calculates confidence
+Includes SNOMED CT and ICD-10 code mapping
 """
 
 import logging
@@ -9,6 +10,15 @@ from typing import Dict, List, Optional, Any
 from collections import Counter
 
 logger = logging.getLogger(__name__)
+
+# Import terminology mappers
+try:
+    from terminology.icd10_mapper import Icd10Mapper
+    from terminology.snomed_mapper import SnomedMapper
+    TERMINOLOGY_AVAILABLE = True
+except ImportError:
+    TERMINOLOGY_AVAILABLE = False
+    logger.warning("Terminology mappers not available. Codes will not be included.")
 
 
 class IntelligentFusionEngine:
@@ -20,12 +30,34 @@ class IntelligentFusionEngine:
     """
     
     def __init__(self):
-        # Weights for different sources (can be adjusted)
-        self.weights = {
-            'rule_based': 0.4,  # Rule-based gets 40% weight
-            'medbert': 0.3,     # MedBERT gets 30% weight
-            'clinicalbert': 0.3  # ClinicalBERT gets 30% weight
+        # Base weights for different sources (optimized based on testing)
+        # Rule-based: Reliable baseline, good for common patterns
+        # MedBERT: Strong for structured data (vitals, labs, demographics)
+        # ClinicalBERT: Strong for unstructured clinical notes
+        self.base_weights = {
+            'rule_based': 0.35,  # Reduced from 0.4 - rule-based is reliable but less adaptive
+            'medbert': 0.35,     # Increased from 0.3 - strong for structured data
+            'clinicalbert': 0.30  # Kept at 0.3 - good for notes but depends on note quality
         }
+        
+        # Confidence multipliers (adjust weights based on source confidence)
+        self.confidence_multipliers = {
+            'high': 1.2,      # Boost high-confidence sources
+            'moderate': 1.0,   # Standard weight
+            'low': 0.7        # Reduce low-confidence sources
+        }
+        
+        # Initialize terminology mappers
+        self.icd10_mapper = None
+        self.snomed_mapper = None
+        
+        if TERMINOLOGY_AVAILABLE:
+            try:
+                self.icd10_mapper = Icd10Mapper()
+                self.snomed_mapper = SnomedMapper()
+                logger.info("Terminology mappers initialized in fusion engine")
+            except Exception as e:
+                logger.warning(f"Failed to initialize terminology mappers: {e}")
     
     def fuse_recommendations(
         self,
@@ -139,7 +171,7 @@ class IntelligentFusionEngine:
             total_weight = 0.0
             
             for source, prob in diag_data['probabilities']:
-                weight = self.weights.get(source, 0.33)  # Default equal weight
+                weight = self.base_weights.get(source, 0.33)  # Default equal weight
                 weighted_prob += prob * weight
                 total_weight += weight
             
@@ -165,10 +197,17 @@ class IntelligentFusionEngine:
             
             final_probability = min(fused_probability + agreement_bonus, 0.95)
             
-            # Determine confidence level
-            if final_probability > 0.7 and source_count >= 2:
+            # Enhanced confidence determination
+            # Consider: probability, source count, agreement, and data quality
+            high_conf_sources = sum(1 for conf in diag_data['confidence_scores'] if conf == 'high')
+            
+            if final_probability >= 0.75 and source_count >= 2 and high_conf_sources >= 1:
                 confidence = 'high'
-            elif final_probability > 0.5:
+            elif final_probability >= 0.65 and source_count >= 2:
+                confidence = 'high'
+            elif final_probability >= 0.55 and source_count >= 2:
+                confidence = 'moderate'
+            elif final_probability >= 0.45:
                 confidence = 'moderate'
             else:
                 confidence = 'low'
@@ -179,7 +218,14 @@ class IntelligentFusionEngine:
             if source_count > 1:
                 explanation += f" ({source_count} sources agree)"
             
-            fused_diagnoses.append({
+            # Calculate average AI probability (MedBERT + ClinicalBERT)
+            ai_probs = [
+                p[1] for p in diag_data['probabilities']
+                if p[0] in ['medbert', 'clinicalbert']
+            ]
+            avg_ai_probability = sum(ai_probs) / len(ai_probs) if ai_probs else None
+            
+            diag_dict = {
                 'diagnosis': diag_name,
                 'probability': round(final_probability, 3),
                 'confidence': confidence,
@@ -191,11 +237,26 @@ class IntelligentFusionEngine:
                     (p[1] for p in diag_data['probabilities'] if p[0] == 'rule_based'),
                     None
                 ),
-                'ai_probability': next(
-                    (p[1] for p in diag_data['probabilities'] if p[0] in ['medbert', 'clinicalbert']),
-                    None
-                )
-            })
+                'ai_probability': avg_ai_probability,
+                'agreement_score': round(agreement_score, 3) if 'agreement_score' in locals() else None,
+                'weight_adjustments': {
+                    source: round(weight, 3)
+                    for source, weight in normalized_weights.items()
+                } if 'normalized_weights' in locals() else None
+            }
+            
+            # Add ICD-10 and SNOMED CT codes
+            if self.icd10_mapper:
+                icd10_code = self.icd10_mapper.get_icd10_code(diag_name)
+                if icd10_code:
+                    diag_dict['icd10'] = icd10_code
+            
+            if self.snomed_mapper:
+                snomed_code = self.snomed_mapper.get_snomed_code(diag_name)
+                if snomed_code:
+                    diag_dict['snomed'] = snomed_code
+            
+            fused_diagnoses.append(diag_dict)
         
         # Sort by probability
         fused_diagnoses.sort(key=lambda x: x['probability'], reverse=True)

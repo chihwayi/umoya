@@ -957,6 +957,7 @@ const AdmittedPatientPage: React.FC = () => {
           appointment={pseudoAppointment as any}
           tenantSlug={tenantSlug!}
           token={token}
+          searchContext="Inpatient care, hospital medicine, ward rounds, acute care"
         />
       )}
 

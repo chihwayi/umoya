@@ -432,6 +432,23 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
                         </li>
                       ))}
                     </ul>
+                    
+                    {/* Guideline Citations */}
+                    {cdssInsights.risk.guideline_citations && cdssInsights.risk.guideline_citations.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-indigo-100">
+                        <p className="text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-emerald-500" />
+                          Evidence & Guidelines
+                        </p>
+                        <ul className="text-[10px] text-slate-500 space-y-1.5">
+                          {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: string, idx: number) => (
+                            <li key={`cite-${idx}`} className="bg-slate-50 p-1.5 rounded border border-slate-100 italic leading-tight">
+                              "{citation.length > 120 ? citation.substring(0, 120) + '...' : citation}"
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

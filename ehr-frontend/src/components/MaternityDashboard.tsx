@@ -17,7 +17,7 @@ import {
   Activity,
   CheckCircle,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import MaternityEnrollmentModal from './MaternityEnrollmentModal';
@@ -62,6 +62,9 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
   const [showEnrollmentDetail, setShowEnrollmentDetail] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const { showSuccess, showError } = useNotification();
 
   useEffect(() => {
@@ -384,6 +387,29 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
     return badges;
   }, [indicators]);
 
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => filteredEnrollments.some((row) => row.id === id)));
   }, [filteredEnrollments]);
@@ -606,6 +632,53 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
           ))}
         </div>
       )}
+
+      {/* Guideline Search Section */}
+      <div className="bg-white rounded-lg border border-indigo-100 shadow p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+            <Search className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Clinical Guidelines & Protocols</h3>
+            <p className="text-sm text-slate-500">
+              Access latest WHO/MOH maternity guidelines via AI search.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={guidelineQuery}
+            onChange={(e) => setGuidelineQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+            placeholder="e.g. pre-eclampsia management protocol"
+            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <button
+            onClick={handleGuidelineSearch}
+            disabled={loadingGuidelines || !guidelineQuery.trim()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loadingGuidelines ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+
+        {guidelineResults.length > 0 && (
+          <div className="space-y-3 mt-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Relevant Guidelines</p>
+            {guidelineResults.map((citation: any, idx: number) => (
+              <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm text-slate-600">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <span>{typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {guidelinePrompts.length > 0 && (
         <div className="bg-white rounded-lg border border-pink-100 shadow p-6">

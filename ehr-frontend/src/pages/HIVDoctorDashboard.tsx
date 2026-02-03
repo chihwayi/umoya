@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, CheckCircle, XCircle, TrendingUp, TrendingDown,
   Users, Search, Filter, Eye, FileText, Pill, TestTube, Calendar, Clock,
-  ArrowLeft, RefreshCw, Check, X, AlertCircle, Heart, Zap, BarChart3, ChevronDown, ChevronUp, Download
+  ArrowLeft, RefreshCw, Check, X, AlertCircle, Heart, Zap, BarChart3, ChevronDown, ChevronUp, Download,
+  Brain, BookOpen
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ModalPortal from '../components/ModalPortal';
@@ -100,6 +101,12 @@ const HIVDoctorDashboard: React.FC = () => {
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [ltfuDays, setLtfuDays] = useState(90);
+
+  // AI/RAG Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -301,6 +308,35 @@ const HIVDoctorDashboard: React.FC = () => {
     }
   };
 
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+         showError('Session Expired', 'Please login again.');
+         return;
+      }
+
+      // Use specific context for HIV
+      const searchContext = "HIV/AIDS treatment, antiretroviral therapy, opportunistic infections";
+      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching guidelines:', error);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   const filterEnrollments = () => {
     let filtered = [...enrollments];
 
@@ -419,126 +455,189 @@ const HIVDoctorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 overflow-x-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <button
                 onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              <div>
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                  <Activity className="w-8 h-8" />
-                  HIV/AIDS Patient Management
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold flex items-center gap-2 sm:gap-3">
+                  <Activity className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 flex-shrink-0" />
+                  <span className="truncate">HIV/AIDS Patient Management</span>
                 </h1>
-                <p className="text-emerald-100 mt-1">Comprehensive HIV care oversight and ARV regimen management</p>
+                <p className="text-emerald-100 mt-1 text-xs sm:text-sm hidden sm:block">Comprehensive HIV care oversight and ARV regimen management</p>
               </div>
             </div>
             <button
               onClick={loadData}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button
+              onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0 flex items-center gap-2 ${
+                showGuidelineSearch ? 'bg-white text-emerald-700 shadow-sm' : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+              title="Toggle Guideline Search"
+            >
+              <Brain className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline text-sm font-medium">AI Guidelines</span>
             </button>
           </div>
         </div>
       </div>
 
+      {/* Guideline Search Panel */}
+      {showGuidelineSearch && (
+        <div className="bg-white border-b border-slate-200 shadow-inner animate-in slide-in-from-top-2 duration-200">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  value={guidelineQuery}
+                  onChange={(e) => setGuidelineQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                  placeholder="Search HIV/AIDS guidelines (e.g., 'Second line regimen failure', 'EAC protocol')..."
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <button
+                onClick={handleGuidelineSearch}
+                disabled={loadingGuidelines}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loadingGuidelines ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <BookOpen className="w-4 h-4" />
+                )}
+                Search Guidelines
+              </button>
+            </div>
+
+            {guidelineResults.length > 0 && (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {guidelineResults.slice(0, 2).map((result: any, index: number) => (
+                  <div key={index} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h4 className="font-medium text-emerald-900 mb-2 flex items-center gap-2">
+                      <BookOpen className="w-4 h-4" />
+                      {result.source}
+                    </h4>
+                    <p className="text-sm text-slate-700 mb-2">{result.text}</p>
+                    {result.recommendation && (
+                      <div className="mt-2 p-2 bg-emerald-50 border border-emerald-100 rounded text-sm text-emerald-800">
+                        <strong>Recommendation:</strong> {result.recommendation}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Statistics Cards */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Total Patients</p>
-                <p className="text-2xl font-bold text-slate-900">{stats.totalPatients}</p>
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 -mt-4 sm:-mt-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">Total Patients</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-900">{stats.totalPatients}</p>
               </div>
-              <Users className="w-8 h-8 text-blue-500" />
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-emerald-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">On ARV</p>
-                <p className="text-2xl font-bold text-slate-900">{stats.onArv}</p>
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-emerald-500">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">On ARV</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-900">{stats.onArv}</p>
               </div>
-              <Pill className="w-8 h-8 text-emerald-500" />
+              <Pill className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-emerald-500 flex-shrink-0" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Needs EAC</p>
-                <p className="text-2xl font-bold text-red-600">{stats.needsEac}</p>
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-red-500">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">Needs EAC</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-red-600">{stats.needsEac}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-red-500" />
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-red-500 flex-shrink-0" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Active EAC</p>
-                <p className="text-2xl font-bold text-slate-900">{stats.activeEac}</p>
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-purple-500">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">Active EAC</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-900">{stats.activeEac}</p>
               </div>
-              <Activity className="w-8 h-8 text-purple-500" />
+              <Activity className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-purple-500 flex-shrink-0" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-orange-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Pending Changes</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.pendingRegimenChanges}</p>
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-orange-500">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">Pending Changes</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-orange-600">{stats.pendingRegimenChanges}</p>
               </div>
-              <FileText className="w-8 h-8 text-orange-500" />
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-orange-500 flex-shrink-0" />
             </div>
           </div>
-          <div className="bg-white rounded-xl shadow-lg p-4 border-l-4 border-red-600">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">Treatment Failures</p>
-                <p className="text-2xl font-bold text-red-600">{stats.treatmentFailures}</p>
+          <div className="bg-white rounded-lg sm:rounded-xl shadow-lg p-2 sm:p-4 border-l-4 border-red-600">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-slate-600 truncate">Treatment Failures</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-red-600">{stats.treatmentFailures}</p>
               </div>
-              <XCircle className="w-8 h-8 text-red-600" />
+              <XCircle className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-red-600 flex-shrink-0" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 pb-8">
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-lg mb-6">
+        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
           <div className="border-b border-slate-200">
-            <nav className="flex -mb-px">
+            <nav className="flex -mb-px overflow-x-auto scrollbar-hide">
               {[
-                { id: 'patients', label: 'All Patients', icon: Users, badge: null },
-                { id: 'regimen-changes', label: 'Regimen Changes', icon: FileText, badge: stats.pendingRegimenChanges },
-                { id: 'eac-programs', label: 'EAC Programs', icon: Activity, badge: stats.activeEac },
-                { id: 'alerts', label: 'Alerts', icon: AlertTriangle, badge: stats.needsEac + stats.treatmentFailures },
-                { id: 'quality', label: 'Quality Metrics', icon: BarChart3, badge: null },
-                { id: 'cohort', label: 'Cohort Analysis', icon: TrendingUp, badge: null },
-                { id: 'comparison', label: 'Comparison Reports', icon: BarChart3, badge: null },
-                { id: 'ltfu', label: 'LTFU Management', icon: Clock, badge: ltfuPatients.length },
-                { id: 'monthly-return', label: 'Monthly Return', icon: FileText, badge: null }
+                { id: 'patients', label: 'All Patients', shortLabel: 'Patients', icon: Users, badge: null },
+                { id: 'regimen-changes', label: 'Regimen Changes', shortLabel: 'Regimens', icon: FileText, badge: stats.pendingRegimenChanges },
+                { id: 'eac-programs', label: 'EAC Programs', shortLabel: 'EAC', icon: Activity, badge: stats.activeEac },
+                { id: 'alerts', label: 'Alerts', shortLabel: 'Alerts', icon: AlertTriangle, badge: stats.needsEac + stats.treatmentFailures },
+                { id: 'quality', label: 'Quality Metrics', shortLabel: 'Quality', icon: BarChart3, badge: null },
+                { id: 'cohort', label: 'Cohort Analysis', shortLabel: 'Cohort', icon: TrendingUp, badge: null },
+                { id: 'comparison', label: 'Comparison Reports', shortLabel: 'Compare', icon: BarChart3, badge: null },
+                { id: 'ltfu', label: 'LTFU Management', shortLabel: 'LTFU', icon: Clock, badge: ltfuPatients.length },
+                { id: 'monthly-return', label: 'Monthly Return', shortLabel: 'Monthly', icon: FileText, badge: null }
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+                  className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 md:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                     activeTab === tab.id
                       ? 'border-emerald-500 text-emerald-600'
                       : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                   }`}
                 >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
+                  <tab.icon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.shortLabel}</span>
                   {tab.badge !== null && tab.badge > 0 && (
-                    <span className="ml-1 px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                    <span className="ml-1 px-1.5 sm:px-2 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full flex-shrink-0">
                       {tab.badge}
                     </span>
                   )}
@@ -550,23 +649,23 @@ const HIVDoctorDashboard: React.FC = () => {
 
         {/* Tab Content */}
         {activeTab === 'patients' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 overflow-hidden">
             {/* Search and Filters */}
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex flex-col md:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="flex-1 relative">
-                <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search by name, enrollment number, or patient ID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -787,7 +886,7 @@ const HIVDoctorDashboard: React.FC = () => {
 
         {/* Regimen Changes Tab */}
         {activeTab === 'regimen-changes' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 overflow-hidden">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-slate-900">Approved Regimen Changes</h2>
               <p className="text-sm text-slate-600 mt-1">
@@ -1290,7 +1389,7 @@ const HIVDoctorDashboard: React.FC = () => {
 
         {/* Alerts Tab */}
         {activeTab === 'alerts' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 overflow-hidden">
             <h2 className="text-xl font-bold text-slate-900 mb-6">Clinical Alerts</h2>
             <p className="text-slate-600 mb-6">Patients requiring immediate attention</p>
             {loading ? (
@@ -1476,7 +1575,7 @@ const HIVDoctorDashboard: React.FC = () => {
         )}
 
         {activeTab === 'ltfu' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-slate-900">Lost to Follow-Up (LTFU) Management</h2>
               <div className="flex items-center gap-3">

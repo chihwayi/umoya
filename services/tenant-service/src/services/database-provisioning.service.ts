@@ -411,11 +411,35 @@ export class DatabaseProvisioningService {
         description: 'Add dispensing_number, total_amount, amount_paid, discount_amount columns to pharmacy_dispensings table',
         statements: () => this.getSprint45PharmacyDispensingEnhancementSchemaStatements(),
       },
+      {
+        id: 'who_smart_forms_data',
+        label: 'WHO Smart Forms Data Storage',
+        version: '2024.12.09',
+        description: 'Adds JSONB columns to store complete WHO Smart Forms data for audit trail and data integrity',
+        statements: () => this.getWhoSmartFormsDataSchemaStatements(),
+      },
     ];
   }
 
   public getCoreSchemaStatements(): string[] {
     return [...this.getClinicSchema()];
+  }
+
+  private getWhoSmartFormsDataSchemaStatements(): string[] {
+    return [
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_tests_who_smart_form_data ON hiv_tests USING GIN(who_smart_form_data)`,
+      `ALTER TABLE hiv_care_enrollments ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_who_smart_form_data ON hiv_care_enrollments USING GIN(who_smart_form_data)`,
+      `ALTER TABLE hiv_clinical_visits ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_clinical_visits_who_smart_form_data ON hiv_clinical_visits USING GIN(who_smart_form_data)`,
+      `ALTER TABLE tb_screenings ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_tb_screenings_who_smart_form_data ON tb_screenings USING GIN(who_smart_form_data)`,
+      `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_appointments_who_smart_form_data ON appointments USING GIN(who_smart_form_data)`,
+      `ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_medical_records_who_smart_form_data ON medical_records USING GIN(who_smart_form_data)`,
+    ];
   }
 
   async createDatabase(databaseName: string): Promise<string> {
@@ -9588,6 +9612,24 @@ RECOMMENDATIONS:
   // =====================================================================================================================
   // Sprint 45: Pharmacy Dispensing Enhancement
   // =====================================================================================================================
+  /*private getWhoSmartFormsDataSchemaStatements(): string[] {
+    return [
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_tests_who_smart_form_data ON hiv_tests USING GIN(who_smart_form_data)`,
+      `ALTER TABLE hiv_care_enrollments ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_enrollments_who_smart_form_data ON hiv_care_enrollments USING GIN(who_smart_form_data)`,
+      `ALTER TABLE hiv_clinical_visits ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_clinical_visits_who_smart_form_data ON hiv_clinical_visits USING GIN(who_smart_form_data)`,
+      `ALTER TABLE tb_screenings ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_tb_screenings_who_smart_form_data ON tb_screenings USING GIN(who_smart_form_data)`,
+      `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_appointments_who_smart_form_data ON appointments USING GIN(who_smart_form_data)`,
+      `ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS who_smart_form_data JSONB`,
+      `CREATE INDEX IF NOT EXISTS idx_medical_records_who_smart_form_data ON medical_records USING GIN(who_smart_form_data)`,
+    ];
+  }
+  */
+
   private getSprint45PharmacyDispensingEnhancementSchemaStatements(): string[] {
     const statements: string[] = [];
 

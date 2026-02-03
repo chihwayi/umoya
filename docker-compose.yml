@@ -27,22 +27,22 @@ services:
     networks:
       - medicore-network
 
-  # Core Services
-  api-gateway:
-    build:
-      context: ./services/api-gateway
-      dockerfile: Dockerfile
-    container_name: medicore-api-gateway
-    ports:
-      - "3000:3000"
+  minio:
+    image: minio/minio:RELEASE.2023-10-07T15-07-38Z
+    container_name: medicore-minio
     environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
+      - MINIO_ROOT_USER=medicore
+      - MINIO_ROOT_PASSWORD=medicore_password
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
     networks:
       - medicore-network
 
+  # Core Services
   tenant-service:
     build:
       context: ./services/tenant-service
@@ -65,99 +65,6 @@ services:
     networks:
       - medicore-network
 
-  auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
-    container_name: medicore-auth-service
-    ports:
-      - "3002:3000"
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://medicore:medicore_password@postgres-master:5432/medicore_master
-      - JWT_SECRET=your-jwt-secret-key
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - postgres-master
-      - redis
-    networks:
-      - medicore-network
-
-  patient-service:
-    build:
-      context: ./services/patient-service
-      dockerfile: Dockerfile
-    container_name: medicore-patient-service
-    ports:
-      - "3003:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  appointment-service:
-    build:
-      context: ./services/appointment-service
-      dockerfile: Dockerfile
-    container_name: medicore-appointment-service
-    ports:
-      - "3004:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  medical-records-service:
-    build:
-      context: ./services/medical-records-service
-      dockerfile: Dockerfile
-    container_name: medicore-medical-records-service
-    ports:
-      - "3005:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  billing-service:
-    build:
-      context: ./services/billing-service
-      dockerfile: Dockerfile
-    container_name: medicore-billing-service
-    ports:
-      - "3006:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  claims-service:
-    build:
-      context: ./services/claims-service
-      dockerfile: Dockerfile
-    container_name: medicore-claims-service
-    ports:
-      - "3007:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
   cdss-service:
     build:
       context: ./services/cdss-service
@@ -169,6 +76,7 @@ services:
       - ENVIRONMENT=development
       - REDIS_URL=redis://redis:6379
       - PYTHONUNBUFFERED=1
+      - CDSS_ENABLE_AI=true
     depends_on:
       - redis
       - postgres-master
@@ -177,54 +85,6 @@ services:
     volumes:
       - ./services/cdss-service:/app
 
-  fhir-service:
-    build:
-      context: ./services/fhir-service
-      dockerfile: Dockerfile
-    container_name: medicore-fhir-service
-    ports:
-      - "3008:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  hl7-service:
-    build:
-      context: ./services/hl7-service
-      dockerfile: Dockerfile
-    container_name: medicore-hl7-service
-    ports:
-      - "3009:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  notification-service:
-    build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
-    container_name: medicore-notification-service
-    ports:
-      - "3010:3000"
-    environment:
-      - NODE_ENV=development
-      - REDIS_URL=redis://redis:6379
-      - SMS_PROVIDER=econet # or telecel, netone
-      - EMAIL_PROVIDER=smtp
-    depends_on:
-      - redis
-    networks:
-      - medicore-network
-
-  # EHR Service
   ehr-service:
     build:
       context: ./services/ehr-service
@@ -240,8 +100,6 @@ services:
       - DB_USERNAME=medicore
       - DB_PASSWORD=medicore_password
       - JWT_SECRET=ehr-super-secret-key
-      # SNOMED CT Configuration
-      # Using PostgreSQL for SNOMED CT (Elasticsearch/Snowstorm removed)
       - SNOMED_USE_POSTGRES=true
       - SNOMED_USE_CACHE=false
       - CDSS_SERVICE_URL=http://cdss-service:8000
@@ -265,26 +123,7 @@ services:
     networks:
       - medicore-network
 
-  minio:
-    image: minio/minio:RELEASE.2023-10-07T15-07-38Z
-    container_name: medicore-minio
-    environment:
-      - MINIO_ROOT_USER=medicore
-      - MINIO_ROOT_PASSWORD=medicore_password
-    command: server --console-address ":9001" /data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    networks:
-      - medicore-network
-
-  # Snowstorm and Elasticsearch removed - using PostgreSQL for SNOMED CT instead
-  # This saves ~4GB RAM and eliminates unreliable search issues
-  # SNOMED CT and ICD-10 mappings are now stored in PostgreSQL master database
-
-  # Web Application (Tenant Management)
+  # Frontends
   web-app:
     build:
       context: ./web-app
@@ -310,7 +149,6 @@ services:
     networks:
       - medicore-network
 
-  # EHR Frontend Application (Staff/Admin)
   ehr-frontend:
     build:
       context: ./ehr-frontend
@@ -347,7 +185,6 @@ services:
     networks:
       - medicore-network
 
-  # Patient Portal Application
   patient-portal:
     build:
       context: ./patient-portal
@@ -382,7 +219,7 @@ services:
     networks:
       - medicore-network
 
-  # Monitoring (Optional for development)
+  # Monitoring
   prometheus:
     image: prom/prometheus:latest
     container_name: medicore-prometheus

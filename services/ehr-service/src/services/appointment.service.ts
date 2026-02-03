@@ -364,6 +364,15 @@ export class AppointmentService {
       }
     }
 
+    // Handle WHO Smart Forms data if provided
+    if (updateAppointmentDto.whoSmartFormData !== undefined) {
+      await connection.query(
+        `UPDATE appointments SET who_smart_form_data = $1::jsonb WHERE id = $2`,
+        [JSON.stringify(updateAppointmentDto.whoSmartFormData), id]
+      );
+      this.logger.log(`Updated WHO Smart Forms data for appointment ${id}`);
+    }
+
     return appointmentRepository.save(appointment);
   }
 

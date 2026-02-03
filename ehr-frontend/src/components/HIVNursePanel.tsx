@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X, Loader2 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X, Loader2, Search, Brain } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
 type HIVNursePanelProps = {
@@ -33,6 +33,9 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
   const [form, setForm] = useState(createInitialFormState);
   const [submitting, setSubmitting] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const cdssInputs = useMemo(() => ({
     diagnoses: ['HIV'],
@@ -81,6 +84,29 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
       cancelled = true;
     };
   }, [appointmentId, patientId, tenantSlug, token]);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   const save = async () => {
     if (!tenantSlug || !token) {
@@ -244,18 +270,61 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
           </button>
         </div>
 
-        {/* Simple CDSS prompts */}
-        <div className="mt-4 p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="font-semibold">CDSS Prompts</span>
+        {/* CDSS Insights & Guidelines */}
+        <div className="mt-4 space-y-3">
+          {/* Search Section */}
+          <div className="p-3 bg-white rounded-lg border border-indigo-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Brain className="w-4 h-4 text-indigo-600" />
+              <h4 className="font-semibold text-sm text-slate-800">Clinical Guidelines Search</h4>
+            </div>
+            
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={guidelineQuery}
+                onChange={(e) => setGuidelineQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                placeholder="Search HIV protocols (e.g., TLD switching, viral load failure)..."
+                className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500"
+              />
+              <button
+                onClick={handleGuidelineSearch}
+                disabled={loadingGuidelines || !guidelineQuery.trim()}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700 flex items-center gap-1 disabled:opacity-50"
+              >
+                <Search className="w-3 h-3" />
+                {loadingGuidelines ? '...' : 'Search'}
+              </button>
+            </div>
+
+            {guidelineResults.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {guidelineResults.map((citation: any, idx: number) => (
+                  <div key={`hiv-cite-${idx}`} className="p-2 bg-indigo-50 rounded border border-indigo-100 text-xs text-indigo-900">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-3 h-3 text-indigo-600 mt-0.5 flex-shrink-0" />
+                      <span>{typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Viral Load due if {'>'}  6 months from last test</li>
-            <li>Consider TB testing if any symptom present</li>
-            <li>Ensure cotrimoxazole prophylaxis when indicated</li>
-            <li>For pregnancy/breastfeeding: ensure PMTCT linkage and VL monitoring</li>
-          </ul>
+
+          {/* Standard CDSS prompts */}
+          <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="font-semibold">Standard Alerts</span>
+            </div>
+            <ul className="list-disc pl-5 space-y-1 text-xs">
+              <li>Viral Load due if {'>'}  6 months from last test</li>
+              <li>Consider TB testing if any symptom present</li>
+              <li>Ensure cotrimoxazole prophylaxis when indicated</li>
+              <li>For pregnancy/breastfeeding: ensure PMTCT linkage and VL monitoring</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

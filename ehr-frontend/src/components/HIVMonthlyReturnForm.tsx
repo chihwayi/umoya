@@ -375,27 +375,31 @@ const HIVMonthlyReturnForm: React.FC<HIVMonthlyReturnFormProps> = ({ tenantSlug,
   };
 
   return (
-    <div className="p-6 bg-slate-50 min-h-screen">
-      <div className="max-w-[1400px] mx-auto bg-white rounded-lg shadow-sm p-6">
+    <div className="p-6 min-h-screen">
+      <div className="max-w-[1400px] mx-auto glass-card rounded-2xl p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <FileText className="w-6 h-6" />
-              Monthly Return Form
-            </h1>
-            <p className="text-sm text-slate-600 mt-1">
-              HIV/AIDS Monthly Return - {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </p>
+        <div className="flex items-center justify-between mb-8 pb-6 border-b border-white/20">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
+              <FileText className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-3">
+                Monthly Return Form
+              </h1>
+              <p className="text-sm text-slate-600 mt-2 font-medium">
+                HIV/AIDS Monthly Return - {new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             {/* Date Selectors */}
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-slate-500" />
+            <div className="flex items-center gap-3 glass-section px-4 py-2 rounded-xl">
+              <Calendar className="w-5 h-5 text-emerald-600" />
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="border border-slate-300 rounded px-3 py-1.5 text-sm"
+                className="glass-input border-0 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-800"
               >
                 {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
                   <option key={year} value={year}>{year}</option>
@@ -404,7 +408,7 @@ const HIVMonthlyReturnForm: React.FC<HIVMonthlyReturnFormProps> = ({ tenantSlug,
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="border border-slate-300 rounded px-3 py-1.5 text-sm"
+                className="glass-input border-0 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-800"
               >
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                   <option key={month} value={month}>
@@ -416,39 +420,40 @@ const HIVMonthlyReturnForm: React.FC<HIVMonthlyReturnFormProps> = ({ tenantSlug,
             <button
               onClick={loadData}
               disabled={loading}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+              className="glass-button px-5 py-2.5 text-white rounded-xl disabled:opacity-50 flex items-center gap-2 font-semibold shadow-lg"
+              style={{ background: 'rgba(5, 150, 105, 0.8)', backdropFilter: 'blur(10px)' }}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
               Refresh
             </button>
             <button
               onClick={exportToPDF}
-              className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 flex items-center gap-2"
+              className="glass-button-secondary px-5 py-2.5 text-slate-700 rounded-xl flex items-center gap-2 font-semibold"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-5 h-5" />
               Export PDF
             </button>
           </div>
         </div>
 
         {/* Section Tabs */}
-        <div className="flex gap-2 mb-6 border-b">
+        <div className="flex gap-3 mb-8 border-b border-white/20 pb-2">
           <button
             onClick={() => setActiveSection('C')}
-            className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+            className={`px-6 py-3 font-bold text-sm border-b-3 transition-all rounded-t-xl ${
               activeSection === 'C'
-                ? 'border-emerald-500 text-emerald-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-emerald-500 text-emerald-600 glass-gradient'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:glass-section'
             }`}
           >
             Section C: HIV/TB Collaboration
           </button>
           <button
             onClick={() => setActiveSection('D')}
-            className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+            className={`px-6 py-3 font-bold text-sm border-b-3 transition-all rounded-t-xl ${
               activeSection === 'D'
-                ? 'border-emerald-500 text-emerald-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'border-emerald-500 text-emerald-600 glass-gradient'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:glass-section'
             }`}
           >
             Section D: ART Summary

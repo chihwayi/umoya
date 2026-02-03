@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Heart, Lungs, AlertTriangle, Activity, FileText } from 'lucide-react';
+import { X, Heart, Wind, AlertTriangle, Activity, FileText, BookOpen, Search, Loader2, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import ICD10Picker from './ICD10Picker';
+import { cdssApi } from '../services/api';
+import { GuidelineResult } from '../types/guidelines';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -24,6 +26,35 @@ const PreAnesthesiaAssessmentModal: React.FC<PreAnesthesiaAssessmentModalProps> 
   const { showError, showSuccess } = useNotification();
   const [loading, setLoading] = useState(false);
   const [comorbidities, setComorbidities] = useState<Array<{ code: string; description: string }>>([]);
+
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     surgicalCaseId: surgicalCase.id || surgicalCase.caseid,
@@ -123,6 +154,69 @@ const PreAnesthesiaAssessmentModal: React.FC<PreAnesthesiaAssessmentModalProps> 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
+            {/* AI Guideline Search */}
+            <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-indigo-600" />
+                    AI Clinical Guidelines & Protocols
+                  </h3>
+                <button
+                  onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  {showGuidelineSearch ? 'Hide Search' : 'Search Guidelines'}
+                </button>
+              </div>
+
+              {showGuidelineSearch && (
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={guidelineQuery}
+                        onChange={(e) => setGuidelineQuery(e.target.value)}
+                        placeholder="Search anesthesia guidelines (e.g., 'difficult airway algorithm', 'malignant hyperthermia protocol')..."
+                        className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                      />
+                    </div>
+                    <button
+                      onClick={handleGuidelineSearch}
+                      disabled={loadingGuidelines}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
+                    </button>
+                  </div>
+
+                  {guidelineResults.length > 0 && (
+                    <div className="space-y-3 mt-4">
+                      {guidelineResults.map((result, idx) => (
+                        <div key={idx} className="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm">
+                          <p className="text-sm text-slate-800 mb-2">{result.text}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              (result.confidence ?? 0) > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                              (result.confidence ?? 0) > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                              'bg-red-50 text-red-700 border-red-100'
+                            }`}>
+                              {Math.round((result.confidence ?? 0) * 100)}% Match
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              Source: {result.source || 'Medical Guidelines Database'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* ASA Physical Status */}
             <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
               <h3 className="font-bold text-slate-900 mb-3">ASA Physical Status Classification</h3>
@@ -162,7 +256,7 @@ const PreAnesthesiaAssessmentModal: React.FC<PreAnesthesiaAssessmentModalProps> 
             {/* Airway Assessment */}
             <div>
               <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <Lungs className="w-5 h-5 text-purple-600" />
+                <Wind className="w-5 h-5 text-purple-600" />
                 Airway Assessment
               </h3>
               <div className="grid grid-cols-3 gap-4">
@@ -267,7 +361,7 @@ const PreAnesthesiaAssessmentModal: React.FC<PreAnesthesiaAssessmentModalProps> 
             {/* Respiratory */}
             <div>
               <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <Lungs className="w-5 h-5 text-blue-600" />
+                <Wind className="w-5 h-5 text-blue-600" />
                 Respiratory Review
               </h3>
               <div className="space-y-3">

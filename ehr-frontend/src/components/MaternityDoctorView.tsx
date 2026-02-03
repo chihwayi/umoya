@@ -14,8 +14,10 @@ import {
   Clock4,
   ClipboardList,
   CheckCircle,
+  Search,
+  BookOpen,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import MaternityEnrollmentDetailModal from './MaternityEnrollmentDetailModal';
@@ -36,6 +38,12 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
   const [activeTab, setActiveTab] = useState<'high-risk' | 'deliveries' | 'overdue'>('high-risk');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
+  
+  // CDSS Guideline Search State
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
   const { showError } = useNotification();
 
   useEffect(() => {
@@ -259,6 +267,29 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
     setShowDetailModal(true);
   }, []);
 
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -305,6 +336,70 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
           </div>
         </div>
       )}
+
+      {/* AI Guideline Search Panel */}
+      <div className="bg-white rounded-lg border border-indigo-100 shadow p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Clinical Guidelines Database</h3>
+              <p className="text-sm text-slate-500">
+                AI-powered search for WHO/MOH maternity protocols and complication management
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={guidelineQuery}
+              onChange={(e) => setGuidelineQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+              placeholder="Search for protocols (e.g. 'severe pre-eclampsia management', 'PPH drug dosage')..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <button
+            onClick={handleGuidelineSearch}
+            disabled={loadingGuidelines || !guidelineQuery.trim()}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loadingGuidelines ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Searching...
+              </>
+            ) : (
+              'Search Guidelines'
+            )}
+          </button>
+        </div>
+
+        {guidelineResults.length > 0 && (
+          <div className="space-y-3 bg-slate-50 rounded-lg p-4 border border-slate-200">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Relevant Protocols & Evidence</p>
+            {guidelineResults.slice(0, 2).map((citation: any, idx: number) => (
+              <div key={`doc-search-${idx}`} className="flex items-start gap-3 p-3 bg-white rounded border border-slate-200 shadow-sm">
+                <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                  </p>
+                  {citation.source && (
+                    <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Timeline */}
       {timelineEvents.length > 0 && (

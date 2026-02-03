@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package } from 'lucide-react';
+import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package, BookOpen, Search } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import ImplantTrackingModal from './ImplantTrackingModal';
+import { cdssApi } from '../services/api';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -26,6 +27,13 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [showImplantModal, setShowImplantModal] = useState(false);
+  
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
   const [documentation, setDocumentation] = useState({
     findings: '',
     procedurePerformed: '',
@@ -176,6 +184,29 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
     }
   };
 
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -301,7 +332,7 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
             {/* Surgical Team */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
               <h3 className="font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-600" />
+                <User className="w-5 h-5 text-indigo-600" />
                 Surgical Team
               </h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -328,6 +359,77 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* AI Guideline Search Section */}
+            <div className="bg-indigo-50/50 rounded-xl p-4 border border-indigo-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-indigo-600" />
+                  Surgical Guidelines & Intelligence
+                </h3>
+                <button
+                  onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border ${
+                    showGuidelineSearch 
+                      ? 'bg-indigo-100 text-indigo-700 border-indigo-200' 
+                      : 'bg-white text-slate-500 border-slate-200 hover:text-indigo-600'
+                  }`}
+                >
+                  {showGuidelineSearch ? 'Hide Guidelines' : 'Search Guidelines'}
+                </button>
+              </div>
+
+              {showGuidelineSearch && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex gap-3 mb-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={guidelineQuery}
+                        onChange={(e) => setGuidelineQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleGuidelineSearch())}
+                        placeholder="Search surgical guidelines (e.g., 'Antibiotic prophylaxis', 'DVT prevention')..."
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleGuidelineSearch}
+                      disabled={loadingGuidelines || !guidelineQuery.trim()}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {loadingGuidelines ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        'Search'
+                      )}
+                    </button>
+                  </div>
+
+                  {guidelineResults.length > 0 && (
+                    <div className="space-y-3 bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                      <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-2">Relevant Guidelines</p>
+                      {guidelineResults.map((citation: any, idx: number) => (
+                        <div key={`surg-search-${idx}`} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                          <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                          <div className="space-y-1">
+                            <p className="text-sm text-slate-700 leading-relaxed">
+                              {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                            </p>
+                            {citation.source && (
+                              <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}

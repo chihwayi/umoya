@@ -56,7 +56,7 @@ class WhoSmartGuidelinesService {
     const response = await ehrAxios.get(`${this.baseUrl}/guidelines`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'X-Tenant-Slug': tenantSlug,
+        'X-Tenant-ID': tenantSlug,
       },
     });
     return response.data.guidelines || [];
@@ -87,7 +87,7 @@ class WhoSmartGuidelinesService {
       {
         headers: {
           Authorization: token ? `Bearer ${token}` : undefined,
-          'X-Tenant-Slug': tenantSlug || undefined,
+          'X-Tenant-ID': tenantSlug || undefined,
         },
       }
     );
@@ -101,7 +101,7 @@ class WhoSmartGuidelinesService {
     const response = await ehrAxios.get(`${this.baseUrl}/forms`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'X-Tenant-Slug': tenantSlug,
+        'X-Tenant-ID': tenantSlug,
       },
     });
     return response.data.forms || [];
@@ -119,7 +119,7 @@ class WhoSmartGuidelinesService {
       const response = await ehrAxios.get(`${this.baseUrl}/forms/${formId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'X-Tenant-Slug': tenantSlug,
+          'X-Tenant-ID': tenantSlug,
         },
       });
       return response.data;
@@ -141,7 +141,7 @@ class WhoSmartGuidelinesService {
       {
         headers: {
           Authorization: `Bearer ${token}`,
-          'X-Tenant-Slug': tenantSlug,
+          'X-Tenant-ID': tenantSlug,
         },
       }
     );

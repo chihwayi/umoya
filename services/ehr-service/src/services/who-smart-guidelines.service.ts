@@ -105,7 +105,7 @@ interface RelatedArtifact {
   url?: string;
 }
 
-interface GuidelineRecommendation {
+export interface GuidelineRecommendation {
   id: string;
   title: string;
   description: string;
@@ -355,8 +355,8 @@ export class WhoSmartGuidelinesService {
     // Convert answer options
     if (item.answerOption) {
       formItem.options = item.answerOption.map(option => ({
-        value: option.valueCoding?.code || option.valueString || String(option.valueInteger || ''),
-        label: option.valueCoding?.display || option.valueString || String(option.valueInteger || '')
+        value: option.valueCoding?.coding?.[0]?.code || option.valueString || String(option.valueInteger || ''),
+        label: option.valueCoding?.coding?.[0]?.display || option.valueString || String(option.valueInteger || '')
       }));
     }
     

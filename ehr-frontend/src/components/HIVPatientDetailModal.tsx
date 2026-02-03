@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle, Printer, Download, ArrowRight } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle, Printer, Download, ArrowRight, Stethoscope, Workflow, BookOpen, Search, Loader2, Sparkles } from 'lucide-react';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import EacSessionModal from './EacSessionModal';
 import HIVPatientSummaryCard from './HIVPatientSummaryCard';
 import { exportVisitToPDF, VisitPDFData } from '../utils/pdfExport';
+import { HIVCareVisitWithSmartForms, HIVWorkflowIntegration } from './HIV';
+import { GuidelineResult } from '../types/guidelines';
 
 interface HIVPatientDetailModalProps {
   enrollment: any;
@@ -26,14 +28,46 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
   const [hivTests, setHivTests] = useState<any[]>([]);
   const [eacEligibility, setEacEligibility] = useState<any>(null);
   const [eacSessions, setEacSessions] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'tests' | 'art-initiation' | 'eac' | 'monitoring' | 'adherence' | 'regimen-history' | 'referrals'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'tests' | 'art-initiation' | 'eac' | 'monitoring' | 'adherence' | 'regimen-history' | 'referrals' | 'workflow'>('overview');
   const [showEacSessionModal, setShowEacSessionModal] = useState(false);
+  const [showCareVisitModal, setShowCareVisitModal] = useState(false);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [monitoringSchedules, setMonitoringSchedules] = useState<any[]>([]);
   const [adherenceTracking, setAdherenceTracking] = useState<any[]>([]);
   const [regimenHistory, setRegimenHistory] = useState<any[]>([]);
   const [clinicalAlerts, setClinicalAlerts] = useState<any[]>([]);
   const [showSummaryCard, setShowSummaryCard] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+
+  // AI Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   useEffect(() => {
     if (enrollment) {
@@ -190,6 +224,99 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+      {/* AI Guideline Search Modal */}
+      {showGuidelineSearch && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100001] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b border-emerald-100 flex items-center justify-between bg-emerald-50">
+              <div className="flex items-center space-x-2 text-emerald-700">
+                <BookOpen className="w-5 h-5" />
+                <h3 className="font-bold">HIV Clinical Guidelines (AI-Powered)</h3>
+              </div>
+              <button 
+                onClick={() => setShowGuidelineSearch(false)}
+                className="p-1 hover:bg-emerald-100 rounded-full text-emerald-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={guidelineQuery}
+                  onChange={(e) => setGuidelineQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                  placeholder="Search HIV guidelines, ARV interactions, opportunistic infections..."
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  autoFocus
+                />
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {loadingGuidelines ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
+                {guidelineResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {guidelineResults.map((result, idx) => (
+                      <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-gray-900 leading-tight">{result.source || 'Clinical Guideline'}</h4>
+                          {result.confidence && (
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                              result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                              'bg-red-50 text-red-700 border-red-100'
+                            }`}>
+                              Confidence: {Math.round(result.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap mb-3">{result.text}</p>
+                        
+                        {result.recommendation && (
+                          <div className="mb-3 p-3 bg-emerald-50 border border-emerald-100 rounded-md">
+                            <h5 className="text-xs font-bold text-emerald-800 uppercase tracking-wide mb-1">Recommendation</h5>
+                            <p className="text-sm text-emerald-900">{result.recommendation}</p>
+                          </div>
+                        )}
+
+                        {result.url && (
+                          <a href={result.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+                            View Source Document <ArrowRight className="w-3 h-3 ml-1" />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-emerald-300" />
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-900 mb-1">No guidelines found</h4>
+                  <p className="text-gray-500 max-w-sm mx-auto">
+                    Try searching for specific topics like "first-line regimen", "viral load failure", or "TB coinfection".
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-3 border-t border-gray-100 bg-gray-50 text-xs text-center text-gray-500">
+              AI-generated results based on WHO & National HIV Guidelines. Verify with standard protocols.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl my-8">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
@@ -425,16 +552,73 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Quick Actions */}
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-indigo-600" />
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setShowCareVisitModal(true)}
+                    className="p-4 bg-white rounded-lg border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                        <Stethoscope className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900 group-hover:text-emerald-700">Record Clinical Visit</p>
+                        <p className="text-xs text-slate-600">Use WHO Smart Forms</p>
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowWorkflowModal(true);
+                      setActiveTab('workflow');
+                    }}
+                    className="p-4 bg-white rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                        <Workflow className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900 group-hover:text-indigo-700">Start WHO Workflow</p>
+                        <p className="text-xs text-slate-600">Complete care continuum</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'visits' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900 mb-4">Clinical Visit History</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">Clinical Visit History</h3>
+                <button
+                  onClick={() => setShowCareVisitModal(true)}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 transition-colors"
+                >
+                  <Stethoscope className="w-4 h-4" />
+                  Record New Visit
+                </button>
+              </div>
               {clinicalVisits.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-xl">
                   <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600">No clinical visits recorded yet</p>
+                  <p className="text-slate-600 mb-4">No clinical visits recorded yet</p>
+                  <button
+                    onClick={() => setShowCareVisitModal(true)}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 mx-auto"
+                  >
+                    <Stethoscope className="w-4 h-4" />
+                    Record First Visit
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -943,6 +1127,53 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
             </div>
           )}
 
+          {activeTab === 'workflow' && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6 mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <Workflow className="w-6 h-6 text-indigo-600" />
+                  <h3 className="text-lg font-bold text-slate-900">WHO Smart Guidelines Workflow</h3>
+                </div>
+                <p className="text-slate-700 mb-4">
+                  Use the complete WHO Smart Guidelines workflow to guide patients through Testing, Registration, ART Initiation, and Care & Treatment stages.
+                </p>
+                <button
+                  onClick={() => setShowWorkflowModal(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors"
+                >
+                  <Workflow className="w-4 h-4" />
+                  Start WHO Workflow
+                </button>
+              </div>
+              
+              <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <h4 className="font-semibold text-slate-900 mb-4">Workflow Stages</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <TestTube className="w-6 h-6 text-blue-600 mb-2" />
+                    <h5 className="font-semibold text-slate-900 mb-1">Testing</h5>
+                    <p className="text-xs text-slate-600">HIV testing algorithm</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <User className="w-6 h-6 text-green-600 mb-2" />
+                    <h5 className="font-semibold text-slate-900 mb-1">Registration</h5>
+                    <p className="text-xs text-slate-600">Patient enrollment</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <Pill className="w-6 h-6 text-purple-600 mb-2" />
+                    <h5 className="font-semibold text-slate-900 mb-1">ART Initiation</h5>
+                    <p className="text-xs text-slate-600">Start treatment</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <Stethoscope className="w-6 h-6 text-emerald-600 mb-2" />
+                    <h5 className="font-semibold text-slate-900 mb-1">Care & Treatment</h5>
+                    <p className="text-xs text-slate-600">Ongoing care visits</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'referrals' && (
             <div className="space-y-6">
               <p className="text-slate-600">Referral management coming soon</p>
@@ -1080,6 +1311,66 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
           clinicalVisits={clinicalVisits}
           onClose={() => setShowSummaryCard(false)}
         />
+      )}
+
+      {/* Care Visit Modal with Smart Forms */}
+      {showCareVisitModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100001] p-4">
+          <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+              <h2 className="text-xl font-bold text-slate-900">Record Clinical Visit</h2>
+              <button
+                onClick={() => setShowCareVisitModal(false)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <HIVCareVisitWithSmartForms
+                enrollment={enrollment}
+                tenantSlug={tenantSlug}
+                token={localStorage.getItem('ehr_token') || ''}
+                onClose={() => setShowCareVisitModal(false)}
+                onSuccess={() => {
+                  loadPatientData();
+                  setShowCareVisitModal(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow Integration Modal */}
+      {showWorkflowModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100001] p-4">
+          <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+              <h2 className="text-xl font-bold text-slate-900">WHO Smart Guidelines Workflow</h2>
+              <button
+                onClick={() => setShowWorkflowModal(false)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <HIVWorkflowIntegration
+                patientId={enrollment.patient_id}
+                patientName={`${enrollment.first_name} ${enrollment.last_name}`}
+                tenantSlug={tenantSlug}
+                token={localStorage.getItem('ehr_token') || ''}
+                currentStage={enrollment.enrollment_date ? 'care' : enrollment.date_confirmed_positive ? 'registration' : 'testing'}
+                onComplete={() => {
+                  loadPatientData();
+                  setShowWorkflowModal(false);
+                }}
+                onClose={() => setShowWorkflowModal(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

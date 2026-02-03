@@ -6760,5 +6760,37 @@ export const analyticsApi = {
   },
 };
 
+export const cdssApi = {
+  getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5) => {
+    const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+  
+  getGuidelines: async (condition: string, patientData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/guidelines', { condition, patientData }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  }
+};
+
 // Export ehrAxios for use in other services
 export { ehrAxios };

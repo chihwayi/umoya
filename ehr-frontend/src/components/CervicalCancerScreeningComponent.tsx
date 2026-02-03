@@ -152,21 +152,27 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-pink-600 to-rose-700 rounded-2xl shadow-lg p-6 text-white">
+      <div className="glass-gradient rounded-2xl p-6 border border-pink-200/50 bg-gradient-to-r from-pink-500/20 to-rose-500/20">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold mb-2">Cervical Cancer Screening</h2>
-            <p className="text-pink-100">Screen patients for cervical cancer</p>
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl shadow-lg">
+              <Activity className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-rose-600 bg-clip-text text-transparent mb-2">Cervical Cancer Screening</h2>
+              <p className="text-slate-700 font-medium">Screen patients for cervical cancer</p>
+            </div>
           </div>
-          <Activity className="w-12 h-12 opacity-80" />
         </div>
       </div>
 
       {/* Patient Search */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <User className="w-5 h-5 text-pink-600" />
-          Select Patient
+      <div className="glass-card rounded-xl p-6">
+        <h3 className="text-xl font-bold mb-5 flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg">
+            <User className="w-5 h-5 text-white" />
+          </div>
+          <span>Select Patient</span>
         </h3>
         <div className="flex gap-3">
           <input
@@ -175,12 +181,13 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && searchPatients()}
-            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500"
+            className="glass-input flex-1 px-4 py-3 rounded-xl text-slate-800 placeholder:text-slate-400"
           />
           <button
             onClick={searchPatients}
             disabled={loading || !searchTerm.trim()}
-            className="px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50"
+            className="glass-button px-6 py-3 text-white rounded-xl disabled:opacity-50 font-semibold shadow-lg"
+            style={{ background: 'rgba(219, 39, 119, 0.8)', backdropFilter: 'blur(10px)' }}
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -208,10 +215,10 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
                     setPatients([]);
                     setSearchTerm(`${patient.firstName} ${patient.lastName}`);
                   }}
-                  className="w-full p-3 text-left border border-slate-200 rounded-lg hover:bg-pink-50"
+                  className="glass-card w-full p-4 text-left rounded-xl transition-all hover:scale-[1.02]"
                 >
-                  <div className="font-semibold">{patient.firstName} {patient.lastName}</div>
-                  <div className="text-sm text-slate-600">ID: {patient.patientNumber} {patient.gender && `• ${patient.gender}`}</div>
+                  <div className="font-bold text-slate-900 text-lg">{patient.firstName} {patient.lastName}</div>
+                  <div className="text-sm text-slate-600 mt-1">ID: {patient.patientNumber} {patient.gender && `• ${patient.gender}`}</div>
                 </button>
               ))}
             {patients.some((p) => p.gender?.toLowerCase() === 'male') && (
@@ -262,26 +269,29 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
 
       {/* Screening Form */}
       {selectedPatient && selectedPatient.gender?.toLowerCase() !== 'male' && (
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-          <h3 className="text-lg font-semibold mb-4">Screening Details</h3>
+        <div className="glass-card rounded-xl p-6">
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+            <div className="w-1 h-6 bg-gradient-to-b from-pink-500 to-rose-500 rounded-full"></div>
+            <span>Screening Details</span>
+          </h3>
           
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Screening Date</label>
+          <div className="space-y-5">
+            <div className="glass-section rounded-xl p-4">
+              <label className="block text-base font-bold text-slate-800 mb-3">Screening Date</label>
               <input
                 type="date"
                 value={form.screeningDate}
                 onChange={(e) => setForm({ ...form, screeningDate: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                className="glass-input w-full px-4 py-3 rounded-xl text-slate-800"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">Screening Method</label>
+            <div className="glass-section rounded-xl p-4">
+              <label className="block text-base font-bold text-slate-800 mb-3">Screening Method</label>
               <select
                 value={form.screeningMethod}
                 onChange={(e) => setForm({ ...form, screeningMethod: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                className="glass-input w-full px-4 py-3 rounded-xl text-slate-800"
               >
                 <option value="via">VIA (Visual Inspection with Acetic Acid)</option>
                 <option value="pap_smear">Pap Smear</option>
@@ -695,9 +705,10 @@ const CervicalCancerScreeningComponent: React.FC<CervicalCancerScreeningComponen
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="w-full px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 flex items-center justify-center gap-2 font-semibold"
+              className="glass-button w-full px-6 py-4 text-white rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 font-bold text-lg shadow-lg"
+              style={{ background: 'rgba(219, 39, 119, 0.8)', backdropFilter: 'blur(10px)' }}
             >
-              <Save className="w-5 h-5" />
+              <Save className="w-6 h-6" />
               {loading ? 'Recording...' : 'Record Screening'}
             </button>
           </div>

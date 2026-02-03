@@ -7,10 +7,10 @@ import {
   Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
   LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
   Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route,
-  Bed, Hospital, Home, Droplet, DollarSign
+  Bed, Hospital, Home, Droplet, DollarSign, Brain, BookOpen
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 import AppointmentActions from '../components/AppointmentActions';
@@ -30,6 +30,7 @@ import LabResultsViewer from '../components/LabResultsViewer';
 import { chartApi } from '../services/api';
 import ClinicalAlerts from '../components/ClinicalAlerts';
 import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
+import { UniversalSmartFormsPanel } from '../components/WHOSmartForms';
 // Tier 1 Components
 import ConsentLibrary from '../components/ConsentLibrary';
 import ImmunizationHistory from '../components/ImmunizationHistory';
@@ -157,7 +158,10 @@ const DoctorDashboard: React.FC = () => {
   const [patientRiskAssessment, setPatientRiskAssessment] = useState<any>(null);
   const [loadingRiskAssessment, setLoadingRiskAssessment] = useState(false);
   const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
-  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [showProblemsModal, setShowProblemsModal] = useState(false);
   const [showAllergiesModal, setShowAllergiesModal] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -180,6 +184,7 @@ const DoctorDashboard: React.FC = () => {
   const [showQuestionnaireLibrary, setShowQuestionnaireLibrary] = useState(false);
   const [showWorkflowList, setShowWorkflowList] = useState(false);
   const [showCarePlanList, setShowCarePlanList] = useState(false);
+  const [showSmartFormsPanel, setShowSmartFormsPanel] = useState(false);
   const [showCarePlanTemplates, setShowCarePlanTemplates] = useState(false);
   const [showCarePlanViewer, setShowCarePlanViewer] = useState(false);
   const [showCarePlanBuilder, setShowCarePlanBuilder] = useState(false);
@@ -217,6 +222,31 @@ const DoctorDashboard: React.FC = () => {
         financeDetails ? ` ${financeDetails}` : ''
       }`,
     );
+  };
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+         showError('Session Expired', 'Please login again.');
+         return;
+      }
+
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching guidelines:', error);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
   };
 
   const openClinicalNotesModal = () => {
@@ -1498,6 +1528,17 @@ const DoctorDashboard: React.FC = () => {
               </div>
               <div className="flex items-center gap-4">
                 <button
+                  onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                  className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 border ${
+                    showGuidelineSearch 
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-md' 
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:text-purple-600'
+                  }`}
+                >
+                  <Brain className="w-4 h-4" />
+                  <span className="font-medium hidden sm:inline">AI Assistant</span>
+                </button>
+                <button
                   onClick={() => setShowAvailabilityManager(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                   title="Manage Availability"
@@ -1817,7 +1858,7 @@ const DoctorDashboard: React.FC = () => {
               onAppointmentSelect={(appointment) => {
                 setCurrentAppointment(appointment);
                 // Switch to the main view tab to show appointment details
-                setActiveTab('main');
+                setActiveTab('current-appointment');
               }}
             />
           )}
@@ -1914,6 +1955,14 @@ const DoctorDashboard: React.FC = () => {
                         >
                           <Target className="w-4 h-4" />
                           Care Plans
+                        </button>
+                        <button
+                          onClick={() => setShowSmartFormsPanel(true)}
+                          disabled={appointmentAwaitingPayment}
+                          className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-60 disabled:hover:from-indigo-500 disabled:hover:to-purple-500 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 text-sm text-white shadow-md"
+                        >
+                          <Activity className="w-4 h-4" />
+                          WHO Forms
                         </button>
                         <button
                           onClick={() => setShowReferralListModal(true)}
@@ -2620,7 +2669,7 @@ const DoctorDashboard: React.FC = () => {
                           <span className="text-violet-200">•</span>
                           <span>Patient ID: {currentAppointment.patient.patientNumber}</span>
                           <span className="text-violet-200">•</span>
-                          <span>{currentAppointment.patient.gender}, {new Date().getFullYear() - new Date(currentAppointment.patient.dateOfBirth).getFullYear()}y</span>
+                          <span>{(currentAppointment.patient as any).gender}, {new Date().getFullYear() - new Date(currentAppointment.patient.dateOfBirth).getFullYear()}y</span>
                         </div>
                       </div>
                       <button
@@ -2919,7 +2968,34 @@ const DoctorDashboard: React.FC = () => {
           appointment={currentAppointment}
           tenantSlug={tenantSlug!}
           token={localStorage.getItem('ehr_token') || ''}
+          searchContext="General Practice, Internal Medicine, Primary Care"
         />
+      )}
+
+      {/* WHO Smart Forms Panel */}
+      {showSmartFormsPanel && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-6 overflow-y-auto flex-1">
+                <UniversalSmartFormsPanel
+                  patientId={currentAppointment?.patient?.id}
+                  patientName={currentAppointment ? `${currentAppointment.patient.firstName} ${currentAppointment.patient.lastName}` : undefined}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={tenantSlug!}
+                  onFormSubmit={(formId, formData) => {
+                    showSuccess('Success', `WHO Smart Form "${formId}" submitted successfully`);
+                    setShowSmartFormsPanel(false);
+                    fetchTodayAppointments();
+                  }}
+                  onClose={() => setShowSmartFormsPanel(false)}
+                  moduleFilter="all"
+                  showAsModal={false}
+                />
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Prescriptions Modal */}
@@ -3358,7 +3434,7 @@ const DoctorDashboard: React.FC = () => {
             setShowCarePlanTemplates(false);
             setCarePlanPatientId(null);
           }}
-          onApplied={() => {
+          onTemplateApplied={() => {
             setShowCarePlanTemplates(false);
             // Optionally refresh patient care plans
           }}
@@ -3378,6 +3454,7 @@ const DoctorDashboard: React.FC = () => {
           onEdit={() => {
             setShowCarePlanViewer(false);
             setShowCarePlanBuilder(true);
+            // Note: Editing requires fetching the care plan object first, currently opening builder in new mode
           }}
         />
       )}
@@ -3478,7 +3555,7 @@ const DoctorDashboard: React.FC = () => {
       {showCarePlanBuilder && tenantSlug && carePlanPatientId && (
         <CarePlanBuilder
           patientId={carePlanPatientId}
-          carePlanId={selectedCarePlanId || undefined}
+          // carePlanId prop removed as it is not supported
           tenantSlug={tenantSlug}
           token={localStorage.getItem('ehr_token') || ''}
           onClose={() => {
@@ -3610,6 +3687,158 @@ const DoctorDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Guideline Search Modal */}
+      {showGuidelineSearch && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 border border-slate-200">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                    <Brain className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Clinical Intelligence Assistant</h2>
+                    <p className="text-purple-100">AI-powered guideline retrieval & clinical decision support</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowGuidelineSearch(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="p-6 bg-slate-50 border-b border-slate-200 shrink-0">
+                <div className="flex gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={guidelineQuery}
+                      onChange={(e) => setGuidelineQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                      placeholder="Ask a clinical question (e.g., 'First-line treatment for community-acquired pneumonia')"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg shadow-sm"
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    onClick={handleGuidelineSearch}
+                    disabled={loadingGuidelines || !guidelineQuery.trim()}
+                    className="px-8 py-4 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center gap-2"
+                  >
+                    {loadingGuidelines ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Search className="w-5 h-5" />
+                    )}
+                    Search
+                  </button>
+                </div>
+              </div>
+
+              {/* Results Area */}
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                {loadingGuidelines ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+                    <div className="relative w-20 h-20 mb-8">
+                      <div className="absolute inset-0 border-4 border-slate-200 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+                      <Brain className="absolute inset-0 m-auto w-8 h-8 text-purple-600 animate-pulse" />
+                    </div>
+                    <p className="text-lg font-medium">Analyzing clinical guidelines...</p>
+                    <p className="text-sm opacity-70 mt-2">Retrieving evidence-based recommendations</p>
+                  </div>
+                ) : guidelineResults && guidelineResults.length > 0 ? (
+                  <div className="space-y-6">
+                    {guidelineResults.map((result: any, index: number) => (
+                      <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-purple-50 rounded-xl shrink-0">
+                            <BookOpen className="w-6 h-6 text-purple-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-bold text-slate-900 mb-2 leading-tight">
+                              {result.title || 'Clinical Recommendation'}
+                            </h3>
+                            <div className="prose prose-slate max-w-none text-slate-600 mb-4">
+                              <p>{result.content || result.snippet}</p>
+                            </div>
+                            
+                            {/* Metadata/Sources */}
+                            {(result.source || result.guideline_id) && (
+                              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-slate-100 text-sm text-slate-500">
+                                <span className="bg-slate-100 px-2 py-1 rounded font-medium text-slate-600">
+                                  Source
+                                </span>
+                                <span>{result.source || 'Medical Guideline Database'}</span>
+                                {result.confidence && (
+                                  <>
+                                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                    <span className={`font-medium ${
+                                      result.confidence > 0.8 ? 'text-emerald-600' : 'text-amber-600'
+                                    }`}>
+                                      {Math.round(result.confidence * 100)}% Match
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : guidelineQuery && !loadingGuidelines && guidelineResults.length === 0 ? (
+                  <div className="text-center py-20">
+                    <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+                      <Search className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Guidelines Found</h3>
+                    <p className="text-slate-500 max-w-md mx-auto">
+                      We couldn't find any specific clinical guidelines matching "{guidelineQuery}". Try adjusting your search terms or browsing the full library.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center py-20">
+                    <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+                      <Brain className="w-10 h-10 text-purple-200" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Ready to Assist</h3>
+                    <p className="text-slate-500 max-w-md mx-auto">
+                      Search for clinical guidelines, drug interactions, or treatment protocols to get AI-powered evidence-based support.
+                    </p>
+                    
+                    <div className="mt-8 flex flex-wrap justify-center gap-3">
+                      {['Hypertension management', 'Sepsis protocols', 'Adult asthma', 'Diabetes type 2'].map(term => (
+                        <button
+                          key={term}
+                          onClick={() => {
+                            setGuidelineQuery(term);
+                          }}
+                          className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm text-slate-600 hover:border-purple-300 hover:text-purple-600 transition-colors"
+                        >
+                          {term}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-400">
+                AI-generated results should be verified against official clinical guidelines. Use professional judgment.
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

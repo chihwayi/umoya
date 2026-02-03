@@ -10,8 +10,11 @@ import {
   Sparkles,
   ShieldAlert,
   Tag,
+  Search,
+  BookOpen,
+  CheckCircle,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import {
   formatDateTimeToDDMMYYYYHHMM,
@@ -122,7 +125,7 @@ interface DoctorImagingResultsResponse {
   };
 }
 
-type FilterValue = 'pending' | 'awaiting_payment' | 'awaiting_ack' | 'completed' | 'critical' | 'all';
+type FilterValue = 'pending' | 'awaiting_payment' | 'awaiting_ack' | 'completed' | 'critical' | 'all' | 'recent';
 
 interface DoctorImagingResultsPanelProps {
   tenantSlug: string;
@@ -231,6 +234,12 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
   const [ackTarget, setAckTarget] = useState<DoctorImagingResult | null>(null);
   const [ackNotes, setAckNotes] = useState('');
   const [ackSubmitting, setAckSubmitting] = useState(false);
+
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const renderSeverityBadge = (severity?: string | null) => {
     if (!severity) return null;
@@ -450,6 +459,29 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
     );
   };
 
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
+
   return (
     <div
       className={`bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-2xl ${
@@ -467,10 +499,23 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
           </p>
         </div>
 
-        {!hideTabs && (
-          <div className="flex flex-wrap items-center gap-2">
-            {FILTER_OPTIONS.map(({ key, label }) => (
-              <button
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+              showGuidelineSearch 
+                ? 'bg-violet-500/20 text-violet-700 border-violet-500/30' 
+                : 'bg-white text-slate-500 border-slate-200 hover:text-violet-600 hover:border-violet-200'
+            }`}
+          >
+            <Search size={14} />
+            {showGuidelineSearch ? 'Hide Guidelines' : 'Imaging Guidelines'}
+          </button>
+
+          {!hideTabs && (
+            <div className="flex flex-wrap items-center gap-2">
+              {FILTER_OPTIONS.map(({ key, label }) => (
+                <button
                 key={key}
                 onClick={() => setInternalFilter(key)}
                 className={`px-4 py-2 text-xs font-bold rounded-xl border-2 transition-all shadow-md hover:shadow-lg ${
@@ -519,6 +564,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
           </div>
         )}
       </div>
+    </div>
 
       {!compact && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
@@ -538,6 +584,61 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
           ))}
         </div>
       )}
+
+      {showGuidelineSearch && (
+        <div className="mb-6 bg-violet-50/50 rounded-xl p-4 border border-violet-100">
+          <div className="flex gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={guidelineQuery}
+                onChange={(e) => setGuidelineQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                placeholder="Search imaging guidelines (e.g. 'MRI brain contrast indications', 'CT pulmonary angiogram protocol')..."
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+            </div>
+            <button
+              onClick={handleGuidelineSearch}
+              disabled={loadingGuidelines || !guidelineQuery.trim()}
+              className="px-6 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loadingGuidelines ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                'Search'
+              )}
+            </button>
+          </div>
+
+          {guidelineResults.length > 0 && (
+            <div className="space-y-3 bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="w-4 h-4 text-violet-600" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Relevant Clinical Guidelines</p>
+              </div>
+              {guidelineResults.map((citation: any, idx: number) => (
+                <div key={`img-search-${idx}`} className="flex items-start gap-3 p-3 bg-slate-50 rounded border border-slate-100">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                    </p>
+                    {citation.source && (
+                      <p className="text-xs text-slate-400 font-medium">Source: {citation.source}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
 
       <div className="relative">
         {loading && (

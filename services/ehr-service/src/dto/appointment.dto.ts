@@ -94,6 +94,9 @@ export class UpdateAppointmentDto {
   @IsString()
   @IsOptional()
   diagnosisSnomedTerm?: string;
+
+  @IsOptional()
+  whoSmartFormData?: Record<string, any>;
 }
 
 export class AppointmentQueryDto {

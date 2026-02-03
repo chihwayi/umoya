@@ -48,17 +48,22 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-slate-200">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <Package className="w-8 h-8 text-emerald-600" />
-            Medication Stock Management
-          </h2>
+      <div className="glass-card rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
+              <Package className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+              Medication Stock Management
+            </h2>
+          </div>
           <button
             onClick={loadStock}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+            className="glass-button px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold shadow-lg"
+            style={{ background: 'rgba(5, 150, 105, 0.8)', backdropFilter: 'blur(10px)' }}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-5 h-5" />
             Refresh
           </button>
         </div>
@@ -68,7 +73,7 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+            className="glass-input px-5 py-3 rounded-xl text-slate-800 font-medium"
           >
             <option value="all">All Medications</option>
             <option value="arv">ARV</option>
@@ -76,14 +81,14 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
             <option value="tpt">TPT</option>
             <option value="other">Other</option>
           </select>
-          <label className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+          <label className="glass-section flex items-center gap-3 px-5 py-3 rounded-xl cursor-pointer transition-all hover:scale-[1.02]">
             <input
               type="checkbox"
               checked={showLowStock}
               onChange={(e) => setShowLowStock(e.target.checked)}
-              className="rounded"
+              className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
             />
-            <span className="text-sm">Show Low Stock Only</span>
+            <span className="text-sm font-semibold text-slate-700">Show Low Stock Only</span>
           </label>
         </div>
       </div>
@@ -106,14 +111,14 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
             const status = getStockStatus(item);
             const StatusIcon = status.icon;
             return (
-              <div key={item.id} className="bg-white rounded-xl shadow-lg p-6 border border-slate-200 hover:shadow-xl transition-shadow">
+              <div key={item.id} className="glass-card rounded-xl p-6 transition-all hover:scale-[1.02]">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-slate-900 mb-1">{item.medication_name}</h3>
                     <p className="text-sm text-slate-600">{item.medication_code || 'N/A'}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${status.color}`}>
-                    <StatusIcon className="w-3 h-3" />
+                  <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md ${status.color}`}>
+                    <StatusIcon className="w-3.5 h-3.5" />
                     {status.label}
                   </span>
                 </div>

@@ -3,6 +3,7 @@ Diagnostic Assistant
 Provides differential diagnosis suggestions based on symptoms, vitals, and patient demographics
 Uses pattern matching and clinical decision rules
 Enhanced with AI models (MedBERT, ClinicalBERT) for intelligent diagnostics
+Includes SNOMED CT and ICD-10 code mapping
 """
 from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
@@ -16,32 +17,65 @@ try:
     from ai_models.medbert_predictor import MedBERTPredictor
     from ai_models.clinicalbert_diagnostic import ClinicalBERTDiagnostic
     from ai_models.fusion_engine import IntelligentFusionEngine
+    from ai_models.llm_provider import LLMProvider
+    from ai_models.rag_engine import RAGEngine
     AI_AVAILABLE = True
 except ImportError:
     AI_AVAILABLE = False
     logger.info("AI models not available. Using rule-based only.")
+    # Fallback if imports fail, though LLMProvider only needs httpx
+    try:
+        from ai_models.llm_provider import LLMProvider
+    except ImportError:
+        LLMProvider = None
+
+# Import terminology mappers
+try:
+    from terminology.icd10_mapper import Icd10Mapper
+    from terminology.snomed_mapper import SnomedMapper
+    TERMINOLOGY_AVAILABLE = True
+except ImportError:
+    TERMINOLOGY_AVAILABLE = False
+    logger.warning("Terminology mappers not available. Codes will not be included.")
 
 
 class DiagnosticAssistant:
     """Symptom-based diagnostic suggestion engine with AI enhancement"""
     
     def __init__(self):
-        """Initialize diagnostic assistant with optional AI models"""
+        """Initialize diagnostic assistant with optional AI models and terminology"""
         self.medbert = None
         self.clinicalbert = None
         self.fusion_engine = None
+        self.llm_provider = None
+        self.rag_engine = None
+        self.icd10_mapper = None
+        self.snomed_mapper = None
         
-        if AI_AVAILABLE:
+        # Always try to initialize AI models (lightweight mode works without transformers)
+        try:
+            self.medbert = MedBERTPredictor()
+            self.clinicalbert = ClinicalBERTDiagnostic()
+            self.fusion_engine = IntelligentFusionEngine()
+            self.llm_provider = LLMProvider() if LLMProvider else None
+            self.rag_engine = RAGEngine() if RAGEngine else None
+            logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
+        except Exception as e:
+            logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
+            self.medbert = None
+            self.clinicalbert = None
+            self.fusion_engine = None
+            self.llm_provider = None
+        
+        if TERMINOLOGY_AVAILABLE:
             try:
-                self.medbert = MedBERTPredictor()
-                self.clinicalbert = ClinicalBERTDiagnostic()
-                self.fusion_engine = IntelligentFusionEngine()
-                logger.info("AI models initialized for intelligent diagnostics")
+                self.icd10_mapper = Icd10Mapper()
+                self.snomed_mapper = SnomedMapper()
+                logger.info("Terminology mappers initialized for code mapping")
             except Exception as e:
-                logger.warning(f"Failed to initialize AI models: {e}. Using rule-based only.")
-                self.medbert = None
-                self.clinicalbert = None
-                self.fusion_engine = None
+                logger.warning(f"Failed to initialize terminology mappers: {e}")
+                self.icd10_mapper = None
+                self.snomed_mapper = None
     
     # Symptom-diagnosis mapping database (simplified clinical knowledge base)
     DIAGNOSTIC_DATABASE = {
@@ -507,23 +541,39 @@ class DiagnosticAssistant:
         # Remove duplicates
         recommended_tests = list(dict.fromkeys(recommended_tests))
         
+        # Enrich diagnoses with ICD-10 and SNOMED CT codes
+        enriched_diagnoses = []
+        for d in suggested_diagnoses:
+            diag_dict = {
+                'diagnosis': d['diagnosis'],
+                'probability': round(d['probability'], 3),
+                'confidence': confidence_scores.get(d['diagnosis'], 'low'),
+                'matching_symptoms': list(set(d['matching_symptoms']))
+            }
+            
+            # Add ICD-10 code if mapper available
+            if self.icd10_mapper:
+                icd10_code = self.icd10_mapper.get_icd10_code(d['diagnosis'])
+                if icd10_code:
+                    diag_dict['icd10'] = icd10_code
+            
+            # Add SNOMED CT code if mapper available
+            if self.snomed_mapper:
+                snomed_code = self.snomed_mapper.get_snomed_code(d['diagnosis'])
+                if snomed_code:
+                    diag_dict['snomed'] = snomed_code
+            
+            enriched_diagnoses.append(diag_dict)
+        
         return {
-            'suggested_diagnoses': [
-                {
-                    'diagnosis': d['diagnosis'],
-                    'probability': round(d['probability'], 3),
-                    'confidence': confidence_scores.get(d['diagnosis'], 'low'),
-                    'matching_symptoms': list(set(d['matching_symptoms']))
-                }
-                for d in suggested_diagnoses
-            ],
+            'suggested_diagnoses': enriched_diagnoses,
             'confidence_scores': confidence_scores,
             'recommended_tests': recommended_tests,
             'red_flags': red_flags,
             'vitals_clues': vitals_clues
         }
     
-    def intelligent_suggest(
+    async def intelligent_suggest(
         self,
         symptoms: List[str],
         vitals: Optional[Dict[str, Any]] = None,
@@ -554,19 +604,80 @@ class DiagnosticAssistant:
             gender=gender
         )
         
-        # If AI not available, return rule-based only
-        if not AI_AVAILABLE or not self.fusion_engine:
+        # Check if lightweight AI models are available (even without transformers)
+        # Lightweight models work without transformers library
+        has_ai_models = (self.medbert is not None) or (self.clinicalbert is not None)
+        has_fusion = self.fusion_engine is not None
+        has_llm = self.llm_provider is not None
+        
+        # If no AI models at all, return rule-based only
+        if not has_ai_models and not has_llm:
             logger.debug("AI models not available, using rule-based only")
             return {
                 **rule_based_results,
                 'source': 'rule_based_only',
                 'ai_enabled': False
             }
-        
+            
+        # 1. Run Local LLM (if available)
+        llm_results = None
+        if has_llm and await self.llm_provider.check_availability():
+            try:
+                # RAG: Retrieve relevant guidelines
+                guideline_context = ""
+                if self.rag_engine:
+                    query_terms = symptoms + ([clinical_notes] if clinical_notes else [])
+                    query = " ".join(query_terms)[:200] # Limit query length
+                    try:
+                        retrieved_docs = self.rag_engine.query(query)
+                        if retrieved_docs:
+                            guideline_texts = [f"{doc['text']} (Source: {doc['source']})" for doc in retrieved_docs]
+                            guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
+                            logger.info(f"RAG retrieved {len(retrieved_docs)} guideline chunks")
+                    except Exception as e:
+                        logger.warning(f"RAG retrieval failed: {e}")
+
+                prompt_history = patient_data.get('conditions', []) if patient_data else []
+                prompt_labs = patient_data.get('labs', {}) if patient_data else {}
+                
+                prompt = f"""
+                Patient Case Analysis:
+                - Demographics: Age {age}, Gender {gender}
+                - Symptoms: {', '.join(symptoms)}
+                - Vitals: {vitals}
+                - Clinical Notes: {clinical_notes or 'None'}
+                - Medical History: {prompt_history}
+                - Lab Results: {prompt_labs}
+                {guideline_context}
+                
+                Based on the patient information and the provided guidelines (if any), provide a differential diagnosis.
+                """
+                
+                schema = """
+                {
+                    "diagnoses": [
+                        {"name": "Diagnosis Name", "probability": 0.5, "reasoning": "Brief explanation"}
+                    ],
+                    "recommended_tests": ["Test Name"],
+                    "red_flags": ["Warning sign"]
+                }
+                """
+                
+                llm_json = await self.llm_provider.generate_json(prompt, schema)
+                if llm_json:
+                    llm_results = llm_json
+                    logger.info(f"Local LLM generated {len(llm_results.get('diagnoses', []))} diagnoses")
+                    
+                    # Store citations for return
+                    if self.rag_engine and 'retrieved_docs' in locals() and retrieved_docs:
+                        llm_results['citations'] = retrieved_docs
+            except Exception as e:
+                logger.error(f"Local LLM execution failed: {e}")
+
         medbert_results = None
         clinicalbert_results = None
         
-        # MedBERT predictions (structured data)
+        # 2. MedBERT predictions (structured data)
         if self.medbert and patient_data:
             try:
                 # Prepare patient data for MedBERT
@@ -584,7 +695,7 @@ class DiagnosticAssistant:
                 logger.warning(f"MedBERT prediction failed: {e}")
                 medbert_results = None
         
-        # ClinicalBERT suggestions (clinical notes)
+        # 3. ClinicalBERT suggestions (clinical notes)
         if self.clinicalbert and clinical_notes:
             try:
                 clinicalbert_results = self.clinicalbert.suggest_diagnoses(
@@ -597,7 +708,7 @@ class DiagnosticAssistant:
                 clinicalbert_results = None
         
         # If no AI results, return rule-based
-        if not medbert_results and not clinicalbert_results:
+        if not medbert_results and not clinicalbert_results and not llm_results:
             return {
                 **rule_based_results,
                 'source': 'rule_based_only',
@@ -605,32 +716,112 @@ class DiagnosticAssistant:
                 'ai_models_available': False
             }
         
-        # Fusion: Combine all results
-        try:
-            fused_results = self.fusion_engine.fuse_recommendations(
-                rule_based_results=rule_based_results,
-                medbert_results=medbert_results,
-                clinicalbert_results=clinicalbert_results
-            )
+        # 4. Fusion: Combine all results
+        # If fusion engine is available, use it for MedBERT/ClinicalBERT
+        fused_results = rule_based_results
+        if self.fusion_engine:
+            try:
+                fused_results = self.fusion_engine.fuse_recommendations(
+                    rule_based_results=rule_based_results,
+                    medbert_results=medbert_results,
+                    clinicalbert_results=clinicalbert_results
+                )
+            except Exception as e:
+                logger.error(f"Fusion failed: {e}. Using rule-based base.")
+                
+        # 5. Merge LLM Results (if any)
+        if llm_results:
+            # Simple merge strategy: Add LLM diagnoses to the list if not present, or boost probability
+            existing_diagnoses = {d['diagnosis'].lower(): d for d in fused_results.get('suggested_diagnoses', [])}
             
-            # Merge with rule-based recommendations (tests, red flags)
+            for llm_diag in llm_results.get('diagnoses', []):
+                name = llm_diag.get('name', '').strip()
+                if not name: continue
+                
+                normalized_name = name.lower()
+                prob = float(llm_diag.get('probability', 0.5))
+                reasoning = llm_diag.get('reasoning', '')
+                
+                if normalized_name in existing_diagnoses:
+                    # Boost existing
+                    existing = existing_diagnoses[normalized_name]
+                    existing['probability'] = min(0.99, existing['probability'] + 0.1)
+                    existing['ai_reasoning'] = reasoning
+                    existing['sources'] = existing.get('sources', []) + ['llm']
+                else:
+                    # Add new
+                    new_diag = {
+                        'diagnosis': name,
+                        'probability': prob,
+                        'confidence': 'moderate' if prob > 0.5 else 'low',
+                        'matching_symptoms': [],
+                        'ai_reasoning': reasoning,
+                        'source': 'llm'
+                    }
+                    fused_results['suggested_diagnoses'].append(new_diag)
+            
+            # Re-sort
+            fused_results['suggested_diagnoses'].sort(key=lambda x: x['probability'], reverse=True)
+            
+            # Merge tests and red flags
+            fused_results['recommended_tests'] = list(set(fused_results.get('recommended_tests', []) + llm_results.get('recommended_tests', [])))
+            fused_results['red_flags'] = list(set(fused_results.get('red_flags', []) + llm_results.get('red_flags', [])))
+            
+            fused_results['ai_models_used'] = fused_results.get('ai_models_used', {})
+            fused_results['ai_models_used']['llm'] = True
+            
+            # Pass through citations
+            if 'citations' in llm_results:
+                fused_results['guideline_citations'] = llm_results['citations']
+
+        return {
+            **fused_results,
+            'recommended_tests': fused_results.get('recommended_tests', []),
+            'red_flags': fused_results.get('red_flags', []),
+            'vitals_clues': fused_results.get('vitals_clues', []),
+            'guideline_citations': fused_results.get('guideline_citations', []),
+            'ai_enabled': True,
+            'source': 'hybrid_cdss_ai_llm'
+        }
+
+    async def summarize_patient_history(
+        self,
+        clinical_notes: List[str],
+        demographics: Dict[str, Any],
+        recent_vitals: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, str]:
+        """
+        Generate a concise "One-Liner" summary of the patient's history using LLM.
+        """
+        if not self.llm_provider:
+             return {"summary": "AI summarization unavailable (Provider missing)", "source": "fallback"}
+
+        if not await self.llm_provider.check_availability():
+             return {"summary": "AI summarization unavailable (Service down)", "source": "fallback"}
+
+        notes_text = "\n".join(clinical_notes[-5:]) if clinical_notes else "No recent notes."
+        
+        prompt = f"""
+        Summarize this patient's medical status into a single professional sentence (the "One-Liner").
+        
+        Patient: {demographics.get('age')}yo {demographics.get('gender')}
+        Recent Vitals: {recent_vitals}
+        Recent Notes:
+        {notes_text}
+        
+        Format: "[Age/Sex] with [Key History] presenting with [Current Status]."
+        Example: "45yo Male with history of T2DM and HTN presenting with acute chest pain and diaphoresis."
+        """
+        
+        response = await self.llm_provider.generate_response(prompt)
+        if response:
             return {
-                **fused_results,
-                'recommended_tests': rule_based_results.get('recommended_tests', []),
-                'red_flags': rule_based_results.get('red_flags', []),
-                'vitals_clues': rule_based_results.get('vitals_clues', []),
-                'ai_enabled': True,
-                'ai_models_used': {
-                    'medbert': medbert_results is not None,
-                    'clinicalbert': clinicalbert_results is not None
-                }
+                "summary": response.strip(),
+                "source": "llm"
             }
-        except Exception as e:
-            logger.error(f"Fusion failed: {e}. Returning rule-based results.")
+        else:
             return {
-                **rule_based_results,
-                'source': 'rule_based_fallback',
-                'ai_enabled': True,
-                'fusion_error': str(e)
+                "summary": "Failed to generate summary.",
+                "source": "error"
             }
 

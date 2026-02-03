@@ -7,9 +7,11 @@ import {
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
   CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
-  Bed, AlertCircle
+  Bed, AlertCircle, BookOpen, Loader2, Sparkles
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
+import { GuidelineResult } from '../types/guidelines';
+import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
 import { useNotification } from '../components/GlobalNotification';
@@ -22,8 +24,11 @@ import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
 import HIVTestingComponent from '../components/HIVTestingComponent';
+import { HIVTestingWithSmartForms, HIVWorkflowIntegration, HIVRegistrationWithSmartForms } from '../components/HIV';
 import HIVPatientManagement from '../components/HIVPatientManagement';
 import TBScreeningComponent from '../components/TBScreeningComponent';
+import { TBScreeningWithSmartForms } from '../components/TB';
+import { MaternityWithSmartForms } from '../components/Maternity';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
@@ -45,6 +50,7 @@ interface Patient {
   bloodType: string;
   allergies: string;
   chronicConditions: string;
+  age?: number;
 }
 
 interface Appointment {
@@ -134,6 +140,9 @@ const NurseDashboard: React.FC = () => {
   const [showHivModal, setShowHivModal] = useState(false);
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
   const [showHivTestingModal, setShowHivTestingModal] = useState(false);
+  const [showHivWorkflowModal, setShowHivWorkflowModal] = useState(false);
+  const [showHivRegistrationModal, setShowHivRegistrationModal] = useState(false);
+  const [selectedPatientForWorkflow, setSelectedPatientForWorkflow] = useState<Patient | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
@@ -148,6 +157,12 @@ const NurseDashboard: React.FC = () => {
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
+
+  // AI Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
   const resolveTenantSlug = () =>
     tenantSlug || localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 
@@ -600,6 +615,34 @@ const NurseDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error executing order:', error);
       showError('Error', 'Failed to execute order');
+    }
+  };
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+         return;
+      }
+
+      // Add context for nursing
+      const searchContext = "Nursing protocols, triage guidelines, medication administration, patient safety";
+      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching guidelines:', error);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
     }
   };
 
@@ -1090,13 +1133,18 @@ const NurseDashboard: React.FC = () => {
                 patientNumber: apt.patient?.patientNumber || '',
                 phone: apt.patient?.phone || '',
                 email: apt.patient?.email || '',
+                dateOfBirth: apt.patient?.dateOfBirth || '',
+                gender: apt.patient?.gender || '',
+                bloodType: apt.patient?.bloodType || '',
+                allergies: apt.patient?.allergies || '',
+                chronicConditions: apt.patient?.chronicConditions || ''
               },
               doctor: {
                 id: apt.doctor?.id || '',
                 firstName: apt.doctor?.firstName || doctorFirstName,
                 lastName: apt.doctor?.lastName || doctorLastNameParts.join(' ') || '',
               },
-              vitals: null,
+              vitals: undefined,
             };
             allAppointments.push(transformed);
           });
@@ -1141,13 +1189,18 @@ const NurseDashboard: React.FC = () => {
                 patientNumber: apt.patient?.patientNumber || '',
                 phone: apt.patient?.phone || '',
                 email: apt.patient?.email || '',
+                dateOfBirth: apt.patient?.dateOfBirth || '',
+                gender: apt.patient?.gender || '',
+                bloodType: apt.patient?.bloodType || '',
+                allergies: apt.patient?.allergies || '',
+                chronicConditions: apt.patient?.chronicConditions || ''
               },
               doctor: {
                 id: apt.doctor?.id || '',
                 firstName: apt.doctor?.firstName || doctorFirstName,
                 lastName: apt.doctor?.lastName || doctorLastNameParts.join(' ') || '',
               },
-              vitals: null,
+              vitals: undefined,
             };
             allAppointments.push(transformed);
           });
@@ -1449,6 +1502,20 @@ const NurseDashboard: React.FC = () => {
                 title="Refresh Data"
               >
                 <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+
+              {/* AI Guideline Toggle */}
+              <button
+                onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                  showGuidelineSearch 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'bg-white/50 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="AI Clinical Guidelines"
+              >
+                <BookOpen className="w-5 h-5" />
+                <span className="hidden lg:inline text-sm font-medium">Guidelines</span>
               </button>
 
               {/* Notifications */}
@@ -1776,6 +1843,17 @@ const NurseDashboard: React.FC = () => {
               >
                 <FileText className="w-4 h-4 inline mr-2" />
                 Monthly Return
+              </button>
+              <button
+                onClick={() => setActiveTab('who-workflow')}
+                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
+                  activeTab === 'who-workflow'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                WHO Workflow
               </button>
             </nav>
           ) : (
@@ -2162,13 +2240,28 @@ const NurseDashboard: React.FC = () => {
         
         {/* HIV Section Tabs */}
         {activeSection === 'hiv' && activeTab === 'testing' && (
-          <HIVTestingComponent tenantSlug={tenantSlug || ''} />
+          <HIVTestingWithSmartForms
+            tenantSlug={tenantSlug || ''}
+            token={localStorage.getItem('ehr_token') || ''}
+            patientId={selectedPatient?.id}
+            onTestComplete={(testData) => {
+              // Handle test completion
+              console.log('HIV test completed:', testData);
+            }}
+          />
         )}
         {activeSection === 'hiv' && activeTab === 'hiv-patients' && (
           <HIVPatientManagement tenantSlug={tenantSlug || ''} />
         )}
         {activeSection === 'hiv' && activeTab === 'tb-screening' && (
-          <TBScreeningComponent tenantSlug={tenantSlug || ''} />
+          <TBScreeningWithSmartForms
+            tenantSlug={tenantSlug || ''}
+            token={localStorage.getItem('ehr_token') || ''}
+            patientId={selectedPatient?.id}
+            onScreeningComplete={(screeningData) => {
+              console.log('TB screening completed:', screeningData);
+            }}
+          />
         )}
         {activeSection === 'hiv' && activeTab === 'cervical-cancer' && (
           <CervicalCancerScreeningComponent tenantSlug={tenantSlug || ''} />
@@ -2210,11 +2303,16 @@ const NurseDashboard: React.FC = () => {
           <HIVStockManagement tenantSlug={tenantSlug || ''} />
         )}
         {activeSection === 'hiv' && activeTab === 'ltfu' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Lost to Follow-Up (LTFU) Management</h2>
+          <div className="glass-card rounded-2xl p-8">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl shadow-lg">
+                  <AlertCircle className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Lost to Follow-Up (LTFU) Management</h2>
+              </div>
               <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-600">Days since last visit:</label>
+                <label className="text-sm font-semibold text-slate-700">Days since last visit:</label>
                 <select
                   value={ltfuDays}
                   onChange={(e) => {
@@ -2226,7 +2324,7 @@ const NurseDashboard: React.FC = () => {
                       });
                     }
                   }}
-                  className="px-3 py-2 border border-slate-300 rounded-lg"
+                  className="glass-input px-4 py-2 rounded-xl text-slate-800 font-medium"
                 >
                   <option value="30">30 days</option>
                   <option value="60">60 days</option>
@@ -2238,19 +2336,19 @@ const NurseDashboard: React.FC = () => {
             </div>
 
             {ltfuPatients.length === 0 ? (
-              <div className="text-center py-12">
-                <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-600 mb-2">No LTFU Patients</h3>
-                <p className="text-slate-500">All patients have been seen within the last {ltfuDays} days</p>
+              <div className="text-center py-16 glass-section rounded-xl">
+                <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-slate-700 mb-2">No LTFU Patients</h3>
+                <p className="text-slate-600">All patients have been seen within the last {ltfuDays} days</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-6">
-                  <p className="font-semibold text-red-900">
+              <div className="space-y-6">
+                <div className="glass-gradient rounded-xl p-6 border-l-4 border-red-500 bg-gradient-to-r from-red-500/10 to-orange-500/10">
+                  <p className="font-bold text-red-900 text-lg mb-2">
                     ⚠️ {ltfuPatients.length} patient{ltfuPatients.length > 1 ? 's' : ''} lost to follow-up 
                     ({ltfuPatients.length} not seen in {ltfuDays}+ days)
                   </p>
-                  <p className="text-sm text-red-700 mt-1">
+                  <p className="text-sm text-red-700">
                     These patients require immediate follow-up action to prevent further disengagement
                   </p>
                 </div>
@@ -2340,6 +2438,67 @@ const NurseDashboard: React.FC = () => {
             )}
           </div>
         )}
+        {activeSection === 'hiv' && activeTab === 'monthly-return' && (
+          <HIVMonthlyReturnForm tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
+        )}
+        {activeSection === 'hiv' && activeTab === 'who-workflow' && (
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <Activity className="w-6 h-6 text-indigo-600" />
+                WHO Smart Guidelines Workflow
+              </h2>
+              <p className="text-slate-600">
+                Complete HIV care workflow using WHO Smart Guidelines: Testing → Registration → ART Initiation → Care & Treatment
+              </p>
+            </div>
+
+            {selectedPatient ? (
+              <HIVWorkflowIntegration
+                patientId={selectedPatient.id}
+                patientName={`${selectedPatient.firstName} ${selectedPatient.lastName}`}
+                patientAge={selectedPatient.dateOfBirth ? Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365)) : undefined}
+                patientSex={selectedPatient.gender}
+                tenantSlug={tenantSlug || ''}
+                token={localStorage.getItem('ehr_token') || ''}
+                currentStage="testing"
+                onComplete={() => {
+                  showSuccess('Success', 'WHO Smart Forms workflow completed successfully');
+                }}
+              />
+            ) : (
+              <div className="text-center py-12 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg border-2 border-indigo-200">
+                <Activity className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Select a Patient to Start</h3>
+                <p className="text-slate-600 mb-6">
+                  Choose a patient from the queue or search to begin the WHO Smart Guidelines workflow
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => {
+                      // Focus on patient search/selection
+                      const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+                      if (searchInput) {
+                        searchInput.focus();
+                      }
+                    }}
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Search className="w-5 h-5" />
+                    Search Patient
+                  </button>
+                  <button
+                    onClick={() => setShowHivTestingModal(true)}
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold flex items-center justify-center gap-2"
+                  >
+                    <TestTube className="w-5 h-5" />
+                    Start HIV Testing
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Maternity Section */}
         {activeSection === 'maternity' && (
@@ -2350,6 +2509,21 @@ const NurseDashboard: React.FC = () => {
                 Maternity & Obstetrics Care
               </h2>
             </div>
+            
+            {/* WHO Smart Forms Integration */}
+            <div className="mb-6">
+              <MaternityWithSmartForms
+                tenantSlug={tenantSlug!}
+                token={localStorage.getItem('ehr_token') || ''}
+                patientId={selectedPatient?.id}
+                patientName={selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : undefined}
+                onSuccess={() => {
+                  // Refresh data if needed
+                }}
+              />
+            </div>
+            
+            {/* Standard Maternity Dashboard */}
             <MaternityDashboard
               tenantSlug={tenantSlug!}
               token={localStorage.getItem('ehr_token') || ''}
@@ -2631,6 +2805,134 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Guideline Search Modal */}
+      {showGuidelineSearch && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <BookOpen className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">AI Clinical Guidelines</h3>
+                  <p className="text-sm text-blue-100">Evidence-based nursing protocols & guidelines</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGuidelineSearch(false)} className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-hidden flex flex-col h-full">
+              <div className="flex gap-2 mb-6 shrink-0">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guidelineQuery}
+                    onChange={(e) => setGuidelineQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                    placeholder="Search for nursing protocols (e.g., 'Sepsis protocol', 'Fall prevention', 'IV administration')..."
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-semibold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loadingGuidelines ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Search
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+                {loadingGuidelines ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-slate-500">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-3" />
+                    <p>Analyzing clinical guidelines...</p>
+                  </div>
+                ) : guidelineResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {guidelineResults.map((result, index) => (
+                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex gap-3">
+                          <div className="mt-1 min-w-[24px]">
+                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
+                              {index + 1}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-slate-900 leading-tight">
+                                {result.source || 'Clinical Guideline'}
+                              </h4>
+                              {result.confidence && (
+                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                  'bg-red-50 text-red-700 border-red-100'
+                                }`}>
+                                  {Math.round(result.confidence * 100)}% Match
+                                </span>
+                              )}
+                            </div>
+                            <div className="prose prose-sm max-w-none text-slate-700">
+                              <p className="whitespace-pre-wrap">{result.text}</p>
+                              {result.recommendation && (
+                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
+                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
+                                </div>
+                              )}
+                            </div>
+                            {result.url && (
+                              <a 
+                                href={result.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                              >
+                                View Source Document
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <p className="text-lg font-medium text-slate-700">No guidelines found</p>
+                    <p className="text-sm">Try searching for a specific condition, procedure, or medication.</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500 text-center shrink-0">
+                AI-assisted results should be verified against official hospital protocols.
+              </div>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
       )}
     </div>
   );

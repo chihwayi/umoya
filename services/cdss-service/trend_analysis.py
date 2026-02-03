@@ -6,11 +6,191 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from collections import Counter
 import statistics
-
+import numpy as np
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from sklearn.linear_model import LinearRegression
 
 class TrendAnalysisEngine:
     """Analyzes trends in patient vitals, labs, diagnoses, and visits"""
     
+    def analyze_glucose_forecast(
+        self,
+        historical_glucose: List[Dict[str, Any]],
+        days_to_forecast: int = 7
+    ) -> Dict[str, Any]:
+        """
+        Forecast glucose levels using Exponential Smoothing (Holt-Winters)
+        Returns: forecasted values, confidence intervals, and trend analysis
+        """
+        if not historical_glucose or len(historical_glucose) < 5:
+            return {
+                'can_forecast': False,
+                'message': 'Insufficient data for forecasting (need at least 5 points)'
+            }
+            
+        # Sort and extract data
+        sorted_data = sorted(
+            historical_glucose,
+            key=lambda x: x.get('timestamp', x.get('recordedAt', ''))
+        )
+        
+        values = []
+        dates = []
+        
+        for item in sorted_data:
+            val = item.get('value') or item.get('glucose_level')
+            ts = item.get('timestamp') or item.get('recordedAt')
+            if val is not None and ts:
+                values.append(float(val))
+                dates.append(ts)
+                
+        if len(values) < 5:
+             return {'can_forecast': False, 'message': 'Insufficient valid glucose readings'}
+             
+        try:
+            # Simple Exponential Smoothing (Holt's Linear Trend)
+            # Good for data with trend but no clear seasonality (unless we have high freq data)
+            model = ExponentialSmoothing(
+                values, 
+                trend='add', 
+                seasonal=None, 
+                damped_trend=True
+            ).fit()
+            
+            forecast = model.forecast(days_to_forecast)
+            
+            # Simple outlier detection (z-score-ish)
+            mean_val = np.mean(values)
+            std_val = np.std(values)
+            alerts = []
+            
+            # Check for consistent hyperglycemia in forecast
+            if any(f > 180 for f in forecast):
+                alerts.append("Forecast predicts potential hyperglycemia (>180 mg/dL)")
+                
+            # Check for hypoglycemia
+            if any(f < 70 for f in forecast):
+                alerts.append("Forecast predicts potential hypoglycemia (<70 mg/dL)")
+                
+            # Detect trend direction based on forecast slope and averages
+            trend_direction = "stable"
+            predicted_avg = np.mean(forecast)
+            
+            if predicted_avg > mean_val * 1.05:
+                trend_direction = "increasing"
+            elif predicted_avg < mean_val * 0.95:
+                trend_direction = "decreasing"
+                
+            return {
+                'can_forecast': True,
+                'forecast_values': [round(f, 1) for f in forecast],
+                'trend_direction': trend_direction,
+                'current_avg': round(mean_val, 1),
+                'predicted_avg': round(predicted_avg, 1),
+                'alerts': alerts,
+                'model_used': 'Holt-Winters Exponential Smoothing'
+            }
+            
+        except Exception as e:
+            return {
+                'can_forecast': False,
+                'message': f'Forecasting model failed: {str(e)}'
+            }
+
+    def analyze_lab_trends(
+        self,
+        lab_history: List[Dict[str, Any]],
+        lab_type: str
+    ) -> Dict[str, Any]:
+        """
+        Analyze specific lab trends (Viral Load, CD4, etc.) using Linear Regression
+        to detect subtle declines or inclines.
+        """
+        if not lab_history or len(lab_history) < 3:
+            return {'has_trend': False, 'message': 'Need at least 3 data points'}
+            
+        # Filter for specific lab type (fuzzy match)
+        relevant_labs = []
+        target = lab_type.lower().replace('_', ' ') # viral_load -> viral load
+        
+        for l in lab_history:
+            name = l.get('test_name', '') or l.get('type', '')
+            name = str(name).lower()
+            if target in name or lab_type.lower() in name:
+                relevant_labs.append(l)
+        
+        if len(relevant_labs) < 3:
+            return {'has_trend': False, 'message': 'Insufficient specific lab data'}
+            
+        # Sort by date
+        sorted_labs = sorted(
+            relevant_labs,
+            key=lambda x: x.get('date', x.get('recordedAt', ''))
+        )
+        
+        values = []
+        days_from_start = []
+        start_date = None
+        
+        for lab in sorted_labs:
+            val = lab.get('value')
+            date_str = lab.get('date') or lab.get('recordedAt')
+            
+            if val is not None and date_str:
+                try:
+                    dt = datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
+                    if start_date is None:
+                        start_date = dt
+                    
+                    days = (dt - start_date).days
+                    values.append(float(val))
+                    days_from_start.append(days)
+                except:
+                    continue
+                    
+        if len(values) < 3:
+            return {'has_trend': False}
+            
+        # Linear Regression
+        X = np.array(days_from_start).reshape(-1, 1)
+        y = np.array(values)
+        
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        slope = model.coef_[0]
+        r2_score = model.score(X, y)
+        
+        # Determine clinical significance
+        significance = "stable"
+        alerts = []
+        
+        # CD4 Count Logic (Decreasing is bad)
+        if "cd4" in lab_type.lower():
+            if slope < -0.5: # Dropping more than 0.5 cells/day approx
+                significance = "declining"
+                if r2_score > 0.6: # Strong correlation
+                    alerts.append(f"Consistent decline in CD4 count detected (Slope: {slope:.2f})")
+            elif slope > 0.5:
+                significance = "improving"
+                
+        # Viral Load Logic (Increasing is bad)
+        elif "viral" in lab_type.lower():
+            if slope > 2: # Increasing (lowered threshold to catch slow rises)
+                significance = "worsening"
+                alerts.append(f"Viral load trending upward (Slope: +{slope:.2f} copies/day)")
+            elif slope < -2:
+                significance = "improving"
+                
+        return {
+            'has_trend': True,
+            'trend_direction': significance,
+            'slope': round(slope, 4),
+            'r2_score': round(r2_score, 2), # Goodness of fit
+            'latest_value': values[-1],
+            'alerts': alerts
+        }
+
     def analyze_vital_trends(
         self,
         current_vitals: Dict[str, Any],

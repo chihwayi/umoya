@@ -13,9 +13,17 @@ import {
   X,
   Monitor,
   Settings,
+  Brain,
+  BookOpen,
+  Search,
+  RefreshCw,
+  ChevronRight,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { GuidelineResult } from '../types/guidelines';
 
 const TelemedicineConsultationPage: React.FC = () => {
   const { tenantSlug, consultationId } = useParams<{ tenantSlug: string; consultationId: string }>();
@@ -29,6 +37,12 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
+
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -77,6 +91,33 @@ const TelemedicineConsultationPage: React.FC = () => {
       } catch (error: any) {
         showError('Failed to end consultation', error.response?.data?.message || 'Please try again');
       }
+    }
+  };
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      // Add context for Telemedicine
+      const searchContext = "Telemedicine, remote consultation, digital health protocols";
+      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+      
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
     }
   };
 
@@ -133,6 +174,16 @@ const TelemedicineConsultationPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+                className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  showGuidelineSearch ? 'bg-purple-600 text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+                title="Toggle AI Assistant"
+              >
+                <Brain className="w-4 h-4" />
+                <span className="hidden sm:inline text-sm font-medium">AI Assistant</span>
+              </button>
               <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/10">
                 <Monitor className="w-4 h-4" />
                 <span className="text-sm capitalize">{connectionQuality}</span>
@@ -150,7 +201,8 @@ const TelemedicineConsultationPage: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="flex h-[calc(100vh-80px)]">
+        <div className={`flex-1 overflow-y-auto p-6 transition-all duration-300 ${showGuidelineSearch ? 'pr-96' : ''}`}>
         {!isJoined ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="max-w-md w-full bg-white/5 backdrop-blur-sm rounded-2xl shadow-xl p-8 text-center border border-white/10">
@@ -274,7 +326,104 @@ const TelemedicineConsultationPage: React.FC = () => {
             </div>
           </div>
         )}
+        </div>
+
+        {/* AI Assistant Sidebar */}
+        <div className={`fixed right-0 top-[73px] bottom-0 w-96 bg-slate-900 border-l border-white/10 transform transition-transform duration-300 ease-in-out z-50 ${showGuidelineSearch ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="h-full flex flex-col">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2 text-white">
+                <Brain className="w-5 h-5 text-purple-400" />
+                AI Assistant
+              </h3>
+              <button 
+                onClick={() => setShowGuidelineSearch(false)}
+                className="p-1 hover:bg-white/10 rounded-lg text-white/60 hover:text-white"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-white/10 bg-slate-800/50">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-white/40" />
+                <input
+                  type="text"
+                  value={guidelineQuery}
+                  onChange={(e) => setGuidelineQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                  placeholder="Search clinical guidelines..."
+                  className="w-full pl-9 pr-4 py-2 bg-slate-900 border border-white/10 rounded-lg text-sm text-white placeholder-white/40 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleGuidelineSearch}
+                disabled={loadingGuidelines || !guidelineQuery.trim()}
+                className="w-full mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {loadingGuidelines ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <BookOpen className="w-4 h-4" />
+                )}
+                Search Guidelines
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {guidelineResults.length > 0 ? (
+                guidelineResults.map((result, index) => (
+                  <div key={index} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="text-sm font-medium text-purple-300 flex items-center gap-2">
+                        <BookOpen className="w-3 h-3" />
+                        {result.source || 'Clinical Guideline'}
+                      </h4>
+                      {result.confidence && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                          result.confidence > 0.8 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
+                          result.confidence > 0.5 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' :
+                          'bg-red-500/20 text-red-300 border-red-500/30'
+                        }`}>
+                          {Math.round(result.confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-white/80 mb-3 leading-relaxed">{result.text}</p>
+                    
+                    {result.recommendation && (
+                      <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs mb-3">
+                        <strong className="flex items-center gap-1.5 text-purple-300 mb-1">
+                          <Sparkles className="w-3 h-3" />
+                          Recommendation
+                        </strong>
+                        <p className="text-purple-100">{result.recommendation}</p>
+                      </div>
+                    )}
+
+                    {result.url && (
+                      <a 
+                        href={result.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center text-xs text-purple-400 hover:text-purple-300 hover:underline mt-1"
+                      >
+                        View Source <ArrowRight className="w-3 h-3 ml-1" />
+                      </a>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-white/40">
+                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">Search for protocols, drug interactions, or clinical guidelines to assist during the consultation.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
     </div>
   );
 };

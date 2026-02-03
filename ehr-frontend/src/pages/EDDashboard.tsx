@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   AlertCircle, AlertTriangle, Activity, Clock, User, Users,
-  Heart, ArrowLeft, RefreshCw, TrendingUp, BarChart3, Ambulance, X
+  Heart, ArrowLeft, RefreshCw, TrendingUp, BarChart3, Ambulance, X,
+  Brain, Search, BookOpen, Sparkles, Loader2
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
+import ModalPortal from '../components/ModalPortal';
+import { GuidelineResult } from '../types/guidelines';
 
 interface EDMetrics {
   current_census: number;
@@ -40,6 +43,36 @@ const EDDashboard: React.FC = () => {
     allergies: '',
     currentMedications: '',
   });
+
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -226,6 +259,79 @@ const EDDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        {/* AI Guideline Search Section */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Brain className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">Emergency Protocols & Guidelines</h3>
+                <p className="text-sm text-slate-500">AI-powered search for trauma, toxicology, and acute care standards</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
+              className="text-sm text-red-600 font-medium hover:text-red-700"
+            >
+              {showGuidelineSearch ? 'Hide Search' : 'Search Protocols'}
+            </button>
+          </div>
+
+          {showGuidelineSearch && (
+            <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guidelineQuery}
+                    onChange={(e) => setGuidelineQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                    placeholder="Search e.g. 'STEMI protocol', 'Sepsis bundle', 'Stroke pathway'..."
+                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {loadingGuidelines ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+
+              {guidelineResults.length > 0 && (
+                <div className="grid gap-3">
+                  {guidelineResults.slice(0, 2).map((result, idx) => (
+                    <div key={idx} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex items-start gap-3">
+                        <BookOpen className="w-5 h-5 text-red-600 mt-1 shrink-0" />
+                        <div>
+                          <h4 className="font-medium text-slate-900">{result.source}</h4>
+                          <p className="text-sm text-slate-600 mt-1 leading-relaxed">{result.text}</p>
+                          {result.url && (
+                            <a
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block mt-2 text-xs text-red-600 hover:underline"
+                            >
+                              View Source
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <EDTrackingBoard 
           tenantSlug={tenantSlug!} 
           token={localStorage.getItem('ehr_token')!}
@@ -406,6 +512,133 @@ const EDDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {/* AI Guideline Search Modal */}
+      {showGuidelineSearch && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[85vh] overflow-hidden bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl border border-slate-200/50 flex flex-col">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <BookOpen className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">AI Clinical Guidelines</h3>
+                  <p className="text-sm text-blue-100">Evidence-based emergency protocols & guidelines</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGuidelineSearch(false)} className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-hidden flex flex-col h-full">
+              <div className="flex gap-2 mb-6 shrink-0">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guidelineQuery}
+                    onChange={(e) => setGuidelineQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                    placeholder="Search for emergency protocols (e.g., 'Stroke protocol', 'Sepsis', 'Trauma')..."
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={handleGuidelineSearch}
+                  disabled={loadingGuidelines || !guidelineQuery.trim()}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-semibold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loadingGuidelines ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Search
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+                {loadingGuidelines ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-slate-500">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-3" />
+                    <p>Analyzing clinical guidelines...</p>
+                  </div>
+                ) : guidelineResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {guidelineResults.map((result, index) => (
+                      <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex gap-3">
+                          <div className="mt-1 min-w-[24px]">
+                            <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold">
+                              {index + 1}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-slate-900 leading-tight">
+                                {result.source || 'Clinical Guideline'}
+                              </h4>
+                              {result.confidence && (
+                                <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                                  result.confidence > 0.8 ? 'bg-green-50 text-green-700 border-green-100' :
+                                  result.confidence > 0.5 ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
+                                  'bg-red-50 text-red-700 border-red-100'
+                                }`}>
+                                  {Math.round(result.confidence * 100)}% Match
+                                </span>
+                              )}
+                            </div>
+                            <div className="prose prose-sm max-w-none text-slate-700">
+                              <p className="whitespace-pre-wrap">{result.text}</p>
+                              {result.recommendation && (
+                                <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                  <strong className="block text-blue-900 text-xs uppercase tracking-wide mb-1">Recommendation</strong>
+                                  <p className="text-blue-800 text-sm m-0">{result.recommendation}</p>
+                                </div>
+                              )}
+                            </div>
+                            {result.url && (
+                              <a 
+                                href={result.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="inline-flex items-center mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                              >
+                                View Source Document
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <p className="text-lg font-medium text-slate-700">No guidelines found</p>
+                    <p className="text-sm">Try searching for a specific condition, procedure, or medication.</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-slate-200 text-xs text-slate-500 text-center shrink-0">
+                AI-assisted results should be verified against official hospital protocols.
+              </div>
+            </div>
+          </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -15,12 +15,18 @@ import {
   TestTube,
   X,
   ArrowLeft,
+  Brain,
+  BookOpen,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ehrApi } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
+import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
+import { GuidelineResult } from '../types/guidelines';
 
 type OphthalmologyEncounter = {
   id: string;
@@ -97,6 +103,13 @@ const OphthalmologyDashboard: React.FC = () => {
   const [encounters, setEncounters] = useState<OphthalmologyEncounter[]>([]);
   const [filters, setFilters] = useState<{ search: string; type: string | null }>({ search: '', type: null });
   const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(null);
+
+  // CDSS Guideline Search State
+  const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+
   const [encounterDetail, setEncounterDetail] = useState<OphthalmologyEncounterDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [dashboardSummary, setDashboardSummary] = useState<OphthalmologyDashboardSummary | null>(null);
@@ -125,6 +138,29 @@ const OphthalmologyDashboard: React.FC = () => {
       resetSnomedSelections();
     }
   }, [modalState]);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      if (!token || !tenantSlug) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+      
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   const ensureAuth = useCallback(() => {
     if (!token || !tenantSlug) {
@@ -238,7 +274,7 @@ const OphthalmologyDashboard: React.FC = () => {
           };
           await ehrApi.createOphthalmologyEncounter(tenantSlug!, token!, payload);
           showSuccess(
-            'Encounter captured. Accounts will unlock the chart once payment is confirmed.',
+            'Success','Encounter captured. Accounts will unlock the chart once payment is confirmed.',
           );
           await loadEncounters(filters.search, filters.type);
           await loadSummary();
@@ -886,7 +922,7 @@ const OphthalmologyDashboard: React.FC = () => {
     encounterDetail?.encounter?.payment_status === 'awaiting_payment';
   const encounterFeeAmount =
     encounterDetail?.encounter?.fee_amount ??
-    encounterDetail?.encounter?.feeAmount ??
+    encounterDetail?.encounter?.fee_amount ??
     null;
 
   return (
@@ -932,6 +968,166 @@ const OphthalmologyDashboard: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+        {/* AI Guideline Search Section */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <Brain className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900">Clinical Guidelines & Protocols</h3>
+                <p className="text-sm text-slate-500">AI-powered search for ophthalmic standards of care</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowGuidelineSearch(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <Sparkles className="w-4 h-4" />
+              AI Guidelines
+            </button>
+          </div>
+        </div>
+
+        {/* AI Guideline Search Modal */}
+        {showGuidelineSearch && (
+          <ModalPortal>
+            <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-4xl max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="p-4 border-b border-indigo-100 flex items-center justify-between bg-indigo-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 rounded-lg">
+                      <BookOpen className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">Ophthalmology Clinical Guidelines</h3>
+                      <p className="text-xs text-indigo-600 font-medium">Powered by AI • AAO/RCOphth Protocols</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowGuidelineSearch(false)}
+                    className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 border-b border-slate-100 bg-white">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={guidelineQuery}
+                        onChange={(e) => setGuidelineQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                        placeholder="Search guidelines (e.g., 'Glaucoma treatment', 'Diabetic retinopathy screening')..."
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      onClick={handleGuidelineSearch}
+                      disabled={loadingGuidelines || !guidelineQuery.trim()}
+                      className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-sm"
+                    >
+                      {loadingGuidelines ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          Search
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50">
+                  {loadingGuidelines ? (
+                    <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+                      <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-3" />
+                      <p className="animate-pulse">Analyzing clinical protocols...</p>
+                    </div>
+                  ) : guidelineResults.length > 0 ? (
+                    <div className="space-y-4">
+                      {guidelineResults.map((result, idx) => (
+                        <div key={idx} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all hover:border-indigo-200 group">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
+                                {idx + 1}
+                              </span>
+                              <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">
+                                {result.source || 'Clinical Guideline'}
+                              </h4>
+                            </div>
+                            {result.confidence && (
+                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                                result.confidence > 0.8 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                result.confidence > 0.5 ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                'bg-red-50 text-red-700 border-red-100'
+                              }`}>
+                                {Math.round(result.confidence * 100)}% Match
+                              </span>
+                            )}
+                          </div>
+                          
+                          <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap mb-4 pl-8">
+                            {result.text}
+                          </p>
+                          
+                          <div className="pl-8 space-y-3">
+                            {result.recommendation && (
+                              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                                <h5 className="text-xs font-bold text-indigo-800 uppercase tracking-wide mb-1 flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Recommendation
+                                </h5>
+                                <p className="text-sm text-indigo-900">{result.recommendation}</p>
+                              </div>
+                            )}
+
+                            {result.url && (
+                              <a 
+                                href={result.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="inline-flex items-center text-xs text-slate-500 hover:text-indigo-600 font-medium hover:underline transition-colors"
+                              >
+                                <BookOpen className="w-3 h-3 mr-1.5" />
+                                View Source Document
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                        <Brain className="w-8 h-8 text-slate-300" />
+                      </div>
+                      <p className="text-lg font-medium text-slate-600">No guidelines found</p>
+                      <p className="text-sm">Try searching for specific ocular conditions or treatments</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
+                  <p className="text-xs text-slate-500">
+                    AI-generated results. Always verify with official AAO/local protocols.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </ModalPortal>
+        )}
 
         <section>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
@@ -1082,7 +1278,7 @@ const OphthalmologyDashboard: React.FC = () => {
                   {encounters.map((encounter) => {
                     const awaitingPayment = encounter.payment_status === 'awaiting_payment';
                     const fee =
-                      encounter.fee_amount ?? encounter.feeAmount ?? null;
+                      encounter.fee_amount ?? null;
                     return (
                       <tr
                         key={encounter.id}
@@ -1554,6 +1750,16 @@ const OphthalmologyDashboard: React.FC = () => {
       </main>
 
       {renderModal()}
+
+      {/* WHO Smart Forms Floating Button */}
+      {tenantSlug && token && (
+        <SmartFormsFloatingButton
+          token={token || ''}
+          tenantSlug={tenantSlug}
+          moduleFilter="clinical"
+          position="bottom-right"
+        />
+      )}
     </div>
   );
 };
