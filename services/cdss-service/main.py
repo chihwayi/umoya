@@ -122,7 +122,12 @@ except Exception as e:
     print(f"Medical Vision initialization failed: {e}")
 
 # MinIO Configuration
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
+if not MINIO_ENDPOINT:
+    print("Warning: MINIO_ENDPOINT not set, defaulting to internal service name or requiring env var")
+    # In docker, it might be 'http://minio:9000', locally 'http://localhost:9000'
+    # We'll leave it empty to force configuration or handle it downstream
+
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "medicore")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "medicore_password")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "medicore-documents")
@@ -271,8 +276,8 @@ async def check_drug_interactions_advanced(request: DrugInteractionRequest):
     # Fetch drug data if not provided
     drugs_data = request.drugs_data
     if not drugs_data:
-        # Optionally fetch from EHR service (if EHR_API_URL is set)
-        ehr_api_url = os.getenv("EHR_SERVICE_URL", "http://ehr-service:3013")
+        # Optionally fetch from EHR service (if EHR_SERVICE_URL is set)
+        ehr_api_url = os.getenv("EHR_SERVICE_URL")
         # For now, we'll use the drug_ids to infer names
         # In production, make HTTP call to EHR service to get drug details
         drugs_data = [{"id": drug_id, "name": drug_id} for drug_id in request.drug_ids]

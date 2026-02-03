@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
+
 # Script to create SNOMED CT PostgreSQL schema in master database
 # This should be run before importing SNOMED CT RF2 files
 

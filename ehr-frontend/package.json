@@ -39,7 +39,6 @@
     "start": "craco start",
     "build": "craco build"
   },
-  "proxy": "http://localhost:3013",
   "browserslist": {
     "production": [
       ">0.2%",

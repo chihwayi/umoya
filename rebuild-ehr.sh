@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 # Script to rebuild EHR service and fix Docker cache issues
 
 echo "🔧 Rebuilding EHR Service..."
@@ -39,5 +42,5 @@ docker logs medicore-ehr-service --tail 20
 
 echo ""
 echo "✅ Done! Check if you see: '🏥 MediCore EHR Service running on port 3013'"
-echo "🌐 API Docs: http://localhost:3013/api/docs"
+echo "🌐 API Docs: $API_BASE_URL/docs"
 

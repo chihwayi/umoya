@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Load environment variables
+source "$(dirname "$0")/../../scripts/load-env.sh"
 # Setup script for CDSS Service - Local Development
 
 echo "🐍 Setting up Python environment for CDSS Service..."

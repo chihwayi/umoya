@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  * Tests SNOMED-coded symptoms, diagnostics, and SLA tracking
  */
 
-const API_BASE = process.env.EHR_API_URL || 'http://localhost:3001/api';
+const API_BASE = process.env.EHR_API_URL;
 const TENANT_SLUG = process.env.EHR_QA_TENANT || 'bulawayo-general';
 const AUTH_TOKEN = process.env.EHR_QA_TOKEN || 'test-token';
 

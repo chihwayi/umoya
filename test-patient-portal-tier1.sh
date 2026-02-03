@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 # Test Patient Portal Tier 1 Endpoints
 # Tests all 15 new endpoints with real patient login
 
-API_URL="http://localhost:3013/api"
+API_URL="$API_BASE_URL"
 TENANT="bulawayo-general"
 
 echo "=================================================="

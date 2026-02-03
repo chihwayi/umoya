@@ -54,7 +54,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const response = await axios.get(`${EHR_API_URL}/patients`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
@@ -70,7 +70,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAdmittedPatients = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const response = await axios.get(`${EHR_API_URL}/beds/admissions`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
@@ -86,7 +86,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadDoctors = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const response = await axios.get(`${EHR_API_URL}/users`, {
         headers: {
           'X-Tenant-ID': tenantSlug,
@@ -102,7 +102,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
 
   const loadAvailableBeds = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const params: any = {};
       if (formData.ward) params.wardName = formData.ward;
       
@@ -131,7 +131,7 @@ const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({
       setLoading(true);
       
       // Use direct axios call to avoid ehrApi.post function error
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
       const response = await axios.post(
         `${EHR_API_URL}/beds/admissions`,
         {

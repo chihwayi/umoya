@@ -19,7 +19,7 @@ module.exports = {
             },
           },
           client: {
-            webSocketURL: 'ws://localhost:3014/ws',
+            webSocketURL: process.env.WDS_SOCKET_URL,
           },
           headers: {
             'Access-Control-Allow-Origin': '*',
@@ -60,7 +60,7 @@ module.exports = {
       },
     },
     client: {
-      webSocketURL: 'ws://localhost:3014/ws',
+      webSocketURL: process.env.WDS_SOCKET_URL || 'ws://localhost:3014/ws',
     },
   },
   typescript: {

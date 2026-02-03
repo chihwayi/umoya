@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 echo "🧪 QUICK TEST: SPRINTS 22 & 24"
 echo "=============================="
 echo ""
@@ -60,7 +63,7 @@ ORDER BY column_name;
 echo ""
 echo "✅ Database verification complete!"
 echo ""
-echo "Next: Test APIs at http://localhost:3013/api/docs"
+echo "Next: Test APIs at $API_BASE_URL/docs"
 echo "  - GET /api/immunizations/schedules"
 echo "  - GET /api/ed/tracking-board"
 echo "  - GET /api/ed/metrics"

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
+
 # Script to set up Snowstorm (SNOMED CT Terminology Server) for testing
 # Usage: ./scripts/setup-snowstorm.sh
 
@@ -30,7 +33,7 @@ echo "2. Waiting for Snowstorm to initialize (this may take 2-5 minutes)..."
 echo "   Checking health endpoint..."
 
 for i in {1..60}; do
-    if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+    if curl -s $SNOWSTORM_URL/health > /dev/null 2>&1; then
         echo "✅ Snowstorm is ready!"
         break
     fi
@@ -40,13 +43,13 @@ done
 
 echo ""
 echo "3. Testing Snowstorm API..."
-curl -s "http://localhost:8080/browser/MAIN/concepts?term=diabetes&limit=1" | jq '.' | head -20 || echo "⚠️  API not ready yet, but container is running"
+curl -s "$SNOWSTORM_URL/browser/MAIN/concepts?term=diabetes&limit=1" | jq '.' | head -20 || echo "⚠️  API not ready yet, but container is running"
 
 echo ""
 echo "📋 Next Steps:"
 echo "1. View logs: docker logs -f snowstorm"
-echo "2. Access API: http://localhost:8080"
-echo "3. Test endpoint: curl http://localhost:8080/browser/MAIN/concepts?term=diabetes"
+echo "2. Access API: $SNOWSTORM_URL"
+echo "3. Test endpoint: curl $SNOWSTORM_URL/browser/MAIN/concepts?term=diabetes"
 echo ""
 echo "⚠️  Note: Snowstorm needs SNOMED CT RF2 files loaded for full functionality"
 echo "   See: https://github.com/IHTSDO/snowstorm for loading instructions"

@@ -3,7 +3,11 @@ import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+
+if (!API_BASE_URL) {
+  console.error('REACT_APP_EHR_API_URL environment variable is not set');
+}
 
 const VerifyEmailPage: React.FC = () => {
   const [searchParams] = useSearchParams();

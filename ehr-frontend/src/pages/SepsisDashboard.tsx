@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Activity, Clock, TrendingUp, Loader2, ArrowLeft, Brain, BookOpen, Search } from 'lucide-react';
-import axios from 'axios';
-import { cdssApi } from '../services/api';
+import { cdssApi, ehrAxios } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const SepsisDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

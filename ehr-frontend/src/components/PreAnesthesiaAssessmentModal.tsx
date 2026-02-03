@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Heart, Wind, AlertTriangle, Activity, FileText, BookOpen, Search, Loader2, Sparkles } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import ICD10Picker from './ICD10Picker';
-import { cdssApi } from '../services/api';
+import { cdssApi, ehrAxios } from '../services/api';
 import { GuidelineResult } from '../types/guidelines';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 interface PreAnesthesiaAssessmentModalProps {
   surgicalCase: any;

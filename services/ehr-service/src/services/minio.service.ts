@@ -6,17 +6,17 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 export class MinioService {
   private readonly logger = new Logger(MinioService.name);
   private readonly s3Client: S3Client;
-  private readonly bucketName = 'medicore-documents';
+  private readonly bucketName = process.env.STORAGE_S3_BUCKET || 'medicore-documents';
 
   constructor() {
     this.s3Client = new S3Client({
-      endpoint: 'http://localhost:9000',
-      region: 'us-east-1',
+      endpoint: process.env.STORAGE_S3_ENDPOINT,
+      region: process.env.STORAGE_S3_REGION || 'us-east-1',
       credentials: {
-        accessKeyId: 'medicore',
-        secretAccessKey: 'medicore_password',
+        accessKeyId: process.env.STORAGE_S3_ACCESS_KEY,
+        secretAccessKey: process.env.STORAGE_S3_SECRET_KEY,
       },
-      forcePathStyle: true,
+      forcePathStyle: process.env.STORAGE_S3_FORCE_PATH_STYLE === 'true',
     });
   }
 

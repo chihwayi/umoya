@@ -181,7 +181,7 @@ export class DigitalPrescriptionService {
 
     // TODO: Generate PDF using pdfkit or similar
     // For now, return a placeholder URL
-    const pdfUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/prescriptions/${prescriptionId}/pdf`;
+    const pdfUrl = `${process.env.FRONTEND_URL}/prescriptions/${prescriptionId}/pdf`;
 
     // Update prescription with PDF URL
     await tenantDb.query(

@@ -136,7 +136,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>Thank you for registering for the MediCore Patient Portal. Please verify your email address by clicking the link below:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL || 'http://localhost:3000'}/patient/verify-email?token=${verificationToken}" 
+              <a href="${process.env.PORTAL_BASE_URL}/patient/verify-email?token=${verificationToken}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Verify Email Address
               </a>
@@ -298,7 +298,7 @@ export class PatientAuthService {
             <p>Dear ${patient.firstName} ${patient.lastName},</p>
             <p>You requested to reset your password. Click the link below to reset it:</p>
             <p style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.PORTAL_BASE_URL || 'http://localhost:3000'}/patient/reset-password?token=${resetToken}" 
+              <a href="${process.env.PORTAL_BASE_URL}/patient/reset-password?token=${resetToken}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Reset Password
               </a>

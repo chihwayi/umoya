@@ -6,11 +6,11 @@ services:
     image: postgres:15-alpine
     container_name: medicore-postgres-master
     environment:
-      POSTGRES_DB: medicore_master
-      POSTGRES_USER: medicore
-      POSTGRES_PASSWORD: medicore_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${PORT_POSTGRES}:5432"
     volumes:
       - postgres_master_data:/var/lib/postgresql/data
       - ./database/schemas/tenant.sql:/docker-entrypoint-initdb.d/01-tenant.sql
@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     container_name: medicore-redis
     ports:
-      - "6379:6379"
+      - "${PORT_REDIS}:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -31,12 +31,12 @@ services:
     image: minio/minio:RELEASE.2023-10-07T15-07-38Z
     container_name: medicore-minio
     environment:
-      - MINIO_ROOT_USER=medicore
-      - MINIO_ROOT_PASSWORD=medicore_password
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     command: server --console-address ":9001" /data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${PORT_MINIO}:9000"
+      - "${PORT_MINIO_CONSOLE}:9001"
     volumes:
       - minio_data:/data
     networks:
@@ -49,16 +49,16 @@ services:
       dockerfile: Dockerfile
     container_name: medicore-tenant-service
     ports:
-      - "3001:3001"
+      - "${PORT_TENANT_SERVICE}:3001"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${ENVIRONMENT}
       - PORT=3001
-      - DATABASE_URL=postgresql://medicore:medicore_password@postgres-master:5432/medicore_master
-      - REDIS_URL=redis://redis:6379
-      - DB_HOST=postgres-master
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_POSTGRES_HOST}:5432/${POSTGRES_DB}
+      - REDIS_URL=${SERVICE_REDIS_URL}
+      - DB_HOST=${SERVICE_POSTGRES_HOST}
       - DB_PORT=5432
-      - DB_USERNAME=medicore
-      - DB_PASSWORD=medicore_password
+      - DB_USERNAME=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       - postgres-master
       - redis
@@ -71,12 +71,17 @@ services:
       dockerfile: Dockerfile
     container_name: medicore-cdss-service
     ports:
-      - "8000:8000"
+      - "${PORT_CDSS_SERVICE}:8000"
     environment:
-      - ENVIRONMENT=development
-      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=${ENVIRONMENT}
+      - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
-      - CDSS_ENABLE_AI=true
+      - CDSS_ENABLE_AI=${CDSS_ENABLE_AI}
+      - MINIO_ENDPOINT=${SERVICE_MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=medicore-documents
+      - EHR_SERVICE_URL=${SERVICE_EHR_URL}
     depends_on:
       - redis
       - postgres-master
@@ -91,27 +96,27 @@ services:
       dockerfile: Dockerfile
     container_name: medicore-ehr-service
     ports:
-      - "3013:3013"
+      - "${PORT_EHR_SERVICE}:3013"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${ENVIRONMENT}
       - PORT=3013
-      - DB_HOST=postgres-master
+      - DB_HOST=${SERVICE_POSTGRES_HOST}
       - DB_PORT=5432
-      - DB_USERNAME=medicore
-      - DB_PASSWORD=medicore_password
-      - JWT_SECRET=ehr-super-secret-key
+      - DB_USERNAME=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
       - SNOMED_USE_POSTGRES=true
       - SNOMED_USE_CACHE=false
-      - CDSS_SERVICE_URL=http://cdss-service:8000
+      - CDSS_SERVICE_URL=${SERVICE_CDSS_URL}
       - STORAGE_DRIVER=s3
-      - STORAGE_S3_ENDPOINT=http://minio:9000
-      - STORAGE_S3_REGION=us-east-1
-      - STORAGE_S3_BUCKET=medicore-imaging
-      - STORAGE_S3_ACCESS_KEY=medicore
-      - STORAGE_S3_SECRET_KEY=medicore_password
-      - STORAGE_S3_FORCE_PATH_STYLE=true
-      - STORAGE_S3_USE_SSL=false
-      - STORAGE_S3_PUBLIC_BASE_URL=http://localhost:9000
+      - STORAGE_S3_ENDPOINT=${STORAGE_S3_ENDPOINT}
+      - STORAGE_S3_REGION=${STORAGE_S3_REGION}
+      - STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}
+      - STORAGE_S3_ACCESS_KEY=${STORAGE_S3_ACCESS_KEY}
+      - STORAGE_S3_SECRET_KEY=${STORAGE_S3_SECRET_KEY}
+      - STORAGE_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}
+      - STORAGE_S3_USE_SSL=${STORAGE_S3_USE_SSL}
+      - STORAGE_S3_PUBLIC_BASE_URL=${MINIO_PUBLIC_URL}
     volumes:
       - ./services/ehr-service/src:/app/src
       - ./services/ehr-service/package.json:/app/package.json
@@ -130,11 +135,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: medicore-web-app
     ports:
-      - "3011:3011"
+      - "${PORT_WEB_APP}:3011"
     environment:
       - PORT=3011
       - REACT_APP_API_URL=/api
-      - REACT_APP_ENVIRONMENT=development
+      - REACT_APP_ENVIRONMENT=${ENVIRONMENT}
       - CHOKIDAR_USEPOLLING=true
       - FAST_REFRESH=false
       - GENERATE_SOURCEMAP=false
@@ -155,11 +160,12 @@ services:
       dockerfile: Dockerfile.dev
     container_name: medicore-ehr-frontend
     ports:
-      - "3014:3000"
+      - "${PORT_EHR_FRONTEND}:3000"
     environment:
       - PORT=3000
-      - REACT_APP_API_URL=http://localhost:3001/api
-      - REACT_APP_EHR_API_URL=http://localhost:3013/api
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_EHR_API_URL=${REACT_APP_EHR_API_URL}
+      - REACT_APP_CDSS_API_URL=${REACT_APP_CDSS_API_URL}
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=1000
       - FAST_REFRESH=true
@@ -169,6 +175,7 @@ services:
       - WATCHPACK_POLLING=true
       - WDS_SOCKET_HOST=0.0.0.0
       - WDS_SOCKET_PORT=3000
+      - WDS_SOCKET_URL=${REACT_APP_WS_URL}
       - REACT_APP_CHOKIDAR_USEPOLLING=true
       - BROWSER=none
     volumes:
@@ -191,10 +198,10 @@ services:
       dockerfile: Dockerfile.dev
     container_name: medicore-patient-portal
     ports:
-      - "3015:3015"
+      - "${PORT_PATIENT_PORTAL}:3015"
     environment:
       - PORT=3015
-      - REACT_APP_EHR_API_URL=http://localhost:3013/api
+      - REACT_APP_EHR_API_URL=${REACT_APP_EHR_API_URL}
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=1000
       - FAST_REFRESH=true

@@ -1,9 +1,13 @@
 import axios from 'axios';
 import { handleAutoLogout } from '../utils/autoLogout';
 
-const TENANT_API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
-const CDSS_API_URL = process.env.REACT_APP_CDSS_API_URL || 'http://localhost:8000';
+const TENANT_API_URL = process.env.REACT_APP_API_URL || '';
+const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || '';
+const CDSS_API_URL = process.env.REACT_APP_CDSS_API_URL || '';
+
+if (!process.env.REACT_APP_API_URL || !process.env.REACT_APP_EHR_API_URL || !process.env.REACT_APP_CDSS_API_URL) {
+  console.warn('One or more API URLs are missing in environment variables. Application may not function correctly.');
+}
 
 // Create axios instance with response interceptor
 const createAxiosInstance = (baseURL: string) => {
@@ -25,8 +29,8 @@ const createAxiosInstance = (baseURL: string) => {
 };
 
 // Create instances
-const tenantAxios = createAxiosInstance(TENANT_API_URL);
-const ehrAxios = createAxiosInstance(EHR_API_URL);
+export const tenantAxios = createAxiosInstance(TENANT_API_URL);
+export const ehrAxios = createAxiosInstance(EHR_API_URL);
 export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 export const tenantApi = {
@@ -251,6 +255,20 @@ export const terminologyApi = {
 };
 
 export const ehrApi = {
+  getPatientAdmissions: async (patientId: string, token: string, tenantSlug: string, activeOnly: boolean = false) => {
+    const response = await ehrAxios.get(`/beds/admissions`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { 
+        patientId,
+        status: activeOnly ? 'active' : undefined
+      }
+    });
+    return { data: response.data };
+  },
+
   // Generic HTTP methods
   get: async (endpoint: string, token: string, tenantSlug: string, params?: any) => {
     const response = await ehrAxios.get(endpoint, {
@@ -6820,5 +6838,3 @@ export const cdssApi = {
   }
 };
 
-// Export ehrAxios for use in other services
-export { ehrAxios };

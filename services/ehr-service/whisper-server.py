@@ -12,7 +12,9 @@ import tempfile
 import os
 import uvicorn
 
-app = FastAPI(title="MediCore Whisper API")
+app = FastAPI(title="MediCore Voice Scribe API")
+
+PORT = int(os.getenv("PORT", 8000))
 
 # Enable CORS
 app.add_middleware(
@@ -109,6 +111,7 @@ async def transcribe_audio(
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 if __name__ == "__main__":
-    print("Starting Whisper API server on http://localhost:8000")
-    print("API Documentation: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    HOST = os.getenv("HOST", "0.0.0.0")
+    print(f"Starting Whisper API server on port {PORT}")
+    print(f"API Documentation: http://{HOST}:{PORT}/docs")
+    uvicorn.run(app, host=HOST, port=PORT)

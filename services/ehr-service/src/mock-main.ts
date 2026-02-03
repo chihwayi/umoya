@@ -39,7 +39,8 @@ async function bootstrap() {
   await app.listen(port);
   
   console.log(`🏥 MediCore EHR Service (Mock) running on port ${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  const host = process.env.HOST || 'localhost';
+  console.log(`📚 API Documentation: http://${host}:${port}/api/docs`);
 }
 
 bootstrap();

@@ -3,9 +3,7 @@ import { X, LogOut, ArrowRight, Home, Ambulance, FileText } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import ICD10Picker from './ICD10Picker';
-import axios from 'axios';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 interface EDDispositionModalProps {
   visit: any;

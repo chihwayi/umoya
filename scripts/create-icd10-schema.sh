@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
+
 # Script to create ICD-10 mapping PostgreSQL schema in master database
 # This should be run before importing ICD-10 mapping TSV files
 

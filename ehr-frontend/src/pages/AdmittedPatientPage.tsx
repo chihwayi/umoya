@@ -12,7 +12,8 @@ import PrescriptionsModal from '../components/PrescriptionsModal';
 import LabOrdersModal from '../components/LabOrdersModal';
 import ICD10Picker from '../components/ICD10Picker';
 
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+const EHR_API_URL = process.env.REACT_APP_EHR_API_URL;
+const ehrAxios = axios.create({ baseURL: EHR_API_URL });
 
 const AdmittedPatientPage: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

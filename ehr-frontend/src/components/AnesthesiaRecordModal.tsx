@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Activity, Clock, Syringe, AlertCircle, TrendingUp, Plus } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 interface AnesthesiaRecordModalProps {
   surgicalCase: any;

@@ -4,13 +4,11 @@ import {
   Calendar, Clock, Users, TrendingUp, Activity, Plus,
   AlertCircle, CheckCircle, Loader2, ArrowLeft
 } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
+import { ehrAxios } from '../services/api';
 import ScheduleSurgeryModal from '../components/ScheduleSurgeryModal';
 import SurgicalCaseDetailModal from '../components/SurgicalCaseDetailModal';
 import ORBoardView from '../components/ORBoardView';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const ORDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

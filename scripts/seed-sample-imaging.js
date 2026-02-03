@@ -16,8 +16,14 @@
 
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-const API_URL = process.env.EHR_API_URL || 'http://localhost:3013/api';
+const API_URL = process.env.REACT_APP_EHR_API_URL || process.env.EHR_API_URL;
+if (!API_URL) {
+  console.error('❌ Error: REACT_APP_EHR_API_URL or EHR_API_URL is not set.');
+  process.exit(1);
+}
+
 const TENANT_SLUG = process.env.TENANT_SLUG || 'bulawayo-general';
 const LOGIN_EMAIL = process.env.LOGIN_EMAIL || 'doctor@bulawayo-general.co.zw';
 const LOGIN_PASSWORD = process.env.LOGIN_PASSWORD || 'Password1#';
@@ -190,8 +196,9 @@ async function main() {
   console.log(`   • Order: ${order.order_number}`);
   console.log(`   • Study: ${study.accession_number}`);
   console.log(`   • Patient: ${patient.firstName} ${patient.lastName}`);
+const frontendUrl = process.env.FRONTEND_URL;
   console.log(
-    `   • View in app: http://localhost:3014/ehr/${TENANT_SLUG}/radiologist (open the study viewer)`,
+    `   • View in app: ${frontendUrl}/ehr/${TENANT_SLUG}/radiologist (open the study viewer)`,
   );
 }
 

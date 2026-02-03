@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
+
 # MediCore Development Environment Setup Script
 
 set -e
@@ -68,10 +71,26 @@ setup_environment() {
             cat > .env << EOF
 # MediCore Environment Configuration
 NODE_ENV=development
+REACT_APP_EHR_API_URL=http://localhost:3013/api
+REACT_APP_TENANT_API_URL=http://localhost:3001
+REACT_APP_CDSS_API_URL=http://localhost:8000
+
 DATABASE_URL=postgresql://medicore:medicore_password@localhost:5432/medicore_master
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 API_PORT=3000
+
+# Service Ports
+PORT_POSTGRES=5432
+PORT_REDIS=6379
+PORT_MINIO=9000
+PORT_MINIO_CONSOLE=9001
+PORT_TENANT_SERVICE=3001
+PORT_CDSS_SERVICE=8000
+PORT_EHR_SERVICE=3013
+PORT_WHISPER=8001
+PORT_ELASTICSEARCH=9200
+PORT_SNOWSTORM=8080
 
 # Zimbabwe-specific settings
 DEFAULT_CURRENCY=USD
@@ -183,7 +202,7 @@ create_admin_user() {
     
     # This would typically be done through the API once services are running
     echo "ℹ️  Admin user creation will be available after starting the services"
-    echo "   Use the web interface at http://localhost:3011 to create your first tenant"
+    echo "   Use the web interface at ${WEB_APP_URL} to create your first tenant"
 }
 
 # Main setup function
@@ -193,6 +212,14 @@ main() {
     check_requirements
     install_dependencies
     setup_environment
+    
+    # Load env vars after setup
+    if [ -f .env ]; then
+        set -a
+        source .env
+        set +a
+    fi
+    
     setup_databases
     build_services
     setup_git_hooks
@@ -204,9 +231,9 @@ main() {
     echo "Next steps:"
     echo "1. Review and update the .env file with your specific configuration"
     echo "2. Start the development environment: npm run dev"
-    echo "3. Access the web application at: http://localhost:3011"
-    echo "4. Access the API documentation at: http://localhost:3000/docs"
-    echo "5. Monitor services with Grafana at: http://localhost:3012 (admin/admin)"
+    echo "3. Access the web application at: ${WEB_APP_URL}"
+    echo "4. Access the API documentation at: ${API_BASE_URL}"
+    echo "5. Monitor services with Grafana at: http://localhost:${PORT_GRAFANA:-3012} (admin/admin)"
     echo ""
     echo "For more information, see the README.md file"
 }

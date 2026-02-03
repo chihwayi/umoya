@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || '';
+
+if (!process.env.REACT_APP_EHR_API_URL) {
+  console.warn('REACT_APP_EHR_API_URL is missing in environment variables. Patient Portal may not function correctly.');
+}
 
 export const patientPortalApi = {
   // Appointments

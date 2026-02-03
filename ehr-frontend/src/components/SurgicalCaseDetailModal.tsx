@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Clock, Activity, FileText, Play, CheckCircle, XCircle, Loader2, Package, BookOpen, Search } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import ImplantTrackingModal from './ImplantTrackingModal';
-import { cdssApi } from '../services/api';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { cdssApi, ehrAxios } from '../services/api';
 
 interface SurgicalCaseDetailModalProps {
   caseId: string;

@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { FileText, User, Calendar, CheckCircle, XCircle, X, Shield } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
 import ICD10Picker from './ICD10Picker';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 interface ConsentPresentationModalProps {
   template: any;
@@ -278,6 +276,9 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
                 <SignaturePad
                   onSave={(signature) => setPatientSignature(signature)}
                   onClear={() => setPatientSignature('')}
+                  onCancel={() => {}}
+                  signerName="Patient"
+                  signerRole="Patient"
                 />
               </div>
 
@@ -303,6 +304,9 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
                     <SignaturePad
                       onSave={(signature) => setWitnessSignature(signature)}
                       onClear={() => setWitnessSignature('')}
+                      onCancel={() => {}}
+                      signerName={witnessName || 'Witness'}
+                      signerRole="Witness"
                     />
                   </div>
                 </div>

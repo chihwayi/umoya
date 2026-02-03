@@ -45,7 +45,11 @@ export class TelemedicineVideoService {
         break;
       default:
         // Simple approach: Use a placeholder URL that can be replaced with actual video provider
-        meetingUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/telemedicine/room/${meetingRoomId}`;
+        const frontendUrl = process.env.FRONTEND_URL;
+        if (!frontendUrl) {
+          this.logger.warn('FRONTEND_URL not set, telemedicine links may be invalid');
+        }
+        meetingUrl = `${frontendUrl || ''}/telemedicine/room/${meetingRoomId}`;
         meetingPassword = this.generatePassword();
     }
 
@@ -61,7 +65,8 @@ export class TelemedicineVideoService {
    */
   async getMeetingUrl(consultationId: string, meetingRoomId: string): Promise<string> {
     // In a real implementation, this would fetch from the video provider
-    return `${process.env.FRONTEND_URL || 'http://localhost:3000'}/telemedicine/room/${meetingRoomId}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    return `${frontendUrl || ''}/telemedicine/room/${meetingRoomId}`;
   }
 
   /**
@@ -122,17 +127,20 @@ export class TelemedicineVideoService {
     //   headers: { Authorization: `Bearer ${dailyApiKey}` },
     // });
     // return response.data.url;
-    return `${process.env.FRONTEND_URL || 'http://localhost:3000'}/telemedicine/room/${roomId}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    return `${frontendUrl || ''}/telemedicine/room/${roomId}`;
   }
 
   private async createTwilioRoom(roomId: string): Promise<string> {
     // TODO: Implement Twilio Video integration
-    return `${process.env.FRONTEND_URL || 'http://localhost:3000'}/telemedicine/room/${roomId}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    return `${frontendUrl || ''}/telemedicine/room/${roomId}`;
   }
 
   private async createZoomRoom(roomId: string): Promise<string> {
     // TODO: Implement Zoom SDK integration
-    return `${process.env.FRONTEND_URL || 'http://localhost:3000'}/telemedicine/room/${roomId}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    return `${frontendUrl || ''}/telemedicine/room/${roomId}`;
   }
 
   private generatePassword(): string {

@@ -4,10 +4,8 @@ import {
   Shield, AlertTriangle, Activity, TrendingUp, Users, 
   Loader2, Calendar, BarChart3, ArrowLeft
 } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 const InfectionControlDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DollarSign, TrendingUp, AlertCircle, CheckCircle, Loader2, Calendar, ArrowLeft, Plus, FileText, Clock, User } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
+import { ehrAxios } from '../services/api';
 import AddChargeModal from '../components/AddChargeModal';
 import ChargeReviewModal from '../components/ChargeReviewModal';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
 const RevenueCycleDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

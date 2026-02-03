@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
+
 # Script to create bulawayo-general tenant
 # Usage: ./scripts/create-bulawayo-tenant.sh
 

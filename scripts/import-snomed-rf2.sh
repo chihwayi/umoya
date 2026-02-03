@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Load environment variables
+source "$(dirname "$0")/load-env.sh"
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -23,7 +26,7 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${SNOWSTORM_CONTAINER}$"; then
 fi
 
 echo "🚀 Triggering SNOMED CT RF2 import..."
-IMPORT_RESPONSE=$(docker exec "${SNOWSTORM_CONTAINER}" curl -s -X POST "http://localhost:8080/imports" \
+IMPORT_RESPONSE=$(docker exec "${SNOWSTORM_CONTAINER}" curl -s -X POST "$SNOWSTORM_URL/imports" \
   -H "Content-Type: application/json" \
   -d '{
         "importType": "FULL",
@@ -37,7 +40,7 @@ IMPORT_RESPONSE=$(docker exec "${SNOWSTORM_CONTAINER}" curl -s -X POST "http://l
 echo "${IMPORT_RESPONSE}"
 echo ""
 echo "✅ Import request submitted. Monitor progress with:"
-echo "   docker exec ${SNOWSTORM_CONTAINER} curl -s http://localhost:8080/imports | jq '.'"
+echo "   docker exec ${SNOWSTORM_CONTAINER} curl -s $SNOWSTORM_URL/imports | jq '.'"
 echo ""
 echo "ℹ️  Ensure the RF2 files are extracted under ./snowstorm/import prior to running this script."
 

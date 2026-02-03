@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { X, Package, Barcode, DollarSign, MapPin, AlertTriangle } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 interface ImplantTrackingModalProps {
   surgicalCaseId: string;

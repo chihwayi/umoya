@@ -17,7 +17,7 @@ services:
     volumes:
       - ./snowstorm/es-data:/usr/share/elasticsearch/data
     ports:
-      - "9200:9200"
+      - "${PORT_ELASTICSEARCH:-9200}:9200"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
@@ -39,7 +39,7 @@ services:
     volumes:
       - ./snowstorm/import:/opt/snowstorm/import:ro
     ports:
-      - "8080:8080"
+      - "${PORT_SNOWSTORM:-8080}:8080"
     networks:
       - medicore
 

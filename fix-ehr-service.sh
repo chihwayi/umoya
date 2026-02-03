@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 echo "=================================="
 echo "🔧 EHR Service Complete Fix Script"
 echo "=================================="
@@ -43,5 +46,5 @@ docker ps | grep ehr-service
 
 echo ""
 echo "If you see '🏥 MediCore EHR Service running on port 3013' above, it's working!"
-echo "🌐 API Documentation: http://localhost:3013/api/docs"
+echo "🌐 API Documentation: $API_BASE_URL/docs"
 

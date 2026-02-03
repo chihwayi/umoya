@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, User, Calendar, DollarSign, FileText, Loader2 } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
-import { ehrApi } from '../services/api';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrApi, ehrAxios } from '../services/api';
 
 interface AddChargeModalProps {
   isOpen: boolean;

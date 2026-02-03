@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 echo "🔄 Force SNOMED Import - Final Attempt"
 echo "======================================"
 
@@ -14,8 +17,8 @@ sleep 30
 
 # Check health
 echo "2. Checking service health..."
-ES_STATUS=$(curl -s "http://localhost:9200/_cluster/health" | jq -r '.status')
-SNOW_STATUS=$(curl -s "http://localhost:8080/actuator/health" | jq -r '.status')
+ES_STATUS=$(curl -s "$ELASTICSEARCH_URL/_cluster/health" | jq -r '.status')
+SNOW_STATUS=$(curl -s "$SNOWSTORM_URL/actuator/health" | jq -r '.status')
 
 echo "   Elasticsearch: $ES_STATUS"
 echo "   Snowstorm: $SNOW_STATUS"
@@ -27,7 +30,7 @@ fi
 
 # Try FULL import (works better on empty systems)
 echo "3. Triggering FULL import..."
-IMPORT_RESPONSE=$(curl -s -X POST "http://localhost:8080/imports" \
+IMPORT_RESPONSE=$(curl -s -X POST "$SNOWSTORM_URL/imports" \
   -H "Content-Type: application/json" \
   -d '{
     "branchPath": "MAIN",
@@ -55,7 +58,7 @@ for i in {1..8}; do
     fi
     
     # Test search
-    SEARCH_TEST=$(curl -s "http://localhost:8080/browser/MAIN/concepts?term=pain&limit=1" 2>/dev/null)
+    SEARCH_TEST=$(curl -s "$SNOWSTORM_URL/browser/MAIN/concepts?term=pain&limit=1" 2>/dev/null)
     if echo "$SEARCH_TEST" | grep -q '"conceptId":[0-9]'; then
         echo "🎉 SNOMED data is available! Import completed!"
         echo "Search result: $SEARCH_TEST"

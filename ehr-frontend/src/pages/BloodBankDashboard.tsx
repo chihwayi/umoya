@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from '../components/GlobalNotification';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 const BloodBankDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

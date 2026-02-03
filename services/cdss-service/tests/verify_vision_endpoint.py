@@ -2,6 +2,8 @@ import requests
 import io
 from PIL import Image
 
+import os
+
 def create_dummy_image():
     # Create a 100x100 RGB image (red)
     img = Image.new('RGB', (100, 100), color = 'red')
@@ -11,7 +13,11 @@ def create_dummy_image():
     return img_byte_arr
 
 def test_analyze_image():
-    url = "http://localhost:8000/analyze-image"
+    base_url = os.getenv("CDSS_SERVICE_URL")
+    if not base_url:
+        print("Error: CDSS_SERVICE_URL environment variable not set")
+        sys.exit(1)
+    url = f"{base_url}/analyze-image"
     print(f"Testing {url}...")
     
     try:

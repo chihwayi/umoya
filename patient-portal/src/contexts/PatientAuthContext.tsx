@@ -40,7 +40,11 @@ interface LinkAccountData {
 
 const PatientAuthContext = createContext<PatientAuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
+
+  if (!API_BASE_URL) {
+    console.warn('REACT_APP_EHR_API_URL is not defined');
+  }
 
 export const PatientAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [patient, setPatient] = useState<Patient | null>(null);

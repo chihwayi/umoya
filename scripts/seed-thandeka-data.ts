@@ -9,7 +9,7 @@ import axios from 'axios';
 
 dotenv.config();
 
-const API_BASE_URL = process.env.API_URL || 'http://localhost:3013';
+const API_BASE_URL = process.env.API_URL;
 const TENANT_SUBDOMAIN = process.env.TENANT_SUBDOMAIN || 'bulawayo-general'; // Change to your tenant subdomain
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@bulawayo-general.co.zw';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Password1#';

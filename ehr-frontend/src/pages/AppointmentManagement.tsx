@@ -44,6 +44,7 @@ interface Appointment {
 }
 
 const AppointmentManagement: React.FC = () => {
+  const API_URL = process.env.REACT_APP_EHR_API_URL;
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
@@ -180,7 +181,7 @@ const AppointmentManagement: React.FC = () => {
       }
 
       // For admins, fetch all stats
-      const response = await fetch(`http://localhost:3013/api/appointments/stats/dashboard`, {
+      const response = await fetch(`${API_URL}/appointments/stats/dashboard`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Tenant-ID': tenantSlug,
@@ -206,7 +207,7 @@ const AppointmentManagement: React.FC = () => {
   const handleStatusUpdate = async (appointmentId: string, newStatus: string) => {
     try {
       const token = localStorage.getItem('ehr_token');
-      const response = await fetch(`http://localhost:3013/api/appointments/${appointmentId}/status`, {
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}/status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -254,7 +255,7 @@ const AppointmentManagement: React.FC = () => {
           return;
       }
 
-      const response = await fetch(`http://localhost:3013/api${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -293,7 +294,7 @@ const AppointmentManagement: React.FC = () => {
       if (!token || !tenantSlug) return { hasConflict: false };
 
       const response = await fetch(
-        `http://localhost:3013/api/appointments/check-availability?doctorId=${doctorId}&appointmentDate=${appointmentDate}&durationMinutes=${durationMinutes}`,
+        `${API_URL}/appointments/check-availability?doctorId=${doctorId}&appointmentDate=${appointmentDate}&durationMinutes=${durationMinutes}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

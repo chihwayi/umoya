@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Building2, Search, ArrowRight, AlertCircle, Heart, Shield, Sparkles } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
+const API_BASE_URL = process.env.REACT_APP_EHR_API_URL;
 
 interface Tenant {
   id: string;

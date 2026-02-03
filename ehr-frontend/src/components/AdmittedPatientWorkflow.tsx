@@ -4,12 +4,10 @@ import {
   Heart, ArrowRightLeft, LogOut, AlertTriangle, CheckCircle,
   Clock, MessageSquare, Plus, TrendingUp, X
 } from 'lucide-react';
-import axios from 'axios';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import ICD10Picker from './ICD10Picker';
-
-const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
+import { ehrAxios } from '../services/api';
 
 interface AdmittedPatientWorkflowProps {
   admission: any;
@@ -97,8 +95,7 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const loadVitals = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
-      const response = await axios.get(`${EHR_API_URL}/vitals/patient/${admission.patient_id}`, {
+      const response = await ehrAxios.get(`/vitals/patient/${admission.patient_id}`, {
         headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
       });
       setVitals(response.data || []);
@@ -109,8 +106,7 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
 
   const loadNotes = async () => {
     try {
-      const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || 'http://localhost:3013/api';
-      const response = await axios.get(`${EHR_API_URL}/nursing-notes/patient/${admission.patient_id}`, {
+      const response = await ehrAxios.get(`/nursing-notes/patient/${admission.patient_id}`, {
         headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` }
       });
       setNotes(response.data || []);

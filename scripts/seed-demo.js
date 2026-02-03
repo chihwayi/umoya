@@ -8,7 +8,7 @@
 
 const axios = require('axios');
 
-const EHR_API_URL = process.env.EHR_API_URL || 'http://localhost:3013/api';
+const EHR_API_URL = process.env.EHR_API_URL;
 const TENANT_SLUG = process.env.TENANT_SLUG || 'bulawayo-general';
 const LOGIN_EMAIL = process.env.SEED_LOGIN_EMAIL || 'doctor@bulawayo-general.co.zw';
 const LOGIN_PASSWORD = process.env.SEED_LOGIN_PASSWORD || 'Password1#';

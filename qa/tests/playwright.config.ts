@@ -15,7 +15,7 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: process.env.EHR_API_URL || 'http://localhost:3001/api',
+    baseURL: process.env.EHR_API_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -24,13 +24,13 @@ export default defineConfig({
       name: 'api-tests',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: process.env.EHR_API_URL || 'http://localhost:3001/api',
+        baseURL: process.env.EHR_API_URL,
       },
     },
   ],
   webServer: {
     command: 'echo "Ensure EHR service is running on port 3001"',
-    url: 'http://localhost:3001',
+    url: process.env.EHR_SERVICE_URL || '',
     reuseExistingServer: !process.env.CI,
   },
 });

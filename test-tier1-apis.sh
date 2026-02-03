@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Load environment variables
+source "$(dirname "$0")/scripts/load-env.sh"
+
 # Tier 1 API Endpoint Testing Script
 # Tests all POST/GET/PUT/DELETE endpoints for Sprints 21-25
 
@@ -16,7 +19,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-BASE_URL="http://localhost:3013/api"
+BASE_URL="$API_BASE_URL"
 TENANT_SLUG="bulawayo-general"
 TOKEN=""
 

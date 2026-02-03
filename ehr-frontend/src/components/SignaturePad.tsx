@@ -4,11 +4,12 @@ import { X, RotateCcw, Check, Pen } from 'lucide-react';
 interface SignaturePadProps {
   onSave: (signatureData: string) => void;
   onCancel: () => void;
+  onClear?: () => void;
   signerName: string;
   signerRole: string;
 }
 
-const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, signerName, signerRole }) => {
+const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, onClear, signerName, signerRole }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
@@ -79,6 +80,9 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, signerNam
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
+    if (onClear) {
+      onClear();
+    }
   };
 
   const saveSignature = () => {
