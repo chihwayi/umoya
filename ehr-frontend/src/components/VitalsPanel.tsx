@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Save, Activity, Heart, Thermometer, Droplets, Eye,
-  Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain, Loader2,
+  Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain, Loader2, Search, Plus
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import {
   ResponsiveContainer,
@@ -42,7 +43,9 @@ interface VitalsData {
 }
 
 type TrendPoint = {
-  timestamp: string;
+  timestamp?: string;
+  recordedAt?: string;
+  createdAt?: string;
   value: number;
 };
 
@@ -92,6 +95,69 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
+  const [guidelineQuery, setGuidelineQuery] = useState('');
+  const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [abnormalFindings, setAbnormalFindings] = useState<SnomedConcept[]>([]);
+  const [pendingFinding, setPendingFinding] = useState<SnomedConcept | null>(null);
+
+  const handleGuidelineSearch = async () => {
+    if (!guidelineQuery.trim()) return;
+    setLoadingGuidelines(true);
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) {
+        showError('Error', 'Session expired. Please login again.');
+        return;
+      }
+      
+      let searchContext = "Clinical vitals management";
+      
+      // Enhance with patient context
+      if (selectedPatient) {
+        const patientContext = [];
+        if (selectedPatient.dateOfBirth) {
+             const age = Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+             patientContext.push(`${age}yo`);
+        }
+        if (selectedPatient.gender) patientContext.push(selectedPatient.gender);
+        if (selectedPatient.chronicConditions) patientContext.push(`Conditions: ${selectedPatient.chronicConditions}`);
+        if (selectedPatient.allergies) patientContext.push(`Allergies: ${selectedPatient.allergies}`);
+        
+        if (patientContext.length > 0) {
+          searchContext += `. Patient: ${patientContext.join(', ')}`;
+        }
+      }
+
+      // Enhance with abnormal vitals context
+      const abnormalities = [];
+      if (vitals.bloodPressureSystolic > 140) abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
+      if (vitals.bloodPressureDiastolic > 90) abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
+      if (vitals.heartRate > 100) abnormalities.push(`HR ${vitals.heartRate} (Tachycardia)`);
+      if (vitals.heartRate < 60 && vitals.heartRate > 0) abnormalities.push(`HR ${vitals.heartRate} (Bradycardia)`);
+      if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
+      if (vitals.temperature > 37.5) abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
+
+      if (abnormalities.length > 0) {
+        searchContext += `. Abnormalities: ${abnormalities.join(', ')}`;
+      }
+
+      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+      
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      if (response.data && response.data.citations) {
+        setGuidelineResults(response.data.citations);
+      } else {
+        setGuidelineResults([]);
+      }
+    } catch (e) {
+      console.error('Guideline search failed:', e);
+      showError('Error', 'Failed to search guidelines');
+    } finally {
+      setLoadingGuidelines(false);
+    }
+  };
 
   useEffect(() => {
     setSelectedPatient(patient || null);
@@ -223,10 +289,13 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
 
   const formatTrendData = (entries?: TrendPoint[]) => {
     if (!entries || !entries.length) return [];
-    return entries.map((entry) => ({
-      date: new Date(entry.timestamp || entry.recordedAt || entry.createdAt).toLocaleDateString(),
-      value: Number(entry.value),
-    }));
+    return entries.map((entry) => {
+      const dateStr = entry.timestamp || entry.recordedAt || entry.createdAt || new Date().toISOString();
+      return {
+        date: new Date(dateStr).toLocaleDateString(),
+        value: Number(entry.value),
+      };
+    });
   };
 
   const getTrendDirection = (data: { value: number }[]) => {
@@ -455,6 +524,52 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
             </div>
           )}
 
+          {/* Guideline Search Section */}
+          <div className="p-5 rounded-2xl border border-blue-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                <Search className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Guideline Search</p>
+                <p className="text-xs text-slate-500">Search clinical protocols relevant to vitals</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={guidelineQuery}
+                onChange={(e) => setGuidelineQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGuidelineSearch()}
+                placeholder="e.g. hypertension management"
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                onClick={handleGuidelineSearch}
+                disabled={loadingGuidelines || !guidelineQuery.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loadingGuidelines ? '...' : 'Search'}
+              </button>
+            </div>
+
+            {guidelineResults.length > 0 && (
+              <div className="space-y-2 mt-3 max-h-60 overflow-y-auto custom-scrollbar">
+                {guidelineResults.map((citation: any, idx: number) => (
+                  <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Vitals Form */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {renderVitalInput(
@@ -566,6 +681,56 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
               </div>
             </div>
           )}
+
+          {/* Clinical Observations (SNOMED) */}
+          <div className="p-4 bg-white/50 rounded-xl border border-slate-200/50">
+            <label className="block text-sm font-semibold text-slate-700 mb-3">Clinical Observations</label>
+            <SnomedConceptPicker
+              value={pendingFinding}
+              onChange={setPendingFinding}
+              token={localStorage.getItem('ehr_token') || ''}
+              tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+              label="Add Observation (SNOMED CT)"
+              placeholder="Search for clinical finding..."
+              context="finding"
+            />
+            {pendingFinding && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAbnormalFindings([...abnormalFindings, pendingFinding]);
+                  setPendingFinding(null);
+                  const newNote = vitals.notes 
+                    ? `${vitals.notes}\n[Observation: ${pendingFinding.term} (${pendingFinding.conceptId})]`
+                    : `[Observation: ${pendingFinding.term} (${pendingFinding.conceptId})]`;
+                  handleInputChange('notes', newNote);
+                }}
+                className="mt-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Add Observation
+              </button>
+            )}
+            
+            {abnormalFindings.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {abnormalFindings.map((finding, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-sm">
+                    {finding.term}
+                    <button
+                      onClick={() => {
+                         const newFindings = abnormalFindings.filter((_, i) => i !== idx);
+                         setAbnormalFindings(newFindings);
+                      }}
+                      className="ml-1 text-indigo-400 hover:text-indigo-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Notes */}
           <div className="p-4 bg-white/50 rounded-xl border border-slate-200/50">

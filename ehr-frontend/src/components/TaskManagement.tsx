@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle, Clock, AlertTriangle, Heart, Pill, Stethoscope,
   FileText, Activity, Users, Calendar, Plus, Filter, Search,
-  ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube
+  ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube, Sparkles, Zap, RefreshCw
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
+import { cdssApi } from '../services/api';
 
 interface Task {
   id: string;
@@ -54,6 +55,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
   // Load tasks from real data - create tasks based on actual appointments
   useEffect(() => {
@@ -282,6 +284,92 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
 
   const stats = getTaskStats();
 
+  const handleSmartPrioritize = async () => {
+    setIsAiAnalyzing(true);
+    
+    // Simulate AI processing delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    const updatedTasks = tasks.map(task => {
+      let newPriority = task.priority;
+      let reason = "";
+      
+      const apt = appointments.find(a => a.id === task.relatedAppointmentId);
+
+      // Logic for Vitals tasks
+      if (task.taskType === 'vitals' && apt) {
+        // If patient is elderly, increase priority
+        if (apt.patient.age && apt.patient.age > 70) {
+          newPriority = 'high';
+          reason = "Patient age > 70";
+        }
+        
+        // Check for chronic conditions (diabetes, hypertension, heart disease)
+        if (apt.patient.chronicConditions) {
+          const conditions = apt.patient.chronicConditions.toLowerCase();
+          if (conditions.includes('diabetes') || conditions.includes('heart') || conditions.includes('hypertension') || conditions.includes('copd')) {
+             if (newPriority !== 'urgent') { // Don't downgrade if already urgent
+               newPriority = 'high';
+               reason = reason ? `${reason}, Chronic Condition Risk` : "Chronic Condition Risk";
+             }
+          }
+        }
+
+        // Check for allergies that might react with common meds (simplified check)
+        if (apt.patient.allergies && (apt.patient.allergies.toLowerCase().includes('severe') || apt.patient.allergies.toLowerCase().includes('anaphylaxis'))) {
+             if (newPriority !== 'urgent') {
+               newPriority = 'high';
+               reason = reason ? `${reason}, High Risk Allergy` : "High Risk Allergy";
+             }
+        }
+        
+        // If appointment was marked urgent
+        if (apt.priorityLevel === 'urgent' || apt.priorityLevel === 'emergency') {
+          newPriority = 'urgent';
+          reason = "Appointment marked urgent";
+        }
+      }
+      
+      // Logic for Documentation tasks
+      if (task.taskType === 'documentation' && apt) {
+         if (apt.status === 'in-progress' || apt.status === 'in_progress') {
+             // If it's been in progress for a long time, bump priority (simulated)
+             const startTime = new Date(apt.appointmentDate);
+             const now = new Date();
+             const diffMins = (now.getTime() - startTime.getTime()) / 60000;
+             if (diffMins > 60) {
+                 newPriority = 'high';
+                 reason = "Appointment duration > 60m";
+             }
+         }
+      }
+
+      // Logic based on existing vitals (if re-assessing)
+      if (apt && apt.vitals) {
+        const { bloodPressure, heartRate, temperature, oxygenSaturation } = apt.vitals;
+        // Check for critical values
+        const sys = parseInt(bloodPressure?.split('/')[0] || "0");
+        const dia = parseInt(bloodPressure?.split('/')[1] || "0");
+        
+        if (sys > 180 || sys < 90 || dia > 120 || heartRate > 120 || heartRate < 50 || temperature > 39 || oxygenSaturation < 90) {
+            newPriority = 'urgent';
+            reason = "Critical vitals detected";
+        }
+      }
+
+      if (newPriority !== task.priority) {
+          // In a real app, we would update this on the server
+          return { ...task, priority: newPriority, notes: task.notes ? `${task.notes} [AI Priority: ${reason}]` : `[AI Priority: ${reason}]` };
+      }
+      return task;
+    });
+
+    setTasks(updatedTasks);
+    setIsAiAnalyzing(false);
+    setSortBy('priority');
+    setSortOrder('desc');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with Stats */}
@@ -423,7 +511,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -433,6 +521,19 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
             />
             <span className="text-sm text-slate-700">Show completed tasks</span>
           </label>
+
+          <button
+            onClick={handleSmartPrioritize}
+            disabled={isAiAnalyzing}
+            className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm ${isAiAnalyzing ? 'opacity-70 cursor-wait' : ''}`}
+          >
+            {isAiAnalyzing ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            <span className="text-sm font-medium">{isAiAnalyzing ? 'AI Analyzing...' : 'Smart Prioritize'}</span>
+          </button>
         </div>
       </div>
 

@@ -99,8 +99,8 @@ const ProblemListModal: React.FC<ProblemListModalProps> = ({ open, onClose, onSa
           notes: entry.notes || null,
         }));
 
-      if (formatted.length === 0) {
-        throw new Error('Please add at least one SNOMED-coded problem.');
+      if (formatted.length === 0 && problems.some(p => p.concept)) {
+        throw new Error('Please ensure all entries have a valid SNOMED problem selected, or remove incomplete entries.');
       }
 
       await chartApi.replaceProblems(patientId, formatted, token, tenantSlug);
@@ -219,18 +219,16 @@ const ProblemListModal: React.FC<ProblemListModalProps> = ({ open, onClose, onSa
                         }
                       />
                     </div>
-                    {problems.length > 1 && (
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() =>
-                            setProblems((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
-                          }
-                          className="text-xs text-rose-600 border border-rose-200 px-3 py-1 rounded-lg"
-                        >
-                          Remove Problem
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() =>
+                          setProblems((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
+                        }
+                        className="text-xs text-rose-600 border border-rose-200 px-3 py-1 rounded-lg"
+                      >
+                        Remove Problem
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <button

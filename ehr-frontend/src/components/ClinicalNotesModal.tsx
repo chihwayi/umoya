@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, X, Save, Calendar, Clock, User, Stethoscope, Brain, Activity, BookOpen, Search, CheckCircle, Sparkles } from 'lucide-react';
+import { FileText, X, Save, Calendar, Clock, User, Stethoscope, Brain, Activity, BookOpen, Search, CheckCircle, Sparkles, Plus, Trash2 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, cdssApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import { ClinicalNotesWithSmartForms } from './ClinicalNotes/ClinicalNotesWithSmartForms';
+import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
 interface Appointment {
   id: string;
@@ -48,6 +49,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelineSearch, setLoadingGuidelineSearch] = useState(false);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
+  const [codedDiagnoses, setCodedDiagnoses] = useState<SnomedConcept[]>([]);
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -88,8 +90,10 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
           setPhysicalExam(cd.physicalExamination || '');
           setAssessment(cd.clinicalAssessment || '');
           setAdditionalNotes(cd.additionalNotes || parsed?.notes || '');
+          setCodedDiagnoses(cd.codedDiagnoses || []);
         } catch {
           setAdditionalNotes(appointment.notes || '');
+          setCodedDiagnoses([]);
         }
       } else {
         setChiefComplaint('');
@@ -97,6 +101,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
         setPhysicalExam('');
         setAssessment('');
         setAdditionalNotes('');
+        setCodedDiagnoses([]);
       }
     } catch (e) {
       // ignore load errors
@@ -348,6 +353,60 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                       {loadingGuidelines ? 'Loading...' : 'Get Guidelines'}
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* SNOMED CT Coded Diagnoses */}
+              <div className="mb-4 space-y-3">
+                <label className="text-sm font-semibold text-slate-600">Structured Diagnoses (SNOMED CT)</label>
+                <div className="space-y-2">
+                  {codedDiagnoses.map((concept, idx) => (
+                    <div key={concept.conceptId} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900">{concept.preferredTerm || concept.term}</p>
+                          <p className="text-xs text-slate-500">SNOMED ID: {concept.conceptId}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newDiagnoses = [...codedDiagnoses];
+                          newDiagnoses.splice(idx, 1);
+                          setCodedDiagnoses(newDiagnoses);
+                        }}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <div className="bg-slate-50/50 p-1 rounded-xl border border-dashed border-slate-300">
+                    <SnomedConceptPicker
+                      value={null}
+                      onChange={(concept) => {
+                        if (concept) {
+                          // Prevent duplicates
+                          if (!codedDiagnoses.some(d => d.conceptId === concept.conceptId)) {
+                            const newDiagnoses = [...codedDiagnoses, concept];
+                            setCodedDiagnoses(newDiagnoses);
+                            
+                            // Auto-append to assessment text if empty or not containing the term
+                            if (!assessment.includes(concept.term)) {
+                              setAssessment(prev => prev ? `${prev}\nDiagnosis: ${concept.term}` : `Diagnosis: ${concept.term}`);
+                            }
+                          }
+                        }
+                      }}
+                      token={token}
+                      tenantSlug={tenantSlug}
+                      placeholder="Add Diagnosis (Search SNOMED CT)..."
+                      context="finding" // or condition
+                    />
+                  </div>
                 </div>
               </div>
               

@@ -8,8 +8,8 @@ interface ChartSidebarProps {
 }
 
 const ChartSidebar: React.FC<ChartSidebarProps> = ({ appointment, vitals, labOrders }) => {
-  let problems: Array<{ description: string; status?: string }> = [];
-  let allergies: Array<{ allergen: string; reaction?: string; severity?: string }> = [];
+  let problems: Array<{ description?: string; snomedTerm?: string; term?: string; status?: string }> = [];
+  let allergies: Array<{ allergen?: string; allergenTerm?: string; reaction?: string; reactionTerm?: string; severity?: string }> = [];
   try {
     if (appointment?.notes) {
       const parsed = JSON.parse(appointment.notes);
@@ -29,7 +29,7 @@ const ChartSidebar: React.FC<ChartSidebarProps> = ({ appointment, vitals, labOrd
             <ul className="space-y-2 text-sm">
               {problems.slice(0,6).map((p, i) => (
                 <li key={i} className="flex items-center justify-between">
-                  <span className="text-slate-700">{p.description}</span>
+                  <span className="text-slate-700">{p.snomedTerm || p.term || p.description || 'Unknown Problem'}</span>
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${p.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>{p.status || 'active'}</span>
                 </li>
               ))}

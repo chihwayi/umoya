@@ -98,10 +98,36 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const notifyPaymentBlocked = (appointment: Appointment, context: string) => {
     const financeDetails = buildFinanceDetails(appointment);
     const suffix = financeDetails ? ` ${financeDetails}` : '';
-    showError(
-      'Awaiting payment',
-      `${context}. Accounts must confirm payment before continuing.${suffix}`
-    );
+    showError(`Action Blocked (Payment Pending)`, `${context}. ${suffix}`);
+  };
+
+  const getCriticalVitals = (vitals: Appointment['vitals']) => {
+    if (!vitals) return [];
+    const critical = [];
+    
+    // BP check
+    if (vitals.bloodPressure) {
+      const [sys, dia] = vitals.bloodPressure.split('/').map(Number);
+      if (sys >= 140 || sys <= 90) critical.push({ label: `BP ${vitals.bloodPressure}`, severity: 'high' });
+      else if (dia >= 90 || dia <= 60) critical.push({ label: `BP ${vitals.bloodPressure}`, severity: 'high' });
+    }
+
+    // SpO2 check
+    if (vitals.oxygenSaturation && vitals.oxygenSaturation < 95) {
+      critical.push({ label: `SpO2 ${vitals.oxygenSaturation}%`, severity: 'high' });
+    }
+
+    // HR check
+    if (vitals.heartRate && (vitals.heartRate > 100 || vitals.heartRate < 60)) {
+      critical.push({ label: `HR ${vitals.heartRate}`, severity: 'medium' });
+    }
+
+    // Temp check
+    if (vitals.temperature && (vitals.temperature > 38 || vitals.temperature < 36)) {
+      critical.push({ label: `Temp ${vitals.temperature}°C`, severity: 'medium' });
+    }
+
+    return critical;
   };
 
   const ensurePaymentCleared = (appointment: Appointment, context: string) => {
@@ -463,6 +489,36 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                           </div>
                         )}
                       </div>
+
+                      {/* Critical Vitals Tags */}
+                      {latestVitals && getCriticalVitals(latestVitals).length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {getCriticalVitals(latestVitals).map((alert, idx) => (
+                            <span key={idx} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border ${alert.severity === 'high' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                              <Activity className="w-3 h-3" />
+                              {alert.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Clinical Context */}
+                      {(appointment.patient.allergies || appointment.patient.chronicConditions) && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {appointment.patient.allergies && appointment.patient.allergies.trim().length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              <AlertTriangle className="w-3 h-3" />
+                              Allergies: {appointment.patient.allergies}
+                            </span>
+                          )}
+                          {appointment.patient.chronicConditions && appointment.patient.chronicConditions.trim().length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              <Stethoscope className="w-3 h-3" />
+                              Conditions: {appointment.patient.chronicConditions}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {awaitingPayment && (
                         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex flex-col gap-1">

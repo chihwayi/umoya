@@ -44,11 +44,18 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
 
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [chiefComplaintConcept, setChiefComplaintConcept] = useState<SnomedConcept | null>(null);
+  const [symptoms, setSymptoms] = useState('');
+  const [symptomsConcepts, setSymptomsConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingSymptomConcept, setPendingSymptomConcept] = useState<SnomedConcept | null>(null);
   const [onset, setOnset] = useState('');
   const [painScore, setPainScore] = useState<number>(0);
   const [allergies, setAllergies] = useState('');
   const [medications, setMedications] = useState('');
+  const [medicationConcepts, setMedicationConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingMedicationConcept, setPendingMedicationConcept] = useState<SnomedConcept | null>(null);
   const [history, setHistory] = useState('');
+  const [historyConcepts, setHistoryConcepts] = useState<SnomedConcept[]>([]);
+  const [pendingHistoryConcept, setPendingHistoryConcept] = useState<SnomedConcept | null>(null);
   const [observations, setObservations] = useState('');
   const [observationsConcepts, setObservationsConcepts] = useState<SnomedConcept[]>([]);
   const [pendingObservationConcept, setPendingObservationConcept] = useState<SnomedConcept | null>(null);
@@ -74,7 +81,29 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
         return;
       }
       
-      const response = await Api.cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      let searchContext = "Triage protocols, clinical guidelines";
+      
+      // Enhance with patient context
+      if (patient) {
+        const patientContext = [];
+        if (patient.dateOfBirth) {
+            const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+            patientContext.push(`${age}yo`);
+        }
+        if (patient.gender) patientContext.push(patient.gender);
+        if (patientContext.length > 0) {
+          searchContext += `. Patient: ${patientContext.join(', ')}`;
+        }
+      }
+
+      // Enhance with current triage data
+      if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
+      if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
+      if (observations) searchContext += `. Obs: ${observations}`;
+
+      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+      
+      const response = await Api.cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -156,11 +185,15 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
         patientId: patient.id,
         chiefComplaint,
         chief_complaint_snomed: chiefComplaintConcept,
+        symptoms,
+        symptoms_snomed: symptomsConcepts,
         onset,
         painScore,
         allergies,
         medications,
+        medications_snomed: medicationConcepts,
         history,
+        history_snomed: historyConcepts,
         observations,
         observations_snomed: observationsConcepts,
         priority,
@@ -379,11 +412,17 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
                         ? Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
                         : undefined;
                       
-                      const symptomsArray = [chiefComplaint, onset].filter(Boolean);
-                      console.log('🔍 Sending symptoms to API:', symptomsArray);
+                      const symptomsArray = [
+                        chiefComplaint, 
+                        chiefComplaintConcept?.term, 
+                        onset,
+                        ...observationsConcepts.map(c => c.term)
+                      ];
+                      const uniqueSymptoms = Array.from(new Set(symptomsArray.filter((s): s is string => !!s)));
+                      console.log('🔍 Sending symptoms to API:', uniqueSymptoms);
                       
                       const result = await Api.ehrApi.getDiagnosisSuggestions({
-                        symptoms: symptomsArray,
+                        symptoms: uniqueSymptoms,
                         age: patientAge,
                         gender: patient.gender,
                       }, token, tenantSlug);
@@ -525,6 +564,61 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
             )}
           </div>
 
+          <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Symptoms</label>
+            <textarea
+              value={symptoms}
+              onChange={(e) => setSymptoms(e.target.value)}
+              className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+              rows={3}
+              placeholder="List specific symptoms (e.g. fever, cough, headache)"
+            />
+            <div className="mt-2">
+              <SnomedConceptPicker
+                value={pendingSymptomConcept}
+                onChange={setPendingSymptomConcept}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                label="SNOMED CT Symptoms (Optional)"
+                placeholder="Search for symptom concept..."
+                context="symptom"
+                helperText="Select a SNOMED CT concept to code the patient's symptoms"
+              />
+              {pendingSymptomConcept && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSymptomsConcepts([...symptomsConcepts, pendingSymptomConcept]);
+                    setPendingSymptomConcept(null);
+                  }}
+                  className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Symptom
+                </button>
+              )}
+              {symptomsConcepts.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {symptomsConcepts.map((concept, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                      <span className="text-sm text-slate-700">
+                        <span className="font-medium">{concept.term}</span>
+                        <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSymptomsConcepts(symptomsConcepts.filter((_, i) => i !== idx))}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
               <label className="block text-sm font-semibold text-slate-700 mb-2">Onset and Course</label>
@@ -602,6 +696,50 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
                 rows={3}
                 placeholder="List active medications"
               />
+              <div className="mt-2">
+                <SnomedConceptPicker
+                  value={pendingMedicationConcept}
+                  onChange={setPendingMedicationConcept}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                  label="SNOMED CT Medications (Optional)"
+                  placeholder="Search medications..."
+                  context="medication"
+                  helperText="Code active medications"
+                />
+                {pendingMedicationConcept && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMedicationConcepts([...medicationConcepts, pendingMedicationConcept]);
+                      setPendingMedicationConcept(null);
+                    }}
+                    className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Medication
+                  </button>
+                )}
+                {medicationConcepts.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {medicationConcepts.map((concept, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                        <span className="text-sm text-slate-700">
+                          <span className="font-medium">{concept.term}</span>
+                          <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMedicationConcepts(medicationConcepts.filter((_, i) => i !== idx))}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -614,6 +752,50 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               rows={3}
               placeholder="Brief past medical/surgical history relevant to the visit"
             />
+            <div className="mt-2">
+              <SnomedConceptPicker
+                value={pendingHistoryConcept}
+                onChange={setPendingHistoryConcept}
+                token={localStorage.getItem('ehr_token') || ''}
+                tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
+                label="SNOMED CT History (Optional)"
+                placeholder="Search conditions/procedures..."
+                ecl="<< 404684003 OR << 71388002" // Clinical finding OR Procedure
+                helperText="Code past conditions or procedures"
+              />
+              {pendingHistoryConcept && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryConcepts([...historyConcepts, pendingHistoryConcept]);
+                    setPendingHistoryConcept(null);
+                  }}
+                  className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add History Concept
+                </button>
+              )}
+              {historyConcepts.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {historyConcepts.map((concept, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg">
+                      <span className="text-sm text-slate-700">
+                        <span className="font-medium">{concept.term}</span>
+                        <span className="text-xs text-slate-500 ml-2">({concept.conceptId})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryConcepts(historyConcepts.filter((_, i) => i !== idx))}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">

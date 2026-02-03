@@ -4,13 +4,15 @@ import {
   ArrowLeft, User, Calendar, Phone, Mail, MapPin, 
   Heart, Activity, AlertCircle, FileText, Clock,
   ChevronLeft, ChevronRight, Stethoscope, Pill, TestTube,
-  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight
+  Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit
 } from 'lucide-react';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi, cdssApi, chartApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
+import ProblemListModal from '../components/ProblemListModal';
+import AllergiesModal from '../components/AllergiesModal';
 
 interface Patient {
   id: string;
@@ -64,12 +66,64 @@ const DoctorPatientDetail: React.FC = () => {
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
 
+  // Medical History State
+  const [problems, setProblems] = useState<any[]>([]);
+  const [allergiesList, setAllergiesList] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showProblemsModal, setShowProblemsModal] = useState(false);
+  const [showAllergiesModal, setShowAllergiesModal] = useState(false);
+  const [latestVitals, setLatestVitals] = useState<any>(null);
+
   useEffect(() => {
     if (patientId) {
       fetchPatientDetails();
       fetchPatientAppointments();
+      fetchLatestVitals();
     }
   }, [patientId]);
+
+  useEffect(() => {
+    if (activeTab === 'medical-history' && patientId) {
+      fetchMedicalHistory();
+    }
+  }, [activeTab, patientId]);
+
+  const fetchLatestVitals = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug || !patientId) return;
+
+      const response = await ehrApi.getVitals(patientId, token, tenantSlug, { limit: 1 });
+      if (response.data && response.data.latest) {
+        setLatestVitals(response.data.latest);
+      } else if (Array.isArray(response.data) && response.data.length > 0) {
+        setLatestVitals(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching vitals:', error);
+    }
+  };
+
+  const fetchMedicalHistory = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !patientId) return;
+
+      setLoadingHistory(true);
+      const [problemsRes, allergiesRes] = await Promise.all([
+        chartApi.getProblems(patientId, token, tenantSlug!),
+        chartApi.getAllergies(patientId, token, tenantSlug!)
+      ]);
+
+      setProblems(Array.isArray(problemsRes.data) ? problemsRes.data : []);
+      setAllergiesList(Array.isArray(allergiesRes.data) ? allergiesRes.data : []);
+    } catch (error) {
+      console.error('Error fetching medical history:', error);
+      showError('Error', 'Failed to fetch medical history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const fetchPatientDetails = async () => {
     try {
@@ -131,7 +185,46 @@ const DoctorPatientDetail: React.FC = () => {
          return;
       }
 
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      let searchContext = "";
+      
+      // Enhance with patient context
+      if (patient) {
+        const patientContext = [];
+        if (patient.dateOfBirth) {
+             const age = calculateAge(patient.dateOfBirth);
+             patientContext.push(`${age}yo`);
+        }
+        if (patient.gender) patientContext.push(patient.gender);
+        
+        if (patientContext.length > 0) {
+          searchContext += `Patient: ${patientContext.join(', ')}. `;
+        }
+
+        // Add chronic conditions and allergies to context
+        if (patient.chronicConditions) {
+          searchContext += `Conditions: ${patient.chronicConditions}. `;
+        }
+        if (patient.allergies) {
+           searchContext += `Allergies: ${patient.allergies}. `;
+        }
+      }
+
+      // Enhance with vitals if available
+      if (latestVitals) {
+        const vitalsContext = [];
+        if (latestVitals.bloodPressure) vitalsContext.push(`BP ${latestVitals.bloodPressure}`);
+        if (latestVitals.heartRate) vitalsContext.push(`HR ${latestVitals.heartRate}`);
+        if (latestVitals.temperature) vitalsContext.push(`Temp ${latestVitals.temperature}`);
+        if (latestVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${latestVitals.oxygenSaturation}%`);
+        
+        if (vitalsContext.length > 0) {
+          searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
+        }
+      }
+
+      const finalQuery = searchContext ? `${searchContext} Query: ${guidelineQuery}` : guidelineQuery;
+
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -451,11 +544,124 @@ const DoctorPatientDetail: React.FC = () => {
         )}
 
         {activeTab === 'medical-history' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Medical History</h3>
-            <div className="text-center py-8">
-              <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-              <p className="text-slate-500">Medical history feature coming soon</p>
+          <div className="space-y-6">
+            {/* Problems Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <Activity className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Problem List</h3>
+                    <p className="text-sm text-slate-500">Active and resolved conditions</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowProblemsModal(true)}
+                  className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-semibold flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" /> Manage Problems
+                </button>
+              </div>
+
+              {loadingHistory ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                </div>
+              ) : problems.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <Activity className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-slate-500">No problems recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {problems.map((problem, index) => (
+                    <div key={index} className="flex items-start justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-slate-900">
+                            {problem.snomedTerm || problem.description || problem.code}
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            problem.status === 'active' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {problem.status}
+                          </span>
+                        </div>
+                        {problem.onsetDate && (
+                          <p className="text-sm text-slate-500">Onset: {formatDateToDDMMYYYY(problem.onsetDate)}</p>
+                        )}
+                        {problem.notes && (
+                          <p className="text-sm text-slate-600 mt-2 bg-white p-2 rounded border border-slate-100">
+                            {problem.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Allergies Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-rose-100 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Allergies</h3>
+                    <p className="text-sm text-slate-500">Adverse reactions and intolerances</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAllergiesModal(true)}
+                  className="px-4 py-2 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors text-sm font-semibold flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" /> Manage Allergies
+                </button>
+              </div>
+
+              {loadingHistory ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
+                </div>
+              ) : allergiesList.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-slate-500">No allergies recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {allergiesList.map((allergy, index) => (
+                    <div key={index} className="flex items-start justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-slate-900">
+                            {allergy.allergenSnomedTerm || allergy.allergen || 'Unknown Allergen'}
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            allergy.severity === 'severe' ? 'bg-red-100 text-red-700' :
+                            allergy.severity === 'moderate' ? 'bg-orange-100 text-orange-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {allergy.severity || 'mild'}
+                          </span>
+                        </div>
+                        {(allergy.reactionSnomedTerm || allergy.reaction) && (
+                          <p className="text-sm text-slate-600">
+                            Reaction: {allergy.reactionSnomedTerm || allergy.reaction}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -662,6 +868,29 @@ const DoctorPatientDetail: React.FC = () => {
           </div>
         </ModalPortal>
       )}
+      {/* Problems Modal */}
+      <ProblemListModal
+        open={showProblemsModal}
+        onClose={() => setShowProblemsModal(false)}
+        onSaved={() => {
+          fetchMedicalHistory();
+        }}
+        appointment={{ patient: { id: patientId } }}
+        tenantSlug={tenantSlug!}
+        token={localStorage.getItem('ehr_token') || ''}
+      />
+
+      {/* Allergies Modal */}
+      <AllergiesModal
+        open={showAllergiesModal}
+        onClose={() => setShowAllergiesModal(false)}
+        onSaved={() => {
+          fetchMedicalHistory();
+        }}
+        patientId={patientId}
+        tenantSlug={tenantSlug!}
+        token={localStorage.getItem('ehr_token') || ''}
+      />
     </div>
   );
 };

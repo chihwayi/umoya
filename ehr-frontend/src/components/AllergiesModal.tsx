@@ -92,8 +92,8 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
           severity: entry.severity,
         }));
 
-      if (valid.length === 0) {
-        throw new Error('Please capture at least one SNOMED-coded allergy');
+      if (valid.length === 0 && allergies.some(a => a.allergen || a.reaction)) {
+        throw new Error('Please ensure all entries have a valid SNOMED allergen selected, or remove incomplete entries.');
       }
 
       await chartApi.replaceAllergies(actualPatientId, valid, token, tenantSlug);
@@ -183,18 +183,16 @@ const AllergiesModal: React.FC<AllergiesModalProps> = ({ open, onClose, onSaved,
                         <option value="severe">Severe</option>
                       </select>
                     </div>
-                    {allergies.length > 1 && (
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() =>
-                            setAllergies((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
-                          }
-                          className="text-xs text-rose-600 border border-rose-200 px-3 py-1 rounded-lg"
-                        >
-                          Remove Allergy
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() =>
+                          setAllergies((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
+                        }
+                        className="text-xs text-rose-600 border border-rose-200 px-3 py-1 rounded-lg"
+                      >
+                        Remove Allergy
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <button

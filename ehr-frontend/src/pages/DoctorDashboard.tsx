@@ -142,10 +142,7 @@ const DoctorDashboard: React.FC = () => {
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
   const [problems, setProblems] = useState<any[]>([]);
   const [allergies, setAllergies] = useState<any[]>([]);
-  const [showSoapModal, setShowSoapModal] = useState(false);
-  const [soapData, setSoapData] = useState({ subjective: '', objective: '', assessment: '', plan: '' });
-  const [showRxTemplateModal, setShowRxTemplateModal] = useState(false);
-  const [rxData, setRxData] = useState({ medication: '', dosage: '', frequency: '', duration: '' });
+
   const [showCarePlanModal, setShowCarePlanModal] = useState(false);
   const [carePlan, setCarePlan] = useState({ goals: '', tasks: '', dueDate: '' });
   const [showReferralListModal, setShowReferralListModal] = useState(false);
@@ -235,7 +232,52 @@ const DoctorDashboard: React.FC = () => {
          return;
       }
 
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      let searchContext = "";
+      
+      // Enhance with patient context if available
+      if (currentAppointment?.patient) {
+        const patientContext = [];
+        if (currentAppointment.patient.dateOfBirth) {
+             const age = Math.floor((new Date().getTime() - new Date(currentAppointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+             patientContext.push(`${age}yo`);
+        }
+        // Gender is not directly in currentAppointment.patient interface in the file, 
+        // but often it's there or we might need to fetch it. 
+        // Let's check the interface. It has id, firstName, lastName, patientNumber, dateOfBirth, phone, email.
+        // It's missing gender. We might rely on what we have.
+        
+        if (patientContext.length > 0) {
+          searchContext += `Patient: ${patientContext.join(', ')}. `;
+        }
+      }
+
+      // Enhance with vitals if available
+      if (patientVitals) {
+        const vitalsContext = [];
+        if (patientVitals.bloodPressure) vitalsContext.push(`BP ${patientVitals.bloodPressure}`);
+        if (patientVitals.heartRate) vitalsContext.push(`HR ${patientVitals.heartRate}`);
+        if (patientVitals.temperature) vitalsContext.push(`Temp ${patientVitals.temperature}`);
+        if (patientVitals.oxygenSaturation) vitalsContext.push(`SpO2 ${patientVitals.oxygenSaturation}%`);
+        
+        if (vitalsContext.length > 0) {
+          searchContext += `Vitals: ${vitalsContext.join(', ')}. `;
+        }
+      }
+
+      // Enhance with current problems/diagnosis if available
+      if (problems && problems.length > 0) {
+        const problemContext = problems
+          .filter(p => p.status === 'active')
+          .map(p => p.snomedTerm || p.description || p.code)
+          .join(', ');
+        if (problemContext) {
+          searchContext += `Conditions: ${problemContext}. `;
+        }
+      }
+
+      const finalQuery = searchContext ? `${searchContext} Query: ${guidelineQuery}` : guidelineQuery;
+
+      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -1337,7 +1379,7 @@ const DoctorDashboard: React.FC = () => {
 
   if (!currentUser) return null;
 
-  const modalOpen = showVitalsModal || showComprehensiveNotes || showReferralModal || showSoapModal || showRxTemplateModal || showCarePlanModal;
+  const modalOpen = showVitalsModal || showComprehensiveNotes || showReferralModal || showCarePlanModal;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -2398,7 +2440,7 @@ const DoctorDashboard: React.FC = () => {
                           {allergies.slice(0, 5).map((a: any) => (
                             <div key={a.id} className="p-2 border border-slate-200 rounded-lg text-xs">
                               <div className="flex items-center justify-between">
-                                <div className="font-semibold text-slate-900">{a.allergen}</div>
+                                <div className="font-semibold text-slate-900">{a.allergenTerm || a.allergen || 'Unknown Allergen'}</div>
                                 {a.severity && (
                                   <span className={`px-2 py-0.5 rounded-full border text-xs ${
                                     a.severity === 'severe' ? 'bg-red-50 text-red-700 border-red-200' : 
@@ -2409,8 +2451,8 @@ const DoctorDashboard: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-                              {a.reaction && (
-                                <div className="text-xs text-slate-600 mt-1">{a.reaction}</div>
+                              {(a.reactionTerm || a.reaction) && (
+                                <div className="text-xs text-slate-600 mt-1">{a.reactionTerm || a.reaction}</div>
                               )}
                             </div>
                           ))}
@@ -3155,102 +3197,9 @@ const DoctorDashboard: React.FC = () => {
         </ModalPortal>
       )}
 
-      {/* SOAP Template Modal */}
-      {showSoapModal && currentAppointment && (
-        <ModalPortal>
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-3xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">SOAP Note</h3>
-              <button onClick={() => setShowSoapModal(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700">Subjective</label>
-                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-28" value={soapData.subjective} onChange={(e) => setSoapData({ ...soapData, subjective: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Objective</label>
-                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-28" value={soapData.objective} onChange={(e) => setSoapData({ ...soapData, objective: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Assessment</label>
-                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-24" value={soapData.assessment} onChange={(e) => setSoapData({ ...soapData, assessment: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700">Plan</label>
-                <textarea className="w-full border border-slate-300 rounded-xl p-3 h-24" value={soapData.plan} onChange={(e) => setSoapData({ ...soapData, plan: e.target.value })} />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
-              <button onClick={() => setShowSoapModal(false)} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
-              <button onClick={async () => {
-                try {
-                  const token = localStorage.getItem('ehr_token');
-                  if (!token) return;
-                  await ehrApi.updateAppointment(currentAppointment.id, {
-                    notes: `SOAP NOTE\nS: ${soapData.subjective}\nO: ${soapData.objective}\nA: ${soapData.assessment}\nP: ${soapData.plan}`
-                  }, token, tenantSlug!);
-                  setShowSoapModal(false);
-                  showSuccess('Saved', 'SOAP note saved');
-                  fetchTodayAppointments();
-                } catch (e) { showError('Error', 'Failed to save SOAP note'); }
-              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white">Save SOAP</button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
 
-      {/* Prescribing Template Modal */}
-      {showRxTemplateModal && currentAppointment && (
-        <ModalPortal>
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/50 w-full max-w-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">Prescribe Medication</h3>
-              <button onClick={() => setShowRxTemplateModal(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-600" /></button>
-            </div>
-            <div className="p-6 space-y-3">
-              <input className="w-full border border-slate-300 rounded-xl p-3" placeholder="Medication" value={rxData.medication} onChange={(e) => setRxData({ ...rxData, medication: e.target.value })} />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input className="border border-slate-300 rounded-xl p-3" placeholder="Dosage" value={rxData.dosage} onChange={(e) => setRxData({ ...rxData, dosage: e.target.value })} />
-                <input className="border border-slate-300 rounded-xl p-3" placeholder="Frequency" value={rxData.frequency} onChange={(e) => setRxData({ ...rxData, frequency: e.target.value })} />
-                <input className="border border-slate-300 rounded-xl p-3" placeholder="Duration" value={rxData.duration} onChange={(e) => setRxData({ ...rxData, duration: e.target.value })} />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
-              <button onClick={() => setShowRxTemplateModal(false)} className="px-4 py-2 rounded-lg border border-slate-300">Cancel</button>
-              <button onClick={async () => {
-                try {
-                  const token = localStorage.getItem('ehr_token');
-                  if (!token || !currentUser) return;
-                  const created = await ehrApi.createOrder({
-                    patientId: currentAppointment.patient.id,
-                    appointmentId: currentAppointment.id,
-                    doctorId: currentUser.id,
-                    orderType: 'medication',
-                    orderName: rxData.medication,
-                    description: `Prescription for ${rxData.medication}`,
-                    instructions: `Dosage: ${rxData.dosage}, Frequency: ${rxData.frequency}, Duration: ${rxData.duration}`,
-                    priority: 'normal',
-                    dosage: rxData.dosage,
-                    frequency: rxData.frequency,
-                    duration: rxData.duration
-                  }, token, tenantSlug!);
-                  const orderId = created?.data?.order?.id;
-                  if (orderId) { await ehrApi.authorizeOrder(orderId, token, tenantSlug!); }
-                  setShowRxTemplateModal(false);
-                  showSuccess('Prescribed', 'Medication order created and authorized');
-                  fetchTodayAppointments();
-                  fetchAuthorizedOrders();
-                } catch (e) { showError('Error', 'Failed to create prescription'); }
-              }} className="px-4 py-2 rounded-lg bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white">Create Prescription</button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
+
+
 
       {/* Care Plan Modal */}
       {showCarePlanModal && currentAppointment && (

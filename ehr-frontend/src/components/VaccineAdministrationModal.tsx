@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Syringe, Calendar, User, AlertTriangle, X } from 'lucide-react';
 import axios from 'axios';
 import { useNotification } from './GlobalNotification';
+import SnomedConceptPicker from './SnomedConceptPicker';
 
 const ehrAxios = axios.create({ baseURL: 'http://localhost:3013/api' });
 
@@ -36,21 +37,11 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
     notes: '',
     reactionObserved: false,
     reactionDetails: '',
+    reactionSnomedConceptId: '',
+    reactionTerm: '',
   });
 
   const [submitting, setSubmitting] = useState(false);
-
-  const commonVaccines = [
-    { code: 'COVID19', name: 'COVID-19 Vaccine', cvx: '213' },
-    { code: 'FLU', name: 'Influenza Vaccine', cvx: '141' },
-    { code: 'PNEUMO', name: 'Pneumococcal Vaccine', cvx: '133' },
-    { code: 'HEPA', name: 'Hepatitis A Vaccine', cvx: '83' },
-    { code: 'HEPB', name: 'Hepatitis B Vaccine', cvx: '08' },
-    { code: 'HPV', name: 'HPV Vaccine', cvx: '165' },
-    { code: 'MMR', name: 'MMR Vaccine', cvx: '03' },
-    { code: 'TDAP', name: 'Tdap Vaccine', cvx: '115' },
-    { code: 'VARICELLA', name: 'Varicella Vaccine', cvx: '21' },
-  ];
 
   const administrationSites = [
     'Left deltoid',
@@ -63,7 +54,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
 
   const handleSubmit = async () => {
     if (!formData.vaccineCode || !formData.vaccineName || !formData.site) {
-      showError('Error', 'Please fill in all required fields');
+      showError('Error', 'Please fill in all required fields (Vaccine and Site)');
       return;
     }
 
@@ -92,7 +83,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
                 <Syringe className="w-6 h-6" />
                 Administer Vaccine
               </h3>
-              <p className="text-green-100 mt-1">Record vaccine administration</p>
+              <p className="text-green-100 mt-1">Record vaccine administration with SNOMED coding</p>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-5 h-5" />
@@ -104,32 +95,29 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
           {/* Vaccine Selection */}
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Vaccine *</label>
-              <select
-              value={formData.vaccineCode}
-              onChange={(e) => {
-                const vaccine = commonVaccines.find(v => v.code === e.target.value);
-                setFormData({
-                  ...formData,
-                  vaccineCode: e.target.value,
-                  vaccineName: vaccine?.name || '',
-                  cvxCode: vaccine?.cvx || '',
-                });
-              }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500"
-            >
-              <option value="">Select Vaccine</option>
-              {commonVaccines.map((vaccine) => (
-                <option key={vaccine.code} value={vaccine.code}>
-                  {vaccine.name}
-                </option>
-              ))}
-            </select>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Vaccine (SNOMED) *</label>
+              <SnomedConceptPicker
+                value={formData.vaccineCode ? { conceptId: formData.vaccineCode, term: formData.vaccineName } : null}
+                onChange={(concept) => {
+                  setFormData({
+                    ...formData,
+                    vaccineCode: concept?.conceptId || '',
+                    vaccineName: concept?.term || '',
+                  });
+                }}
+                token={token}
+                tenantSlug={tenantSlug}
+                ecl="<< 787859002 |Vaccine product (product)|"
+                placeholder="Search vaccine (e.g., Influenza, COVID-19)..."
+              />
+              {formData.vaccineName && (
+                <p className="text-xs text-green-600 mt-1">Selected: {formData.vaccineName} ({formData.vaccineCode})</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 CVX Code
-                <span className="text-xs text-slate-500 ml-1">(CDC)</span>
+                <span className="text-xs text-slate-500 ml-1">(Optional)</span>
               </label>
               <input
                 type="text"
@@ -137,7 +125,6 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
                 onChange={(e) => setFormData({ ...formData, cvxCode: e.target.value })}
                 placeholder="e.g., 213"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50"
-                readOnly
               />
             </div>
           </div>
@@ -266,13 +253,36 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
               </label>
             </div>
             {formData.reactionObserved && (
-              <textarea
-                value={formData.reactionDetails}
-                onChange={(e) => setFormData({ ...formData, reactionDetails: e.target.value })}
-                rows={2}
-                placeholder="Describe the reaction..."
-                className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Reaction Type (SNOMED)</label>
+                  <SnomedConceptPicker
+                    value={formData.reactionSnomedConceptId ? { conceptId: formData.reactionSnomedConceptId, term: formData.reactionTerm } : null}
+                    onChange={(concept) => {
+                      setFormData({
+                        ...formData,
+                        reactionSnomedConceptId: concept?.conceptId || '',
+                        reactionTerm: concept?.term || '',
+                        reactionDetails: formData.reactionDetails || (concept ? `Reaction: ${concept.term}` : '')
+                      });
+                    }}
+                    token={token}
+                    tenantSlug={tenantSlug}
+                    ecl="<< 404684003 |Clinical finding (finding)|"
+                    placeholder="Search reaction (e.g. Fever, Rash)..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Additional Details</label>
+                  <textarea
+                    value={formData.reactionDetails}
+                    onChange={(e) => setFormData({ ...formData, reactionDetails: e.target.value })}
+                    rows={2}
+                    placeholder="Describe the reaction details..."
+                    className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>

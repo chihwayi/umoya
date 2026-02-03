@@ -629,7 +629,53 @@ const NurseDashboard: React.FC = () => {
       }
 
       // Add context for nursing
-      const searchContext = "Nursing protocols, triage guidelines, medication administration, patient safety";
+      let searchContext = "Nursing protocols, triage guidelines, medication administration, patient safety";
+      
+      // Enhance with patient context if selected
+      if (selectedPatient) {
+        const patientContext = [];
+        if (selectedPatient.age) patientContext.push(`${selectedPatient.age}yo`);
+        if (selectedPatient.gender) patientContext.push(selectedPatient.gender);
+        if (selectedPatient.chronicConditions) patientContext.push(`Hx: ${selectedPatient.chronicConditions}`);
+        if (selectedPatient.allergies) patientContext.push(`Allergies: ${selectedPatient.allergies}`);
+        
+        if (patientContext.length > 0) {
+          searchContext += `. Patient Context: ${patientContext.join(', ')}`;
+        }
+
+        // Enhance with vitals if available in today's appointments
+        const patientApt = appointments.find(a => a.patient.id === selectedPatient.id && a.vitals);
+        if (patientApt && patientApt.vitals) {
+          const v = patientApt.vitals;
+          const vitalsContext = [];
+          
+          // BP
+          if (v.bloodPressure) {
+            const parts = v.bloodPressure.split('/');
+            if (parts.length === 2) {
+              const sys = Number(parts[0]);
+              const dia = Number(parts[1]);
+              if (sys > 140 || dia > 90) vitalsContext.push(`BP ${v.bloodPressure} (High)`);
+              else if (sys < 90 || dia < 60) vitalsContext.push(`BP ${v.bloodPressure} (Low)`);
+            }
+          }
+          
+          // HR
+          if (v.heartRate > 100) vitalsContext.push(`HR ${v.heartRate} (Tachycardia)`);
+          else if (v.heartRate < 60) vitalsContext.push(`HR ${v.heartRate} (Bradycardia)`);
+          
+          // Temp
+          if (v.temperature > 37.5) vitalsContext.push(`Temp ${v.temperature}C (Fever)`);
+          
+          // SpO2
+          if (v.oxygenSaturation < 95) vitalsContext.push(`SpO2 ${v.oxygenSaturation}% (Low)`);
+          
+          if (vitalsContext.length > 0) {
+            searchContext += `. Recent Vitals: ${vitalsContext.join(', ')}`;
+          }
+        }
+      }
+
       const finalQuery = `${searchContext}: ${guidelineQuery}`;
 
       const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
