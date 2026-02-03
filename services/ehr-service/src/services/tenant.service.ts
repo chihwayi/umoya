@@ -99,6 +99,8 @@ import { PharmacyStockMovement } from '../entities/pharmacy-stock-movement.entit
 import { PharmacyPricingRule } from '../entities/pharmacy-pricing-rule.entity';
 import { PharmacyFormulary } from '../entities/pharmacy-formulary.entity';
 import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
+import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
+import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
 
 @Injectable()
 export class TenantService {
@@ -289,6 +291,8 @@ export class TenantService {
         PharmacyPricingRule,
         PharmacyFormulary,
         PharmacyAlert,
+        SmsGatewayConfig,
+        PaymentGatewayConfig,
       ],
       synchronize: false,
       logging: false,

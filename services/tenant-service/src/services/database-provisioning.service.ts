@@ -418,11 +418,60 @@ export class DatabaseProvisioningService {
         description: 'Adds JSONB columns to store complete WHO Smart Forms data for audit trail and data integrity',
         statements: () => this.getWhoSmartFormsDataSchemaStatements(),
       },
+      {
+        id: 'gateway_configurations',
+        label: 'SMS & Payment Gateway Configurations',
+        version: '2026.02.04',
+        description: 'Tables for storing tenant-specific SMS and Payment gateway configurations',
+        statements: () => this.getGatewayConfigurationStatements(),
+      },
     ];
   }
 
   public getCoreSchemaStatements(): string[] {
     return [...this.getClinicSchema()];
+  }
+
+  private getGatewayConfigurationStatements(): string[] {
+    return [
+      // SMS Gateway Configurations
+      `CREATE TABLE IF NOT EXISTS sms_gateway_configurations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_type VARCHAR(50) NOT NULL,
+        provider_name VARCHAR(100),
+        api_url VARCHAR(500) NOT NULL,
+        api_key VARCHAR(255),
+        api_secret VARCHAR(255),
+        sender_id VARCHAR(50),
+        is_active BOOLEAN DEFAULT true,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_sms_gateway_config_provider_type ON sms_gateway_configurations(provider_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_sms_gateway_config_is_active ON sms_gateway_configurations(is_active)`,
+
+      // Payment Gateway Configurations
+      `CREATE TABLE IF NOT EXISTS payment_gateway_configurations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_type VARCHAR(50) NOT NULL,
+        provider_name VARCHAR(100),
+        api_url VARCHAR(500) NOT NULL,
+        merchant_id VARCHAR(100),
+        integration_key VARCHAR(255),
+        api_key VARCHAR(255),
+        api_secret VARCHAR(255),
+        webhook_url VARCHAR(500),
+        webhook_secret VARCHAR(255),
+        is_active BOOLEAN DEFAULT true,
+        is_test_mode BOOLEAN DEFAULT false,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_provider_type ON payment_gateway_configurations(provider_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_is_active ON payment_gateway_configurations(is_active)`,
+    ];
   }
 
   private getWhoSmartFormsDataSchemaStatements(): string[] {

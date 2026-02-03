@@ -158,7 +158,7 @@ export class MedicationReminderService {
           this.notificationsService.sendSms({
             phone: reminder.phone,
             message,
-          }),
+          }, connection),
         );
       }
     }
@@ -190,12 +190,13 @@ export class MedicationReminderService {
       sendPromises.push(
         this.patientNotificationsService.createNotification(
           patient_id,
+          'general',
+          'Medication Reminder',
+          `Time to take ${medication_name}`,
           tenantId,
           {
-            type: 'medication_reminder',
-            title: 'Medication Reminder',
-            message: `Time to take ${medication_name}`,
-            data: {
+            priority: 'high',
+            metadata: {
               prescriptionId: prescription_id,
               medicationName: medication_name,
               dosage,

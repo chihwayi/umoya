@@ -5,11 +5,12 @@ import { AppointmentSimple } from '../entities/appointment-simple.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
 import { Bill } from '../entities/billing.entity';
+import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 
 @Injectable()
 export class NotificationsService {
   
-  async sendSms(smsData: { phone: string, message: string, network?: string }) {
+  async sendSms(smsData: { phone: string, message: string, network?: string }, tenantDb?: DataSource) {
     const { phone, message, network } = smsData;
     
     // Detect Zimbabwe network from phone number
@@ -20,11 +21,35 @@ export class NotificationsService {
     const messageId = `SMS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Different gateways for different networks
-    const gateways = {
+    const defaultGateways = {
       econet: 'https://api.econet.co.zw/sms',
       telecel: 'https://api.telecel.co.zw/sms', 
       netone: 'https://api.netone.co.zw/sms'
     };
+
+    let gatewayUrl = defaultGateways[targetNetwork] || defaultGateways.econet;
+    let apiKey = '';
+
+    // Try to load tenant-specific configuration
+    if (tenantDb) {
+      try {
+        const configRepo = tenantDb.getRepository(SmsGatewayConfig);
+        const config = await configRepo.findOne({
+          where: {
+            providerType: targetNetwork as any,
+            isActive: true
+          }
+        });
+
+        if (config) {
+          gatewayUrl = config.apiUrl;
+          apiKey = config.apiKey;
+        }
+      } catch (error) {
+        // Fallback to defaults if table doesn't exist or error occurs
+        console.warn('Failed to load SMS gateway config, using defaults', error);
+      }
+    }
 
     return {
       messageId,
@@ -33,7 +58,7 @@ export class NotificationsService {
       phone,
       message: message.substring(0, 160), // SMS character limit
       cost: this.calculateSmsCost(message, targetNetwork),
-      gateway: gateways[targetNetwork] || gateways.econet,
+      gateway: gatewayUrl,
       timestamp: new Date().toISOString()
     };
   }
@@ -54,7 +79,7 @@ export class NotificationsService {
     return this.sendSms({
       phone: appointment.patient.phone,
       message
-    });
+    }, tenantDb);
   }
 
   async sendPrescriptionReady(prescriptionId: string, tenantDb: DataSource) {
@@ -73,7 +98,7 @@ export class NotificationsService {
     return this.sendSms({
       phone: prescription.patient.phone,
       message
-    });
+    }, tenantDb);
   }
 
   async sendLabResultsReady(labOrderId: string, tenantDb: DataSource) {
@@ -93,7 +118,7 @@ export class NotificationsService {
     return this.sendSms({
       phone: labOrder.patient.phone,
       message
-    });
+    }, tenantDb);
   }
 
   async sendPaymentReminder(billId: string, tenantDb: DataSource) {
@@ -112,7 +137,7 @@ export class NotificationsService {
     return this.sendSms({
       phone: bill.patient.phone,
       message
-    });
+    }, tenantDb);
   }
 
   async getDeliveryStatus(messageId: string) {

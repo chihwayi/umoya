@@ -22,6 +22,11 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 - **Account Status Control** - Activate/deactivate users as needed
 - **Profile Management** - User settings and password change functionality
 
+### ⚙️ **Tenant Configuration System** (NEW)
+- **Gateway Isolation** - Unique SMS & Payment gateway credentials per tenant
+- **Dynamic Configuration** - Store and manage API keys securely in tenant databases
+- **Fallback Support** - System-level defaults with tenant-level overrides
+
 ### 🏥 **Core eHR Functionality** 
 - **User Management** ✅ - Complete staff management system
 - **Patient Management** 🚧 - Patient registration and demographics (Next)
@@ -31,31 +36,33 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 - **Laboratory & Imaging** 🚧 - Test orders and results
 - **Billing & Invoicing** 🚧 - Financial management
 
-### 💰 **Medical Aid Claims Processing** (Planned)
-- Automated claim generation and submission
-- Real-time claim status tracking
-- Integration with major Zimbabwean medical aids (CIMAS, Premier, Econet Health)
-- Competitive pricing model vs Health263
+### ✅ **Medical Aid Claims Processing**
+- **Automated Claims** - Generation and submission via EDI/API
+- **Status Tracking** - Real-time claim status updates
+- **Pre-authorization** - Instant checks for procedures
+- **Provider Integration** - CIMAS, Premier, Econet Health, PSMAS
+- **Pricing** - Competitive model vs Health263
 
-### 🤖 **Clinical Decision Support System (CDSS)** (Planned)
-- AI-powered diagnostic assistance
-- Drug interaction checking
-- Clinical guidelines and protocols
-- Statistical analysis and reporting
-- Predictive analytics for patient outcomes
+### ✅ **Clinical Decision Support System (CDSS)**
+- **AI Diagnostics** - MedBERT & ClinicalBERT fusion for intelligent suggestions
+- **Medical Vision** - AI analysis for X-Rays and DICOM imagery
+- **Drug Safety** - Advanced interaction checking (Drug-Drug, Drug-Food)
+- **Guidelines** - Automated clinical protocols and compliance
+- **Dosing** - Renal and weight-based dosing calculators
 
-### 🔗 **Interoperability** (Planned)
-- HL7 v2.x message processing
-- FHIR R4 compliance
-- RESTful APIs for third-party integration
-- Real-time data synchronization
+### 🔗 **Interoperability**
+- **HL7 v2.x** - ADT, ORM, and ORU message processing
+- **FHIR R4** - Complete resource mapping & capability statement
+- **WHO Smart Guidelines** - Native FHIR-based guideline execution
+- **DHIS2 Integration** - Automated reporting and patient sync
+- **External APIs** - Webhooks for real-time status updates
 
-### 🇿🇼 **Zimbabwe-Specific Features** (Planned)
-- Local medical aid integration
-- ZMDC compliance
-- Local currency support (ZWL/USD)
-- SMS notifications (Econet, Telecel, NetOne)
-- Mobile money integration (EcoCash, OneMoney)
+### 🇿🇼 **Zimbabwe-Specific Features**
+- **SMS Notifications** ✅ - Multi-network support (Econet, Telecel, NetOne) with tenant-specific sender IDs
+- **Mobile Money Integration** ✅ - EcoCash & OneMoney payment processing with tenant-specific merchant accounts
+- **Local Medical Aid Integration** ✅ - Direct integration with CIMAS, Premier, Econet Health
+- **ZMDC Compliance** (Planned) - Regulatory reporting standards
+- **Local Currency Support** 🚧 - ZWL/USD multi-currency handling
 
 ## 🏗️ Architecture
 
@@ -68,7 +75,7 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 
 - **Backend**: Node.js, NestJS, TypeScript, PostgreSQL
 - **Frontend**: React, TypeScript, Tailwind CSS
-- **AI/ML**: Python, FastAPI, TensorFlow (Planned)
+- **AI/ML**: Python, FastAPI, PyTorch, HuggingFace Transformers
 - **Integration**: HAPI FHIR, Mirth Connect (Planned)
 - **Infrastructure**: Docker, Docker Compose, Redis
 
@@ -115,8 +122,12 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 - **📋 Audit Logging** - Complete activity tracking & compliance
 - **📧 Email Notifications** - Welcome emails, alerts, password resets
 - **📊 Analytics Dashboard** - System-wide reporting & metrics
+- **💳 Payment Gateway Integration** - Tenant-specific EcoCash & OneMoney configuration
+- **📱 SMS Gateway Integration** - Isolated SMS credentials for Econet/Telecel/NetOne
 - **🌐 Professional Web Portal** - React TypeScript interface
 - **🔧 RESTful APIs** - 69+ EHR APIs ready for development
+- **🤖 CDSS** - AI-powered diagnostics & interaction checking
+- **💰 Medical Aid Claims** - Automated submission & status tracking
 
 ### 🚧 **Next Phase: Core EHR Modules**
 - **Patient Management** - Registration, demographics, medical history
@@ -124,7 +135,7 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 - **Medical Records** - Clinical notes, diagnoses, treatment plans
 - **Prescription Management** - Medication orders, drug interactions
 - **Laboratory Integration** - Test orders, results management
-- **Billing & Claims** - Medical aid integration, invoicing
+- **Billing & Invoicing** - Financial management, invoicing
 
 ## 🎯 Competitive Advantages
 
@@ -135,7 +146,7 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
 - **Enterprise Security** - Multi-tenant isolation, JWT auth, audit logs
 - **Complete Staff Management** - Built-in user management with role-based access
 - **Smart Notifications** - No browser popups, beautiful toast messages
-- **AI-Powered CDSS** - First in Zimbabwe market (planned)
+- **AI-Powered CDSS** - First in Zimbabwe market
 - **Production-Ready** - Enterprise-grade multi-tenant architecture
 - **Developer-Friendly** - 69+ APIs, comprehensive documentation
 

@@ -252,7 +252,7 @@ export class SpecialtyAutomationService {
           await this.notificationsService.sendSms({
             phone: patient.phone,
             message: `Dear ${patient.first_name}, this is a reminder that your next ${cycle.regimen_name} cycle is scheduled for ${cycle.next_cycle_date}. Please contact the clinic to confirm.`,
-          });
+          }, tenantDb);
         } catch (smsError) {
           this.logger.warn(`Failed to send SMS reminder: ${smsError instanceof Error ? smsError.message : smsError}`);
         }
@@ -303,7 +303,7 @@ export class SpecialtyAutomationService {
               await this.notificationsService.sendSms({
                 phone: member.phone,
                 message: `URGENT: ${message}`,
-              });
+              }, tenantDb);
             } catch (smsError) {
               this.logger.warn(`Failed to send escalation SMS: ${smsError instanceof Error ? smsError.message : smsError}`);
             }
@@ -355,7 +355,7 @@ export class SpecialtyAutomationService {
               await this.notificationsService.sendSms({
                 phone: member.phone,
                 message: `SLA Alert: ${message}`,
-              });
+              }, tenantDb);
             } catch (smsError) {
               this.logger.warn(`Failed to send SLA alert SMS: ${smsError instanceof Error ? smsError.message : smsError}`);
             }

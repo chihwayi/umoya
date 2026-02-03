@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Bill, BillStatus } from '../entities/billing.entity';
+import { PaymentGatewayConfig, PaymentProviderType } from '../entities/payment-gateway-config.entity';
 
 @Injectable()
 export class PaymentsService {
@@ -36,6 +37,20 @@ export class PaymentsService {
   async processEcoCashPayment(paymentData: any, tenantDb: DataSource) {
     const { billId, amount, phoneNumber, currency = 'USD' } = paymentData;
     
+    // Fetch tenant-specific configuration
+    let merchantId = 'SIMULATED_MERCHANT';
+    try {
+      const configRepo = tenantDb.getRepository(PaymentGatewayConfig);
+      const config = await configRepo.findOne({
+        where: { providerType: PaymentProviderType.ECOCASH, isActive: true }
+      });
+      if (config && config.merchantId) {
+        merchantId = config.merchantId;
+      }
+    } catch (e) {
+      console.warn('Failed to load EcoCash config', e);
+    }
+
     const transactionId = `ECO_${Date.now()}`;
     
     // Simulate EcoCash API integration
@@ -43,6 +58,7 @@ export class PaymentsService {
       transactionId,
       status: 'PENDING',
       provider: 'EcoCash',
+      merchantId, // Return the tenant-specific merchant ID
       amount,
       currency,
       phoneNumber,
@@ -65,6 +81,20 @@ export class PaymentsService {
   async processOneMoneyPayment(paymentData: any, tenantDb: DataSource) {
     const { billId, amount, phoneNumber, currency = 'USD' } = paymentData;
     
+    // Fetch tenant-specific configuration
+    let merchantId = 'SIMULATED_MERCHANT';
+    try {
+      const configRepo = tenantDb.getRepository(PaymentGatewayConfig);
+      const config = await configRepo.findOne({
+        where: { providerType: PaymentProviderType.ONEMONEY, isActive: true }
+      });
+      if (config && config.merchantId) {
+        merchantId = config.merchantId;
+      }
+    } catch (e) {
+      console.warn('Failed to load OneMoney config', e);
+    }
+
     const transactionId = `ONE_${Date.now()}`;
     
     // Simulate OneMoney API integration
@@ -72,6 +102,7 @@ export class PaymentsService {
       transactionId,
       status: 'PENDING',
       provider: 'OneMoney',
+      merchantId, // Return the tenant-specific merchant ID
       amount,
       currency,
       phoneNumber,

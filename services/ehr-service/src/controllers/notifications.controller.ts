@@ -16,7 +16,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Send SMS notification (Econet/Telecel/NetOne)' })
   @ApiResponse({ status: 201, description: 'SMS sent successfully' })
   async sendSms(@Body() smsData: any, @Request() req: RequestWithTenant) {
-    return this.notificationsService.sendSms(smsData);
+    return this.notificationsService.sendSms(smsData, req.tenantDb);
   }
 
   @Post('appointment-reminder')
