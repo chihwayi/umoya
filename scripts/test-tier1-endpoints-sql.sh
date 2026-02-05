@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Load environment variables
-source "$(dirname "$0")/scripts/load-env.sh"
+source "$(dirname "$0")/load-env.sh"
 
 # Test Tier 1 Endpoints by running the SQL queries directly
 # This verifies the query logic works without auth issues

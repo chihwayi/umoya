@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Load environment variables
-source "$(dirname "$0")/scripts/load-env.sh"
+source "$(dirname "$0")/load-env.sh"
 
 # Tier 1 API Endpoint Testing Script
 # Tests all POST/GET/PUT/DELETE endpoints for Sprints 21-25

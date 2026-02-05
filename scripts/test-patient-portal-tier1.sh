@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Load environment variables
-source "$(dirname "$0")/scripts/load-env.sh"
+source "$(dirname "$0")/load-env.sh"
 
 # Test Patient Portal Tier 1 Endpoints
 # Tests all 15 new endpoints with real patient login

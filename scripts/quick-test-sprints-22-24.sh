@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Load environment variables
-source "$(dirname "$0")/scripts/load-env.sh"
+source "$(dirname "$0")/load-env.sh"
 
 echo "🧪 QUICK TEST: SPRINTS 22 & 24"
 echo "=============================="
