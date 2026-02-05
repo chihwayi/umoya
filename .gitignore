@@ -90,6 +90,7 @@ jspm_packages/
 *.swp
 *.swo
 *~
+*.backup
 
 # OS
 .DS_Store
@@ -98,38 +99,18 @@ jspm_packages/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
 
-# Database
-*.sqlite
-*.db
+# Python
+venv/
+env/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Temporary files
-tmp/
-temp/
-
-# Service logs
-services/*/logs/
-services/*/*.log
-
-# Build artifacts
-services/*/dist/
-web-app/build/
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# Backup files
-*.backup
-*.bak
-
-# Local development
-.local/
-local/
-# Terminology assets
-snowstorm/
-
-# Local downloads
+# Data
 downloads/
 who-smart-guidelines-repos/
