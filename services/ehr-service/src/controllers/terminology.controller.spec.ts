@@ -6,6 +6,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 describe('TerminologyController', () => {
   let controller: TerminologyController;
   let service: TerminologyService;
+  const mockTenantDb = {} as any;
 
   const mockTerminologyService = {
     searchConcepts: jest.fn(),
@@ -45,14 +46,14 @@ describe('TerminologyController', () => {
       mockTerminologyService.searchConcepts.mockResolvedValue(mockResult);
 
       const result = await controller.searchConcepts(
+        { tenantDb: mockTenantDb } as any,
         'diabetes',
         '50',
         '0',
         'true',
-        {} as any,
       );
 
-      expect(service.searchConcepts).toHaveBeenCalledWith('diabetes', 50, 0, true);
+      expect(service.searchConcepts).toHaveBeenCalledWith(mockTenantDb, 'diabetes', 50, 0, true, undefined, undefined);
       expect(result).toEqual(mockResult);
     });
 
@@ -66,9 +67,9 @@ describe('TerminologyController', () => {
 
       mockTerminologyService.searchConcepts.mockResolvedValue(mockResult);
 
-      await controller.searchConcepts('test', undefined, undefined, undefined, {} as any);
+      await controller.searchConcepts({ tenantDb: mockTenantDb } as any, 'test', undefined, undefined, undefined);
 
-      expect(service.searchConcepts).toHaveBeenCalledWith('test', 50, 0, true);
+      expect(service.searchConcepts).toHaveBeenCalledWith(mockTenantDb, 'test', 50, 0, true, undefined, undefined);
     });
 
     it('should propagate service errors', async () => {
@@ -77,7 +78,7 @@ describe('TerminologyController', () => {
       );
 
       await expect(
-        controller.searchConcepts('a', '50', '0', 'true', {} as any),
+        controller.searchConcepts({ tenantDb: mockTenantDb } as any, 'a', '50', '0', 'true'),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -92,9 +93,9 @@ describe('TerminologyController', () => {
 
       mockTerminologyService.validateConcept.mockResolvedValue(mockConcept);
 
-      const result = await controller.validateConcept('73211009', {} as any);
+      const result = await controller.validateConcept('73211009', { tenantDb: mockTenantDb } as any);
 
-      expect(service.validateConcept).toHaveBeenCalledWith('73211009');
+      expect(service.validateConcept).toHaveBeenCalledWith(mockTenantDb, '73211009');
       expect(result).toEqual(mockConcept);
     });
 
@@ -103,7 +104,7 @@ describe('TerminologyController', () => {
         new NotFoundException('Concept not found'),
       );
 
-      await expect(controller.validateConcept('99999999', {} as any)).rejects.toThrow(
+      await expect(controller.validateConcept('99999999', { tenantDb: mockTenantDb } as any)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -119,9 +120,9 @@ describe('TerminologyController', () => {
 
       mockTerminologyService.getConceptDetails.mockResolvedValue(mockDetails);
 
-      const result = await controller.getConceptDetails('73211009', {} as any);
+      const result = await controller.getConceptDetails('73211009', { tenantDb: mockTenantDb } as any);
 
-      expect(service.getConceptDetails).toHaveBeenCalledWith('73211009');
+      expect(service.getConceptDetails).toHaveBeenCalledWith(mockTenantDb, '73211009');
       expect(result).toEqual(mockDetails);
     });
   });
@@ -139,23 +140,23 @@ describe('TerminologyController', () => {
 
       mockTerminologyService.mapConcept.mockResolvedValue(mockMappings);
 
-      const result = await controller.mapConcept('73211009', 'ICD10', {} as any);
+      const result = await controller.mapConcept('73211009', 'ICD10', { tenantDb: mockTenantDb } as any);
 
-      expect(service.mapConcept).toHaveBeenCalledWith('73211009', 'ICD10');
+      expect(service.mapConcept).toHaveBeenCalledWith(mockTenantDb, '73211009', 'ICD10');
       expect(result).toEqual(mockMappings);
     });
 
     it('should handle different target systems', async () => {
       mockTerminologyService.mapConcept.mockResolvedValue([]);
 
-      await controller.mapConcept('73211009', 'ICD11', {} as any);
-      expect(service.mapConcept).toHaveBeenCalledWith('73211009', 'ICD11');
+      await controller.mapConcept('73211009', 'ICD11', { tenantDb: mockTenantDb } as any);
+      expect(service.mapConcept).toHaveBeenCalledWith(mockTenantDb, '73211009', 'ICD11');
 
-      await controller.mapConcept('73211009', 'LOINC', {} as any);
-      expect(service.mapConcept).toHaveBeenCalledWith('73211009', 'LOINC');
+      await controller.mapConcept('73211009', 'LOINC', { tenantDb: mockTenantDb } as any);
+      expect(service.mapConcept).toHaveBeenCalledWith(mockTenantDb, '73211009', 'LOINC');
 
-      await controller.mapConcept('73211009', 'CPT', {} as any);
-      expect(service.mapConcept).toHaveBeenCalledWith('73211009', 'CPT');
+      await controller.mapConcept('73211009', 'CPT', { tenantDb: mockTenantDb } as any);
+      expect(service.mapConcept).toHaveBeenCalledWith(mockTenantDb, '73211009', 'CPT');
     });
   });
 });

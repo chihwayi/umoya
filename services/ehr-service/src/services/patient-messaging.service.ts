@@ -22,10 +22,10 @@ export class PatientMessagingService {
     recipientId: string,
     recipientType: RecipientType,
     message: string,
+    tenantId: string,
     subject?: string,
     messageType: MessageType = 'general',
     priority: Priority = 'normal',
-    tenantId: string,
   ): Promise<PatientMessage> {
     const messageRepository = await this.getMessageRepository(tenantId);
 
@@ -119,7 +119,7 @@ export class PatientMessagingService {
       ${filters?.read !== undefined ? ` AND read = $2` : ''}
       ${filters?.messageType ? ` AND message_type = $${filters.read !== undefined ? '3' : '2'}` : ''}
     `;
-    const countParams = [patientId];
+    const countParams: any[] = [patientId];
     if (filters?.read !== undefined) countParams.push(filters.read);
     if (filters?.messageType) countParams.push(filters.messageType);
     const countResult = await connection.query(countQuery, countParams);

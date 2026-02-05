@@ -1313,7 +1313,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getResourceHistory(resourceType, id, tenantDb, tenantId);
+    return this.fhirService.getResourceHistory(resourceType, id, tenantDb);
   }
 
   @Post('$validate')

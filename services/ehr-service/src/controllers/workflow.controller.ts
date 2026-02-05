@@ -37,10 +37,10 @@ export class WorkflowController {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Workflows retrieved successfully' })
   async getWorkflows(
+    @Request() req: RequestWithTenant,
     @Query('triggerEvent') triggerEvent?: string,
     @Query('isActive') isActive?: boolean,
     @Query('search') search?: string,
-    @Request() req: RequestWithTenant,
   ) {
     return this.workflowService.getWorkflows(
       {
@@ -78,11 +78,11 @@ export class WorkflowController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Executions retrieved successfully' })
   async getWorkflowExecutions(
+    @Request() req: RequestWithTenant,
     @Query('workflowId') workflowId?: string,
     @Query('patientId') patientId?: string,
     @Query('status') status?: string,
     @Query('limit') limit?: number,
-    @Request() req: RequestWithTenant,
   ) {
     return this.workflowService.getWorkflowExecutions(
       {

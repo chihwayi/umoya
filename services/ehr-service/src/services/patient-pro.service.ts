@@ -23,6 +23,15 @@ export interface QuestionnaireQuestion {
   };
 }
 
+export interface AlertRule {
+  name: string;
+  conditionType: 'score' | 'response' | 'symptom' | 'score_greater_than' | 'score_between' | 'score_less_than';
+  conditionValue: any;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  notifyRoles?: string[];
+}
+
 export interface QuestionnaireTemplate {
   code: string;
   name: string;
@@ -31,7 +40,7 @@ export interface QuestionnaireTemplate {
   version?: string;
   questions: QuestionnaireQuestion[];
   scoring: {
-    algorithm: 'sum' | 'average' | 'weighted' | 'custom';
+    algorithm: 'sum' | 'average' | 'weighted' | 'custom' | 'direct' | 'reverse';
     minScore: number;
     maxScore: number;
     thresholds?: Array<{
@@ -41,6 +50,7 @@ export interface QuestionnaireTemplate {
       severity?: 'low' | 'medium' | 'high' | 'critical';
     }>;
   };
+  alertRules?: AlertRule[];
 }
 
 @Injectable()
@@ -857,6 +867,7 @@ export class PatientProService {
     const standardQuestionnaires = getAllQuestionnaires();
 
     for (const q of standardQuestionnaires) {
+      const qAny = q as any; // Allow access to alertRules
       // Check if already exists
       const existing = await tenantDb.query(`SELECT id FROM questionnaire_templates WHERE code = $1`, [q.code]);
 
@@ -884,14 +895,14 @@ export class PatientProService {
           q.scoring.maxScore,
           JSON.stringify(q.questions),
           JSON.stringify(q.scoring),
-          JSON.stringify(q.alertRules || []),
+          JSON.stringify(qAny.alertRules || []),
         ],
       );
 
       // Create default alert rules
-      if (q.alertRules && q.alertRules.length > 0) {
+      if (qAny.alertRules && qAny.alertRules.length > 0) {
         const [template] = await tenantDb.query(`SELECT id FROM questionnaire_templates WHERE code = $1`, [q.code]);
-        for (const alertRule of q.alertRules) {
+        for (const alertRule of qAny.alertRules) {
           await tenantDb.query(
             `INSERT INTO pro_alert_rules (
               questionnaire_template_id, rule_name, condition_type, condition_value,

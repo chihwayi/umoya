@@ -116,7 +116,7 @@ export interface GuidelineRecommendation {
   fhirResourceId?: string;
 }
 
-interface SmartForm {
+export interface SmartForm {
   id: string;
   title: string;
   description?: string;
@@ -125,7 +125,7 @@ interface SmartForm {
   fhirResourceId?: string;
 }
 
-interface FormItem {
+export interface FormItem {
   linkId: string;
   text: string;
   type: string;

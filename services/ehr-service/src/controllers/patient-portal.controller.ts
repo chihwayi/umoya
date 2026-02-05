@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { Response } from 'express';
+import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import { PatientAuthService, PatientRegisterDto, PatientLoginDto, PatientPasswordResetDto, PatientPasswordResetConfirmDto } from '../services/patient-auth.service';
 import { PatientPortalService } from '../services/patient-portal.service';
@@ -14,6 +15,7 @@ import { HealthRecordsExportService } from '../services/health-records-export.se
 import { PatientProService } from '../services/patient-pro.service';
 import { AssignQuestionnaireDto, SubmitQuestionnaireDto } from '../dto/patient-pro.dto';
 import { HealthGoalsService, CreateGoalDto, UpdateGoalDto, LogProgressDto } from '../services/health-goals.service';
+import { CarePlanService } from '../services/care-plan.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 // Tier 1 Services
@@ -23,6 +25,8 @@ import { ImmunizationService } from '../services/immunization.service';
 import { ADTService } from '../services/adt.service';
 import { EDService } from '../services/ed.service';
 import { TenantService } from '../services/tenant.service';
+
+import { SignerRole, SignatureType } from '../dto/consent.dto';
 
 @ApiTags('Patient Portal')
 @Controller('patient-portal')
@@ -41,6 +45,7 @@ export class PatientPortalController {
     private readonly healthRecordsExportService: HealthRecordsExportService,
     private readonly patientProService: PatientProService,
     private readonly healthGoalsService: HealthGoalsService,
+    private readonly carePlanService: CarePlanService,
     // Tier 1 Services
     private readonly patientConsentService: PatientConsentService,
     private readonly clinicalPathwayService: ClinicalPathwayService,
@@ -538,10 +543,10 @@ export class PatientPortalController {
       body.recipientId,
       body.recipientType as any,
       body.message,
+      req.tenantId,
       body.subject,
       (body.messageType as any) || 'general',
       (body.priority as any) || 'normal',
-      req.tenantId,
     );
   }
 
@@ -1409,7 +1414,7 @@ export class PatientPortalController {
     @Query('status') status?: string,
   ) {
     const patientId = req.user.sub;
-    return this.patientPortalService.getPatientCarePlans(patientId, req.tenantId, { status });
+    return this.carePlanService.getCarePlans(patientId, { status }, req.tenantDb);
   }
 
   @Get('care-plans/:carePlanId')
@@ -1422,8 +1427,7 @@ export class PatientPortalController {
     @Req() req: RequestWithTenant & { user: { sub: string } },
     @Param('carePlanId') carePlanId: string,
   ) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.getPatientCarePlan(patientId, carePlanId, req.tenantId);
+    return this.carePlanService.getCarePlanById(carePlanId, req.tenantDb);
   }
 
   @Post('care-plans/:carePlanId/progress')
@@ -1437,8 +1441,7 @@ export class PatientPortalController {
     @Param('carePlanId') carePlanId: string,
     @Body() progressData: { notes: string; metrics?: any },
   ) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.reportCarePlanProgress(patientId, carePlanId, progressData, req.tenantId);
+    return this.carePlanService.updateCarePlan(carePlanId, { notes: progressData.notes }, req.tenantDb);
   }
 
   @Post('care-plans/:carePlanId/goals/:goalId/progress')
@@ -1454,8 +1457,10 @@ export class PatientPortalController {
     @Param('goalId') goalId: string,
     @Body() progressData: { currentValue: number; notes?: string; metrics?: any },
   ) {
-    const patientId = req.user.sub;
-    return this.patientPortalService.reportGoalProgress(patientId, carePlanId, goalId, progressData, req.tenantId);
+    return this.carePlanService.updateGoal(goalId, { 
+      currentValue: progressData.currentValue,
+      notes: progressData.notes 
+    }, req.tenantDb);
   }
 
   // ==================== TIER 1: E-CONSENT MANAGEMENT ====================
@@ -1521,7 +1526,7 @@ export class PatientPortalController {
     @Param('id') consentId: string,
   ) {
     const patientId = req.user.sub;
-    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantDb as DataSource);
     
     // Verify patient owns this consent
     if (consent.patientId !== patientId) {
@@ -1541,10 +1546,10 @@ export class PatientPortalController {
     @Body() signatureData: { signatureData: string; signedBy: string },
   ) {
     const patientId = req.user.sub;
-    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const tenantDb = req.tenantDb as DataSource;
     
     // Verify patient owns this consent
-    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    const consent = await this.patientConsentService.getConsentById(consentId, tenantDb);
     if (consent.patientId !== patientId) {
       throw new Error('Access denied');
     }
@@ -1553,11 +1558,14 @@ export class PatientPortalController {
       consentId,
       {
         signatureData: signatureData.signatureData,
-        signedBy: patientId,
-        signedByRole: 'patient',
+        signerName: 'Patient', // Self-signed
+        signerRole: SignerRole.PATIENT,
+        signatureType: SignatureType.TYPED,
         signatureMethod: 'typed',
       },
       patientId,
+      req.ip || '',
+      (req.headers['user-agent'] as string) || '',
       tenantDb,
     );
   }
@@ -1572,18 +1580,20 @@ export class PatientPortalController {
     @Body() declineData: { reason: string },
   ) {
     const patientId = req.user.sub;
-    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const tenantDb = req.tenantDb as DataSource;
     
     // Verify patient owns this consent
-    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    const consent = await this.patientConsentService.getConsentById(consentId, tenantDb);
     if (consent.patientId !== patientId) {
       throw new Error('Access denied');
     }
     
     return await this.patientConsentService.declineConsent(
       consentId,
-      declineData.reason,
+      { reason: declineData.reason },
       patientId,
+      req.ip || '',
+      (req.headers['user-agent'] as string) || '',
       tenantDb,
     );
   }
@@ -1599,14 +1609,22 @@ export class PatientPortalController {
     @Res() res: Response,
   ) {
     const patientId = req.user.sub;
+    const tenantDb = req.tenantDb as DataSource;
     
     // Verify patient owns this consent
-    const consent = await this.patientConsentService.getConsentById(consentId, req.tenantId);
+    const consent = await this.patientConsentService.getConsentById(consentId, tenantDb);
     if (consent.patientId !== patientId) {
       throw new Error('Access denied');
     }
     
-    const exported = await this.patientConsentService.exportConsent(consentId, format, req.tenantId);
+    const exported = await this.patientConsentService.exportConsent(
+        consentId,
+        format,
+        patientId,
+        req.ip || '',
+        (req.headers['user-agent'] as string) || '',
+        tenantDb
+    );
     
     if (format === 'pdf') {
       res.setHeader('Content-Type', 'application/pdf');

@@ -1,4 +1,4 @@
-import { LabOrder } from '../../entities/lab-order.entity';
+import { LabOrder, LabOrderStatus, Priority } from '../../entities/lab-order.entity';
 import * as fhir from 'fhir/r4';
 
 /**
@@ -11,20 +11,19 @@ export class ServiceRequestMapper {
    */
   static toFhir(labOrder: LabOrder, tenantId?: string): fhir.ServiceRequest {
     // Map status
-    const statusMap: Record<string, fhir.ServiceRequestStatus> = {
-      ordered: 'draft',
-      'in_progress': 'active',
-      completed: 'completed',
-      cancelled: 'revoked',
-      'on_hold': 'on-hold',
+    const statusMap: Record<string, any> = {
+      [LabOrderStatus.ORDERED]: 'draft',
+      [LabOrderStatus.IN_PROGRESS]: 'active',
+      [LabOrderStatus.COMPLETED]: 'completed',
+      [LabOrderStatus.CANCELLED]: 'revoked',
+      [LabOrderStatus.AWAITING_PAYMENT]: 'on-hold',
     };
 
     // Map priority
-    const priorityMap: Record<string, fhir.RequestPriority> = {
-      routine: 'routine',
-      urgent: 'urgent',
-      stat: 'stat',
-      asap: 'asap',
+    const priorityMap: Record<string, any> = {
+      [Priority.ROUTINE]: 'routine',
+      [Priority.URGENT]: 'urgent',
+      [Priority.STAT]: 'stat',
     };
 
     const fhirServiceRequest: fhir.ServiceRequest = {
@@ -62,19 +61,11 @@ export class ServiceRequestMapper {
           },
         ],
       }),
-      ...(labOrder.specimenType && {
-        specimen: [
-          {
-            type: {
-              text: labOrder.specimenType,
-            },
-          },
-        ],
-      }),
-      note: labOrder.notes
+      // Specimen mapping removed as it requires proper Reference handling
+      note: labOrder.specialInstructions
         ? [
             {
-              text: labOrder.notes,
+              text: labOrder.specialInstructions,
             },
           ]
         : undefined,
@@ -99,7 +90,7 @@ export class ServiceRequestMapper {
       testCode: coding.code || 'UNKNOWN',
       testName: coding.display || coding.code || 'Unknown Test',
       category: 'chemistry' as any, // Default category
-      specimenType: fhirServiceRequest.specimen?.[0]?.type?.text || 'Blood',
+      specimenType: fhirServiceRequest.specimen?.[0]?.display || 'Blood',
     })) || [];
 
     if (tests.length === 0 && fhirServiceRequest.code?.text) {
@@ -107,25 +98,26 @@ export class ServiceRequestMapper {
         testCode: 'UNKNOWN',
         testName: fhirServiceRequest.code.text,
         category: 'chemistry' as any,
-        specimenType: fhirServiceRequest.specimen?.[0]?.type?.text || 'Blood',
+        specimenType: fhirServiceRequest.specimen?.[0]?.display || 'Blood',
       });
     }
 
     // Map status
     const statusMap: Record<string, LabOrderStatus> = {
-      draft: 'ordered',
-      active: 'in_progress',
-      completed: 'completed',
-      revoked: 'cancelled',
-      'on-hold': 'on_hold',
+      draft: LabOrderStatus.ORDERED,
+      active: LabOrderStatus.IN_PROGRESS,
+      completed: LabOrderStatus.COMPLETED,
+      revoked: LabOrderStatus.CANCELLED,
+      'on-hold': LabOrderStatus.AWAITING_PAYMENT,
+      'entered-in-error': LabOrderStatus.CANCELLED,
     };
 
     // Map priority
     const priorityMap: Record<string, Priority> = {
-      routine: 'routine',
-      urgent: 'urgent',
-      stat: 'stat',
-      asap: 'asap',
+      routine: Priority.ROUTINE,
+      urgent: Priority.URGENT,
+      stat: Priority.STAT,
+      asap: Priority.URGENT,
     };
 
     // Extract ordering provider
@@ -146,12 +138,12 @@ export class ServiceRequestMapper {
       patientId,
       orderNumber: `LAB-${Date.now()}`,
       tests,
-      status: statusMap[fhirServiceRequest.status] || 'ordered',
-      priority: priorityMap[fhirServiceRequest.priority] || 'routine',
+      status: statusMap[fhirServiceRequest.status] || LabOrderStatus.ORDERED,
+      priority: priorityMap[fhirServiceRequest.priority || 'routine'] || Priority.ROUTINE,
       ...(orderingProviderId && { orderingProviderId }),
       ...(scheduledDateTime && { scheduledDateTime }),
       ...(clinicalInfo && { clinicalInfo }),
-      ...(notes && { notes }),
+      ...(notes && { specialInstructions: notes }),
     };
   }
 }

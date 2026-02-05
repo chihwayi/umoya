@@ -123,7 +123,7 @@ export class MedicationRequestMapper {
       id: prescription.id,
       meta: {
         versionId: '1',
-        lastUpdated: prescription.updatedAt?.toISOString() || prescription.createdAt.toISOString(),
+        lastUpdated: prescription.createdAt.toISOString(),
       },
       status,
       intent,

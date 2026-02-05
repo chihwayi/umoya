@@ -1,7 +1,9 @@
-import { NestFactory } from '@nestjs/core';
+import './instrument';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { TenantModule } from './tenant.module';
+import { SentryFilter } from './filters/sentry.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(TenantModule);
@@ -12,6 +14,10 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
     transform: true,
   }));
+
+  // Enable Sentry Filter
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new SentryFilter(httpAdapter));
 
   // Enable CORS for all origins in development
   app.enableCors({

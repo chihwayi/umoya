@@ -1,0 +1,37 @@
+name: MediCore CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ehr-service, tenant-service]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        # cache: 'npm' # Uncomment if package-lock.json exists and is committed
+        # cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+    - name: Install Dependencies
+      working-directory: services/${{ matrix.service }}
+      run: npm install
+
+    - name: Build
+      working-directory: services/${{ matrix.service }}
+      run: npm run build
+
+    - name: Test
+      working-directory: services/${{ matrix.service }}
+      run: npm test

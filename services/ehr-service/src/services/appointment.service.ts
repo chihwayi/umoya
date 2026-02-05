@@ -134,7 +134,9 @@ export class AppointmentService {
             patientId: savedAppointment.patientId,
             data: {
               appointmentType: savedAppointment.appointmentType,
-              priority: savedAppointment.priority,
+              priority: savedAppointment.priorityLevel,
+              start: savedAppointment.appointmentDate,
+              end: new Date(new Date(savedAppointment.appointmentDate).getTime() + savedAppointment.durationMinutes * 60000),
               doctorId: savedAppointment.doctorId,
             },
           },

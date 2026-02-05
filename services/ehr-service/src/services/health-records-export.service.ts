@@ -149,8 +149,8 @@ export class HealthRecordsExportService {
     doc.end();
 
     // Wait for PDF to be written
-    await new Promise((resolve, reject) => {
-      stream.on('finish', resolve);
+    await new Promise<void>((resolve, reject) => {
+      stream.on('finish', () => resolve());
       stream.on('error', reject);
     });
 
@@ -207,7 +207,7 @@ export class HealthRecordsExportService {
     }
 
     // Add Patient resource
-    const fhirPatient = this.fhirService.patientToFhir(patientEntity);
+    const fhirPatient = this.fhirService.patientToFhir(patientEntity as any);
     bundle.entry.push({
       resource: fhirPatient,
       fullUrl: `Patient/${patientId}`,
@@ -236,7 +236,7 @@ export class HealthRecordsExportService {
           patientId: aptData.patient_id || aptData.patientId,
           doctorId: aptData.doctor_id || aptData.doctorId,
         };
-        const encounter = this.fhirService.appointmentToEncounter(aptEntity);
+        const encounter = this.fhirService.appointmentToEncounter(aptEntity as any);
         bundle.entry.push({
           resource: encounter,
           fullUrl: `Encounter/${aptData.id}`,
@@ -261,7 +261,7 @@ export class HealthRecordsExportService {
           patientId: rxData.patient_id || rxData.patientId,
           doctorId: rxData.doctor_id || rxData.doctorId,
         };
-        const medicationRequest = this.fhirService.prescriptionToMedicationRequest(rxEntity);
+        const medicationRequest = this.fhirService.prescriptionToMedicationRequest(rxEntity as any);
         bundle.entry.push({
           resource: medicationRequest,
           fullUrl: `MedicationRequest/${rxData.id}`,
@@ -286,7 +286,7 @@ export class HealthRecordsExportService {
           resultDate: labData.result_date || labData.resultDate || labData.test_date || labData.testDate || labData.created_at,
           patientId: labData.patient_id || labData.patientId,
         };
-        const diagnosticReport = this.fhirService.labOrderToDiagnosticReport(labEntity);
+        const diagnosticReport = this.fhirService.labOrderToDiagnosticReport(labEntity as any);
         bundle.entry.push({
           resource: diagnosticReport,
           fullUrl: `DiagnosticReport/${labData.id}`,

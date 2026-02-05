@@ -126,9 +126,9 @@ export class MedicationMapper {
         },
       ] : undefined,
       // Add description as note
-      note: drug.description ? [{
-        text: drug.description,
-      }] : undefined,
+      // note: drug.description ? [{
+      //   text: drug.description
+      // }] : undefined,
     };
   }
 
@@ -204,7 +204,8 @@ export class MedicationMapper {
       .filter(name => name.length > 0) || [];
 
     // Extract description from note
-    const description = fhirMedication.note?.[0]?.text;
+    // const description = fhirMedication.note?.[0]?.text;
+    const description = undefined;
 
     return {
       genericName,

@@ -275,8 +275,8 @@ export class PatientProController {
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean, description: 'Include inactive templates' })
   @ApiResponse({ status: 200, description: 'Templates retrieved successfully' })
   async getTemplates(
-    @Query('includeInactive') includeInactive?: boolean,
     @Req() req: RequestWithTenant,
+    @Query('includeInactive') includeInactive?: boolean,
   ) {
     const query = includeInactive
       ? `SELECT * FROM questionnaire_templates ORDER BY is_standard DESC, name ASC`

@@ -166,9 +166,7 @@ export class ImmunizationMapper {
       manufacturer,
       lotNumber,
       expirationDate: immunization.expirationDate
-        ? (typeof immunization.expirationDate === 'string'
-            ? immunization.expirationDate.split('T')[0]
-            : immunization.expirationDate.toISOString().split('T')[0])
+        ? new Date(immunization.expirationDate).toISOString().split('T')[0]
         : undefined,
       site,
       route,

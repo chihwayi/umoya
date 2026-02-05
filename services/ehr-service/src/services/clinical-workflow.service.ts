@@ -1034,7 +1034,7 @@ export class ClinicalWorkflowService {
 
     // Execute the step
     try {
-      await this.executeStep(stepExecution[0].execution_id, step[0], tenantDb);
+      await this.executeStep(step[0], execution[0].trigger_data, tenantDb, stepExecutionId);
       
       return {
         success: true,

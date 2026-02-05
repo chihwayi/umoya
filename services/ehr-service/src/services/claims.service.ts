@@ -465,7 +465,7 @@ export class ClaimsService {
       primaryDiagnosisDescription: updatedData.primaryDiagnosisDescription || (claim as any).primaryDiagnosisDescription,
     } as any);
 
-    const savedClaim = await claimRepository.save(newClaim);
+    const savedClaim = await claimRepository.save(newClaim) as any;
 
     // Log status history
     await this.logClaimStatusChange(tenantDb, savedClaim.id, ClaimStatus.DRAFT, ClaimStatus.REJECTED, null, 'Resubmission created from rejected claim');

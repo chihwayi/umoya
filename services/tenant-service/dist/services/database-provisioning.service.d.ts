@@ -23,6 +23,8 @@ export declare class DatabaseProvisioningService {
     private enforceUserRoleConstraint;
     private getProvisioningBundles;
     getCoreSchemaStatements(): string[];
+    private getGatewayConfigurationStatements;
+    private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;
     applyClinicSchema(connectionString: string, options?: ApplySchemaOptions): Promise<void>;
@@ -56,6 +58,9 @@ export declare class DatabaseProvisioningService {
     private getSprint14_2ClaimsEnhancementStatements;
     private getSprint16WorkflowSchemaStatements;
     private getSprint17CarePlansSchemaStatements;
+    private getSprint18ReferralManagementSchemaStatements;
+    private getSprint19DocumentManagementSchemaStatements;
+    private getSprint20ProviderMessagingSchemaStatements;
     private getSprint31RevenueCycleSchemaStatements;
     private getSprint26OperatingRoomSchemaStatements;
     private getSprint27AnesthesiaSchemaStatements;
@@ -74,5 +79,6 @@ export declare class DatabaseProvisioningService {
     private getSprint41QualityReportingSchemaStatements;
     private getSprint42AdvancedAnalyticsSchemaStatements;
     private getSprint45DrugEnhancementSchemaStatements;
+    private getSprint45PharmacyDispensingEnhancementSchemaStatements;
 }
 export {};

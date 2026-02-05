@@ -45,12 +45,12 @@ export class CarePlanController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Care plans retrieved successfully' })
   async getCarePlans(
+    @Request() req: RequestWithTenant,
     @Query('patientId') patientId: string,
     @Query('status') status?: string,
     @Query('category') category?: string,
     @Query('primaryProviderId') primaryProviderId?: string,
     @Query('limit') limit?: number,
-    @Request() req: RequestWithTenant,
   ) {
     return this.carePlanService.getCarePlans(
       patientId,

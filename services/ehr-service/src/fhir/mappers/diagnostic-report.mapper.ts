@@ -1,5 +1,5 @@
-import { LabOrder, LabOrderStatus } from '../../entities/lab-order.entity';
-import type * as fhir from 'fhir/r4';
+import { LabOrder, LabOrderStatus, Priority, LabTestCategory } from '../../entities/lab-order.entity';
+import * as fhir from 'fhir/r4';
 
 export class DiagnosticReportMapper {
   /**
@@ -145,12 +145,12 @@ export class DiagnosticReportMapper {
       conclusion,
       conclusionCode,
       presentedForm,
-      note: labOrder.specialInstructions ? [{
-        text: labOrder.specialInstructions,
-      }] : undefined,
     };
   }
-  
+
+  /**
+   * Convert FHIR DiagnosticReport to LabOrder entity data
+   */
   /**
    * Convert FHIR DiagnosticReport to LabOrder entity data
    */
@@ -167,9 +167,8 @@ export class DiagnosticReportMapper {
     const tests = [{
       testCode: loincCode || snomedCode || 'UNKNOWN',
       testName: testName,
-      category: this.mapV2CodeToCategory(category),
+      category: this.mapV2CodeToCategory(category) as LabTestCategory,
       specimenType: fhirDiagnosticReport.specimen?.[0]?.display || 'blood',
-      instructions: fhirDiagnosticReport.note?.[0]?.text,
     }];
     
     // Extract results if available
@@ -197,11 +196,12 @@ export class DiagnosticReportMapper {
     const issued = fhirDiagnosticReport.issued
       ? new Date(fhirDiagnosticReport.issued)
       : new Date();
-    
-    // Extract performer IDs
-    const collectedById = fhirDiagnosticReport.performer?.[0]?.reference?.split('/')[1];
-    const reviewedById = fhirDiagnosticReport.performer?.find((p, i) => i > 0)?.reference?.split('/')[1];
-    
+
+    // Extract performers
+    const performers = fhirDiagnosticReport.performer || [];
+    const collectedById = performers.length > 0 ? performers[0].reference?.split('/')[1] : undefined;
+    const reviewedById = performers.length > 1 ? performers[1].reference?.split('/')[1] : undefined;
+
     // Extract attachments
     const attachments = fhirDiagnosticReport.presentedForm?.map(att => ({
       filename: att.title || 'attachment',
@@ -219,9 +219,7 @@ export class DiagnosticReportMapper {
       snomedTerm: testName,
       cptCode,
       status: this.mapStatusFromFhir(fhirDiagnosticReport.status),
-      priority: 'routine', // Default, could be extracted from priority extension
-      clinicalInfo: fhirDiagnosticReport.note?.[0]?.text,
-      specialInstructions: fhirDiagnosticReport.note?.[0]?.text,
+      priority: Priority.ROUTINE,
       scheduledDateTime: effectiveDateTime,
       collectedAt: effectiveDateTime,
       collectedById,
@@ -232,7 +230,7 @@ export class DiagnosticReportMapper {
       attachments,
     };
   }
-  
+
   /**
    * Map LabOrderStatus to FHIR DiagnosticReport status
    */
@@ -294,7 +292,7 @@ export class DiagnosticReportMapper {
       'RAD': 'radiology',
       'CUS': 'cardiology',
     };
-    return codeMap[v2Code] || 'chemistry';
+    return codeMap[v2Code?.toUpperCase()] || 'chemistry';
   }
 }
 

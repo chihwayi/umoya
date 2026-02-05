@@ -66,7 +66,7 @@ export class PatientPortalAppointmentService {
     const appointmentDto = {
       patientId,
       doctorId: appointmentData.doctorId,
-      appointmentDate: new Date(appointmentData.appointmentDate),
+      appointmentDate: appointmentData.appointmentDate,
       reason: appointmentData.reason,
       durationMinutes: appointmentData.durationMinutes || 30,
       appointmentType: appointmentData.appointmentType || 'consultation',

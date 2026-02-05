@@ -596,7 +596,7 @@ export class ObservationMapper {
       testCode: code || 'UNKNOWN',
       testName,
       category: 'chemistry' as any,
-      specimenType: fhirObservation.specimen?.type?.text || 'Blood',
+      specimenType: fhirObservation.specimen?.display || 'Blood',
     };
 
     const value = fhirObservation.valueQuantity?.value;
@@ -613,12 +613,16 @@ export class ObservationMapper {
     };
 
     const result = value ? {
+      testCode: code || 'UNKNOWN',
+      testName,
       value: value.toString(),
       unit: unit || '',
-      flag: interpretationToFlag[interpretation || 'N'] || 'normal',
+      flag: (interpretationToFlag[interpretation || 'N'] || 'normal') as any,
       referenceRange: fhirObservation.referenceRange?.[0]
         ? `${fhirObservation.referenceRange[0].low?.value || ''}-${fhirObservation.referenceRange[0].high?.value || ''}`
-        : undefined,
+        : '',
+      resultDate: effectiveDate,
+      performedBy: fhirObservation.performer?.[0]?.reference?.split('/')[1] || '',
     } : undefined;
 
     return {

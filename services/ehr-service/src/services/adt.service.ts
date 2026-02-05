@@ -32,6 +32,9 @@ export class ADTService {
       ward?: string;
       service?: string;
       notes?: string;
+      expectedLosDays?: number;
+      isolationRequired?: boolean;
+      codeStatus?: string;
     },
     userId: string,
     tenantDb: DataSource,

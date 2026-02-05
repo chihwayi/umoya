@@ -10,22 +10,29 @@ export class AllergyIntoleranceMapper {
    * Convert Allergy entity to FHIR AllergyIntolerance resource
    */
   static toFhir(allergy: Allergy, tenantId?: string): fhir.AllergyIntolerance {
-    // Map severity
-    const severityMap: Record<string, fhir.AllergyIntoleranceSeverity> = {
+    // Map severity to criticality
+    const criticalityMap: Record<string, 'low' | 'high' | 'unable-to-assess'> = {
+      mild: 'low',
+      moderate: 'low',
+      severe: 'high',
+    };
+
+    // Map severity to reaction severity
+    const reactionSeverityMap: Record<string, 'mild' | 'moderate' | 'severe'> = {
       mild: 'mild',
       moderate: 'moderate',
       severe: 'severe',
     };
 
     // Map clinical status
-    const clinicalStatusMap: Record<string, fhir.AllergyIntoleranceClinicalStatusCodes> = {
+    const clinicalStatusMap: Record<string, string> = {
       active: 'active',
       inactive: 'inactive',
       resolved: 'resolved',
     };
 
     // Map verification status
-    const verificationStatusMap: Record<string, fhir.AllergyIntoleranceVerificationStatusCodes> = {
+    const verificationStatusMap: Record<string, string> = {
       unconfirmed: 'unconfirmed',
       confirmed: 'confirmed',
       refuted: 'refuted',
@@ -57,7 +64,7 @@ export class AllergyIntoleranceMapper {
       },
       type: 'allergy',
       category: ['medication', 'food', 'environment', 'biologic'],
-      criticality: severityMap[allergy.severity?.toLowerCase()] || 'unable-to-assess',
+      criticality: criticalityMap[allergy.severity?.toLowerCase()] || 'unable-to-assess',
       code: {
         coding: [
           ...(allergy.allergenSnomedCode
@@ -119,7 +126,7 @@ export class AllergyIntoleranceMapper {
                   text: allergy.reaction,
                 },
               ],
-              severity: severityMap[allergy.severity?.toLowerCase()] || 'unable-to-assess',
+              severity: reactionSeverityMap[allergy.severity?.toLowerCase()] || 'mild',
             },
           ]
         : [],

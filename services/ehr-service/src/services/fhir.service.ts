@@ -42,6 +42,78 @@ type BundleEntry = {
 export class FhirService {
   constructor(private readonly fhirValidator?: FhirValidatorService) {}
   
+  async getResourceHistory(resourceType: string, id: string, tenantDb: DataSource) {
+    // Basic implementation: return current version only as history is not fully tracked yet
+    // In a real implementation, this would query an audit/history table
+    const repo = this.getRepositoryForResourceType(resourceType, tenantDb);
+    if (!repo) {
+      throw new NotFoundException(`Resource type ${resourceType} not supported`);
+    }
+    
+    const resource = await repo.findOne({ where: { id } } as any);
+    if (!resource) {
+      throw new NotFoundException(`${resourceType} with ID ${id} not found`);
+    }
+
+    // Wrap in Bundle
+    return {
+      resourceType: 'Bundle',
+      type: 'history',
+      entry: [
+        {
+          resource: await this.mapEntityToFhir(resource, resourceType, tenantDb)
+        }
+      ]
+    };
+  }
+
+  async validateResource(resource: any, profile?: string) {
+    if (this.fhirValidator) {
+      if (!resource.resourceType) {
+        throw new BadRequestException('Resource must have resourceType');
+      }
+      await this.fhirValidator.validateResource(resource, resource.resourceType);
+      return {
+        resourceType: 'OperationOutcome',
+        issue: [
+          {
+            severity: 'information',
+            code: 'informational',
+            details: { text: 'Validation successful' }
+          }
+        ]
+      };
+    }
+    // Fallback if validator not available
+    return {
+      resourceType: 'OperationOutcome',
+      issue: [
+        {
+          severity: 'warning',
+          code: 'incomplete',
+          details: { text: 'Validator service not available' }
+        }
+      ]
+    };
+  }
+
+  private getRepositoryForResourceType(resourceType: string, tenantDb: DataSource) {
+    switch (resourceType) {
+      case 'Patient': return tenantDb.getRepository(Patient);
+      case 'Encounter': return tenantDb.getRepository(Admission); // Or Appointment
+      case 'Observation': return tenantDb.getRepository(Vitals);
+      case 'MedicationRequest': return tenantDb.getRepository(Prescription);
+      case 'DiagnosticReport': return tenantDb.getRepository(LabOrder);
+      // Add others as needed
+      default: return null;
+    }
+  }
+
+  private async mapEntityToFhir(entity: any, resourceType: string, tenantDb: DataSource) {
+     // Reuse existing mappers
+     // This is a simplified version; real one would need proper dispatch
+     return entity;
+  }
   getCapabilityStatement() {
     return {
       resourceType: 'CapabilityStatement',
@@ -1362,6 +1434,10 @@ export class FhirService {
       throw new NotFoundException(`DiagnosticReport with ID ${id} not found`);
     }
 
+    return DiagnosticReportMapper.toFhir(labOrder, tenantId);
+  }
+
+  labOrderToDiagnosticReport(labOrder: LabOrder, tenantId?: string) {
     return DiagnosticReportMapper.toFhir(labOrder, tenantId);
   }
 
