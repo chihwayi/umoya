@@ -6,6 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import * as Sentry from '@sentry/nestjs';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -41,6 +42,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // Log the full error
     console.error('🚨 [EXCEPTION FILTER] Caught exception:');
+    
+    // Send to Sentry
+    Sentry.captureException(exception);
+
     console.error('🚨 [EXCEPTION FILTER] Status:', status);
     console.error('🚨 [EXCEPTION FILTER] Path:', request.url);
     console.error('🚨 [EXCEPTION FILTER] Method:', request.method);
