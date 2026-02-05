@@ -21,6 +21,9 @@ import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface HIVTestingComponentProps {
   tenantSlug: string;
+  patientId?: string;
+  initialData?: any;
+  onDataChange?: (data: any) => void;
 }
 
 interface StiPanel {
@@ -275,7 +278,7 @@ const SectionCard: React.FC<{
   </section>
 );
 
-const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug }) => {
+const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, patientId, initialData, onDataChange }) => {
   const { showSuccess, showError } = useNotification();
   const [searchTerm, setSearchTerm] = useState('');
   const [patients, setPatients] = useState<any[]>([]);
@@ -295,6 +298,44 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
 
   const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
   const snomedReady = Boolean(snomedToken && tenantSlug);
+
+  // Load patient if ID is provided
+  useEffect(() => {
+    const loadPatient = async () => {
+      if (patientId && snomedReady) {
+        try {
+          const token = localStorage.getItem('ehr_token');
+          if (!token) return;
+          // Use searchPatients as a fallback if getPatientById isn't available or behaves differently,
+          // but preferably use getPatientById.
+          // Since we verified getPatientById exists in ehrApi, we use it.
+          const response = await ehrApi.getPatientById(patientId, token, tenantSlug);
+          setSelectedPatient(response.data);
+        } catch (error) {
+          console.error('Failed to load patient', error);
+          showError('Error', 'Failed to load patient details');
+        }
+      }
+    };
+    loadPatient();
+  }, [patientId, snomedReady, tenantSlug]);
+
+  // Handle initial data from parent (e.g. Unified Workflow)
+  useEffect(() => {
+    if (initialData) {
+      setTestForm(prev => ({
+        ...prev,
+        ...initialData
+      }));
+    }
+  }, [initialData]);
+
+  // Propagate changes to parent
+  useEffect(() => {
+    if (onDataChange) {
+      onDataChange(testForm);
+    }
+  }, [testForm, onDataChange]);
 
   useEffect(() => {
     if (selectedPatient) {
@@ -1070,10 +1111,12 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
       </div>
 
       <SectionCard
-        title="Patient search & intake"
+        title={patientId ? "Patient Context" : "Patient search & intake"}
         icon={<User className="w-5 h-5" />}
-        description="Find the client, review demographics, then proceed through the WHO-aligned workflow."
+        description={patientId ? "Review demographics and proceed through the WHO-aligned workflow." : "Find the client, review demographics, then proceed through the WHO-aligned workflow."}
       >
+        {!patientId && (
+        <>
         <div className="flex flex-col lg:flex-row gap-3">
           <input
             type="text"
@@ -1114,6 +1157,8 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug })
               </button>
             ))}
           </div>
+        )}
+        </>
         )}
 
       {selectedPatient && (
