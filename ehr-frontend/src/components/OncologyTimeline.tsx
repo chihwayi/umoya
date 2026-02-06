@@ -62,7 +62,7 @@ type ResponseHistoryRecord = {
 
 const CATEGORY_META: Record<
   TimelineCategory,
-  { label: string; color: string; icon: React.ComponentType<{ size?: number; className?: string }> }
+  { label: string; color: string; icon: any }
 > = {
   diagnosis: { label: 'Diagnosis', color: 'from-rose-500 to-rose-600', icon: Stethoscope },
   staging: { label: 'Staging', color: 'from-fuchsia-500 to-purple-500', icon: Layers },

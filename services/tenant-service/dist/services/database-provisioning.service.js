@@ -92,7 +92,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             {
                 id: 'core',
                 label: 'Core Clinic Schema',
-                version: '2025.03.01',
+                version: '2025.03.03',
                 description: 'Baseline tables, triggers, and seed data for every tenant',
                 statements: () => this.getClinicSchema(),
                 triggers: () => this.getTriggerStatements(),
@@ -255,6 +255,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 statements: () => this.getSprint31RevenueCycleSchemaStatements(),
             },
             {
+                id: 'sprint23_bed_management',
+                label: 'Sprint 23 - Bed Management & ADT',
+                version: '2026.02.06',
+                description: 'Advanced bed management, ADT workflows, and census tracking',
+                statements: () => this.getSprint23BedManagementSchemaStatements(),
+            },
+            {
                 id: 'sprint26_operating_room',
                 label: 'Sprint 26 - Operating Room Management',
                 version: '2025.12.05',
@@ -394,6 +401,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 description: 'Tables for storing tenant-specific SMS and Payment gateway configurations',
                 statements: () => this.getGatewayConfigurationStatements(),
             },
+            {
+                id: 'portal_enhancements',
+                label: 'Patient Portal Enhancements',
+                version: '2026.02.06',
+                description: 'Adds portal access columns to patients and patient_messages table',
+                statements: () => this.getPortalEnhancementStatements(),
+            },
         ];
     }
     getCoreSchemaStatements() {
@@ -435,6 +449,41 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       )`,
             `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_provider_type ON payment_gateway_configurations(provider_type)`,
             `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_is_active ON payment_gateway_configurations(is_active)`,
+        ];
+    }
+    getPortalEnhancementStatements() {
+        return [
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_access_enabled BOOLEAN DEFAULT false`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_registered_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_last_login TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_hash VARCHAR(255)`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_email_verified BOOLEAN DEFAULT false`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_email_verification_token VARCHAR(255)`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_reset_token VARCHAR(255)`,
+            `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_reset_expires TIMESTAMP WITH TIME ZONE`,
+            `CREATE TABLE IF NOT EXISTS patient_messages (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          tenant_id VARCHAR NOT NULL,
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+          sender_type VARCHAR(50) NOT NULL,
+          sender_id UUID,
+          recipient_type VARCHAR(50) NOT NULL,
+          recipient_id UUID,
+          subject VARCHAR(500),
+          message TEXT NOT NULL,
+          message_type VARCHAR(50) NOT NULL DEFAULT 'general',
+          priority VARCHAR(20) NOT NULL DEFAULT 'low',
+          read BOOLEAN NOT NULL DEFAULT false,
+          read_at TIMESTAMP,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_tenant_id" ON "patient_messages" ("tenant_id")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_patient_id" ON "patient_messages" ("patient_id")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_sender" ON "patient_messages" ("sender_type", "sender_id")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
         ];
     }
     getWhoSmartFormsDataSchemaStatements() {
@@ -5488,7 +5537,8 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         ('doctor@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Doctor', 'Bulawayo', 'doctor', 'MD-0001', 'Internal Medicine', '+263 77 555 1000', false),
         ('nurse@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Nurse', 'Dube', 'nurse', 'RN-0008', 'Maternal & Child Health', '+263 77 555 2000', false),
         ('radiologist@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Rudo', 'Munyoro', 'radiologist', 'RAD-001234', 'Diagnostic Radiology', '+263 77 555 1212', false),
-        ('accounts@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Finance', 'Officer', 'accounts', NULL, 'Revenue Management', '+263 77 555 4500', false)
+        ('accounts@bulawayo-general.co.zw', '${defaultPasswordHash}', 'Finance', 'Officer', 'accounts', NULL, 'Revenue Management', '+263 77 555 4500', false),
+        ('gina@gmail.com', '${defaultPasswordHash}', 'Gina', 'Doctor', 'doctor', 'MD-GINA', 'General Practice', '+1 555 0000', false)
       ON CONFLICT (email) DO NOTHING;
     `);
     }
@@ -7264,6 +7314,269 @@ RECOMMENDATIONS:
         statements.push(`COMMENT ON TABLE charge_capture_rules IS 'Rules for automatic charge capture from clinical activities'`);
         statements.push(`COMMENT ON TABLE charge_approval_notifications IS 'Notifications sent to accounts department when charges are approved by doctors'`);
         return statements;
+    }
+    getSprint23BedManagementSchemaStatements() {
+        return [
+            `
+      -- Beds Table
+      CREATE TABLE IF NOT EXISTS beds (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bed_number VARCHAR(50) NOT NULL,
+        room_number VARCHAR(50) NOT NULL,
+        ward_name VARCHAR(100) NOT NULL,
+        floor VARCHAR(50),
+        building VARCHAR(100),
+        bed_type VARCHAR(50) NOT NULL CHECK (bed_type IN (
+          'icu', 'general', 'pediatric', 'maternity', 'isolation', 'telemetry', 'step_down', 'observation'
+        )),
+        specialty VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'available' CHECK (status IN (
+          'available', 'occupied', 'reserved', 'blocked', 'cleaning', 'maintenance', 'out_of_service'
+        )),
+        current_patient_id UUID REFERENCES patients(id),
+        current_admission_id UUID,
+        occupied_since TIMESTAMP WITH TIME ZONE,
+        expected_discharge TIMESTAMP WITH TIME ZONE,
+        has_equipment JSONB DEFAULT '[]'::jsonb,
+        features JSONB DEFAULT '[]'::jsonb,
+        is_isolation_capable BOOLEAN DEFAULT false,
+        is_negative_pressure BOOLEAN DEFAULT false,
+        last_cleaned_at TIMESTAMP WITH TIME ZONE,
+        last_cleaned_by UUID REFERENCES users(id),
+        maintenance_notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(bed_number, ward_name)
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_beds_status ON beds(status);`,
+            `CREATE INDEX IF NOT EXISTS idx_beds_ward ON beds(ward_name);`,
+            `CREATE INDEX IF NOT EXISTS idx_beds_type ON beds(bed_type);`,
+            `CREATE INDEX IF NOT EXISTS idx_beds_patient ON beds(current_patient_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_beds_floor ON beds(floor);`,
+            `
+      -- Admissions Table
+      CREATE TABLE IF NOT EXISTS admissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_number VARCHAR(50) UNIQUE NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        admission_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        admission_type VARCHAR(50) NOT NULL CHECK (admission_type IN (
+          'emergency', 'elective', 'urgent', 'newborn', 'maternity', 'observation'
+        )),
+        admission_source VARCHAR(100),
+        referring_facility VARCHAR(255),
+        admitting_provider UUID REFERENCES users(id),
+        admitting_diagnosis TEXT NOT NULL,
+        admission_reason TEXT,
+        initial_bed_id UUID REFERENCES beds(id),
+        initial_ward VARCHAR(100),
+        current_bed_id UUID REFERENCES beds(id),
+        current_ward VARCHAR(100),
+        service VARCHAR(100),
+        attending_provider UUID REFERENCES users(id),
+        admission_status VARCHAR(50) DEFAULT 'active' CHECK (admission_status IN (
+          'active', 'discharged', 'transferred_out', 'deceased', 'eloped', 'cancelled'
+        )),
+        expected_los_days INTEGER,
+        isolation_required BOOLEAN DEFAULT false,
+        isolation_type VARCHAR(100),
+        code_status VARCHAR(50),
+        advance_directives TEXT,
+        discharge_plan TEXT,
+        estimated_discharge_date DATE,
+        financial_class VARCHAR(100),
+        insurance_verified BOOLEAN DEFAULT false,
+        insurance_authorization VARCHAR(100),
+        notes TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_patient ON admissions(patient_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_status ON admissions(admission_status);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_date ON admissions(admission_date);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_ward ON admissions(current_ward);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_bed ON admissions(current_bed_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_provider ON admissions(attending_provider);`,
+            `CREATE INDEX IF NOT EXISTS idx_admissions_number ON admissions(admission_number);`,
+            `
+      -- Discharges Table
+      CREATE TABLE IF NOT EXISTS discharges (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        discharge_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        discharge_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        discharge_type VARCHAR(50) NOT NULL CHECK (discharge_type IN (
+          'routine', 'against_medical_advice', 'transfer_to_facility', 'home_health', 'deceased', 'hospice', 'left_without_being_seen', 'still_patient'
+        )),
+        discharge_disposition VARCHAR(100) NOT NULL,
+        discharge_destination VARCHAR(255),
+        discharge_diagnosis TEXT NOT NULL,
+        discharge_condition VARCHAR(100),
+        discharge_provider UUID REFERENCES users(id),
+        discharge_instructions TEXT,
+        medications_prescribed TEXT,
+        follow_up_appointments TEXT,
+        follow_up_provider UUID REFERENCES users(id),
+        follow_up_date DATE,
+        restrictions TEXT,
+        diet_instructions TEXT,
+        activity_level TEXT,
+        wound_care TEXT,
+        home_health_ordered BOOLEAN DEFAULT false,
+        dme_ordered BOOLEAN DEFAULT false,
+        dme_details TEXT,
+        transportation_arranged BOOLEAN DEFAULT false,
+        patient_education_provided BOOLEAN DEFAULT false,
+        discharge_summary_completed BOOLEAN DEFAULT false,
+        discharge_summary_sent_date TIMESTAMP WITH TIME ZONE,
+        length_of_stay_hours INTEGER,
+        readmission_risk VARCHAR(50),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_discharges_admission ON discharges(admission_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_discharges_patient ON discharges(patient_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_discharges_date ON discharges(discharge_date);`,
+            `CREATE INDEX IF NOT EXISTS idx_discharges_type ON discharges(discharge_type);`,
+            `
+      -- Transfers Table
+      CREATE TABLE IF NOT EXISTS patient_transfers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admission_id UUID NOT NULL REFERENCES admissions(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        transfer_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        transfer_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        transfer_type VARCHAR(50) NOT NULL CHECK (transfer_type IN (
+          'internal_ward', 'internal_bed', 'external_facility', 'icu_to_floor', 'floor_to_icu', 'service_change'
+        )),
+        from_bed_id UUID REFERENCES beds(id),
+        from_ward VARCHAR(100),
+        from_service VARCHAR(100),
+        to_bed_id UUID REFERENCES beds(id),
+        to_ward VARCHAR(100),
+        to_service VARCHAR(100),
+        to_facility VARCHAR(255),
+        transfer_reason TEXT NOT NULL,
+        clinical_reason TEXT,
+        accepting_provider UUID REFERENCES users(id),
+        transferring_provider UUID REFERENCES users(id),
+        patient_condition VARCHAR(100),
+        mode_of_transport VARCHAR(100),
+        equipment_needed TEXT,
+        special_instructions TEXT,
+        transfer_accepted BOOLEAN DEFAULT true,
+        transfer_completed BOOLEAN DEFAULT false,
+        transfer_completed_time TIMESTAMP WITH TIME ZONE,
+        cancelled BOOLEAN DEFAULT false,
+        cancellation_reason TEXT,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_admission ON patient_transfers(admission_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_patient ON patient_transfers(patient_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_date ON patient_transfers(transfer_date);`,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_from_bed ON patient_transfers(from_bed_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_to_bed ON patient_transfers(to_bed_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_patient_transfers_type ON patient_transfers(transfer_type);`,
+            `
+      -- Bed Assignments Table
+      CREATE TABLE IF NOT EXISTS bed_assignments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bed_id UUID NOT NULL REFERENCES beds(id),
+        patient_id UUID NOT NULL REFERENCES patients(id),
+        admission_id UUID REFERENCES admissions(id),
+        assigned_date TIMESTAMP WITH TIME ZONE NOT NULL,
+        assigned_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        assigned_by UUID REFERENCES users(id),
+        released_date TIMESTAMP WITH TIME ZONE,
+        released_time TIMESTAMP WITH TIME ZONE,
+        released_by UUID REFERENCES users(id),
+        assignment_reason VARCHAR(255),
+        duration_hours INTEGER,
+        is_active BOOLEAN DEFAULT true,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_bed_assignments_bed ON bed_assignments(bed_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_bed_assignments_patient ON bed_assignments(patient_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_bed_assignments_admission ON bed_assignments(admission_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_bed_assignments_active ON bed_assignments(is_active);`,
+            `CREATE INDEX IF NOT EXISTS idx_bed_assignments_date ON bed_assignments(assigned_date);`,
+            `
+      -- Bed Status Log Table
+      CREATE TABLE IF NOT EXISTS bed_status_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bed_id UUID NOT NULL REFERENCES beds(id),
+        previous_status VARCHAR(50),
+        new_status VARCHAR(50) NOT NULL,
+        previous_patient_id UUID REFERENCES patients(id),
+        new_patient_id UUID REFERENCES patients(id),
+        changed_by UUID REFERENCES users(id),
+        changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        change_reason TEXT,
+        notes TEXT
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_bed_status_log_bed ON bed_status_log(bed_id);`,
+            `CREATE INDEX IF NOT EXISTS idx_bed_status_log_date ON bed_status_log(changed_at);`,
+            `
+      -- Census Snapshots Table
+      CREATE TABLE IF NOT EXISTS census_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        snapshot_date DATE NOT NULL,
+        snapshot_time TIME NOT NULL DEFAULT '00:00',
+        ward_name VARCHAR(100),
+        total_beds INTEGER NOT NULL,
+        occupied_beds INTEGER NOT NULL,
+        available_beds INTEGER NOT NULL,
+        reserved_beds INTEGER DEFAULT 0,
+        blocked_beds INTEGER DEFAULT 0,
+        cleaning_beds INTEGER DEFAULT 0,
+        occupancy_rate DECIMAL(5,2),
+        average_los DECIMAL(5,2),
+        admissions_today INTEGER DEFAULT 0,
+        discharges_today INTEGER DEFAULT 0,
+        transfers_in_today INTEGER DEFAULT 0,
+        transfers_out_today INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(snapshot_date, snapshot_time, ward_name)
+      );
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_census_snapshots_date ON census_snapshots(snapshot_date);`,
+            `CREATE INDEX IF NOT EXISTS idx_census_snapshots_ward ON census_snapshots(ward_name);`,
+            `
+      -- Insert sample wards and beds
+      INSERT INTO beds (bed_number, room_number, ward_name, floor, building, bed_type, status) VALUES
+      ('ICU-01', 'ICU-101', 'Intensive Care Unit', '2', 'Main', 'icu', 'available'),
+      ('ICU-02', 'ICU-102', 'Intensive Care Unit', '2', 'Main', 'icu', 'available'),
+      ('ICU-03', 'ICU-103', 'Intensive Care Unit', '2', 'Main', 'icu', 'available'),
+      ('ICU-04', 'ICU-104', 'Intensive Care Unit', '2', 'Main', 'icu', 'available'),
+      ('MED-01', '201', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('MED-02', '201', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('MED-03', '202', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('MED-04', '202', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('MED-05', '203', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('MED-06', '203', 'Medical Ward', '3', 'Main', 'general', 'available'),
+      ('PED-01', 'P101', 'Pediatrics', '4', 'Main', 'pediatric', 'available'),
+      ('PED-02', 'P102', 'Pediatrics', '4', 'Main', 'pediatric', 'available'),
+      ('PED-03', 'P103', 'Pediatrics', '4', 'Main', 'pediatric', 'available'),
+      ('MAT-01', 'M101', 'Maternity', '5', 'Main', 'maternity', 'available'),
+      ('MAT-02', 'M102', 'Maternity', '5', 'Main', 'maternity', 'available'),
+      ('MAT-03', 'M103', 'Maternity', '5', 'Main', 'maternity', 'available')
+      ON CONFLICT DO NOTHING;
+      `
+        ];
     }
     getSprint26OperatingRoomSchemaStatements() {
         const statements = [];

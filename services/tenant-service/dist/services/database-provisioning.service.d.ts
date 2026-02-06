@@ -24,6 +24,7 @@ export declare class DatabaseProvisioningService {
     private getProvisioningBundles;
     getCoreSchemaStatements(): string[];
     private getGatewayConfigurationStatements;
+    private getPortalEnhancementStatements;
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;
@@ -62,6 +63,7 @@ export declare class DatabaseProvisioningService {
     private getSprint19DocumentManagementSchemaStatements;
     private getSprint20ProviderMessagingSchemaStatements;
     private getSprint31RevenueCycleSchemaStatements;
+    private getSprint23BedManagementSchemaStatements;
     private getSprint26OperatingRoomSchemaStatements;
     private getSprint27AnesthesiaSchemaStatements;
     private getSprint28BCMASchemaStatements;

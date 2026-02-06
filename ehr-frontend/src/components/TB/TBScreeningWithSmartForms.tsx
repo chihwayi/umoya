@@ -48,7 +48,7 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
       // Submit to backend if patientId is available
       if (patientId) {
         await ehrApi.createTbScreening(mappedData, token, tenantSlug);
-        showSuccess('TB screening recorded using WHO Smart Form');
+        showSuccess('Success', 'TB screening recorded using WHO Smart Form');
       }
       
       if (onScreeningComplete) {
@@ -59,7 +59,7 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
       setSelectedFormId(null);
     } catch (error: any) {
       console.error('Error submitting TB screening:', error);
-      showError(`Failed to submit screening: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit screening: ${error.message || 'Unknown error'}`);
     }
   };
 

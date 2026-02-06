@@ -70,25 +70,25 @@ const ScheduleConfigForm: React.FC<ScheduleConfigFormProps> = ({
         format: formData.format,
         isActive: formData.isActive,
         recipients: formData.recipients
-          ? formData.recipients.split(',').map((r) => r.trim()).filter(Boolean)
+          ? formData.recipients.split(',').map((r: string) => r.trim()).filter(Boolean)
           : [],
         recipientRoles: formData.recipientRoles
-          ? formData.recipientRoles.split(',').map((r) => r.trim()).filter(Boolean)
+          ? formData.recipientRoles.split(',').map((r: string) => r.trim()).filter(Boolean)
           : [],
         scheduleConfig,
       };
 
       if (schedule) {
         await analyticsApi.updateSchedule(tenantSlug, token, schedule.id, payload);
-        showSuccess('Schedule updated successfully');
+        showSuccess('Success', 'Schedule updated successfully');
       } else {
         await analyticsApi.createSchedule(tenantSlug, token, payload);
-        showSuccess('Schedule created successfully');
+        showSuccess('Success', 'Schedule created successfully');
       }
       onSuccess();
       onClose();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to save schedule');
+      showError('Error', error.response?.data?.message || 'Failed to save schedule');
     } finally {
       setLoading(false);
     }

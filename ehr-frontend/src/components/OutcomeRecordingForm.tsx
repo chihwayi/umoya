@@ -48,7 +48,7 @@ const OutcomeRecordingForm: React.FC<OutcomeRecordingFormProps> = ({
 
   const searchPatients = async () => {
     try {
-      const result = await ehrApi.searchPatients(tenantSlug, token, searchTerm, { limit: 10 });
+      const result = await ehrApi.searchPatients(searchTerm, token, tenantSlug);
       setPatients(result.data?.patients || []);
     } catch (error) {
       console.error('Failed to search patients:', error);
@@ -76,15 +76,15 @@ const OutcomeRecordingForm: React.FC<OutcomeRecordingFormProps> = ({
 
       if (outcome) {
         await analyticsApi.updateOutcome(tenantSlug, token, outcome.id, payload);
-        showSuccess('Outcome updated successfully');
+        showSuccess('Success', 'Outcome updated successfully');
       } else {
         await analyticsApi.recordOutcome(tenantSlug, token, payload);
-        showSuccess('Outcome recorded successfully');
+        showSuccess('Success', 'Outcome recorded successfully');
       }
       onSuccess();
       onClose();
     } catch (error: any) {
-      showError(error.response?.data?.message || 'Failed to save outcome');
+      showError('Error', error.response?.data?.message || 'Failed to save outcome');
     } finally {
       setLoading(false);
     }

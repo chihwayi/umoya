@@ -116,7 +116,7 @@ const PharmacyInventory: React.FC = () => {
         category: filterCategory || undefined,
         supplierId: filterSupplier || undefined,
         status: filterStatus || undefined,
-      });
+      } as any);
       setInventory(response.data?.inventory || []);
     } catch (error: any) {
       console.error('Failed to load inventory:', error);
@@ -209,10 +209,10 @@ const PharmacyInventory: React.FC = () => {
     try {
       if (editingItem) {
         await pharmacyApi.updateInventory(editingItem.id, formData, token!, tenantSlug!);
-        showSuccess('Inventory item updated successfully');
+        showSuccess('Success', 'Inventory item updated successfully');
       } else {
         await pharmacyApi.createInventory(formData, token!, tenantSlug!);
-        showSuccess('Inventory item created successfully');
+        showSuccess('Success', 'Inventory item created successfully');
       }
       handleCloseModal();
       loadInventory();

@@ -51,12 +51,12 @@ export const GenericSmartFormWrapper: React.FC<GenericSmartFormWrapperProps> = (
       if (formData) {
         setForm(formData);
       } else {
-        showError(`WHO Smart Form "${formId}" not found`);
+        showError('Error', `WHO Smart Form "${formId}" not found`);
         if (onClose) onClose();
       }
     } catch (error: any) {
       console.error('Error loading WHO Smart Form:', error);
-      showError(`Failed to load WHO Smart Form: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to load WHO Smart Form: ${error.message || 'Unknown error'}`);
       if (onClose) onClose();
     } finally {
       setLoading(false);
@@ -81,11 +81,11 @@ export const GenericSmartFormWrapper: React.FC<GenericSmartFormWrapperProps> = (
       // Call success callback with form data
       onSuccess(formData);
       
-      showSuccess('WHO Smart Form submitted successfully');
+      showSuccess('Success', 'WHO Smart Form submitted successfully');
       if (onClose) onClose();
     } catch (error: any) {
       console.error('Error submitting WHO Smart Form:', error);
-      showError(`Failed to submit form: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit form: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

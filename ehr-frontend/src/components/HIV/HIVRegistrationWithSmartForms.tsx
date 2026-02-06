@@ -84,12 +84,12 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
       // Submit enrollment
       await ehrApi.enrollInHivCare(enrollmentData, token, tenantSlug);
 
-      showSuccess('Patient enrolled in HIV care using WHO Smart Forms');
+      showSuccess('Success', 'Patient enrolled in HIV care using WHO Smart Forms');
       onSuccess();
       onClose();
     } catch (error: any) {
       console.error('Error submitting enrollment:', error);
-      showError(`Failed to enroll patient: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to enroll patient: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

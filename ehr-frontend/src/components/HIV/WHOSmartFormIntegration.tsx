@@ -48,12 +48,12 @@ export const WHOSmartFormIntegration: React.FC<WHOSmartFormIntegrationProps> = (
       if (formData) {
         setForm(formData);
       } else {
-        showError(`WHO Smart Form "${formId}" not found`);
+        showError('Error', `WHO Smart Form "${formId}" not found`);
         onClose();
       }
     } catch (error: any) {
       console.error('Error loading WHO Smart Form:', error);
-      showError(`Failed to load WHO Smart Form: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to load WHO Smart Form: ${error.message || 'Unknown error'}`);
       onClose();
     } finally {
       setLoading(false);
@@ -78,11 +78,11 @@ export const WHOSmartFormIntegration: React.FC<WHOSmartFormIntegrationProps> = (
       // Call success callback with form data
       onSuccess(formData);
       
-      showSuccess('WHO Smart Form submitted successfully');
+      showSuccess('Success', 'WHO Smart Form submitted successfully');
       onClose();
     } catch (error: any) {
       console.error('Error submitting WHO Smart Form:', error);
-      showError(`Failed to submit form: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit form: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

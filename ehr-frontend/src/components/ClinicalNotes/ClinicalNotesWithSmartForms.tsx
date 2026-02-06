@@ -104,7 +104,7 @@ export const ClinicalNotesWithSmartForms: React.FC<ClinicalNotesWithSmartFormsPr
           token,
           tenantSlug
         );
-        showSuccess('Clinical notes saved using WHO Smart Form');
+        showSuccess('Success', 'Clinical notes saved using WHO Smart Form');
       }
       
       if (onSuccess) {
@@ -116,7 +116,7 @@ export const ClinicalNotesWithSmartForms: React.FC<ClinicalNotesWithSmartFormsPr
       }
     } catch (error: any) {
       console.error('Error submitting clinical notes:', error);
-      showError(`Failed to save notes: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to save notes: ${error.message || 'Unknown error'}`);
     }
   };
 

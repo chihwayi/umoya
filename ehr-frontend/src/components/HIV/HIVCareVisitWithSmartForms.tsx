@@ -99,7 +99,7 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
 
     // For now, just accumulate data
     // In a full implementation, you might want to submit after each form or all at once
-    showSuccess('Form data captured. Continue with next form or submit visit.');
+    showSuccess('Success', 'Form data captured. Continue with next form or submit visit.');
     setSelectedFormId(null);
   };
 
@@ -113,12 +113,12 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
       // Submit clinical visit
       await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
 
-      showSuccess('HIV clinical visit recorded using WHO Smart Forms');
+      showSuccess('Success', 'HIV clinical visit recorded using WHO Smart Forms');
       onSuccess();
       onClose();
     } catch (error: any) {
       console.error('Error submitting visit:', error);
-      showError(`Failed to record visit: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to record visit: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

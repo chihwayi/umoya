@@ -22,6 +22,7 @@ export declare class Tenant {
     address: string;
     city: string;
     country: string;
+    logoUrl: string;
     featureFlags: Record<string, boolean>;
     createdAt: Date;
     updatedAt: Date;

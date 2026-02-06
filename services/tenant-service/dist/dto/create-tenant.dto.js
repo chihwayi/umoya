@@ -48,6 +48,11 @@ __decorate([
     __metadata("design:type", String)
 ], CreateTenantDto.prototype, "city", void 0);
 __decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CreateTenantDto.prototype, "logoUrl", void 0);
+__decorate([
     (0, class_validator_1.IsEnum)(tenant_entity_1.SubscriptionTier),
     __metadata("design:type", String)
 ], CreateTenantDto.prototype, "subscriptionTier", void 0);

@@ -211,7 +211,7 @@ const PatientProViewer: React.FC<PatientProViewerProps> = ({
           return code === selectedQuestionnaire && completedAt;
         })
         .map(t => {
-          const completedAt = t.completedAt || t.completed_at;
+          const completedAt = t.completedAt || t.completed_at || '';
           const date = new Date(completedAt);
           return {
             ...t,

@@ -84,6 +84,10 @@ __decorate([
     __metadata("design:type", String)
 ], Tenant.prototype, "country", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Tenant.prototype, "logoUrl", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'jsonb', nullable: true }),
     __metadata("design:type", Object)
 ], Tenant.prototype, "featureFlags", void 0);

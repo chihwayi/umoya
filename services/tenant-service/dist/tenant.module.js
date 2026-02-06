@@ -25,6 +25,7 @@ const audit_service_1 = require("./services/audit.service");
 const email_service_1 = require("./services/email.service");
 const health_monitor_service_1 = require("./services/health-monitor.service");
 const backup_service_1 = require("./services/backup.service");
+const storage_service_1 = require("./services/storage.service");
 const auth_controller_1 = require("./controllers/auth.controller");
 const backup_controller_1 = require("./controllers/backup.controller");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
@@ -64,6 +65,7 @@ exports.TenantModule = TenantModule = __decorate([
             email_service_1.EmailService,
             health_monitor_service_1.HealthMonitorService,
             backup_service_1.BackupService,
+            storage_service_1.StorageService,
             jwt_strategy_1.JwtStrategy
         ],
         exports: [tenant_service_1.TenantService, tenant_analytics_service_1.TenantAnalyticsService, tenant_database_service_1.TenantDatabaseService, auth_service_1.AuthService],

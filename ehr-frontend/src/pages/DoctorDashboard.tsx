@@ -1951,7 +1951,6 @@ const DoctorDashboard: React.FC = () => {
               tenantSlug={tenantSlug!}
               token={localStorage.getItem('ehr_token') || ''}
               onAppointmentUpdate={fetchTodayAppointments}
-              appointments={appointments}
             />
           )}
 

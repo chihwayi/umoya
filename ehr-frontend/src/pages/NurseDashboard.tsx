@@ -10,7 +10,6 @@ import {
   Bed, AlertCircle, BookOpen, Loader2, Sparkles
 } from 'lucide-react';
 import { ehrApi, cdssApi, tenantApi } from '../services/api';
-import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
@@ -37,6 +36,7 @@ import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
+import { GuidelineResult } from '../types/guidelines';
 
 interface Patient {
   id: string;
@@ -1299,9 +1299,10 @@ const NurseDashboard: React.FC = () => {
 
   const renderCalendar = () => {
     const today = new Date();
-    // Use calendarAppointments for calendar view, appointments for day view
-    const appointmentsToDisplay = calendarView === 'day' ? appointments : calendarAppointments;
+    // Use calendarAppointments for all views to ensure date navigation works correctly
+    const appointmentsToDisplay = calendarAppointments;
     const dayAppointments = getAppointmentsForDate(calendarDate, appointmentsToDisplay);
+    const isToday = calendarDate.toDateString() === today.toDateString();
     
     console.log('📅 Calendar render - View:', calendarView);
     console.log('📅 Calendar render - Total appointments:', appointmentsToDisplay.length);
@@ -1314,7 +1315,7 @@ const NurseDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">
-                {calendarView === 'day' ? "Today's Schedule" : 
+                {calendarView === 'day' ? (isToday ? "Today's Schedule" : "Daily Schedule") : 
                  calendarView === 'week' ? "Week View" : 
                  "Month View"}
               </h2>

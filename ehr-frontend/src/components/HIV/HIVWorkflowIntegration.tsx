@@ -102,6 +102,7 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
     } else {
       // Move to next form
       setCurrentFormIndex(currentFormIndex + 1);
+      showSuccess('Success', 'Form saved, proceeding to next step');
     }
   };
 
@@ -112,18 +113,21 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
       switch (stage) {
         case 'testing':
           await ehrApi.createHivTest(mapToHivTest(data), token, tenantSlug);
-          showSuccess('HIV test recorded using WHO Smart Forms');
+          showSuccess('Success', 'HIV test recorded using WHO Smart Forms');
           // Move to registration if positive
           if (data['HIV.B.DE115'] === 'positive' || data['HIV.B.DE111'] === 'positive') {
             setActiveStage('registration');
             setCurrentFormIndex(0);
             setFormData({});
+          } else {
+            // End workflow for negative
+            if (onComplete) onComplete();
           }
           break;
 
         case 'registration':
           await ehrApi.enrollInHivCare(mapToEnrollment(data), token, tenantSlug);
-          showSuccess('Patient enrolled in HIV care using WHO Smart Forms');
+          showSuccess('Success', 'Patient enrolled in HIV care using WHO Smart Forms');
           // Move to ART initiation
           setActiveStage('art');
           setCurrentFormIndex(0);
@@ -132,7 +136,7 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
 
         case 'art':
           // ART initiation is typically part of enrollment or first visit
-          showSuccess('ART initiation recorded using WHO Smart Forms');
+          showSuccess('Success', 'ART initiation recorded using WHO Smart Forms');
           // Move to care visits
           setActiveStage('care');
           setCurrentFormIndex(0);
@@ -141,7 +145,7 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
 
         case 'care':
           await ehrApi.createHivClinicalVisit(mapToVisit(data), token, tenantSlug);
-          showSuccess('HIV care visit recorded using WHO Smart Forms');
+          showSuccess('Success', 'HIV care visit recorded using WHO Smart Forms');
           if (onComplete) {
             onComplete();
           }
@@ -149,7 +153,7 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
       }
     } catch (error: any) {
       console.error(`Error submitting ${stage}:`, error);
-      showError(`Failed to submit ${stage}: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit ${stage}: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

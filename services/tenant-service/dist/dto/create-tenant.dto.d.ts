@@ -6,5 +6,6 @@ export declare class CreateTenantDto {
     contactPhone: string;
     address?: string;
     city?: string;
+    logoUrl?: string;
     subscriptionTier: SubscriptionTier;
 }

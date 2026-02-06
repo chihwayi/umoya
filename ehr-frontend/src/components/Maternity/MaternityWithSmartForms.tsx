@@ -99,25 +99,26 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
         // HIV Testing
         if (patientId) {
           await ehrApi.createHivTest(mappedData, token, tenantSlug);
-          showSuccess('HIV test recorded using WHO Smart Form');
+          showSuccess('Success', 'HIV test recorded using WHO Smart Form');
         }
       } else if (selectedFormId?.includes('F16')) {
         // ART Initiation
-        showSuccess('ART initiation recorded using WHO Smart Form');
+        showSuccess('Success', 'ART initiation recorded using WHO Smart Form');
       } else {
         // General maternity data
-        showSuccess('Maternity data recorded using WHO Smart Form');
+        showSuccess('Success', 'Maternity data recorded using WHO Smart Form');
       }
 
       if (onSuccess) {
         onSuccess();
       }
-
+      
+      // Close smart form
       setShowSmartForm(false);
-      setSelectedFormId(null);
+      
     } catch (error: any) {
       console.error('Error submitting maternity form:', error);
-      showError(`Failed to submit form: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit form: ${error.message || 'Unknown error'}`);
     }
   };
 

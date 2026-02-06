@@ -297,6 +297,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getStepExecutions: async (executionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/workflows/executions/${executionId}/steps`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getPatientAdmissions: async (patientId: string, token: string, tenantSlug: string, activeOnly: boolean = false) => {
     const response = await ehrAxios.get(`/beds/admissions`, {
       headers: {
@@ -530,6 +540,60 @@ export const ehrApi = {
 
   activateUser: async (userId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.put(`/users/${userId}/activate`, {}, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Clinical Pathways
+  getClinicalPathways: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinical-pathways', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  getPatientPathwayEnrollments: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patients/${patientId}/pathway-enrollments`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  // Care Plans & Goals
+  getPatientCarePlans: async (token: string, tenantSlug: string, params?: any) => {
+    const response = await ehrAxios.get('/care-plans', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params
+    });
+    return { data: response.data };
+  },
+
+  getPatientCarePlan: async (carePlanId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/care-plans/${carePlanId}`, {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  reportGoalProgress: async (carePlanId: string, goalId: string, progressData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/care-plans/${carePlanId}/goals/${goalId}/progress`, progressData, {
       headers: { 
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
@@ -1169,7 +1233,18 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  getPatientLabResults: async (patientId: string, token: string, tenantSlug: string) => {
+  getConsentTemplates: async (params: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/consent-templates', {
+      params,
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getPatientCarePlans: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/lab-orders/patient/${patientId}/results`, {
       headers: {
         'X-Tenant-ID': tenantSlug,

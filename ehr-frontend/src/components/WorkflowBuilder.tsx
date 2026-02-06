@@ -25,7 +25,7 @@ interface Workflow {
 }
 
 interface WorkflowBuilderProps {
-  workflow?: Workflow | null;
+  workflow?: Partial<Workflow> | null;
   tenantSlug: string;
   token: string;
   onClose: () => void;
@@ -68,7 +68,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({ workflow, tenantSlug,
     trigger_conditions: workflow?.trigger_conditions || {},
     is_active: workflow?.is_active !== false,
     priority: workflow?.priority || 0,
-    steps: workflow?.steps || [],
+    steps: (workflow?.steps || []) as WorkflowStep[],
   });
 
   const addStep = () => {

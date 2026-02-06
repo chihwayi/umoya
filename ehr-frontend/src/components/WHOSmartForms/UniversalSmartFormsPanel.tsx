@@ -154,7 +154,7 @@ export const UniversalSmartFormsPanel: React.FC<UniversalSmartFormsPanelProps> =
         });
       }
       
-      setForms(filteredForms);
+      setForms(filteredForms as unknown as SmartFormType[]);
       
       // Extract categories
       const cats = new Set<FormCategory>();
@@ -165,7 +165,7 @@ export const UniversalSmartFormsPanel: React.FC<UniversalSmartFormsPanelProps> =
       setCategories(cats);
     } catch (error: any) {
       console.error('Error loading Smart Forms:', error);
-      showError(`Failed to load forms: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to load forms: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

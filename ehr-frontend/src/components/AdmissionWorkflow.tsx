@@ -5,12 +5,12 @@ import axios from 'axios';
 import ICD10Picker from './ICD10Picker';
 
 interface AdmissionWorkflowProps {
-  patientId: string;
-  patientName: string;
+  patientId?: string;
+  patientName?: string;
   tenantSlug: string;
   token: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 const AdmissionWorkflow: React.FC<AdmissionWorkflowProps> = ({

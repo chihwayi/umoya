@@ -125,8 +125,8 @@ const SnomedConceptPicker: React.FC<SnomedConceptPickerProps> = ({
       });
       // Remove duplicates by conceptId
       const concepts = data.concepts || [];
-      const uniqueConcepts = concepts.filter((concept, index, self) =>
-        index === self.findIndex((c) => c.conceptId === concept.conceptId)
+      const uniqueConcepts = concepts.filter((concept: SnomedConcept, index: number, self: SnomedConcept[]) =>
+        index === self.findIndex((c: SnomedConcept) => c.conceptId === concept.conceptId)
       );
       setResults(uniqueConcepts);
       setHasSearched(true);

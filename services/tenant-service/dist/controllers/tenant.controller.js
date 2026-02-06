@@ -15,12 +15,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const platform_express_1 = require("@nestjs/platform-express");
 const tenant_service_1 = require("../services/tenant.service");
+const storage_service_1 = require("../services/storage.service");
 const create_tenant_dto_1 = require("../dto/create-tenant.dto");
 const tenant_entity_1 = require("../entities/tenant.entity");
 let TenantController = class TenantController {
-    constructor(tenantService) {
+    constructor(tenantService, storageService) {
         this.tenantService = tenantService;
+        this.storageService = storageService;
+    }
+    async uploadLogo(file) {
+        const url = await this.storageService.uploadLogo(file);
+        return { url };
     }
     async createTenant(createTenantDto) {
         const tenant = await this.tenantService.createTenant(createTenantDto);
@@ -54,6 +61,28 @@ let TenantController = class TenantController {
     }
 };
 exports.TenantController = TenantController;
+__decorate([
+    (0, common_1.Post)('logo'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file')),
+    (0, swagger_1.ApiConsumes)('multipart/form-data'),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                file: {
+                    type: 'string',
+                    format: 'binary',
+                },
+            },
+        },
+    }),
+    (0, swagger_1.ApiOperation)({ summary: 'Upload tenant logo' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'Logo uploaded successfully' }),
+    __param(0, (0, common_1.UploadedFile)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "uploadLogo", null);
 __decorate([
     (0, common_1.Post)(),
     (0, swagger_1.ApiOperation)({ summary: 'Create new tenant' }),
@@ -111,6 +140,7 @@ exports.TenantController = TenantController = __decorate([
     (0, swagger_1.ApiTags)('tenants'),
     (0, swagger_1.ApiBearerAuth)(),
     (0, common_1.Controller)('tenants'),
-    __metadata("design:paramtypes", [tenant_service_1.TenantService])
+    __metadata("design:paramtypes", [tenant_service_1.TenantService,
+        storage_service_1.StorageService])
 ], TenantController);
 //# sourceMappingURL=tenant.controller.js.map

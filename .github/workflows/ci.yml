@@ -12,7 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [ehr-service, tenant-service]
+        include:
+          - service: ehr-service
+            path: services/ehr-service
+          - service: tenant-service
+            path: services/tenant-service
+          - service: ehr-frontend
+            path: ehr-frontend
 
     steps:
     - uses: actions/checkout@v4
@@ -22,18 +28,18 @@ jobs:
       with:
         node-version: '18.x'
         # cache: 'npm' # Uncomment if package-lock.json exists and is committed
-        # cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+        # cache-dependency-path: ${{ matrix.path }}/package-lock.json
 
     - name: Install Dependencies
-      working-directory: services/${{ matrix.service }}
+      working-directory: ${{ matrix.path }}
       run: npm install
 
     - name: Build
-      working-directory: services/${{ matrix.service }}
+      working-directory: ${{ matrix.path }}
       run: npm run build
 
     - name: Test
-      working-directory: services/${{ matrix.service }}
+      working-directory: ${{ matrix.path }}
       run: npm test
 
     - name: Send mail on failure

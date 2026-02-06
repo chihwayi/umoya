@@ -73,7 +73,7 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
       // Submit to backend if patientId is available
       if (patientId) {
         await ehrApi.createHivTest(mappedData, token, tenantSlug);
-        showSuccess('HIV test recorded using WHO Smart Form');
+        showSuccess('Success', 'HIV test recorded using WHO Smart Form');
       }
       
       if (onTestComplete) {
@@ -84,7 +84,7 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
       setSelectedFormId(null);
     } catch (error: any) {
       console.error('Error submitting HIV test:', error);
-      showError(`Failed to submit test: ${error.message || 'Unknown error'}`);
+      showError('Error', `Failed to submit test: ${error.message || 'Unknown error'}`);
     }
   };
 

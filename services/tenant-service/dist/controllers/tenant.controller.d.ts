@@ -1,9 +1,14 @@
 import { TenantService } from '../services/tenant.service';
+import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 export declare class TenantController {
     private readonly tenantService;
-    constructor(tenantService: TenantService);
+    private readonly storageService;
+    constructor(tenantService: TenantService, storageService: StorageService);
+    uploadLogo(file: Express.Multer.File): Promise<{
+        url: string;
+    }>;
     createTenant(createTenantDto: CreateTenantDto): Promise<{
         tenant: Tenant;
         message: string;
