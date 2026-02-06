@@ -81,7 +81,7 @@ const SharedDocumentsList: React.FC<SharedDocumentsListProps> = ({ token, tenant
       setDocuments(response.data || []);
     } catch (error: any) {
       console.error('Error loading shared documents:', error);
-      showError(error.response?.data?.message || 'Failed to load shared documents');
+      showError('Error', error.response?.data?.message || 'Failed to load shared documents');
     } finally {
       setLoading(false);
     }
@@ -120,9 +120,9 @@ const SharedDocumentsList: React.FC<SharedDocumentsListProps> = ({ token, tenant
   const handleDownload = async (documentId: string, fileName: string) => {
     try {
       // Download logic would go here
-      showSuccess('Document download initiated');
+      showSuccess('Success', 'Document download initiated');
     } catch (error: any) {
-      showError('Failed to download document');
+      showError('Error', 'Failed to download document');
     }
   };
 
@@ -186,7 +186,7 @@ const SharedDocumentsList: React.FC<SharedDocumentsListProps> = ({ token, tenant
     }
   };
 
-  const documentTypes = [...new Set(documents.map(d => d.document.document_type))];
+  const documentTypes = Array.from(new Set(documents.map((d) => d.document.document_type)));
 
   if (loading) {
     return (
@@ -495,7 +495,7 @@ const SharedDocumentsList: React.FC<SharedDocumentsListProps> = ({ token, tenant
                     setShowViewer(false);
                     setSelectedDocument(null);
                   }}
-                  readOnly={true}
+                  onUpdate={loadSharedDocuments}
                 />
               </div>
             </div>

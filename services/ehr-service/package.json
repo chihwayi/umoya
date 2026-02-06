@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
-    "dev": "ts-node --transpile-only src/main.ts",
+    "dev": "nodemon --exec ts-node --transpile-only src/main.ts",
     "simple": "ts-node --transpile-only src/simple-main.ts",
     "mock": "ts-node --transpile-only src/mock-main.ts",
     "test": "jest"
@@ -59,6 +59,7 @@
     "@types/pdfkit": "^0.13.7",
     "@types/uuid": "^9.0.0",
     "jest": "^30.2.0",
+    "nodemon": "^3.1.11",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"

@@ -45,9 +45,13 @@ export const handleAutoLogout = () => {
   // Redirect to login page after a short delay to allow notification to show
   setTimeout(() => {
     if (tenantSlug) {
-      window.location.href = `/ehr/${tenantSlug}`;
+      if (window.location.pathname !== `/ehr/${tenantSlug}`) {
+        window.location.href = `/ehr/${tenantSlug}`;
+      }
     } else {
-      window.location.href = '/';
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
   }, 1500); // 1.5 second delay to show notification
 };

@@ -33,7 +33,7 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     // Extract user information
     const user = (request as any).user;
     const userId = user?.id || user?.userId || 'anonymous';
-    const userName = user?.fullName || user?.name || user?.email || 'Unknown';
+    const userName = user?.fullName || user?.name || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email) || 'Unknown';
     const userRole = user?.role || 'unknown';
 
     // Extract request metadata
@@ -67,8 +67,8 @@ export class HipaaAuditInterceptor implements NestInterceptor {
               userRole,
               action,
               resourceType,
-              resourceId || 'unknown',
-              patientId || 'unknown',
+              resourceId || undefined,
+              patientId || undefined,
               ipAddress as string,
               userAgent,
               sessionId,
@@ -97,7 +97,7 @@ export class HipaaAuditInterceptor implements NestInterceptor {
               userId,
               action,
               resourceType,
-              resourceId,
+              resourceId || null,
               patientId || null,
               error.message || 'Access denied',
               ipAddress as string,

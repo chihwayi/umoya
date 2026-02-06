@@ -11,7 +11,7 @@ import {
   Mic
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi, cdssApi, tenantApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
 import AppointmentActions from '../components/AppointmentActions';
@@ -120,6 +120,7 @@ const DoctorDashboard: React.FC = () => {
   const { showError, showSuccess } = useNotification();
   
   // State
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
   const [loading, setLoading] = useState(true);
@@ -708,6 +709,24 @@ const DoctorDashboard: React.FC = () => {
     // Refresh every 30 seconds
     const interval = setInterval(loadUnreadCount, 30000);
     return () => clearInterval(interval);
+  }, [tenantSlug]);
+
+  // Fetch tenant info
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await tenantApi.getTenantBySlug(tenantSlug!);
+        if (response.data) {
+          setTenantInfo(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant info:', error);
+      }
+    };
+
+    if (tenantSlug) {
+      fetchTenantInfo();
+    }
   }, [tenantSlug]);
 
   useEffect(() => {
@@ -1403,11 +1422,23 @@ const DoctorDashboard: React.FC = () => {
         <div className="p-6 flex-1 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
-                <Stethoscope className="w-6 h-6 text-white" />
-              </div>
+              {tenantInfo?.logoUrl ? (
+                <div className="h-10 w-10 bg-white p-1 rounded-xl flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={tenantInfo.logoUrl} 
+                    alt={`${tenantInfo.clinicName} Logo`} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl">
+                  <Stethoscope className="w-6 h-6 text-white" />
+                </div>
+              )}
               <div>
-                <h2 className="font-bold text-white">MediCore</h2>
+                <h2 className="font-bold text-white">
+                  {tenantInfo?.clinicName ? tenantInfo.clinicName : 'MediCore'}
+                </h2>
                 <p className="text-xs text-slate-300">Doctor Portal</p>
               </div>
             </div>

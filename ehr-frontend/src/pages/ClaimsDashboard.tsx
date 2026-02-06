@@ -33,9 +33,10 @@ import {
   ChevronUp,
   Upload,
 } from 'lucide-react';
-import { claimsApi, billingApi, ehrApi } from '../services/api';
+import { claimsApi, billingApi, ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
+import { GuidelineResult } from '../types/guidelines';
 
 const formatCurrency = (amount: number | string): string => {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -91,11 +92,29 @@ const ClaimsDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [preAuthorizations, setPreAuthorizations] = useState<any[]>([]);
   const [selectedClaims, setSelectedClaims] = useState<Set<string>>(new Set());
-  const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
-  const [showApiConfigModal, setShowApiConfigModal] = useState(false);
-  const [showPreAuthModal, setShowPreAuthModal] = useState(false);
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  // const [apiConfigurations, setApiConfigurations] = useState<any[]>([]);
+  // const [showApiConfigModal, setShowApiConfigModal] = useState(false);
+  // const [showPreAuthModal, setShowPreAuthModal] = useState(false);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
+
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await tenantApi.getTenantBySlug(tenantSlug!);
+        if (response.data) {
+          setTenantInfo(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant info:', error);
+      }
+    };
+
+    if (tenantSlug) {
+      fetchTenantInfo();
+    }
+  }, [tenantSlug]);
 
   useEffect(() => {
     if (!tenantSlug || !token) {
@@ -146,20 +165,24 @@ const ClaimsDashboard: React.FC = () => {
         setPreAuthorizations(preAuthResponse.data || []);
       }
 
+      /* 
       if (activeTab === 'api-config') {
         const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
         setApiConfigurations(configResponse.data || []);
       }
+      */
 
       if (activeTab === 'preauth') {
         const preAuthResponse = await claimsApi.getPreAuthorizations(tenantSlug, token);
         setPreAuthorizations(Array.isArray(preAuthResponse.data) ? preAuthResponse.data : []);
       }
 
+      /*
       if (activeTab === 'api-config') {
         const configResponse = await claimsApi.getApiConfigurations(tenantSlug, token);
         setApiConfigurations(Array.isArray(configResponse.data) ? configResponse.data : []);
       }
+      */
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
       showError(error.response?.data?.message || 'Failed to load dashboard data', 'error');
@@ -279,6 +302,15 @@ const ClaimsDashboard: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
+              {tenantInfo?.logoUrl && (
+                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={tenantInfo.logoUrl} 
+                    alt={`${tenantInfo.clinicName} Logo`} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
               <div>
                 <h1 className="text-3xl font-bold text-white">Medical Aid Claims</h1>
                 <p className="text-white/60 mt-1">Manage claims, track status, and analyze performance</p>
@@ -722,7 +754,8 @@ const ClaimsDashboard: React.FC = () => {
         </ModalPortal>
       )}
 
-      {/* Pre-Authorization Modal */}
+      {/* Pre-Authorization Modal - Placeholder */}
+      {/* 
       {showPreAuthModal && (
         <ModalPortal>
           <PreAuthorizationModal
@@ -736,8 +769,10 @@ const ClaimsDashboard: React.FC = () => {
           />
         </ModalPortal>
       )}
+      */}
 
-      {/* API Configuration Modal */}
+      {/* API Configuration Modal - Placeholder */}
+      {/* 
       {showApiConfigModal && (
         <ModalPortal>
           <ApiConfigurationModal
@@ -751,6 +786,7 @@ const ClaimsDashboard: React.FC = () => {
           />
         </ModalPortal>
       )}
+      */}
     </div>
   );
 };
@@ -1138,7 +1174,8 @@ const ClaimDetailModal: React.FC<{
   onResubmit: (id: string, data: any) => void;
   tenantSlug: string;
   token: string;
-}> = ({ claim, onClose, onSubmit, onResubmit }) => {
+  onRefresh: () => void;
+}> = ({ claim, onClose, onSubmit, onResubmit, tenantSlug, token, onRefresh }) => {
   const { showError, showSuccess } = useNotification();
   const [showResubmitForm, setShowResubmitForm] = useState(false);
   const [showStatusHistory, setShowStatusHistory] = useState(false);
@@ -1358,6 +1395,7 @@ const ClaimDetailModal: React.FC<{
                     Object.assign(claim, response.data.claim);
                   }
                   loadStatusHistory();
+                  onRefresh();
                 } catch (error: any) {
                   showError(error.response?.data?.message || 'Failed to check status', 'error');
                 }

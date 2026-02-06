@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Stethoscope, Shield, ArrowLeft } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -24,8 +25,8 @@ const EHRLogin: React.FC = () => {
       if (!tenantSlug) return;
       
       try {
-        const response = await tenantApi.getActiveTenants();
-        const tenant = response.data.find((t: any) => t.subdomain === tenantSlug);
+        const response = await tenantApi.getTenantBySlug(tenantSlug);
+        const tenant = response.data;
         
         if (tenant) {
           setTenantInfo({
@@ -34,7 +35,7 @@ const EHRLogin: React.FC = () => {
           });
           showInfo('Clinic Selected', `Accessing ${tenant.clinicName} EHR system`);
         } else {
-            // Fallback if tenant not found in the list (shouldn't happen if navigating from directory)
+            // Fallback if tenant not found
              setTenantInfo({
                 name: location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login'
              });
@@ -70,8 +71,14 @@ const EHRLogin: React.FC = () => {
         localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
         localStorage.setItem('ehr_tenant', tenantSlug);
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
-        showSuccess('Login Successful', `Welcome back, ${response.data.user.firstName}!`);
         
+        // Generate and store session ID for audit logging
+        const sessionId = uuidv4();
+        localStorage.setItem('ehr_session_id', sessionId);
+        
+        // Reset welcome message flag
+        sessionStorage.removeItem('ehr_welcome_shown');
+
         // Redirect based on user role
         const role = response.data.user.role;
         switch (role) {

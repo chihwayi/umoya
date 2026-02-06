@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
-    "dev": "ts-node src/main.ts",
+    "dev": "nodemon --exec ts-node src/main.ts",
     "repair:tenants": "node dist/scripts/repairTenants.js",
     "test": "jest"
   },
@@ -46,6 +46,7 @@
     "@types/node": "^20.0.0",
     "@types/passport-jwt": "^3.0.9",
     "jest": "^30.2.0",
+    "nodemon": "^3.1.11",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"

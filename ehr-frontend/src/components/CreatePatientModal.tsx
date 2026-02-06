@@ -56,7 +56,8 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
       // Convert date format for API
       const patientData = {
         ...formData,
-        dateOfBirth: formatDateForAPI(formData.dateOfBirth)
+        dateOfBirth: formatDateForAPI(formData.dateOfBirth),
+        email: formData.email.trim() === '' ? undefined : formData.email
       };
 
       await ehrApi.createPatient(patientData, token, tenantSlug);

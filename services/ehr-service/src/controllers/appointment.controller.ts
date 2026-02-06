@@ -54,10 +54,6 @@ export class AppointmentController {
     return this.appointmentService.getAppointmentStats(req.tenantId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: RequestWithTenant) {
-    return this.appointmentService.findOne(id, req.tenantId);
-  }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateAppointmentDto: UpdateAppointmentDto, @Req() req: RequestWithTenant) {
@@ -277,5 +273,10 @@ export class AppointmentController {
     }
 
     return this.patientProService.getProResponsesForAppointment(req.tenantDb, id, patientId);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    return this.appointmentService.findOne(id, req.tenantId);
   }
 }

@@ -31,7 +31,7 @@ import {
   CreditCard,
   Loader2,
 } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
@@ -284,6 +284,24 @@ const LabDashboard: React.FC = () => {
   const [reagentInventory, setReagentInventory] = useState<any[]>([]);
   const [qcLoading, setQcLoading] = useState(false);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await tenantApi.getTenantBySlug(tenantSlug!);
+        if (response.data) {
+          setTenantInfo(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant info:', error);
+      }
+    };
+
+    if (tenantSlug) {
+      fetchTenantInfo();
+    }
+  }, [tenantSlug]);
 
   const [actionModal, setActionModal] = useState<LabActionModalState | null>(null);
   const [actionModalValues, setActionModalValues] = useState<Record<string, string>>({});
@@ -1612,9 +1630,19 @@ const LabDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl">
-                <TestTube className="w-6 h-6 text-white" />
-              </div>
+              {tenantInfo?.logoUrl ? (
+                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
+                  <img 
+                    src={tenantInfo.logoUrl} 
+                    alt={`${tenantInfo.clinicName} Logo`} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="p-2 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl">
+                  <TestTube className="w-6 h-6 text-white" />
+                </div>
+              )}
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Laboratory Dashboard</h1>
                 <p className="text-sm text-slate-500">Manage lab orders and results</p>

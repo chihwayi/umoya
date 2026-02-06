@@ -1,11 +1,12 @@
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 import { handleAutoLogout } from '../utils/autoLogout';
 
-const TENANT_API_URL = process.env.REACT_APP_API_URL || '';
+const TENANT_API_URL = process.env.REACT_APP_TENANT_API_URL || process.env.REACT_APP_API_URL || '';
 const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || '';
 const CDSS_API_URL = process.env.REACT_APP_CDSS_API_URL || '';
 
-if (!process.env.REACT_APP_API_URL || !process.env.REACT_APP_EHR_API_URL || !process.env.REACT_APP_CDSS_API_URL) {
+if (!TENANT_API_URL || !EHR_API_URL || !CDSS_API_URL) {
   console.warn('One or more API URLs are missing in environment variables. Application may not function correctly.');
 }
 
@@ -13,11 +14,26 @@ if (!process.env.REACT_APP_API_URL || !process.env.REACT_APP_EHR_API_URL || !pro
 const createAxiosInstance = (baseURL: string) => {
   const instance = axios.create({ baseURL });
   
+  // Request interceptor to add session ID
+  instance.interceptors.request.use(
+    (config) => {
+      let sessionId = localStorage.getItem('ehr_session_id');
+      if (!sessionId) {
+        sessionId = uuidv4();
+        localStorage.setItem('ehr_session_id', sessionId);
+      }
+      config.headers['x-session-id'] = sessionId;
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   // Response interceptor to handle 401 errors
   instance.interceptors.response.use(
     (response) => response,
     (error) => {
-      if (error.response?.status === 401) {
+      const isLoginRequest = error.config?.url?.endsWith('/auth/login');
+      if (error.response?.status === 401 && !isLoginRequest) {
         console.log('🚨 401 Unauthorized detected - triggering auto-logout');
         handleAutoLogout();
       }
@@ -37,6 +53,10 @@ export const tenantApi = {
   getActiveTenants: async () => {
     const response = await tenantAxios.get('/tenants');
     return { data: response.data.filter((tenant: any) => tenant.status === 'active') };
+  },
+  getTenantBySlug: async (slug: string) => {
+    const response = await tenantAxios.get(`/tenants/subdomain/${slug}`);
+    return { data: response.data };
   }
 };
 
@@ -255,6 +275,28 @@ export const terminologyApi = {
 };
 
 export const ehrApi = {
+  getAuditSummary: async (token: string, tenantSlug: string, startDate: string, endDate: string) => {
+    const response = await ehrAxios.get('/hipaa-audit/summary', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: { startDate, endDate },
+    });
+    return { data: response.data };
+  },
+
+  getAuditLogs: async (token: string, tenantSlug: string, params: any) => {
+    const response = await ehrAxios.get('/hipaa-audit/logs', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params,
+    });
+    return { data: response.data };
+  },
+
   getPatientAdmissions: async (patientId: string, token: string, tenantSlug: string, activeOnly: boolean = false) => {
     const response = await ehrAxios.get(`/beds/admissions`, {
       headers: {

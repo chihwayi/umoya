@@ -26,6 +26,7 @@ export class AdminMaintenanceController {
     return { message: 'Schema applied', tenantId: id, tenantName: tenant.clinicName };
   }
 
+  // @UseGuards(JwtAuthGuard)
   @Post('tenants/repair-all')
   async repairAllTenants() {
     const tenants = await this.tenantService.findAll();

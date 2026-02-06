@@ -9,7 +9,7 @@ import {
   CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
   Bed, AlertCircle, BookOpen, Loader2, Sparkles
 } from 'lucide-react';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi, cdssApi, tenantApi } from '../services/api';
 import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
@@ -110,6 +110,7 @@ const NurseDashboard: React.FC = () => {
   const location = useLocation();
   const { showSuccess, showError } = useNotification();
 
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
@@ -359,6 +360,24 @@ const NurseDashboard: React.FC = () => {
       // Refresh count every 2 minutes
       const interval = setInterval(loadSharedCount, 120000);
       return () => clearInterval(interval);
+    }
+  }, [tenantSlug]);
+
+  // Fetch tenant info
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await tenantApi.getTenantBySlug(tenantSlug!);
+        if (response.data) {
+          setTenantInfo(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant info:', error);
+      }
+    };
+
+    if (tenantSlug) {
+      fetchTenantInfo();
     }
   }, [tenantSlug]);
 
@@ -1528,12 +1547,24 @@ const NurseDashboard: React.FC = () => {
             {/* Left Section - System Title */}
             <div className="flex items-center space-x-4">
               <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-gradient-to-r from-pink-500 to-rose-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <Stethoscope className="h-5 w-5 text-white" />
-                </div>
+                {tenantInfo?.logoUrl ? (
+                  <div className="h-10 w-10 bg-white p-1 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden">
+                    <img 
+                      src={tenantInfo.logoUrl} 
+                      alt={`${tenantInfo.clinicName} Logo`} 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-8 w-8 bg-gradient-to-r from-pink-500 to-rose-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <Stethoscope className="h-5 w-5 text-white" />
+                  </div>
+                )}
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-slate-900">Nurse Dashboard</h1>
+                <h1 className="text-lg font-bold text-slate-900">
+                  {tenantInfo?.clinicName ? `${tenantInfo.clinicName}` : 'Nurse Dashboard'}
+                </h1>
                 <p className="text-xs text-slate-600">Patient Care Management</p>
               </div>
             </div>
@@ -2687,7 +2718,7 @@ const NurseDashboard: React.FC = () => {
           onClose={() => setShowCreatePatientModal(false)}
           onPatientCreated={() => {
             fetchTodayAppointments();
-            showSuccess('Success', 'Patient created successfully');
+            fetchPatients();
           }}
           tenantSlug={tenantSlug!}
         />

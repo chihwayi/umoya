@@ -19,7 +19,9 @@ api.interceptors.response.use(
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       delete api.defaults.headers.common['Authorization'];
-      window.location.href = '/';
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

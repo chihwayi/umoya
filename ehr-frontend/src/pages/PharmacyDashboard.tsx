@@ -25,7 +25,7 @@ import {
   FolderOpen,
   X,
 } from 'lucide-react';
-import { pharmacyApi, ehrApi } from '../services/api';
+import { pharmacyApi, ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import PharmacyDispensing from '../components/PharmacyDispensing';
@@ -84,6 +84,7 @@ const PharmacyDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents'>('overview');
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);
 
@@ -97,6 +98,23 @@ const PharmacyDashboard: React.FC = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      try {
+        const response = await tenantApi.getTenantBySlug(tenantSlug!);
+        if (response.data) {
+          setTenantInfo(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching tenant info:', error);
+      }
+    };
+
+    if (tenantSlug) {
+      fetchTenantInfo();
+    }
+  }, [tenantSlug]);
 
   // Load shared documents count
   useEffect(() => {
@@ -227,6 +245,15 @@ const PharmacyDashboard: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </button>
+              {tenantInfo?.logoUrl && (
+                <div className="h-12 w-12 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200">
+                  <img 
+                    src={tenantInfo.logoUrl} 
+                    alt={`${tenantInfo.clinicName} Logo`} 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
                   Pharmacy Management

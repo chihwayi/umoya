@@ -179,8 +179,8 @@ export class HipaaAuditService {
     userRole: string,
     action: HipaaAuditAction,
     resourceType: string,
-    resourceId: string,
-    patientId: string,
+    resourceId: string | undefined | null,
+    patientId: string | undefined | null,
     ipAddress?: string,
     userAgent?: string,
     sessionId?: string,
@@ -231,13 +231,13 @@ export class HipaaAuditService {
       userRole,
       action,
       resourceType,
-      resourceId,
-      patientId,
+      resourceId: resourceId || undefined,
+      patientId: patientId || undefined,
       ipAddress,
       userAgent,
       sessionId,
       outcome: 'success',
-      oldValues,
+      oldValues: oldValues ? JSON.parse(JSON.stringify(oldValues)) : undefined,
       newValues,
       metadata,
       riskLevel: 'medium', // Modifications are generally medium risk
@@ -482,10 +482,15 @@ export class HipaaAuditService {
 
     const byUser = await tenantDb.query(
       `
-      SELECT user_id, user_name, user_role, COUNT(*)::int AS count
-      FROM hipaa_audit_logs
-      WHERE created_at >= $1 AND created_at <= $2
-      GROUP BY user_id, user_name, user_role
+      SELECT
+        hal.user_id,
+        COALESCE(hal.user_name, tu.first_name || ' ' || tu.last_name, tu.email, CASE WHEN hal.user_id IS NOT NULL AND hal.user_id != 'anonymous' THEN 'User ' || substring(hal.user_id::text, 1, 8) ELSE 'Anonymous' END) AS user_name,
+        hal.user_role,
+        COUNT(*)::int AS count
+      FROM hipaa_audit_logs hal
+      LEFT JOIN users tu ON tu.id = hal.user_id
+      WHERE hal.created_at >= $1 AND hal.created_at <= $2
+      GROUP BY hal.user_id, hal.user_name, tu.first_name, tu.last_name, tu.email, hal.user_role
       ORDER BY count DESC
       LIMIT 20
     `,
@@ -547,35 +552,41 @@ export class HipaaAuditService {
         HAVING SUM((data_accessed->>'recordCount')::int) > 500
       )
       SELECT
-        'excessive_access' AS breach_type,
-        sp.user_id,
-        sp.user_name,
-        sp.access_count AS metric_value,
-        sp.last_access AS detected_at,
+        'excessive_access' AS "type",
+        'high' AS "severity",
+        sp.user_id AS "userId",
+        COALESCE(sp.user_name, tu.first_name || ' ' || tu.last_name, 'Unknown User') AS "userName",
+        sp.access_count AS "metricValue",
+        sp.last_access AS "detectedAt",
         'User accessed ' || sp.access_count || ' records across ' || sp.patient_count || ' patients' AS description
       FROM suspicious_patterns sp
+      LEFT JOIN users tu ON tu.id = sp.user_id
       UNION ALL
       SELECT
-        'failed_access_attempts' AS breach_type,
-        fa.user_id,
-        NULL AS user_name,
-        fa.failed_count AS metric_value,
-        MAX(hal.created_at) AS detected_at,
+        'failed_access_attempts' AS "type",
+        'medium' AS "severity",
+        fa.user_id AS "userId",
+        COALESCE(MAX(hal.user_name), MAX(tu.first_name || ' ' || tu.last_name), 'Unknown User') AS "userName",
+        fa.failed_count AS "metricValue",
+        MAX(hal.created_at) AS "detectedAt",
         'User had ' || fa.failed_count || ' failed access attempts' AS description
       FROM failed_accesses fa
       JOIN hipaa_audit_logs hal ON hal.user_id = fa.user_id
+      LEFT JOIN users tu ON tu.id = fa.user_id
       WHERE hal.outcome IN ('failure', 'denied')
       GROUP BY fa.user_id, fa.failed_count
       UNION ALL
       SELECT
-        'bulk_data_export' AS breach_type,
-        be.user_id,
-        be.user_name,
-        be.total_records AS metric_value,
-        MAX(hal.created_at) AS detected_at,
+        'bulk_data_export' AS "type",
+        'critical' AS "severity",
+        be.user_id AS "userId",
+        COALESCE(be.user_name, MAX(tu.first_name || ' ' || tu.last_name), 'Unknown User') AS "userName",
+        be.total_records AS "metricValue",
+        MAX(hal.created_at) AS "detectedAt",
         'User exported ' || be.total_records || ' records in ' || be.export_count || ' exports' AS description
       FROM bulk_exports be
       JOIN hipaa_audit_logs hal ON hal.user_id = be.user_id
+      LEFT JOIN users tu ON tu.id = be.user_id
       WHERE hal.action = 'data_export'
       GROUP BY be.user_id, be.user_name, be.total_records, be.export_count
     `,
@@ -620,10 +631,17 @@ export class HipaaAuditService {
       ),
       tenantDb.query(
         `
-        SELECT user_id, user_name, user_role, COUNT(*)::int AS access_count
-        FROM hipaa_audit_logs
-        WHERE ${conditions.join(' AND ')}
-        GROUP BY user_id, user_name, user_role
+        SELECT
+          hal.user_id,
+          COALESCE(hal.user_name, tu.first_name || ' ' || tu.last_name, 'Unknown User') AS user_name,
+          hal.user_role,
+          COUNT(*)::int AS access_count
+        FROM hipaa_audit_logs hal
+        LEFT JOIN users tu ON tu.id = hal.user_id
+        WHERE ${conditions
+          .map((c) => c.replace('patient_id', 'hal.patient_id').replace('created_at', 'hal.created_at'))
+          .join(' AND ')}
+        GROUP BY hal.user_id, hal.user_name, tu.first_name, tu.last_name, hal.user_role
         ORDER BY access_count DESC
       `,
         params,

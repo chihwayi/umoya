@@ -252,7 +252,7 @@ class MedicalEntityExtractor {
       }
     }
 
-    return [...new Set(symptoms)];
+    return Array.from(new Set(symptoms));
   }
 
   /**
@@ -268,7 +268,7 @@ class MedicalEntityExtractor {
     ];
 
     for (const pattern of problemPatterns) {
-      const matches = text.matchAll(pattern);
+      const matches = Array.from(text.matchAll(pattern));
       for (const match of matches) {
         const problem = match[1].trim();
         if (problem.length > 3 && problem.length < 100) {
@@ -277,7 +277,7 @@ class MedicalEntityExtractor {
       }
     }
 
-    return [...new Set(problems)];
+    return Array.from(new Set(problems));
   }
 
   /**
@@ -320,7 +320,7 @@ class MedicalEntityExtractor {
     ];
 
     for (const pattern of medPatterns) {
-      const matches = text.matchAll(pattern);
+      const matches = Array.from(text.matchAll(pattern));
       for (const match of matches) {
         const med = match[1].trim();
         if (med.length > 2 && med.length < 50) {
@@ -329,7 +329,7 @@ class MedicalEntityExtractor {
       }
     }
 
-    return [...new Set(medications)];
+    return Array.from(new Set(medications));
   }
 
   /**
@@ -357,7 +357,7 @@ class MedicalEntityExtractor {
       }
     }
 
-    return [...new Set(allergies)];
+    return Array.from(new Set(allergies));
   }
 }
 
