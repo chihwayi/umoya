@@ -10,6 +10,21 @@ const api = axios.create({
   },
 });
 
+// Add response interceptor to handle 401 Unauthorized errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Clear local storage and redirect to login
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      delete api.defaults.headers.common['Authorization'];
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Auth API
 export const authAPI = {
   login: async (email: string, password: string) => {
@@ -77,6 +92,17 @@ export const tenantAPI = {
     return response.data;
   },
 
+  uploadTenantLogo: async (file: File): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/tenants/logo', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   updateTenantStatus: async (id: string, status: string): Promise<Tenant> => {
     const response = await api.put(`/tenants/${id}/status`, { status });
     return response.data;
@@ -134,4 +160,27 @@ export const analyticsAPI = {
     const response = await api.get(`/analytics/tenants/${tenantId}/report`);
     return response.data;
   },
+};
+
+// Backup API
+export const backupAPI = {
+  listBackups: async (): Promise<any[]> => {
+    const response = await api.get('/admin/backups');
+    return response.data;
+  },
+
+  createBackup: async (type: 'auto' | 'manual'): Promise<any> => {
+    const response = await api.post(`/admin/backups?type=${type}`);
+    return response.data;
+  },
+
+  getDownloadUrl: async (key: string): Promise<{ url: string }> => {
+    const response = await api.get(`/admin/backups/${encodeURIComponent(key)}/download`);
+    return response.data;
+  },
+
+  restoreBackup: async (key: string): Promise<{ message: string }> => {
+    const response = await api.post(`/admin/backups/${encodeURIComponent(key)}/restore`);
+    return response.data;
+  }
 };

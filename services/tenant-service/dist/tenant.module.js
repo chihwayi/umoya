@@ -24,7 +24,9 @@ const auth_service_1 = require("./services/auth.service");
 const audit_service_1 = require("./services/audit.service");
 const email_service_1 = require("./services/email.service");
 const health_monitor_service_1 = require("./services/health-monitor.service");
+const backup_service_1 = require("./services/backup.service");
 const auth_controller_1 = require("./controllers/auth.controller");
+const backup_controller_1 = require("./controllers/backup.controller");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const tenant_entity_1 = require("./entities/tenant.entity");
 const tenant_user_entity_1 = require("./entities/tenant-user.entity");
@@ -51,7 +53,7 @@ exports.TenantModule = TenantModule = __decorate([
             }),
             typeorm_1.TypeOrmModule.forFeature([tenant_entity_1.Tenant, tenant_user_entity_1.TenantUser, tenant_analytics_entity_1.TenantAnalytics, admin_user_entity_1.AdminUser, audit_log_entity_1.AuditLog]),
         ],
-        controllers: [tenant_controller_1.TenantController, tenant_user_controller_1.TenantUserController, tenant_analytics_controller_1.TenantAnalyticsController, auth_controller_1.AuthController, admin_maintenance_controller_1.AdminMaintenanceController],
+        controllers: [tenant_controller_1.TenantController, tenant_user_controller_1.TenantUserController, tenant_analytics_controller_1.TenantAnalyticsController, auth_controller_1.AuthController, admin_maintenance_controller_1.AdminMaintenanceController, backup_controller_1.BackupController],
         providers: [
             tenant_service_1.TenantService,
             tenant_analytics_service_1.TenantAnalyticsService,
@@ -61,6 +63,7 @@ exports.TenantModule = TenantModule = __decorate([
             audit_service_1.AuditService,
             email_service_1.EmailService,
             health_monitor_service_1.HealthMonitorService,
+            backup_service_1.BackupService,
             jwt_strategy_1.JwtStrategy
         ],
         exports: [tenant_service_1.TenantService, tenant_analytics_service_1.TenantAnalyticsService, tenant_database_service_1.TenantDatabaseService, auth_service_1.AuthService],

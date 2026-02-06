@@ -6,7 +6,9 @@ export enum ClinicUserRole {
   NURSE = 'nurse',
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
-  LAB_TECH = 'lab_tech'
+  LAB_TECHNICIAN = 'lab_technician',
+  ACCOUNTS = 'accounts',
+  RADIOLOGIST = 'radiologist'
 }
 
 export class CreateClinicUserDto {
@@ -39,7 +41,8 @@ export class CreateClinicUserDto {
   @IsString()
   specialization?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(8)
-  temporaryPassword: string;
+  temporaryPassword?: string;
 }

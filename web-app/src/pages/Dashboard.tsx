@@ -8,6 +8,7 @@ import { SystemOverview } from '../components/SystemOverview';
 import { HealthMonitor } from '../components/HealthMonitor';
 import { AuditLogs } from '../components/AuditLogs';
 import { SecurityPanel } from '../components/SecurityPanel';
+import { BackupManager } from '../components/BackupManager';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -21,7 +22,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [error, setError] = useState('');
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'health' | 'audit' | 'security'>('overview');
+  const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'health' | 'audit' | 'security' | 'backups'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -31,9 +32,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const loadTenants = async () => {
     try {
       const data = await tenantAPI.getAllTenants();
-      setTenants(data);
+      if (Array.isArray(data)) {
+        setTenants(data);
+      } else {
+        console.warn('Expected array of tenants but received:', data);
+        setTenants([]);
+      }
     } catch (err) {
+      console.error('Failed to load tenants:', err);
       setError('Failed to load tenants');
+      setTenants([]);
     } finally {
       setLoading(false);
     }
@@ -81,77 +89,121 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: '📊', color: 'from-blue-500 to-blue-600' },
-    { id: 'tenants', label: 'Tenants', icon: '🏥', color: 'from-green-500 to-green-600' },
-    { id: 'health', label: 'Health', icon: '💚', color: 'from-emerald-500 to-emerald-600' },
-    { id: 'audit', label: 'Audit', icon: '📋', color: 'from-purple-500 to-purple-600' },
-    { id: 'security', label: 'Security', icon: '🔐', color: 'from-red-500 to-red-600' },
+    { 
+      id: 'overview', 
+      label: 'Overview', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      )
+    },
+    { 
+      id: 'tenants', 
+      label: 'Tenants', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      )
+    },
+    { 
+      id: 'health', 
+      label: 'Health', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    },
+    { 
+      id: 'audit', 
+      label: 'Audit', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+      )
+    },
+    { 
+      id: 'security', 
+      label: 'Security', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      )
+    },
+    { 
+      id: 'backups', 
+      label: 'Backups', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+        </svg>
+      )
+    },
   ];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="relative">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto"></div>
-            <div className="absolute inset-0 rounded-full h-16 w-16 border-4 border-transparent border-r-blue-400 animate-pulse mx-auto"></div>
-          </div>
-          <p className="mt-6 text-slate-600 font-medium">Loading MediCore Dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-800 mx-auto"></div>
+          <p className="mt-4 text-slate-600 font-medium">Loading MediCore Dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}></div>
+          <div className="fixed inset-0 bg-slate-900 bg-opacity-50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}></div>
         </div>
       )}
 
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl shadow-lg border-b border-white/20 sticky top-0 z-30">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button 
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                className="lg:hidden p-2 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center">
                   <span className="text-white font-bold text-lg">M</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  <h1 className="text-lg font-bold text-slate-800 tracking-tight">
                     MediCore
                   </h1>
-                  <span className="text-xs text-slate-500 font-medium">Admin Portal</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="hidden sm:flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">SA</span>
+              <div className="hidden sm:flex items-center space-x-3 px-3 py-1 bg-slate-100 rounded-md">
+                <div className="w-6 h-6 bg-slate-300 rounded-full flex items-center justify-center">
+                  <span className="text-slate-600 text-xs font-bold">SA</span>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-medium text-slate-700">Super Admin</p>
-                  <p className="text-xs text-slate-500">admin@medicore.co.zw</p>
                 </div>
               </div>
               <button 
                 onClick={handleLogout}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="text-slate-500 hover:text-slate-700 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                title="Logout"
               >
-                <span className="hidden sm:inline">Logout</span>
-                <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
               </button>
@@ -162,11 +214,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white/90 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
+        <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
-          <div className="flex flex-col h-full pt-20 lg:pt-4">
-            <div className="flex-1 px-4 py-6 space-y-2">
+          <div className="flex flex-col h-full pt-20 lg:pt-6">
+            <div className="flex-1 px-3 space-y-1">
+              <div className="px-3 mb-6">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Menu</p>
+              </div>
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -174,31 +229,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     setCurrentView(tab.id as any);
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200 group ${
+                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md font-medium text-sm transition-colors ${
                     currentView === tab.id
-                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg transform scale-105`
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                      ? 'bg-slate-800 text-white border-l-4 border-blue-500'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                   }`}
                 >
-                  <span className="text-xl">{tab.icon}</span>
-                  <span className="font-semibold">{tab.label}</span>
-                  {currentView === tab.id && (
-                    <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                  )}
+                  <span className="text-lg opacity-75">{tab.icon}</span>
+                  <span>{tab.label}</span>
                 </button>
               ))}
             </div>
-            <div className="p-4 border-t border-slate-200">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4">
+            <div className="p-4 border-t border-slate-800">
+              <div className="bg-slate-800 rounded-md p-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                  <div className="flex-shrink-0">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">System Status</p>
-                    <p className="text-xs text-slate-600">All systems operational</p>
+                    <p className="text-sm font-medium text-white">System Status</p>
+                    <p className="text-xs text-slate-400">All systems operational</p>
                   </div>
                 </div>
               </div>
@@ -207,88 +260,89 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 lg:ml-0">
+        <main className="flex-1 min-w-0 lg:ml-0 bg-slate-50 min-h-[calc(100vh-4rem)]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {currentView === 'overview' && <SystemOverview />}
             {currentView === 'health' && <HealthMonitor />}
             {currentView === 'audit' && <AuditLogs />}
             {currentView === 'security' && <SecurityPanel />}
+            {currentView === 'backups' && <BackupManager />}
             
             {currentView === 'tenants' && (
-              <div className="space-y-8">
+              <div className="space-y-6">
                 {/* Quick Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                          <span className="text-white text-lg">🏥</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-slate-600">Total Tenants</p>
-                        <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Total Tenants</p>
+                        <p className="text-2xl font-semibold text-slate-900 mt-1">
                           {tenants.length}
                         </p>
                       </div>
+                      <div className="p-3 bg-blue-50 rounded-md">
+                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                          <span className="text-white text-lg">✅</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-slate-600">Active</p>
-                        <p className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
+                  <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Active</p>
+                        <p className="text-2xl font-semibold text-slate-900 mt-1">
                           {tenants.filter(t => t.status === 'active').length}
                         </p>
                       </div>
+                      <div className="p-3 bg-emerald-50 rounded-md">
+                        <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg">
-                          <span className="text-white text-lg">⏳</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-slate-600">Pending</p>
-                        <p className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-amber-800 bg-clip-text text-transparent">
+                  <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Pending</p>
+                        <p className="text-2xl font-semibold text-slate-900 mt-1">
                           {tenants.filter(t => t.status === 'pending').length}
                         </p>
                       </div>
+                      <div className="p-3 bg-amber-50 rounded-md">
+                        <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                          <span className="text-white text-lg">💼</span>
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-slate-600">Enterprise</p>
-                        <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+                  <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">Enterprise</p>
+                        <p className="text-2xl font-semibold text-slate-900 mt-1">
                           {tenants.filter(t => t.subscriptionTier === 'enterprise').length}
                         </p>
+                      </div>
+                      <div className="p-3 bg-purple-50 rounded-md">
+                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-                  <h2 className="text-2xl font-bold text-slate-800">Tenant Management</h2>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 pb-2 border-b border-slate-200">
+                  <h2 className="text-xl font-bold text-slate-800">Tenant Management</h2>
                   <button
                     onClick={() => setCreateModalOpen(true)}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center space-x-2"
+                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm flex items-center space-x-2"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -323,17 +377,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </div>
 
                 {tenants.length === 0 && (
-                  <div className="text-center py-16">
-                    <div className="w-24 h-24 bg-gradient-to-r from-slate-200 to-slate-300 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <span className="text-4xl">🏥</span>
+                  <div className="text-center py-16 bg-white rounded-lg border border-dashed border-slate-300">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
                     </div>
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No tenants found</h3>
+                    <h3 className="text-lg font-medium text-slate-900 mb-1">No tenants found</h3>
                     <p className="text-slate-500 mb-6">Create your first tenant to get started with MediCore.</p>
                     <button
                       onClick={() => setCreateModalOpen(true)}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-sm inline-flex items-center space-x-2"
                     >
-                      Create First Tenant
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Create First Tenant</span>
                     </button>
                   </div>
                 )}

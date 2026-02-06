@@ -72,7 +72,7 @@ export class HipaaAuditController {
     );
   }
 
-  @Get('breaches')
+  @Get('detect-breaches')
   @Roles('admin')
   @ApiOperation({ summary: 'Detect potential HIPAA breaches' })
   @ApiQuery({ name: 'lookbackDays', description: 'Number of days to look back', required: false, type: Number })

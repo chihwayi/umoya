@@ -5,7 +5,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
 export const Modal: React.FC<ModalProps> = ({ 
@@ -21,7 +21,8 @@ export const Modal: React.FC<ModalProps> = ({
     sm: 'max-w-md',
     md: 'max-w-lg',
     lg: 'max-w-2xl',
-    xl: 'max-w-4xl'
+    xl: 'max-w-4xl',
+    '2xl': 'max-w-6xl'
   };
 
   return (
@@ -29,18 +30,18 @@ export const Modal: React.FC<ModalProps> = ({
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Backdrop */}
         <div 
-          className="fixed inset-0 transition-opacity bg-black bg-opacity-50 backdrop-blur-sm"
+          className="fixed inset-0 transition-opacity bg-slate-900 bg-opacity-75"
           onClick={onClose}
         />
 
         {/* Modal */}
-        <div className={`inline-block w-full ${sizeClasses[size]} my-8 overflow-hidden text-left align-middle transition-all transform bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/20`}>
+        <div className={`inline-block w-full ${sizeClasses[size]} my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-lg border border-slate-200`}>
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-200/50">
-            <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+          <div className="flex items-center justify-between p-6 border-b border-slate-200">
+            <h3 className="text-lg font-bold text-slate-900">{title}</h3>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all duration-200"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors duration-200"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

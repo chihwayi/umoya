@@ -445,6 +445,17 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  detectBreaches: async (token: string, tenantSlug: string, lookbackDays: number = 30) => {
+    const response = await ehrAxios.get('/hipaa-audit/detect-breaches', {
+      headers: { 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: { lookbackDays }
+    });
+    return { data: response.data };
+  },
+
   createUser: async (userData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/users', userData, {
       headers: { 
@@ -5394,23 +5405,7 @@ export const prescriptionTemplateApi = {
     return { data: response.data };
   },
 
-  detectBreaches: async (
-    token: string,
-    tenantSlug: string,
-    lookbackDays?: number
-  ) => {
-    const params: Record<string, any> = {};
-    if (lookbackDays) params.lookbackDays = lookbackDays;
 
-    const response = await ehrAxios.get('/hipaa-audit/breaches', {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      params,
-    });
-    return { data: response.data };
-  },
 
   getPatientAccessReport: async (
     patientId: string,

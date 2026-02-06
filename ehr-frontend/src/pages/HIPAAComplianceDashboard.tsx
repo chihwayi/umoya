@@ -85,12 +85,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
     try {
       setUserAccessLoading(true);
       
-      // Check if method exists (frontend cache issue)
-      if (!ehrApi.getAuditSummary || typeof ehrApi.getAuditSummary !== 'function') {
-        console.warn('getAuditSummary method not available - frontend may need rebuild');
-        setUserAccessLoading(false);
-        return;
-      }
+
 
       const endDate = new Date();
       const startDate = new Date();
@@ -170,17 +165,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
     try {
       setLoading(true);
       
-      // Check if methods exist (frontend cache issue)
-      if (!ehrApi.getAuditLogs || typeof ehrApi.getAuditLogs !== 'function') {
-        console.warn('getAuditLogs method not available - frontend may need rebuild');
-        setLoading(false);
-        return;
-      }
-      if (!ehrApi.getAuditSummary || typeof ehrApi.getAuditSummary !== 'function') {
-        console.warn('getAuditSummary method not available - frontend may need rebuild');
-        setLoading(false);
-        return;
-      }
+
 
       const endDate = new Date();
       const startDate = new Date();
@@ -236,12 +221,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
     try {
       setSummaryLoading(true);
       
-      // Check if method exists (frontend cache issue)
-      if (!ehrApi.getAuditSummary || typeof ehrApi.getAuditSummary !== 'function') {
-        console.warn('getAuditSummary method not available - frontend may need rebuild');
-        setSummaryLoading(false);
-        return;
-      }
+
 
       const endDate = new Date();
       const startDate = new Date();
@@ -265,12 +245,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
     try {
       setLogsLoading(true);
       
-      // Check if method exists (frontend cache issue)
-      if (!ehrApi.getAuditLogs || typeof ehrApi.getAuditLogs !== 'function') {
-        console.warn('getAuditLogs method not available - frontend may need rebuild');
-        setLogsLoading(false);
-        return;
-      }
+
 
       const params: any = {
         limit: logsLimit,
@@ -301,12 +276,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
     try {
       setBreachesLoading(true);
       
-      // Check if method exists (frontend cache issue)
-      if (!ehrApi.detectBreaches || typeof ehrApi.detectBreaches !== 'function') {
-        console.warn('detectBreaches method not available - frontend may need rebuild');
-        setBreachesLoading(false);
-        return;
-      }
+
 
       const response = await ehrApi.detectBreaches(token, tenantSlug || '', 30);
       setBreaches(response.data?.breaches || response.data || []);
@@ -320,12 +290,7 @@ const HIPAAComplianceDashboard: React.FC = () => {
 
   const exportLogs = async () => {
     try {
-      // Check if method exists (frontend cache issue)
-      if (!ehrApi.getAuditLogs || typeof ehrApi.getAuditLogs !== 'function') {
-        console.warn('getAuditLogs method not available - frontend may need rebuild');
-        showError('Error', 'Export functionality not available. Please refresh the page.');
-        return;
-      }
+
 
       const params: any = { limit: 10000 };
       if (filters.startDate) params.startDate = new Date(filters.startDate).toISOString();

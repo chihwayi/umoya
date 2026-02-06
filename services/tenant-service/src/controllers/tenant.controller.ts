@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantService } from '../services/tenant.service';
+import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 
@@ -8,7 +10,31 @@ import { Tenant, TenantStatus } from '../entities/tenant.entity';
 @ApiBearerAuth()
 @Controller('tenants')
 export class TenantController {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly storageService: StorageService
+  ) {}
+
+  @Post('logo')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Upload tenant logo' })
+  @ApiResponse({ status: 201, description: 'Logo uploaded successfully' })
+  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+    const url = await this.storageService.uploadLogo(file);
+    return { url };
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create new tenant' })

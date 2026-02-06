@@ -28,6 +28,10 @@ export class CreateTenantDto {
   @IsString()
   city?: string;
 
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
   @IsEnum(SubscriptionTier)
   subscriptionTier: SubscriptionTier;
 }

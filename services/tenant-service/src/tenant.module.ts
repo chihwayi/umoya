@@ -15,7 +15,10 @@ import { AuthService } from './services/auth.service';
 import { AuditService } from './services/audit.service';
 import { EmailService } from './services/email.service';
 import { HealthMonitorService } from './services/health-monitor.service';
+import { BackupService } from './services/backup.service';
+import { StorageService } from './services/storage.service';
 import { AuthController } from './controllers/auth.controller';
+import { BackupController } from './controllers/backup.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Tenant } from './entities/tenant.entity';
 import { TenantUser } from './entities/tenant-user.entity';
@@ -39,7 +42,7 @@ import { AuditLog } from './entities/audit-log.entity';
     }),
     TypeOrmModule.forFeature([Tenant, TenantUser, TenantAnalytics, AdminUser, AuditLog]),
   ],
-  controllers: [TenantController, TenantUserController, TenantAnalyticsController, AuthController, AdminMaintenanceController],
+  controllers: [TenantController, TenantUserController, TenantAnalyticsController, AuthController, AdminMaintenanceController, BackupController],
   providers: [
     TenantService, 
     TenantAnalyticsService, 
@@ -49,6 +52,8 @@ import { AuditLog } from './entities/audit-log.entity';
     AuditService,
     EmailService,
     HealthMonitorService,
+    BackupService,
+    StorageService,
     JwtStrategy
   ],
   exports: [TenantService, TenantAnalyticsService, TenantDatabaseService, AuthService],

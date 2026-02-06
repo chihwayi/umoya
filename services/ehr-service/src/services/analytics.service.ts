@@ -64,6 +64,26 @@ export class AnalyticsService {
         return await this.calculateAppointmentCount(tenantDb, dateRange);
       case 'prescription_count':
         return await this.calculatePrescriptionCount(tenantDb, dateRange);
+      case 'unassigned_studies_count':
+        return await this.calculateUnassignedStudiesCount(tenantDb);
+      case 'critical_findings_count':
+        return await this.calculateCriticalFindingsCount(tenantDb, dateRange);
+      case 'outstanding_balance':
+        return await this.calculateOutstandingBalance(tenantDb);
+      case 'medical_aid_pending':
+        return await this.calculateMedicalAidPending(tenantDb);
+      case 'active_patients_count':
+        return await this.calculateActivePatientsCount(tenantDb);
+      case 'pending_results_count':
+        return await this.calculatePendingResultsCount(tenantDb);
+      case 'unread_messages_count':
+        return await this.calculateUnreadMessagesCount(tenantDb);
+      case 'my_queue_count':
+        return await this.calculateMyQueueCount(tenantDb, dimensions?.userId);
+      case 'draft_reports_count':
+        return await this.calculateDraftReportsCount(tenantDb, dimensions?.userId);
+      case 'refund_requests_count':
+        return await this.calculateRefundRequestsCount(tenantDb);
       default:
         // Try to get from pre-calculated metrics
         const result = await tenantDb.query(
@@ -305,6 +325,108 @@ export class AnalyticsService {
       [dateRange.from, dateRange.to],
     );
     return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateUnassignedStudiesCount(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM lab_orders lo
+       WHERE EXISTS (
+         SELECT 1 FROM jsonb_array_elements(lo.tests) as test
+         WHERE test->>'category' = 'radiology'
+       )
+       AND lo.reviewed_by_id IS NULL
+       AND lo.status != 'cancelled'`,
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateCriticalFindingsCount(tenantDb: DataSource, dateRange: { from: string; to: string }): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM lab_orders lo
+       WHERE EXISTS (
+         SELECT 1 FROM jsonb_array_elements(lo.results) as result
+         WHERE result->>'flag' = 'critical'
+       )
+       AND lo.created_at >= $1 AND lo.created_at <= $2`,
+      [dateRange.from, dateRange.to],
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateOutstandingBalance(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COALESCE(SUM(total_amount), 0) as total
+       FROM billing
+       WHERE status IN ('sent', 'pending', 'overdue')`,
+    );
+    return parseFloat(result[0]?.total || '0');
+  }
+
+  private async calculateMedicalAidPending(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COALESCE(SUM(claim_amount), 0) as total
+       FROM medical_aid_claims
+       WHERE status IN ('submitted', 'processing')`,
+    );
+    return parseFloat(result[0]?.total || '0');
+  }
+
+  private async calculateActivePatientsCount(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM patients
+       WHERE is_active = true`,
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculatePendingResultsCount(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM lab_orders
+       WHERE status IN ('ordered', 'in_progress', 'collected')`,
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateUnreadMessagesCount(tenantDb: DataSource): Promise<number> {
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM patient_messages
+       WHERE read = false`,
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateMyQueueCount(tenantDb: DataSource, userId?: string): Promise<number> {
+    if (!userId) return 0;
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM lab_orders
+       WHERE reviewed_by_id = $1
+       AND status NOT IN ('completed', 'cancelled')`,
+      [userId],
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateDraftReportsCount(tenantDb: DataSource, userId?: string): Promise<number> {
+    if (!userId) return 0;
+    const result = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM lab_orders
+       WHERE reviewed_by_id = $1
+       AND status = 'in_progress'`,
+      [userId],
+    );
+    return parseInt(result[0]?.count || '0');
+  }
+
+  private async calculateRefundRequestsCount(tenantDb: DataSource): Promise<number> {
+    // Placeholder implementation until Refund entity is defined
+    return 0;
   }
 
   private getDateFromPeriod(period: string): string {

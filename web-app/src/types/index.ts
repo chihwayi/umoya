@@ -11,6 +11,7 @@ export interface Tenant {
   address: string | null;
   city: string | null;
   country: string;
+  logoUrl?: string;
   featureFlags: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +24,7 @@ export interface CreateTenantRequest {
   contactPhone: string;
   address?: string;
   city?: string;
+  logoUrl?: string;
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
 }
 
@@ -33,8 +35,9 @@ export interface TenantUser {
   lastName: string;
   email: string;
   phone: string;
-  role: 'tenant_admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accounts' | 'radiologist';
+  role: 'admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accounts' | 'radiologist';
   status: 'active' | 'inactive' | 'suspended';
+  isActive: boolean;
   licenseNumber?: string;
   specialization?: string;
   lastLogin?: string;
@@ -49,10 +52,10 @@ export interface CreateTenantUserRequest {
   lastName: string;
   email: string;
   phone: string;
-  role: 'tenant_admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accounts' | 'radiologist';
+  role: 'admin' | 'doctor' | 'nurse' | 'receptionist' | 'pharmacist' | 'lab_technician' | 'accounts' | 'radiologist';
   licenseNumber?: string;
   specialization?: string;
-  temporaryPassword: string;
+  temporaryPassword?: string;
 }
 
 export interface SystemStats {
@@ -62,6 +65,7 @@ export interface SystemStats {
   tenantsByTier: Array<{ tier: string; count: number }>;
   recentSignups: Tenant[];
   activationRate: string;
+  
 }
 
 export interface TenantReport {
@@ -78,5 +82,5 @@ export interface TenantReport {
 export interface User {
   id: string;
   email: string;
-  role: 'super_admin' | 'tenant_admin';
+  role: 'super_admin' | 'admin';
 }

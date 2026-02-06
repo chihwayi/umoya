@@ -130,7 +130,7 @@ export class DatabaseProvisioningService {
         tasks: [
           (db) => this.ensureUpdatedAtTriggerFunction(db),
           (db) => this.enforceUserRoleConstraint(db),
-          (db) => this.seedDefaultUsers(db),
+          // (db) => this.seedDefaultUsers(db), // Removed to prevent unrelated users in new tenants
           (db) => this.seedLabCatalog(db),
           (db) => this.seedImagingCatalog(db),
           (db) => this.seedLookupTables(db),
@@ -425,6 +425,13 @@ export class DatabaseProvisioningService {
         description: 'Tables for storing tenant-specific SMS and Payment gateway configurations',
         statements: () => this.getGatewayConfigurationStatements(),
       },
+      {
+        id: 'portal_enhancements',
+        label: 'Patient Portal Enhancements',
+        version: '2026.02.06',
+        description: 'Adds portal access columns to patients and patient_messages table',
+        statements: () => this.getPortalEnhancementStatements(),
+      },
     ];
   }
 
@@ -471,6 +478,43 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_provider_type ON payment_gateway_configurations(provider_type)`,
       `CREATE INDEX IF NOT EXISTS idx_payment_gateway_config_is_active ON payment_gateway_configurations(is_active)`,
+    ];
+  }
+
+  private getPortalEnhancementStatements(): string[] {
+    return [
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_access_enabled BOOLEAN DEFAULT false`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_registered_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_last_login TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_hash VARCHAR(255)`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_email_verified BOOLEAN DEFAULT false`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_email_verification_token VARCHAR(255)`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_reset_token VARCHAR(255)`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS portal_password_reset_expires TIMESTAMP WITH TIME ZONE`,
+
+      `CREATE TABLE IF NOT EXISTS patient_messages (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          tenant_id VARCHAR NOT NULL,
+          patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+          sender_type VARCHAR(50) NOT NULL,
+          sender_id UUID,
+          recipient_type VARCHAR(50) NOT NULL,
+          recipient_id UUID,
+          subject VARCHAR(500),
+          message TEXT NOT NULL,
+          message_type VARCHAR(50) NOT NULL DEFAULT 'general',
+          priority VARCHAR(20) NOT NULL DEFAULT 'low',
+          read BOOLEAN NOT NULL DEFAULT false,
+          read_at TIMESTAMP,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_tenant_id" ON "patient_messages" ("tenant_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_patient_id" ON "patient_messages" ("patient_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_sender" ON "patient_messages" ("sender_type", "sender_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
     ];
   }
 

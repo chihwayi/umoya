@@ -59,6 +59,9 @@ export class Tenant {
   @Column({ default: 'Zimbabwe' })
   country: string;
 
+  @Column({ nullable: true })
+  logoUrl: string;
+
   @Column({ type: 'jsonb', nullable: true })
   featureFlags: Record<string, boolean>;
 

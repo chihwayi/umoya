@@ -10,11 +10,13 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist')),
+    role VARCHAR(50) NOT NULL CHECK (role IN ('tenant_admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'accounts', 'radiologist')),
     license_number VARCHAR(100),
     specialization VARCHAR(100),
     phone VARCHAR(50),
     is_active BOOLEAN DEFAULT true,
+    must_change_password BOOLEAN DEFAULT false,
+    password_changed_at TIMESTAMP WITH TIME ZONE,
     last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -42,9 +44,38 @@ CREATE TABLE patients (
     allergies TEXT,
     chronic_conditions TEXT,
     is_active BOOLEAN DEFAULT true,
+    portal_access_enabled BOOLEAN DEFAULT false,
+    portal_registered_at TIMESTAMP WITH TIME ZONE,
+    portal_last_login TIMESTAMP WITH TIME ZONE,
+    portal_password_hash VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Patient Messages (Portal)
+CREATE TABLE IF NOT EXISTS patient_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id VARCHAR NOT NULL,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    sender_type VARCHAR(50) NOT NULL,
+    sender_id UUID,
+    recipient_type VARCHAR(50) NOT NULL,
+    recipient_id UUID,
+    subject VARCHAR(500),
+    message TEXT NOT NULL,
+    message_type VARCHAR(50) NOT NULL DEFAULT 'general',
+    priority VARCHAR(20) NOT NULL DEFAULT 'low',
+    read BOOLEAN NOT NULL DEFAULT false,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_tenant_id" ON "patient_messages" ("tenant_id");
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_patient_id" ON "patient_messages" ("patient_id");
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_sender" ON "patient_messages" ("sender_type", "sender_id");
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id");
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read");
+CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at");
 
 -- Appointments table
 CREATE TABLE appointments (

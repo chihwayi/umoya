@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Tenant } from './tenant.entity';
 
 export enum UserRole {
-  TENANT_ADMIN = 'tenant_admin',
+  ADMIN = 'admin',
   DOCTOR = 'doctor',
   NURSE = 'nurse',
   RECEPTIONIST = 'receptionist',
@@ -48,7 +48,7 @@ export class TenantUser {
   @Column({
     type: 'enum',
     enum: UserRole,
-    default: UserRole.TENANT_ADMIN
+    default: UserRole.ADMIN
   })
   role: UserRole;
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tenant, TenantUser, CreateTenantUserRequest } from '../types';
 import { tenantAPI } from '../services/api';
-import { Modal, ConfirmModal } from './Modal';
+import { Modal } from './Modal';
 
 interface TenantDetailsModalProps {
   tenant: Tenant | null;
@@ -9,6 +9,11 @@ interface TenantDetailsModalProps {
   onClose: () => void;
   onUpdate: () => void;
 }
+
+// Helper to cast event value to role type
+const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>, current: CreateTenantUserRequest, setter: React.Dispatch<React.SetStateAction<CreateTenantUserRequest>>) => {
+  setter({...current, role: e.target.value as CreateTenantUserRequest['role']});
+};
 
 export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   tenant,
@@ -25,29 +30,41 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
   const [userToReset, setUserToReset] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [newUser, setNewUser] = useState<CreateTenantUserRequest>({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
-    role: 'tenant_admin',
+    role: 'admin',
     temporaryPassword: ''
   });
+  const [createdUserCredentials, setCreatedUserCredentials] = useState<{email: string, password: string} | null>(null);
 
   useEffect(() => {
     if (tenant && isOpen) {
       loadUsers();
+    } else {
+      setUsers([]); // Clear users when closed or tenant cleared
     }
   }, [tenant, isOpen]);
 
   const loadUsers = async () => {
     if (!tenant) return;
+    setUsers([]); // Clear users immediately to prevent showing stale data from previous tenant
     setLoading(true);
     try {
       const data = await tenantAPI.getTenantUsers(tenant.id);
-      setUsers(data);
+      if (Array.isArray(data)) {
+        setUsers(data);
+      } else {
+        console.warn('Expected array of users but received:', data);
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Failed to load users:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -57,21 +74,51 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
     e.preventDefault();
     if (!tenant) return;
     
+    // Frontend Validation
+    if (newUser.phone && newUser.phone.length < 10) {
+      showError('Phone number must be at least 10 characters');
+      return;
+    }
+
     setLoading(true);
+    setErrorMessage('');
+    
+    // Generate a secure random password
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let generatedPassword = '';
+    for (let i = 0; i < 12; i++) {
+      generatedPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
     try {
-      await tenantAPI.createTenantUser(tenant.id, newUser);
+      // Clean up the payload: remove empty strings for optional fields
+      const payload: any = { ...newUser, temporaryPassword: generatedPassword };
+      if (!payload.phone) delete payload.phone;
+      
+      await tenantAPI.createTenantUser(tenant.id, payload);
+      
+      // Store credentials to show to user
+      setCreatedUserCredentials({
+        email: newUser.email,
+        password: generatedPassword
+      });
+      
       setShowCreateUser(false);
       setNewUser({
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
-        role: 'tenant_admin',
+        role: 'admin',
         temporaryPassword: ''
       });
+      showSuccess('User created successfully');
       loadUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create user:', error);
+      const msg = error.response?.data?.message;
+      const displayMsg = Array.isArray(msg) ? msg.join(', ') : (msg || 'Failed to create user');
+      showError(displayMsg);
     } finally {
       setLoading(false);
     }
@@ -96,8 +143,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setShowPasswordModal(false);
       setUserToReset(null);
       setNewPassword('');
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
+      showSuccess('Password reset successfully');
     } catch (error) {
       console.error('Failed to reset password:', error);
     }
@@ -111,306 +157,400 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
       setShowDeleteModal(false);
       setUserToDelete(null);
       loadUsers();
+      showSuccess('User deleted successfully');
     } catch (error) {
       console.error('Failed to delete user:', error);
     }
   };
 
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setShowSuccessMessage(true);
+    setTimeout(() => setShowSuccessMessage(false), 3000);
+  };
+
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(''), 5000);
+  };
+
+  const getTierStyle = (tier: string) => {
+    switch (tier) {
+      case 'enterprise': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'professional': return 'bg-blue-100 text-blue-700 border-blue-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'suspended': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'inactive': return 'bg-slate-100 text-slate-500 border-slate-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  if (!tenant) return null;
+
   return (
     <>
-      <Modal isOpen={isOpen && !!tenant} onClose={onClose} title={`${tenant?.clinicName || ''} - User Management`} size="xl">
-        {tenant && (
-          <div className="space-y-6">
-            {/* Tenant Info */}
-            <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">S</span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-slate-600">Status:</span>
-                    <span className="ml-2 font-semibold text-slate-800">{tenant.status}</span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">T</span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-slate-600">Tier:</span>
-                    <span className="ml-2 font-semibold text-slate-800">{tenant.subscriptionTier}</span>
-                  </div>
+      <Modal isOpen={isOpen} onClose={onClose} title="Tenant Management" size="2xl">
+        <div className="space-y-6">
+
+          {/* Tenant Header Card */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                {tenant.logoUrl ? (
+                  <img src={tenant.logoUrl} alt={tenant.clinicName} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-2xl font-bold text-slate-400">{tenant.clinicName.charAt(0)}</span>
+                )}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">{tenant.clinicName}</h3>
+                <div className="flex items-center space-x-2 mt-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider ${getTierStyle(tenant.subscriptionTier)}`}>
+                    {tenant.subscriptionTier}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium uppercase tracking-wider ${getStatusStyle(tenant.status)}`}>
+                    {tenant.status}
+                  </span>
                 </div>
               </div>
             </div>
+            <div className="flex flex-col text-sm text-slate-500 space-y-1">
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <span>{tenant.contactEmail}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
+                <span>{tenant.subdomain}.medicore.app</span>
+              </div>
+            </div>
+          </div>
 
-            {/* Users Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
-              <h4 className="text-xl font-bold text-slate-800 flex items-center space-x-2">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                </svg>
-                <span>Users ({users.length})</span>
+          {/* Success Message */}
+          {showSuccessMessage && (
+            <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg border border-emerald-200 flex items-center animate-fade-in-down">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              {successMessage}
+            </div>
+          )}
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg border border-red-200 flex items-center animate-fade-in-down">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {errorMessage}
+            </div>
+          )}
+
+          {/* Users Section */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50/50">
+              <h4 className="font-bold text-slate-800 flex items-center">
+                <span className="bg-slate-200 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">{users.length}</span>
+                Tenant Users
               </h4>
               <button
-                onClick={() => setShowCreateUser(true)}
-                className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center space-x-2"
+                onClick={() => setShowCreateUser(!showCreateUser)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                  showCreateUser 
+                    ? 'bg-slate-200 text-slate-700' 
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg'
+                }`}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                {showCreateUser ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <span>Cancel</span>
+                    {/* User Credentials Modal - Moved to end for stacking context */}
+      {createdUserCredentials && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+            <div className="bg-emerald-600 p-6 text-white text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>Add User</span>
+              </div>
+              <h3 className="text-xl font-bold">User Created Successfully!</h3>
+              <p className="text-emerald-100 text-sm mt-1">Please save these credentials immediately.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="mb-3">
+                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Email Address</label>
+                  <div className="flex items-center justify-between">
+                    <code className="text-slate-900 font-mono text-sm">{createdUserCredentials.email}</code>
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.email)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="Copy Email"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Temporary Password</label>
+                  <div className="flex items-center justify-between">
+                    <code className="text-emerald-600 font-mono text-lg font-bold">{createdUserCredentials.password}</code>
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.password)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="Copy Password"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 flex items-start">
+                <svg className="w-4 h-4 mr-2 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <span>This password will <strong>not</strong> be shown again. The user will be required to change it upon first login.</span>
+              </div>
+              <button
+                onClick={() => setCreatedUserCredentials(null)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-slate-200"
+              >
+                I have saved these credentials
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    <span>Add New User</span>
+                  </>
+                )}
               </button>
             </div>
 
-            {/* Create User Form */}
+            {/* Create User Form - Collapsible */}
             {showCreateUser && (
-              <div className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
-                <h5 className="text-lg font-bold text-slate-800 mb-4 flex items-center space-x-2">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                  <span>Create New User</span>
-                </h5>
+              <div className="p-6 bg-indigo-50/50 border-b border-indigo-100 animate-fade-in">
+                <h5 className="text-sm font-bold text-indigo-900 mb-4 uppercase tracking-wide">New User Details</h5>
                 <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    placeholder="First Name"
-                    value={newUser.firstName}
-                    onChange={(e) => setNewUser({...newUser, firstName: e.target.value})}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Last Name"
-                    value={newUser.lastName}
-                    onChange={(e) => setNewUser({...newUser, lastName: e.target.value})}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                    required
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                    required
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Phone Number"
-                    value={newUser.phone}
-                    onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                    required
-                  />
-                  <select
-                    value={newUser.role}
-                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value as CreateTenantUserRequest['role'] })}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                  >
-                    <option value="tenant_admin">👨💼 Admin</option>
-                    <option value="doctor">👨⚕️ Doctor</option>
-                    <option value="nurse">👩⚕️ Nurse</option>
-                    <option value="radiologist">🩻 Radiologist</option>
-                    <option value="lab_technician">🧪 Lab Technician</option>
-                    <option value="pharmacist">💊 Pharmacist</option>
-                    <option value="receptionist">👩💻 Receptionist</option>
-                    <option value="accounts">📊 Accounts</option>
-                  </select>
-                  <input
-                    type="password"
-                    placeholder="Temporary Password (min 8 chars)"
-                    value={newUser.temporaryPassword}
-                    onChange={(e) => setNewUser({...newUser, temporaryPassword: e.target.value})}
-                    className="border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 bg-white"
-                    minLength={8}
-                    required
-                  />
-                  <div className="md:col-span-2 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={newUser.firstName}
+                      onChange={(e) => setNewUser({...newUser, firstName: e.target.value})}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={newUser.lastName}
+                      onChange={(e) => setNewUser({...newUser, lastName: e.target.value})}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={newUser.phone}
+                      onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Role</label>
+                    <select
+                      value={newUser.role}
+                      onChange={(e) => handleRoleChange(e, newUser, setNewUser)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="doctor">Doctor</option>
+                      <option value="nurse">Nurse</option>
+                      <option value="receptionist">Receptionist</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2 flex justify-end pt-2">
                     <button
                       type="submit"
                       disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center space-x-2"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium text-sm shadow-sm transition-colors disabled:opacity-50"
                     >
-                      {loading ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                      <span>Create User</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateUser(false)}
-                      className="flex-1 bg-slate-500 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span>Cancel</span>
+                      {loading ? 'Creating...' : 'Create User'}
                     </button>
                   </div>
                 </form>
               </div>
             )}
 
-            {/* Users List */}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {users.map((user) => (
-                <div key={user.id} className="bg-white/80 backdrop-blur-sm p-6 border border-slate-200 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between space-y-4 lg:space-y-0">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-bold text-sm">{user.fullName?.charAt(0) || user.firstName?.charAt(0) || 'U'}</span>
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
-                          <div className="text-sm text-slate-600">{user.email}</div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-sm">
-                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
-                          {user.role}
-                        </span>
-                        <span className={`px-3 py-1 rounded-full font-medium ${
-                          user.status === 'active' ? 'bg-green-100 text-green-800' :
-                          user.status === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {user.status}
-                        </span>
-                        {user.lastLogin && (
-                          <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
-                            Last: {new Date(user.lastLogin).toLocaleDateString()}
+            {/* Users List Table */}
+            <div className="overflow-x-auto">
+              {loading && users.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  <div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                  Loading users...
+                </div>
+              ) : users.length === 0 ? (
+                <div className="p-12 text-center text-slate-500 bg-slate-50">
+                  <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-lg font-medium text-slate-600">No users found</p>
+                  <p className="text-sm mt-1">Get started by adding a user to this tenant.</p>
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                      <th className="px-6 py-4">User</th>
+                      <th className="px-6 py-4">Role</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {users.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm mr-3 border border-indigo-200">
+                              {getInitials(user.firstName, user.lastName)}
+                            </div>
+                            <div>
+                              <div className="font-medium text-slate-900">{user.firstName} {user.lastName}</div>
+                              <div className="text-xs text-slate-500">{user.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200 capitalize">
+                            {user.role.replace('_', ' ')}
                           </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                      <select
-                        value={user.status}
-                        onChange={(e) => handleStatusChange(user.id, e.target.value)}
-                        className="border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      >
-                        <option value="active">✅ Active</option>
-                        <option value="inactive">⏸️ Inactive</option>
-                        <option value="suspended">🚫 Suspended</option>
-                      </select>
-                      <button
-                        onClick={() => {
-                          setUserToReset(user.id);
-                          setShowPasswordModal(true);
-                        }}
-                        className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-1"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                        </svg>
-                        <span>Reset</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setUserToDelete(user.id);
-                          setShowDeleteModal(true);
-                        }}
-                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl flex items-center space-x-1"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => handleStatusChange(user.id, user.isActive ? 'false' : 'true')}
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
+                              user.isActive 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${user.isActive ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                            {user.isActive ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => {
+                                setUserToReset(user.id);
+                                setShowPasswordModal(true);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Reset Password"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.536 16.536L14 19l-4 4-4-4 2.464-2.464L10.257 14.257A6 6 0 0118 10a2 2 0 01-2 2z" /></svg>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setUserToDelete(user.id);
+                                setShowDeleteModal(true);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete User"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
-
-            {/* Success Message */}
-            {showSuccessMessage && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-6 py-4 rounded-xl shadow-lg flex items-center space-x-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="font-medium">Password reset successfully! User must change password on next login.</span>
-              </div>
-            )}
-
-            {loading && (
-              <div className="text-center py-8">
-                <div className="inline-flex items-center space-x-2 text-slate-600">
-                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
-                  <span className="font-medium">Loading users...</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* Delete User Modal */}
-      <ConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setUserToDelete(null);
-        }}
-        onConfirm={handleDeleteUser}
-        title="Delete User"
-        message="Are you sure you want to delete this user? This action cannot be undone and will permanently remove all user data."
-        confirmText="Delete User"
-        type="danger"
-      />
-
-      {/* Reset Password Modal */}
-      <Modal 
-        isOpen={showPasswordModal} 
-        onClose={() => {
-          setShowPasswordModal(false);
-          setUserToReset(null);
-          setNewPassword('');
-        }} 
-        title="Reset User Password" 
-        size="sm"
-      >
-        <div className="space-y-4">
-          <p className="text-slate-600">Enter a new temporary password for this user. They will be required to change it on their next login.</p>
-          <input
-            type="password"
-            placeholder="New temporary password (min 8 characters)"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            minLength={8}
-            autoFocus
-          />
-          <div className="flex space-x-3">
-            <button
-              onClick={() => {
-                setShowPasswordModal(false);
-                setUserToReset(null);
-                setNewPassword('');
-              }}
-              className="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-all duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleResetPassword}
-              disabled={newPassword.length < 8}
-              className="flex-1 px-4 py-2 text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Reset Password
-            </button>
           </div>
         </div>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Confirm Delete" size="sm">
+          <div className="space-y-4">
+            <p className="text-slate-600">Are you sure you want to delete this user? This action cannot be undone.</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                Delete User
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Password Reset Modal */}
+      {showPasswordModal && (
+        <Modal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Reset Password" size="sm">
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">Enter a new password for the user. They will be required to change it upon first login.</p>
+            <input
+              type="text"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New Password"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={newPassword.length < 8}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm disabled:opacity-50"
+              >
+                Reset Password
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 };

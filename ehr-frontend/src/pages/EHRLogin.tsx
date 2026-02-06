@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Stethoscope, Shield, ArrowLeft } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 
 const EHRLogin: React.FC = () => {
@@ -17,13 +17,39 @@ const EHRLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  const tenantName = location.state?.tenantName || tenantSlug?.replace('-', ' ');
+  const [tenantInfo, setTenantInfo] = useState<{ name: string; logoUrl?: string } | null>(null);
 
   useEffect(() => {
-    if (tenantName) {
-      showInfo('Clinic Selected', `Accessing ${tenantName} EHR system`);
-    }
-  }, [tenantName, showInfo]);
+    const fetchTenantDetails = async () => {
+      if (!tenantSlug) return;
+      
+      try {
+        const response = await tenantApi.getActiveTenants();
+        const tenant = response.data.find((t: any) => t.subdomain === tenantSlug);
+        
+        if (tenant) {
+          setTenantInfo({
+            name: tenant.clinicName,
+            logoUrl: tenant.logoUrl
+          });
+          showInfo('Clinic Selected', `Accessing ${tenant.clinicName} EHR system`);
+        } else {
+            // Fallback if tenant not found in the list (shouldn't happen if navigating from directory)
+             setTenantInfo({
+                name: location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login'
+             });
+        }
+      } catch (error) {
+        console.error('Failed to fetch tenant details', error);
+         // Fallback on error
+          setTenantInfo({
+            name: location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login'
+         });
+      }
+    };
+
+    fetchTenantDetails();
+  }, [tenantSlug, location.state, showInfo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,11 +107,22 @@ const EHRLogin: React.FC = () => {
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl mb-4">
-              <Stethoscope className="w-8 h-8 text-white" />
-            </div>
+            {tenantInfo?.logoUrl ? (
+                <div className="w-24 h-24 mx-auto mb-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden">
+                    <img 
+                        src={tenantInfo.logoUrl} 
+                        alt={`${tenantInfo.name} Logo`} 
+                        className="w-full h-full object-contain"
+                    />
+                </div>
+            ) : (
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl mb-4">
+                  <Stethoscope className="w-8 h-8 text-white" />
+                </div>
+            )}
+            
             <h1 className="text-2xl font-bold text-slate-800 mb-2">
-              {tenantName || 'EHR Login'}
+              {tenantInfo?.name || 'EHR Login'}
             </h1>
             <p className="text-slate-600">Access your electronic health records</p>
           </div>

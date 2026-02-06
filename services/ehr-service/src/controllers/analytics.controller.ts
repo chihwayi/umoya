@@ -354,10 +354,16 @@ export class AnalyticsController {
     @Query('dateTo') dateTo: string,
     @Req() req: RequestWithTenant,
   ) {
-    return this.analyticsService.calculateMetrics(req.tenantDb, metricNames, {
-      from: dateFrom,
-      to: dateTo,
-    });
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.analyticsService.calculateMetrics(
+      req.tenantDb,
+      metricNames,
+      {
+        from: dateFrom,
+        to: dateTo,
+      },
+      { userId },
+    );
   }
 
   @Get('metrics/trends')
