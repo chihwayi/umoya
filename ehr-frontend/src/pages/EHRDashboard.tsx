@@ -186,11 +186,39 @@ const EHRDashboard: React.FC = () => {
     securityAlerts: 0,
   });
 
+  const [accountStats, setAccountStats] = useState({
+    todayReceipts: 0,
+    outstandingBalance: 0,
+    pendingClaims: 0,
+    refundRequests: 0,
+  });
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadAdminStats();
+    } else if (user?.role === 'accounts') {
+      loadAccountStats();
     }
   }, [user]);
+
+  const loadAccountStats = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      const { data } = await ehrApi.getFinanceSummary(tenantSlug, token);
+      if (data) {
+        setAccountStats({
+          todayReceipts: data.totals?.todayReceipts || 0,
+          outstandingBalance: data.totals?.outstandingBalance || 0,
+          pendingClaims: data.pendingClaims?.totalSubmitted || 0,
+          refundRequests: 0, // Not currently in summary API
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load account stats:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchTenantInfo = async () => {
@@ -266,10 +294,10 @@ const EHRDashboard: React.FC = () => {
     }
     if (role === 'accounts') {
       return [
-        { label: 'Today\'s Receipts', value: '$7,820', icon: CreditCard, color: 'text-amber-600' },
-        { label: 'Outstanding Balance', value: '$18,450', icon: BarChart3, color: 'text-purple-600' },
-        { label: 'Medical Aid Pending', value: '$9,120', icon: Shield, color: 'text-emerald-600' },
-        { label: 'Refund Requests', value: '3', icon: FileText, color: 'text-blue-600' },
+        { label: 'Today\'s Receipts', value: `$${accountStats.todayReceipts.toLocaleString()}`, icon: CreditCard, color: 'text-amber-600' },
+        { label: 'Outstanding Balance', value: `$${accountStats.outstandingBalance.toLocaleString()}`, icon: BarChart3, color: 'text-purple-600' },
+        { label: 'Medical Aid Pending', value: `$${accountStats.pendingClaims.toLocaleString()}`, icon: Shield, color: 'text-emerald-600' },
+        { label: 'Refund Requests', value: accountStats.refundRequests.toString(), icon: FileText, color: 'text-blue-600' },
       ];
     }
     return [
@@ -504,7 +532,7 @@ const EHRDashboard: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-800">
                 {user.role === 'admin' ? 'System Administration' : 'Quick Actions'}
               </h2>
-              {user.role !== 'admin' && (
+              {user.role !== 'admin' && user.role !== 'accounts' && (
                 <button onClick={() => navigate(`/ehr/${tenantSlug}/patients`)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all">
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">New Patient</span>

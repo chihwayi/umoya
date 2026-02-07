@@ -71,11 +71,8 @@ export class PatientController {
   }
 
   @Get('stats')
-  async getPatientStats() {
-    return {
-      totalPatients: 10,
-      newPatientsThisMonth: 3
-    };
+  async getPatientStats(@Request() req: RequestWithTenant) {
+    return this.patientService.getStats(req.tenantDb);
   }
 
   @Get(':id')

@@ -106,8 +106,22 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="/ehr/:tenantSlug/patients" element={<PatientManagement />} />
-            <Route path="/ehr/:tenantSlug/patients/:patientId" element={<PatientDetail />} />
+            <Route
+              path="/ehr/:tenantSlug/patients"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'receptionist', 'radiologist', 'lab_tech', 'pharmacist']}>
+                  <PatientManagement />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/patients/:patientId"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'receptionist', 'radiologist', 'lab_tech', 'pharmacist']}>
+                  <PatientDetail />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="/ehr/:tenantSlug/appointments" element={<AppointmentManagement />} />
             <Route
               path="/ehr/:tenantSlug/doctor"

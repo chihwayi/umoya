@@ -16,6 +16,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ModalPortal from './ModalPortal';
 import ConfirmationDialog from './ConfirmationDialog';
+import DatePicker from './DatePicker';
 import { formatDateForAPI, formatDateForInput, isValidDate } from '../utils/dateUtils';
 
 interface PatientOption {
@@ -574,7 +575,7 @@ const AppointmentWaitlist: React.FC<AppointmentWaitlistProps> = ({ tenantSlug, o
                   <DatePicker
                     label="Preferred date"
                     value={form.preferredDate}
-                    onChange={(value) => setForm((prev) => ({ ...prev, preferredDate: value }))}
+                    onChange={(value: string) => setForm((prev) => ({ ...prev, preferredDate: value }))}
                   />
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -667,7 +668,7 @@ const AppointmentWaitlist: React.FC<AppointmentWaitlistProps> = ({ tenantSlug, o
                 <DatePicker
                   label="Appointment date"
                   value={scheduleForm.date}
-                  onChange={(value) => setScheduleForm((prev) => ({ ...prev, date: value }))}
+                  onChange={(value: string) => setScheduleForm((prev) => ({ ...prev, date: value }))}
                 />
                 <div>
                   <label className="text-sm font-semibold text-slate-700 mb-2 block">Time</label>

@@ -53,7 +53,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onUs
       });
       setShowPasswordModal(true);
       onUserCreated();
-      onClose();
+      // Do not close the modal here to allow PasswordDisplayModal to show
       setFormData({
         firstName: '',
         lastName: '',
@@ -74,6 +74,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onUs
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      {!showPasswordModal && (
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -203,10 +204,14 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose, onUs
           </form>
         </div>
       </div>
+      )}
       
       <PasswordDisplayModal
         isOpen={showPasswordModal}
-        onClose={() => setShowPasswordModal(false)}
+        onClose={() => {
+          setShowPasswordModal(false);
+          onClose(); // Close the main modal when password modal is closed
+        }}
         userName={createdUser?.name || ''}
         email={createdUser?.email || ''}
         tempPassword={createdUser?.tempPassword || ''}

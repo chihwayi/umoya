@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Edit, CheckCircle, XCircle, Clock, Target, Activity, TrendingUp, Calendar, User } from 'lucide-react';
+import { X, Edit, CheckCircle, XCircle, Clock, Target, Activity, TrendingUp, Calendar, User, Plus } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import CarePlanProgress from './CarePlanProgress';

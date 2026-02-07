@@ -104,6 +104,29 @@ export class PatientService {
       .getMany();
   }
 
+  async getStats(tenantDb: DataSource): Promise<{ totalPatients: number; newPatientsThisMonth: number }> {
+    const patientRepository = tenantDb.getRepository(Patient);
+    
+    const totalPatients = await patientRepository.count({
+      where: { isActive: true }
+    });
+    
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const newPatientsThisMonth = await patientRepository
+      .createQueryBuilder('patient')
+      .where('patient.isActive = :isActive', { isActive: true })
+      .andWhere('patient.createdAt >= :startOfMonth', { startOfMonth })
+      .getCount();
+      
+    return {
+      totalPatients,
+      newPatientsThisMonth
+    };
+  }
+
   async advancedSearch(
     filters: {
       searchTerm?: string;

@@ -1244,7 +1244,7 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  getPatientCarePlans: async (patientId: string, token: string, tenantSlug: string) => {
+  getPatientLabResults: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/lab-orders/patient/${patientId}/results`, {
       headers: {
         'X-Tenant-ID': tenantSlug,

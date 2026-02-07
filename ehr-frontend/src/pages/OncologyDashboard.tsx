@@ -39,6 +39,7 @@ import OncologyBiomarkerDashboard from '../components/OncologyBiomarkerDashboard
 import OncologySurvivorshipDashboard from '../components/OncologySurvivorshipDashboard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
+import { GuidelineResult } from '../types/guidelines';
 
 type OncologyCase = {
   id: string;
