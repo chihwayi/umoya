@@ -41,9 +41,18 @@ const PatientManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [stats, setStats] = useState({ totalPatients: 0, newPatientsThisMonth: 0 });
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const { showSuccess, showError } = useNotification();
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('ehr_user');
+    if (storedUser) {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error('Failed to parse user', e);
+      }
+    }
     fetchPatients();
     fetchStats();
   }, []);
@@ -117,6 +126,12 @@ const PatientManagement: React.FC = () => {
     return age;
   };
 
+  const canCreatePatient = () => {
+    if (!currentUser) return false;
+    const allowedRoles = ['admin', 'doctor', 'nurse', 'receptionist'];
+    return allowedRoles.includes(currentUser.role);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -148,13 +163,15 @@ const PatientManagement: React.FC = () => {
           </div>
         </div>
         
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Add Patient
-        </button>
+        {canCreatePatient() && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Patient
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CreditCard,
@@ -182,6 +182,7 @@ const renderPayerTag = (payer: string) => {
 const AccountsDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showError, showSuccess } = useNotification();
 
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
@@ -214,13 +215,21 @@ const AccountsDashboard: React.FC = () => {
   const [templateSubmitting, setTemplateSubmitting] = useState(false);
 
   const [filters, setFilters] = useState({
-    status: '',
+    status: searchParams.get('status') || '',
     module: '',
     payerType: '',
     dateFrom: '',
     dateTo: '',
     search: '',
   });
+
+  // Update filters when search params change
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      setFilters(prev => ({ ...prev, status: statusParam }));
+    }
+  }, [searchParams]);
 
   const loadSummary = useCallback(async () => {
     if (!tenantSlug) return;

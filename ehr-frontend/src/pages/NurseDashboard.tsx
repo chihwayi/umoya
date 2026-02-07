@@ -2254,7 +2254,13 @@ const NurseDashboard: React.FC = () => {
         )}
         {activeTab === 'vitals' && (
           <div className="w-full overflow-x-auto">
-            <VitalsPanel appointments={appointments} />
+            <VitalsPanel 
+              appointments={appointments} 
+              onSave={() => {
+                fetchTodayAppointments();
+                showSuccess('Vitals Saved', 'Patient vitals have been recorded successfully.');
+              }}
+            />
           </div>
         )}
         {activeTab === 'triage' && (

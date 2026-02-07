@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   DollarSign,
   CreditCard,
@@ -75,6 +75,7 @@ const StatCard: React.FC<{
 const BillingDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showError, showSuccess, showInfo } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -85,7 +86,7 @@ const BillingDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'bills' | 'reports'>('overview');
   const [filters, setFilters] = useState({
-    status: '',
+    status: searchParams.get('status') || '',
     dateFrom: '',
     dateTo: '',
     payerType: '',
@@ -107,6 +108,23 @@ const BillingDashboard: React.FC = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    const tabParam = searchParams.get('tab');
+    
+    if (statusParam) {
+      setFilters(prev => ({ ...prev, status: statusParam }));
+      // If status is provided, switch to transactions tab if not already on a relevant tab
+      if (tabParam) {
+        setActiveTab(tabParam as any);
+      } else if (activeTab === 'overview') {
+        setActiveTab('transactions');
+      }
+    } else if (tabParam) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!tenantSlug || !token) {

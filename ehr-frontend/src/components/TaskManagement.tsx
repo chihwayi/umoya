@@ -67,70 +67,83 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
       appointments.forEach((apt, index) => {
         const patientName = `${apt.patient.firstName} ${apt.patient.lastName}`;
         const appointmentTime = new Date(apt.appointmentDate);
+        const isCreatedByCurrentUser = apt.createdBy === currentUser?.id;
         
         // Only create tasks for appointments that need nursing care
         if (apt.status === 'scheduled' || apt.status === 'confirmed') {
           // Only create vital signs task if vitals haven't been recorded yet
           if (!apt.vitals) {
-            realTasks.push({
-              id: `vitals-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              taskType: 'vitals',
-              title: 'Record Vital Signs',
-              description: `Record vital signs for ${patientName}`,
-              priority: 'normal',
-              status: 'pending',
-              dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
-              estimatedDuration: 10,
-              assignedTo: currentUser?.id || '',
-              createdBy: currentUser?.id || '',
-              createdAt: now.toISOString(),
-              relatedAppointmentId: apt.id,
-              isRecurring: false
-            });
+            // Only show pending tasks to the nurse who registered the patient (created the appointment)
+            // OR if the task is explicitly assigned to them (future feature)
+            if (isCreatedByCurrentUser) {
+              realTasks.push({
+                id: `vitals-${apt.id}`,
+                patientId: apt.patient.id,
+                patientName,
+                taskType: 'vitals',
+                title: 'Record Vital Signs',
+                description: `Record vital signs for ${patientName}`,
+                priority: 'normal',
+                status: 'pending',
+                dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
+                estimatedDuration: 10,
+                assignedTo: apt.createdBy || '',
+                createdBy: apt.createdBy || '',
+                createdAt: now.toISOString(),
+                relatedAppointmentId: apt.id,
+                isRecurring: false
+              });
+            }
           } else {
             // Vitals already recorded - mark as completed
-            realTasks.push({
-              id: `vitals-${apt.id}`,
-              patientId: apt.patient.id,
-              patientName,
-              taskType: 'vitals',
-              title: 'Record Vital Signs',
-              description: `Record vital signs for ${patientName}`,
-              priority: 'normal',
-              status: 'completed',
-              dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
-              estimatedDuration: 10,
-              assignedTo: currentUser?.id || '',
-              createdBy: currentUser?.id || '',
-              createdAt: now.toISOString(),
-              completedAt: apt.vitals.recordedAt || now.toISOString(),
-              relatedAppointmentId: apt.id,
-              isRecurring: false
-            });
+            // Show completed task if the current user performed it OR created the appointment
+            const isPerformedByCurrentUser = apt.vitals.recordedBy === currentUser?.id;
+            
+            if (isCreatedByCurrentUser || isPerformedByCurrentUser) {
+              realTasks.push({
+                id: `vitals-${apt.id}`,
+                patientId: apt.patient.id,
+                patientName,
+                taskType: 'vitals',
+                title: 'Record Vital Signs',
+                description: `Record vital signs for ${patientName}`,
+                priority: 'normal',
+                status: 'completed',
+                dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
+                estimatedDuration: 10,
+                assignedTo: apt.createdBy || '',
+                createdBy: apt.createdBy || '',
+                createdAt: now.toISOString(),
+                completedAt: apt.vitals.recordedAt || now.toISOString(),
+                relatedAppointmentId: apt.id,
+                isRecurring: false
+              });
+            }
           }
         }
 
         if (apt.status === 'in-progress' || apt.status === 'in_progress') {
           // Documentation task for in-progress appointments
-          realTasks.push({
-            id: `doc-${apt.id}`,
-            patientId: apt.patient.id,
-            patientName,
-            taskType: 'documentation',
-            title: 'Update Progress Notes',
-            description: `Document progress for ${patientName}`,
-            priority: 'normal',
-            status: 'pending',
-            dueTime: new Date(appointmentTime.getTime() + 30 * 60000).toISOString(),
-            estimatedDuration: 10,
-            assignedTo: currentUser?.id || '',
-            createdBy: currentUser?.id || '',
-            createdAt: now.toISOString(),
-            relatedAppointmentId: apt.id,
-            isRecurring: false
-          });
+          // Show if created by user OR if user is serving (we don't strictly know if serving without notes, so we default to creator)
+          if (isCreatedByCurrentUser) {
+            realTasks.push({
+              id: `doc-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              taskType: 'documentation',
+              title: 'Update Progress Notes',
+              description: `Document progress for ${patientName}`,
+              priority: 'normal',
+              status: 'pending',
+              dueTime: new Date(appointmentTime.getTime() + 30 * 60000).toISOString(),
+              estimatedDuration: 10,
+              assignedTo: apt.createdBy || '',
+              createdBy: apt.createdBy || '',
+              createdAt: now.toISOString(),
+              relatedAppointmentId: apt.id,
+              isRecurring: false
+            });
+          }
         }
       });
 

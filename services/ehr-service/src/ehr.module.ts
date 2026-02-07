@@ -87,6 +87,7 @@ import { SepsisController } from './controllers/sepsis.controller';
 import { DietaryController } from './controllers/dietary.controller';
 import { TranscriptionController } from './controllers/transcription.controller';
 import { WhoSmartGuidelinesController } from './controllers/who-smart-guidelines.controller';
+import { DiagnosticController } from './controllers/diagnostic.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -315,6 +316,7 @@ import { RolesGuard } from './guards/roles.guard';
     DietaryController,
     TranscriptionController,
     WhoSmartGuidelinesController,
+    DiagnosticController,
   ],
   providers: [
     AuthService,
