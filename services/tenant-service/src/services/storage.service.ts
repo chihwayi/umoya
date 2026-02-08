@@ -28,7 +28,7 @@ export class StorageService {
     });
   }
 
-  async uploadLogo(file: Express.Multer.File): Promise<string> {
+  async uploadLogo(file: any): Promise<string> {
     const fileExtension = file.originalname.split('.').pop();
     const key = `logos/${uuidv4()}.${fileExtension}`;
 

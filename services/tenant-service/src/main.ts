@@ -21,7 +21,7 @@ async function bootstrap() {
 
   // Enable CORS for all origins in development
   app.enableCors({
-    origin: true,
+    origin: ['http://localhost:3000', 'http://localhost:3011', 'http://127.0.0.1:3000', 'http://127.0.0.1:3011'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],

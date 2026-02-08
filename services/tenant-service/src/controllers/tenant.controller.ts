@@ -31,7 +31,7 @@ export class TenantController {
   })
   @ApiOperation({ summary: 'Upload tenant logo' })
   @ApiResponse({ status: 201, description: 'Logo uploaded successfully' })
-  async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<{ url: string }> {
+  async uploadLogo(@UploadedFile() file: any): Promise<{ url: string }> {
     const url = await this.storageService.uploadLogo(file);
     return { url };
   }
