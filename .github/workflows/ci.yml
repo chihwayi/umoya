@@ -31,8 +31,10 @@ jobs:
         # cache-dependency-path: ${{ matrix.path }}/package-lock.json
 
     - name: Install Dependencies
-      working-directory: ${{ matrix.path }}
       run: npm install
+
+    - name: Build Shared Config
+      run: npm run build -w @medicore/config
 
     - name: Build
       working-directory: ${{ matrix.path }}
