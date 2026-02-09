@@ -34,7 +34,7 @@ export class EmailService {
         <h3>Your Account Details:</h3>
         <ul>
           <li><strong>Clinic:</strong> ${tenantName}</li>
-          <li><strong>System URL:</strong> https://${subdomain}.medicore.co.zw</li>
+          <li><strong>System URL:</strong> https://${subdomain}.${process.env.SYSTEM_DOMAIN || 'medicore.co.zw'}</li>
           <li><strong>Login Email:</strong> ${tenantEmail}</li>
           <li><strong>Temporary Password:</strong> ${tempPassword}</li>
         </ul>
