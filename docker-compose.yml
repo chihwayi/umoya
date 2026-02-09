@@ -59,6 +59,13 @@ services:
       - DB_PORT=5432
       - DB_USERNAME=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - MINIO_URL=${SERVICE_MINIO_URL}
+      - BACKUP_BUCKET_NAME=${BACKUP_BUCKET_NAME}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      - AWS_ENDPOINT=${SERVICE_MINIO_URL}
     depends_on:
       - postgres-master
       - redis
@@ -82,6 +89,8 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=medicore-documents
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LLM_API_URL=${LLM_API_URL}
     depends_on:
       - redis
       - postgres-master
@@ -117,6 +126,7 @@ services:
       - STORAGE_S3_FORCE_PATH_STYLE=${STORAGE_S3_FORCE_PATH_STYLE}
       - STORAGE_S3_USE_SSL=${STORAGE_S3_USE_SSL}
       - STORAGE_S3_PUBLIC_BASE_URL=${MINIO_PUBLIC_URL}
+      - CORS_ORIGINS=${CORS_ORIGINS}
     volumes:
       - ./services/ehr-service/src:/app/src
       - ./services/ehr-service/package.json:/app/package.json

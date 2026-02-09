@@ -30,9 +30,11 @@ async function bootstrap() {
   // Enable global exception filter for detailed error logging
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Enable CORS
+  // Enable CORS from environment variables
+  const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
+
   app.enableCors({
-    origin: true,
+    origin: corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug', 'x-session-id'],

@@ -17,9 +17,13 @@ app = FastAPI(title="MediCore Voice Scribe API")
 PORT = int(os.getenv("PORT", 8000))
 
 # Enable CORS
+# Load allowed origins from environment variable, default to "*" if not set (for development)
+cors_origins_env = os.getenv("CORS_ORIGINS")
+allowed_origins = cors_origins_env.split(",") if cors_origins_env else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to your domains
+    allow_origins=allowed_origins,  # In production, restrict to your domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -23,7 +23,7 @@ export class StorageService {
         accessKeyId: accessKeyId || 'minioadmin',
         secretAccessKey: secretAccessKey || 'minioadmin',
       },
-      endpoint: endpoint || 'http://localhost:9000',
+      endpoint: endpoint || this.configService.get<string>('MINIO_URL') || 'http://localhost:9000',
       forcePathStyle: true,
     });
   }
@@ -41,7 +41,7 @@ export class StorageService {
       }));
 
       // Return the public URL (assuming public bucket or accessible via MinIO)
-      const endpoint = this.configService.get<string>('AWS_ENDPOINT') || 'http://localhost:9000';
+      const endpoint = this.configService.get<string>('AWS_ENDPOINT') || this.configService.get<string>('MINIO_URL') || 'http://localhost:9000';
       return `${endpoint}/${this.bucketName}/${key}`;
     } catch (error) {
       this.logger.error(`Failed to upload logo: ${error}`);

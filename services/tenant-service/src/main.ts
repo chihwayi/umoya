@@ -19,9 +19,11 @@ async function bootstrap() {
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new SentryFilter(httpAdapter));
 
-  // Enable CORS for all origins in development
+  // Enable CORS from environment variables
+  const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
+  
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3011', 'http://127.0.0.1:3000', 'http://127.0.0.1:3011'],
+    origin: corsOrigins.length > 0 ? corsOrigins : true, // Default to true if not specified (development only)
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],
