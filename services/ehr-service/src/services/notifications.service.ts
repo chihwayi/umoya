@@ -22,9 +22,9 @@ export class NotificationsService {
     
     // Different gateways for different networks
     const defaultGateways = {
-      econet: 'https://api.econet.co.zw/sms',
-      telecel: 'https://api.telecel.co.zw/sms', 
-      netone: 'https://api.netone.co.zw/sms'
+      econet: process.env.SMS_GATEWAY_ECONET || 'https://api.econet.co.zw/sms',
+      telecel: process.env.SMS_GATEWAY_TELECEL || 'https://api.telecel.co.zw/sms', 
+      netone: process.env.SMS_GATEWAY_NETONE || 'https://api.netone.co.zw/sms'
     };
 
     let gatewayUrl = defaultGateways[targetNetwork] || defaultGateways.econet;

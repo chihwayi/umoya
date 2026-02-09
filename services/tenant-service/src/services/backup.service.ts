@@ -40,7 +40,7 @@ export class BackupService {
         accessKeyId: accessKeyId || 'minioadmin',
         secretAccessKey: secretAccessKey || 'minioadmin',
       },
-      endpoint: endpoint || this.configService.get<string>('MINIO_URL') || 'http://localhost:9000',
+      endpoint: endpoint || this.configService.get<string>('MINIO_URL'),
       forcePathStyle: true, // Required for MinIO
     });
   }

@@ -37,7 +37,7 @@ export class TranscriptionService {
   private readonly WHISPER_API_KEY = process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY;
   // Default to true for CDSS service integration
   private readonly USE_LOCAL_WHISPER = process.env.USE_LOCAL_WHISPER !== 'false'; 
-  private readonly LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL;
+  private readonly LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL || 'http://localhost:8001';
 
   constructor() {
     if (this.USE_LOCAL_WHISPER && !this.LOCAL_WHISPER_URL) {

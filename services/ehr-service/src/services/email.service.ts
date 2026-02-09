@@ -14,7 +14,7 @@ export class EmailService {
   private initializeTransporter() {
     // Support multiple email providers via environment variables
     const emailProvider = process.env.EMAIL_PROVIDER || 'smtp';
-    const smtpHost = process.env.SMTP_HOST || 'localhost';
+    const smtpHost = process.env.SMTP_HOST;
     const smtpPort = parseInt(process.env.SMTP_PORT || '587');
     const smtpUser = process.env.SMTP_USER || '';
     const smtpPassword = process.env.SMTP_PASSWORD || '';

@@ -23,7 +23,11 @@ class TerminologyService:
         """Initialize terminology service"""
         self.icd10_mapper = Icd10Mapper()
         self.snomed_mapper = SnomedMapper()
-        self.ehr_service_url = os.getenv('EHR_SERVICE_URL', 'http://ehr-service:3013')
+        self.ehr_service_url = os.getenv('EHR_SERVICE_URL')
+        if not self.ehr_service_url:
+            logger.warning("EHR_SERVICE_URL not set, defaulting to http://ehr-service:3013")
+            self.ehr_service_url = 'http://ehr-service:3013'
+            
         self.use_ehr_service = os.getenv('CDSS_USE_EHR_TERMINOLOGY', 'false').lower() == 'true'
         
         logger.info(f"Terminology Service initialized (EHR integration: {self.use_ehr_service})")

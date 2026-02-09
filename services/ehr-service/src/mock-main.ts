@@ -36,7 +36,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   
   const port = process.env.PORT || 3013;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   
   console.log(`🏥 MediCore EHR Service (Mock) running on port ${port}`);
   const host = process.env.HOST || 'localhost';
