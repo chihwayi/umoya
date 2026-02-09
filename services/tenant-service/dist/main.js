@@ -6,6 +6,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const tenant_module_1 = require("./tenant.module");
 const sentry_filter_1 = require("./filters/sentry.filter");
+const config_1 = require("@medicore/config");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(tenant_module_1.TenantModule);
     app.useGlobalPipes(new common_1.ValidationPipe({
@@ -15,8 +16,9 @@ async function bootstrap() {
     }));
     const { httpAdapter } = app.get(core_1.HttpAdapterHost);
     app.useGlobalFilters(new sentry_filter_1.SentryFilter(httpAdapter));
+    const corsOrigins = config_1.config.security.corsOrigins;
     app.enableCors({
-        origin: true,
+        origin: corsOrigins.length > 0 ? corsOrigins : true,
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],

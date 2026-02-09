@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { AllExceptionsFilter } from './filters/http-exception.filter';
+import { config as envConfig } from '@medicore/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(EhrModule);
@@ -31,7 +32,7 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Enable CORS from environment variables
-  const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
+  const corsOrigins = envConfig.security.corsOrigins;
 
   app.enableCors({
     origin: corsOrigins.length > 0 ? corsOrigins : true,

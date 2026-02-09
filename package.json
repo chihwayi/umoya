@@ -20,6 +20,7 @@
     "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts"
   },
   "workspaces": [
+    "packages/*",
     "services/*",
     "web-app"
   ],

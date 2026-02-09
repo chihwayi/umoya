@@ -6,7 +6,7 @@ export declare class TenantController {
     private readonly tenantService;
     private readonly storageService;
     constructor(tenantService: TenantService, storageService: StorageService);
-    uploadLogo(file: Express.Multer.File): Promise<{
+    uploadLogo(file: any): Promise<{
         url: string;
     }>;
     createTenant(createTenantDto: CreateTenantDto): Promise<{

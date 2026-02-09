@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { TenantModule } from './tenant.module';
 import { SentryFilter } from './filters/sentry.filter';
+import { config as envConfig } from '@medicore/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(TenantModule);
@@ -20,7 +21,7 @@ async function bootstrap() {
   app.useGlobalFilters(new SentryFilter(httpAdapter));
 
   // Enable CORS from environment variables
-  const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
+  const corsOrigins = envConfig.security.corsOrigins;
   
   app.enableCors({
     origin: corsOrigins.length > 0 ? corsOrigins : true, // Default to true if not specified (development only)
