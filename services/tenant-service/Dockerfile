@@ -1,13 +1,34 @@
-FROM node:18-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --only=production
+# Install build dependencies for native modules
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+# Copy root workspace files
+COPY package.json package-lock.json ./
+
+# Copy shared config package
+COPY packages/config/package.json ./packages/config/
+COPY packages/config/tsconfig.json ./packages/config/
+
+# Copy service package
+COPY services/tenant-service/package.json ./services/tenant-service/
+
+# Install dependencies
+RUN npm install
+
+# Copy shared config source and build it
+COPY packages/config ./packages/config
+RUN npm run build -w @medicore/config
+
+# Copy service source
+COPY services/tenant-service ./services/tenant-service
+
+# Build service
+WORKDIR /app/services/tenant-service
 RUN npm run build
 
-EXPOSE 3000
+EXPOSE 3001
 
 CMD ["npm", "start"]

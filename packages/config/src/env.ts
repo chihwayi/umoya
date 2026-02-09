@@ -29,6 +29,18 @@ const envSchema = z.object({
   
   // Security
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:3011,http://127.0.0.1:3000,http://127.0.0.1:3011'),
+
+  // AI & Transcription
+  WHISPER_API_URL: z.string().default('https://api.openai.com/v1/audio/transcriptions'),
+  WHISPER_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  USE_LOCAL_WHISPER: z.enum(['true', 'false']).default('true'),
+  LOCAL_WHISPER_URL: z.string().default('http://localhost:8001'),
+
+  // Notifications (SMS)
+  SMS_GATEWAY_ECONET: z.string().default('https://api.econet.co.zw/sms'),
+  SMS_GATEWAY_TELECEL: z.string().default('https://api.telecel.co.zw/sms'),
+  SMS_GATEWAY_NETONE: z.string().default('https://api.netone.co.zw/sms'),
 });
 
 // Parse and validate
@@ -74,5 +86,22 @@ export const config = {
   
   security: {
     corsOrigins: env.CORS_ORIGINS.split(','),
+  },
+
+  ai: {
+    transcription: {
+      useLocal: env.USE_LOCAL_WHISPER === 'true',
+      localUrl: env.LOCAL_WHISPER_URL,
+      apiUrl: env.WHISPER_API_URL,
+      apiKey: env.OPENAI_API_KEY || env.WHISPER_API_KEY,
+    }
+  },
+
+  notifications: {
+    sms: {
+      econet: env.SMS_GATEWAY_ECONET,
+      telecel: env.SMS_GATEWAY_TELECEL,
+      netone: env.SMS_GATEWAY_NETONE,
+    }
   }
 } as const;

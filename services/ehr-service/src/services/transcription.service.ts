@@ -10,6 +10,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { config } from '@medicore/config';
 
 export interface TranscriptionOptions {
   language?: 'en' | 'sn' | 'nd' | 'auto';
@@ -33,11 +34,11 @@ export interface TranscriptionResult {
 @Injectable()
 export class TranscriptionService {
   private readonly logger = new Logger(TranscriptionService.name);
-  private readonly WHISPER_API_URL = process.env.WHISPER_API_URL || 'https://api.openai.com/v1/audio/transcriptions';
-  private readonly WHISPER_API_KEY = process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY;
+  private readonly WHISPER_API_URL = config.ai.transcription.apiUrl;
+  private readonly WHISPER_API_KEY = config.ai.transcription.apiKey;
   // Default to true for CDSS service integration
-  private readonly USE_LOCAL_WHISPER = process.env.USE_LOCAL_WHISPER !== 'false'; 
-  private readonly LOCAL_WHISPER_URL = process.env.LOCAL_WHISPER_URL || 'http://localhost:8001';
+  private readonly USE_LOCAL_WHISPER = config.ai.transcription.useLocal; 
+  private readonly LOCAL_WHISPER_URL = config.ai.transcription.localUrl;
 
   constructor() {
     if (this.USE_LOCAL_WHISPER && !this.LOCAL_WHISPER_URL) {

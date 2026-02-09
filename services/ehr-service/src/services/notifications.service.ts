@@ -6,6 +6,7 @@ import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
 import { Bill } from '../entities/billing.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
+import { config as envConfig } from '@medicore/config';
 
 @Injectable()
 export class NotificationsService {
@@ -22,9 +23,9 @@ export class NotificationsService {
     
     // Different gateways for different networks
     const defaultGateways = {
-      econet: process.env.SMS_GATEWAY_ECONET || 'https://api.econet.co.zw/sms',
-      telecel: process.env.SMS_GATEWAY_TELECEL || 'https://api.telecel.co.zw/sms', 
-      netone: process.env.SMS_GATEWAY_NETONE || 'https://api.netone.co.zw/sms'
+      econet: envConfig.notifications.sms.econet,
+      telecel: envConfig.notifications.sms.telecel,
+      netone: envConfig.notifications.sms.netone
     };
 
     let gatewayUrl = defaultGateways[targetNetwork] || defaultGateways.econet;
