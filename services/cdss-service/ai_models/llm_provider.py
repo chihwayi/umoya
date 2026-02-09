@@ -13,14 +13,19 @@ class LLMProvider:
     
     def __init__(self):
         self.base_url = os.getenv("LLM_API_URL")
+        self.enabled = os.getenv("LLM_ENABLED", "true").lower() == "true"
+        
         if not self.base_url:
-            # Default to Docker internal host if not specified, but log warning
-            logger.warning("LLM_API_URL not set, defaulting to http://host.docker.internal:11434")
-            self.base_url = "http://host.docker.internal:11434"
-            
+            if self.enabled:
+                # Default to Docker internal host if not specified
+                default_url = "http://host.docker.internal:11434"
+                logger.info(f"LLM_API_URL not set, defaulting to {default_url}")
+                self.base_url = default_url
+            else:
+                self.base_url = None
+                
         self.model_name = os.getenv("LLM_MODEL_NAME", "llama3")
         self.timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
-        self.enabled = os.getenv("LLM_ENABLED", "true").lower() == "true"
         self._available = None
 
     async def check_availability(self) -> bool:

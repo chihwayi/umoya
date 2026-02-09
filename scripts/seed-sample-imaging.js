@@ -3,7 +3,7 @@
 /**
  * Seeds a demo imaging order/study with a real DICOM file for the specified tenant.
  * Requirements:
- *   - EHR service running locally (http://localhost:3013)
+ *   - EHR service running (URL configured via env vars)
  *   - Sample DICOM stored at sample-data/dicom/CT-MONO2-16-ankle.dcm
  *
  * Environment variables:
@@ -11,7 +11,7 @@
  *   LOGIN_EMAIL          (default: doctor@bulawayo-general.co.zw)
  *   LOGIN_PASSWORD       (default: Password1#)
  *   DICOM_PATH           (default: sample-data/dicom/CT-MONO2-16-ankle.dcm)
- *   EHR_API_URL          (default: http://localhost:3013/api)
+ *   EHR_API_URL          (Required)
  */
 
 const fs = require('fs');

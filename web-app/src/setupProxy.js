@@ -5,7 +5,7 @@ module.exports = function(app) {
   app.use(
     '/api',
     createProxyMiddleware({
-      target: 'http://tenant-service:3001',
+      target: process.env.PROXY_TARGET || 'http://tenant-service:3001',
       changeOrigin: true,
       secure: false,
       logLevel: 'debug',

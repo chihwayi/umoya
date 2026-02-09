@@ -10,7 +10,7 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=0 /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
 

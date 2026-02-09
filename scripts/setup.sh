@@ -72,8 +72,14 @@ setup_environment() {
 # MediCore Environment Configuration
 NODE_ENV=development
 REACT_APP_EHR_API_URL=http://localhost:3013/api
-REACT_APP_TENANT_API_URL=http://localhost:3001
+REACT_APP_TENANT_API_URL=/api
 REACT_APP_CDSS_API_URL=http://localhost:8000
+REACT_APP_BASE_DOMAIN=medicore.co.zw
+REACT_APP_PROTOCOL=http
+
+CDSS_ENABLE_AI=true
+MOCK_VISION_AI=true
+LLM_API_URL=http://host.docker.internal:11434
 
 DATABASE_URL=postgresql://medicore:medicore_password@localhost:5432/medicore_master
 REDIS_URL=redis://localhost:6379

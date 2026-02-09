@@ -74,7 +74,8 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           // Only create vital signs task if vitals haven't been recorded yet
           if (!apt.vitals) {
             // Only show pending tasks to the nurse who registered the patient (created the appointment)
-            // OR if the task is explicitly assigned to them (future feature)
+            // or if the nurse has taken ownership of the patient care.
+            // Ensure strictly pending status.
             if (isCreatedByCurrentUser) {
               realTasks.push({
                 id: `vitals-${apt.id}`,

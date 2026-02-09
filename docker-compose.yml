@@ -84,6 +84,7 @@ services:
       - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
       - CDSS_ENABLE_AI=${CDSS_ENABLE_AI}
+      - MOCK_VISION_AI=${MOCK_VISION_AI}
       - MINIO_ENDPOINT=${SERVICE_MINIO_URL}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
@@ -91,6 +92,7 @@ services:
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_API_URL=${LLM_API_URL}
+      - WHISPER_API_KEY=${WHISPER_API_KEY}
     depends_on:
       - redis
       - postgres-master
@@ -127,6 +129,7 @@ services:
       - STORAGE_S3_USE_SSL=${STORAGE_S3_USE_SSL}
       - STORAGE_S3_PUBLIC_BASE_URL=${MINIO_PUBLIC_URL}
       - CORS_ORIGINS=${CORS_ORIGINS}
+      - WHISPER_API_KEY=${WHISPER_API_KEY}
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src
       - ./services/ehr-service/package.json:/app/services/ehr-service/package.json

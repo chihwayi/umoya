@@ -111,19 +111,28 @@ dosing_calculator = DosingCalculator()
 diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
 trend_analysis_engine = TrendAnalysisEngine()
 
+# Check for AI enablement
+enable_ai = os.getenv("CDSS_ENABLE_AI", "false").lower() == "true"
+
 # Initialize Voice Scribe
 voice_scribe = None
-try:
-    voice_scribe = VoiceScribe()
-except Exception as e:
-    print(f"Voice scribe initialization failed: {e}")
+if enable_ai:
+    try:
+        voice_scribe = VoiceScribe()
+    except Exception as e:
+        print(f"Voice scribe initialization failed: {e}")
+else:
+    print("Voice Scribe disabled via CDSS_ENABLE_AI=false")
 
 # Initialize Medical Vision Service
 medical_vision = None
-try:
-    medical_vision = MedicalVisionService()
-except Exception as e:
-    print(f"Medical Vision initialization failed: {e}")
+if enable_ai:
+    try:
+        medical_vision = MedicalVisionService()
+    except Exception as e:
+        print(f"Medical Vision initialization failed: {e}")
+else:
+    print("AI features (Medical Vision) disabled via CDSS_ENABLE_AI=false")
 
 # MinIO Configuration
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
