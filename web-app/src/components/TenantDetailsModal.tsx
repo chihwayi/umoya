@@ -271,63 +271,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     <span>Cancel</span>
-                    {/* User Credentials Modal - Moved to end for stacking context */}
-      {createdUserCredentials && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in" style={{ zIndex: 9999 }}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
-            <div className="bg-emerald-600 p-6 text-white text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold">User Created Successfully!</h3>
-              <p className="text-emerald-100 text-sm mt-1">Please save these credentials immediately.</p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <div className="mb-3">
-                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Email Address</label>
-                  <div className="flex items-center justify-between">
-                    <code className="text-slate-900 font-mono text-sm">{createdUserCredentials.email}</code>
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.email)}
-                      className="text-slate-400 hover:text-indigo-600 transition-colors"
-                      title="Copy Email"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Temporary Password</label>
-                  <div className="flex items-center justify-between">
-                    <code className="text-emerald-600 font-mono text-lg font-bold">{createdUserCredentials.password}</code>
-                    <button 
-                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.password)}
-                      className="text-slate-400 hover:text-indigo-600 transition-colors"
-                      title="Copy Password"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 flex items-start">
-                <svg className="w-4 h-4 mr-2 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                <span>This password will <strong>not</strong> be shown again. The user will be required to change it upon first login.</span>
-              </div>
-              <button
-                onClick={() => setCreatedUserCredentials(null)}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-slate-200"
-              >
-                I have saved these credentials
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+                  </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -550,6 +494,63 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* User Credentials Modal - Moved to end for stacking context */}
+      {createdUserCredentials && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+            <div className="bg-emerald-600 p-6 text-white text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold">User Created Successfully!</h3>
+              <p className="text-emerald-100 text-sm mt-1">Please save these credentials immediately.</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="mb-3">
+                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Email Address</label>
+                  <div className="flex items-center justify-between">
+                    <code className="text-slate-900 font-mono text-sm">{createdUserCredentials.email}</code>
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.email)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="Copy Email"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 font-medium uppercase tracking-wider block mb-1">Temporary Password</label>
+                  <div className="flex items-center justify-between">
+                    <code className="text-emerald-600 font-mono text-lg font-bold">{createdUserCredentials.password}</code>
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(createdUserCredentials.password)}
+                      className="text-slate-400 hover:text-indigo-600 transition-colors"
+                      title="Copy Password"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 flex items-start">
+                <svg className="w-4 h-4 mr-2 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <span>This password will <strong>not</strong> be shown again. The user will be required to change it upon first login.</span>
+              </div>
+              <button
+                onClick={() => setCreatedUserCredentials(null)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-slate-200"
+              >
+                I have saved these credentials
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

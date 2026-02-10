@@ -17,6 +17,7 @@ CREATE TABLE tenants (
     address TEXT,
     city VARCHAR(100),
     country VARCHAR(100) DEFAULT 'Zimbabwe',
+    "logoUrl" VARCHAR(500),
     "featureFlags" JSONB DEFAULT '{}',
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()

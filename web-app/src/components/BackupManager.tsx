@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { backupAPI } from '../services/api';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface Backup {
   id: string;
@@ -13,6 +14,7 @@ interface Backup {
 }
 
 export const BackupManager: React.FC = () => {
+  const { success, error: notifyError, info } = useNotification();
   const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -32,6 +34,7 @@ export const BackupManager: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load backups', error);
+      notifyError('Error', 'Failed to load backups list');
       setBackups([]);
     } finally {
       setInitialLoading(false);
@@ -42,10 +45,11 @@ export const BackupManager: React.FC = () => {
     setLoading(true);
     try {
       await backupAPI.createBackup('manual');
+      success('Success', 'Backup created successfully');
       await loadBackups(); // Refresh list
     } catch (error) {
       console.error('Failed to create backup', error);
-      alert('Failed to create backup. Ensure you have admin permissions.');
+      notifyError('Backup Failed', 'Failed to create backup. Ensure you have admin permissions.');
     } finally {
       setLoading(false);
     }
@@ -59,17 +63,17 @@ export const BackupManager: React.FC = () => {
     // Additional safety confirmation
     const confirmText = prompt('Type "RESTORE" to confirm this dangerous operation:');
     if (confirmText !== 'RESTORE') {
-        alert('Restore cancelled.');
+        info('Cancelled', 'Restore operation cancelled.');
         return;
     }
 
     setLoading(true);
     try {
       await backupAPI.restoreBackup(key);
-      alert('Restore initiated successfully! The system may be unavailable for a few minutes.');
+      success('Restore Initiated', 'System restore started. The system may be unavailable for a few minutes.');
     } catch (error) {
       console.error('Failed to restore backup', error);
-      alert('Failed to restore backup. Check console for details.');
+      notifyError('Restore Failed', 'Failed to restore backup. Check console for details.');
     } finally {
       setLoading(false);
     }
@@ -81,7 +85,7 @@ export const BackupManager: React.FC = () => {
       window.open(url, '_blank');
     } catch (error) {
       console.error('Failed to get download link', error);
-      alert('Failed to generate download link');
+      notifyError('Download Failed', 'Failed to generate download link');
     }
   };
 

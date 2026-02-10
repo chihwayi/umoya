@@ -62,6 +62,7 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MINIO_URL=${SERVICE_MINIO_URL}
       - BACKUP_BUCKET_NAME=${BACKUP_BUCKET_NAME}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL}
       - AWS_REGION=${AWS_REGION}
       - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
@@ -115,6 +116,7 @@ services:
       - DB_PORT=5432
       - DB_USERNAME=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
       - SNOMED_USE_POSTGRES=true
       - SNOMED_USE_CACHE=false
@@ -130,6 +132,7 @@ services:
       - STORAGE_S3_PUBLIC_BASE_URL=${MINIO_PUBLIC_URL}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
+    command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src
       - ./services/ehr-service/package.json:/app/services/ehr-service/package.json

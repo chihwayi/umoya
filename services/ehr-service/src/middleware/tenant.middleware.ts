@@ -29,21 +29,15 @@ export class TenantMiddleware implements NestMiddleware {
     const pathLower = requestPath.toLowerCase();
     const urlLower = originalUrl.toLowerCase();
     
-    // Comprehensive check for tenants/active endpoint
-    const isTenantsActiveEndpoint = 
+    // Comprehensive check for public tenant endpoints (active list and subdomain lookup)
+    const isPublicTenantEndpoint = 
       pathLower.includes('tenants/active') ||
-      pathLower.includes('tenants\\/active') ||
+      pathLower.includes('tenants/subdomain') ||
       urlLower.includes('tenants/active') ||
-      urlLower.includes('tenants\\/active') ||
-      pathLower.endsWith('/tenants/active') ||
-      pathLower === '/tenants/active' ||
-      pathLower === 'tenants/active' ||
-      urlLower.endsWith('/api/tenants/active') ||
-      urlLower.endsWith('/tenants/active') ||
-      urlLower.includes('/api/tenants/active') ||
-      (method.toUpperCase() === 'GET' && (pathLower.includes('tenant') && pathLower.includes('active')));
+      urlLower.includes('tenants/subdomain') ||
+      (method.toUpperCase() === 'GET' && pathLower.includes('tenants') && (pathLower.includes('active') || pathLower.includes('subdomain')));
     
-    if (isTenantsActiveEndpoint) {
+    if (isPublicTenantEndpoint) {
       return next();
     }
 

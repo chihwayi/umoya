@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { authAPI } from './services/api';
+import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 
 function App() {
@@ -31,13 +32,15 @@ function App() {
   }
 
   return (
-    <div className="App">
-      {isAuthenticated ? (
-        <Dashboard onLogout={handleLogout} />
-      ) : (
-        <Login onLogin={handleLogin} />
-      )}
-    </div>
+    <NotificationProvider>
+      <div className="App">
+        {isAuthenticated ? (
+          <Dashboard onLogout={handleLogout} />
+        ) : (
+          <Login onLogin={handleLogin} />
+        )}
+      </div>
+    </NotificationProvider>
   );
 }
 

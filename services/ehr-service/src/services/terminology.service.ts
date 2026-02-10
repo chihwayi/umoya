@@ -109,7 +109,7 @@ export class TerminologyService {
         port: parseInt(process.env.DB_PORT || '5432'),
         username: process.env.DB_USERNAME || 'medicore',
         password: process.env.DB_PASSWORD || 'medicore_password',
-        database: 'medicore_master',
+        database: process.env.POSTGRES_DB || 'medicore_master',
       });
       await this.masterDb.initialize();
       this.logger.log('✅ Master database connected for SNOMED CT PostgreSQL search');

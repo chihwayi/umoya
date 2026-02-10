@@ -130,7 +130,7 @@ export class DatabaseProvisioningService {
         tasks: [
           (db) => this.ensureUpdatedAtTriggerFunction(db),
           (db) => this.enforceUserRoleConstraint(db),
-          (db) => this.seedDefaultUsers(db), // Re-enabled to seed gina@gmail.com
+          // (db) => this.seedDefaultUsers(db), // Re-enabled to seed gina@gmail.com
           (db) => this.seedLabCatalog(db),
           (db) => this.seedImagingCatalog(db),
           (db) => this.seedLookupTables(db),

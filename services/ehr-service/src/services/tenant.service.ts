@@ -116,7 +116,7 @@ export class TenantService {
       port: parseInt(process.env.DB_PORT) || 5432,
       username: process.env.DB_USERNAME || 'medicore',
       password: process.env.DB_PASSWORD || 'medicore_password',
-      database: 'medicore_master',
+      database: process.env.POSTGRES_DB || 'medicore',
     });
     this.masterDb.initialize().catch(console.error);
   }
@@ -192,6 +192,7 @@ export class TenantService {
       username: process.env.DB_USERNAME || 'medicore',
       password: process.env.DB_PASSWORD || 'medicore_password',
       database: databaseName,
+      synchronize: false,
       entities: [
         User,
         Patient,
@@ -294,7 +295,6 @@ export class TenantService {
         SmsGatewayConfig,
         PaymentGatewayConfig,
       ],
-      synchronize: false,
       logging: false,
     });
 

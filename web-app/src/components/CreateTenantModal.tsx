@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { CreateTenantRequest } from '../types';
 import { Modal } from './Modal';
 import { tenantAPI } from '../services/api';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface CreateTenantModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
   onSubmit,
   loading
 }) => {
+  const { error: notifyError } = useNotification();
   const [formData, setFormData] = useState<CreateTenantRequest>({
     clinicName: '',
     subdomain: '',
@@ -43,7 +45,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
         finalLogoUrl = url;
       } catch (error) {
         console.error('Failed to upload logo', error);
-        alert('Failed to upload logo, but proceeding with tenant creation.');
+        notifyError('Upload Failed', 'Failed to upload logo, but proceeding with tenant creation.');
       } finally {
         setUploading(false);
       }
@@ -125,6 +127,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
               type="text"
               name="clinicName"
               required
+              minLength={2}
               className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
               value={formData.clinicName}
               onChange={handleChange}
@@ -139,6 +142,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
                 type="text"
                 name="subdomain"
                 required
+                minLength={3}
                 pattern="^[a-z0-9\-]+$"
                 className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
                 value={formData.subdomain}
@@ -149,7 +153,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
                 .medicore.co.zw
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-2 ml-1">Lowercase letters, numbers, hyphens only</p>
+            <p className="text-xs text-slate-500 mt-2 ml-1">Lowercase letters, numbers, hyphens only (min 3 chars)</p>
           </div>
 
           <div>
@@ -171,6 +175,7 @@ export const CreateTenantModal: React.FC<CreateTenantModalProps> = ({
               type="tel"
               name="contactPhone"
               required
+              minLength={10}
               className="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
               value={formData.contactPhone}
               onChange={handleChange}

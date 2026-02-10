@@ -9,12 +9,14 @@ import { HealthMonitor } from '../components/HealthMonitor';
 import { AuditLogs } from '../components/AuditLogs';
 import { SecurityPanel } from '../components/SecurityPanel';
 import { BackupManager } from '../components/BackupManager';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const { success, error: notifyError } = useNotification();
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -41,6 +43,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     } catch (err) {
       console.error('Failed to load tenants:', err);
       setError('Failed to load tenants');
+      notifyError('Error', 'Failed to load tenants list');
       setTenants([]);
     } finally {
       setLoading(false);
@@ -52,9 +55,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     try {
       await tenantAPI.createTenant(data);
       setCreateModalOpen(false);
+      success('Success', 'Tenant created successfully');
       loadTenants();
-    } catch (err) {
-      setError('Failed to create tenant');
+    } catch (err: any) {
+      console.error('Failed to create tenant:', err);
+      const errorMessage = err.response?.data?.message || 'Failed to create tenant';
+      setError(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
+      notifyError('Creation Failed', Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
     } finally {
       setCreateLoading(false);
     }
@@ -63,8 +70,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const handleStatusChange = async (id: string, status: string) => {
     try {
       await tenantAPI.updateTenantStatus(id, status);
+      success('Success', `Tenant status updated to ${status}`);
       loadTenants();
     } catch (err) {
+      notifyError('Update Failed', 'Failed to update tenant status');
       setError('Failed to update tenant status');
     }
   };
@@ -72,8 +81,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const handleDeleteTenant = async (id: string) => {
     try {
       await tenantAPI.deleteTenant(id);
+      success('Success', 'Tenant deleted successfully');
       loadTenants();
     } catch (err) {
+      notifyError('Deletion Failed', 'Failed to delete tenant');
       setError('Failed to delete tenant');
     }
   };

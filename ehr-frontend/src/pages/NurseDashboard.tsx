@@ -158,6 +158,61 @@ const NurseDashboard: React.FC = () => {
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Sidebar Navigation Helper
+  const getSidebarNavigation = () => {
+    return [
+      { 
+        icon: Stethoscope, 
+        label: 'Main Dashboard', 
+        desc: 'Core nursing tasks & patient queue', 
+        section: 'main' as const,
+        tab: 'dashboard',
+        color: 'from-emerald-500 to-teal-500',
+        children: [
+          { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
+          { label: 'My Tasks', tab: 'tasks', icon: Activity },
+          { label: 'Safety Alerts', tab: 'alerts', icon: Bell },
+          { label: 'Today\'s Schedule', tab: 'calendar', icon: Calendar },
+          { label: 'Patients', tab: 'patients', icon: Users },
+          { label: 'Patient Queue', tab: 'queue', icon: Activity },
+          { label: 'Orders & Procedures', tab: 'orders', icon: ClipboardList },
+          { label: 'Nursing Notes', tab: 'notes', icon: FileText },
+        ]
+      },
+      { 
+        icon: Activity, 
+        label: 'HIV/AIDS Program', 
+        desc: 'Testing, treatment & care', 
+        section: 'hiv' as const,
+        tab: 'testing',
+        color: 'from-red-500 to-orange-500',
+        children: [
+          { label: 'HIV Testing', tab: 'testing', icon: TestTube },
+          { label: 'Patients on Care', tab: 'hiv-patients', icon: Users },
+          { label: 'TB Screening', tab: 'tb-screening', icon: Stethoscope },
+          { label: 'Cervical Cancer', tab: 'cervical-cancer', icon: Activity },
+          { label: 'Quality Metrics', tab: 'quality-metrics', icon: BarChart3 },
+          { label: 'Stock Management', tab: 'stock-management', icon: Package },
+          { label: 'LTFU Management', tab: 'ltfu', icon: Clock },
+          { label: 'Monthly Return', tab: 'monthly-return', icon: FileText },
+          { label: 'WHO Workflow', tab: 'who-workflow', icon: Activity },
+        ]
+      },
+      { 
+        icon: Heart, 
+        label: 'Maternity & Obstetrics', 
+        desc: 'Prenatal & postnatal care', 
+        section: 'maternity' as const,
+        tab: 'maternity',
+        color: 'from-pink-500 to-rose-500',
+        children: [
+          { label: 'Maternity Workspace', tab: 'maternity', icon: Heart },
+        ]
+      }
+    ];
+  };
 
   // AI Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -366,15 +421,15 @@ const NurseDashboard: React.FC = () => {
   // Fetch tenant info
   useEffect(() => {
     const fetchTenantInfo = async () => {
-      try {
-        const response = await tenantApi.getTenantBySlug(tenantSlug!);
-        if (response.data) {
-          setTenantInfo(response.data);
+        try {
+          const response = await tenantApi.getTenantBySlug(tenantSlug!);
+          if (response.data) {
+            setTenantInfo(response.data);
+          }
+        } catch (error) {
+          console.error('Error fetching tenant info:', error);
         }
-      } catch (error) {
-        console.error('Error fetching tenant info:', error);
-      }
-    };
+      };
 
     if (tenantSlug) {
       fetchTenantInfo();
@@ -581,7 +636,7 @@ const NurseDashboard: React.FC = () => {
     return { waiting, inProgress, completed, urgent, vitalsRecorded, awaitingPayment };
   };
 
-  const getNurseActions = () => {
+  const getDashboardGridActions = () => {
     return [
       { icon: Activity, label: 'My Tasks', desc: 'Epic-style task management', color: 'from-indigo-500 to-purple-600', action: () => setActiveTab('tasks') },
       { icon: Calendar, label: 'Today\'s Schedule', desc: 'View today\'s appointments', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('calendar') },
@@ -1486,7 +1541,7 @@ const NurseDashboard: React.FC = () => {
           <span className="text-xs text-slate-500 ml-auto">Click to navigate</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-        {getNurseActions().map((action, index) => (
+        {getDashboardGridActions().map((action, index) => (
           <button
             key={index}
             onClick={action.action}
@@ -1541,30 +1596,112 @@ const NurseDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-x-hidden">
+      {/* Sidebar */}
+      <aside className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white z-50 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 shadow-2xl flex flex-col`}>
+        {/* Logo Section */}
+        <div className="p-6 border-b border-slate-700/50">
+          <div className="flex items-center gap-3">
+            {tenantInfo?.logoUrl ? (
+              <div className="h-10 w-10 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
+                <img src={tenantInfo.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="h-10 w-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
+                <Stethoscope className="h-6 w-6 text-white" />
+              </div>
+            )}
+            <div>
+              <h1 className="font-bold text-lg leading-tight">{tenantInfo?.clinicName || 'Medicore'}</h1>
+              <p className="text-xs text-slate-400">Nurse Portal</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {getSidebarNavigation().map((item, index) => {
+             const isSectionActive = activeSection === item.section;
+             return (
+               <div key={index} className="space-y-1">
+                 <button
+                   onClick={() => {
+                     setActiveSection(item.section);
+                     setActiveTab(item.tab);
+                     // Keep sidebar open to show children
+                   }}
+                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                     isSectionActive 
+                       ? `bg-gradient-to-r ${item.color} shadow-lg text-white` 
+                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                   }`}
+                 >
+                   <item.icon className={`w-5 h-5 ${isSectionActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
+                   <div className="text-left flex-1">
+                     <p className="font-medium">{item.label}</p>
+                     <p className={`text-xs ${isSectionActive ? 'text-white/80' : 'text-slate-500 group-hover:text-slate-400'}`}>{item.desc}</p>
+                   </div>
+                   {isSectionActive ? <ChevronDown className="w-4 h-4 text-white/80" /> : <ChevronDown className="w-4 h-4 text-slate-600 -rotate-90" />}
+                 </button>
+                 
+                 {/* Sub-navigation Children */}
+                 {isSectionActive && item.children && (
+                   <div className="pl-4 space-y-1 mt-1 mb-3 animate-fadeIn">
+                     {item.children.map((child, childIndex) => {
+                       const isTabActive = activeTab === child.tab;
+                       return (
+                         <button
+                           key={childIndex}
+                           onClick={() => {
+                             setActiveTab(child.tab);
+                             setSidebarOpen(false); // Close sidebar on mobile after selection
+                           }}
+                           className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm ${
+                             isTabActive
+                               ? 'bg-slate-800 text-white font-medium border-l-2 border-emerald-500'
+                               : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                           }`}
+                         >
+                           <child.icon className={`w-4 h-4 ${isTabActive ? 'text-emerald-400' : 'text-slate-500'}`} />
+                           <span>{child.label}</span>
+                         </button>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
+             );
+          })}
+        </nav>
+
+        {/* Logout */}
+        <div className="p-6 border-t border-slate-700/50">
+           <button
+             onClick={handleLogout}
+             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200"
+           >
+             <LogOut className="w-5 h-5" />
+             <span className="font-medium">Sign Out</span>
+           </button>
+        </div>
+      </aside>
+
+      {/* Main Content Wrapper */}
+      <div className="lg:pl-64 transition-all duration-300 flex flex-col min-h-screen">
       {/* Slim Top Bar: system title + notifications + user */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
         <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex justify-between items-center h-14">
-            {/* Left Section - System Title */}
+            {/* Left Section - Hamburger + Title */}
             <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0">
-                {tenantInfo?.logoUrl ? (
-                  <div className="h-10 w-10 bg-white p-1 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={tenantInfo.logoUrl} 
-                      alt={`${tenantInfo.clinicName} Logo`} 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-8 w-8 bg-gradient-to-r from-pink-500 to-rose-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <Stethoscope className="h-5 w-5 text-white" />
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
               <div className="hidden sm:block">
                 <h1 className="text-lg font-bold text-slate-900">
-                  {tenantInfo?.clinicName ? `${tenantInfo.clinicName}` : 'Nurse Dashboard'}
+                  Nurse Dashboard
                 </h1>
                 <p className="text-xs text-slate-600">Patient Care Management</p>
               </div>
@@ -1672,286 +1809,6 @@ const NurseDashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Section Navigation Bar */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 border-b-2 border-emerald-800 shadow-lg overflow-x-auto">
-        <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
-          <nav className="flex space-x-2 sm:space-x-4 lg:space-x-6 min-w-max">
-            <button
-              onClick={() => {
-                setActiveSection('main');
-                setActiveTab('dashboard');
-              }}
-              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
-                activeSection === 'main'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-emerald-100 hover:text-white'
-              }`}
-            >
-              <Stethoscope className="w-4 h-4" />
-              Main Dashboard
-            </button>
-            <button
-              onClick={() => {
-                setActiveSection('hiv');
-                setActiveTab('testing');
-              }}
-              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
-                activeSection === 'hiv'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-emerald-100 hover:text-white'
-              }`}
-            >
-              <Activity className="w-4 h-4" />
-              HIV/AIDS/TB Program
-            </button>
-            <button
-              onClick={() => {
-                setActiveSection('maternity');
-                setActiveTab('maternity');
-              }}
-              className={`py-3 px-4 border-b-2 font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
-                activeSection === 'maternity'
-                  ? 'border-white text-white'
-                  : 'border-transparent text-emerald-100 hover:text-white'
-              }`}
-            >
-              <Heart className="w-4 h-4" />
-              Maternity & Obstetrics
-            </button>
-          </nav>
-        </div>
-      </div>
-
-      {/* Page Tabs (in-content) */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 overflow-x-auto">
-        <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
-          {activeSection === 'main' ? (
-            <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 min-w-max pb-px">
-              <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
-                  activeTab === 'dashboard'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4 inline mr-2" />
-                Dashboard
-              </button>
-              <button
-                onClick={() => setActiveTab('tasks')}
-                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
-                  activeTab === 'tasks'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Activity className="w-4 h-4 inline mr-2" />
-                My Tasks
-                {(taskCounts.pending > 0 || taskCounts.inProgress > 0 || taskCounts.overdue > 0) && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse">
-                    {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('alerts')}
-                className={`py-3 sm:py-4 px-2 sm:px-3 lg:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
-                  activeTab === 'alerts'
-                    ? 'border-red-500 text-red-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Bell className="w-4 h-4 inline mr-2" />
-                Safety Alerts
-                {alertCounts.active > 0 && (
-                  <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
-                    alertCounts.critical > 0 
-                      ? 'bg-gradient-to-r from-red-600 to-red-700' 
-                      : alertCounts.high > 0 
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500'
-                      : 'bg-gradient-to-r from-yellow-500 to-orange-500'
-                  }`}>
-                    {alertCounts.active}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('calendar')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'calendar'
-                    ? 'border-pink-500 text-pink-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Calendar className="w-4 h-4 inline mr-2" />
-                Today's Schedule
-              </button>
-              <button
-                onClick={() => setActiveTab('patients')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'patients'
-                    ? 'border-pink-500 text-pink-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Users className="w-4 h-4 inline mr-2" />
-                Patients
-              </button>
-              <button
-                onClick={() => setActiveTab('queue')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'queue'
-                    ? 'border-pink-500 text-pink-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Activity className="w-4 h-4 inline mr-2" />
-                Patient Queue
-              </button>
-              <button
-                onClick={() => setActiveTab('orders')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'orders'
-                    ? 'border-pink-500 text-pink-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <ClipboardList className="w-4 h-4 inline mr-2" />
-                Orders & Procedures
-              </button>
-              <button
-                onClick={() => setActiveTab('notes')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'notes'
-                    ? 'border-pink-500 text-pink-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <FileText className="w-4 h-4 inline mr-2" />
-                Nursing Notes
-              </button>
-            </nav>
-          ) : activeSection === 'hiv' ? (
-            <nav className="flex space-x-4 sm:space-x-6 lg:space-x-8 min-w-max pb-px" aria-label="HIV Tabs">
-              <button
-                onClick={() => setActiveTab('testing')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'testing'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <TestTube className="w-4 h-4 inline mr-2" />
-                HIV Testing
-              </button>
-              <button
-                onClick={() => setActiveTab('hiv-patients')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'hiv-patients'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Users className="w-4 h-4 inline mr-2" />
-                Patients on Care
-              </button>
-              <button
-                onClick={() => setActiveTab('tb-screening')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'tb-screening'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Stethoscope className="w-4 h-4 inline mr-2" />
-                TB Screening
-              </button>
-              <button
-                onClick={() => setActiveTab('cervical-cancer')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'cervical-cancer'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Activity className="w-4 h-4 inline mr-2" />
-                Cervical Cancer Screening
-              </button>
-              <button
-                onClick={() => setActiveTab('quality-metrics')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'quality-metrics'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4 inline mr-2" />
-                Quality Metrics
-              </button>
-              <button
-                onClick={() => setActiveTab('stock-management')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'stock-management'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Package className="w-4 h-4 inline mr-2" />
-                Stock Management
-              </button>
-              <button
-                onClick={() => setActiveTab('ltfu')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'ltfu'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Clock className="w-4 h-4 inline mr-2" />
-                LTFU Management
-              </button>
-              <button
-                onClick={() => setActiveTab('monthly-return')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'monthly-return'
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <FileText className="w-4 h-4 inline mr-2" />
-                Monthly Return
-              </button>
-              <button
-                onClick={() => setActiveTab('who-workflow')}
-                className={`py-4 px-1 border-b-2 font-semibold text-sm transition-all duration-200 ${
-                  activeTab === 'who-workflow'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
-              >
-                <Activity className="w-4 h-4 inline mr-2" />
-                WHO Workflow
-              </button>
-            </nav>
-          ) : (
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-4">
-              <div className="flex items-center gap-3 text-white">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Heart className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm uppercase text-white/80 tracking-wide">Maternity & Obstetrics Workspace</p>
-                  <p className="text-base font-semibold">Monitor high-risk pregnancies, ANC follow-ups, and deliveries</p>
-                </div>
-              </div>
-              <div className="text-xs text-emerald-100/90">
-                Data refreshes automatically. Use the detailed cards below to open charts and manage care.
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Content */}
       <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8 overflow-x-hidden">
@@ -3018,6 +2875,7 @@ const NurseDashboard: React.FC = () => {
         </div>
         </ModalPortal>
       )}
+      </div>
     </div>
   );
 };

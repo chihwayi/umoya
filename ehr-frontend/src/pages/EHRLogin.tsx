@@ -19,6 +19,7 @@ const EHRLogin: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const [tenantInfo, setTenantInfo] = useState<{ name: string; logoUrl?: string } | null>(null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const fetchTenantDetails = async () => {
@@ -114,12 +115,13 @@ const EHRLogin: React.FC = () => {
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            {tenantInfo?.logoUrl ? (
+            {tenantInfo?.logoUrl && !imgError ? (
                 <div className="w-24 h-24 mx-auto mb-4 bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden">
                     <img 
                         src={tenantInfo.logoUrl} 
                         alt={`${tenantInfo.name} Logo`} 
                         className="w-full h-full object-contain"
+                        onError={() => setImgError(true)}
                     />
                 </div>
             ) : (
