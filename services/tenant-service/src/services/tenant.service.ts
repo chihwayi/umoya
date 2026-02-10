@@ -71,6 +71,26 @@ export class TenantService implements OnModuleInit {
     return savedTenant;
   }
 
+  async updateTenant(id: string, updateData: Partial<Tenant>): Promise<Tenant> {
+    const tenant = await this.findById(id);
+    
+    // Update fields
+    Object.assign(tenant, updateData);
+    
+    // If subscription tier changed, we might need to update feature flags
+    if (updateData.subscriptionTier) {
+      tenant.featureFlags = {
+        ...tenant.featureFlags,
+        ...this.getDefaultFeatureFlags(updateData.subscriptionTier)
+      };
+    }
+
+    const savedTenant = await this.tenantRepository.save(tenant);
+    this.logger.log(`Tenant updated: ${savedTenant.id}`);
+    
+    return savedTenant;
+  }
+
   async findBySubdomain(subdomain: string): Promise<Tenant> {
     const tenant = await this.tenantRepository.findOne({
       where: { subdomain, status: TenantStatus.ACTIVE }

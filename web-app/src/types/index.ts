@@ -28,6 +28,16 @@ export interface CreateTenantRequest {
   subscriptionTier: 'basic' | 'professional' | 'enterprise';
 }
 
+export interface UpdateTenantRequest {
+  clinicName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  city?: string;
+  logoUrl?: string;
+  subscriptionTier?: 'basic' | 'professional' | 'enterprise';
+}
+
 export interface TenantUser {
   id: string;
   tenantId: string;

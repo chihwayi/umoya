@@ -4,6 +4,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantService } from '../services/tenant.service';
 import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
+import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
 
 @ApiTags('tenants')
@@ -64,6 +65,16 @@ export class TenantController {
   @Get('subdomain/:subdomain')
   async getTenantBySubdomain(@Param('subdomain') subdomain: string): Promise<Tenant> {
     return this.tenantService.findBySubdomain(subdomain);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update tenant details' })
+  @ApiResponse({ status: 200, description: 'Tenant updated successfully' })
+  async updateTenant(
+    @Param('id') id: string,
+    @Body(ValidationPipe) updateTenantDto: UpdateTenantDto
+  ): Promise<Tenant> {
+    return this.tenantService.updateTenant(id, updateTenantDto);
   }
 
   @Put(':id/status')

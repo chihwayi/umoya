@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Tenant, CreateTenantRequest, TenantUser, CreateTenantUserRequest, SystemStats, TenantReport } from '../types';
+import { Tenant, CreateTenantRequest, UpdateTenantRequest, TenantUser, CreateTenantUserRequest, SystemStats, TenantReport } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -91,6 +91,11 @@ export const tenantAPI = {
 
   createTenant: async (data: CreateTenantRequest): Promise<{ tenant: Tenant; message: string }> => {
     const response = await api.post('/tenants', data);
+    return response.data;
+  },
+
+  updateTenant: async (id: string, data: UpdateTenantRequest): Promise<Tenant> => {
+    const response = await api.put(`/tenants/${id}`, data);
     return response.data;
   },
 
