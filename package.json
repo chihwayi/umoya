@@ -22,7 +22,8 @@
   "workspaces": [
     "packages/*",
     "services/*",
-    "web-app"
+    "web-app",
+    "ehr-frontend"
   ],
   "devDependencies": {
     "@playwright/test": "^1.56.1",
