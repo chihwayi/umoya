@@ -379,26 +379,61 @@ async def check_clinical_guidelines(request: ClinicalGuidelineRequest):
 class GuidelineSearchRequest(BaseModel):
     query: str = Field(..., description="Search query for clinical guidelines")
     limit: int = Field(5, description="Maximum number of results to return")
+    patient_context: Optional[Dict[str, Any]] = Field(None, description="Patient specific data (vitals, age, gender, conditions)")
 
 
 @app.post("/guidelines/search")
 async def search_guidelines(request: GuidelineSearchRequest):
     """
-    Search for clinical guidelines using RAG (Retrieval-Augmented Generation).
-    Returns relevant guideline excerpts and citations based on the search query.
+    Search for clinical guidelines using RAG and optionally generate patient-specific analysis.
     """
     citations = []
+    analysis = None
+    
+    # 1. Retrieve relevant guidelines (RAG)
     if diagnostic_assistant.rag_engine:
         try:
             print(f"[CDSS] Searching guidelines for: {request.query}")
             citations = diagnostic_assistant.rag_engine.query(request.query, n_results=request.limit)
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
-            # Don't fail the request, just return empty list or error message
-    
+            
+    # 2. Generate Patient-Specific Analysis (LLM)
+    if diagnostic_assistant.llm_provider and request.patient_context:
+        try:
+            # Construct context-aware prompt
+            context_str = "\n".join([f"{k}: {v}" for k, v in request.patient_context.items()])
+            guidelines_str = "\n\n".join([f"Source: {c['source']}\n{c['text']}" for c in citations])
+            
+            prompt = f"""
+            You are a clinical decision support assistant. 
+            Analyze the following patient case against the provided clinical guidelines.
+            
+            PATIENT CONTEXT:
+            {context_str}
+            
+            RELEVANT GUIDELINES:
+            {guidelines_str}
+            
+            USER QUERY: {request.query}
+            
+            INSTRUCTIONS:
+            1. Provide specific recommendations for THIS patient based on their vitals/demographics.
+            2. Cite the guidelines where appropriate.
+            3. Highlight any red flags or immediate actions needed.
+            4. Keep it concise and clinically actionable.
+            """
+            
+            print(f"[CDSS] Generating analysis for patient context...")
+            analysis = await diagnostic_assistant.llm_provider.generate_response(prompt)
+            
+        except Exception as e:
+            print(f"[CDSS] LLM analysis failed: {e}")
+
     return {
         "query": request.query,
         "citations": citations,
+        "analysis": analysis,
         "count": len(citations)
     }
 

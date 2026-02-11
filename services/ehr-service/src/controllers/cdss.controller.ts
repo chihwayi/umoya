@@ -48,8 +48,8 @@ export class CdssController {
   @Post('guidelines/search')
   @ApiOperation({ summary: 'Search clinical guidelines' })
   @ApiResponse({ status: 200, description: 'Guidelines found' })
-  async searchGuidelines(@Body() body: { query: string, limit?: number }, @Request() req: RequestWithTenant) {
-    return this.cdssService.searchGuidelines(body.query, body.limit);
+  async searchGuidelines(@Body() body: { query: string, limit?: number, patient_context?: any }, @Request() req: RequestWithTenant) {
+    return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context);
   }
 
   @Post('risk-assessment')

@@ -67,6 +67,10 @@ services:
       - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
       - AWS_ENDPOINT=${SERVICE_MINIO_URL}
+    volumes:
+      - ./services/tenant-service:/app/services/tenant-service
+      - /app/services/tenant-service/node_modules
+    command: npm run dev
     depends_on:
       - postgres-master
       - redis
@@ -91,6 +95,7 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=medicore-documents
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
+      - CDSS_USE_EHR_TERMINOLOGY=true
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_API_URL=${LLM_API_URL}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
@@ -137,6 +142,7 @@ services:
       - ./services/ehr-service/src:/app/services/ehr-service/src
       - ./services/ehr-service/package.json:/app/services/ehr-service/package.json
       - ./services/ehr-service/who-smart-guidelines:/app/services/ehr-service/who-smart-guidelines
+      - ./database/schemas:/app/database/schemas
     depends_on:
       - postgres-master
       - cdss-service
@@ -155,6 +161,7 @@ services:
     environment:
       - PORT=3011
       - REACT_APP_API_URL=/api
+      - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - REACT_APP_ENVIRONMENT=${ENVIRONMENT}
       - CHOKIDAR_USEPOLLING=true
       - FAST_REFRESH=false

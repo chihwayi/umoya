@@ -35,6 +35,8 @@ export class TenantMiddleware implements NestMiddleware {
       pathLower.includes('tenants/subdomain') ||
       urlLower.includes('tenants/active') ||
       urlLower.includes('tenants/subdomain') ||
+      pathLower.includes('terminology/import') ||
+      urlLower.includes('terminology/import') ||
       (method.toUpperCase() === 'GET' && pathLower.includes('tenants') && (pathLower.includes('active') || pathLower.includes('subdomain')));
     
     if (isPublicTenantEndpoint) {

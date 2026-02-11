@@ -1,15 +1,85 @@
-import { Controller, Get, Query, Param, UseGuards, Request, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Query, Param, UseGuards, Request, NotFoundException, UseInterceptors, UploadedFile, Body, BadRequestException } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { TerminologyService } from '../services/terminology.service';
+import { TerminologyImportService } from '../services/terminology-import.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { Public } from '../decorators/public.decorator';
 
 @ApiTags('Terminology (SNOMED CT & RxNorm)')
 @ApiBearerAuth()
 @Controller('terminology')
 @UseGuards(JwtAuthGuard)
 export class TerminologyController {
-  constructor(private readonly terminologyService: TerminologyService) {}
+  constructor(
+    private readonly terminologyService: TerminologyService,
+    private readonly terminologyImportService: TerminologyImportService,
+  ) {}
+
+  @Post('import/upload')
+  @Public()
+  @ApiOperation({ summary: 'Upload and import terminology data (SNOMED/ICD10)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+        type: {
+          type: 'string',
+          enum: ['snomed', 'icd10'],
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Import job started' })
+  @UseInterceptors(FileInterceptor('file'))
+  async importTerminology(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('type') type: 'snomed' | 'icd10',
+  ) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+    if (!type || !['snomed', 'icd10'].includes(type)) {
+      throw new BadRequestException('Valid type (snomed or icd10) is required');
+    }
+    const jobId = await this.terminologyImportService.importFile(file, type);
+    return { jobId, message: 'Import job started successfully' };
+  }
+
+  @Get('import/jobs')
+  @Public()
+  @ApiOperation({ summary: 'Get all import jobs' })
+  @ApiResponse({ status: 200, description: 'List of import jobs' })
+  async getImportJobs() {
+    return await this.terminologyImportService.getAllJobs();
+  }
+
+  @Get('import/stats')
+  @Public()
+  @ApiOperation({ summary: 'Get terminology statistics' })
+  @ApiResponse({ status: 200, description: 'System terminology statistics' })
+  async getStats() {
+    return await this.terminologyImportService.getStats();
+  }
+
+  @Get('import/status/:jobId')
+  @Public()
+  @ApiOperation({ summary: 'Get import job status' })
+  @ApiParam({ name: 'jobId', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job status' })
+  async getImportStatus(@Param('jobId') jobId: string) {
+    const status = await this.terminologyImportService.getImportStatus(jobId);
+    if (!status) {
+      throw new NotFoundException('Job not found');
+    }
+    return status;
+  }
 
   @Get('snomed/search')
   @ApiOperation({ summary: 'Search SNOMED CT concepts by term' })

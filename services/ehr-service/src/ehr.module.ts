@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MulterModule } from '@nestjs/platform-express';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -143,6 +144,7 @@ import { InvoicePdfService } from './services/invoice-pdf.service';
 import { InvoiceTemplateService } from './services/invoice-template.service';
 import { CardiologyService } from './services/cardiology.service';
 import { TerminologyService } from './services/terminology.service';
+import { TerminologyImportService } from './services/terminology-import.service';
 import { Icd10Service } from './services/icd10.service';
 import { CdssHookService } from './services/cdss-hook.service';
 import { SpecialtyAutomationService } from './services/specialty-automation.service';
@@ -228,6 +230,9 @@ import { RolesGuard } from './guards/roles.guard';
     ConfigModule.forRoot(),
     ScheduleModule.forRoot(),
     PassportModule,
+    MulterModule.register({
+      dest: './uploads',
+    }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'ehr-super-secret-key',
       signOptions: { expiresIn: '8h' },
@@ -373,6 +378,7 @@ import { RolesGuard } from './guards/roles.guard';
     InvoicePdfService,
     InvoiceTemplateService,
     TerminologyService,
+    TerminologyImportService,
     Icd10Service,
     CdssHookService,
     SpecialtyAutomationService,
@@ -456,6 +462,7 @@ export class EhrModule {
       .apply(TenantMiddleware)
       .exclude(
         { path: 'tenants/active', method: RequestMethod.ALL }, // Public endpoint - all methods
+        { path: 'terminology/import/(.*)', method: RequestMethod.ALL }, // Terminology import endpoints
       )
       .forRoutes('*');
   }

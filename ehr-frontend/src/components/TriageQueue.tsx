@@ -162,11 +162,20 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
   const filteredAppointments = appointments
     .filter(appointment => {
+      // Safety checks for patient data
+      const patient = appointment.patient || {};
+      const firstName = patient.firstName || '';
+      const lastName = patient.lastName || '';
+      const patientNumber = patient.patientNumber || '';
+      const appointmentType = appointment.appointmentType || '';
+      
+      const searchLower = searchTerm.toLowerCase();
+
       const matchesSearch = 
-        appointment.patient.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.patient.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.patient.patientNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.appointmentType.toLowerCase().includes(searchTerm.toLowerCase());
+        firstName.toLowerCase().includes(searchLower) ||
+        lastName.toLowerCase().includes(searchLower) ||
+        patientNumber.toLowerCase().includes(searchLower) ||
+        appointmentType.toLowerCase().includes(searchLower);
       
       const matchesStatus = filterStatus === 'all' || appointment.status === filterStatus;
       const matchesPriority = filterPriority === 'all' || appointment.priorityLevel === filterPriority;
@@ -184,8 +193,10 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
           comparison = new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime();
           break;
         case 'name':
-          comparison = `${a.patient.firstName} ${a.patient.lastName}`.localeCompare(`${b.patient.firstName} ${b.patient.lastName}`);
-          break;
+                const nameA = a.patient ? `${a.patient.firstName || ''} ${a.patient.lastName || ''}` : '';
+                const nameB = b.patient ? `${b.patient.firstName || ''} ${b.patient.lastName || ''}` : '';
+                comparison = nameA.localeCompare(nameB);
+                break;
         case 'status':
           comparison = getStatusOrder(a.status) - getStatusOrder(b.status);
           break;
@@ -250,15 +261,28 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     }
   };
 
+  const isElderly = (dob: string | undefined) => {
+    if (!dob) return false;
+    const birthDate = new Date(dob);
+    const ageDifMs = Date.now() - birthDate.getTime();
+    const ageDate = new Date(ageDifMs);
+    return Math.abs(ageDate.getUTCFullYear() - 1970) > 65;
+  };
+
+  const isWaived = (appointment: Appointment) => {
+    // Auto-waive payment for elderly patients (>65)
+    return isElderly(appointment.patient.dateOfBirth);
+  };
+
   const handleRecordVitalsClick = (appointment: Appointment) => {
-    if (!ensurePaymentCleared(appointment, 'Vitals cannot be recorded while payment is pending')) {
+    if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'Vitals cannot be recorded while payment is pending')) {
       return;
     }
     onRecordVitals(appointment);
   };
 
   const handleTriageClick = (appointment: Appointment) => {
-    if (!ensurePaymentCleared(appointment, 'Triage assessment is locked until payment is confirmed')) {
+    if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'Triage assessment is locked until payment is confirmed')) {
       return;
     }
     onTriageAssessment(appointment);
@@ -402,6 +426,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
       {/* Patient Queue */}
       <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 overflow-hidden">
+        
         <div className="bg-gradient-to-r from-slate-50 to-pink-50 p-8 border-b border-slate-200/50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
@@ -430,7 +455,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h4 className={`text-xl font-bold ${awaitingPayment ? 'text-amber-800' : 'text-slate-900 group-hover:text-pink-900 transition-colors'}`}>
-                          {appointment.patient.firstName} {appointment.patient.lastName}
+                          {appointment.patient?.firstName || 'Unknown'} {appointment.patient?.lastName || 'Patient'}
                         </h4>
                         {awaitingPayment && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
@@ -439,7 +464,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         )}
                       </div>
                       <p className="text-slate-600 font-medium mb-3">
-                        ID: {appointment.patient.patientNumber} • {appointment.appointmentType}
+                        ID: {appointment.patient?.patientNumber || 'N/A'} • {appointment.appointmentType}
                       </p>
                       <div className="flex items-center gap-4 mb-3 flex-wrap">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(appointment.priorityLevel)}`}>
@@ -503,15 +528,21 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                       )}
 
                       {/* Clinical Context */}
-                      {(appointment.patient.allergies || appointment.patient.chronicConditions) && (
+                      {(appointment.patient?.allergies || appointment.patient?.chronicConditions || isElderly(appointment.patient?.dateOfBirth)) && (
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {appointment.patient.allergies && appointment.patient.allergies.trim().length > 0 && (
+                          {isElderly(appointment.patient?.dateOfBirth) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                              <AlertTriangle className="w-3 h-3" />
+                              Fall Risk (Age &gt; 65)
+                            </span>
+                          )}
+                          {appointment.patient?.allergies && appointment.patient.allergies.trim().length > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                               <AlertTriangle className="w-3 h-3" />
                               Allergies: {appointment.patient.allergies}
                             </span>
                           )}
-                          {appointment.patient.chronicConditions && appointment.patient.chronicConditions.trim().length > 0 && (
+                          {appointment.patient?.chronicConditions && appointment.patient.chronicConditions.trim().length > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                               <Stethoscope className="w-3 h-3" />
                               Conditions: {appointment.patient.chronicConditions}
@@ -520,7 +551,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         </div>
                       )}
 
-                      {awaitingPayment && (
+                      {awaitingPayment && !isWaived(appointment) && (
                         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex flex-col gap-1">
                           <span className="flex items-center gap-2 font-medium">
                             <Lock className="w-4 h-4" /> Payment required before nursing actions
@@ -533,6 +564,12 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                           )}
                         </div>
                       )}
+                      {awaitingPayment && isWaived(appointment) && (
+                        <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="font-medium">Payment Waived (Age &gt; 65)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -542,26 +579,27 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     ) : (
                       <button
                         onClick={() => handleRecordVitalsClick(appointment)}
-                        disabled={awaitingPayment}
-                        className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment
+                        disabled={awaitingPayment && !isWaived(appointment)}
+                        className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment && !isWaived(appointment)
                           ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                           : 'bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700'
                         }`}
                       >
-                        <Activity className="w-4 h-4" />
-                        {awaitingPayment ? 'Locked' : 'Record Vitals'}
+                        <Heart className="w-4 h-4" />
+                        Record Vitals
                       </button>
                     )}
+                    
                     <button
                       onClick={() => handleTriageClick(appointment)}
-                      disabled={awaitingPayment}
-                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment
+                      disabled={awaitingPayment && !isWaived(appointment)}
+                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment && !isWaived(appointment)
                         ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-orange-500 to-yellow-600 text-white hover:from-orange-600 hover:to-yellow-700'
                       }`}
                     >
                       <ClipboardList className="w-4 h-4" />
-                      {awaitingPayment ? 'Locked' : 'Triage'}
+                      Triage Assessment
                     </button>
                     {onViewCarePlans && (
                       <button

@@ -191,3 +191,34 @@ export const backupAPI = {
     return response.data;
   }
 };
+
+// Terminology API
+export const terminologyAPI = {
+  importFile: async (file: File, type: 'snomed' | 'icd10'): Promise<{ jobId: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    
+    const response = await api.post('/terminology/import/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  getAllJobs: async (): Promise<any[]> => {
+    const response = await api.get('/terminology/import/jobs');
+    return response.data;
+  },
+
+  getJobStatus: async (jobId: string): Promise<any> => {
+    const response = await api.get(`/terminology/import/status/${jobId}`);
+    return response.data;
+  },
+
+  getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number }> => {
+    const response = await api.get('/terminology/import/stats');
+    return response.data;
+  }
+};

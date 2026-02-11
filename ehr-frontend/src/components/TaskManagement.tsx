@@ -583,7 +583,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                     </div>
                     
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center flex-wrap gap-2 sm:gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-slate-900">{task.title}</h3>
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(task.priority)}`}>
                           {task.priority.toUpperCase()}
@@ -600,7 +600,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                       
                       <p className="text-slate-600 mb-3">{task.description}</p>
                       
-                      <div className="flex items-center gap-6 text-sm text-slate-500 mb-3">
+                      <div className="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500 mb-3">
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4" />
                           <span>{task.patientName}</span>

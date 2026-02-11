@@ -310,6 +310,48 @@ export class WhoSmartGuidelinesService {
   }
   
   /**
+   * Search guidelines
+   */
+  async search(query: string): Promise<Array<{ id: string; title: string; description?: string; source: string }>> {
+    const results: Array<{ id: string; title: string; description?: string; source: string }> = [];
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    // Search PlanDefinitions
+    for (const [id, planDef] of this.planDefinitions.entries()) {
+      if (
+        id.toLowerCase().includes(normalizedQuery) ||
+        (planDef.title && planDef.title.toLowerCase().includes(normalizedQuery)) ||
+        (planDef.description && planDef.description.toLowerCase().includes(normalizedQuery))
+      ) {
+        results.push({
+          id,
+          title: planDef.title || 'Untitled Guideline',
+          description: planDef.description,
+          source: 'WHO Smart Guidelines'
+        });
+      }
+    }
+    
+    // Search Questionnaires (Smart Forms)
+    for (const [id, questionnaire] of this.questionnaires.entries()) {
+      if (
+        id.toLowerCase().includes(normalizedQuery) ||
+        (questionnaire.title && questionnaire.title.toLowerCase().includes(normalizedQuery)) ||
+        (questionnaire.description && questionnaire.description.toLowerCase().includes(normalizedQuery))
+      ) {
+        results.push({
+          id,
+          title: questionnaire.title || 'Untitled Form',
+          description: questionnaire.description,
+          source: 'WHO Smart Guidelines (Form)'
+        });
+      }
+    }
+    
+    return results;
+  }
+  
+  /**
    * List available guidelines
    */
   async listGuidelines(): Promise<Array<{ id: string; title: string; description?: string }>> {

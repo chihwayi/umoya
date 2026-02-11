@@ -130,7 +130,7 @@ export class DatabaseProvisioningService {
         tasks: [
           (db) => this.ensureUpdatedAtTriggerFunction(db),
           (db) => this.enforceUserRoleConstraint(db),
-          // (db) => this.seedDefaultUsers(db), // Re-enabled to seed gina@gmail.com
+          (db) => this.seedDefaultUsers(db), // Re-enabled to seed gina@gmail.com
           (db) => this.seedLabCatalog(db),
           (db) => this.seedImagingCatalog(db),
           (db) => this.seedLookupTables(db),
@@ -152,13 +152,14 @@ export class DatabaseProvisioningService {
         description: 'Ensures HIV testing workflows and lookup tables are provisioned',
         tasks: [(db) => this.applyHivTestingUpgrades(db)],
       },
-      {
+      // ICD-10 Mapping bundle removed to enforce master-only terminology storage
+      /*{
         id: 'icd10_mapping',
         label: 'ICD-10 Mapping Tables',
         version: '2025.03.01',
         description: 'Provides SNOMED → ICD-10 mapping storage and metadata tracking',
         statements: () => this.getIcd10MappingStatements(),
-      },
+      },*/
       {
         id: 'sprint5_features',
         label: 'Sprint 5 Features',

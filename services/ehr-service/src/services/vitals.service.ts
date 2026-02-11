@@ -122,7 +122,7 @@ export class VitalsService {
       reverse
         .map((vital) => {
           const value = mapper(vital);
-          if (value === null || typeof value === 'undefined' || Number.isNaN(value)) return null;
+          if (value === null || typeof value === 'undefined' || Number.isNaN(value) || value === 0) return null;
           return {
             timestamp: vital.recordedAt || vital.createdAt,
             value: value,
@@ -148,11 +148,11 @@ export class VitalsService {
           return null;
         }),
         heartRate: formatTrend((v) => v.heartRate ?? null),
-        temperature: formatTrend((v) => (typeof v.temperature === 'number' ? v.temperature : null)),
+        temperature: formatTrend((v) => (v.temperature !== null && v.temperature !== undefined ? Number(v.temperature) : null)),
         oxygenSaturation: formatTrend((v) => v.oxygenSaturation ?? null),
         respiratoryRate: formatTrend((v) => v.respiratoryRate ?? null),
-        weight: formatTrend((v) => (typeof v.weight === 'number' ? v.weight : null)),
-        bmi: formatTrend((v) => (typeof v.bmi === 'number' ? v.bmi : null)),
+        weight: formatTrend((v) => (v.weight !== null && v.weight !== undefined ? Number(v.weight) : null)),
+        bmi: formatTrend((v) => (v.bmi !== null && v.bmi !== undefined ? Number(v.bmi) : null)),
       },
     };
   }

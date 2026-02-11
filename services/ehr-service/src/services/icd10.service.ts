@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 export interface ICD10Code {
@@ -29,6 +29,40 @@ export interface SnomedToIcd10Mapping {
 
 @Injectable()
 export class Icd10Service {
+  private logger = new Logger(Icd10Service.name);
+  private masterDb: DataSource;
+
+  /**
+   * Initialize master database connection for ICD-10 tables
+   */
+  private async initializeMasterDb() {
+    try {
+      this.masterDb = new DataSource({
+        type: 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        username: process.env.DB_USERNAME || 'medicore',
+        password: process.env.DB_PASSWORD || 'medicore_password',
+        database: process.env.POSTGRES_DB || 'medicore_master',
+      });
+      await this.masterDb.initialize();
+      this.logger.log('✅ Master database connected for ICD-10 search');
+    } catch (error: any) {
+      this.logger.error(`❌ Failed to connect to master DB for ICD-10 search: ${error.message}`);
+      throw new BadRequestException('Master database connection not available for ICD-10 search.');
+    }
+  }
+
+  /**
+   * Get master database connection
+   */
+  private async getMasterDb(): Promise<DataSource> {
+    if (!this.masterDb || !this.masterDb.isInitialized) {
+      await this.initializeMasterDb();
+    }
+    return this.masterDb;
+  }
+
   /**
    * Search ICD-10 codes using full-text search
    */
@@ -43,11 +77,12 @@ export class Icd10Service {
       return [];
     }
 
+    const masterDb = await this.getMasterDb();
     const query = `
       SELECT * FROM search_icd10_codes($1, $2, $3, $4)
     `;
 
-    const results = await tenantDb.query(query, [term.trim(), limit, offset, billableOnly]);
+    const results = await masterDb.query(query, [term.trim(), limit, offset, billableOnly]);
     return results;
   }
 
@@ -55,6 +90,7 @@ export class Icd10Service {
    * Get detailed ICD-10 code information
    */
   async getIcd10CodeDetails(code: string, tenantDb: DataSource): Promise<ICD10CodeDetails | null> {
+    const masterDb = await this.getMasterDb();
     const query = `
       SELECT 
         code,
@@ -70,7 +106,7 @@ export class Icd10Service {
       WHERE code = $1
     `;
 
-    const results = await tenantDb.query(query, [code.toUpperCase()]);
+    const results = await masterDb.query(query, [code.toUpperCase()]);
     return results.length > 0 ? results[0] : null;
   }
 
@@ -78,11 +114,12 @@ export class Icd10Service {
    * Get ICD-10 codes by category
    */
   async getIcd10ByCategory(category: string, limit: number = 100, tenantDb: DataSource): Promise<ICD10Code[]> {
+    const masterDb = await this.getMasterDb();
     const query = `
       SELECT * FROM get_icd10_by_category($1, $2)
     `;
 
-    const results = await tenantDb.query(query, [category.toUpperCase(), limit]);
+    const results = await masterDb.query(query, [category.toUpperCase(), limit]);
     return results;
   }
 
@@ -90,6 +127,7 @@ export class Icd10Service {
    * Get SNOMED to ICD-10 mappings for a given SNOMED code
    */
   async getSnomedToIcd10Mappings(snomedCode: string, tenantDb: DataSource): Promise<SnomedToIcd10Mapping[]> {
+    const masterDb = await this.getMasterDb();
     const query = `
       SELECT 
         m.snomed_code,
@@ -106,7 +144,7 @@ export class Icd10Service {
       ORDER BY m.map_priority ASC, m.correlation ASC
     `;
 
-    const results = await tenantDb.query(query, [snomedCode]);
+    const results = await masterDb.query(query, [snomedCode]);
     return results;
   }
 

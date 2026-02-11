@@ -62,7 +62,10 @@ export const parseDDMMYYYYToDate = (dateString: string): Date | null => {
   const match = cleanDate.match(dateRegex);
   
   if (!match) {
-    console.warn('Invalid date format provided to parseDDMMYYYYToDate:', dateString);
+    // Only warn if the string looks like a full date attempt (>= 8 chars) to avoid spamming logs during typing
+    if (cleanDate.length >= 8) {
+      console.warn('Invalid date format provided to parseDDMMYYYYToDate:', dateString);
+    }
     return null;
   }
   

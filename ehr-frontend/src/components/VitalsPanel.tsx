@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Save, Activity, Heart, Thermometer, Droplets, Eye,
   Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain, Loader2, Search, Plus
@@ -69,12 +69,11 @@ type VitalTrendsResponse = {
 
 interface VitalsPanelProps {
   patient?: Patient;
-  appointments?: any[];
   onClose?: () => void;
-  onSave?: () => void;
+  onSave?: (insights?: any) => void;
 }
 
-const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], onClose, onSave }) => {
+const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) => {
   const { showSuccess, showError } = useNotification();
   const [vitals, setVitals] = useState<VitalsData>({
     bloodPressureSystolic: 0,
@@ -97,9 +96,17 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
   const [trendLoading, setTrendLoading] = useState(false);
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [abnormalFindings, setAbnormalFindings] = useState<SnomedConcept[]>([]);
   const [pendingFinding, setPendingFinding] = useState<SnomedConcept | null>(null);
+  const insightsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (cdssInsights?.risk && insightsRef.current) {
+      insightsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [cdssInsights]);
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -112,47 +119,44 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
         return;
       }
       
-      let searchContext = "Clinical vitals management";
+      const patientContext: any = {};
       
       // Enhance with patient context
       if (selectedPatient) {
-        const patientContext = [];
         if (selectedPatient.dateOfBirth) {
              const age = Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-             patientContext.push(`${age}yo`);
+             patientContext.age = age;
         }
-        if (selectedPatient.gender) patientContext.push(selectedPatient.gender);
-        if (selectedPatient.chronicConditions) patientContext.push(`Conditions: ${selectedPatient.chronicConditions}`);
-        if (selectedPatient.allergies) patientContext.push(`Allergies: ${selectedPatient.allergies}`);
-        
-        if (patientContext.length > 0) {
-          searchContext += `. Patient: ${patientContext.join(', ')}`;
-        }
+        if (selectedPatient.gender) patientContext.gender = selectedPatient.gender;
+        if (selectedPatient.chronicConditions) patientContext.conditions = selectedPatient.chronicConditions;
+        if (selectedPatient.allergies) patientContext.allergies = selectedPatient.allergies;
       }
 
       // Enhance with abnormal vitals context
-      const abnormalities = [];
-      if (vitals.bloodPressureSystolic > 140) abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
-      if (vitals.bloodPressureDiastolic > 90) abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
-      if (vitals.heartRate > 100) abnormalities.push(`HR ${vitals.heartRate} (Tachycardia)`);
-      if (vitals.heartRate < 60 && vitals.heartRate > 0) abnormalities.push(`HR ${vitals.heartRate} (Bradycardia)`);
-      if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
-      if (vitals.temperature > 37.5) abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
-
-      if (abnormalities.length > 0) {
-        searchContext += `. Abnormalities: ${abnormalities.join(', ')}`;
-      }
-
-      const finalQuery = `${searchContext}: ${guidelineQuery}`;
+      patientContext.vitals = { ...vitals };
+      patientContext.abnormalities = [];
       
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
-      } else {
-        setGuidelineResults([]);
+      if (vitals.bloodPressureSystolic > 140) patientContext.abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
+      if (vitals.bloodPressureDiastolic > 90) patientContext.abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
+      if (vitals.heartRate > 100) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Tachycardia)`);
+      if (vitals.heartRate < 60 && vitals.heartRate > 0) patientContext.abnormalities.push(`HR ${vitals.heartRate} (Bradycardia)`);
+      if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) patientContext.abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
+      if (vitals.temperature > 37.5) patientContext.abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
+
+      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug, 5, patientContext);
+      
+      if (response.data) {
+        if (response.data.citations) {
+          setGuidelineResults(response.data.citations);
+        }
+        if (response.data.analysis) {
+          setAnalysisResult(response.data.analysis);
+        } else {
+          setAnalysisResult(null);
+        }
       }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
+    } catch (error) {
+      console.error('Guideline search failed', error);
       showError('Error', 'Failed to search guidelines');
     } finally {
       setLoadingGuidelines(false);
@@ -278,7 +282,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
       setCdssInsights(insights);
       showSuccess('Success', 'Vitals recorded successfully');
       fetchVitalsTrend(selectedPatient.id);
-      onSave?.();
+      onSave?.(insights);
     } catch (error) {
       console.error('Error saving vitals:', error);
       showError('Error', 'Failed to save vitals');
@@ -289,21 +293,43 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
 
   const formatTrendData = (entries?: TrendPoint[]) => {
     if (!entries || !entries.length) return [];
-    return entries.map((entry) => {
-      const dateStr = entry.timestamp || entry.recordedAt || entry.createdAt || new Date().toISOString();
-      return {
-        date: new Date(dateStr).toLocaleDateString(),
-        value: Number(entry.value),
-      };
-    });
+    return entries
+      .filter(entry => Number(entry.value) !== 0) // Filter out 0 values (artifacts)
+      .map((entry) => {
+        const dateStr = entry.timestamp || entry.recordedAt || entry.createdAt || new Date().toISOString();
+        const d = new Date(dateStr);
+        // Format as "2/11 10:30 AM" for better granularity
+        const formattedDate = d.toLocaleDateString() === new Date().toLocaleDateString()
+          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) // Today: Show time only
+          : d.toLocaleDateString(); // Past: Show date only
+          
+        return {
+          date: formattedDate,
+          fullDate: d.toLocaleString(), // Keep full date for tooltip
+          value: Number(entry.value),
+        };
+      });
   };
 
   const getTrendDirection = (data: { value: number }[]) => {
-    if (!data || data.length < 2) return { direction: 'stable', delta: 0 };
+    if (!data || data.length < 2) return { direction: 'none', delta: 0 };
+    
+    // Sort data by date (ascending) to ensure correct trend calculation
+    // Although backend returns sorted, ensuring it here is safer
+    // Note: The parent 'formatTrendData' converts timestamps to strings, 
+    // but relies on the backend order (which is reversed in service, then mapped).
+    // Let's assume input 'data' is chronologically sorted (oldest -> newest).
+    
+    // Check if we have enough variance to show a trend
     const first = data[0].value;
     const last = data[data.length - 1].value;
+    
+    // Calculate simple linear delta
     const delta = last - first;
-    if (Math.abs(delta) < 0.5) return { direction: 'stable', delta };
+    
+    // Threshold for "stable" (e.g. < 1 unit change might be noise)
+    if (Math.abs(delta) < 1.0) return { direction: 'stable', delta: 0 }; // Treat as 0 change if negligible
+    
     return { direction: delta > 0 ? 'up' : 'down', delta };
   };
 
@@ -316,12 +342,14 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
     const entries = formatTrendData(trendOverview?.trends?.[dataKey]);
     const latest = entries.length ? entries[entries.length - 1].value : null;
     const { direction, delta } = getTrendDirection(entries);
-    const badge =
-      direction === 'up'
-        ? 'bg-red-50 text-red-600 border-red-100'
-        : direction === 'down'
-        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-        : 'bg-slate-50 text-slate-600 border-slate-200';
+    
+    // Determine badge style
+    let badge = 'bg-slate-50 text-slate-600 border-slate-200';
+    if (direction === 'up') badge = 'bg-red-50 text-red-600 border-red-100';
+    else if (direction === 'down') badge = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+    
+    // Hide badge if direction is 'none' (insufficient data)
+    const showBadge = direction !== 'none';
 
     return (
       <div key={label} className="border border-slate-200 rounded-2xl p-4 bg-white/70">
@@ -332,14 +360,15 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
               {latest !== null ? `${latest.toFixed(1)} ${unit}` : '—'}
             </p>
           </div>
-          {entries.length >= 2 && (
+          {showBadge && (
             <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${badge}`}>
-              {direction === 'up' ? 'Rising' : direction === 'down' ? 'Falling' : 'Stable'}{' '}
-              {Math.abs(delta).toFixed(1)}
+              {direction === 'up' ? 'Rising' : direction === 'down' ? 'Falling' : 'Stable'}
+              {direction !== 'stable' && ` ${Math.abs(delta).toFixed(1)}`}
             </span>
           )}
         </div>
-        {entries.length >= 2 ? (
+
+        {entries.length >= 1 ? (
           <div className="h-28">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={entries} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
@@ -355,7 +384,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
                   dataKey="value"
                   stroke={color}
                   strokeWidth={2}
-                  dot={false}
+                  dot={{ r: 3 }}
                   activeDot={{ r: 4 }}
                 />
               </LineChart>
@@ -470,7 +499,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
           </div>
 
           {cdssInsights?.risk && (
-            <div className="p-5 rounded-2xl border border-indigo-200 bg-white shadow-sm">
+            <div ref={insightsRef} className="p-5 rounded-2xl border border-indigo-200 bg-white shadow-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl">
                   <Brain className="w-5 h-5 text-white" />
@@ -554,8 +583,21 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, appointments = [], o
               </button>
             </div>
 
+            {analysisResult && (
+              <div className="mb-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="w-4 h-4 text-indigo-600" />
+                  <p className="text-sm font-semibold text-indigo-900">Patient-Specific Analysis</p>
+                </div>
+                <div className="text-xs text-indigo-800 whitespace-pre-wrap leading-relaxed font-medium">
+                  {analysisResult}
+                </div>
+              </div>
+            )}
+
             {guidelineResults.length > 0 && (
               <div className="space-y-2 mt-3 max-h-60 overflow-y-auto custom-scrollbar">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sources & Guidelines</p>
                 {guidelineResults.map((citation: any, idx: number) => (
                   <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
                     <div className="flex items-start gap-2">

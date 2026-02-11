@@ -460,8 +460,15 @@ const NurseDashboard: React.FC = () => {
     else if (path.includes('/nurse/notes')) { setActiveTab('notes'); setNotesPreset(undefined); }
     else if (path.includes('/nurse/care-plans')) { setActiveTab('notes'); setNotesPreset('care_plans'); }
     else if (path.includes('/nurse/medications')) { setActiveTab('notes'); setNotesPreset('medications'); }
-    else setActiveTab('calendar');
+    else setActiveTab('dashboard'); // Default to dashboard if no match
   }, [location.pathname]);
+
+  useEffect(() => {
+    console.log('NurseDashboard: appointments state changed:', appointments.length);
+    if (appointments.length > 0) {
+      console.log('NurseDashboard: First appointment:', appointments[0]);
+    }
+  }, [appointments]);
 
   // Load Quality Metrics and LTFU when in HIV section
   useEffect(() => {
@@ -562,7 +569,12 @@ const NurseDashboard: React.FC = () => {
       }
 
       const today = new Date();
-      const todayString = today.toISOString().split('T')[0];
+      // Use local date instead of UTC to ensure we fetch for the correct day in the user's timezone
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayString = `${year}-${month}-${day}`;
+      
       console.log('🔍 Fetching appointments for date:', todayString);
       console.log('🔍 Today object:', today);
       console.log('🔍 Today timezone offset:', today.getTimezoneOffset());
@@ -579,13 +591,20 @@ const NurseDashboard: React.FC = () => {
       if (allAppointments.length === 0) {
         console.log('📅 No appointments for today, checking recent days...');
         try {
+          const getLocalDateString = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          };
+
           const yesterday = new Date(today);
           yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayString = yesterday.toISOString().split('T')[0];
+          const yesterdayString = getLocalDateString(yesterday);
           
           const dayBefore = new Date(today);
           dayBefore.setDate(dayBefore.getDate() - 2);
-          const dayBeforeString = dayBefore.toISOString().split('T')[0];
+          const dayBeforeString = getLocalDateString(dayBefore);
           
           console.log('🔍 Also checking yesterday:', yesterdayString);
           console.log('🔍 And day before:', dayBeforeString);
@@ -626,6 +645,7 @@ const NurseDashboard: React.FC = () => {
   };
 
   const getQueueStats = () => {
+    // Show all appointments for nurses, even those awaiting payment
     const waiting = appointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length;
     const inProgress = appointments.filter(apt => apt.status === 'in-progress').length;
     const completed = appointments.filter(apt => apt.status === 'completed').length;
@@ -1277,7 +1297,12 @@ const NurseDashboard: React.FC = () => {
         const dayOfWeek = weekStart.getDay();
         const diff = weekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
         weekStart.setDate(diff);
-        const weekStartString = weekStart.toISOString().split('T')[0];
+        
+        // Use local date string
+        const year = weekStart.getFullYear();
+        const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+        const day = String(weekStart.getDate()).padStart(2, '0');
+        const weekStartString = `${year}-${month}-${day}`;
         
         const response = await ehrApi.getWeekView(weekStartString, token, tenantSlug!);
         console.log('📅 Week view API response:', response.data);
@@ -1329,7 +1354,15 @@ const NurseDashboard: React.FC = () => {
         fetchedAppointments = allAppointments;
       } else {
         // Day view - use existing API
-        const dateStr = calendarDate.toISOString().split('T')[0];
+        // Use local date string to ensure we fetch for the correct day in the user's timezone
+        const getLocalDateString = (date: Date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        const dateStr = getLocalDateString(calendarDate);
+        console.log('📅 Fetching calendar appointments for date:', dateStr);
         const response = await ehrApi.getAppointments(token, tenantSlug!, { date: dateStr });
         fetchedAppointments = response.data.appointments || [];
       }
@@ -1500,7 +1533,7 @@ const NurseDashboard: React.FC = () => {
             <span className="text-xs text-slate-500 ml-auto">Real-time metrics</span>
           </div>
           
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {quickStats.map((stat, index) => (
               <div 
                 key={index} 
@@ -1596,10 +1629,18 @@ const NurseDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-x-hidden">
+      {/* Mobile Sidebar Backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white z-50 transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 shadow-2xl flex flex-col`}>
         {/* Logo Section */}
-        <div className="p-6 border-b border-slate-700/50">
+        <div className="p-6 border-b border-slate-700/50 relative">
           <div className="flex items-center gap-3">
             {tenantInfo?.logoUrl ? (
               <div className="h-10 w-10 bg-white p-1 rounded-lg flex items-center justify-center overflow-hidden">
@@ -1614,6 +1655,13 @@ const NurseDashboard: React.FC = () => {
               <h1 className="font-bold text-lg leading-tight">{tenantInfo?.clinicName || 'Medicore'}</h1>
               <p className="text-xs text-slate-400">Nurse Portal</p>
             </div>
+            {/* Mobile Close Button */}
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-2"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
@@ -1943,8 +1991,8 @@ const NurseDashboard: React.FC = () => {
 
               {/* Pagination */}
               {getTotalPages() > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                  <div className="text-sm text-slate-600">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
+                  <div className="text-sm text-slate-600 text-center sm:text-left">
                     Showing {((currentPage - 1) * patientsPerPage) + 1} to {Math.min(currentPage * patientsPerPage, filteredPatients.length)} of {filteredPatients.length} patients
                   </div>
                   <div className="flex items-center gap-2">
@@ -1955,7 +2003,7 @@ const NurseDashboard: React.FC = () => {
                     >
                       Previous
                     </button>
-                    <div className="flex items-center gap-1">
+                    <div className="hidden sm:flex items-center gap-1">
                       {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(page => (
                         <button
                           key={page}
@@ -1970,6 +2018,10 @@ const NurseDashboard: React.FC = () => {
                         </button>
                       ))}
                     </div>
+                    {/* Mobile page indicator */}
+                    <span className="sm:hidden text-sm font-medium text-slate-600">
+                      Page {currentPage} of {getTotalPages()}
+                    </span>
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
                       disabled={currentPage === getTotalPages()}
@@ -2492,10 +2544,11 @@ const NurseDashboard: React.FC = () => {
               <VitalsPanel
                 patient={selectedPatient}
                 onClose={() => setShowVitalsModal(false)}
-                onSave={() => {
-                  setShowVitalsModal(false);
+                onSave={(insights) => {
                   fetchTodayAppointments();
-                  showSuccess('Success', 'Vitals recorded successfully');
+                  if (!insights?.risk) {
+                    setShowVitalsModal(false);
+                  }
                 }}
               />
             </div>

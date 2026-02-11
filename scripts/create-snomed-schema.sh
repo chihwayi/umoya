@@ -6,9 +6,9 @@ source "$(dirname "$0")/load-env.sh"
 # Script to create SNOMED CT PostgreSQL schema in master database
 # This should be run before importing SNOMED CT RF2 files
 
-DB_USERNAME="${DB_USERNAME:-medicore}"
-DB_PASSWORD="${DB_PASSWORD:-medicore_password}"
-DB_NAME="${DB_NAME:-medicore_master}"
+DB_USERNAME="${DB_USERNAME:-postgres}"
+DB_PASSWORD="${DB_PASSWORD:-postgres}"
+DB_NAME="${DB_NAME:-medicore}"
 CONTAINER_NAME="${POSTGRES_CONTAINER:-medicore-postgres-master}"
 
 echo "📋 Creating SNOMED CT PostgreSQL schema in ${DB_NAME}..."
