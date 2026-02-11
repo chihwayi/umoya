@@ -94,16 +94,16 @@ export class CdssService {
   }
 
   /**
-   * Basic drug interaction checking (fallback)
+   * Basic drug interaction checking (fallback) - DISABLED
    */
   private async basicDrugInteractionCheck(drugIds: string[]) {
-    // Basic fallback when CDSS service unavailable
+    // Return empty result to avoid fake data
     return {
       hasInteractions: false,
       interactions: [],
       severity_summary: { critical: 0, major: 0, moderate: 0, minor: 0 },
-      recommendations: ['Basic checking completed. Advanced CDSS service unavailable.'],
-      source: 'basic_fallback',
+      recommendations: [],
+      source: 'fallback_empty',
     };
   }
 
@@ -226,336 +226,21 @@ export class CdssService {
   }
 
   /**
-   * Basic diagnostic assistance (fallback)
+   * Basic diagnostic assistance (fallback) - DISABLED
    */
   private async basicDiagnosisAssist(symptoms: any) {
-    // AI diagnostic assistance based on symptoms (fallback)
-    console.log('=== FALLBACK FUNCTION CALLED ===');
-    console.log('[FALLBACK] basicDiagnosisAssist called with keys:', Object.keys(symptoms));
-    console.log('[FALLBACK] Full symptoms object:', JSON.stringify(symptoms).substring(0, 500));
-    this.logger.log(`[FALLBACK] basicDiagnosisAssist called with keys: ${Object.keys(symptoms).join(', ')}`);
+    this.logger.warn(`[FALLBACK] Basic diagnosis assist triggered but disabled to prevent fake data.`);
     
-    const patientAge =
-      typeof symptoms.age === 'number'
-        ? symptoms.age
-        : typeof symptoms.patientAge === 'number'
-        ? symptoms.patientAge
-        : typeof symptoms.patient?.age === 'number'
-        ? symptoms.patient.age
-        : undefined;
-
-    // Extract symptoms from different possible formats
-    let allSymptoms: string[] = [];
-    
-    // Case 1: If symptoms.symptoms is an array (most common from frontend)
-    if (symptoms.symptoms && Array.isArray(symptoms.symptoms)) {
-      allSymptoms = symptoms.symptoms;
-      this.logger.log(`[FALLBACK] Found symptoms.symptoms array with ${allSymptoms.length} items`);
-    } 
-    // Case 2: If symptoms.symptoms is a string
-    else if (symptoms.symptoms && typeof symptoms.symptoms === 'string') {
-      allSymptoms = [symptoms.symptoms];
-      this.logger.log(`[FALLBACK] Found symptoms.symptoms as string`);
-    } 
-    // Case 3: If the whole object is an array (unlikely but possible)
-    else if (Array.isArray(symptoms)) {
-      allSymptoms = symptoms;
-      this.logger.log(`[FALLBACK] Symptoms object is an array with ${allSymptoms.length} items`);
-    }
-    // Case 4: Check for chiefComplaint
-    else if (symptoms.chiefComplaint) {
-      allSymptoms = [symptoms.chiefComplaint];
-      this.logger.log(`[FALLBACK] Found chiefComplaint`);
-    }
-    
-    // Also add chiefComplaint if it exists separately
-    if (symptoms.chiefComplaint && !allSymptoms.includes(symptoms.chiefComplaint)) {
-      allSymptoms.push(symptoms.chiefComplaint);
-    }
-    
-    // Filter out empty strings and create searchable text
-    allSymptoms = allSymptoms.filter(s => s && typeof s === 'string' && s.trim().length > 0);
-    const allSymptomsText = allSymptoms.join(' ').toLowerCase();
-    
-    console.log(`[FALLBACK] Final parsed symptoms (${allSymptoms.length} items): ${allSymptomsText.substring(0, 150)}...`);
-    this.logger.log(`[FALLBACK] Final parsed symptoms (${allSymptoms.length} items): ${allSymptomsText.substring(0, 150)}...`);
-    
-    if (allSymptomsText.length === 0) {
-      console.error(`[FALLBACK] No symptoms extracted! Original object keys: ${Object.keys(symptoms).join(', ')}`);
-      console.error(`[FALLBACK] Original object:`, JSON.stringify(symptoms).substring(0, 300));
-      this.logger.error(`[FALLBACK] No symptoms extracted! Original object: ${JSON.stringify(symptoms).substring(0, 200)}`);
-      
-      // Return at least a generic diagnosis so user sees something
-      return {
-        suggested_diagnoses: [{
-          diagnosis: 'Symptom Evaluation Needed',
-          probability: 0.5,
-          confidence: 'low',
-          matching_symptoms: []
-        }],
-        recommended_tests: ['Complete Blood Count (CBC)', 'Basic Metabolic Panel'],
-        red_flags: [],
-        differentialDiagnoses: [{
-          condition: 'Symptom Evaluation Needed',
-          probability: 0.5,
-          icd10: 'R69'
-        }],
-        recommendedTests: ['Complete Blood Count', 'Basic Metabolic Panel'],
-        urgencyLevel: 'medium'
-      };
-    }
-    
-    // Simulate AI diagnostic engine with better symptom matching
-    const possibleDiagnoses = [];
-    
-    // Headache + nausea + photophobia = Migraine
-    if ((allSymptomsText.includes('headache') || allSymptomsText.includes('head pain')) &&
-        (allSymptomsText.includes('nausea') || allSymptomsText.includes('vomit')) &&
-        (allSymptomsText.includes('light') || allSymptomsText.includes('photophobia') || allSymptomsText.includes('sensitivity'))) {
-      possibleDiagnoses.push({
-        diagnosis: 'Migraine',
-        condition: 'Migraine',
-        probability: 0.70,
-        confidence: 'moderate',
-        matching_symptoms: ['headache', 'nausea', 'photophobia'],
-        icd10: 'G43.9'
-      });
-    }
-    
-    // Headache patterns
-    if (allSymptomsText.includes('headache') || allSymptomsText.includes('head pain')) {
-      if (allSymptomsText.includes('nausea') || allSymptomsText.includes('vomit')) {
-        possibleDiagnoses.push({
-          diagnosis: 'Migraine',
-          condition: 'Migraine',
-          probability: 0.55,
-          confidence: 'moderate',
-          matching_symptoms: ['headache', 'nausea'],
-          icd10: 'G43.9'
-        });
-      }
-      possibleDiagnoses.push({
-        diagnosis: 'Tension Headache',
-        condition: 'Tension Headache',
-        probability: 0.45,
-        confidence: 'moderate',
-        matching_symptoms: ['headache'],
-        icd10: 'G44.2'
-      });
-    }
-    
-    // Fever + chills
-    if ((allSymptomsText.includes('fever') || allSymptomsText.includes('temperature') || allSymptomsText.includes('hot')) &&
-        (allSymptomsText.includes('chill') || allSymptomsText.includes('shivering'))) {
-      possibleDiagnoses.push({
-        diagnosis: 'Infection (likely bacterial)',
-        condition: 'Bacterial Infection',
-        probability: 0.60,
-        confidence: 'moderate',
-        matching_symptoms: ['fever', 'chills'],
-        icd10: 'B99.9'
-      });
-    }
-    
-    // Fever + respiratory
-    if ((allSymptomsText.includes('fever') || allSymptomsText.includes('temperature')) && 
-        (allSymptomsText.includes('cough') || allSymptomsText.includes('breathing'))) {
-      possibleDiagnoses.push({
-        diagnosis: 'Upper Respiratory Tract Infection',
-        condition: 'Upper Respiratory Tract Infection',
-        probability: 0.65,
-        confidence: 'moderate',
-        matching_symptoms: ['fever', 'cough'],
-        icd10: 'J06.9'
-      });
-    }
-    
-    // Just fever
-    if ((allSymptomsText.includes('fever') || allSymptomsText.includes('temperature') || allSymptomsText.includes('hot')) &&
-        possibleDiagnoses.length === 0) {
-      possibleDiagnoses.push({
-        diagnosis: 'Viral Infection',
-        condition: 'Viral Infection',
-        probability: 0.50,
-        confidence: 'low',
-        matching_symptoms: ['fever'],
-        icd10: 'B34.9'
-      });
-    }
-    
-    // Chest pain patterns
-    if (allSymptomsText.includes('chest pain') || allSymptomsText.includes('chest discomfort')) {
-      if (patientAge && patientAge > 40) {
-        possibleDiagnoses.push({
-          diagnosis: 'Acute Coronary Syndrome',
-          condition: 'Acute Coronary Syndrome',
-          probability: 0.60,
-          confidence: 'moderate',
-          matching_symptoms: ['chest_pain'],
-          icd10: 'I20.9'
-        });
-      }
-      possibleDiagnoses.push({
-        diagnosis: 'Musculoskeletal Chest Pain',
-        condition: 'Musculoskeletal Chest Pain',
-        probability: 0.45,
-        confidence: 'moderate',
-        matching_symptoms: ['chest_pain'],
-        icd10: 'M79.3'
-      });
-    }
-
-    this.logger.log(`[FALLBACK] Found ${possibleDiagnoses.length} possible diagnoses`);
-    if (possibleDiagnoses.length === 0) {
-      this.logger.warn(`[FALLBACK] No diagnoses found for symptoms text (length: ${allSymptomsText.length}): ${allSymptomsText.substring(0, 200)}`);
-      this.logger.warn(`[FALLBACK] Symptom text contains 'headache': ${allSymptomsText.includes('headache')}`);
-      this.logger.warn(`[FALLBACK] Symptom text contains 'nausea': ${allSymptomsText.includes('nausea')}`);
-      this.logger.warn(`[FALLBACK] Symptom text contains 'fever': ${allSymptomsText.includes('fever')}`);
-      
-      // Even if no matches, provide generic diagnoses based on any keywords found
-      if (allSymptomsText.length > 0) {
-        if (allSymptomsText.includes('headache')) {
-          possibleDiagnoses.push({
-            diagnosis: 'Headache Disorder',
-            condition: 'Headache Disorder',
-            probability: 0.50,
-            confidence: 'moderate',
-            matching_symptoms: ['headache'],
-            icd10: 'R51'
-          });
-        }
-        if (allSymptomsText.includes('fever')) {
-          possibleDiagnoses.push({
-            diagnosis: 'Fever, unspecified',
-            condition: 'Fever',
-            probability: 0.50,
-            confidence: 'moderate',
-            matching_symptoms: ['fever'],
-            icd10: 'R50.9'
-          });
-        }
-      }
-      
-      // If still nothing, add generic
-      if (possibleDiagnoses.length === 0) {
-        possibleDiagnoses.push({
-          diagnosis: 'General Symptom Evaluation Needed',
-          condition: 'General Symptom Evaluation Needed',
-          probability: 0.30,
-          confidence: 'low',
-          matching_symptoms: [],
-          icd10: 'R69'
-        });
-      }
-    }
-    
-    // ALWAYS ensure we have at least one diagnosis - this should NEVER be empty
-    if (possibleDiagnoses.length === 0) {
-      console.error('[FALLBACK] ERROR: Still have 0 diagnoses after all checks!');
-      console.error('[FALLBACK] Symptom text was:', allSymptomsText.substring(0, 200));
-      console.error('[FALLBACK] All symptoms array:', allSymptoms);
-      this.logger.error(`[FALLBACK] CRITICAL: No diagnoses found! Symptom text length: ${allSymptomsText.length}`);
-      
-      // FORCE at least one diagnosis - this should ALWAYS execute
-      possibleDiagnoses.push({
-        diagnosis: 'Symptom Assessment Required',
-        condition: 'Symptom Assessment Required',
-        probability: 0.5,
-        confidence: 'low',
-        matching_symptoms: allSymptoms.length > 0 ? allSymptoms.slice(0, 3) : ['unknown'],
-        icd10: 'R69'
-      });
-      
-      // Also add generic diagnoses based on ANY text presence
-      if (allSymptomsText.length > 0) {
-        possibleDiagnoses.push({
-          diagnosis: 'Clinical Evaluation Needed',
-          condition: 'Clinical Evaluation Needed',
-          probability: 0.4,
-          confidence: 'low',
-          matching_symptoms: [],
-          icd10: 'Z00.00'
-        });
-      }
-    }
-    
-    // FINAL safety check - should NEVER happen but just in case
-    if (possibleDiagnoses.length === 0) {
-      this.logger.error('[FALLBACK] CRITICAL ERROR: possibleDiagnoses is STILL empty after all safeguards!');
-      possibleDiagnoses.push({
-        diagnosis: 'Emergency Assessment Required',
-        condition: 'Emergency Assessment Required',
-        probability: 1.0,
-        confidence: 'high',
-        matching_symptoms: ['unknown'],
-        icd10: 'R69'
-      });
-    }
-    
-    // Convert to expected format - prioritize suggested_diagnoses format
-    const response = {
-      suggested_diagnoses: possibleDiagnoses.map(d => ({
-        diagnosis: d.diagnosis || d.condition || 'Unknown',
-        probability: d.probability || 0.5,
-        confidence: d.confidence || 'low',
-        matching_symptoms: d.matching_symptoms || []
-      })),
-      recommended_tests: ['Complete Blood Count (CBC)', 'Basic Metabolic Panel'],
+    return {
+      suggested_diagnoses: [],
+      recommended_tests: [],
       red_flags: [],
-      // Keep old format for backwards compatibility - ENSURE IT HAS DATA
-      differentialDiagnoses: possibleDiagnoses.map(d => ({
-        condition: d.diagnosis || d.condition || 'Unknown',
-        probability: d.probability || 0.5,
-        confidence: d.confidence || 'low',
-        icd10: d.icd10 || 'R69',
-        matching_symptoms: d.matching_symptoms || []
-      })),
-      recommendedTests: ['Complete Blood Count', 'Basic Metabolic Panel'],
-      urgencyLevel: possibleDiagnoses.some(d => (d.probability || 0) > 0.7) ? 'high' : 'medium'
+      differentialDiagnoses: [],
+      recommendedTests: [],
+      urgencyLevel: 'unknown',
+      source: 'fallback_empty',
+      error: 'CDSS service unavailable'
     };
-    
-    // FINAL check - response should NEVER have empty arrays
-    if (response.suggested_diagnoses.length === 0 || response.differentialDiagnoses.length === 0) {
-      this.logger.error(`[FALLBACK] CRITICAL: Response has empty arrays! Force adding emergency diagnosis.`);
-      console.error(`[FALLBACK] Response before fix:`, JSON.stringify(response).substring(0, 300));
-      
-      // Force add to BOTH formats
-      const emergencyDiag = {
-        diagnosis: 'Urgent Clinical Assessment Required',
-        condition: 'Urgent Clinical Assessment Required',
-        probability: 1.0,
-        confidence: 'high',
-        matching_symptoms: allSymptoms.length > 0 ? allSymptoms.slice(0, 2) : ['symptoms reported'],
-        icd10: 'R69'
-      };
-      
-      response.suggested_diagnoses.push(emergencyDiag);
-      response.differentialDiagnoses.push({
-        condition: emergencyDiag.diagnosis,
-        probability: emergencyDiag.probability,
-        confidence: emergencyDiag.confidence,
-        icd10: emergencyDiag.icd10,
-        matching_symptoms: emergencyDiag.matching_symptoms
-      });
-    }
-    
-    console.log(`[FALLBACK] Final response: ${response.suggested_diagnoses.length} suggested_diagnoses, ${response.differentialDiagnoses.length} differentialDiagnoses`);
-    this.logger.log(`[FALLBACK] Returning response with ${response.suggested_diagnoses.length} diagnoses`);
-    
-    // ABSOLUTE FINAL CHECK - if still empty, something is very wrong
-    if (response.suggested_diagnoses.length === 0 && response.differentialDiagnoses.length === 0) {
-      this.logger.error('[FALLBACK] ABSOLUTE CRITICAL ERROR: Response is STILL empty after all fixes!');
-      return {
-        suggested_diagnoses: [{ diagnosis: 'SYSTEM ERROR - Please Retry', probability: 1.0, confidence: 'high', matching_symptoms: [] }],
-        differentialDiagnoses: [{ condition: 'SYSTEM ERROR - Please Retry', probability: 1.0, icd10: 'R69' }],
-        recommendedTests: ['System Error - Retry Diagnosis'],
-        recommended_tests: ['System Error - Retry Diagnosis'],
-        urgencyLevel: 'high',
-        red_flags: ['Diagnostic system error - please retry']
-      };
-    }
-    
-    return response;
   }
 
   /**
@@ -620,17 +305,61 @@ export class CdssService {
   }
 
   /**
-   * Search for clinical guidelines using RAG
+   * Search for clinical guidelines using RAG and WHO Smart Guidelines
    */
-  async searchGuidelines(query: string, limit: number = 5) {
+  async searchGuidelines(query: string, limit: number = 5, patientContext?: any) {
+    const results = {
+      query,
+      citations: [],
+      count: 0,
+      error: null
+    };
+
     try {
-      const response = await this.cdssClient.post('/guidelines/search', {
-        query,
-        limit
-      });
-      return response.data;
+      // 1. Search WHO Smart Guidelines (Local)
+      if (this.whoSmartGuidelinesService) {
+        try {
+          const whoResults = await this.whoSmartGuidelinesService.search(query);
+          if (whoResults.length > 0) {
+            results.citations.push(...whoResults.map(r => ({
+              title: r.title,
+              text: r.description || r.title,
+              source: r.source,
+              url: null,
+              score: 1.0 // High confidence for local matches
+            })));
+          }
+        } catch (err) {
+          this.logger.warn(`WHO Smart Guidelines search failed: ${err.message}`);
+        }
+      }
+
+      // 2. Search External CDSS (RAG)
+      try {
+        const response = await this.cdssClient.post('/guidelines/search', {
+          query,
+          limit,
+          patient_context: patientContext
+        });
+        if (response.data && response.data.citations) {
+          results.citations.push(...response.data.citations);
+        }
+      } catch (error: any) {
+        this.logger.warn(`CDSS guideline search failed: ${error.message}`);
+      }
+      
+      // If no results found (either from WHO or CDSS), use fallback
+      if (results.citations.length === 0) {
+        this.logger.log('No guidelines found from external sources, using basic fallback');
+        const fallback = this.basicSearchGuidelines(query);
+        results.citations = fallback.citations;
+      }
+      
+      results.count = results.citations.length;
+      return results;
+      
     } catch (error: any) {
-      this.logger.warn(`CDSS guideline search failed: ${error.message}`);
+      this.logger.error(`Unexpected error in searchGuidelines: ${error.message}`);
       return {
         query,
         citations: [],
@@ -641,36 +370,34 @@ export class CdssService {
   }
 
   /**
-   * Basic guidelines (fallback)
+   * Basic guideline search (fallback) - NOW DISABLED to prevent fake data
+   */
+  private basicSearchGuidelines(query: string) {
+    // We intentionally return empty results here to avoid showing
+    // hardcoded/outdated/fake guidelines when the AI service is down.
+    this.logger.warn(`[FALLBACK] Basic search triggered for query "${query}" but disabled to prevent fake data.`);
+    
+    return {
+      query,
+      citations: [],
+      count: 0,
+      error: null
+    };
+  }
+
+  /**
+   * Basic guidelines (fallback) - NOW DISABLED to prevent fake data
    */
   private async basicGetGuidelines(condition: string) {
-    const guidelines = {
-      'hypertension': {
-        condition: 'Hypertension',
-        guidelines: [
-          'Target BP <140/90 mmHg for most adults',
-          'Target BP <130/80 mmHg for high-risk patients',
-        ],
-        references: ['AHA/ACC 2017 Guidelines'],
-      },
-      'diabetes': {
-        condition: 'Type 2 Diabetes',
-        guidelines: [
-          'Target HbA1c <7% for most adults',
-          'Metformin as first-line therapy',
-        ],
-        references: ['ADA Standards of Care'],
-      }
-    };
-
+    // Return empty/generic structure to avoid hardcoded fake guidelines
     return {
-      guidelines: [guidelines[condition.toLowerCase()] || { condition, guidelines: ['No guidelines available'] }],
-      recommendations: guidelines[condition.toLowerCase()]?.guidelines || ['No specific guidelines available'],
+      guidelines: [{ condition, guidelines: ['Guideline service unavailable'] }],
+      recommendations: [],
       contraindications: [],
       medication_warnings: [],
       evidence_level: 'unknown',
       matched_condition: condition,
-      source: 'basic_fallback',
+      source: 'fallback_empty',
     };
   }
 
@@ -813,8 +540,9 @@ export class CdssService {
         interpretations: [],
         summary: { total_tests: 0, normal: 0, abnormal: 0, critical: 0 },
         critical_alerts: [],
-        warnings: [],
-        recommendations: ['Lab interpretation service unavailable']
+        warnings: ['CDSS service unavailable - results not interpreted'],
+        recommendations: ['Manual interpretation required'],
+        source: 'error'
       };
     }
   }
@@ -834,10 +562,11 @@ export class CdssService {
     } catch (error: any) {
       this.logger.warn(`CDSS duplicate therapy detection unavailable: ${error.message}`);
       return {
-        has_duplicates: false,
+        has_duplicates: false, // Default to false but warn
         duplicates: [],
-        warnings: [],
-        summary: { total_medications: medications.length }
+        warnings: ['CDSS service unavailable - duplicate check failed'],
+        summary: { total_medications: medications.length },
+        source: 'error'
       };
     }
   }
@@ -866,11 +595,13 @@ export class CdssService {
     } catch (error: any) {
       this.logger.warn(`CDSS high-risk medication check unavailable: ${error.message}`);
       return {
-        has_high_risk_medications: false,
+        has_high_risk_medications: false, // Default to false but warn
         beers_criteria_alerts: [],
         stopp_criteria_alerts: [],
         high_alert_medications: [],
-        summary: { total_medications: medications.length }
+        summary: { total_medications: medications.length },
+        warnings: ['CDSS service unavailable - high risk check failed'],
+        source: 'error'
       };
     }
   }
@@ -897,9 +628,11 @@ export class CdssService {
     } catch (error: any) {
       this.logger.warn(`CDSS care gap detection unavailable: ${error.message}`);
       return {
-        has_gaps: false,
+        has_gaps: false, // Default to false but warn
         gaps: [],
-        recommendations: []
+        recommendations: [],
+        warnings: ['CDSS service unavailable - care gap detection failed'],
+        source: 'error'
       };
     }
   }
@@ -920,7 +653,8 @@ export class CdssService {
       return {
         interactions: [],
         summary: { major: 0, moderate: 0 },
-        recommendations: ['Food interaction service unavailable']
+        recommendations: ['Food interaction service unavailable'],
+        source: 'error'
       };
     }
   }
@@ -1006,39 +740,18 @@ export class CdssService {
   }
 
   /**
-   * Basic risk assessment (fallback)
+   * Basic risk assessment (fallback) - DISABLED
    */
   private async basicRiskAssessment(patientData: any) {
-    const { age, vitals, medicalHistory, medications } = patientData;
-    
-    let riskScore = 0;
-    const riskFactors = [];
-
-    if (age > 65) {
-      riskScore += 2;
-      riskFactors.push('Advanced age');
-    }
-
-    if (vitals?.systolicBP > 140 || vitals?.bloodPressure?.split('/')[0] > 140) {
-      riskScore += 2;
-      riskFactors.push('Hypertension');
-    }
-
-    if (medicalHistory?.includes?.('diabetes') || medicalHistory?.some?.((h: string) => h.toLowerCase().includes('diabetes'))) {
-      riskScore += 3;
-      riskFactors.push('Diabetes mellitus');
-    }
-
-    const riskLevel = riskScore >= 6 ? 'high' : riskScore >= 3 ? 'moderate' : 'low';
+    this.logger.warn(`[FALLBACK] Basic risk assessment triggered but disabled to prevent fake data.`);
 
     return {
-      overall_score: riskScore * 5, // Convert to percentage
-      risk_level: riskLevel,
-      factors: riskFactors.map(f => ({ category: 'general', factor: f, impact: 'moderate' })),
-      recommendations: riskLevel === 'high' ? 
-        ['Frequent monitoring', 'Specialist referral'] :
-        ['Regular follow-up', 'Lifestyle modifications'],
-      source: 'basic_fallback',
+      overall_score: 0,
+      risk_level: 'unknown',
+      factors: [],
+      recommendations: [],
+      source: 'fallback_empty',
+      error: 'CDSS service unavailable'
     };
   }
 
@@ -1093,13 +806,13 @@ export class CdssService {
     } catch (error: any) {
       this.logger.warn(`CDSS dosing recommendation unavailable: ${error.message}`);
       return {
-        recommended_dose: dosingRequest.standard_dose || 0,
-        frequency: 'as directed',
+        recommended_dose: null, // Do not provide a fallback dose
+        frequency: 'unknown',
         adjustments: [],
-        warnings: ['CDSS service unavailable - use standard dosing'],
+        warnings: ['CDSS service unavailable - Cannot provide dosing recommendation'],
         monitoring: [],
         drug_name: dosingRequest.drug_name,
-        source: 'basic_fallback',
+        source: 'error',
       };
     }
   }
