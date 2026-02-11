@@ -91,10 +91,18 @@ export class EmailService {
       return { success: true, messageId: `test-${Date.now()}` };
     }
 
+    // Validate recipients
+    const recipients = Array.isArray(options.to) ? options.to.filter(email => email && email.trim() !== '') : (options.to && options.to.trim() !== '' ? [options.to] : []);
+    
+    if (recipients.length === 0) {
+      this.logger.warn('Attempted to send email with no valid recipients');
+      return { success: false, error: 'No valid recipients specified' };
+    }
+
     try {
       const mailOptions = {
         from: `"${fromName}" <${fromEmail}>`,
-        to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+        to: recipients.join(', '),
         subject: options.subject,
         text: options.text,
         html: options.html || options.text?.replace(/\n/g, '<br>'),
