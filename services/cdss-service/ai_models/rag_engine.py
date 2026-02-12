@@ -138,7 +138,8 @@ class RAGEngine:
                     "source": f"{source}{f' (p.{page})' if page else ''}",
                     "text": doc,
                     "confidence": round(confidence, 2),
-                    "url": url
+                    "url": url,
+                    "metadata": meta
                 }
                 formatted_results.append(citation)
                 
@@ -147,6 +148,26 @@ class RAGEngine:
         except Exception as e:
             logger.error(f"Context retrieval failed: {e}")
             return []
+
+    def add_documents(self, texts: List[str], metadatas: List[Dict[str, Any]], ids: List[str]):
+        """
+        Batch ingest documents into the vector database.
+        """
+        if not self.collection or not self.embedding_model:
+            return False
+            
+        try:
+            embeddings = self.embedding_model.encode(texts).tolist()
+            self.collection.add(
+                documents=texts,
+                embeddings=embeddings,
+                metadatas=metadatas,
+                ids=ids
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to add documents batch: {e}")
+            return False
 
     def add_document(self, text: str, source: str, page: int = 1):
         """

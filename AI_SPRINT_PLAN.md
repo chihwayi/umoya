@@ -30,7 +30,7 @@
 1.  **Metadata Tagging System** [COMPLETED]
     *   **Task**: Update ingestion to tag chunks with `target_population` (e.g., "pregnant", "adult", "child") and `clinical_domain` (e.g., "cardiology").
     *   **Success Criteria**: Every vector in ChromaDB has valid metadata.
-2.  **Context-Aware Retrieval** [IN PROGRESS]
+2.  **Context-Aware Retrieval** [COMPLETED]
     *   **Task**: Modify `RAGEngine.query()` to accept patient demographics (Age, Sex).
     *   **Logic**: `if patient.sex == 'Male': exclude(metadata.target_population == 'pregnant')`.
     *   **Success Criteria**: Searching "hypertension" for a 75yo Male returns *zero* pregnancy-related chunks.
