@@ -167,6 +167,28 @@ class DiagnosticAssistant:
             ],
             'key_symptoms': ['dizziness', 'vertigo', 'nausea'],
             'alarming_signs': ['focal_neurologic', 'syncope', 'chest_pain']
+        },
+        'musculoskeletal_pain': {
+            'common_diagnoses': [
+                {'diagnosis': 'Muscle Strain', 'probability': 0.35},
+                {'diagnosis': 'Contusion', 'probability': 0.25},
+                {'diagnosis': 'Fracture', 'probability': 0.15},
+                {'diagnosis': 'Arthritis', 'probability': 0.15},
+                {'diagnosis': 'Tendinitis', 'probability': 0.10}
+            ],
+            'key_symptoms': ['pain', 'swelling', 'limited_range_of_motion'],
+            'alarming_signs': ['deformity', 'inability_to_bear_weight', 'severe_pain']
+        },
+        'fall_injury': {
+            'common_diagnoses': [
+                {'diagnosis': 'Contusion', 'probability': 0.30},
+                {'diagnosis': 'Fracture', 'probability': 0.25},
+                {'diagnosis': 'Head Injury', 'probability': 0.15},
+                {'diagnosis': 'Sprain/Strain', 'probability': 0.20},
+                {'diagnosis': 'Laceration', 'probability': 0.10}
+            ],
+            'key_symptoms': ['pain', 'bruising', 'swelling'],
+            'alarming_signs': ['loss_of_consciousness', 'deformity', 'severe_bleeding']
         }
     }
     
@@ -430,6 +452,15 @@ class DiagnosticAssistant:
             'vomiting': 'abdominal_pain',
             'dizziness': 'dizziness',
             'vertigo': 'dizziness',
+            'hip pain': 'musculoskeletal_pain',
+            'leg pain': 'musculoskeletal_pain',
+            'knee pain': 'musculoskeletal_pain',
+            'back pain': 'musculoskeletal_pain',
+            'joint pain': 'musculoskeletal_pain',
+            'muscle pain': 'musculoskeletal_pain',
+            'fall': 'fall_injury',
+            'fell': 'fall_injury',
+            'trauma': 'fall_injury',
         }
         
         # Also check for partial matches in normalized symptoms
@@ -450,7 +481,7 @@ class DiagnosticAssistant:
         # If no matches found, try to infer from common words
         if not matched_db_keys:
             symptom_text = ' '.join(normalized_symptoms).lower()
-            if any(word in symptom_text for word in ['headache', 'head', 'pain']):
+            if any(word in symptom_text for word in ['headache', 'head']):
                 matched_db_keys.add('headache')
             if any(word in symptom_text for word in ['fever', 'temperature', 'hot']):
                 matched_db_keys.add('fever')
@@ -464,6 +495,10 @@ class DiagnosticAssistant:
                 matched_db_keys.add('abdominal_pain')
             if any(word in symptom_text for word in ['dizzy', 'vertigo', 'spinning']):
                 matched_db_keys.add('dizziness')
+            if 'pain' in symptom_text and not matched_db_keys:
+                matched_db_keys.add('musculoskeletal_pain')
+            if any(word in symptom_text for word in ['fall', 'fell', 'hit', 'trauma']):
+                matched_db_keys.add('fall_injury')
         
         # Generate diagnoses from matched database keys
         for db_key in matched_db_keys:
@@ -661,16 +696,27 @@ class DiagnosticAssistant:
                 - Lab Results: {prompt_labs}
                 {guideline_context}
                 
-                Based on the patient information and the provided guidelines (if any), provide a differential diagnosis.
+                Based on the patient information and the provided guidelines (if any), provide a comprehensive clinical assessment.
+                
+                CRITICAL INSTRUCTION: You must think step-by-step before providing a recommendation. 
+                1. Analyze the symptoms and vitals in context of demographics.
+                2. Evaluate risk factors and potential red flags.
+                3. Consider relevant guidelines and rule out/in conditions.
+                4. SYNTHESIZE this reasoning into a clear, logical argument.
+                5. ONLY THEN formulate the primary recommendation.
                 """
                 
                 schema = """
                 {
+                    "reasoning": "Detailed step-by-step clinical reasoning explaining the thought process, analysis of symptoms/vitals, and justification for the recommendation.",
+                    "recommendation": "Primary clinical recommendation (concise)",
+                    "evidence_level": "High | Moderate | Low",
                     "diagnoses": [
                         {"name": "Diagnosis Name", "probability": 0.5, "reasoning": "Brief explanation"}
                     ],
                     "recommended_tests": ["Test Name"],
-                    "red_flags": ["Warning sign"]
+                    "red_flags": ["Warning sign"],
+                    "action_items": ["Immediate actions to take"]
                 }
                 """
                 
@@ -784,6 +830,15 @@ class DiagnosticAssistant:
             # Pass through citations
             if 'citations' in llm_results:
                 fused_results['guideline_citations'] = llm_results['citations']
+                
+            # Merge Sprint 3 fields
+            if 'recommendation' in llm_results:
+                fused_results['clinical_recommendation'] = {
+                    'text': llm_results['recommendation'],
+                    'evidence_level': llm_results.get('evidence_level', 'Low'),
+                    'reasoning': llm_results.get('reasoning', ''),
+                    'action_items': llm_results.get('action_items', [])
+                }
 
         return {
             **fused_results,
@@ -791,6 +846,7 @@ class DiagnosticAssistant:
             'red_flags': fused_results.get('red_flags', []),
             'vitals_clues': fused_results.get('vitals_clues', []),
             'guideline_citations': fused_results.get('guideline_citations', []),
+            'clinical_recommendation': fused_results.get('clinical_recommendation'),
             'ai_enabled': True,
             'source': 'hybrid_cdss_ai_llm'
         }

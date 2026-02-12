@@ -456,12 +456,19 @@ async def search_guidelines(request: GuidelineSearchRequest):
             USER QUERY: {request.query}
             
             INSTRUCTIONS:
-            1. Provide specific recommendations for THIS patient based on their vitals/demographics.
-            2. Cite the guidelines where appropriate.
-            3. Highlight any red flags or immediate actions needed.
-            4. Keep it concise and clinically actionable.
-            5. If the guidelines provided are not relevant, state that clearly.
-            6. Correct any disjointed text from the sources into coherent sentences.
+            1. FIRST, think step-by-step: Analyze the patient's vitals/demographics against the guidelines.
+            2. THEN, provide specific recommendations for THIS patient.
+            3. Cite the guidelines where appropriate.
+            4. Highlight any red flags or immediate actions needed.
+            5. Keep it concise and clinically actionable.
+            6. If the guidelines provided are not relevant, state that clearly.
+            
+            FORMAT YOUR RESPONSE AS:
+            **Clinical Reasoning:**
+            [Step-by-step analysis]
+            
+            **Recommendation:**
+            [Actionable advice]
             """
             
             print(f"[CDSS] Generating analysis for patient context...")

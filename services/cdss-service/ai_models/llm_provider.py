@@ -51,7 +51,7 @@ class LLMProvider:
             
         return False
 
-    async def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+    async def generate_response(self, prompt: str, system_prompt: Optional[str] = None, json_mode: bool = False) -> Optional[str]:
         """
         Generate a text response from the LLM.
         """
@@ -69,9 +69,12 @@ class LLMProvider:
             "stream": False,
             "options": {
                 "temperature": 0.2, # Low temperature for clinical factualness
-                "num_predict": 512
+                "num_predict": 1024  # Increased for detailed JSON
             }
         }
+
+        if json_mode:
+            payload["format"] = "json"
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -91,14 +94,33 @@ class LLMProvider:
         """
         system_prompt = f"You are a medical AI assistant. Output ONLY valid JSON matching this schema: {schema_description}. Do not include markdown formatting or explanations."
         
-        response_text = await self.generate_response(prompt, system_prompt)
+        response_text = await self.generate_response(prompt, system_prompt, json_mode=True)
         if not response_text:
             return None
 
         try:
-            # Clean up potential markdown code blocks
-            clean_text = response_text.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean_text)
+            # Attempt 1: Clean parse (if model obeyed "ONLY valid JSON")
+            return json.loads(response_text)
         except json.JSONDecodeError:
+            pass
+
+        try:
+            # Attempt 2: Extract from markdown code blocks
+            import re
+            code_block_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+            match = re.search(code_block_pattern, response_text, re.DOTALL)
+            if match:
+                return json.loads(match.group(1))
+                
+            # Attempt 3: Naive extraction from first { to last }
+            start = response_text.find('{')
+            end = response_text.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                return json.loads(response_text[start:end+1])
+                
+            # If all fails, log and return None
             logger.error(f"Failed to parse LLM JSON response: {response_text}")
+            return None
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse LLM JSON response after extraction: {response_text}")
             return None

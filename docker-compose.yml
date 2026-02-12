@@ -105,8 +105,11 @@ services:
       - WHISPER_API_KEY=${WHISPER_API_KEY}
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - ./services/cdss-service:/app
+      - ./data/chroma_db:/app/data/chroma_db
     depends_on:
       - redis
       - postgres-master

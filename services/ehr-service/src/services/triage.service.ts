@@ -211,6 +211,9 @@ export class TriageService {
     // Resolve SNOMED concepts
     const chiefComplaintConcept = await this.resolveConcept(tenantDb, data.chiefComplaintSnomedCode || (data as any).chief_complaint_snomed);
     const observationsList = await this.normalizeConceptArray(tenantDb, (data as any).observations_snomed || data.observationsSnomed);
+    const symptomsList = await this.normalizeConceptArray(tenantDb, (data as any).symptoms_snomed || data.symptomsSnomed);
+    const medicationsList = await this.normalizeConceptArray(tenantDb, (data as any).medications_snomed || data.medicationsSnomed);
+    const historyList = await this.normalizeConceptArray(tenantDb, (data as any).history_snomed || data.historySnomed);
 
     // Use raw SQL to insert with SNOMED fields
     const result = await tenantDb.query(
@@ -219,9 +222,10 @@ export class TriageService {
         patient_id, chief_complaint, chief_complaint_snomed_code, chief_complaint_snomed_term,
         chief_complaint_snomed_module_id, chief_complaint_snomed_definition_status,
         onset, pain_score, allergies, medications, history, observations, observations_snomed,
+        symptoms, symptoms_snomed, medications_snomed, history_snomed,
         priority, severity_score, recorded_at, recorded_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16, $17)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19, $20, $21)
       RETURNING *
       `,
       [
@@ -238,6 +242,10 @@ export class TriageService {
         data.history ?? null,
         data.observations ?? null,
         JSON.stringify(observationsList),
+        data.symptoms ?? null,
+        JSON.stringify(symptomsList),
+        JSON.stringify(medicationsList),
+        JSON.stringify(historyList),
         data.priority,
         data.severityScore ?? null,
         data.recordedAt ?? new Date(),

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { ehrApi, cdssApi } from '../services/api';
+import { GuidelineRecommendationCard, ClinicalRecommendation } from './GuidelineRecommendationCard';
 import { useNotification } from '../components/GlobalNotification';
 import {
   ResponsiveContainer,
@@ -73,6 +74,16 @@ interface VitalsPanelProps {
   onSave?: (insights?: any) => void;
 }
 
+const formatAnalysisText = (text: string) => {
+  if (!text) return null;
+  return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-bold text-indigo-950">{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
+
 const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) => {
   const { showSuccess, showError } = useNotification();
   const [vitals, setVitals] = useState<VitalsData>({
@@ -135,6 +146,11 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       // Enhance with abnormal vitals context
       patientContext.vitals = { ...vitals };
       patientContext.abnormalities = [];
+      
+      // Enhance with vital history
+      if (trendOverview?.trends) {
+          patientContext.vitalHistory = trendOverview.trends;
+      }
       
       if (vitals.bloodPressureSystolic > 140) patientContext.abnormalities.push(`Systolic BP ${vitals.bloodPressureSystolic} (High)`);
       if (vitals.bloodPressureDiastolic > 90) patientContext.abnormalities.push(`Diastolic BP ${vitals.bloodPressureDiastolic} (High)`);
@@ -509,7 +525,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   <p className="text-xs text-slate-500">Automatically generated from the latest vitals</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs uppercase text-slate-500 tracking-wide">Risk Level</p>
                   <p className="text-lg font-bold text-slate-900 capitalize">
@@ -519,62 +535,61 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
                   )}
                 </div>
-                {Array.isArray(cdssInsights.risk.recommendations) && cdssInsights.risk.recommendations.length > 0 && (
-                  <div className="flex-1 ml-4">
-                    <p className="text-xs font-semibold text-slate-600 mb-1">Recommendations</p>
-                    <ul className="text-xs text-slate-600 space-y-1">
-                      {cdssInsights.risk.recommendations.slice(0, 3).map((rec: string, idx: number) => (
-                        <li key={`rec-${idx}`} className="flex items-start gap-2">
-                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
-                          <span>{rec}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    
-                    {/* Guideline Citations */}
-                    {cdssInsights.risk.guideline_citations && cdssInsights.risk.guideline_citations.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-indigo-100">
-                        <p className="text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-emerald-500" />
-                          Evidence & Guidelines
-                        </p>
-                        <ul className="text-[10px] text-slate-500 space-y-1.5">
-                          {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: any, idx: number) => {
-                            let data = citation;
-                            
-                            // Robust JSON parsing
-                            if (typeof data === 'string') {
-                              try {
-                                let parsed = JSON.parse(data);
-                                if (typeof parsed === 'string') {
-                                   try { parsed = JSON.parse(parsed); } catch(e){}
-                                }
-                                if (typeof parsed === 'object' && parsed !== null) data = parsed;
-                              } catch (e) {
-                                try {
-                                  const cleaned = data.replace(/\n/g, "\\n").replace(/\r/g, "");
-                                  const parsed = JSON.parse(cleaned);
-                                  if (typeof parsed === 'object' && parsed !== null) data = parsed;
-                                } catch (e2) {}
-                              }
-                            }
-
-                            const text = (typeof data === 'object' && data !== null) 
-                                ? (data.text || data.content || JSON.stringify(data))
-                                : String(data);
-
-                            return (
-                              <li key={`cite-${idx}`} className="bg-slate-50 p-1.5 rounded border border-slate-100 italic leading-tight">
-                                "{text.length > 120 ? text.substring(0, 120) + '...' : text}"
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
+
+              {/* Recommendations Section */}
+              {Array.isArray(cdssInsights.risk.recommendations) && cdssInsights.risk.recommendations.length > 0 && (
+                <div className="space-y-3">
+                  {cdssInsights.risk.recommendations.slice(0, 3).map((rec: any, idx: number) => {
+                    // Adapt data to ClinicalRecommendation interface
+                    const data: ClinicalRecommendation = typeof rec === 'string' 
+                      ? { recommendation: rec, evidence_level: 'Medium' } 
+                      : rec;
+                    
+                    return (
+                      <GuidelineRecommendationCard 
+                        key={`rec-${idx}`} 
+                        data={data} 
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Guideline Citations */}
+              {cdssInsights.risk.guideline_citations && cdssInsights.risk.guideline_citations.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-indigo-100">
+                  <p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3 text-emerald-500" />
+                    Evidence & Guidelines
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: any, idx: number) => {
+                       let data = citation;
+                       if (typeof data === 'string') {
+                         try {
+                           let parsed = JSON.parse(data);
+                           if (typeof parsed === 'string') {
+                              try { parsed = JSON.parse(parsed); } catch(e){}
+                           }
+                           if (typeof parsed === 'object' && parsed !== null) data = parsed;
+                         } catch (e) {
+                            // Minimal retry logic
+                         }
+                       }
+                       const text = (typeof data === 'object' && data !== null) 
+                           ? (data.text || data.content || JSON.stringify(data))
+                           : String(data);
+                       
+                       return (
+                         <div key={`cite-${idx}`} className="bg-slate-50 p-2 rounded border border-slate-100 text-[10px] text-slate-600 italic">
+                           "{text.length > 150 ? text.substring(0, 150) + '...' : text}"
+                         </div>
+                       );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -625,7 +640,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   <p className="text-sm font-bold text-indigo-900">AI Clinical Analysis</p>
                 </div>
                 <div className="text-sm text-indigo-900 whitespace-pre-wrap leading-relaxed font-medium">
-                  {analysisResult}
+                  {formatAnalysisText(analysisResult)}
                 </div>
               </div>
             )}

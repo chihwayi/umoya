@@ -671,7 +671,20 @@ const NurseDashboard: React.FC = () => {
       { icon: Users, label: 'Patients', desc: 'Browse & schedule', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('patients') },
       { icon: Users, label: 'Patient Queue', desc: 'Manage patient flow', color: 'from-indigo-500 to-purple-500', action: () => setActiveTab('queue') },
       { icon: Heart, label: 'Vitals Recording', desc: 'Record patient vitals', color: 'from-red-500 to-pink-500', action: () => setActiveTab('vitals') },
-      { icon: ClipboardList, label: 'Triage Assessment', desc: 'Patient assessment', color: 'from-orange-500 to-yellow-500', action: () => setActiveTab('triage') },
+      { 
+        icon: ClipboardList, 
+        label: 'Triage Assessment', 
+        desc: 'Patient assessment', 
+        color: 'from-orange-500 to-yellow-500', 
+        action: () => {
+          if (selectedPatient) {
+            setActiveTab('triage');
+          } else {
+            setActiveTab('queue');
+            showSuccess('Select Patient', 'Please select a patient from the queue to start triage.');
+          }
+        }
+      },
       { icon: FileText, label: 'Nursing Notes', desc: 'Document care provided', color: 'from-green-500 to-emerald-500', action: () => setActiveTab('notes') },
       { icon: TestTube, label: 'HIV Testing', desc: 'Perform HIV test', color: 'from-emerald-600 to-teal-700', action: () => setShowHivTestingModal(true) },
       { icon: FolderOpen, label: 'Shared Documents', desc: 'View shared patient documents', color: 'from-violet-500 to-purple-600', action: () => setShowSharedDocumentsModal(true), badge: sharedDocumentsCount > 0 ? sharedDocumentsCount : undefined },
@@ -827,7 +840,8 @@ const NurseDashboard: React.FC = () => {
       return;
     }
     setSelectedPatient(appointment.patient);
-    setShowAssessmentModal(true);
+    setActiveTab('triage');
+    // setShowAssessmentModal(true); // Switch to tab view instead of modal for better history visibility
   };
 
   const fetchPatients = async () => {
@@ -2164,7 +2178,7 @@ const NurseDashboard: React.FC = () => {
         {activeTab === 'vitals' && (
           <div className="w-full overflow-x-auto">
             <VitalsPanel 
-              appointments={appointments} 
+              patient={selectedPatient || undefined}
               onSave={() => {
                 fetchTodayAppointments();
                 showSuccess('Vitals Saved', 'Patient vitals have been recorded successfully.');
@@ -2174,7 +2188,10 @@ const NurseDashboard: React.FC = () => {
         )}
         {activeTab === 'triage' && (
           <div className="w-full overflow-x-auto">
-            <PatientAssessment appointments={appointments} />
+            <PatientAssessment 
+              patient={selectedPatient || undefined}
+              appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))} 
+            />
           </div>
         )}
         {activeTab === 'notes' && (() => {
@@ -2574,6 +2591,7 @@ const NurseDashboard: React.FC = () => {
             <div className="overflow-y-auto px-6 py-6 max-h-[calc(85vh-74px)]">
               <PatientAssessment
                 patient={selectedPatient}
+                appointments={appointments.filter(apt => apt.patient.id === selectedPatient?.id)}
                 onClose={() => setShowAssessmentModal(false)}
                 onSave={() => {
                   setShowAssessmentModal(false);

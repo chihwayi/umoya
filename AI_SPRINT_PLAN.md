@@ -40,41 +40,43 @@
 
 ---
 
-## Sprint 3: The "Clinical Voice" & UX (Weeks 5-6)
+## Sprint 3: The "Clinical Voice" & UX (Weeks 5-6) [COMPLETED]
 **Theme**: "Clear, Actionable Advice."
 **Objective**: Move from "Sources & Guidelines" to "Clinical Recommendations."
 
 ### Key Deliverables:
-1.  **Structured Output Engineering**
+1.  **Structured Output Engineering** [COMPLETED]
     *   **Task**: Force LLM to output strict JSON: `{ "recommendation": "...", "evidence_level": "...", "citations": [...] }`.
-    *   **Success Criteria**: Zero parsing errors in the backend.
-2.  **Frontend Cards Redesign**
-    *   **Task**: Update `VitalsPanel.tsx` to render "Recommendation Cards" (Green/Yellow/Red alerts) instead of raw text blocks.
+    *   **Success Criteria**: Zero parsing errors in the backend. Verified via `test_sprint3_structured_output.py`.
+2.  **Frontend Cards Redesign** [COMPLETED]
+    *   **Task**: Create `GuidelineRecommendationCard.tsx` and integrate into `VitalsPanel.tsx` to render "Recommendation Cards" (Green/Yellow/Red alerts).
+    *   **Success Criteria**: UI displays structured recommendation, evidence level, and action items.
     *   **Success Criteria**: Nurses can see the "Answer" in <2 seconds without reading paragraphs.
-3.  **Chain-of-Thought Prompting**
+3.  **Chain-of-Thought Prompting** [COMPLETED]
     *   **Task**: Rewrite system prompts to require "Step-by-Step Clinical Reasoning" before giving the final answer.
     *   **Success Criteria**: Responses explain *why* a recommendation was made (e.g., "Because BP > 160/100...").
+4.  **Automated Unit Tests** [COMPLETED]
+    *   **Task**: Create `test_sprint3_validation.py` to ensure schema robustness against malformed LLM outputs.
+    *   **Success Criteria**: `LLMProvider` handles missing fields, markdown blocks, and conversational preambles gracefully.
 
 ---
 
-## Sprint 4: Performance & Refinement (Weeks 7-8)
+## Sprint 4: Performance & Refinement (Weeks 7-8) [COMPLETED]
 **Theme**: "Speed & Precision."
 **Objective**: Sub-second latency and 99% relevance.
 
 ### Key Deliverables:
-1.  **Re-Ranking Layer**
+1.  **Re-Ranking Layer** [COMPLETED]
     *   **Task**: Deploy a Cross-Encoder (e.g., `bge-reranker`) to re-score the top 20 results.
     *   **Success Criteria**: The single best paragraph is always Rank #1.
-2.  **Hybrid Search**
+2.  **Hybrid Search** [COMPLETED]
     *   **Task**: Combine Vector Search (Semantic) with BM25 (Keyword) search.
     *   **Success Criteria**: Exact drug names (e.g., "Nifedipine") are found even if the embedding model is fuzzy.
-3.  **Latency Optimization**
+3.  **Latency Optimization** [COMPLETED]
     *   **Task**: Implement Redis Caching for frequent queries (e.g., "Hypertension treatment").
     *   **Success Criteria**: Common queries return in <200ms.
 
 ---
 
 ## Immediate Next Steps (Day 0)
-1.  **Config**: Update `docker-compose.yml` to lock in `llama3`.
-2.  **Code**: Create the `clean_text` utility (Done).
-3.  **Plan**: Approval of this Sprint Plan.
+1.  **Review**: User to sign off on Sprint 4 implementation.

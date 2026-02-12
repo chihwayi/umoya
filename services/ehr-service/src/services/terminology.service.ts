@@ -282,21 +282,22 @@ export class TerminologyService {
     const limit = options?.limit ?? 50;
     const params: any[] = [conceptId];
     let query = `
-      SELECT concept_id,
-             target_code,
-             target_display,
-             map_group,
-             map_priority,
-             map_rule,
-             map_advice,
-             map_status,
-             map_category_id,
-             module_id,
-             effective_time,
-             active,
-             map_source
-        FROM snomed_icd10_mappings
-       WHERE concept_id = $1
+      SELECT m.snomed_code as concept_id,
+             m.icd10_code as target_code,
+             i.description as target_display,
+             1 as map_group,
+             m.map_priority,
+             m.map_rule,
+             NULL as map_advice,
+             NULL as map_status,
+             m.map_category as map_category_id,
+             NULL as module_id,
+             NULL as effective_time,
+             m.active,
+             NULL as map_source
+        FROM snomed_to_icd10_map m
+        LEFT JOIN icd10_codes i ON m.icd10_code = i.code
+       WHERE m.snomed_code = $1
     `;
 
     if (!includeInactive) {
@@ -319,6 +320,7 @@ export class TerminologyService {
       return results;
     } catch (error: any) {
       if (error?.code === '42P01') {
+        this.logger.error(`ICD-10 table missing: ${error.message}`);
         throw new NotFoundException(
           'ICD-10 mapping tables are not provisioned. Please run the ICD-10 mapping import script.',
         );
@@ -335,20 +337,21 @@ export class TerminologyService {
 
     try {
       const [row] = await dbToUse.query(`
-        SELECT release_label,
-               effective_time,
-               source_zip,
+        SELECT file_name as release_label,
+               end_time as effective_time,
+               file_name as source_zip,
                total_rows,
-               import_started_at,
-               import_completed_at
-          FROM icd10_mapping_metadata
-         ORDER BY import_completed_at DESC NULLS LAST, import_started_at DESC
+               start_time as import_started_at,
+               end_time as import_completed_at
+          FROM terminology_import_jobs
+         WHERE type = 'snomed' AND status = 'completed'
+         ORDER BY end_time DESC
          LIMIT 1
       `);
       return row || null;
     } catch (error: any) {
       if (error?.code === '42P01') {
-        this.logger.warn('ICD-10 mapping metadata table missing; import may not have been run yet.');
+        this.logger.warn('Terminology import jobs table missing; import may not have been run yet.');
         return null;
       }
       this.logger.warn(`Failed to fetch ICD-10 mapping metadata: ${error.message}`);

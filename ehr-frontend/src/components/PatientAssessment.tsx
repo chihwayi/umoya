@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   X, Save, ClipboardList, AlertTriangle, Activity, Heart,
-  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus, CheckCircle, Search
+  Thermometer, Droplets, Stethoscope, Calendar, Edit2, Brain, Plus, CheckCircle, Search, History, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from '../components/GlobalNotification';
@@ -68,7 +68,72 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+  const [guidelineAnalysis, setGuidelineAnalysis] = useState<string | null>(null);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [recentVitals, setRecentVitals] = useState<any>(null);
+  const [triageHistory, setTriageHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
+
+  const formatAnalysisText = (text: string) => {
+    if (!text) return null;
+    return text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  // Load triage history when patient changes
+  useEffect(() => {
+    if (patient?.id) {
+      const loadHistory = async () => {
+        try {
+          const token = localStorage.getItem('ehr_token');
+          const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+          if (!token || !tenantSlug) return;
+          
+          const response = await Api.ehrApi.getTriageAssessments(patient.id, token, tenantSlug);
+          if (response.data && response.data.assessments) {
+            setTriageHistory(response.data.assessments);
+          } else if (Array.isArray(response.data)) {
+            setTriageHistory(response.data);
+          } else {
+            setTriageHistory([]);
+          }
+        } catch (e) {
+          console.error('Failed to load triage history:', e);
+        }
+      };
+      loadHistory();
+    } else {
+      setTriageHistory([]);
+    }
+  }, [patient?.id]);
+
+  useEffect(() => {
+    const loadVitals = async () => {
+      if (!patient?.id) return;
+      try {
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (!token || !tenantSlug) return;
+        const response = await Api.ehrApi.getVitals(patient.id, token, tenantSlug, { trend: true, limit: 1 });
+        if (response.data && response.data.latest) {
+          setRecentVitals(response.data.latest);
+        } else if (response.data && response.data.vitals && response.data.vitals.length > 0) {
+           // Fallback if trend=false or structure differs
+           setRecentVitals(response.data.vitals[0]);
+        } else {
+          setRecentVitals(null);
+        }
+      } catch (e) {
+        console.error('Failed to load recent vitals', e);
+      }
+    };
+    loadVitals();
+  }, [patient?.id]);
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -104,10 +169,12 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
       const finalQuery = `${searchContext}: ${guidelineQuery}`;
       
       const response = await Api.cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
-      if (response.data && response.data.citations) {
-        setGuidelineResults(response.data.citations);
+      if (response.data) {
+        setGuidelineResults(response.data.citations || []);
+        setGuidelineAnalysis(response.data.analysis || null);
       } else {
         setGuidelineResults([]);
+        setGuidelineAnalysis(null);
       }
     } catch (e) {
       console.error('Guideline search failed:', e);
@@ -249,7 +316,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           <div className="hidden md:flex items-center gap-6 text-sm text-slate-600">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              <span>Recent: {appointments[0] ? formatDateTimeToDDMMYYYYHHMM(appointments[0].appointmentDate) : 'N/A'}</span>
+              <span>Recent: {recentVitals ? formatDateTimeToDDMMYYYYHHMM(recentVitals.recordedAt) : 'N/A'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Stethoscope className="w-4 h-4" />
@@ -258,6 +325,59 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           </div>
         </div>
       </div>
+
+      {/* Triage History Section */}
+      {triageHistory.length > 0 && (
+        <div className="bg-white rounded-xl p-4 border border-slate-200">
+          <button 
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <div className="flex items-center gap-2 text-slate-700 font-semibold">
+              <History className="w-5 h-5 text-slate-500" />
+              <span>Previous Triage Assessments ({triageHistory.length})</span>
+            </div>
+            {showHistory ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+          </button>
+          
+          {showHistory && (
+            <div className="mt-4 space-y-3">
+              {triageHistory.map((assessment, idx) => (
+                <div 
+                  key={assessment.id || idx} 
+                  className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm hover:bg-slate-100 transition-colors cursor-pointer"
+                  onClick={() => setSelectedHistory(assessment)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-slate-700 flex items-center gap-2">
+                      {new Date(assessment.recordedAt).toLocaleDateString()} at {new Date(assessment.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-xs font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        View Details
+                      </span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                      assessment.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                      assessment.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {assessment.priority}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-slate-600">
+                    <p><span className="font-medium text-slate-700">CC:</span> {assessment.chiefComplaint}</p>
+                    {assessment.painScore > 0 && <p><span className="font-medium text-slate-700">Pain:</span> {assessment.painScore}/10</p>}
+                    {assessment.vitals && (
+                      <p className="text-xs text-slate-500">
+                        BP: {assessment.vitals.bloodPressure || '-'}, HR: {assessment.vitals.heartRate || '-'}, Temp: {assessment.vitals.temperature || '-'}°C
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {cdssInsights && (
         <div className="p-6 bg-white rounded-2xl border border-indigo-200/80 shadow-sm space-y-4">
@@ -380,9 +500,21 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           </button>
         </div>
 
+        {guidelineAnalysis && (
+          <div className="mt-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+            <h4 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+              <Brain className="w-4 h-4" />
+              AI Clinical Analysis
+            </h4>
+            <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+              {formatAnalysisText(guidelineAnalysis)}
+            </div>
+          </div>
+        )}
+
         {guidelineResults.length > 0 && (
           <div className="space-y-3 mt-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Results</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Evidence Sources</p>
             {guidelineResults.map((citation: any, idx: number) => (
               <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm text-slate-600">
                 {/* Handle both string and object citations if necessary */}
@@ -1033,6 +1165,210 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
           tenantSlug={localStorage.getItem('ehr_tenant_slug') || ''}
           token={localStorage.getItem('ehr_token') || ''}
         />
+      )}
+
+      {selectedHistory && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl ${
+                    selectedHistory.priority === 'urgent' ? 'bg-red-100 text-red-600' :
+                    selectedHistory.priority === 'high' ? 'bg-orange-100 text-orange-600' :
+                    'bg-blue-100 text-blue-600'
+                  }`}>
+                    <Activity className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Triage Assessment Details</h2>
+                    <p className="text-sm text-slate-500">
+                      Recorded on {new Date(selectedHistory.recordedAt).toLocaleDateString()} at {new Date(selectedHistory.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedHistory(null)}
+                  className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-slate-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-8">
+                {/* Vitals Section */}
+                {selectedHistory.vitals && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                        <Activity className="w-4 h-4" />
+                        <span className="text-xs font-semibold uppercase">Blood Pressure</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.bloodPressure || '—'}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                        <Heart className="w-4 h-4" />
+                        <span className="text-xs font-semibold uppercase">Heart Rate</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.heartRate ? `${selectedHistory.vitals.heartRate} bpm` : '—'}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                        <Thermometer className="w-4 h-4" />
+                        <span className="text-xs font-semibold uppercase">Temperature</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.temperature ? `${selectedHistory.vitals.temperature}°C` : '—'}</p>
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                        <Droplets className="w-4 h-4" />
+                        <span className="text-xs font-semibold uppercase">O2 Saturation</span>
+                      </div>
+                      <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.oxygenSaturation ? `${selectedHistory.vitals.oxygenSaturation}%` : '—'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Chief Complaint</h3>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                        <p className="text-slate-800">{selectedHistory.chiefComplaint}</p>
+                        {selectedHistory.chief_complaint_snomed && (
+                           <div className="mt-2 flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-fit">
+                             <span className="font-semibold">SNOMED:</span>
+                             {selectedHistory.chief_complaint_snomed.term}
+                           </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Symptoms</h3>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                        <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.symptoms || 'None recorded'}</p>
+                        {selectedHistory.symptoms_snomed && selectedHistory.symptoms_snomed.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {selectedHistory.symptoms_snomed.map((s: any, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                                {s.term}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Pain Assessment</h3>
+                      <div className="flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-xl">
+                         <div className={`text-2xl font-bold ${
+                           selectedHistory.painScore >= 7 ? 'text-red-600' :
+                           selectedHistory.painScore >= 4 ? 'text-orange-500' :
+                           'text-green-600'
+                         }`}>
+                           {selectedHistory.painScore}/10
+                         </div>
+                         <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                           <div 
+                             className={`h-full ${
+                               selectedHistory.painScore >= 7 ? 'bg-red-500' :
+                               selectedHistory.painScore >= 4 ? 'bg-orange-500' :
+                               'bg-green-500'
+                             }`}
+                             style={{ width: `${selectedHistory.painScore * 10}%` }}
+                           />
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Clinical History</h3>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                        <div>
+                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Onset</span>
+                          <p className="text-slate-800">{selectedHistory.onset || 'Not specified'}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Medical History</span>
+                          <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.history || 'None recorded'}</p>
+                          {selectedHistory.history_snomed && selectedHistory.history_snomed.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {selectedHistory.history_snomed.map((h: any, idx: number) => (
+                                <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                                  {h.term}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Medications & Allergies</h3>
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                        <div>
+                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Current Medications</span>
+                          <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.medications || 'None recorded'}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Allergies</span>
+                          <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.allergies || 'No known allergies'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedHistory.observations && (
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Nurse Observations</h3>
+                        <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                          <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.observations}</p>
+                          {selectedHistory.observations_snomed && selectedHistory.observations_snomed.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {selectedHistory.observations_snomed.map((o: any, idx: number) => (
+                                <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                                  {o.term}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {selectedHistory.cdssInsights && (
+                   <div className="mt-6 pt-6 border-t border-slate-100">
+                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                       <Brain className="w-4 h-4 text-purple-600" />
+                       CDSS Insights (Archived)
+                     </h3>
+                     <div className="p-4 bg-purple-50/50 border border-purple-100 rounded-xl text-sm text-slate-700">
+                        {/* Render simple view of archived CDSS data */}
+                        <pre className="whitespace-pre-wrap font-sans overflow-x-auto">{JSON.stringify(selectedHistory.cdssInsights, null, 2)}</pre>
+                     </div>
+                   </div>
+                )}
+              </div>
+              
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button
+                  onClick={() => setSelectedHistory(null)}
+                  className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
     </div>

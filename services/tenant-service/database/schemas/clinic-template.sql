@@ -1796,6 +1796,18 @@ ADD COLUMN IF NOT EXISTS presenting_complaint_term TEXT,
 ADD COLUMN IF NOT EXISTS symptoms_snomed_codes JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS medical_history_coded JSONB DEFAULT '[]'::jsonb;
 
+-- Regular Triage Assessments: Add SNOMED fields
+ALTER TABLE triage_assessments
+ADD COLUMN IF NOT EXISTS chief_complaint_snomed_code VARCHAR(50),
+ADD COLUMN IF NOT EXISTS chief_complaint_snomed_term TEXT,
+ADD COLUMN IF NOT EXISTS chief_complaint_snomed_module_id VARCHAR(50),
+ADD COLUMN IF NOT EXISTS chief_complaint_snomed_definition_status VARCHAR(50),
+ADD COLUMN IF NOT EXISTS symptoms TEXT,
+ADD COLUMN IF NOT EXISTS symptoms_snomed JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS medications_snomed JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS history_snomed JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS observations_snomed JSONB DEFAULT '[]'::jsonb;
+
 COMMENT ON COLUMN ed_triage_assessments.presenting_complaint_snomed IS 'SNOMED CT code for triage complaint - critical for ESI algorithm';
 COMMENT ON COLUMN ed_triage_assessments.symptoms_snomed_codes IS 'Array of presenting symptoms with SNOMED codes';
 

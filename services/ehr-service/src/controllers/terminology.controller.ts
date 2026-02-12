@@ -142,24 +142,7 @@ export class TerminologyController {
     return this.terminologyService.getConceptDetails(req.tenantDb, conceptId);
   }
 
-  @Get('snomed/map/:conceptId/:targetSystem')
-  @ApiOperation({ summary: 'Map SNOMED CT code to another terminology system' })
-  @ApiParam({ name: 'conceptId', description: 'SNOMED CT concept ID', required: true })
-  @ApiParam({
-    name: 'targetSystem',
-    description: 'Target terminology system',
-    enum: ['ICD10', 'ICD11', 'LOINC', 'CPT'],
-    required: true,
-  })
-  @ApiResponse({ status: 200, description: 'Mappings returned successfully' })
-  @ApiResponse({ status: 404, description: 'No mappings found' })
-  async mapConcept(
-    @Param('conceptId') conceptId: string,
-    @Param('targetSystem') targetSystem: 'ICD10' | 'ICD11' | 'LOINC' | 'CPT',
-    @Request() req: RequestWithTenant,
-  ) {
-    return this.terminologyService.mapConcept(req.tenantDb, conceptId, targetSystem);
-  }
+
 
   @Get('snomed/map/:conceptId/ICD10')
   @ApiOperation({ summary: 'Get ICD-10 mappings for a SNOMED CT concept' })
@@ -182,6 +165,25 @@ export class TerminologyController {
       includeInactive: includeInactive === 'true',
       limit: limit ? parseInt(limit, 10) : undefined,
     });
+  }
+
+  @Get('snomed/map/:conceptId/:targetSystem')
+  @ApiOperation({ summary: 'Map SNOMED CT code to another terminology system' })
+  @ApiParam({ name: 'conceptId', description: 'SNOMED CT concept ID', required: true })
+  @ApiParam({
+    name: 'targetSystem',
+    description: 'Target terminology system',
+    enum: ['ICD10', 'ICD11', 'LOINC', 'CPT'],
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'Mappings returned successfully' })
+  @ApiResponse({ status: 404, description: 'No mappings found' })
+  async mapConcept(
+    @Param('conceptId') conceptId: string,
+    @Param('targetSystem') targetSystem: 'ICD10' | 'ICD11' | 'LOINC' | 'CPT',
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.terminologyService.mapConcept(req.tenantDb, conceptId, targetSystem);
   }
 
   @Get('snomed/icd10/metadata')

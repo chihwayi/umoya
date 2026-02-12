@@ -6908,7 +6908,9 @@ export const clinicalPathwaysApi = {
 
 export const cdssApi = {
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
+    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
+    // Endpoint on cdss-service is /risk/calculate, not /risk-assessment
+    const response = await cdssAxios.post('/risk/calculate', patientData, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
@@ -6929,7 +6931,15 @@ export const cdssApi = {
   },
   
   getGuidelines: async (condition: string, patientData: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post('/cdss/guidelines', { condition, patientData }, {
+    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
+    // Endpoint on cdss-service is /guidelines/check
+    const response = await cdssAxios.post('/guidelines/check', { 
+      condition, 
+      patient_age: patientData?.age,
+      patient_gender: patientData?.gender,
+      comorbidities: patientData?.comorbidities || [],
+      medications: patientData?.medications || []
+    }, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,

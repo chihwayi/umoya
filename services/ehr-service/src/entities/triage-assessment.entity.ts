@@ -24,6 +24,12 @@ export class TriageAssessment {
   chiefComplaintSnomedDefinitionStatus?: string;
 
   @Column({ type: 'text', nullable: true })
+  symptoms?: string;
+
+  @Column({ name: 'symptoms_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  symptomsSnomed?: any[];
+
+  @Column({ type: 'text', nullable: true })
   onset?: string;
 
   @Column({ name: 'pain_score', type: 'int', nullable: true })
@@ -35,8 +41,14 @@ export class TriageAssessment {
   @Column({ type: 'text', nullable: true })
   medications?: string;
 
+  @Column({ name: 'medications_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  medicationsSnomed?: any[];
+
   @Column({ type: 'text', nullable: true })
   history?: string;
+
+  @Column({ name: 'history_snomed', type: 'jsonb', nullable: true, default: () => "'[]'::jsonb" })
+  historySnomed?: any[];
 
   @Column({ type: 'text', nullable: true })
   observations?: string;
