@@ -33,8 +33,9 @@ class LLMProvider:
         if not self.enabled:
             return False
             
-        if self._available is not None:
-            return self._available
+        # Re-check availability every time to handle transient failures or restarts
+        # if self._available is not None:
+        #    return self._available
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -79,7 +80,9 @@ class LLMProvider:
                 result = response.json()
                 return result.get("response", "")
         except Exception as e:
-            logger.error(f"Error generating LLM response: {e}")
+            logger.error(f"Error generating LLM response: {repr(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     async def generate_json(self, prompt: str, schema_description: str) -> Optional[Dict[str, Any]]:

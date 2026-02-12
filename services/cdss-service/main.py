@@ -394,15 +394,53 @@ async def search_guidelines(request: GuidelineSearchRequest):
     if diagnostic_assistant.rag_engine:
         try:
             print(f"[CDSS] Searching guidelines for: {request.query}")
-            citations = diagnostic_assistant.rag_engine.query(request.query, n_results=request.limit)
+            
+            # Construct Metadata Filters (Sprint 2: Context-Aware Retrieval)
+            filters = {}
+            if request.patient_context:
+                pc = request.patient_context
+                
+                # Age-based filtering
+                age = pc.get('age')
+                if age is not None:
+                    if isinstance(age, str) and age.isdigit():
+                        age = int(age)
+                        
+                    if isinstance(age, int):
+                        if age < 18:
+                            filters["target_population"] = "children"
+                        elif age > 65:
+                            filters["target_population"] = "elderly"
+                
+                # Gender/Pregnancy (Overrides age if pregnant)
+                gender = pc.get('gender', '').lower()
+                is_pregnant = pc.get('is_pregnant', False) or 'pregnant' in str(pc).lower()
+                
+                if is_pregnant and gender in ['female', 'f']:
+                    filters["target_population"] = "pregnant_women"
+            
+            # Log active filters
+            if filters:
+                print(f"[CDSS] Applying RAG Filters: {filters}")
+
+            citations = diagnostic_assistant.rag_engine.query(
+                request.query, 
+                n_results=request.limit,
+                filters=filters if filters else None
+            )
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
             
     # 2. Generate Patient-Specific Analysis (LLM)
-    if diagnostic_assistant.llm_provider and request.patient_context:
+    if diagnostic_assistant.llm_provider:
         try:
             # Construct context-aware prompt
-            context_str = "\n".join([f"{k}: {v}" for k, v in request.patient_context.items()])
+            context_str = ""
+            if request.patient_context:
+                context_str = "\n".join([f"{k}: {v}" for k, v in request.patient_context.items()])
+            else:
+                context_str = "No specific patient context provided. Answer generally."
+
             guidelines_str = "\n\n".join([f"Source: {c['source']}\n{c['text']}" for c in citations])
             
             prompt = f"""
@@ -413,7 +451,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
             {context_str}
             
             RELEVANT GUIDELINES:
-            {guidelines_str}
+            {guidelines_str[:12000]}
             
             USER QUERY: {request.query}
             
@@ -422,6 +460,8 @@ async def search_guidelines(request: GuidelineSearchRequest):
             2. Cite the guidelines where appropriate.
             3. Highlight any red flags or immediate actions needed.
             4. Keep it concise and clinically actionable.
+            5. If the guidelines provided are not relevant, state that clearly.
+            6. Correct any disjointed text from the sources into coherent sentences.
             """
             
             print(f"[CDSS] Generating analysis for patient context...")
@@ -429,6 +469,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
             
         except Exception as e:
             print(f"[CDSS] LLM analysis failed: {e}")
+            analysis = f"Analysis generation failed due to a temporary error: {str(e)}. Please try again."
 
     return {
         "query": request.query,

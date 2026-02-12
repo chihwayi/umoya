@@ -97,15 +97,22 @@ services:
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - CDSS_USE_EHR_TERMINOLOGY=true
       - CORS_ORIGINS=${CORS_ORIGINS}
-      - LLM_API_URL=${LLM_API_URL}
+      - LLM_ENABLED=true
+      - ANONYMIZED_TELEMETRY=False
+      - LLM_API_URL=http://host.docker.internal:11434
+      - LLM_MODEL_NAME=llama3
+      - LLM_TIMEOUT_SECONDS=300
       - WHISPER_API_KEY=${WHISPER_API_KEY}
+      - CHROMA_ANONYMIZED_TELEMETRY=False
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./services/cdss-service:/app
     depends_on:
       - redis
       - postgres-master
+      - minio
     networks:
       - medicore-network
-    volumes:
-      - ./services/cdss-service:/app
 
   ehr-service:
     build:

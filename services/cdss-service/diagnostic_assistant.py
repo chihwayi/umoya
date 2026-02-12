@@ -57,7 +57,11 @@ class DiagnosticAssistant:
             self.medbert = MedBERTPredictor()
             self.clinicalbert = ClinicalBERTDiagnostic()
             self.fusion_engine = IntelligentFusionEngine()
-            self.llm_provider = LLMProvider() if LLMProvider else None
+            # Initialize LLMProvider and check availability
+            if LLMProvider:
+                self.llm_provider = LLMProvider()
+                # We don't await here because __init__ is sync, but check_availability will be called later
+            
             self.rag_engine = RAGEngine() if RAGEngine else None
             logger.info("AI models initialized for intelligent diagnostics (lightweight mode + LLM + RAG)")
         except Exception as e:
@@ -628,12 +632,19 @@ class DiagnosticAssistant:
                 if self.rag_engine:
                     query_terms = symptoms + ([clinical_notes] if clinical_notes else [])
                     query = " ".join(query_terms)[:200] # Limit query length
+                    
+                    # Context-Aware Filtering (Sprint 2)
+                    rag_filters = {}
+                    if gender and gender.lower() in ['male', 'm']:
+                        # Exclude pregnancy-related content for males
+                        rag_filters["target_population"] = {"$ne": "pregnant_women"}
+                        
                     try:
-                        retrieved_docs = self.rag_engine.query(query)
+                        retrieved_docs = self.rag_engine.query(query, filters=rag_filters)
                         if retrieved_docs:
                             guideline_texts = [f"{doc['text']} (Source: {doc['source']})" for doc in retrieved_docs]
                             guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
-                            logger.info(f"RAG retrieved {len(retrieved_docs)} guideline chunks")
+                            logger.info(f"RAG retrieved {len(retrieved_docs)} guideline chunks with filters: {rag_filters}")
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed: {e}")
 

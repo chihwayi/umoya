@@ -1,6 +1,7 @@
 
 import os
 import logging
+import hashlib
 from typing import List, Dict, Any, Optional
 
 # Configure logger
@@ -32,9 +33,12 @@ class RAGEngine:
             # Ensure directory exists
             os.makedirs(self.persistence_path, exist_ok=True)
             
-            self.chroma_client = chromadb.PersistentClient(path=self.persistence_path)
+            self.chroma_client = chromadb.PersistentClient(
+                path=self.persistence_path,
+                settings=Settings(anonymized_telemetry=False)
+            )
             self.collection = self.chroma_client.get_or_create_collection(name="medical_guidelines")
-            logger.info(f"ChromaDB initialized at {self.persistence_path}")
+            logger.info(f"ChromaDB initialized at {self.persistence_path} (Telemetry Disabled)")
 
             # 2. Initialize Embedding Model
             # Using all-MiniLM-L6-v2 for efficiency (lightweight, good performance)
@@ -75,7 +79,7 @@ class RAGEngine:
             })
         return entities
 
-    def query(self, query: str, n_results: int = 3) -> List[Dict[str, Any]]:
+    def query(self, query: str, n_results: int = 3, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         Retrieve relevant guideline snippets from the Vector DB.
         Returns structured citations.
@@ -91,6 +95,7 @@ class RAGEngine:
             results = self.collection.query(
                 query_embeddings=query_embedding,
                 n_results=n_results,
+                where=filters,
                 include=["documents", "metadatas", "distances"]
             )
             
@@ -100,9 +105,28 @@ class RAGEngine:
             distances = results['distances'][0] if results['distances'] else []
             
             formatted_results = []
+            seen_texts = set()
+            seen_pages = set()
+            
             for i, (doc, meta) in enumerate(zip(documents, metadatas)):
+                # Deduplication logic: skip if we've seen this exact text before
+                # Normalize text (strip whitespace) for comparison
+                text_content = doc.strip() if doc else ""
+                if text_content in seen_texts:
+                    continue
+                
                 source = meta.get('source', 'Unknown Source')
                 page = meta.get('page', '')
+                
+                # Page-level deduplication: Max 1 chunk per page per source
+                # This prevents clustering of results from a single relevant page
+                page_key = f"{source}_{page}"
+                if page_key in seen_pages:
+                    continue
+                
+                seen_texts.add(text_content)
+                seen_pages.add(page_key)
+                
                 url = meta.get('url', '')
                 
                 # Calculate confidence (1 - distance for cosine distance)
@@ -133,7 +157,9 @@ class RAGEngine:
             
         try:
             embedding = self.embedding_model.encode([text]).tolist()
-            doc_id = f"{source}_{page}_{hash(text)}"
+            # Use stable hash (MD5) instead of Python's hash() which is randomized per process
+            text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+            doc_id = f"{source}_{page}_{text_hash}"
             
             self.collection.add(
                 documents=[text],

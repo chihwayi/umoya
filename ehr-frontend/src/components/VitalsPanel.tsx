@@ -539,11 +539,36 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                           Evidence & Guidelines
                         </p>
                         <ul className="text-[10px] text-slate-500 space-y-1.5">
-                          {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: string, idx: number) => (
-                            <li key={`cite-${idx}`} className="bg-slate-50 p-1.5 rounded border border-slate-100 italic leading-tight">
-                              "{citation.length > 120 ? citation.substring(0, 120) + '...' : citation}"
-                            </li>
-                          ))}
+                          {cdssInsights.risk.guideline_citations.slice(0, 2).map((citation: any, idx: number) => {
+                            let data = citation;
+                            
+                            // Robust JSON parsing
+                            if (typeof data === 'string') {
+                              try {
+                                let parsed = JSON.parse(data);
+                                if (typeof parsed === 'string') {
+                                   try { parsed = JSON.parse(parsed); } catch(e){}
+                                }
+                                if (typeof parsed === 'object' && parsed !== null) data = parsed;
+                              } catch (e) {
+                                try {
+                                  const cleaned = data.replace(/\n/g, "\\n").replace(/\r/g, "");
+                                  const parsed = JSON.parse(cleaned);
+                                  if (typeof parsed === 'object' && parsed !== null) data = parsed;
+                                } catch (e2) {}
+                              }
+                            }
+
+                            const text = (typeof data === 'object' && data !== null) 
+                                ? (data.text || data.content || JSON.stringify(data))
+                                : String(data);
+
+                            return (
+                              <li key={`cite-${idx}`} className="bg-slate-50 p-1.5 rounded border border-slate-100 italic leading-tight">
+                                "{text.length > 120 ? text.substring(0, 120) + '...' : text}"
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
@@ -579,17 +604,27 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 disabled={loadingGuidelines || !guidelineQuery.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {loadingGuidelines ? '...' : 'Search'}
+                {loadingGuidelines ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  'Search'
+                )}
               </button>
             </div>
 
+            {/* Analysis Result Section - moved above Guideline Results */}
             {analysisResult && (
-              <div className="mb-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="w-4 h-4 text-indigo-600" />
-                  <p className="text-sm font-semibold text-indigo-900">Patient-Specific Analysis</p>
+              <div className="mt-4 mb-4 p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-100">
+                  <div className="p-1.5 bg-indigo-100 rounded-lg">
+                    <Brain className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <p className="text-sm font-bold text-indigo-900">AI Clinical Analysis</p>
                 </div>
-                <div className="text-xs text-indigo-800 whitespace-pre-wrap leading-relaxed font-medium">
+                <div className="text-sm text-indigo-900 whitespace-pre-wrap leading-relaxed font-medium">
                   {analysisResult}
                 </div>
               </div>
@@ -598,16 +633,78 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
             {guidelineResults.length > 0 && (
               <div className="space-y-2 mt-3 max-h-60 overflow-y-auto custom-scrollbar">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Sources & Guidelines</p>
-                {guidelineResults.map((citation: any, idx: number) => (
-                  <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
-                    <div className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        {typeof citation === 'string' ? citation : (citation.content || JSON.stringify(citation))}
+                {guidelineResults.map((citation: any, idx: number) => {
+                  let data = citation;
+                  
+                  // Robust JSON parsing logic
+                  if (typeof data === 'string') {
+                    try {
+                      // 1. Try direct parse
+                      let parsed = JSON.parse(data);
+                      
+                      // 2. Handle double-encoded JSON (string inside string)
+                      if (typeof parsed === 'string') {
+                        try {
+                          const doubleParsed = JSON.parse(parsed);
+                          if (typeof doubleParsed === 'object' && doubleParsed !== null) {
+                            parsed = doubleParsed;
+                          }
+                        } catch (e) {
+                          // Ignore inner parse error
+                        }
+                      }
+
+                      if (typeof parsed === 'object' && parsed !== null) {
+                        data = parsed;
+                      }
+                    } catch (e) {
+                      // 3. If direct parse fails, try cleaning newlines (common issue with LLM output)
+                      try {
+                        // Replace literal newlines with escaped newlines
+                        const cleaned = data.replace(/\n/g, "\\n").replace(/\r/g, "");
+                        const parsed = JSON.parse(cleaned);
+                        if (typeof parsed === 'object' && parsed !== null) {
+                          data = parsed;
+                        }
+                      } catch (e2) {
+                        // Parsing failed completely, keep as string
+                      }
+                    }
+                  }
+
+                  return (
+                    <div key={`search-res-${idx}`} className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          {typeof data === 'string' ? (
+                            data
+                          ) : (
+                            <>
+                              {data.source && (
+                                <p className="font-semibold text-slate-700 mb-1">
+                                  {data.source}
+                                  {data.confidence > 0 && <span className="text-slate-400 font-normal ml-1">({(data.confidence * 100).toFixed(0)}%)</span>}
+                                </p>
+                              )}
+                              <p className="whitespace-pre-wrap">{data.text || data.content || JSON.stringify(data)}</p>
+                              {data.url && (
+                                <a 
+                                  href={data.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-500 hover:underline mt-1 block"
+                                >
+                                  View Source
+                                </a>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

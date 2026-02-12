@@ -6918,7 +6918,8 @@ export const cdssApi = {
   },
 
   searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5, patientContext?: any) => {
-    const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit, patient_context: patientContext }, {
+    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
+    const response = await cdssAxios.post('/guidelines/search', { query, limit, patient_context: patientContext }, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,

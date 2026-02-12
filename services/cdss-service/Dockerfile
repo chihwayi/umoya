@@ -12,6 +12,11 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    libmagic-dev \
+    poppler-utils \
+    tesseract-ocr \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip
@@ -19,7 +24,13 @@ RUN pip install --upgrade pip setuptools wheel
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+
+# Download NLTK data (required for unstructured)
+RUN python -m nltk.downloader punkt averaged_perceptron_tagger
+
+# Install scispacy model
+RUN pip install --default-timeout=1000 --no-cache-dir https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.5.4/en_core_sci_sm-0.5.4.tar.gz
 
 # Verify installation
 RUN python -c "import fastapi, uvicorn, pydantic, numpy, pandas, sklearn, redis; print('✅ All modules installed successfully')"

@@ -1,10 +1,20 @@
-
 import os
 import sys
 import glob
 import logging
-from pathlib import Path
-import pypdf
+import hashlib
+import nltk
+from typing import List, Dict, Any
+
+# Ensure NLTK data is available for unstructured
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    nltk.download('averaged_perceptron_tagger')
 
 # Add parent directory to path to import app modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,113 +27,131 @@ logger = logging.getLogger(__name__)
 
 GUIDELINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "who-smart-guidelines")
 
-def extract_text_from_pdf(pdf_path: str) -> list[tuple[str, int]]:
+def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """
-    Extracts text from a PDF file.
-    Returns a list of tuples: (text_content, page_number)
+    Uses unstructured to partition PDF and chunk by title.
+    Returns a list of dicts with 'text' and 'metadata'.
     """
-    extracted_data = []
     try:
-        reader = pypdf.PdfReader(pdf_path)
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text()
-            if text and len(text.strip()) > 50: # Skip empty/very short pages
-                extracted_data.append((text, i + 1))
-    except Exception as e:
-        logger.error(f"Error reading PDF {pdf_path}: {e}")
-    
-    return extracted_data
-
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 100) -> list[str]:
-    """
-    Simple sliding window chunker.
-    Increased chunk size for PDF content which is often denser.
-    """
-    chunks = []
-    start = 0
-    text_len = len(text)
-    
-    while start < text_len:
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start += (chunk_size - overlap)
+        from unstructured.partition.pdf import partition_pdf
         
-    return chunks
+        logger.info(f"Partitioning PDF (Layout-Aware): {pdf_path}")
+        
+        # partition_pdf with "by_title" chunking strategy
+        # "hi_res" strategy uses layout analysis to detect tables/images (requires tesseract/poppler)
+        elements = partition_pdf(
+            filename=pdf_path,
+            strategy="hi_res", 
+            infer_table_structure=True,
+            chunking_strategy="by_title",
+            max_characters=1500,        # Slightly larger chunks for medical context
+            new_after_n_chars=2000,
+            combine_text_under_n_chars=500,
+            extract_images_in_pdf=False
+        )
+        
+        processed_chunks = []
+        for element in elements:
+            text = str(element).strip()
+            if len(text) < 50:
+                continue
+                
+            # Basic metadata extraction
+            meta = element.metadata.to_dict() if hasattr(element.metadata, "to_dict") else {}
+            page_number = meta.get("page_number", 1)
+            filename = os.path.basename(pdf_path)
+            
+            # Heuristic Metadata Tagging (Sprint 1 Quick Win)
+            lower_text = text.lower()
+            lower_file = filename.lower()
+            
+            target_pop = "adults" # Default
+            if any(k in lower_file or k in lower_text for k in ["anc", "antenatal", "pregnancy", "pregnant", "maternal"]):
+                target_pop = "pregnant_women"
+            elif any(k in lower_file or k in lower_text for k in ["child", "pediatric", "infant", "adolescent"]):
+                target_pop = "children"
+            elif "elderly" in lower_text or "geriatric" in lower_text:
+                target_pop = "elderly"
+                
+            domain = "general"
+            if "hypertension" in lower_file or "hypertension" in lower_text:
+                domain = "cardiology"
+            elif "hiv" in lower_file:
+                domain = "infectious_disease"
+            
+            processed_chunks.append({
+                "text": text,
+                "metadata": {
+                    "source": filename,
+                    "page": page_number,
+                    "type": "guideline",
+                    "target_population": target_pop,
+                    "clinical_domain": domain
+                }
+            })
+            
+        return processed_chunks
+        
+    except ImportError as e:
+        logger.error(f"❌ 'unstructured' library import failed: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error processing PDF {pdf_path}: {e}")
+        # Fallback?
+        return []
 
 def ingest_guidelines():
-    print(f"🚀 Starting Knowledge Ingestion from {GUIDELINES_DIR}...")
+    print(f"🚀 Starting Advanced Knowledge Ingestion (Unstructured) from {GUIDELINES_DIR}...")
     
     rag = RAGEngine()
     
-    # 1. Find all Markdown/Text/PDF files (recursively)
-    files = glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.md"), recursive=True) + \
-            glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.txt"), recursive=True) + \
-            glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.pdf"), recursive=True)
+    # Check if RAG engine is ready
+    if not rag.collection:
+        print("❌ RAG Engine not initialized correctly.")
+        return
+
+    # Wipe existing data (Data Hygiene)
+    try:
+        print("🧹 Wiping existing Vector DB for clean ingestion...")
+        rag.chroma_client.delete_collection("medical_guidelines")
+        rag.collection = rag.chroma_client.get_or_create_collection("medical_guidelines")
+        print("   ✅ Collection wiped and recreated.")
+    except Exception as e:
+        logger.warning(f"Could not wipe DB (might be empty): {e}")
+
+    files = glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.pdf"), recursive=True)
     
     if not files:
-        print("❌ No guideline files found.")
+        print("❌ No PDF guideline files found.")
         return
 
     total_chunks = 0
     
     for file_path in files:
-        filename = os.path.basename(file_path)
-        print(f"📄 Processing {filename}...")
+        print(f"📄 Processing {os.path.basename(file_path)}...")
         
-        try:
-            # Handle PDFs
-            if filename.lower().endswith('.pdf'):
-                pages = extract_text_from_pdf(file_path)
-                for page_text, page_num in pages:
-                    chunks = chunk_text(page_text)
-                    for chunk in chunks:
-                        success = rag.add_document(
-                            text=chunk,
-                            source=filename,
-                            page=page_num
-                        )
-                        if success:
-                            total_chunks += 1
+        chunks = process_pdf(file_path)
+        
+        if not chunks:
+            print("   ⚠️ No chunks extracted.")
+            continue
             
-            # Handle Text/Markdown
-            else:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                chunks = chunk_text(content)
-                for chunk in chunks:
-                    success = rag.add_document(
-                        text=chunk,
-                        source=filename,
-                        page=1 
-                    )
-                    if success:
-                        total_chunks += 1
-                    
-        except Exception as e:
-            print(f"❌ Failed to process {filename}: {e}")
-
-    print(f"\n✅ Ingestion Complete! Added {total_chunks} chunks to the Knowledge Base.")
-
-def test_retrieval():
-    print("\n🔎 Testing Retrieval...")
-    rag = RAGEngine()
-    
-    queries = [
-        "What is the first line regimen for HIV?",
-        "When should ART be started?",
-        "How to monitor viral load?"
-    ]
-    
-    for q in queries:
-        print(f"\nQuestion: {q}")
-        results = rag.query(q, n_results=1)
-        if results:
-            print(f"Answer Context: {results[0]['text'][:300]}...") # Truncate for display
-            print(f"Source: {results[0]['source']}")
-        else:
-            print("❌ No context found.")
+        texts = [c["text"] for c in chunks]
+        metadatas = [c["metadata"] for c in chunks]
+        ids = []
+        
+        # Generate stable IDs
+        for c in chunks:
+            # Create a deterministic hash of the text
+            text_hash = hashlib.md5(c["text"].encode('utf-8')).hexdigest()
+            # ID format: Source_Page_Hash
+            ids.append(f"{c['metadata']['source']}_p{c['metadata']['page']}_{text_hash}")
+            
+        rag.add_documents(texts, metadatas, ids)
+        total_chunks += len(chunks)
+        print(f"   ✅ Added {len(chunks)} chunks.")
+        
+    print(f"🎉 Ingestion Complete! Total Chunks: {total_chunks}")
 
 if __name__ == "__main__":
     ingest_guidelines()
-    test_retrieval()
