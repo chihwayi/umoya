@@ -160,6 +160,21 @@ const NurseDashboard: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Persistent acknowledged alerts
+  const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('nurse_acknowledged_alerts');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+
+  const handleAlertAcknowledge = (alertId: string) => {
+    setAcknowledgedAlertIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(alertId);
+      localStorage.setItem('nurse_acknowledged_alerts', JSON.stringify(Array.from(newSet)));
+      return newSet;
+    });
+  };
+
   // Sidebar Navigation Helper
   const getSidebarNavigation = () => {
     return [
@@ -1897,13 +1912,11 @@ const NurseDashboard: React.FC = () => {
           <PatientSafetyAlerts 
             currentUser={currentUser}
             appointments={appointments}
-            onAlertAcknowledge={(alertId) => {
-              console.log('Alert acknowledged:', alertId);
-              // Could trigger refresh of other data
-            }}
+            acknowledgedAlertIds={acknowledgedAlertIds}
+            onAlertAcknowledge={handleAlertAcknowledge}
             onAlertDismiss={(alertId) => {
               console.log('Alert dismissed:', alertId);
-              // Could update alert status
+              handleAlertAcknowledge(alertId);
             }}
             onAlertCountsChange={(counts) => {
               calculateTaskCounts([counts.active, counts.critical, counts.high]);
@@ -2191,6 +2204,10 @@ const NurseDashboard: React.FC = () => {
             <PatientAssessment 
               patient={selectedPatient || undefined}
               appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))} 
+              onSave={() => {
+                fetchTodayAppointments();
+                showSuccess('Triage Saved', 'Assessment recorded successfully.');
+              }}
             />
           </div>
         )}

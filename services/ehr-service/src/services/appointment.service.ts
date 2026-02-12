@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, Optional } from '@nestjs/common';
-import { Repository, Between, Not } from 'typeorm';
+import { Repository, Between, Not, In } from 'typeorm';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
+import { Vitals } from '../entities/vitals.entity';
+import { TriageAssessment } from '../entities/triage-assessment.entity';
 import { CreateAppointmentDto, UpdateAppointmentDto, AppointmentQueryDto } from '../dto/appointment.dto';
 import { TenantService } from './tenant.service';
 import { FinanceService } from './finance.service';
@@ -259,8 +261,61 @@ export class AppointmentService {
     // Get appointments and total count
     const [appointments, total] = await queryBuilder.getManyAndCount();
 
+    // Fetch Vitals and Triage for these appointments to support task synchronization
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    let vitalsMap = new Map<string, Vitals[]>();
+    let triageMap = new Map<string, TriageAssessment[]>();
+
+    if (appointments.length > 0) {
+      const patientIds = [...new Set(appointments.map(a => a.patientId).filter(id => id))];
+      
+      if (patientIds.length > 0) {
+        // Determine date range from the appointments found
+        const dates = appointments.map(a => new Date(a.appointmentDate).getTime());
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+        
+        // Expand range to cover the full day(s)
+        minDate.setHours(0, 0, 0, 0);
+        maxDate.setHours(23, 59, 59, 999);
+
+        const vitals = await connection.getRepository(Vitals).find({
+          where: {
+            patientId: In(patientIds),
+            recordedAt: Between(minDate, maxDate)
+          }
+        });
+
+        const triage = await connection.getRepository(TriageAssessment).find({
+          where: {
+            patientId: In(patientIds),
+            recordedAt: Between(minDate, maxDate)
+          }
+        });
+
+        // Group by patientId
+        vitals.forEach(v => {
+          if (!vitalsMap.has(v.patientId)) vitalsMap.set(v.patientId, []);
+          vitalsMap.get(v.patientId).push(v);
+        });
+
+        triage.forEach(t => {
+          if (!triageMap.has(t.patientId)) triageMap.set(t.patientId, []);
+          triageMap.get(t.patientId).push(t);
+        });
+      }
+    }
+
     return {
-      appointments: appointments.map(apt => ({
+      appointments: appointments.map(apt => {
+        const patientVitals = vitalsMap.get(apt.patientId) || [];
+        const patientTriage = triageMap.get(apt.patientId) || [];
+        
+        // Sort by recordedAt desc to get latest
+        patientVitals.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+        patientTriage.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+
+        return {
         id: apt.id,
         patient: {
           id: apt.patient?.id,
@@ -286,8 +341,11 @@ export class AppointmentService {
         financeTransactionId: apt.financeTransactionId,
         createdBy: apt.createdBy,
         createdAt: apt.createdAt,
-        updatedAt: apt.updatedAt
-      })),
+        updatedAt: apt.updatedAt,
+        vitals: patientVitals[0] || null,
+        triage: patientTriage[0] || null
+      };
+    }),
       total
     };
   }

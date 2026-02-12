@@ -26,6 +26,7 @@ interface SafetyAlert {
 interface PatientSafetyAlertsProps {
   currentUser: any;
   appointments: any[];
+  acknowledgedAlertIds?: Set<string>;
   onAlertAcknowledge?: (alertId: string) => void;
   onAlertDismiss?: (alertId: string) => void;
   onAlertCountsChange?: (counts: { active: number; critical: number; high: number }) => void;
@@ -34,6 +35,7 @@ interface PatientSafetyAlertsProps {
 const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   currentUser,
   appointments,
+  acknowledgedAlertIds,
   onAlertAcknowledge,
   onAlertDismiss,
   onAlertCountsChange
@@ -180,6 +182,17 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
         }
       });
 
+      // Apply acknowledgment status from props
+      if (acknowledgedAlertIds) {
+        realAlerts.forEach(alert => {
+          if (acknowledgedAlertIds.has(alert.id)) {
+            alert.acknowledgedAt = new Date().toISOString();
+            alert.isActive = false;
+            alert.acknowledgedBy = currentUser?.id || 'current_user';
+          }
+        });
+      }
+
       setAlerts(realAlerts);
     };
 
@@ -188,7 +201,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
     } else {
       setAlerts([]);
     }
-  }, [appointments]);
+  }, [appointments, acknowledgedAlertIds]);
 
   // Notify parent of alert count changes
   // Use useRef to store the callback to avoid recreating it on every render

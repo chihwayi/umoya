@@ -71,30 +71,72 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         
         // Only create tasks for appointments that need nursing care
         if (apt.status === 'scheduled' || apt.status === 'confirmed') {
-          // Only create vital signs task if vitals haven't been recorded yet
-          if (!apt.vitals) {
-            // Only show pending tasks to the nurse who registered the patient (created the appointment)
-            // or if the nurse has taken ownership of the patient care.
-            // Ensure strictly pending status.
-            if (isCreatedByCurrentUser) {
+          // 1. Triage Task
+          if (!apt.triage) {
+            // Pending Triage - Visible to ALL nurses
+            realTasks.push({
+              id: `triage-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              taskType: 'assessment',
+              title: 'Perform Triage Assessment',
+              description: `Complete triage assessment for ${patientName}`,
+              priority: 'high',
+              status: 'pending',
+              dueTime: new Date(appointmentTime.getTime() - 20 * 60000).toISOString(), // 20 mins before
+              estimatedDuration: 15,
+              assignedTo: apt.createdBy || '',
+              createdBy: apt.createdBy || '',
+              createdAt: now.toISOString(),
+              relatedAppointmentId: apt.id,
+              isRecurring: false
+            });
+          } else {
+            // Completed Triage
+            const isPerformedByCurrentUser = apt.triage.recordedBy === currentUser?.id;
+            if (isCreatedByCurrentUser || isPerformedByCurrentUser) {
               realTasks.push({
-                id: `vitals-${apt.id}`,
+                id: `triage-${apt.id}`,
                 patientId: apt.patient.id,
                 patientName,
-                taskType: 'vitals',
-                title: 'Record Vital Signs',
-                description: `Record vital signs for ${patientName}`,
-                priority: 'normal',
-                status: 'pending',
-                dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
-                estimatedDuration: 10,
+                taskType: 'assessment',
+                title: 'Perform Triage Assessment',
+                description: `Complete triage assessment for ${patientName}`,
+                priority: 'high',
+                status: 'completed',
+                dueTime: new Date(appointmentTime.getTime() - 20 * 60000).toISOString(),
+                estimatedDuration: 15,
                 assignedTo: apt.createdBy || '',
                 createdBy: apt.createdBy || '',
                 createdAt: now.toISOString(),
+                completedAt: apt.triage.recordedAt || now.toISOString(),
                 relatedAppointmentId: apt.id,
                 isRecurring: false
               });
             }
+          }
+
+          // 2. Vital Signs Task
+          if (!apt.vitals) {
+            // Show pending tasks to ALL nurses so any available nurse can pick it up.
+            // This ensures tasks are visible even if the nurse didn't create the appointment.
+            realTasks.push({
+              id: `vitals-${apt.id}`,
+              patientId: apt.patient.id,
+              patientName,
+              taskType: 'vitals',
+              title: 'Record Vital Signs',
+              description: `Record vital signs for ${patientName}`,
+              priority: 'normal',
+              status: 'pending',
+              dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
+              estimatedDuration: 10,
+              assignedTo: apt.createdBy || '', // Remains assigned to creator initially, but visible to all
+              createdBy: apt.createdBy || '',
+              createdAt: now.toISOString(),
+              relatedAppointmentId: apt.id,
+              isRecurring: false
+            });
           } else {
             // Vitals already recorded - mark as completed
             // Show completed task if the current user performed it OR created the appointment
