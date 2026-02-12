@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TerminologyController } from './terminology.controller';
 import { TerminologyService } from '../services/terminology.service';
+import { TerminologyImportService } from '../services/terminology-import.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('TerminologyController', () => {
@@ -15,6 +16,13 @@ describe('TerminologyController', () => {
     mapConcept: jest.fn(),
   };
 
+  const mockTerminologyImportService = {
+    importFile: jest.fn(),
+    getAllJobs: jest.fn(),
+    getStats: jest.fn(),
+    getImportStatus: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TerminologyController],
@@ -22,6 +30,10 @@ describe('TerminologyController', () => {
         {
           provide: TerminologyService,
           useValue: mockTerminologyService,
+        },
+        {
+          provide: TerminologyImportService,
+          useValue: mockTerminologyImportService,
         },
       ],
     }).compile();
