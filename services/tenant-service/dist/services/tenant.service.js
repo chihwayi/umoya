@@ -65,6 +65,19 @@ let TenantService = TenantService_1 = class TenantService {
         }
         return savedTenant;
     }
+    async updateTenant(id, updateData) {
+        const tenant = await this.findById(id);
+        Object.assign(tenant, updateData);
+        if (updateData.subscriptionTier) {
+            tenant.featureFlags = {
+                ...tenant.featureFlags,
+                ...this.getDefaultFeatureFlags(updateData.subscriptionTier)
+            };
+        }
+        const savedTenant = await this.tenantRepository.save(tenant);
+        this.logger.log(`Tenant updated: ${savedTenant.id}`);
+        return savedTenant;
+    }
     async findBySubdomain(subdomain) {
         const tenant = await this.tenantRepository.findOne({
             where: { subdomain, status: tenant_entity_1.TenantStatus.ACTIVE }

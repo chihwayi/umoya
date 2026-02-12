@@ -25,6 +25,7 @@ export declare class DatabaseProvisioningService {
     getCoreSchemaStatements(): string[];
     private getGatewayConfigurationStatements;
     private getPortalEnhancementStatements;
+    private getMedicationRemindersSchemaStatements;
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;

@@ -10,6 +10,7 @@ export declare class TenantService implements OnModuleInit {
     constructor(tenantRepository: Repository<Tenant>, databaseProvisioningService: DatabaseProvisioningService);
     onModuleInit(): Promise<void>;
     createTenant(createTenantDto: CreateTenantDto): Promise<Tenant>;
+    updateTenant(id: string, updateData: Partial<Tenant>): Promise<Tenant>;
     findBySubdomain(subdomain: string): Promise<Tenant>;
     findById(id: string): Promise<Tenant>;
     findAll(): Promise<Tenant[]>;

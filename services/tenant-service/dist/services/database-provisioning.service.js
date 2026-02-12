@@ -122,13 +122,6 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 tasks: [(db) => this.applyHivTestingUpgrades(db)],
             },
             {
-                id: 'icd10_mapping',
-                label: 'ICD-10 Mapping Tables',
-                version: '2025.03.01',
-                description: 'Provides SNOMED → ICD-10 mapping storage and metadata tracking',
-                statements: () => this.getIcd10MappingStatements(),
-            },
-            {
                 id: 'sprint5_features',
                 label: 'Sprint 5 Features',
                 version: '2025.03.02',
@@ -408,6 +401,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 description: 'Adds portal access columns to patients and patient_messages table',
                 statements: () => this.getPortalEnhancementStatements(),
             },
+            {
+                id: 'medication_reminders',
+                label: 'Medication Reminders',
+                version: '2026.02.12',
+                description: 'Adds medication_reminders table for tracking patient medication adherence reminders',
+                statements: () => this.getMedicationRemindersSchemaStatements(),
+            },
         ];
     }
     getCoreSchemaStatements() {
@@ -484,6 +484,32 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
             `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
+        ];
+    }
+    getMedicationRemindersSchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS medication_reminders (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        prescription_id UUID REFERENCES prescriptions(id) ON DELETE CASCADE,
+        medication_name VARCHAR(255) NOT NULL,
+        dosage VARCHAR(100),
+        frequency VARCHAR(100),
+        reminder_time TIME NOT NULL,
+        reminder_days INTEGER[] DEFAULT '{1,2,3,4,5,6,7}',
+        start_date DATE NOT NULL,
+        end_date DATE,
+        is_active BOOLEAN DEFAULT true,
+        last_sent_at TIMESTAMP WITH TIME ZONE,
+        next_reminder_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_by UUID REFERENCES users(id),
+        updated_by UUID REFERENCES users(id)
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_medication_reminders_patient_id ON medication_reminders(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_medication_reminders_active ON medication_reminders(is_active)`,
+            `CREATE INDEX IF NOT EXISTS idx_medication_reminders_prescription ON medication_reminders(prescription_id)`,
         ];
     }
     getWhoSmartFormsDataSchemaStatements() {
@@ -1001,7 +1027,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       );
       
       CREATE TABLE prescriptions (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_uuid(),
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
           doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           medication_name VARCHAR(255) NOT NULL,

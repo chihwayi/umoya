@@ -19,6 +19,7 @@ const platform_express_1 = require("@nestjs/platform-express");
 const tenant_service_1 = require("../services/tenant.service");
 const storage_service_1 = require("../services/storage.service");
 const create_tenant_dto_1 = require("../dto/create-tenant.dto");
+const update_tenant_dto_1 = require("../dto/update-tenant.dto");
 const tenant_entity_1 = require("../entities/tenant.entity");
 let TenantController = class TenantController {
     constructor(tenantService, storageService) {
@@ -44,6 +45,9 @@ let TenantController = class TenantController {
     }
     async getTenantBySubdomain(subdomain) {
         return this.tenantService.findBySubdomain(subdomain);
+    }
+    async updateTenant(id, updateTenantDto) {
+        return this.tenantService.updateTenant(id, updateTenantDto);
     }
     async updateTenantStatus(id, status) {
         return this.tenantService.updateTenantStatus(id, status);
@@ -114,6 +118,16 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], TenantController.prototype, "getTenantBySubdomain", null);
+__decorate([
+    (0, common_1.Put)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update tenant details' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Tenant updated successfully' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)(common_1.ValidationPipe)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_tenant_dto_1.UpdateTenantDto]),
+    __metadata("design:returntype", Promise)
+], TenantController.prototype, "updateTenant", null);
 __decorate([
     (0, common_1.Put)(':id/status'),
     __param(0, (0, common_1.Param)('id')),
