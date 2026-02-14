@@ -60,6 +60,39 @@ CREATE TABLE IF NOT EXISTS cdss_admin_audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- CDSS Admin: Encryption key registry (for auditable key rotation metadata)
+CREATE TABLE IF NOT EXISTS cdss_encryption_keys (
+    key_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    key_fingerprint TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    rotated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- CDSS Admin: Async job orchestration records
+CREATE TABLE IF NOT EXISTS cdss_admin_jobs (
+    job_id TEXT PRIMARY KEY,
+    job_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    retry_of TEXT,
+    payload JSONB,
+    result JSONB,
+    message TEXT,
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_started_at ON cdss_admin_jobs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_status ON cdss_admin_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_type ON cdss_admin_jobs(job_type);
+
 -- Tenant analytics table
 CREATE TABLE tenant_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

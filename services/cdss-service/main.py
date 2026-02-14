@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from fastapi.responses import JSONResponse
 import time
+import asyncio
 import uvicorn
 import httpx
 import os
@@ -409,8 +410,232 @@ async def startup_event():
         print(f"Error checking MinIO connection: {e}")
 
 lab_interpreter = LabResultInterpreter()
-_INGEST_JOBS = {}
-_INGEST_LOCK = Lock()
+_ADMIN_JOBS: Dict[str, Dict[str, Any]] = {}
+_ADMIN_JOBS_LOCK = Lock()
+_MAX_ADMIN_JOB_ATTEMPTS = int(os.getenv("CDSS_MAX_JOB_ATTEMPTS", "3"))
+_MAX_ADMIN_JOB_RECORDS = int(os.getenv("CDSS_MAX_JOB_RECORDS", "2000"))
+# Backward-compatible alias for existing ingest endpoints/UI paths.
+_INGEST_JOBS = _ADMIN_JOBS
+_INGEST_LOCK = _ADMIN_JOBS_LOCK
+
+
+def _create_job(
+    *,
+    job_type: str,
+    owner: str,
+    tenant_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+    retry_of: Optional[str] = None,
+    attempt: int = 1,
+) -> str:
+    job_id = str(uuid4())
+    with _ADMIN_JOBS_LOCK:
+        if len(_ADMIN_JOBS) >= _MAX_ADMIN_JOB_RECORDS:
+            # Drop oldest completed/failed jobs first to keep in-memory state bounded.
+            candidates = sorted(
+                _ADMIN_JOBS.values(),
+                key=lambda j: j.get("started_at") or "",
+            )
+            removed = 0
+            for j in candidates:
+                if len(_ADMIN_JOBS) < _MAX_ADMIN_JOB_RECORDS:
+                    break
+                if j.get("status") in ("completed", "failed"):
+                    _ADMIN_JOBS.pop(str(j.get("jobId")), None)
+                    removed += 1
+            if removed == 0 and candidates:
+                _ADMIN_JOBS.pop(str(candidates[0].get("jobId")), None)
+        _ADMIN_JOBS[job_id] = {
+            "jobId": job_id,
+            "type": job_type,
+            "status": "queued",
+            "started_at": datetime.utcnow().isoformat(),
+            "finished_at": None,
+            "message": None,
+            "owner": owner,
+            "tenant_id": tenant_id or "public",
+            "attempt": attempt,
+            "max_attempts": _MAX_ADMIN_JOB_ATTEMPTS,
+            "retry_of": retry_of,
+            "payload": payload or {},
+            "result": None,
+        }
+        if settings_provider:
+            try:
+                settings_provider.upsert_job(_ADMIN_JOBS[job_id])
+            except Exception:
+                pass
+    return job_id
+
+
+def _update_job(job_id: str, **updates: Any) -> None:
+    with _ADMIN_JOBS_LOCK:
+        job = _ADMIN_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(updates)
+        _ADMIN_JOBS[job_id] = job
+        if settings_provider:
+            try:
+                settings_provider.upsert_job(job)
+            except Exception:
+                pass
+
+
+def _run_reindex_job() -> Dict[str, Any]:
+    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+        raise RuntimeError("RAG engine unavailable")
+    ce = diagnostic_assistant.rag_engine
+    if ce.chroma_client:
+        ce.chroma_client.delete_collection("medical_guidelines")
+        ce.collection = ce.chroma_client.get_or_create_collection("medical_guidelines")
+        ce._build_bm25_index()
+    count = ce.collection.count() if ce.collection else 0
+    return {"reindexed": True, "documents": count}
+
+
+def _run_cache_flush_job() -> Dict[str, Any]:
+    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+        return {"flushed": 0}
+    ce = diagnostic_assistant.rag_engine
+    if not ce.redis_client:
+        return {"flushed": 0}
+    namespace = "cdss"
+    if settings_provider:
+        try:
+            namespace = settings_provider.get_settings().get("cache_namespace", "cdss")
+        except Exception:
+            pass
+    pattern_list = [f"{namespace}:*", "rag:*", "llm:*"]
+    deleted = 0
+    for pattern in pattern_list:
+        try:
+            for key in ce.redis_client.scan_iter(match=pattern):
+                ce.redis_client.delete(key)
+                deleted += 1
+        except Exception:
+            continue
+    return {"flushed": deleted}
+
+
+def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not voice_scribe:
+        raise RuntimeError("Voice service unavailable")
+    temp_path = str(payload.get("temp_path") or "")
+    language = payload.get("language")
+    generate_soap = bool(payload.get("generate_soap", True))
+    filename = str(payload.get("filename") or "audio.wav")
+    tenant_key = str(payload.get("tenant_id") or "public")
+
+    if not temp_path:
+        raise RuntimeError("Missing transcription temp file path")
+
+    try:
+        transcription_result = voice_scribe.transcribe_audio(temp_path, language=language)
+        if "error" in transcription_result:
+            raise RuntimeError(transcription_result["error"])
+        result: Dict[str, Any] = {
+            "transcription": transcription_result,
+            "soap_note": None,
+            "audio_url": None,
+            "storage_key": None,
+        }
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = _safe_filename(filename)
+            file_key = f"tenants/{tenant_key}/voice-consultations/{timestamp}_{safe_name}"
+            s3_client.upload_file(temp_path, MINIO_BUCKET, file_key)
+            result["storage_key"] = file_key
+            result["audio_url"] = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{file_key}"
+        except Exception as e:
+            print(f"MinIO upload failed: {e}")
+
+        if generate_soap:
+            result["soap_note"] = asyncio.run(voice_scribe.generate_soap_note(transcription_result["text"]))
+        return result
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def _run_image_analysis_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not medical_vision:
+        raise RuntimeError("Medical Vision service unavailable")
+    temp_path = str(payload.get("temp_path") or "")
+    filename = str(payload.get("filename") or "image.bin")
+    if not temp_path:
+        raise RuntimeError("Missing image temp file path")
+    try:
+        with open(temp_path, "rb") as f:
+            content = f.read()
+        result = medical_vision.analyze_image(content, filename)
+        if "error" in result:
+            raise RuntimeError(result["error"])
+        return result
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def _run_job(job_id: str) -> None:
+    _update_job(job_id, status="running")
+    ok = False
+    err: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    action_name = "job"
+    try:
+        with _ADMIN_JOBS_LOCK:
+            job = dict(_ADMIN_JOBS.get(job_id) or {})
+        if not job:
+            return
+        job_type = str(job.get("type") or "")
+        payload = job.get("payload") or {}
+        action_name = job_type or action_name
+
+        if job_type == "ingest":
+            from ingest_guidelines import ingest_guidelines
+            ingest_guidelines()
+            result = {"ingested": True}
+        elif job_type == "reindex":
+            result = _run_reindex_job()
+        elif job_type == "cache_flush":
+            result = _run_cache_flush_job()
+        elif job_type == "transcribe":
+            result = _run_transcribe_job(payload)
+        elif job_type == "analyze_image":
+            result = _run_image_analysis_job(payload)
+        else:
+            raise RuntimeError(f"Unsupported job type: {job_type}")
+        ok = True
+    except Exception as e:
+        err = str(e)
+        ok = False
+    finally:
+        _update_job(
+            job_id,
+            status="completed" if ok else "failed",
+            finished_at=datetime.utcnow().isoformat(),
+            message=None if ok else err,
+            result=result if ok else None,
+        )
+        if settings_provider:
+            try:
+                with _ADMIN_JOBS_LOCK:
+                    job = _ADMIN_JOBS.get(job_id) or {}
+                settings_provider.log_action(
+                    actor=job.get("owner", "system"),
+                    action=f"{action_name}_{'completed' if ok else 'failed'}",
+                    payload={
+                        "jobId": job_id,
+                        "type": job.get("type"),
+                        "tenant_id": job.get("tenant_id"),
+                        "attempt": job.get("attempt"),
+                        "message": err,
+                    },
+                )
+            except Exception:
+                pass
 
 def require_owner(request: Request, response: Response, authorization: str = Header(None)) -> str:
     """
@@ -541,28 +766,6 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
 
-def _run_ingest(job_id: str = None):
-    ok = False
-    err = None
-    try:
-        from ingest_guidelines import ingest_guidelines
-        ingest_guidelines()
-        ok = True
-    except Exception as e:
-        err = str(e)
-    finally:
-        if job_id:
-            try:
-                with _INGEST_LOCK:
-                    job = _INGEST_JOBS.get(job_id)
-                    if job:
-                        job["status"] = "completed" if ok else "failed"
-                        job["finished_at"] = datetime.utcnow().isoformat()
-                        job["message"] = None if ok else err
-                        _INGEST_JOBS[job_id] = job
-            except Exception:
-                pass
-
 @app.post("/admin/ingest")
 async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner)):
     if settings_provider:
@@ -576,16 +779,12 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
         content = await file.read()
         with open(dest, "wb") as f:
             f.write(content)
-    job_id = str(uuid4())
-    with _INGEST_LOCK:
-        _INGEST_JOBS[job_id] = {
-            "jobId": job_id,
-            "status": "running",
-            "started_at": datetime.utcnow().isoformat(),
-            "finished_at": None,
-            "message": None
-        }
-    t = threading.Thread(target=_run_ingest, args=(job_id,), daemon=True)
+    job_id = _create_job(
+        job_type="ingest",
+        owner=owner,
+        payload={"filename": getattr(file, "filename", None)},
+    )
+    t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
     t.start()
     if settings_provider:
         try:
@@ -595,59 +794,57 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
     return {"started": True, "jobId": job_id}
 
 @app.post("/admin/reindex")
-async def admin_reindex(owner: str = Depends(require_owner)):
-    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
-        raise HTTPException(status_code=503, detail="RAG engine unavailable")
+async def admin_reindex(async_job: bool = True, owner: str = Depends(require_owner)):
+    if async_job:
+        job_id = _create_job(job_type="reindex", owner=owner)
+        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
+        t.start()
+        return {"started": True, "jobId": job_id}
     try:
-        ce = diagnostic_assistant.rag_engine
-        if ce.chroma_client:
-            ce.chroma_client.delete_collection("medical_guidelines")
-            ce.collection = ce.chroma_client.get_or_create_collection("medical_guidelines")
-            ce._build_bm25_index()
-        count = ce.collection.count() if ce.collection else 0
+        result = _run_reindex_job()
         if settings_provider:
             try:
-                settings_provider.log_action(actor=owner, action="reindex", payload={"documents": count})
+                settings_provider.log_action(actor=owner, action="reindex", payload=result)
             except Exception:
                 pass
-        return {"reindexed": True, "documents": count}
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/ingest/jobs")
 async def admin_ingest_jobs(limit: int = 20, owner: str = Depends(require_owner)):
-    with _INGEST_LOCK:
-        arr = list(_INGEST_JOBS.values())
+    with _ADMIN_JOBS_LOCK:
+        arr = [j for j in _ADMIN_JOBS.values() if j.get("type") == "ingest"]
     arr.sort(key=lambda x: x.get("started_at") or "", reverse=True)
     return {"jobs": arr[:limit], "limit": limit}
 
 @app.get("/admin/ingest/status/{job_id}")
 async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner)):
-    with _INGEST_LOCK:
-        job = _INGEST_JOBS.get(job_id)
-    if not job:
+    with _ADMIN_JOBS_LOCK:
+        job = _ADMIN_JOBS.get(job_id)
+    if not job or job.get("type") != "ingest":
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 @app.post("/admin/ingest/retry/{job_id}")
 async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner)):
-    with _INGEST_LOCK:
-        existing = _INGEST_JOBS.get(job_id)
-    if not existing:
+    with _ADMIN_JOBS_LOCK:
+        existing = _ADMIN_JOBS.get(job_id)
+    if not existing or existing.get("type") != "ingest":
         raise HTTPException(status_code=404, detail="Job not found")
     if existing.get("status") == "running":
         raise HTTPException(status_code=409, detail="Job is still running")
-    new_id = str(uuid4())
-    with _INGEST_LOCK:
-        _INGEST_JOBS[new_id] = {
-            "jobId": new_id,
-            "status": "running",
-            "started_at": datetime.utcnow().isoformat(),
-            "finished_at": None,
-            "message": None,
-            "retry_of": job_id
-        }
-    t = threading.Thread(target=_run_ingest, args=(new_id,), daemon=True)
+    attempt = int(existing.get("attempt") or 1) + 1
+    if attempt > int(existing.get("max_attempts") or _MAX_ADMIN_JOB_ATTEMPTS):
+        raise HTTPException(status_code=409, detail="Job reached maximum retry attempts")
+    new_id = _create_job(
+        job_type="ingest",
+        owner=owner,
+        payload=existing.get("payload") or {},
+        retry_of=job_id,
+        attempt=attempt,
+    )
+    t = threading.Thread(target=_run_job, args=(new_id,), daemon=True)
     t.start()
     if settings_provider:
         try:
@@ -655,34 +852,91 @@ async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner)):
         except Exception:
             pass
     return {"started": True, "jobId": new_id, "retry_of": job_id}
+
+
+@app.get("/admin/jobs")
+async def admin_jobs(
+    limit: int = 50,
+    type: Optional[str] = None,
+    status: Optional[str] = None,
+    owner: str = Depends(require_owner),
+):
+    if settings_provider:
+        try:
+            arr = settings_provider.get_jobs(
+                limit=max(1, min(limit, 200)),
+                job_type=type,
+                status=status,
+            )
+            return {"jobs": arr, "limit": limit}
+        except Exception:
+            pass
+    with _ADMIN_JOBS_LOCK:
+        arr = list(_ADMIN_JOBS.values())
+    if type:
+        arr = [j for j in arr if str(j.get("type")) == str(type)]
+    if status:
+        arr = [j for j in arr if str(j.get("status")) == str(status)]
+    arr.sort(key=lambda x: x.get("started_at") or "", reverse=True)
+    return {"jobs": arr[: max(1, min(limit, 200))], "limit": limit}
+
+
+@app.get("/admin/jobs/{job_id}")
+async def admin_job_status(job_id: str, owner: str = Depends(require_owner)):
+    if settings_provider:
+        try:
+            job = settings_provider.get_job(job_id)
+            if job:
+                return job
+        except Exception:
+            pass
+    with _ADMIN_JOBS_LOCK:
+        job = _ADMIN_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@app.post("/admin/jobs/retry/{job_id}")
+async def admin_job_retry(job_id: str, owner: str = Depends(require_owner)):
+    with _ADMIN_JOBS_LOCK:
+        existing = _ADMIN_JOBS.get(job_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if existing.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Job is still running")
+    attempt = int(existing.get("attempt") or 1) + 1
+    max_attempts = int(existing.get("max_attempts") or _MAX_ADMIN_JOB_ATTEMPTS)
+    if attempt > max_attempts:
+        raise HTTPException(status_code=409, detail="Job reached maximum retry attempts")
+
+    new_id = _create_job(
+        job_type=str(existing.get("type") or ""),
+        owner=owner,
+        tenant_id=str(existing.get("tenant_id") or "public"),
+        payload=existing.get("payload") or {},
+        retry_of=job_id,
+        attempt=attempt,
+    )
+    t = threading.Thread(target=_run_job, args=(new_id,), daemon=True)
+    t.start()
+    return {"started": True, "jobId": new_id, "retry_of": job_id}
+
+
 @app.post("/admin/cache/flush")
-async def admin_cache_flush(owner: str = Depends(require_owner)):
-    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
-        return {"flushed": 0}
-    ce = diagnostic_assistant.rag_engine
-    if not ce.redis_client:
-        return {"flushed": 0}
-    namespace = "cdss"
+async def admin_cache_flush(async_job: bool = True, owner: str = Depends(require_owner)):
+    if async_job:
+        job_id = _create_job(job_type="cache_flush", owner=owner)
+        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
+        t.start()
+        return {"started": True, "jobId": job_id}
+    result = _run_cache_flush_job()
     if settings_provider:
         try:
-            namespace = settings_provider.get_settings().get("cache_namespace", "cdss")
+            settings_provider.log_action(actor=owner, action="cache_flush", payload=result)
         except Exception:
             pass
-    pattern_list = [f"{namespace}:*", "rag:*", "llm:*"]
-    deleted = 0
-    for pattern in pattern_list:
-        try:
-            for key in ce.redis_client.scan_iter(match=pattern):
-                ce.redis_client.delete(key)
-                deleted += 1
-        except Exception:
-            continue
-    if settings_provider:
-        try:
-            settings_provider.log_action(actor=owner, action="cache_flush", payload={"deleted": deleted})
-        except Exception:
-            pass
-    return {"flushed": deleted}
+    return result
 
 @app.post("/admin/metrics/reset")
 async def admin_metrics_reset(owner: str = Depends(require_owner)):
@@ -800,7 +1054,8 @@ async def transcribe_audio(
     req: Request,
     file: UploadFile = File(...),
     generate_soap: bool = True,
-    language: Optional[str] = Form(None)
+    language: Optional[str] = Form(None),
+    async_job: bool = Form(False),
 ):
     """
     Transcribe audio file (English, Shona, Ndebele) and optionally generate SOAP note.
@@ -809,54 +1064,46 @@ async def transcribe_audio(
     if not voice_scribe:
         raise HTTPException(status_code=503, detail="Voice service unavailable")
     
-    # Save uploaded file to temp file
     tenant_key = _tenant_cache_key_from_request(req)
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
-    
+
+    if async_job:
+        owner = req.headers.get("x-owner-email") or "service"
+        job_id = _create_job(
+            job_type="transcribe",
+            owner=owner,
+            tenant_id=tenant_key,
+            payload={
+                "tenant_id": tenant_key,
+                "temp_path": temp_path,
+                "filename": file.filename,
+                "language": language,
+                "generate_soap": generate_soap,
+            },
+        )
+        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
+        t.start()
+        return {"started": True, "jobId": job_id}
+
     try:
-        # 1. Transcribe
-        transcription_result = await run_in_threadpool(voice_scribe.transcribe_audio, temp_path, language=language)
-        if "error" in transcription_result:
-             raise HTTPException(status_code=500, detail=transcription_result["error"])
-        
-        result = {
-            "transcription": transcription_result,
-            "soap_note": None,
-            "audio_url": None,
-            "storage_key": None
-        }
-        
-        # 2. Upload to MinIO
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = _safe_filename(file.filename)
-            file_key = f"tenants/{tenant_key}/voice-consultations/{timestamp}_{filename}"
-            
-            await run_in_threadpool(s3_client.upload_file, temp_path, MINIO_BUCKET, file_key)
-            
-            # Construct URL (accessible if bucket is public or via signed url)
-            # For internal use, we return the key
-            result["storage_key"] = file_key
-            result["audio_url"] = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{file_key}"
-        except Exception as e:
-            print(f"MinIO upload failed: {e}")
-            # Continue even if upload fails, as we have the text
-        
-        # 3. Generate SOAP Note
-        if generate_soap:
-            soap_result = await voice_scribe.generate_soap_note(transcription_result["text"])
-            result["soap_note"] = soap_result
-            
-        return result
-    finally:
-        # Cleanup temp file
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        return await run_in_threadpool(
+            _run_transcribe_job,
+            {
+                "tenant_id": tenant_key,
+                "temp_path": temp_path,
+                "filename": file.filename,
+                "language": language,
+                "generate_soap": generate_soap,
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/analyze-image")
 async def analyze_medical_image(
     req: Request,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    async_job: bool = Form(False),
 ):
     """
     Analyze medical images (X-Ray, DICOM) using Computer Vision.
@@ -867,28 +1114,33 @@ async def analyze_medical_image(
 
     tenant_key = _tenant_cache_key_from_request(req)
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
-    try:
-        with open(temp_path, "rb") as f:
-            content = f.read()
-        
-        # Run inference in threadpool to avoid blocking
-        result = await run_in_threadpool(
-            medical_vision.analyze_image, 
-            content, 
-            file.filename
+    if async_job:
+        owner = req.headers.get("x-owner-email") or "service"
+        job_id = _create_job(
+            job_type="analyze_image",
+            owner=owner,
+            tenant_id=tenant_key,
+            payload={
+                "tenant_id": tenant_key,
+                "temp_path": temp_path,
+                "filename": file.filename,
+            },
         )
-        
-        if "error" in result:
-             raise HTTPException(status_code=500, detail=result["error"])
-             
-        return result
-        
+        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
+        t.start()
+        return {"started": True, "jobId": job_id}
+    try:
+        return await run_in_threadpool(
+            _run_image_analysis_job,
+            {
+                "tenant_id": tenant_key,
+                "temp_path": temp_path,
+                "filename": file.filename,
+            },
+        )
     except Exception as e:
         print(f"Image analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
 
 
 duplicate_detector = DuplicateTherapyDetector()
@@ -1802,7 +2054,7 @@ async def check_food_interactions(request: FoodInteractionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/transcribe")
+@app.post("/transcribe/basic")
 async def transcribe_audio_basic(
     req: Request,
     file: UploadFile = File(...),

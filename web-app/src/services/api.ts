@@ -333,6 +333,24 @@ export const cdssAdminAPI = {
     const response = await api.get(`/cdss-admin/admin/ingest/jobs?limit=${limit}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   },
+  getAdminJobs: async (limit = 50, type?: string, status?: string): Promise<any> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+    const response = await api.get(`/cdss-admin/admin/jobs?${params.toString()}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getAdminJobStatus: async (jobId: string): Promise<any> => {
+    const response = await api.get(`/cdss-admin/admin/jobs/${encodeURIComponent(jobId)}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  retryAdminJob: async (jobId: string): Promise<any> => {
+    const response = await api.post(`/cdss-admin/admin/jobs/retry/${encodeURIComponent(jobId)}`, null, { headers: { ...getOwnerHeaders() } });
+    const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+    const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+    const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+    return { data: response.data, rateLimit: { limit, remaining, reset } };
+  },
   retryIngestJob: async (jobId: string): Promise<any> => {
     const response = await api.post(`/cdss-admin/admin/ingest/retry/${encodeURIComponent(jobId)}`, null, { headers: { ...getOwnerHeaders() } });
     const limit = Number(response.headers['x-ratelimit-limit'] || 0);

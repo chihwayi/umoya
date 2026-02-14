@@ -73,14 +73,14 @@ export const CdssAdmin: React.FC = () => {
   const [jobIdQuery, setJobIdQuery] = useState<string>(() => {
     try { return localStorage.getItem('cdssAdmin.jobIdQuery') || ''; } catch { return ''; }
   });
-  const [jobsSortKey, setJobsSortKey] = useState<'jobId' | 'status' | 'started_at' | 'finished_at'>(() => {
+  const [jobsSortKey, setJobsSortKey] = useState<'jobId' | 'type' | 'status' | 'started_at' | 'finished_at'>(() => {
     try { return (localStorage.getItem('cdssAdmin.jobsSortKey') as any) || 'started_at'; } catch { return 'started_at'; }
   });
   const [jobsSortDir, setJobsSortDir] = useState<'asc' | 'desc'>(() => {
     try { return (localStorage.getItem('cdssAdmin.jobsSortDir') as any) || 'desc'; } catch { return 'desc'; }
   });
-  const defaultJobsWidths = { jobId: 140, status: 120, started: 160, finished: 160, message: 320, actions: 120 };
-  const [jobsColWidths, setJobsColWidths] = useState<{ jobId: number; status: number; started: number; finished: number; message: number; actions: number }>(() => {
+  const defaultJobsWidths = { jobId: 140, type: 140, status: 120, started: 160, finished: 160, message: 320, actions: 120 };
+  const [jobsColWidths, setJobsColWidths] = useState<{ jobId: number; type: number; status: number; started: number; finished: number; message: number; actions: number }>(() => {
     try {
       const raw = localStorage.getItem('cdssAdmin.jobsColWidths');
       const parsed = raw ? JSON.parse(raw) : null;
@@ -137,7 +137,7 @@ export const CdssAdmin: React.FC = () => {
           sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
           sortDir: auditSortDir,
         }),
-        cdssAdminAPI.getIngestJobs(20),
+        cdssAdminAPI.getAdminJobs(50),
       ]);
       setStatus(st);
       setSettings(se?.settings || se);
@@ -161,7 +161,7 @@ export const CdssAdmin: React.FC = () => {
     if (autoRefresh) {
       const tick = async () => {
         try {
-          const jobs = await cdssAdminAPI.getIngestJobs(20);
+          const jobs = await cdssAdminAPI.getAdminJobs(50);
           setIngestJobs(jobs?.jobs || []);
         } catch {}
       };
@@ -305,7 +305,7 @@ export const CdssAdmin: React.FC = () => {
       setMessage(jobId ? `Ingestion started • Job ${jobId}` : 'Ingestion started');
       setAutoRefresh(true);
       try {
-        const jobs = await cdssAdminAPI.getIngestJobs(20);
+        const jobs = await cdssAdminAPI.getAdminJobs(50);
         setIngestJobs(jobs?.jobs || []);
       } catch {}
     } catch (e: any) {
@@ -325,8 +325,11 @@ export const CdssAdmin: React.FC = () => {
     try {
       const res = await cdssAdminAPI.reindex();
       if (res?.rateLimit) setRateLimit(res.rateLimit);
-      setMessage('Reindex requested');
-      await loadAll();
+      const jobId = res?.data?.jobId || res?.data?.job_id;
+      setMessage(jobId ? `Reindex started • Job ${jobId}` : 'Reindex requested');
+      setAutoRefresh(true);
+      const jobs = await cdssAdminAPI.getAdminJobs(50);
+      setIngestJobs(jobs?.jobs || []);
     } catch (e: any) {
       const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
       if (e?.response?.status === 429 && reset > 0) {
@@ -344,7 +347,11 @@ export const CdssAdmin: React.FC = () => {
     try {
       const res = await cdssAdminAPI.flushCache();
       if (res?.rateLimit) setRateLimit(res.rateLimit);
-      setMessage('Cache flushed');
+      const jobId = res?.data?.jobId || res?.data?.job_id;
+      setMessage(jobId ? `Cache flush started • Job ${jobId}` : 'Cache flushed');
+      setAutoRefresh(true);
+      const jobs = await cdssAdminAPI.getAdminJobs(50);
+      setIngestJobs(jobs?.jobs || []);
     } catch (e: any) {
       const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
       if (e?.response?.status === 429 && reset > 0) {
@@ -496,7 +503,7 @@ export const CdssAdmin: React.FC = () => {
     return 0;
   });
 
-  const toggleSort = (key: 'jobId' | 'status' | 'started_at' | 'finished_at') => {
+  const toggleSort = (key: 'jobId' | 'type' | 'status' | 'started_at' | 'finished_at') => {
     if (jobsSortKey === key) {
       setJobsSortDir(jobsSortDir === 'asc' ? 'desc' : 'asc');
     } else {
@@ -507,11 +514,11 @@ export const CdssAdmin: React.FC = () => {
   const sortIndicator = (key: string) => jobsSortKey === key ? (jobsSortDir === 'asc' ? '▲' : '▼') : '';
 
   const exportJobsCsv = () => {
-    const headers = ['jobId', 'status', 'started_at', 'finished_at', 'message'];
+    const headers = ['jobId', 'type', 'status', 'started_at', 'finished_at', 'message'];
     const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [headers.join(',')].concat(
       filteredJobs.map((j: any) =>
-        [j.jobId, j.status, j.started_at, j.finished_at || '', j.message || ''].map((x: any) => esc(String(x))).join(',')
+        [j.jobId, j.type || '', j.status, j.started_at, j.finished_at || '', j.message || ''].map((x: any) => esc(String(x))).join(',')
       )
     );
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -845,7 +852,7 @@ export const CdssAdmin: React.FC = () => {
             />
             <button
               onClick={async () => {
-                const jobs = await cdssAdminAPI.getIngestJobs(20);
+                const jobs = await cdssAdminAPI.getAdminJobs(50);
                 setIngestJobs(jobs?.jobs || []);
               }}
               className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
@@ -917,6 +924,14 @@ export const CdssAdmin: React.FC = () => {
                       <div onMouseDown={beginResize('jobs', 'jobId', jobsColWidths.jobId)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
                     </div>
                   </th>
+                  <th style={{ width: jobsColWidths.type }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <button onClick={() => toggleSort('type')} className="text-left w-full">
+                        Type <span className="text-slate-400">{sortIndicator('type')}</span>
+                      </button>
+                      <div onMouseDown={beginResize('jobs', 'type', jobsColWidths.type)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
                   <th style={{ width: jobsColWidths.status }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     <div className="relative pr-2">
                       <button onClick={() => toggleSort('status')} className="text-left w-full">
@@ -968,6 +983,11 @@ export const CdssAdmin: React.FC = () => {
                         Copy
                       </button>
                     </td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-700">
+                        {j.type || 'ingest'}
+                      </span>
+                    </td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}><span className={statusChip(j.status)}>{j.status}</span></td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.started_at || ''}>{relTime(j.started_at)}{nowTick ? '' : ''}</td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.finished_at || ''}>{j.finished_at ? relTime(j.finished_at) : '-' }{nowTick ? '' : ''}</td>
@@ -978,11 +998,11 @@ export const CdssAdmin: React.FC = () => {
                         onClick={async () => {
                           setLoading(true);
                           try {
-                            const res = await cdssAdminAPI.retryIngestJob(j.jobId);
+                            const res = await cdssAdminAPI.retryAdminJob(j.jobId);
                             if (res?.rateLimit) setRateLimit(res.rateLimit);
                             const jobId = res?.data?.jobId || res?.data?.job_id;
                             setMessage(`Retry started • Job ${jobId || ''}`);
-                            const jobs = await cdssAdminAPI.getIngestJobs(20);
+                            const jobs = await cdssAdminAPI.getAdminJobs(50);
                             setIngestJobs(jobs?.jobs || []);
                           } catch (e: any) {
                             const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);

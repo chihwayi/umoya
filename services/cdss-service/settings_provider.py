@@ -76,6 +76,36 @@ class SettingsProvider:
                 );
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cdss_admin_jobs (
+                  job_id TEXT PRIMARY KEY,
+                  job_type TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  owner TEXT NOT NULL,
+                  tenant_id TEXT NOT NULL,
+                  attempt INTEGER NOT NULL DEFAULT 1,
+                  max_attempts INTEGER NOT NULL DEFAULT 3,
+                  retry_of TEXT,
+                  payload JSONB,
+                  result JSONB,
+                  message TEXT,
+                  started_at TIMESTAMPTZ NOT NULL,
+                  finished_at TIMESTAMPTZ,
+                  created_at TIMESTAMPTZ DEFAULT NOW(),
+                  updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_started_at ON cdss_admin_jobs(started_at DESC);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_status ON cdss_admin_jobs(status);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_type ON cdss_admin_jobs(job_type);"
+            )
             if self.crypto.enabled:
                 cur.execute(
                     """
@@ -213,6 +243,170 @@ class SettingsProvider:
         except Exception as e:
             logger.warning(f"Failed to fetch audit logs: {e}")
             return []
+
+    def upsert_job(self, job: Dict[str, Any]) -> None:
+        try:
+            with self.conn.cursor() as cur:
+                payload = self.crypto.encrypt_json(job.get("payload") or {})
+                result = self.crypto.encrypt_json(job.get("result") or {}) if job.get("result") is not None else None
+                cur.execute(
+                    """
+                    INSERT INTO cdss_admin_jobs (
+                      job_id, job_type, status, owner, tenant_id,
+                      attempt, max_attempts, retry_of, payload, result, message,
+                      started_at, finished_at, created_at, updated_at
+                    ) VALUES (
+                      %s, %s, %s, %s, %s,
+                      %s, %s, %s, %s, %s, %s,
+                      %s, %s, NOW(), NOW()
+                    )
+                    ON CONFLICT (job_id) DO UPDATE SET
+                      job_type = EXCLUDED.job_type,
+                      status = EXCLUDED.status,
+                      owner = EXCLUDED.owner,
+                      tenant_id = EXCLUDED.tenant_id,
+                      attempt = EXCLUDED.attempt,
+                      max_attempts = EXCLUDED.max_attempts,
+                      retry_of = EXCLUDED.retry_of,
+                      payload = EXCLUDED.payload,
+                      result = EXCLUDED.result,
+                      message = EXCLUDED.message,
+                      started_at = EXCLUDED.started_at,
+                      finished_at = EXCLUDED.finished_at,
+                      updated_at = NOW();
+                    """,
+                    (
+                        job.get("jobId"),
+                        job.get("type"),
+                        job.get("status"),
+                        job.get("owner"),
+                        job.get("tenant_id", "public"),
+                        int(job.get("attempt") or 1),
+                        int(job.get("max_attempts") or 3),
+                        job.get("retry_of"),
+                        Json(payload),
+                        Json(result) if result is not None else None,
+                        job.get("message"),
+                        job.get("started_at"),
+                        job.get("finished_at"),
+                    ),
+                )
+        except Exception as e:
+            logger.warning(f"Failed to upsert admin job: {e}")
+
+    def get_jobs(self, limit: int = 50, job_type: Optional[str] = None, status: Optional[str] = None) -> list[dict]:
+        try:
+            with self.conn.cursor() as cur:
+                conditions = []
+                params: list[Any] = []
+                if job_type:
+                    conditions.append("job_type = %s")
+                    params.append(job_type)
+                if status:
+                    conditions.append("status = %s")
+                    params.append(status)
+                where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+                params.append(max(1, min(limit, 200)))
+                cur.execute(
+                    f"""
+                    SELECT
+                      job_id, job_type, status, owner, tenant_id,
+                      attempt, max_attempts, retry_of, payload, result, message,
+                      started_at, finished_at
+                    FROM cdss_admin_jobs
+                    {where_clause}
+                    ORDER BY started_at DESC
+                    LIMIT %s;
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+                out: list[dict] = []
+                for r in rows:
+                    (
+                        job_id, jt, st, owner, tenant_id,
+                        attempt, max_attempts, retry_of, payload, result, message,
+                        started_at, finished_at,
+                    ) = r
+                    try:
+                        payload = self.crypto.decrypt_json(payload)
+                    except Exception:
+                        payload = {"_error": "payload_decrypt_failed"}
+                    try:
+                        result = self.crypto.decrypt_json(result) if result is not None else None
+                    except Exception:
+                        result = {"_error": "result_decrypt_failed"}
+                    out.append(
+                        {
+                            "jobId": job_id,
+                            "type": jt,
+                            "status": st,
+                            "owner": owner,
+                            "tenant_id": tenant_id,
+                            "attempt": attempt,
+                            "max_attempts": max_attempts,
+                            "retry_of": retry_of,
+                            "payload": payload,
+                            "result": result,
+                            "message": message,
+                            "started_at": started_at.isoformat() if hasattr(started_at, "isoformat") else str(started_at),
+                            "finished_at": finished_at.isoformat() if hasattr(finished_at, "isoformat") else (str(finished_at) if finished_at else None),
+                        }
+                    )
+                return out
+        except Exception as e:
+            logger.warning(f"Failed to fetch admin jobs: {e}")
+            return []
+
+    def get_job(self, job_id: str) -> Optional[dict]:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                      job_id, job_type, status, owner, tenant_id,
+                      attempt, max_attempts, retry_of, payload, result, message,
+                      started_at, finished_at
+                    FROM cdss_admin_jobs
+                    WHERE job_id = %s
+                    LIMIT 1;
+                    """,
+                    (job_id,),
+                )
+                r = cur.fetchone()
+                if not r:
+                    return None
+                (
+                    job_id_v, jt, st, owner, tenant_id,
+                    attempt, max_attempts, retry_of, payload, result, message,
+                    started_at, finished_at,
+                ) = r
+                try:
+                    payload = self.crypto.decrypt_json(payload)
+                except Exception:
+                    payload = {"_error": "payload_decrypt_failed"}
+                try:
+                    result = self.crypto.decrypt_json(result) if result is not None else None
+                except Exception:
+                    result = {"_error": "result_decrypt_failed"}
+                return {
+                    "jobId": job_id_v,
+                    "type": jt,
+                    "status": st,
+                    "owner": owner,
+                    "tenant_id": tenant_id,
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                    "retry_of": retry_of,
+                    "payload": payload,
+                    "result": result,
+                    "message": message,
+                    "started_at": started_at.isoformat() if hasattr(started_at, "isoformat") else str(started_at),
+                    "finished_at": finished_at.isoformat() if hasattr(finished_at, "isoformat") else (str(finished_at) if finished_at else None),
+                }
+        except Exception as e:
+            logger.warning(f"Failed to fetch admin job {job_id}: {e}")
+            return None
 
     def close(self) -> None:
         try:
