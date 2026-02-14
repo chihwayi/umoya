@@ -30,11 +30,33 @@ export const CdssAdmin: React.FC = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [rateLimit, setRateLimit] = useState<{ limit: number; remaining: number; reset: number } | null>(null);
   const [audit, setAudit] = useState<{ logs: any[]; limit: number; offset: number } | null>(null);
-  const [auditLimit, setAuditLimit] = useState<number>(20);
-  const [auditOffset, setAuditOffset] = useState<number>(0);
+  const [auditLimit, setAuditLimit] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem('cdssAdmin.auditLimit'));
+      return Number.isFinite(v) && v > 0 ? v : 20;
+    } catch {
+      return 20;
+    }
+  });
+  const [auditOffset, setAuditOffset] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem('cdssAdmin.auditOffset'));
+      return Number.isFinite(v) && v >= 0 ? v : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [ingestJobs, setIngestJobs] = useState<any[]>([]);
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [refreshSecs, setRefreshSecs] = useState<number>(5);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
+    try { return localStorage.getItem('cdssAdmin.autoRefresh') !== 'false'; } catch { return true; }
+  });
+  const [refreshSecs, setRefreshSecs] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('cdssAdmin.refreshSecs');
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 2 ? n : 5;
+    } catch { return 5; }
+  });
   const runningCount = ingestJobs.filter(j => j.status === 'running').length;
   const [retryCooldown, setRetryCooldown] = useState<number>(0);
   const [reindexCooldown, setReindexCooldown] = useState<number>(0);
@@ -95,6 +117,13 @@ export const CdssAdmin: React.FC = () => {
       if (timer) clearInterval(timer);
     };
   }, [autoRefresh, refreshSecs]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.autoRefresh', String(autoRefresh)); } catch {}
+  }, [autoRefresh]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.refreshSecs', String(refreshSecs)); } catch {}
+  }, [refreshSecs]);
 
   useEffect(() => {
     if (runningCount === 0 && autoRefresh) {
@@ -309,6 +338,17 @@ export const CdssAdmin: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cdssAdmin.auditLimit', String(auditLimit));
+    } catch {}
+  }, [auditLimit]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('cdssAdmin.auditOffset', String(auditOffset));
+    } catch {}
+  }, [auditOffset]);
 
   return (
     <div className="space-y-6">
