@@ -37,6 +37,11 @@ from ai_models.voice_scribe import VoiceScribe
 from ai_models.medical_vision import MedicalVisionService
 from settings_provider import SettingsProvider
 from privacy_guard import redact_text, redact_value
+from service_auth import (
+    decode_service_jwt,
+    extract_owner_claim_sets,
+    is_owner_scope_allowed,
+)
 import jwt
 import threading
 import pathlib
@@ -341,10 +346,9 @@ async def service_to_service_auth_middleware(request: Request, call_next):
                 service_jwt = request.headers.get("x-service-jwt", "").strip()
             if service_jwt:
                 try:
-                    claims = jwt.decode(
-                        service_jwt,
-                        SERVICE_AUTH_JWT_SECRET,
-                        algorithms=["HS256"],
+                    claims = decode_service_jwt(
+                        token=service_jwt,
+                        secret=SERVICE_AUTH_JWT_SECRET,
                         audience=SERVICE_AUTH_AUDIENCE,
                         issuer=SERVICE_AUTH_ISSUER,
                     )
@@ -902,63 +906,6 @@ def _run_job(job_id: str) -> None:
             except Exception:
                 pass
 
-def _extract_owner_claim_sets(payload: Dict[str, Any]) -> Dict[str, set[str]]:
-    roles: set[str] = set()
-    scopes: set[str] = set()
-    permissions: set[str] = set()
-
-    role_value = payload.get("role")
-    if isinstance(role_value, str) and role_value.strip():
-        roles.add(role_value.strip().lower())
-    for key, target in (("roles", roles), ("scopes", scopes), ("permissions", permissions)):
-        val = payload.get(key)
-        if isinstance(val, list):
-            for item in val:
-                if isinstance(item, str) and item.strip():
-                    target.add(item.strip().lower())
-    scope_str = payload.get("scope")
-    if isinstance(scope_str, str) and scope_str.strip():
-        for item in scope_str.split():
-            if item.strip():
-                scopes.add(item.strip().lower())
-    perm_str = payload.get("permission")
-    if isinstance(perm_str, str) and perm_str.strip():
-        permissions.add(perm_str.strip().lower())
-
-    return {"roles": roles, "scopes": scopes, "permissions": permissions}
-
-
-def _is_owner_scope_allowed(claims: Dict[str, set[str]], required_scope: str) -> bool:
-    required = required_scope.strip().lower()
-    if not required:
-        return True
-
-    roles = claims.get("roles", set())
-    scopes = claims.get("scopes", set())
-    permissions = claims.get("permissions", set())
-    granted = set(scopes) | set(permissions)
-
-    if "super_admin" in roles or "owner" in roles:
-        return True
-    if "*" in granted or "cdss.admin.*" in granted:
-        return True
-    if required in granted:
-        return True
-    if required.endswith(".read") and required.replace(".read", ".*") in granted:
-        return True
-    if required.endswith(".write") and required.replace(".write", ".*") in granted:
-        return True
-    if required.startswith("cdss.admin.jobs.") and "cdss.admin.jobs.*" in granted:
-        return True
-    if required.startswith("cdss.admin.settings.") and "cdss.admin.settings.*" in granted:
-        return True
-    if required.startswith("cdss.admin.audit.") and "cdss.admin.audit.*" in granted:
-        return True
-    if required.startswith("cdss.admin.metrics.") and "cdss.admin.metrics.*" in granted:
-        return True
-    return False
-
-
 def require_owner(request: Request, response: Response, authorization: str = Header(None)) -> str:
     """
     Owner gating with JWT verification only:
@@ -974,7 +921,7 @@ def require_owner(request: Request, response: Response, authorization: str = Hea
     try:
         payload = jwt.decode(token, ADMIN_JWT_SECRET, algorithms=["HS256"])
         email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
-        owner_claims = _extract_owner_claim_sets(payload)
+        owner_claims = extract_owner_claim_sets(payload)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -1042,7 +989,7 @@ def require_owner_scope(required_scope: str):
         has_explicit_claims = bool(claims.get("roles") or claims.get("scopes") or claims.get("permissions"))
         if not has_explicit_claims and not OWNER_SCOPE_STRICT:
             return owner
-        if not _is_owner_scope_allowed(claims, required_scope):
+        if not is_owner_scope_allowed(claims, required_scope):
             raise HTTPException(status_code=403, detail=f"Missing required scope: {required_scope}")
         return owner
 

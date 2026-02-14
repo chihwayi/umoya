@@ -40,7 +40,7 @@ Status legend:
   - Owner access works only with valid signed JWT claim.
   - Regression tests cover pass/fail auth cases.
 
-### E1-B2 (`P0`, `In Progress`) Service-to-service auth hardening
+### E1-B2 (`P0`, `Done`) Service-to-service auth hardening
 
 - Owner: Platform + Backend
 - Effort: 1-2 weeks
@@ -52,8 +52,11 @@ Status legend:
   - CDSS rejects unauthenticated service callers.
   - Rotatable service credentials in env/secret manager.
   - Negative tests for invalid issuer/audience/signature.
+ - Implementation notes:
+   - Enforced JWT `iss`/`aud` validation with optional token fallback under explicit mode controls.
+   - Added replay protection (`jti`) and negative tests for issuer/audience/signature validation.
 
-### E1-B3 (`P0`, `In Progress`) Fine-grained authorization model
+### E1-B3 (`P0`, `Done`) Fine-grained authorization model
 
 - Owner: Backend (EHR + CDSS)
 - Effort: 1 week
@@ -63,6 +66,9 @@ Status legend:
 - Acceptance criteria:
   - Unauthorized roles receive deterministic 403.
   - Audit logs include actor, tenant, action, request ID.
+ - Implementation notes:
+   - Scoped admin permissions enforced (`settings`, `jobs`, `metrics`, `audit`) via `require_owner_scope`.
+   - Scope extraction and decision logic covered by dedicated unit tests.
 
 ---
 
