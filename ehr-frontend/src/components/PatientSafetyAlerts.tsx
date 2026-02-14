@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   AlertTriangle, Heart, Shield, Droplets, Activity, Eye,
-  Bell, X, CheckCircle, Clock, User, MapPin, Pill
+  Bell, X, CheckCircle, Clock, User, MapPin, Pill, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 interface SafetyAlert {
@@ -45,6 +45,8 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
   const [filterType, setFilterType] = useState<'all' | 'allergy' | 'fall_risk' | 'isolation' | 'critical_vitals' | 'medication' | 'lab' | 'general'>('all');
   const [showAcknowledged, setShowAcknowledged] = useState(false);
+
+  const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
 
   // Generate real safety alerts based on actual patient data
   useEffect(() => {
@@ -296,6 +298,18 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
     onAlertDismiss?.(alertId);
   };
 
+  const toggleAlertExpansion = (alertId: string) => {
+    setExpandedAlerts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(alertId)) {
+        newSet.delete(alertId);
+      } else {
+        newSet.add(alertId);
+      }
+      return newSet;
+    });
+  };
+
   const stats = getAlertStats();
 
   return (
@@ -420,7 +434,8 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
           filteredAlerts.map((alert) => (
             <div
               key={alert.id}
-              className={`bg-white rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
+              onClick={() => handleAcknowledge(alert.id)}
+              className={`bg-white rounded-xl border-2 transition-all duration-200 hover:shadow-lg cursor-pointer ${
                 alert.severity === 'critical' ? 'border-red-200 bg-red-50/30' :
                 alert.severity === 'high' ? 'border-orange-200 bg-orange-50/30' :
                 alert.severity === 'medium' ? 'border-yellow-200 bg-yellow-50/30' :
@@ -495,7 +510,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                   <div className="flex items-center gap-2 ml-4">
                     {!alert.acknowledgedAt && (
                       <button
-                        onClick={() => handleAcknowledge(alert.id)}
+                        onClick={(e) => { e.stopPropagation(); handleAcknowledge(alert.id); }}
                         className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200 font-semibold text-sm flex items-center gap-1"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -504,7 +519,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                     )}
                     
                     <button
-                      onClick={() => handleDismiss(alert.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDismiss(alert.id); }}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
                     >
                       <X className="w-4 h-4" />

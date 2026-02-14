@@ -159,6 +159,7 @@ const NurseDashboard: React.FC = () => {
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Persistent acknowledged alerts
   const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(() => {
@@ -1811,20 +1812,83 @@ const NurseDashboard: React.FC = () => {
               </button>
 
               {/* Notifications */}
-              <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative">
-                <Bell className="h-5 w-5" />
-                {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active) > 0 && (
-                  <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
-                    alertCounts.critical > 0 
-                      ? 'bg-gradient-to-r from-red-600 to-red-700' 
-                      : alertCounts.high > 0 
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500'
-                      : 'bg-gradient-to-r from-green-500 to-emerald-600'
-                  }`}>
-                    {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active}
-                  </span>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative"
+                >
+                  <Bell className="h-5 w-5" />
+                  {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active) > 0 && (
+                    <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
+                      alertCounts.critical > 0 
+                        ? 'bg-gradient-to-r from-red-600 to-red-700' 
+                        : alertCounts.high > 0 
+                        ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-600'
+                    }`}>
+                      {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200/50 py-2 z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                      <h3 className="font-semibold text-slate-900">Notifications</h3>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {alertCounts.active > 0 && (
+                         <button 
+                           onClick={() => {
+                             setActiveSection('main');
+                             setActiveTab('alerts');
+                             setShowNotifications(false);
+                           }}
+                           className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-50 transition-colors group"
+                         >
+                           <div className="flex items-start gap-3">
+                             <div className="p-2 bg-red-100 text-red-600 rounded-lg group-hover:bg-red-200 transition-colors">
+                               <AlertTriangle className="w-4 h-4" />
+                             </div>
+                             <div>
+                               <p className="text-sm font-medium text-slate-900">Patient Safety Alerts</p>
+                               <p className="text-xs text-slate-500">{alertCounts.active} active alerts ({alertCounts.critical} critical)</p>
+                             </div>
+                           </div>
+                         </button>
+                      )}
+                      
+                      {(taskCounts.pending + taskCounts.overdue) > 0 && (
+                         <button 
+                           onClick={() => {
+                             setActiveSection('main');
+                             setActiveTab('tasks');
+                             setShowNotifications(false);
+                           }}
+                           className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-50 transition-colors group"
+                         >
+                           <div className="flex items-start gap-3">
+                             <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:bg-blue-200 transition-colors">
+                               <ClipboardList className="w-4 h-4" />
+                             </div>
+                             <div>
+                               <p className="text-sm font-medium text-slate-900">My Tasks</p>
+                               <p className="text-xs text-slate-500">{taskCounts.pending} pending, {taskCounts.overdue} overdue</p>
+                             </div>
+                           </div>
+                         </button>
+                      )}
+
+                      {taskCounts.pending === 0 && alertCounts.active === 0 && (
+                        <div className="px-4 py-8 text-center text-slate-500">
+                          <CheckCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          <p className="text-sm">No new notifications</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
 
               {/* User Profile Dropdown */}
               <div className="relative" data-dropdown="user">

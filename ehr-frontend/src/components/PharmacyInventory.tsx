@@ -223,7 +223,7 @@ const PharmacyInventory: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this inventory item?')) return;
+    if (!window.confirm('Are you sure you want to delete this inventory item?')) return;
     try {
       // Note: Delete endpoint may not exist yet, handle gracefully
       showError('Delete not implemented', 'Please contact support');

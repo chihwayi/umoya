@@ -57,11 +57,23 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
 
+  // Load completed tasks from local storage
+  const getLocalCompletedTasks = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem('nurse_completed_tasks');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (e) {
+      console.error('Failed to load completed tasks', e);
+      return new Set();
+    }
+  };
+
   // Load tasks from real data - create tasks based on actual appointments
   useEffect(() => {
     const generateTasksFromAppointments = () => {
       const realTasks: Task[] = [];
       const now = new Date();
+      const localCompleted = getLocalCompletedTasks();
       
       // Only create tasks from real appointments with actual data
       appointments.forEach((apt, index) => {
@@ -73,21 +85,25 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         if (apt.status === 'scheduled' || apt.status === 'confirmed') {
           // 1. Triage Task
           if (!apt.triage) {
+            const taskId = `triage-${apt.id}`;
+            const isLocalCompleted = localCompleted.has(taskId);
+            
             // Pending Triage - Visible to ALL nurses
             realTasks.push({
-              id: `triage-${apt.id}`,
+              id: taskId,
               patientId: apt.patient.id,
               patientName,
               taskType: 'assessment',
               title: 'Perform Triage Assessment',
               description: `Complete triage assessment for ${patientName}`,
               priority: 'high',
-              status: 'pending',
+              status: isLocalCompleted ? 'completed' : 'pending',
               dueTime: new Date(appointmentTime.getTime() - 20 * 60000).toISOString(), // 20 mins before
               estimatedDuration: 15,
               assignedTo: apt.createdBy || '',
               createdBy: apt.createdBy || '',
               createdAt: now.toISOString(),
+              completedAt: isLocalCompleted ? now.toISOString() : undefined,
               relatedAppointmentId: apt.id,
               isRecurring: false
             });
@@ -118,22 +134,26 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
 
           // 2. Vital Signs Task
           if (!apt.vitals) {
+            const taskId = `vitals-${apt.id}`;
+            const isLocalCompleted = localCompleted.has(taskId);
+
             // Show pending tasks to ALL nurses so any available nurse can pick it up.
             // This ensures tasks are visible even if the nurse didn't create the appointment.
             realTasks.push({
-              id: `vitals-${apt.id}`,
+              id: taskId,
               patientId: apt.patient.id,
               patientName,
               taskType: 'vitals',
               title: 'Record Vital Signs',
               description: `Record vital signs for ${patientName}`,
               priority: 'normal',
-              status: 'pending',
+              status: isLocalCompleted ? 'completed' : 'pending',
               dueTime: new Date(appointmentTime.getTime() - 15 * 60000).toISOString(),
               estimatedDuration: 10,
               assignedTo: apt.createdBy || '', // Remains assigned to creator initially, but visible to all
               createdBy: apt.createdBy || '',
               createdAt: now.toISOString(),
+              completedAt: isLocalCompleted ? now.toISOString() : undefined,
               relatedAppointmentId: apt.id,
               isRecurring: false
             });
@@ -169,20 +189,24 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           // Documentation task for in-progress appointments
           // Show if created by user OR if user is serving (we don't strictly know if serving without notes, so we default to creator)
           if (isCreatedByCurrentUser) {
+            const taskId = `doc-${apt.id}`;
+            const isLocalCompleted = localCompleted.has(taskId);
+
             realTasks.push({
-              id: `doc-${apt.id}`,
+              id: taskId,
               patientId: apt.patient.id,
               patientName,
               taskType: 'documentation',
               title: 'Update Progress Notes',
               description: `Document progress for ${patientName}`,
               priority: 'normal',
-              status: 'pending',
+              status: isLocalCompleted ? 'completed' : 'pending',
               dueTime: new Date(appointmentTime.getTime() + 30 * 60000).toISOString(),
               estimatedDuration: 10,
               assignedTo: apt.createdBy || '',
               createdBy: apt.createdBy || '',
               createdAt: now.toISOString(),
+              completedAt: isLocalCompleted ? now.toISOString() : undefined,
               relatedAppointmentId: apt.id,
               isRecurring: false
             });
@@ -310,6 +334,16 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   };
 
   const handleTaskComplete = (taskId: string) => {
+    // Save to local storage
+    try {
+      const saved = localStorage.getItem('nurse_completed_tasks');
+      const completedSet = saved ? new Set(JSON.parse(saved)) : new Set();
+      completedSet.add(taskId);
+      localStorage.setItem('nurse_completed_tasks', JSON.stringify(Array.from(completedSet)));
+    } catch (e) {
+      console.error('Failed to save completed task', e);
+    }
+
     setTasks(prev => prev.map(task => 
       task.id === taskId 
         ? { ...task, status: 'completed' as const, completedAt: new Date().toISOString() }
@@ -579,10 +613,11 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           </label>
 
           <button
-            onClick={handleSmartPrioritize}
-            disabled={isAiAnalyzing}
-            className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm ${isAiAnalyzing ? 'opacity-70 cursor-wait' : ''}`}
-          >
+              onClick={handleSmartPrioritize}
+              disabled={isAiAnalyzing}
+              title="Automatically analyzes patient data (age, conditions, vitals) to prioritize tasks"
+              className={`flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm ${isAiAnalyzing ? 'opacity-70 cursor-wait' : ''}`}
+            >
             {isAiAnalyzing ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
             ) : (
@@ -595,11 +630,26 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
 
       {/* Task List */}
       <div className="space-y-4">
-        {filteredTasks.length === 0 ? (
+        {appointments.length === 0 ? (
+           <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-slate-200/50">
+             <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+             <h3 className="text-lg font-semibold text-slate-600 mb-2">No Appointments Today</h3>
+             <p className="text-slate-500">There are no appointments scheduled for today, so no tasks are generated.</p>
+           </div>
+        ) : filteredTasks.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-slate-200/50">
             <Activity className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-slate-600 mb-2">No Tasks Found</h3>
-            <p className="text-slate-500">No tasks match your current filters.</p>
+            <p className="text-slate-500 mb-4">No tasks match your current filters. Try changing filters or checking "Show completed tasks".</p>
+            <div className="bg-blue-50 p-4 rounded-lg inline-block text-left max-w-md">
+                <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    About Smart Prioritize
+                </h4>
+                <p className="text-sm text-blue-700">
+                    The Smart Prioritize button uses AI to analyze patient data (vitals, age, conditions) and automatically adjusts task priorities to highlight urgent cases.
+                </p>
+            </div>
           </div>
         ) : (
           filteredTasks.map((task) => (
@@ -633,6 +683,12 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.status)}`}>
                           {task.status.replace('_', ' ').toUpperCase()}
                         </span>
+                        {task.notes && task.notes.includes('[AI Priority') && (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            AI PRIORITY
+                          </span>
+                        )}
                         {task.isRecurring && (
                           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">
                             RECURRING

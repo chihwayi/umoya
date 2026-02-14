@@ -76,7 +76,7 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
+    if (!window.confirm('Are you sure you want to delete this template?')) return;
 
     try {
       const token = localStorage.getItem('ehr_token');

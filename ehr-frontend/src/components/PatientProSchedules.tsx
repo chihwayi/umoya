@@ -70,7 +70,7 @@ const PatientProSchedules: React.FC<PatientProSchedulesProps> = ({
   };
 
   const handleDelete = async (scheduleId: string) => {
-    if (!confirm('Are you sure you want to delete this schedule?')) return;
+    if (!window.confirm('Are you sure you want to delete this schedule?')) return;
 
     try {
       await ehrApi.deleteProSchedule(scheduleId, token, tenantSlug);
