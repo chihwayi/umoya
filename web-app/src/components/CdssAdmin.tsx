@@ -22,6 +22,8 @@ export const CdssAdmin: React.FC = () => {
   const [refreshSecs, setRefreshSecs] = useState<number>(5);
   const runningCount = ingestJobs.filter(j => j.status === 'running').length;
   const [retryCooldown, setRetryCooldown] = useState<number>(0);
+  const [reindexCooldown, setReindexCooldown] = useState<number>(0);
+  const [flushCooldown, setFlushCooldown] = useState<number>(0);
 
   const loadAll = async () => {
     setLoading(true);
@@ -82,6 +84,22 @@ export const CdssAdmin: React.FC = () => {
     return () => clearInterval(t);
   }, [retryCooldown]);
 
+  useEffect(() => {
+    if (reindexCooldown <= 0) return;
+    const t = setInterval(() => {
+      setReindexCooldown((v) => (v > 0 ? v - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [reindexCooldown]);
+
+  useEffect(() => {
+    if (flushCooldown <= 0) return;
+    const t = setInterval(() => {
+      setFlushCooldown((v) => (v > 0 ? v - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [flushCooldown]);
+
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
@@ -128,10 +146,15 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      await cdssAdminAPI.reindex();
+      const res = await cdssAdminAPI.reindex();
+      if (res?.rateLimit) setRateLimit(res.rateLimit);
       setMessage('Reindex requested');
       await loadAll();
     } catch (e: any) {
+      const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
+      if (e?.response?.status === 429 && reset > 0) {
+        setReindexCooldown(reset);
+      }
       setMessage(e?.response?.data?.detail || 'Failed to reindex');
     } finally {
       setLoading(false);
@@ -142,9 +165,14 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      await cdssAdminAPI.flushCache();
+      const res = await cdssAdminAPI.flushCache();
+      if (res?.rateLimit) setRateLimit(res.rateLimit);
       setMessage('Cache flushed');
     } catch (e: any) {
+      const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
+      if (e?.response?.status === 429 && reset > 0) {
+        setFlushCooldown(reset);
+      }
       setMessage(e?.response?.data?.detail || 'Failed to flush cache');
     } finally {
       setLoading(false);
@@ -318,8 +346,22 @@ export const CdssAdmin: React.FC = () => {
         <div className="flex items-center space-x-3">
           <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           <button onClick={handleIngest} className="px-4 py-2 rounded bg-blue-600 text-white">Upload & Ingest</button>
-          <button onClick={handleReindex} className="px-4 py-2 rounded bg-amber-600 text-white">Reindex</button>
-          <button onClick={handleFlushCache} className="px-4 py-2 rounded bg-rose-600 text-white">Flush Cache</button>
+          <button
+            onClick={handleReindex}
+            className="px-4 py-2 rounded bg-amber-600 text-white disabled:opacity-50"
+            disabled={reindexCooldown > 0}
+            title={reindexCooldown > 0 ? `Rate limited • wait ${reindexCooldown}s` : 'Rebuild vector + BM25 indexes'}
+          >
+            Reindex
+          </button>
+          <button
+            onClick={handleFlushCache}
+            className="px-4 py-2 rounded bg-rose-600 text-white disabled:opacity-50"
+            disabled={flushCooldown > 0}
+            title={flushCooldown > 0 ? `Rate limited • wait ${flushCooldown}s` : 'Delete cache entries'}
+          >
+            Flush Cache
+          </button>
           <div className="ml-auto flex items-center gap-2">
             <label className="text-xs text-slate-600">Auto-refresh</label>
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />

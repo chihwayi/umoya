@@ -263,11 +263,17 @@ export const cdssAdminAPI = {
   },
   reindex: async (): Promise<any> => {
     const response = await api.post('/cdss-admin/admin/reindex', null, { headers: { ...getOwnerHeaders() } });
-    return response.data;
+    const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+    const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+    const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+    return { data: response.data, rateLimit: { limit, remaining, reset } };
   },
   flushCache: async (): Promise<any> => {
     const response = await api.post('/cdss-admin/admin/cache/flush', null, { headers: { ...getOwnerHeaders() } });
-    return response.data;
+    const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+    const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+    const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+    return { data: response.data, rateLimit: { limit, remaining, reset } };
   },
   getMetrics: async (): Promise<any> => {
     const response = await api.get('/cdss-admin/admin/metrics', { headers: { ...getOwnerHeaders() } });
