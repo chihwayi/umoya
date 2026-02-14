@@ -29,6 +29,9 @@ from food_interactions import FoodInteractionChecker
 from ai_models.voice_scribe import VoiceScribe
 from ai_models.medical_vision import MedicalVisionService
 from settings_provider import SettingsProvider
+import threading
+import pathlib
+import redis as redis_pkg
 
 app = FastAPI(
     title="MediCore CDSS Service",
@@ -248,6 +251,85 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
         raise HTTPException(status_code=400, detail="cache_ttl_seconds must be a non-negative integer")
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
+
+def _run_ingest():
+    try:
+        from ingest_guidelines import ingest_guidelines
+        ingest_guidelines()
+    except Exception as e:
+        print(f"Ingestion failed: {e}")
+
+@app.post("/admin/ingest")
+async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner)):
+    if settings_provider:
+        s = settings_provider.get_settings()
+        if not s.get("allow_pdf_uploads", True) and file is not None:
+            raise HTTPException(status_code=403, detail="PDF uploads disabled")
+    if file is not None:
+        target_dir = pathlib.Path(__file__).resolve().parent / "who-smart-guidelines" / "dak"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        dest = target_dir / file.filename
+        content = await file.read()
+        with open(dest, "wb") as f:
+            f.write(content)
+    t = threading.Thread(target=_run_ingest, daemon=True)
+    t.start()
+    return {"started": True}
+
+@app.post("/admin/reindex")
+async def admin_reindex(owner: str = Depends(require_owner)):
+    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+        raise HTTPException(status_code=503, detail="RAG engine unavailable")
+    try:
+        ce = diagnostic_assistant.rag_engine
+        if ce.chroma_client:
+            ce.chroma_client.delete_collection("medical_guidelines")
+            ce.collection = ce.chroma_client.get_or_create_collection("medical_guidelines")
+            ce._build_bm25_index()
+        return {"reindexed": True, "documents": ce.collection.count() if ce.collection else 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/cache/flush")
+async def admin_cache_flush(owner: str = Depends(require_owner)):
+    if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
+        return {"flushed": 0}
+    ce = diagnostic_assistant.rag_engine
+    if not ce.redis_client:
+        return {"flushed": 0}
+    namespace = "cdss"
+    if settings_provider:
+        try:
+            namespace = settings_provider.get_settings().get("cache_namespace", "cdss")
+        except Exception:
+            pass
+    pattern_list = [f"{namespace}:*", "rag:*", "llm:*"]
+    deleted = 0
+    for pattern in pattern_list:
+        try:
+            for key in ce.redis_client.scan_iter(match=pattern):
+                ce.redis_client.delete(key)
+                deleted += 1
+        except Exception:
+            continue
+    return {"flushed": deleted}
+
+@app.get("/admin/metrics")
+async def admin_metrics(owner: str = Depends(require_owner)):
+    docs = None
+    cache_keys = 0
+    ce = diagnostic_assistant.rag_engine if diagnostic_assistant else None
+    if ce and ce.collection:
+        try:
+            docs = ce.collection.count()
+        except Exception:
+            docs = None
+    if ce and ce.redis_client:
+        try:
+            cache_keys = len(list(ce.redis_client.scan_iter(match="*")))
+        except Exception:
+            cache_keys = 0
+    return {"documents": docs, "cache_keys": cache_keys}
 
 @app.post("/transcribe")
 async def transcribe_audio(
