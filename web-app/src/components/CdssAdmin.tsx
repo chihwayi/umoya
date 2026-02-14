@@ -41,9 +41,15 @@ export const CdssAdmin: React.FC = () => {
   const [flushCooldown, setFlushCooldown] = useState<number>(0);
   const [ingestCooldown, setIngestCooldown] = useState<number>(0);
   const [saveCooldown, setSaveCooldown] = useState<number>(0);
-  const [denseMode, setDenseMode] = useState<boolean>(false);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [jobIdQuery, setJobIdQuery] = useState<string>('');
+  const [denseMode, setDenseMode] = useState<boolean>(() => {
+    try { return localStorage.getItem('cdssAdmin.denseMode') === 'true'; } catch { return false; }
+  });
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.statusFilter') || 'all'; } catch { return 'all'; }
+  });
+  const [jobIdQuery, setJobIdQuery] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.jobIdQuery') || ''; } catch { return ''; }
+  });
 
   const loadAll = async () => {
     setLoading(true);
@@ -119,6 +125,16 @@ export const CdssAdmin: React.FC = () => {
     }, 1000);
     return () => clearInterval(t);
   }, [flushCooldown]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.denseMode', String(denseMode)); } catch {}
+  }, [denseMode]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.statusFilter', statusFilter); } catch {}
+  }, [statusFilter]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.jobIdQuery', jobIdQuery); } catch {}
+  }, [jobIdQuery]);
 
   useEffect(() => {
     if (ingestCooldown <= 0) return;
@@ -474,6 +490,13 @@ export const CdssAdmin: React.FC = () => {
               <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                 Running: {runningCount}
               </span>
+              <button
+                className="ml-2 px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                onClick={() => { setStatusFilter('all'); setJobIdQuery(''); }}
+                title="Clear status filter and Job ID search"
+              >
+                Clear Filters
+              </button>
             </div>
           </div>
           <div className="overflow-auto rounded-lg border border-slate-200 max-h-96">
