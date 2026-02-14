@@ -13,6 +13,7 @@ export declare class DatabaseProvisioningService {
     private dataSource;
     private readonly logger;
     constructor(dataSource: DataSource);
+    private assertSafeDatabaseName;
     private emitProvisioningEvent;
     getProvisioningBundlesManifest(): ProvisioningBundleManifest[];
     private normalizeStatements;

@@ -7,8 +7,16 @@ const swagger_1 = require("@nestjs/swagger");
 const tenant_module_1 = require("./tenant.module");
 const sentry_filter_1 = require("./filters/sentry.filter");
 const config_1 = require("@medicore/config");
+const crypto_1 = require("crypto");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(tenant_module_1.TenantModule);
+    app.use((req, res, next) => {
+        const existing = req.header('x-request-id') || req.header('X-Request-ID');
+        const rid = existing && existing.length > 0 ? existing : (0, crypto_1.randomUUID)();
+        req.requestId = rid;
+        res.setHeader('X-Request-ID', rid);
+        next();
+    });
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
@@ -18,10 +26,15 @@ async function bootstrap() {
     app.useGlobalFilters(new sentry_filter_1.SentryFilter(httpAdapter));
     const corsOrigins = config_1.config.security.corsOrigins;
     app.enableCors({
-        origin: corsOrigins.length > 0 ? corsOrigins : true,
+        origin: corsOrigins.length > 0
+            ? corsOrigins
+            : process.env.NODE_ENV === 'development'
+                ? true
+                : false,
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id', 'X-Request-ID'],
+        exposedHeaders: ['X-Request-ID'],
     });
     app.setGlobalPrefix('api');
     const config = new swagger_1.DocumentBuilder()

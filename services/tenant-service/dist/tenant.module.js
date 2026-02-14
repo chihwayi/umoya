@@ -34,6 +34,16 @@ const tenant_user_entity_1 = require("./entities/tenant-user.entity");
 const tenant_analytics_entity_1 = require("./entities/tenant-analytics.entity");
 const admin_user_entity_1 = require("./entities/admin-user.entity");
 const audit_log_entity_1 = require("./entities/audit-log.entity");
+function resolveJwtSecret() {
+    const secret = process.env.JWT_SECRET;
+    if (secret && secret.trim().length > 0) {
+        return secret;
+    }
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+        return 'dev-only-tenant-secret-change-me';
+    }
+    throw new Error('JWT_SECRET is required for tenant-service outside development/test');
+}
 let TenantModule = class TenantModule {
 };
 exports.TenantModule = TenantModule;
@@ -43,7 +53,7 @@ exports.TenantModule = TenantModule = __decorate([
             config_1.ConfigModule.forRoot(),
             schedule_1.ScheduleModule.forRoot(),
             jwt_1.JwtModule.register({
-                secret: process.env.JWT_SECRET || 'medicore-super-secret-key',
+                secret: resolveJwtSecret(),
                 signOptions: { expiresIn: '24h' },
             }),
             typeorm_1.TypeOrmModule.forRoot({

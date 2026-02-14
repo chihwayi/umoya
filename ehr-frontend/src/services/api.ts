@@ -38,6 +38,16 @@ const createAxiosInstance = (baseURL: string) => {
   instance.interceptors.response.use(
     (response) => response,
     (error) => {
+      try {
+        const rid = error?.response?.headers?.['x-request-id'] || error?.response?.headers?.['X-Request-ID'];
+        if (rid) {
+          error.requestId = rid;
+          const baseMsg = error?.response?.data?.message || error.message || 'Request failed';
+          if (typeof baseMsg === 'string' && !String(baseMsg).includes('requestId:')) {
+            error.message = `${baseMsg} (requestId: ${rid})`;
+          }
+        }
+      } catch {}
       const isLoginRequest = error.config?.url?.endsWith('/auth/login');
       if (error.response?.status === 401 && !isLoginRequest) {
         console.log('🚨 401 Unauthorized detected - triggering auto-logout');

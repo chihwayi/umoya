@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { cdssAdminAPI } from '../services/api';
 
 type Status = {
@@ -46,6 +46,7 @@ export const CdssAdmin: React.FC = () => {
       return 0;
     }
   });
+  const [auditPageInput, setAuditPageInput] = useState<string>('1');
   const [ingestJobs, setIngestJobs] = useState<any[]>([]);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(() => {
     try { return localStorage.getItem('cdssAdmin.autoRefresh') !== 'false'; } catch { return true; }
@@ -72,6 +73,53 @@ export const CdssAdmin: React.FC = () => {
   const [jobIdQuery, setJobIdQuery] = useState<string>(() => {
     try { return localStorage.getItem('cdssAdmin.jobIdQuery') || ''; } catch { return ''; }
   });
+  const [jobsSortKey, setJobsSortKey] = useState<'jobId' | 'status' | 'started_at' | 'finished_at'>(() => {
+    try { return (localStorage.getItem('cdssAdmin.jobsSortKey') as any) || 'started_at'; } catch { return 'started_at'; }
+  });
+  const [jobsSortDir, setJobsSortDir] = useState<'asc' | 'desc'>(() => {
+    try { return (localStorage.getItem('cdssAdmin.jobsSortDir') as any) || 'desc'; } catch { return 'desc'; }
+  });
+  const defaultJobsWidths = { jobId: 140, status: 120, started: 160, finished: 160, message: 320, actions: 120 };
+  const [jobsColWidths, setJobsColWidths] = useState<{ jobId: number; status: number; started: number; finished: number; message: number; actions: number }>(() => {
+    try {
+      const raw = localStorage.getItem('cdssAdmin.jobsColWidths');
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? { ...defaultJobsWidths, ...parsed } : defaultJobsWidths;
+    } catch {
+      return defaultJobsWidths;
+    }
+  });
+  const defaultAuditWidths = { time: 180, actor: 140, action: 180, payload: 520 };
+  const [auditColWidths, setAuditColWidths] = useState<{ time: number; actor: number; action: number; payload: number }>(() => {
+    try {
+      const raw = localStorage.getItem('cdssAdmin.auditColWidths');
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? { ...defaultAuditWidths, ...parsed } : defaultAuditWidths;
+    } catch {
+      return defaultAuditWidths;
+    }
+  });
+  const resizingRef = useRef<{ table: 'jobs' | 'audit'; key: string; startX: number; startWidth: number } | null>(null);
+  const [exportingAll, setExportingAll] = useState<boolean>(false);
+  const [exportAllCount, setExportAllCount] = useState<number>(0);
+  const [auditActorQuery, setAuditActorQuery] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.auditActorQuery') || ''; } catch { return ''; }
+  });
+  const [auditActionQuery, setAuditActionQuery] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.auditActionQuery') || ''; } catch { return ''; }
+  });
+  const [auditDateFrom, setAuditDateFrom] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.auditDateFrom') || ''; } catch { return ''; }
+  });
+  const [auditDateTo, setAuditDateTo] = useState<string>(() => {
+    try { return localStorage.getItem('cdssAdmin.auditDateTo') || ''; } catch { return ''; }
+  });
+  const [auditSortKey, setAuditSortKey] = useState<'time' | 'actor' | 'action'>(() => {
+    try { return (localStorage.getItem('cdssAdmin.auditSortKey') as any) || 'time'; } catch { return 'time'; }
+  });
+  const [auditSortDir, setAuditSortDir] = useState<'asc' | 'desc'>(() => {
+    try { return (localStorage.getItem('cdssAdmin.auditSortDir') as any) || 'desc'; } catch { return 'desc'; }
+  });
 
   const loadAll = async () => {
     setLoading(true);
@@ -81,7 +129,14 @@ export const CdssAdmin: React.FC = () => {
         cdssAdminAPI.getStatus(),
         cdssAdminAPI.getSettings(),
         cdssAdminAPI.getMetrics(),
-        cdssAdminAPI.getAuditLogs(auditLimit, auditOffset),
+        cdssAdminAPI.getAuditLogs(auditLimit, auditOffset, {
+          actor: auditActorQuery.trim() || undefined,
+          action: auditActionQuery.trim() || undefined,
+          startDate: auditDateFrom || undefined,
+          endDate: auditDateTo || undefined,
+          sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+          sortDir: auditSortDir,
+        }),
         cdssAdminAPI.getIngestJobs(20),
       ]);
       setStatus(st);
@@ -164,6 +219,37 @@ export const CdssAdmin: React.FC = () => {
   useEffect(() => {
     try { localStorage.setItem('cdssAdmin.jobIdQuery', jobIdQuery); } catch {}
   }, [jobIdQuery]);
+
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.jobsColWidths', JSON.stringify(jobsColWidths)); } catch {}
+  }, [jobsColWidths]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditColWidths', JSON.stringify(auditColWidths)); } catch {}
+  }, [auditColWidths]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.jobsSortKey', jobsSortKey); } catch {}
+  }, [jobsSortKey]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.jobsSortDir', jobsSortDir); } catch {}
+  }, [jobsSortDir]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditActorQuery', auditActorQuery); } catch {}
+  }, [auditActorQuery]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditActionQuery', auditActionQuery); } catch {}
+  }, [auditActionQuery]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditDateFrom', auditDateFrom); } catch {}
+  }, [auditDateFrom]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditDateTo', auditDateTo); } catch {}
+  }, [auditDateTo]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditSortKey', auditSortKey); } catch {}
+  }, [auditSortKey]);
+  useEffect(() => {
+    try { localStorage.setItem('cdssAdmin.auditSortDir', auditSortDir); } catch {}
+  }, [auditSortDir]);
 
   useEffect(() => {
     if (ingestCooldown <= 0) return;
@@ -305,7 +391,14 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      const au = await cdssAdminAPI.getAuditLogs(auditLimit, auditOffset);
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, auditOffset, {
+        actor: auditActorQuery.trim() || undefined,
+        action: auditActionQuery.trim() || undefined,
+        startDate: auditDateFrom || undefined,
+        endDate: auditDateTo || undefined,
+        sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+        sortDir: auditSortDir,
+      });
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
       setMessage('Audit logs refreshed');
     } catch (e: any) {
@@ -320,7 +413,14 @@ export const CdssAdmin: React.FC = () => {
     setAuditOffset(newOffset);
     setLoading(true);
     try {
-      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset);
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset, {
+        actor: auditActorQuery.trim() || undefined,
+        action: auditActionQuery.trim() || undefined,
+        startDate: auditDateFrom || undefined,
+        endDate: auditDateTo || undefined,
+        sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+        sortDir: auditSortDir,
+      });
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
     } finally {
       setLoading(false);
@@ -332,7 +432,14 @@ export const CdssAdmin: React.FC = () => {
     setAuditOffset(newOffset);
     setLoading(true);
     try {
-      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset);
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset, {
+        actor: auditActorQuery.trim() || undefined,
+        action: auditActionQuery.trim() || undefined,
+        startDate: auditDateFrom || undefined,
+        endDate: auditDateTo || undefined,
+        sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+        sortDir: auditSortDir,
+      });
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
     } finally {
       setLoading(false);
@@ -349,6 +456,251 @@ export const CdssAdmin: React.FC = () => {
       localStorage.setItem('cdssAdmin.auditOffset', String(auditOffset));
     } catch {}
   }, [auditOffset]);
+  useEffect(() => {
+    const p = Math.floor(auditOffset / auditLimit) + 1;
+    setAuditPageInput(String(p));
+  }, [auditOffset, auditLimit]);
+
+  const handleAuditJump = async () => {
+    const n = Number(auditPageInput);
+    const page = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+    const newOffset = (page - 1) * auditLimit;
+    setAuditOffset(newOffset);
+    setLoading(true);
+    try {
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset, {
+        actor: auditActorQuery.trim() || undefined,
+        action: auditActionQuery.trim() || undefined,
+        startDate: auditDateFrom || undefined,
+        endDate: auditDateTo || undefined,
+        sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+        sortDir: auditSortDir,
+      });
+      setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredJobs = (ingestJobs || [])
+    .filter(j => (statusFilter === 'all' ? true : j.status === statusFilter))
+    .filter(j => (jobIdQuery.trim().length === 0 ? true : String(j.jobId || '').toLowerCase().includes(jobIdQuery.trim().toLowerCase())));
+
+  const sortedJobs = [...filteredJobs].sort((a: any, b: any) => {
+    const key = jobsSortKey;
+    const dir = jobsSortDir === 'asc' ? 1 : -1;
+    const va = key === 'started_at' || key === 'finished_at' ? new Date(a[key] || 0).getTime() : String(a[key] || '');
+    const vb = key === 'started_at' || key === 'finished_at' ? new Date(b[key] || 0).getTime() : String(b[key] || '');
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+
+  const toggleSort = (key: 'jobId' | 'status' | 'started_at' | 'finished_at') => {
+    if (jobsSortKey === key) {
+      setJobsSortDir(jobsSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setJobsSortKey(key);
+      setJobsSortDir(key === 'jobId' ? 'asc' : 'desc');
+    }
+  };
+  const sortIndicator = (key: string) => jobsSortKey === key ? (jobsSortDir === 'asc' ? '▲' : '▼') : '';
+
+  const exportJobsCsv = () => {
+    const headers = ['jobId', 'status', 'started_at', 'finished_at', 'message'];
+    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [headers.join(',')].concat(
+      filteredJobs.map((j: any) =>
+        [j.jobId, j.status, j.started_at, j.finished_at || '', j.message || ''].map((x: any) => esc(String(x))).join(',')
+      )
+    );
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'jobs-filtered.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const beginResize = (table: 'jobs' | 'audit', key: string, current: number) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = { table, key, startX: e.clientX, startWidth: current };
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingRef.current) return;
+      const dx = ev.clientX - resizingRef.current.startX;
+      const w = Math.max(80, resizingRef.current.startWidth + dx);
+      if (resizingRef.current.table === 'jobs') {
+        setJobsColWidths((prev) => ({ ...prev, [resizingRef.current!.key]: w }));
+      } else {
+        setAuditColWidths((prev) => ({ ...prev, [resizingRef.current!.key]: w }));
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      resizingRef.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const exportAuditCsv = () => {
+    const rows = auditRows;
+    const headers = ['created_at', 'actor', 'action', 'payload'];
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines = [headers.join(',')].concat(
+      rows.map((r: any) => {
+        const payload = JSON.stringify(r?.payload || {});
+        return [String(r?.created_at || ''), String(r?.actor || ''), String(r?.action || ''), payload].map((x) => esc(String(x))).join(',');
+      })
+    );
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'audit-logs.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAllAuditCsv = async () => {
+    setExportingAll(true);
+    setExportAllCount(0);
+    try {
+      const headers = ['created_at', 'actor', 'action', 'payload'];
+      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const lines: string[] = [headers.join(',')];
+      const pageSize = 500;
+      let offset = 0;
+      while (true) {
+        const au = await cdssAdminAPI.getAuditLogs(pageSize, offset, {
+          actor: auditActorQuery.trim() || undefined,
+          action: auditActionQuery.trim() || undefined,
+          startDate: auditDateFrom || undefined,
+          endDate: auditDateTo || undefined,
+          sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+          sortDir: auditSortDir,
+        });
+        const rows: any[] = au?.logs || [];
+        if (!rows.length) break;
+        for (const r of rows) {
+          const payload = JSON.stringify(r?.payload || {});
+          lines.push([String(r?.created_at || ''), String(r?.actor || ''), String(r?.action || ''), payload].map((x) => esc(String(x))).join(','));
+        }
+        setExportAllCount((c) => c + rows.length);
+        if (rows.length < pageSize) break;
+        offset += pageSize;
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'audit-logs-all.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const resetJobsColWidths = () => {
+    setJobsColWidths(defaultJobsWidths);
+  };
+  const resetAuditColWidths = () => {
+    setAuditColWidths(defaultAuditWidths);
+  };
+
+  const relTime = (v: any) => {
+    if (!v) return '-';
+    const t = new Date(v).getTime();
+    if (!Number.isFinite(t)) return '-';
+    const diff = Math.floor((Date.now() - t) / 1000);
+    if (diff < 5) return 'just now';
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  };
+  const [nowTick, setNowTick] = useState<number>(0);
+  useEffect(() => {
+    const i = setInterval(() => setNowTick((v) => v + 1), 30000);
+    return () => clearInterval(i);
+  }, []);
+
+  const auditRows = audit?.logs || [];
+
+  const toggleAuditSort = (key: 'time' | 'actor' | 'action') => {
+    if (auditSortKey === key) {
+      setAuditSortDir(auditSortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setAuditSortKey(key);
+      setAuditSortDir(key === 'time' ? 'desc' : 'asc');
+    }
+  };
+  const auditSortIndicator = (key: string) => auditSortKey === key ? (auditSortDir === 'asc' ? '▲' : '▼') : '';
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const au = await cdssAdminAPI.getAuditLogs(auditLimit, auditOffset, {
+          actor: auditActorQuery.trim() || undefined,
+          action: auditActionQuery.trim() || undefined,
+          startDate: auditDateFrom || undefined,
+          endDate: auditDateTo || undefined,
+          sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+          sortDir: auditSortDir,
+        });
+        setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [auditSortKey, auditSortDir]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      (async () => {
+        setLoading(true);
+        try {
+          const newOffset = 0;
+          setAuditOffset(newOffset);
+          const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset, {
+            actor: auditActorQuery.trim() || undefined,
+            action: auditActionQuery.trim() || undefined,
+            startDate: auditDateFrom || undefined,
+            endDate: auditDateTo || undefined,
+            sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+            sortDir: auditSortDir,
+          });
+          setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [auditActorQuery, auditActionQuery, auditDateFrom, auditDateTo]);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const au = await cdssAdminAPI.getAuditLogs(auditLimit, 0, {
+          actor: auditActorQuery.trim() || undefined,
+          action: auditActionQuery.trim() || undefined,
+          startDate: auditDateFrom || undefined,
+          endDate: auditDateTo || undefined,
+          sortKey: auditSortKey === 'time' ? 'created_at' : auditSortKey,
+          sortDir: auditSortDir,
+        });
+        setAudit({ logs: au?.logs || [], limit: auditLimit, offset: 0 });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [auditLimit]);
 
   return (
     <div className="space-y-6">
@@ -537,30 +889,88 @@ export const CdssAdmin: React.FC = () => {
               >
                 Clear Filters
               </button>
+              <button
+                className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                onClick={resetJobsColWidths}
+                title="Reset column widths"
+              >
+                Reset Cols
+              </button>
+              <button
+                className="px-2 py-1 text-xs rounded bg-emerald-600 text-white"
+                onClick={exportJobsCsv}
+                title="Export current Jobs view to CSV"
+              >
+                Export CSV
+              </button>
             </div>
           </div>
           <div className="overflow-auto rounded-lg border border-slate-200 max-h-96">
-            <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`}>
+            <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`} style={{ tableLayout: 'fixed' }}>
               <thead>
                 <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>Job ID</th>
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Status</th>
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Started</th>
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Finished</th>
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Message</th>
-                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Actions</th>
+                  <th style={{ width: jobsColWidths.jobId }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>
+                    <div className="relative pr-2">
+                      <button onClick={() => toggleSort('jobId')} className="text-left w-full">
+                        Job ID <span className="text-slate-400">{sortIndicator('jobId')}</span>
+                      </button>
+                      <div onMouseDown={beginResize('jobs', 'jobId', jobsColWidths.jobId)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
+                  <th style={{ width: jobsColWidths.status }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <button onClick={() => toggleSort('status')} className="text-left w-full">
+                        Status <span className="text-slate-400">{sortIndicator('status')}</span>
+                      </button>
+                      <div onMouseDown={beginResize('jobs', 'status', jobsColWidths.status)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
+                  <th style={{ width: jobsColWidths.started }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <button onClick={() => toggleSort('started_at')} className="text-left w-full">
+                        Started <span className="text-slate-400">{sortIndicator('started_at')}</span>
+                      </button>
+                      <div onMouseDown={beginResize('jobs', 'started', jobsColWidths.started)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
+                  <th style={{ width: jobsColWidths.finished }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <button onClick={() => toggleSort('finished_at')} className="text-left w-full">
+                        Finished <span className="text-slate-400">{sortIndicator('finished_at')}</span>
+                      </button>
+                      <div onMouseDown={beginResize('jobs', 'finished', jobsColWidths.finished)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
+                  <th style={{ width: jobsColWidths.message }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <span>Message</span>
+                      <div onMouseDown={beginResize('jobs', 'message', jobsColWidths.message)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
+                  <th style={{ width: jobsColWidths.actions }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                    <div className="relative pr-2">
+                      <span>Actions</span>
+                      <div onMouseDown={beginResize('jobs', 'actions', jobsColWidths.actions)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {(ingestJobs || [])
-                  .filter(j => (statusFilter === 'all' ? true : j.status === statusFilter))
-                  .filter(j => (jobIdQuery.trim().length === 0 ? true : String(j.jobId || '').toLowerCase().includes(jobIdQuery.trim().toLowerCase())))
-                  .map((j, idx) => (
+                {sortedJobs.map((j, idx) => (
                   <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
-                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 font-mono text-xs`}>{j.jobId}</td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 font-mono text-xs`}>
+                      {j.jobId}
+                      <button
+                        className="ml-2 px-1 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700"
+                        onClick={() => navigator.clipboard?.writeText(String(j.jobId || '')).catch(() => {})}
+                        title="Copy Job ID"
+                      >
+                        Copy
+                      </button>
+                    </td>
                     <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}><span className={statusChip(j.status)}>{j.status}</span></td>
-                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{j.started_at}</td>
-                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{j.finished_at || '-'}</td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.started_at || ''}>{relTime(j.started_at)}{nowTick ? '' : ''}</td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`} title={j.finished_at || ''}>{j.finished_at ? relTime(j.finished_at) : '-' }{nowTick ? '' : ''}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-500 max-w-xl truncate`} title={j.message || ''}>{j.message || '-'}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     {(j.status === 'failed' || j.status === 'completed') && (
@@ -605,22 +1015,61 @@ export const CdssAdmin: React.FC = () => {
           <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
           <div className="flex items-center gap-2">
             <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 disabled:opacity-50">Prev</button>
+            <span className="text-xs text-slate-500">page {Math.floor(auditOffset / auditLimit) + 1}</span>
+            <span className="text-xs text-slate-400">•</span>
             <span className="text-xs text-slate-500">offset {auditOffset}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-500">page</span>
+              <input
+                className="w-16 border border-slate-300 rounded px-2 py-1 text-xs"
+                value={auditPageInput}
+                onChange={(e) => setAuditPageInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAuditJump(); }}
+              />
+              <button onClick={handleAuditJump} className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700">Go</button>
+            </div>
+            <input
+              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              placeholder="Filter actor"
+              value={auditActorQuery}
+              onChange={(e) => setAuditActorQuery(e.target.value)}
+              title="Filter by actor"
+            />
+            <input
+              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              placeholder="Filter action"
+              value={auditActionQuery}
+              onChange={(e) => setAuditActionQuery(e.target.value)}
+              title="Filter by action"
+            />
+            <input
+              type="date"
+              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              value={auditDateFrom}
+              onChange={(e) => setAuditDateFrom(e.target.value)}
+              title="From date"
+            />
+            <input
+              type="date"
+              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              value={auditDateTo}
+              onChange={(e) => setAuditDateTo(e.target.value)}
+              title="To date"
+            />
+            <button
+              onClick={() => { setAuditActorQuery(''); setAuditActionQuery(''); setAuditDateFrom(''); setAuditDateTo(''); }}
+              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+              title="Clear audit filters"
+            >
+              Clear
+            </button>
             <select
               className="border border-slate-300 rounded px-2 py-1 text-xs"
               value={auditLimit}
-              onChange={async (e) => {
+              onChange={(e) => {
                 const newLimit = Number(e.target.value);
                 setAuditLimit(newLimit);
-                const newOffset = 0;
-                setAuditOffset(newOffset);
-                setLoading(true);
-                try {
-                  const au = await cdssAdminAPI.getAuditLogs(newLimit, newOffset);
-                  setAudit({ logs: au?.logs || [], limit: newLimit, offset: newOffset });
-                } finally {
-                  setLoading(false);
-                }
+                setAuditOffset(0);
               }}
             >
               <option value={20}>limit 20</option>
@@ -628,27 +1077,65 @@ export const CdssAdmin: React.FC = () => {
               <option value={100}>limit 100</option>
             </select>
             <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Next</button>
+            <button onClick={resetAuditColWidths} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Reset Cols</button>
+            <button onClick={exportAllAuditCsv} disabled={exportingAll} className="px-3 py-1.5 text-sm rounded bg-emerald-700 text-white disabled:opacity-50">{exportingAll ? `Exporting… ${exportAllCount}` : 'Export All CSV'}</button>
+            <button onClick={exportAuditCsv} className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white">Export CSV</button>
             <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
           </div>
         </div>
         <div className="overflow-auto rounded-lg border border-slate-200 max-h-80">
-          <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`}>
+          <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`} style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>Time</th>
-                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Actor</th>
-                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Action</th>
-                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Payload</th>
+                <th style={{ width: auditColWidths.time }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>
+                  <div className="relative pr-2">
+                    <button onClick={() => toggleAuditSort('time')} className="text-left w-full">
+                      Time <span className="text-slate-400">{auditSortIndicator('time')}</span>
+                    </button>
+                    <div onMouseDown={beginResize('audit', 'time', auditColWidths.time)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                  </div>
+                </th>
+                <th style={{ width: auditColWidths.actor }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                  <div className="relative pr-2">
+                    <button onClick={() => toggleAuditSort('actor')} className="text-left w-full">
+                      Actor <span className="text-slate-400">{auditSortIndicator('actor')}</span>
+                    </button>
+                    <div onMouseDown={beginResize('audit', 'actor', auditColWidths.actor)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                  </div>
+                </th>
+                <th style={{ width: auditColWidths.action }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                  <div className="relative pr-2">
+                    <button onClick={() => toggleAuditSort('action')} className="text-left w-full">
+                      Action <span className="text-slate-400">{auditSortIndicator('action')}</span>
+                    </button>
+                    <div onMouseDown={beginResize('audit', 'action', auditColWidths.action)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                  </div>
+                </th>
+                <th style={{ width: auditColWidths.payload }} className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
+                  <div className="relative pr-2">
+                    <span>Payload</span>
+                    <div onMouseDown={beginResize('audit', 'payload', auditColWidths.payload)} className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-slate-300 opacity-0 hover:opacity-100"></div>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {(audit?.logs || []).map((log, idx) => (
+              {auditRows.map((log: any, idx: number) => (
                 <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
-                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 text-slate-700`}>{log.created_at}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 text-slate-700`} title={log.created_at || ''}>{relTime(log.created_at)}{nowTick ? '' : ''}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.actor}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.action}</td>
                   <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-600`}>
-                    <pre className="whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
+                    <div className="flex items-start gap-2">
+                      <pre className="flex-1 whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
+                      <button
+                        className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                        onClick={() => navigator.clipboard?.writeText(JSON.stringify(log.payload || {}, null, 2)).catch(() => {})}
+                        title="Copy payload JSON"
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

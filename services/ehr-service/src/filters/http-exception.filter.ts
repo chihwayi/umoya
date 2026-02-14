@@ -1,10 +1,4 @@
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/nestjs';
 
@@ -15,17 +9,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : exception instanceof Error
-        ? exception.message
-        : 'Internal server error';
+    const message = exception instanceof HttpException ? exception.getResponse() : exception instanceof Error ? exception.message : 'Internal server error';
 
     const errorDetails = {
       statusCode: status,
@@ -33,32 +19,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       method: request.method,
       message: typeof message === 'string' ? message : (message as any)?.message || message,
-      error: exception instanceof Error ? {
-        name: exception.name,
-        message: exception.message,
-        stack: exception.stack,
-      } : exception,
+      error:
+        exception instanceof Error
+          ? {
+              name: exception.name,
+              message: exception.message,
+              stack: exception.stack,
+            }
+          : exception,
     };
 
-    // Log the full error
-    console.error('🚨 [EXCEPTION FILTER] Caught exception:');
-    
-    // Send to Sentry
     Sentry.captureException(exception);
 
-    console.error('🚨 [EXCEPTION FILTER] Status:', status);
-    console.error('🚨 [EXCEPTION FILTER] Path:', request.url);
-    console.error('🚨 [EXCEPTION FILTER] Method:', request.method);
-    console.error('🚨 [EXCEPTION FILTER] Error:', errorDetails.error);
-    console.error('🚨 [EXCEPTION FILTER] Full details:', JSON.stringify(errorDetails, null, 2));
+    const rid = (request as any)?.requestId || request.headers['x-request-id'] || request.headers['X-Request-ID'] || null;
 
+    response.setHeader('X-Request-ID', typeof rid === 'string' ? rid : String(rid || ''));
     response.status(status).json({
-      statusCode: status,
+      code: exception instanceof HttpException ? (exception.getResponse() as any)?.code || 'HTTP_ERROR' : 'INTERNAL_ERROR',
       message: typeof message === 'string' ? message : (message as any)?.message || 'Internal server error',
+      details: exception instanceof HttpException ? (exception.getResponse() as any)?.details || null : null,
+      requestId: typeof rid === 'string' ? rid : null,
       timestamp: new Date().toISOString(),
-      path: request.url,
     });
   }
 }
-
 

@@ -126,18 +126,46 @@ class SettingsProvider:
         except Exception as e:
             logger.warning(f"Failed to write audit log: {e}")
 
-    def get_audit_logs(self, limit: int = 50, offset: int = 0) -> list[dict]:
+    def get_audit_logs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        actor: Optional[str] = None,
+        action: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        sort_key: str = "created_at",
+        sort_dir: str = "DESC",
+    ) -> list[dict]:
         try:
             with self.conn.cursor() as cur:
-                cur.execute(
-                    """
+                allowed_sort_keys = {"created_at", "actor", "action"}
+                sk = sort_key if sort_key in allowed_sort_keys else "created_at"
+                sd = "ASC" if str(sort_dir).upper() == "ASC" else "DESC"
+                conditions = []
+                params = []
+                if actor:
+                    conditions.append("actor ILIKE %s")
+                    params.append(f"%{actor}%")
+                if action:
+                    conditions.append("action ILIKE %s")
+                    params.append(f"%{action}%")
+                if start_date:
+                    conditions.append("created_at >= %s")
+                    params.append(start_date)
+                if end_date:
+                    conditions.append("created_at <= %s")
+                    params.append(end_date)
+                where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+                query = f"""
                     SELECT actor, action, payload, created_at
                     FROM cdss_admin_audit_logs
-                    ORDER BY created_at DESC
+                    {where_clause}
+                    ORDER BY {sk} {sd}
                     LIMIT %s OFFSET %s;
-                    """,
-                    (limit, offset),
-                )
+                """
+                params.extend([limit, offset])
+                cur.execute(query, params)
                 rows = cur.fetchall()
                 result = []
                 for r in rows:

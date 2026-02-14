@@ -4,6 +4,27 @@ if (!process.env.REACT_APP_EHR_API_URL) {
   console.warn('REACT_APP_EHR_API_URL is missing in environment variables. Patient Portal may not function correctly.');
 }
 
+const _genRid = (): string => {
+  try {
+    // @ts-ignore
+    if (typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function') {
+      // @ts-ignore
+      return (crypto as any).randomUUID();
+    }
+  } catch {}
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+  return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`;
+};
+const _withRid = (headers: Record<string, string>) => ({ 'X-Request-ID': _genRid(), ...headers });
+const _ridFrom = (r: Response) => r.headers.get('X-Request-ID') || r.headers.get('x-request-id');
+const _errMsg = (r: Response, base: string) => {
+  const rid = _ridFrom(r);
+  return rid ? `${base} (requestId: ${rid})` : base;
+};
+const _ensureOk = (r: Response, base: string) => {
+  if (!r.ok) throw new Error(_errMsg(r, base));
+};
+
 export const patientPortalApi = {
   // Appointments
   getAppointments: async (token: string, tenantSlug: string, filters?: { startDate?: string; endDate?: string; status?: string }) => {
@@ -12,50 +33,30 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.status) params.append('status', filters.status);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch appointments');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch appointments');
     return response.json();
   },
 
   getAppointment: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${id}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch appointment');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${id}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch appointment');
     return response.json();
   },
 
   requestAppointment: async (data: any, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/request`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to request appointment');
+    _ensureOk(response, 'Failed to request appointment');
     return response.json();
   },
 
   cancelAppointment: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to cancel appointment');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${id}`, { method: 'DELETE', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to cancel appointment');
     return response.json();
   },
 
@@ -78,28 +79,25 @@ export const patientPortalApi = {
   }, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/request-with-payment`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to request appointment');
+      let msg = 'Failed to request appointment';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      const rid = response.headers.get('X-Request-ID') || response.headers.get('x-request-id');
+      if (rid) msg = `${msg} (requestId: ${rid})`;
+      throw new Error(msg);
     }
     return response.json();
   },
 
   getAvailableDoctors: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-doctors`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch available doctors');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-doctors`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch available doctors');
     return response.json();
   },
 
@@ -108,13 +106,8 @@ export const patientPortalApi = {
     params.append('doctorId', doctorId);
     params.append('date', date);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-slots?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch available time slots');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/available-slots?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch available time slots');
     return response.json();
   },
 
@@ -128,19 +121,15 @@ export const patientPortalApi = {
     const url = `${API_BASE_URL}/patient-portal/records?${params.toString()}`;
     console.log('Fetching medical records from:', url);
     
-    const response = await fetch(url, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(url, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     
     console.log('Medical records API response status:', response.status, response.statusText);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Medical records API error:', errorText);
-      throw new Error(`Failed to fetch records: ${response.status} ${response.statusText}`);
+      let base = `Failed to fetch records: ${response.status} ${response.statusText}`;
+      const rid = response.headers.get('X-Request-ID') || response.headers.get('x-request-id');
+      if (rid) base = `${base} (requestId: ${rid})`;
+      throw new Error(base);
     }
     
     const data = await response.json();
@@ -154,13 +143,8 @@ export const patientPortalApi = {
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/lab-results?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch lab results');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/lab-results?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch lab results');
     return response.json();
   },
 
@@ -169,15 +153,16 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (activeOnly) params.append('activeOnly', 'true');
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch prescriptions');
+      let msg = 'Failed to fetch prescriptions';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      const rid = response.headers.get('X-Request-ID') || response.headers.get('x-request-id');
+      if (rid) msg = `${msg} (requestId: ${rid})`;
+      throw new Error(msg);
     }
     const data = await response.json();
     // Handle both array and object responses
@@ -185,13 +170,8 @@ export const patientPortalApi = {
   },
 
   downloadPrescription: async (prescriptionId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/download`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to download prescription');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/download`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to download prescription');
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -207,16 +187,16 @@ export const patientPortalApi = {
   createRefillRequest: async (prescriptionId: string, data: { requestedQuantity?: number; reason?: string; urgency?: string }, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/refill-request`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create refill request');
+      let msg = 'Failed to create refill request';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -225,27 +205,20 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/refill-requests?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch refill requests');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/refill-requests?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch refill requests');
     return response.json();
   },
 
   cancelRefillRequest: async (requestId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/refill-requests/${requestId}`, {
-      method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/refill-requests/${requestId}`, { method: 'DELETE', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to cancel refill request');
+      let msg = 'Failed to cancel refill request';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -254,16 +227,16 @@ export const patientPortalApi = {
   createMedicationReminder: async (prescriptionId: string, data: { reminderTime: string; reminderDays: number[]; reminderType?: string; timezone?: string }, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/reminders`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create medication reminder');
+      let msg = 'Failed to create medication reminder';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -272,44 +245,33 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (filters?.activeOnly) params.append('activeOnly', 'true');
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch medication reminders');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch medication reminders');
     return response.json();
   },
 
   updateMedicationReminder: async (reminderId: string, data: { reminderTime?: string; reminderDays?: number[]; reminderType?: string; isActive?: boolean }, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders/${reminderId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders/${reminderId}`, { method: 'PUT', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify(data) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update medication reminder');
+      let msg = 'Failed to update medication reminder';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
 
   deleteMedicationReminder: async (reminderId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders/${reminderId}`, {
-      method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/reminders/${reminderId}`, { method: 'DELETE', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete medication reminder');
+      let msg = 'Failed to delete medication reminder';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -318,16 +280,16 @@ export const patientPortalApi = {
   logMedicationAdherence: async (prescriptionId: string, data: { scheduledTime: string; taken: boolean; takenTime?: string; missedReason?: string; notes?: string }, token: string, tenantSlug: string) => {
     const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/${prescriptionId}/adherence`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
+      headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to log medication adherence');
+      let msg = 'Failed to log medication adherence';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -338,13 +300,8 @@ export const patientPortalApi = {
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/adherence/summary?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch adherence summary');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/adherence/summary?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch adherence summary');
     return response.json();
   },
 
@@ -355,13 +312,8 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/adherence/logs?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch adherence logs');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/prescriptions/adherence/logs?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch adherence logs');
     return response.json();
   },
 
@@ -372,15 +324,14 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.status) params.append('status', filters.status);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/bills?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/bills?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch bills');
+      let msg = 'Failed to fetch bills';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     const data = await response.json();
     // Handle both array and object responses
@@ -388,13 +339,8 @@ export const patientPortalApi = {
   },
 
   getBill: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/bills/${id}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch bill');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/bills/${id}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch bill');
     return response.json();
   },
 
@@ -405,80 +351,52 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch vitals');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch vitals');
     return response.json();
   },
 
   submitVitals: async (vitalsData: any, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals/submit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(vitalsData),
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/vitals/submit`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify(vitalsData) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to submit vitals');
+      let msg = 'Failed to submit vitals';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
 
   // Patient-Reported Outcomes (PROs)
   getAvailableQuestionnaires: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/available`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch available questionnaires');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/available`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch available questionnaires');
     return response.json();
   },
 
   getPendingQuestionnaires: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/pending`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch pending questionnaires');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/pending`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch pending questionnaires');
     return response.json();
   },
 
   getQuestionnaire: async (questionnaireId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/${questionnaireId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch questionnaire');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/${questionnaireId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch questionnaire');
     return response.json();
   },
 
   submitQuestionnaire: async (questionnaireId: string, responses: any[], token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/${questionnaireId}/submit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ responses }),
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/${questionnaireId}/submit`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify({ responses }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to submit questionnaire');
+      let msg = 'Failed to submit questionnaire';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
@@ -488,24 +406,14 @@ export const patientPortalApi = {
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.category) params.append('category', filters.category);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/history?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch questionnaire history');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/history?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch questionnaire history');
     return response.json();
   },
 
   getPreVisitQuestionnaires: async (appointmentId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${appointmentId}/questionnaires`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch pre-visit questionnaires');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/appointments/${appointmentId}/questionnaires`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch pre-visit questionnaires');
     return response.json();
   },
 
@@ -514,101 +422,67 @@ export const patientPortalApi = {
     if (filters?.questionnaireCode) params.append('questionnaireCode', filters.questionnaireCode);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/trends?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch PRO trends');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/trends?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch PRO trends');
     return response.json();
   },
 
   getQuestionnaireSchedules: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/schedules`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch questionnaire schedules');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/questionnaires/schedules`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch questionnaire schedules');
     return response.json();
   },
 
   // Telemedicine
   getConsultationByAppointment: async (appointmentId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${appointmentId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${appointmentId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Failed to fetch consultation' }));
-      throw new Error(error.message || 'Failed to fetch consultation');
+      let msg = 'Failed to fetch consultation';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
 
   getConsultation: async (consultationId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch consultation');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch consultation');
     return response.json();
   },
 
   joinConsultation: async (consultationId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/join`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/join`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to join consultation');
+      let msg = 'Failed to join consultation';
+      try {
+        const error = await response.json();
+        msg = error?.message || msg;
+      } catch {}
+      throw new Error(_errMsg(response, msg));
     }
     return response.json();
   },
 
   getMeetingUrl: async (consultationId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/meeting-url`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to get meeting URL');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/telemedicine/consultation/${consultationId}/meeting-url`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to get meeting URL');
     return response.json();
   },
 
   // Dashboard Summary
   getDashboardSummary: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch dashboard summary');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/dashboard/summary`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch dashboard summary');
     return response.json();
   },
 
   // Chronic Disease Management - Diabetes
   getDiabetesRegistry: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/registry`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch diabetes registry');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/registry`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch diabetes registry');
     return response.json();
   },
 
@@ -618,35 +492,20 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/glucose-history?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch glucose history');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/glucose-history?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch glucose history');
     return response.json();
   },
 
   getDiabetesCarePlan: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/care-plan`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch diabetes care plan');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/care-plan`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch diabetes care plan');
     return response.json();
   },
 
   getDiabetesMedications: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/medications`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch diabetes medications');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/diabetes/medications`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch diabetes medications');
     return response.json();
   },
 
@@ -657,13 +516,8 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/cardiology/encounters?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch cardiology encounters');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/cardiology/encounters?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch cardiology encounters');
     return response.json();
   },
 
@@ -673,13 +527,8 @@ export const patientPortalApi = {
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/cardiology/blood-pressure-trends?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch blood pressure trends');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/cardiology/blood-pressure-trends?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch blood pressure trends');
     return response.json();
   },
 
@@ -691,74 +540,38 @@ export const patientPortalApi = {
     if (filters?.limit) params.append('limit', filters.limit.toString());
     if (filters?.offset) params.append('offset', filters.offset.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch messages');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch messages');
     return response.json();
   },
 
   getMessage: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch message');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch message');
     return response.json();
   },
 
   sendMessage: async (data: { recipientId: string; recipientType: string; message: string; subject?: string; messageType?: string; priority?: string }, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to send message');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify(data) });
+    _ensureOk(response, 'Failed to send message');
     return response.json();
   },
 
   markMessageAsRead: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}/read`, {
-      method: 'PUT',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to mark message as read');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}/read`, { method: 'PUT', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to mark message as read');
     return response.json();
   },
 
   markAllMessagesAsRead: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/read-all`, {
-      method: 'PUT',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to mark all messages as read');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/read-all`, { method: 'PUT', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to mark all messages as read');
     return response.json();
   },
 
   deleteMessage: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to delete message');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/messages/${id}`, { method: 'DELETE', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to delete message');
     return response.json();
   },
 
@@ -769,49 +582,26 @@ export const patientPortalApi = {
     if (filters?.notificationType) params.append('notificationType', filters.notificationType);
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch notifications');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch notifications');
     return response.json();
   },
 
   markNotificationAsRead: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/${id}/read`, {
-      method: 'PUT',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to mark notification as read');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/${id}/read`, { method: 'PUT', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to mark notification as read');
     return response.json();
   },
 
   markAllNotificationsAsRead: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/read-all`, {
-      method: 'PUT',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to mark all notifications as read');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/read-all`, { method: 'PUT', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to mark all notifications as read');
     return response.json();
   },
 
   deleteNotification: async (id: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to delete notification');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/notifications/${id}`, { method: 'DELETE', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to delete notification');
     return response.json();
   },
 
@@ -821,14 +611,8 @@ export const patientPortalApi = {
     if (options?.startDate) params.append('startDate', options.startDate);
     if (options?.endDate) params.append('endDate', options.endDate);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/export/pdf?${params.toString()}`, {
-      method: 'POST',
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to export PDF');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/export/pdf?${params.toString()}`, { method: 'POST', headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to export PDF');
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -845,13 +629,8 @@ export const patientPortalApi = {
     if (options?.startDate) params.append('startDate', options.startDate);
     if (options?.endDate) params.append('endDate', options.endDate);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/export/fhir?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to export FHIR');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/export/fhir?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to export FHIR');
     const data = await response.json();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
@@ -869,13 +648,8 @@ export const patientPortalApi = {
     if (options?.startDate) params.append('startDate', options.startDate);
     if (options?.endDate) params.append('endDate', options.endDate);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/export/json?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to export JSON');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/export/json?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to export JSON');
     const data = await response.json();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
@@ -894,13 +668,8 @@ export const patientPortalApi = {
     if (options?.endDate) params.append('endDate', options.endDate);
     if (options?.dataType) params.append('dataType', options.dataType);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/export/csv?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to export CSV');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/export/csv?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to export CSV');
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -914,16 +683,8 @@ export const patientPortalApi = {
 
   // Health Goals
   createGoal: async (token: string, tenantSlug: string, goalData: any) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-      body: JSON.stringify(goalData),
-    });
-    if (!response.ok) throw new Error('Failed to create goal');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }), body: JSON.stringify(goalData) });
+    _ensureOk(response, 'Failed to create goal');
     return response.json();
   },
 
@@ -931,64 +692,32 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch goals');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals?${params.toString()}`, { headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to fetch goals');
     return response.json();
   },
 
   getGoal: async (token: string, tenantSlug: string, goalId: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch goal');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, { headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to fetch goal');
     return response.json();
   },
 
   updateGoal: async (token: string, tenantSlug: string, goalId: string, updates: any) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-      body: JSON.stringify(updates),
-    });
-    if (!response.ok) throw new Error('Failed to update goal');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, { method: 'PUT', headers: _withRid({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }), body: JSON.stringify(updates) });
+    _ensureOk(response, 'Failed to update goal');
     return response.json();
   },
 
   deleteGoal: async (token: string, tenantSlug: string, goalId: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to delete goal');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}`, { method: 'DELETE', headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to delete goal');
     return response.json();
   },
 
   logProgress: async (token: string, tenantSlug: string, goalId: string, progressData: any) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}/progress`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-      body: JSON.stringify(progressData),
-    });
-    if (!response.ok) throw new Error('Failed to log progress');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}/progress`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }), body: JSON.stringify(progressData) });
+    _ensureOk(response, 'Failed to log progress');
     return response.json();
   },
 
@@ -996,13 +725,8 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (limit) params.append('limit', limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}/progress?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch progress logs');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/goals/${goalId}/progress?${params.toString()}`, { headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to fetch progress logs');
     return response.json();
   },
 
@@ -1010,39 +734,21 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (limit) params.append('limit', limit.toString());
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/achievements?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch achievements');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/achievements?${params.toString()}`, { headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to fetch achievements');
     return response.json();
   },
 
   getStreaks: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/streaks`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': tenantSlug,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch streaks');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/streaks`, { headers: _withRid({ 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantSlug }) });
+    _ensureOk(response, 'Failed to fetch streaks');
     return response.json();
   },
 
   // Symptom Checker
   analyzeSymptoms: async (data: { symptoms: string[]; age?: number; gender?: string }, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/symptom-checker/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to analyze symptoms');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/symptom-checker/analyze`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify(data) });
+    _ensureOk(response, 'Failed to analyze symptoms');
     return response.json();
   },
 
@@ -1052,174 +758,97 @@ export const patientPortalApi = {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
 
-    const response = await fetch(`${API_BASE_URL}/patient-portal/consents?${params.toString()}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch consents');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents?${params.toString()}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch consents');
     return response.json();
   },
 
   getConsentById: async (consentId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch consent');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch consent');
     return response.json();
   },
 
   signConsent: async (consentId: string, signatureData: any, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/sign`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(signatureData),
-    });
-    if (!response.ok) throw new Error('Failed to sign consent');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/sign`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify(signatureData) });
+    _ensureOk(response, 'Failed to sign consent');
     return response.json();
   },
 
   declineConsent: async (consentId: string, reason: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/decline`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ reason }),
-    });
-    if (!response.ok) throw new Error('Failed to decline consent');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/decline`, { method: 'POST', headers: _withRid({ 'Content-Type': 'application/json', 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }), body: JSON.stringify({ reason }) });
+    _ensureOk(response, 'Failed to decline consent');
     return response.json();
   },
 
   downloadConsent: async (consentId: string, format: 'pdf' | 'json', token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/export?format=${format}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to download consent');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/consents/${consentId}/export?format=${format}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to download consent');
     return response.blob();
   },
 
   // ==================== TIER 1: CLINICAL PATHWAYS ====================
   
   getPatientPathways: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch pathways');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch pathways');
     return response.json();
   },
 
   getPathwayProgress: async (enrollmentId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways/${enrollmentId}/progress`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch pathway progress');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/pathways/${enrollmentId}/progress`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch pathway progress');
     return response.json();
   },
 
   // ==================== TIER 1: IMMUNIZATIONS ====================
   
   getPatientImmunizations: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch immunizations');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch immunizations');
     return response.json();
   },
 
   getImmunizationForecast: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/forecast`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch immunization forecast');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/forecast`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch immunization forecast');
     return response.json();
   },
 
   downloadImmunizationRecord: async (format: 'pdf' | 'json', token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/export?format=${format}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to download immunization record');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/immunizations/export?format=${format}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to download immunization record');
     return response.blob();
   },
 
   // ==================== TIER 1: ADMISSION STATUS ====================
   
   getCurrentAdmission: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/current`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/current`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
     if (!response.ok) {
-      if (response.status === 404) return null; // Not admitted
-      throw new Error('Failed to fetch admission status');
+      if (response.status === 404) return null;
+      throw new Error(_errMsg(response, 'Failed to fetch admission status'));
     }
     return response.json();
   },
 
   getAdmissionHistory: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/history`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch admission history');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/admission/history`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch admission history');
     return response.json();
   },
 
   // ==================== TIER 1: ED VISITS ====================
   
   getPatientEDVisits: async (token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch ED visits');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch ED visits');
     return response.json();
   },
 
   getEDVisitDetails: async (visitId: string, token: string, tenantSlug: string) => {
-    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits/${visitId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) throw new Error('Failed to fetch ED visit details');
+    const response = await fetch(`${API_BASE_URL}/patient-portal/ed-visits/${visitId}`, { headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }) });
+    _ensureOk(response, 'Failed to fetch ED visit details');
     return response.json();
   },
 };
-

@@ -18,6 +18,11 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         this.dataSource = dataSource;
         this.logger = new common_1.Logger(DatabaseProvisioningService_1.name);
     }
+    assertSafeDatabaseName(databaseName) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(databaseName)) {
+            throw new Error(`Unsafe database name: ${databaseName}`);
+        }
+    }
     emitProvisioningEvent(event, details) {
         this.logger.log(JSON.stringify({ source: 'provisioning', event, ...details }));
     }
@@ -530,6 +535,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
     }
     async createDatabase(databaseName) {
         try {
+            this.assertSafeDatabaseName(databaseName);
             this.logger.log(`Creating database: ${databaseName}`);
             await this.dataSource.query(`CREATE DATABASE "${databaseName}"`);
             const connectionString = this.generateConnectionString(databaseName);
@@ -6064,11 +6070,12 @@ RECOMMENDATIONS:
     }
     async deleteDatabase(databaseName) {
         try {
+            this.assertSafeDatabaseName(databaseName);
             await this.dataSource.query(`
         SELECT pg_terminate_backend(pid)
         FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
+        WHERE datname = $1 AND pid <> pg_backend_pid()
+      `, [databaseName]);
             await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
             this.logger.log(`Database ${databaseName} deleted successfully`);
         }

@@ -5,9 +5,19 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { TenantModule } from './tenant.module';
 import { SentryFilter } from './filters/sentry.filter';
 import { config as envConfig } from '@medicore/config';
+import { randomUUID } from 'crypto';
+import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(TenantModule);
+  
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const existing = req.header('x-request-id') || req.header('X-Request-ID');
+    const rid = existing && existing.length > 0 ? existing : randomUUID();
+    (req as any).requestId = rid;
+    res.setHeader('X-Request-ID', rid);
+    next();
+  });
   
   // Enable validation globally
   app.useGlobalPipes(new ValidationPipe({
@@ -32,7 +42,8 @@ async function bootstrap() {
           : false,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
   });
 
   app.setGlobalPrefix('api');

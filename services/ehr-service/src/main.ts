@@ -8,11 +8,20 @@ import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { AllExceptionsFilter } from './filters/http-exception.filter';
 import { config as envConfig } from '@medicore/config';
+import { randomUUID } from 'crypto';
+import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(EhrModule);
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const existing = req.header('x-request-id') || req.header('X-Request-ID');
+    const rid = existing && existing.length > 0 ? existing : randomUUID();
+    (req as any).requestId = rid;
+    res.setHeader('X-Request-ID', rid);
+    next();
+  });
   
   // Enable validation globally
   app.useGlobalPipes(new ValidationPipe({
@@ -38,7 +47,8 @@ async function bootstrap() {
     origin: corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug', 'x-session-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug', 'x-session-id', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
   });
 
   app.setGlobalPrefix('api');

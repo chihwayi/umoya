@@ -3,22 +3,27 @@ import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
+type SafeTenant = Omit<Tenant, 'connectionString'>;
+type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
 export declare class TenantController {
     private readonly tenantService;
     private readonly storageService;
     constructor(tenantService: TenantService, storageService: StorageService);
+    private toSafeTenant;
+    private toPublicTenant;
     uploadLogo(file: any): Promise<{
         url: string;
     }>;
     createTenant(createTenantDto: CreateTenantDto): Promise<{
-        tenant: Tenant;
+        tenant: SafeTenant;
         message: string;
     }>;
-    getAllTenants(): Promise<Tenant[]>;
-    getTenantById(id: string): Promise<Tenant>;
-    getTenantBySubdomain(subdomain: string): Promise<Tenant>;
-    updateTenant(id: string, updateTenantDto: UpdateTenantDto): Promise<Tenant>;
-    updateTenantStatus(id: string, status: TenantStatus): Promise<Tenant>;
+    getAllTenants(): Promise<SafeTenant[]>;
+    getActiveTenants(): Promise<PublicTenant[]>;
+    getTenantBySubdomain(subdomain: string): Promise<PublicTenant>;
+    getTenantById(id: string): Promise<SafeTenant>;
+    updateTenant(id: string, updateTenantDto: UpdateTenantDto): Promise<SafeTenant>;
+    updateTenantStatus(id: string, status: TenantStatus): Promise<SafeTenant>;
     deleteTenant(id: string): Promise<{
         message: string;
     }>;
@@ -27,3 +32,4 @@ export declare class TenantController {
         database: string;
     }>;
 }
+export {};

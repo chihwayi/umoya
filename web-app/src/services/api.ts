@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 import { Tenant, CreateTenantRequest, UpdateTenantRequest, TenantUser, CreateTenantUserRequest, SystemStats, TenantReport } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
@@ -10,10 +11,31 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  try {
+    const existing = (config.headers as any)?.['X-Request-ID'] || (config.headers as any)?.['x-request-id'];
+    if (!existing) {
+      if (!config.headers) config.headers = {};
+      (config.headers as any)['X-Request-ID'] = uuidv4();
+    }
+  } catch {}
+  return config;
+});
+
 // Add response interceptor to handle 401 Unauthorized errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    try {
+      const rid = error?.response?.headers?.['x-request-id'] || error?.response?.headers?.['X-Request-ID'];
+      if (rid) {
+        error.requestId = rid;
+        const baseMsg = error?.response?.data?.message || error.message || 'Request failed';
+        if (typeof baseMsg === 'string' && !String(baseMsg).includes('requestId:')) {
+          error.message = `${baseMsg} (requestId: ${rid})`;
+        }
+      }
+    } catch {}
     if (error.response && error.response.status === 401) {
       // Clear local storage and redirect to login
       localStorage.removeItem('auth_token');
@@ -291,8 +313,20 @@ export const cdssAdminAPI = {
     const reset = Number(response.headers['x-ratelimit-reset'] || 0);
     return { metrics: response.data, rateLimit: { limit, remaining, reset } };
   },
-  getAuditLogs: async (limit = 50, offset = 0): Promise<any> => {
-    const response = await api.get(`/cdss-admin/admin/audit?limit=${limit}&offset=${offset}`, { headers: { ...getOwnerHeaders() } });
+  getAuditLogs: async (
+    limit = 50,
+    offset = 0,
+    opts?: { actor?: string; action?: string; startDate?: string; endDate?: string; sortKey?: string; sortDir?: 'asc' | 'desc' }
+  ): Promise<any> => {
+    const params: Record<string, string> = { limit: String(limit), offset: String(offset) };
+    if (opts?.actor && opts.actor.trim()) params.actor = opts.actor.trim();
+    if (opts?.action && opts.action.trim()) params.action = opts.action.trim();
+    if (opts?.startDate && opts.startDate.trim()) params.startDate = opts.startDate.trim();
+    if (opts?.endDate && opts.endDate.trim()) params.endDate = opts.endDate.trim();
+    if (opts?.sortKey) params.sortKey = opts.sortKey;
+    if (opts?.sortDir) params.sortDir = opts.sortDir;
+    const qs = new URLSearchParams(params).toString();
+    const response = await api.get(`/cdss-admin/admin/audit?${qs}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   },
   getIngestJobs: async (limit = 20): Promise<any> => {
