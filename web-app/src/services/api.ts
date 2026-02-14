@@ -284,6 +284,14 @@ export const cdssAdminAPI = {
     const response = await api.get(`/cdss-admin/admin/ingest/jobs?limit=${limit}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   },
+  retryIngestJob: async (jobId: string): Promise<any> => {
+    const response = await api.post(`/cdss-admin/admin/ingest/retry/${encodeURIComponent(jobId)}`, null, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  resetMetrics: async (): Promise<any> => {
+    const response = await api.post(`/cdss-admin/admin/metrics/reset`, null, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
   getIngestJobStatus: async (jobId: string): Promise<any> => {
     const response = await api.get(`/cdss-admin/admin/ingest/status/${encodeURIComponent(jobId)}`, { headers: { ...getOwnerHeaders() } });
     return response.data;

@@ -130,6 +130,22 @@ export const CdssAdmin: React.FC = () => {
     }
   };
 
+  const handleResetMetrics = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      await cdssAdminAPI.resetMetrics();
+      const meResp = await cdssAdminAPI.getMetrics();
+      setMetrics(meResp.metrics || meResp);
+      if (meResp.rateLimit) setRateLimit(meResp.rateLimit);
+      setMessage('Metrics counters reset');
+    } catch (e: any) {
+      setMessage(e?.response?.data?.detail || 'Failed to reset metrics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefreshAudit = async () => {
     setLoading(true);
     setMessage('');
@@ -210,6 +226,9 @@ export const CdssAdmin: React.FC = () => {
           <button onClick={handleRefreshMetrics} className="mt-3 px-3 py-1.5 text-sm rounded bg-slate-900 text-white">
             Refresh
           </button>
+          <button onClick={handleResetMetrics} className="mt-3 ml-2 px-3 py-1.5 text-sm rounded bg-rose-700 text-white">
+            Reset Counters
+          </button>
         </div>
       </div>
 
@@ -286,7 +305,29 @@ export const CdssAdmin: React.FC = () => {
                     <td className="py-2 pr-4">{j.status}</td>
                     <td className="py-2 pr-4">{j.started_at}</td>
                     <td className="py-2 pr-4">{j.finished_at || '-'}</td>
-                    <td className="py-2 pr-4 text-xs text-slate-500">{j.message || '-'}</td>
+                  <td className="py-2 pr-4 text-xs text-slate-500">{j.message || '-'}</td>
+                  <td className="py-2 pr-4">
+                    {(j.status === 'failed' || j.status === 'completed') && (
+                      <button
+                        onClick={async () => {
+                          setLoading(true);
+                          try {
+                            const res = await cdssAdminAPI.retryIngestJob(j.jobId);
+                            setMessage(`Retry started • Job ${res?.jobId || ''}`);
+                            const jobs = await cdssAdminAPI.getIngestJobs(20);
+                            setIngestJobs(jobs?.jobs || []);
+                          } catch (e: any) {
+                            setMessage(e?.response?.data?.detail || 'Retry failed');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        className="px-2 py-1 text-xs rounded bg-blue-600 text-white"
+                      >
+                        Retry
+                      </button>
+                    )}
+                  </td>
                   </tr>
                 ))}
               </tbody>

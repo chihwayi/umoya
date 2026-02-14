@@ -413,6 +413,33 @@ async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner)):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+@app.post("/admin/ingest/retry/{job_id}")
+async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner)):
+    with _INGEST_LOCK:
+        existing = _INGEST_JOBS.get(job_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if existing.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Job is still running")
+    new_id = str(uuid4())
+    with _INGEST_LOCK:
+        _INGEST_JOBS[new_id] = {
+            "jobId": new_id,
+            "status": "running",
+            "started_at": datetime.utcnow().isoformat(),
+            "finished_at": None,
+            "message": None,
+            "retry_of": job_id
+        }
+    t = threading.Thread(target=_run_ingest, args=(new_id,), daemon=True)
+    t.start()
+    if settings_provider:
+        try:
+            settings_provider.log_action(actor=owner, action="ingest_retry", payload={"retry_of": job_id, "jobId": new_id})
+        except Exception:
+            pass
+    return {"started": True, "jobId": new_id, "retry_of": job_id}
 @app.post("/admin/cache/flush")
 async def admin_cache_flush(owner: str = Depends(require_owner)):
     if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
@@ -441,6 +468,31 @@ async def admin_cache_flush(owner: str = Depends(require_owner)):
         except Exception:
             pass
     return {"flushed": deleted}
+
+@app.post("/admin/metrics/reset")
+async def admin_metrics_reset(owner: str = Depends(require_owner)):
+    ce = diagnostic_assistant.rag_engine if diagnostic_assistant else None
+    if not ce or not ce.redis_client:
+        return {"reset": 0}
+    keys = [
+        "metrics:rag:cache_hit",
+        "metrics:rag:cache_miss",
+        "metrics:llm:cache_hit",
+        "metrics:llm:cache_miss",
+    ]
+    reset = 0
+    try:
+        for k in keys:
+            ce.redis_client.delete(k)
+            reset += 1
+    except Exception:
+        pass
+    if settings_provider:
+        try:
+            settings_provider.log_action(actor=owner, action="metrics_reset", payload={"reset": reset})
+        except Exception:
+            pass
+    return {"reset": reset}
 
 @app.get("/admin/metrics")
 async def admin_metrics(owner: str = Depends(require_owner)):
