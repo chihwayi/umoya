@@ -27,7 +27,7 @@ Status legend:
 
 ## Epic 1: Identity, Trust Boundaries, and Access Control
 
-### E1-B1 (`P0`, `Todo`) Remove header-based owner bypass in CDSS admin
+### E1-B1 (`P0`, `Done`) Remove header-based owner bypass in CDSS admin
 
 - Owner: Backend (CDSS)
 - Effort: 2-3 days
@@ -40,7 +40,7 @@ Status legend:
   - Owner access works only with valid signed JWT claim.
   - Regression tests cover pass/fail auth cases.
 
-### E1-B2 (`P0`, `Todo`) Service-to-service auth hardening
+### E1-B2 (`P0`, `In Progress`) Service-to-service auth hardening
 
 - Owner: Platform + Backend
 - Effort: 1-2 weeks
@@ -53,7 +53,7 @@ Status legend:
   - Rotatable service credentials in env/secret manager.
   - Negative tests for invalid issuer/audience/signature.
 
-### E1-B3 (`P0`, `Todo`) Fine-grained authorization model
+### E1-B3 (`P0`, `In Progress`) Fine-grained authorization model
 
 - Owner: Backend (EHR + CDSS)
 - Effort: 1 week
@@ -68,7 +68,7 @@ Status legend:
 
 ## Epic 2: Tenant Isolation and Data Protection
 
-### E2-B1 (`P0`, `Todo`) Tenant-scoped cache and storage isolation
+### E2-B1 (`P0`, `Done`) Tenant-scoped cache and storage isolation
 
 - Owner: Platform + Backend
 - Effort: 1 week
@@ -80,7 +80,7 @@ Status legend:
   - Cross-tenant cache reads are impossible by key design.
   - Load tests prove isolation under concurrent tenants.
 
-### E2-B2 (`P0`, `Todo`) Encryption model upgrade (at-rest + in-transit + key rotation)
+### E2-B2 (`P0`, `In Progress`) Encryption model upgrade (at-rest + in-transit + key rotation)
 
 - Owner: Platform + Security
 - Effort: 1-2 weeks
@@ -107,7 +107,7 @@ Status legend:
 
 ## Epic 3: AI Safety Controls and Clinical Guardrails
 
-### E3-B1 (`P0`, `Todo`) PHI minimization gateway for AI calls
+### E3-B1 (`P0`, `In Progress`) PHI minimization gateway for AI calls
 
 - Owner: Backend (CDSS) + Security
 - Effort: 1 week
@@ -158,7 +158,7 @@ Status legend:
 
 ## Epic 4: Scale, Reliability, and Cost Control (100s of Tenants)
 
-### E4-B1 (`P0`, `Todo`) Async inference and job orchestration
+### E4-B1 (`P0`, `In Progress`) Async inference and job orchestration
 
 - Owner: Platform + Backend
 - Effort: 1-2 weeks
@@ -222,7 +222,7 @@ Status legend:
 
 ## Epic 6: Compliance Operating System
 
-### E6-B1 (`P0`, `Todo`) Security risk analysis and control mapping
+### E6-B1 (`P0`, `In Progress`) Security risk analysis and control mapping
 
 - Owner: Security + Compliance
 - Effort: 1 week initial, then recurring

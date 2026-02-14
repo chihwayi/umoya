@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
+import { createHmac, randomUUID } from 'crypto';
 
 @Injectable()
 export class CdssService {
@@ -10,6 +11,10 @@ export class CdssService {
   private readonly cdssClient: AxiosInstance;
   private readonly cdssServiceUrl: string;
   private readonly cdssServiceToken?: string;
+  private readonly cdssServiceJwtSecret?: string;
+  private readonly cdssServiceJwtIssuer: string;
+  private readonly cdssServiceJwtAudience: string;
+  private readonly cdssServiceAuthMode: 'token' | 'jwt' | 'both';
 
   constructor(
     @Optional() @Inject(WhoSmartGuidelinesService) 
@@ -17,6 +22,11 @@ export class CdssService {
   ) {
     this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
+    this.cdssServiceJwtSecret = process.env.CDSS_SERVICE_JWT_SECRET || undefined;
+    this.cdssServiceJwtIssuer = process.env.CDSS_SERVICE_AUTH_ISSUER || 'medicore.ehr-service';
+    this.cdssServiceJwtAudience = process.env.CDSS_SERVICE_AUTH_AUDIENCE || 'medicore.cdss';
+    const modeRaw = (process.env.CDSS_SERVICE_AUTH_MODE || 'both').toLowerCase();
+    this.cdssServiceAuthMode = modeRaw === 'jwt' || modeRaw === 'token' ? modeRaw : 'both';
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,
       timeout: 15000, // Increased timeout
@@ -27,13 +37,21 @@ export class CdssService {
     
     // Add request interceptor for debugging
     this.cdssClient.interceptors.request.use(request => {
-      if (this.cdssServiceToken) {
-        if (!request.headers) {
-          request.headers = new AxiosHeaders();
-        }
-        (request.headers as AxiosHeaders).set('X-Service-Token', this.cdssServiceToken);
-        (request.headers as AxiosHeaders).set('X-Service-Name', 'ehr-service');
+      if (!request.headers) {
+        request.headers = new AxiosHeaders();
       }
+      if (this.cdssServiceAuthMode === 'token' || this.cdssServiceAuthMode === 'both') {
+        if (this.cdssServiceToken) {
+          (request.headers as AxiosHeaders).set('X-Service-Token', this.cdssServiceToken);
+        }
+      }
+      if (this.cdssServiceAuthMode === 'jwt' || this.cdssServiceAuthMode === 'both') {
+        const jwt = this.createServiceJwt();
+        if (jwt) {
+          (request.headers as AxiosHeaders).set('Authorization', `Bearer ${jwt}`);
+        }
+      }
+      (request.headers as AxiosHeaders).set('X-Service-Name', 'ehr-service');
       this.logger.log(`[CDSS] Request to: ${request.url}`);
       return request;
     });
@@ -60,6 +78,37 @@ export class CdssService {
       timeout,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
     };
+  }
+
+  private createServiceJwt(): string | null {
+    const secret = this.cdssServiceJwtSecret;
+    if (!secret || secret.length < 24) {
+      return null;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const payload = {
+      iss: this.cdssServiceJwtIssuer,
+      aud: this.cdssServiceJwtAudience,
+      sub: 'ehr-service',
+      iat: now,
+      exp: now + 60,
+      jti: randomUUID(),
+    };
+    const enc = (obj: Record<string, any>) =>
+      Buffer.from(JSON.stringify(obj))
+        .toString('base64')
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+    const body = `${enc(header)}.${enc(payload)}`;
+    const sig = createHmac('sha256', secret)
+      .update(body)
+      .digest('base64')
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    return `${body}.${sig}`;
   }
 
   /**

@@ -7,6 +7,18 @@ def is_phi_redaction_enabled() -> bool:
     return os.getenv("CDSS_PHI_REDACTION_ENABLED", "true").lower() == "true"
 
 
+def _parse_bool(name: str, default: str) -> bool:
+    raw = os.getenv(name, default)
+    val = str(raw).strip().lower()
+    if val not in ("true", "false"):
+        raise RuntimeError(f"Invalid {name} value '{raw}'. Expected 'true' or 'false'.")
+    return val == "true"
+
+
+def is_outbound_phi_block_enabled() -> bool:
+    return _parse_bool("CDSS_BLOCK_OUTBOUND_PHI", "true")
+
+
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Emails
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "[REDACTED_EMAIL]"),
@@ -41,6 +53,22 @@ def redact_text(text: str) -> str:
     return out
 
 
+def contains_phi(text: str) -> bool:
+    if not isinstance(text, str) or not text:
+        return False
+    for pattern, _ in _PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
+
+
+def assert_no_outbound_phi(text: str, purpose: str = "outbound_payload") -> None:
+    if not is_outbound_phi_block_enabled():
+        return
+    if contains_phi(text):
+        raise RuntimeError(f"Outbound PHI policy blocked payload for {purpose}.")
+
+
 def redact_value(value: Any) -> Any:
     if not is_phi_redaction_enabled():
         return value
@@ -61,4 +89,3 @@ def redact_value(value: Any) -> Any:
                 redacted[k] = redact_value(v)
         return redacted
     return value
-

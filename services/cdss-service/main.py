@@ -82,20 +82,34 @@ def _validate_security_config() -> None:
     # Strict boolean parsing for security switches
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
+    _get_bool_env_strict("CDSS_BLOCK_OUTBOUND_PHI", "true")
     _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
     encryption_enabled = _get_bool_env_strict("CDSS_ENCRYPTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS", "true")
 
+    service_auth_mode = os.getenv("CDSS_SERVICE_AUTH_MODE", "both").strip().lower() or "both"
+    if service_auth_mode not in ("token", "jwt", "both"):
+        raise RuntimeError("CDSS_SERVICE_AUTH_MODE must be one of: token, jwt, both.")
+
     service_token = os.getenv("CDSS_SERVICE_TOKEN", "").strip()
-    if service_auth_required and not service_token:
+    if service_auth_required and service_auth_mode in ("token", "both") and not service_token:
         raise RuntimeError("CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_TOKEN is missing.")
-    if service_auth_required and len(service_token) < 24:
-        raise RuntimeError("CDSS_SERVICE_TOKEN must be at least 24 characters when service auth is enabled.")
+    if service_auth_required and service_auth_mode in ("token", "both") and len(service_token) < 24:
+        raise RuntimeError("CDSS_SERVICE_TOKEN must be at least 24 characters when token service auth is enabled.")
+
+    service_jwt_secret = os.getenv("CDSS_SERVICE_JWT_SECRET", "").strip()
+    if service_auth_required and service_auth_mode in ("jwt", "both") and not service_jwt_secret:
+        raise RuntimeError("CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_JWT_SECRET is missing.")
+    if service_auth_required and service_auth_mode in ("jwt", "both") and len(service_jwt_secret) < 24:
+        raise RuntimeError("CDSS_SERVICE_JWT_SECRET must be at least 24 characters when JWT service auth is enabled.")
 
     # Prevent insecure default token outside dev-like environments.
     insecure_default = "dev_cdss_service_token_change_in_production"
-    if env not in ("dev", "development", "local", "test") and service_token == insecure_default:
+    if env not in ("dev", "development", "local", "test") and service_auth_mode in ("token", "both") and service_token == insecure_default:
         raise RuntimeError("CDSS_SERVICE_TOKEN is using insecure default value in non-development environment.")
+    insecure_jwt_secret_default = "dev_cdss_service_jwt_secret_change_in_production"
+    if env not in ("dev", "development", "local", "test") and service_auth_mode in ("jwt", "both") and service_jwt_secret == insecure_jwt_secret_default:
+        raise RuntimeError("CDSS_SERVICE_JWT_SECRET is using insecure default value in non-development environment.")
 
     jwt_secret = os.getenv("JWT_SECRET", "").strip()
     insecure_jwt_defaults = {
@@ -111,6 +125,10 @@ def _validate_security_config() -> None:
     owner_emails = [e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()]
     if env not in ("dev", "development", "local", "test") and not owner_emails:
         raise RuntimeError("OWNER_EMAILS must be configured in non-development environment.")
+    _get_bool_env_strict(
+        "CDSS_OWNER_SCOPE_STRICT",
+        "false" if env in ("dev", "development", "local", "test") else "true",
+    )
 
     if encryption_enabled:
         provider = os.getenv("CDSS_ENCRYPTION_PROVIDER", "local").strip().lower() or "local"
@@ -130,8 +148,17 @@ def _validate_security_config() -> None:
 
 _validate_security_config()
 SERVICE_AUTH_REQUIRED = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
+SERVICE_AUTH_MODE = os.getenv("CDSS_SERVICE_AUTH_MODE", "both").strip().lower() or "both"
 SERVICE_AUTH_TOKEN = os.getenv("CDSS_SERVICE_TOKEN", "")
+SERVICE_AUTH_JWT_SECRET = os.getenv("CDSS_SERVICE_JWT_SECRET", "").strip()
+SERVICE_AUTH_ISSUER = os.getenv("CDSS_SERVICE_AUTH_ISSUER", "medicore.ehr-service").strip() or "medicore.ehr-service"
+SERVICE_AUTH_AUDIENCE = os.getenv("CDSS_SERVICE_AUTH_AUDIENCE", "medicore.cdss").strip() or "medicore.cdss"
 ADMIN_JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
+_SEC_ENV = os.getenv("ENVIRONMENT", "development").strip().lower()
+OWNER_SCOPE_STRICT = _get_bool_env_strict(
+    "CDSS_OWNER_SCOPE_STRICT",
+    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+)
 
 def _status_code_to_code(sc: int) -> str:
     if sc == 400:
@@ -255,22 +282,50 @@ async def service_to_service_auth_middleware(request: Request, call_next):
     if path in exempt_exact or any(path.startswith(prefix) for prefix in exempt_prefixes):
         return await call_next(request)
 
-    if not SERVICE_AUTH_TOKEN:
-        payload = {
-            "code": "SERVICE_UNAVAILABLE",
-            "message": "CDSS service auth is enabled but CDSS_SERVICE_TOKEN is not configured",
-            "details": None,
-            "requestId": getattr(request.state, "request_id", str(uuid4())),
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        return JSONResponse(status_code=503, content=payload)
+    auth_ok = False
+    auth_errors: list[str] = []
 
-    provided_token = request.headers.get("x-service-token", "")
-    if not provided_token or not hmac.compare_digest(provided_token, SERVICE_AUTH_TOKEN):
+    if SERVICE_AUTH_MODE in ("jwt", "both"):
+        if not SERVICE_AUTH_JWT_SECRET:
+            auth_errors.append("JWT service auth secret not configured")
+        else:
+            bearer = request.headers.get("authorization", "")
+            service_jwt = ""
+            if bearer.lower().startswith("bearer "):
+                service_jwt = bearer.split(" ", 1)[1].strip()
+            if not service_jwt:
+                service_jwt = request.headers.get("x-service-jwt", "").strip()
+            if service_jwt:
+                try:
+                    claims = jwt.decode(
+                        service_jwt,
+                        SERVICE_AUTH_JWT_SECRET,
+                        algorithms=["HS256"],
+                        audience=SERVICE_AUTH_AUDIENCE,
+                        issuer=SERVICE_AUTH_ISSUER,
+                    )
+                    request.state.service_identity = str(claims.get("sub") or "service")
+                    auth_ok = True
+                except Exception as e:
+                    auth_errors.append(f"Invalid service JWT: {str(e)}")
+            else:
+                auth_errors.append("Missing service JWT")
+
+    if not auth_ok and SERVICE_AUTH_MODE in ("token", "both"):
+        if not SERVICE_AUTH_TOKEN:
+            auth_errors.append("Token service auth not configured")
+        else:
+            provided_token = request.headers.get("x-service-token", "")
+            if provided_token and hmac.compare_digest(provided_token, SERVICE_AUTH_TOKEN):
+                auth_ok = True
+            else:
+                auth_errors.append("Invalid service authentication token")
+
+    if not auth_ok:
         payload = {
             "code": "UNAUTHORIZED",
-            "message": "Invalid service authentication token",
-            "details": None,
+            "message": "Invalid service authentication credentials",
+            "details": {"errors": auth_errors} if auth_errors else None,
             "requestId": getattr(request.state, "request_id", str(uuid4())),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -408,12 +463,33 @@ async def startup_event():
                 print(f"Error checking bucket '{MINIO_BUCKET}': {e}")
     except Exception as e:
         print(f"Error checking MinIO connection: {e}")
+    try:
+        _start_job_worker()
+    except Exception as e:
+        print(f"Error starting CDSS job worker: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    try:
+        _JOB_WORKER_STOP.set()
+        if _JOB_WORKER_THREAD and _JOB_WORKER_THREAD.is_alive():
+            _JOB_WORKER_THREAD.join(timeout=2.0)
+    except Exception:
+        pass
 
 lab_interpreter = LabResultInterpreter()
 _ADMIN_JOBS: Dict[str, Dict[str, Any]] = {}
 _ADMIN_JOBS_LOCK = Lock()
 _MAX_ADMIN_JOB_ATTEMPTS = int(os.getenv("CDSS_MAX_JOB_ATTEMPTS", "3"))
 _MAX_ADMIN_JOB_RECORDS = int(os.getenv("CDSS_MAX_JOB_RECORDS", "2000"))
+_JOB_QUEUE_NAME = os.getenv("CDSS_JOB_QUEUE_NAME", "cdss:jobs:queue")
+_JOB_DLQ_NAME = os.getenv("CDSS_JOB_DLQ_NAME", "cdss:jobs:dead_letter")
+_JOB_WORKER_ENABLED = _get_bool_env_strict("CDSS_JOB_WORKER_ENABLED", "true")
+_JOB_WORKER_POLL_SECONDS = int(os.getenv("CDSS_JOB_WORKER_POLL_SECONDS", "5"))
+_JOB_QUEUE_REDIS: Optional[redis_pkg.Redis] = None
+_JOB_WORKER_THREAD: Optional[threading.Thread] = None
+_JOB_WORKER_STOP = threading.Event()
 # Backward-compatible alias for existing ingest endpoints/UI paths.
 _INGEST_JOBS = _ADMIN_JOBS
 _INGEST_LOCK = _ADMIN_JOBS_LOCK
@@ -480,6 +556,124 @@ def _update_job(job_id: str, **updates: Any) -> None:
                 settings_provider.upsert_job(job)
             except Exception:
                 pass
+
+
+def _get_queue_redis_client() -> Optional[redis_pkg.Redis]:
+    global _JOB_QUEUE_REDIS
+    if _JOB_QUEUE_REDIS is not None:
+        return _JOB_QUEUE_REDIS
+    try:
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        if redis_url:
+            _JOB_QUEUE_REDIS = redis_pkg.from_url(redis_url, decode_responses=True)
+        else:
+            host = os.getenv("REDIS_HOST", "localhost")
+            port = int(os.getenv("REDIS_PORT", 6379))
+            _JOB_QUEUE_REDIS = redis_pkg.Redis(host=host, port=port, db=0, decode_responses=True)
+        _JOB_QUEUE_REDIS.ping()
+        return _JOB_QUEUE_REDIS
+    except Exception:
+        _JOB_QUEUE_REDIS = None
+        return None
+
+
+def _push_dead_letter(job_id: str, reason: Optional[str] = None) -> None:
+    _update_job(job_id, dead_lettered=True, dead_letter_reason=reason)
+    client = _get_queue_redis_client()
+    if not client:
+        return
+    try:
+        client.lpush(_JOB_DLQ_NAME, json.dumps({"jobId": job_id, "reason": reason, "at": datetime.utcnow().isoformat()}))
+    except Exception:
+        pass
+
+
+def _read_dead_letter(limit: int = 100) -> List[Dict[str, Any]]:
+    limit_n = max(1, min(limit, 500))
+    client = _get_queue_redis_client()
+    if not client:
+        return []
+    try:
+        items = client.lrange(_JOB_DLQ_NAME, 0, limit_n - 1)
+    except Exception:
+        return []
+    out: List[Dict[str, Any]] = []
+    for raw in items:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                out.append(parsed)
+                continue
+        except Exception:
+            pass
+        out.append({"raw": str(raw)})
+    return out
+
+
+def _dispatch_job(job_id: str) -> str:
+    """
+    Queue-first dispatch. Falls back to direct in-process execution if queue is unavailable.
+    Returns backend: redis | thread
+    """
+    if _JOB_WORKER_ENABLED:
+        client = _get_queue_redis_client()
+        if client:
+            try:
+                client.lpush(_JOB_QUEUE_NAME, job_id)
+                _update_job(job_id, queue_backend="redis", status="queued")
+                return "redis"
+            except Exception:
+                pass
+
+    # Fallback path for local/dev or redis outage
+    _dispatch_job(job_id)
+    _update_job(job_id, queue_backend="thread", status="queued")
+    return "thread"
+
+
+def _job_worker_loop() -> None:
+    """
+    Dedicated worker loop for queued jobs.
+    """
+    while not _JOB_WORKER_STOP.is_set():
+        client = _get_queue_redis_client()
+        if not client:
+            _JOB_WORKER_STOP.wait(timeout=max(1, _JOB_WORKER_POLL_SECONDS))
+            continue
+        try:
+            item = client.brpop(_JOB_QUEUE_NAME, timeout=max(1, _JOB_WORKER_POLL_SECONDS))
+            if not item:
+                continue
+            _, job_id = item
+            if not job_id:
+                continue
+            with _ADMIN_JOBS_LOCK:
+                job = _ADMIN_JOBS.get(str(job_id))
+            if not job and settings_provider:
+                try:
+                    persisted = settings_provider.get_job(str(job_id))
+                    if persisted:
+                        with _ADMIN_JOBS_LOCK:
+                            _ADMIN_JOBS[str(job_id)] = persisted
+                        job = persisted
+                except Exception:
+                    pass
+            if not job:
+                continue
+            _run_job(str(job_id))
+        except Exception:
+            _JOB_WORKER_STOP.wait(timeout=max(1, _JOB_WORKER_POLL_SECONDS))
+
+
+def _start_job_worker() -> None:
+    global _JOB_WORKER_THREAD
+    if not _JOB_WORKER_ENABLED:
+        return
+    if _JOB_WORKER_THREAD and _JOB_WORKER_THREAD.is_alive():
+        return
+    _JOB_WORKER_STOP.clear()
+    _JOB_WORKER_THREAD = threading.Thread(target=_job_worker_loop, daemon=True, name="cdss-job-worker")
+    _JOB_WORKER_THREAD.start()
 
 
 def _run_reindex_job() -> Dict[str, Any]:
@@ -612,6 +806,8 @@ def _run_job(job_id: str) -> None:
         err = str(e)
         ok = False
     finally:
+        with _ADMIN_JOBS_LOCK:
+            job_snapshot = dict(_ADMIN_JOBS.get(job_id) or {})
         _update_job(
             job_id,
             status="completed" if ok else "failed",
@@ -619,6 +815,8 @@ def _run_job(job_id: str) -> None:
             message=None if ok else err,
             result=result if ok else None,
         )
+        if (not ok) and int(job_snapshot.get("attempt") or 1) >= int(job_snapshot.get("max_attempts") or _MAX_ADMIN_JOB_ATTEMPTS):
+            _push_dead_letter(job_id, reason=err)
         if settings_provider:
             try:
                 with _ADMIN_JOBS_LOCK:
@@ -637,6 +835,63 @@ def _run_job(job_id: str) -> None:
             except Exception:
                 pass
 
+def _extract_owner_claim_sets(payload: Dict[str, Any]) -> Dict[str, set[str]]:
+    roles: set[str] = set()
+    scopes: set[str] = set()
+    permissions: set[str] = set()
+
+    role_value = payload.get("role")
+    if isinstance(role_value, str) and role_value.strip():
+        roles.add(role_value.strip().lower())
+    for key, target in (("roles", roles), ("scopes", scopes), ("permissions", permissions)):
+        val = payload.get(key)
+        if isinstance(val, list):
+            for item in val:
+                if isinstance(item, str) and item.strip():
+                    target.add(item.strip().lower())
+    scope_str = payload.get("scope")
+    if isinstance(scope_str, str) and scope_str.strip():
+        for item in scope_str.split():
+            if item.strip():
+                scopes.add(item.strip().lower())
+    perm_str = payload.get("permission")
+    if isinstance(perm_str, str) and perm_str.strip():
+        permissions.add(perm_str.strip().lower())
+
+    return {"roles": roles, "scopes": scopes, "permissions": permissions}
+
+
+def _is_owner_scope_allowed(claims: Dict[str, set[str]], required_scope: str) -> bool:
+    required = required_scope.strip().lower()
+    if not required:
+        return True
+
+    roles = claims.get("roles", set())
+    scopes = claims.get("scopes", set())
+    permissions = claims.get("permissions", set())
+    granted = set(scopes) | set(permissions)
+
+    if "super_admin" in roles or "owner" in roles:
+        return True
+    if "*" in granted or "cdss.admin.*" in granted:
+        return True
+    if required in granted:
+        return True
+    if required.endswith(".read") and required.replace(".read", ".*") in granted:
+        return True
+    if required.endswith(".write") and required.replace(".write", ".*") in granted:
+        return True
+    if required.startswith("cdss.admin.jobs.") and "cdss.admin.jobs.*" in granted:
+        return True
+    if required.startswith("cdss.admin.settings.") and "cdss.admin.settings.*" in granted:
+        return True
+    if required.startswith("cdss.admin.audit.") and "cdss.admin.audit.*" in granted:
+        return True
+    if required.startswith("cdss.admin.metrics.") and "cdss.admin.metrics.*" in granted:
+        return True
+    return False
+
+
 def require_owner(request: Request, response: Response, authorization: str = Header(None)) -> str:
     """
     Owner gating with JWT verification only:
@@ -652,6 +907,7 @@ def require_owner(request: Request, response: Response, authorization: str = Hea
     try:
         payload = jwt.decode(token, ADMIN_JWT_SECRET, algorithms=["HS256"])
         email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
+        owner_claims = _extract_owner_claim_sets(payload)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -707,11 +963,26 @@ def require_owner(request: Request, response: Response, authorization: str = Hea
     if email_from_jwt not in allowed:
         raise HTTPException(status_code=403, detail="Owner access required")
 
+    request.state.owner_claims = owner_claims
     _rate_limit(email_from_jwt)
     return email_from_jwt
 
+
+def require_owner_scope(required_scope: str):
+    def _dep(request: Request, response: Response, authorization: str = Header(None)) -> str:
+        owner = require_owner(request=request, response=response, authorization=authorization)
+        claims = getattr(request.state, "owner_claims", {"roles": set(), "scopes": set(), "permissions": set()})
+        has_explicit_claims = bool(claims.get("roles") or claims.get("scopes") or claims.get("permissions"))
+        if not has_explicit_claims and not OWNER_SCOPE_STRICT:
+            return owner
+        if not _is_owner_scope_allowed(claims, required_scope):
+            raise HTTPException(status_code=403, detail=f"Missing required scope: {required_scope}")
+        return owner
+
+    return _dep
+
 @app.get("/admin/status")
-async def admin_status(owner: str = Depends(require_owner)):
+async def admin_status(owner: str = Depends(require_owner_scope("cdss.admin.read"))):
     llm = {
         "enabled": os.getenv("LLM_ENABLED", "true").lower() == "true",
         "model": os.getenv("LLM_MODEL_NAME"),
@@ -750,13 +1021,13 @@ class SettingsPayload(BaseModel):
     allow_pdf_uploads: Optional[bool] = None
 
 @app.get("/admin/settings")
-async def get_admin_settings(owner: str = Depends(require_owner)):
+async def get_admin_settings(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
     if not settings_provider:
         raise HTTPException(status_code=501, detail="Settings store unavailable")
     return settings_provider.get_settings()
 
 @app.put("/admin/settings")
-async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(require_owner)):
+async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(require_owner_scope("cdss.admin.settings.write"))):
     if not settings_provider:
         raise HTTPException(status_code=501, detail="Settings store unavailable")
     # Basic data validation
@@ -767,7 +1038,7 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
     return {"settings": updated}
 
 @app.post("/admin/ingest")
-async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner)):
+async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     if settings_provider:
         s = settings_provider.get_settings()
         if not s.get("allow_pdf_uploads", True) and file is not None:
@@ -784,8 +1055,7 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
         owner=owner,
         payload={"filename": getattr(file, "filename", None)},
     )
-    t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
-    t.start()
+    _dispatch_job(job_id)
     if settings_provider:
         try:
             settings_provider.log_action(actor=owner, action="ingest_start", payload={"filename": getattr(file, 'filename', None), "jobId": job_id})
@@ -794,11 +1064,10 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
     return {"started": True, "jobId": job_id}
 
 @app.post("/admin/reindex")
-async def admin_reindex(async_job: bool = True, owner: str = Depends(require_owner)):
+async def admin_reindex(async_job: bool = True, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     if async_job:
         job_id = _create_job(job_type="reindex", owner=owner)
-        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
-        t.start()
+        _dispatch_job(job_id)
         return {"started": True, "jobId": job_id}
     try:
         result = _run_reindex_job()
@@ -812,14 +1081,14 @@ async def admin_reindex(async_job: bool = True, owner: str = Depends(require_own
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/ingest/jobs")
-async def admin_ingest_jobs(limit: int = 20, owner: str = Depends(require_owner)):
+async def admin_ingest_jobs(limit: int = 20, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
     with _ADMIN_JOBS_LOCK:
         arr = [j for j in _ADMIN_JOBS.values() if j.get("type") == "ingest"]
     arr.sort(key=lambda x: x.get("started_at") or "", reverse=True)
     return {"jobs": arr[:limit], "limit": limit}
 
 @app.get("/admin/ingest/status/{job_id}")
-async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner)):
+async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
     with _ADMIN_JOBS_LOCK:
         job = _ADMIN_JOBS.get(job_id)
     if not job or job.get("type") != "ingest":
@@ -827,7 +1096,7 @@ async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner)):
     return job
 
 @app.post("/admin/ingest/retry/{job_id}")
-async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner)):
+async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     with _ADMIN_JOBS_LOCK:
         existing = _ADMIN_JOBS.get(job_id)
     if not existing or existing.get("type") != "ingest":
@@ -844,8 +1113,7 @@ async def admin_ingest_retry(job_id: str, owner: str = Depends(require_owner)):
         retry_of=job_id,
         attempt=attempt,
     )
-    t = threading.Thread(target=_run_job, args=(new_id,), daemon=True)
-    t.start()
+    _dispatch_job(new_id)
     if settings_provider:
         try:
             settings_provider.log_action(actor=owner, action="ingest_retry", payload={"retry_of": job_id, "jobId": new_id})
@@ -859,7 +1127,7 @@ async def admin_jobs(
     limit: int = 50,
     type: Optional[str] = None,
     status: Optional[str] = None,
-    owner: str = Depends(require_owner),
+    owner: str = Depends(require_owner_scope("cdss.admin.jobs.read")),
 ):
     if settings_provider:
         try:
@@ -882,7 +1150,7 @@ async def admin_jobs(
 
 
 @app.get("/admin/jobs/{job_id}")
-async def admin_job_status(job_id: str, owner: str = Depends(require_owner)):
+async def admin_job_status(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
     if settings_provider:
         try:
             job = settings_provider.get_job(job_id)
@@ -898,7 +1166,7 @@ async def admin_job_status(job_id: str, owner: str = Depends(require_owner)):
 
 
 @app.post("/admin/jobs/retry/{job_id}")
-async def admin_job_retry(job_id: str, owner: str = Depends(require_owner)):
+async def admin_job_retry(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     with _ADMIN_JOBS_LOCK:
         existing = _ADMIN_JOBS.get(job_id)
     if not existing:
@@ -918,17 +1186,20 @@ async def admin_job_retry(job_id: str, owner: str = Depends(require_owner)):
         retry_of=job_id,
         attempt=attempt,
     )
-    t = threading.Thread(target=_run_job, args=(new_id,), daemon=True)
-    t.start()
+    _dispatch_job(new_id)
     return {"started": True, "jobId": new_id, "retry_of": job_id}
 
 
+@app.get("/admin/jobs/dead-letter")
+async def admin_dead_letter_jobs(limit: int = 100, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
+    return {"jobs": _read_dead_letter(limit=limit), "limit": max(1, min(limit, 500))}
+
+
 @app.post("/admin/cache/flush")
-async def admin_cache_flush(async_job: bool = True, owner: str = Depends(require_owner)):
+async def admin_cache_flush(async_job: bool = True, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     if async_job:
         job_id = _create_job(job_type="cache_flush", owner=owner)
-        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
-        t.start()
+        _dispatch_job(job_id)
         return {"started": True, "jobId": job_id}
     result = _run_cache_flush_job()
     if settings_provider:
@@ -939,7 +1210,7 @@ async def admin_cache_flush(async_job: bool = True, owner: str = Depends(require
     return result
 
 @app.post("/admin/metrics/reset")
-async def admin_metrics_reset(owner: str = Depends(require_owner)):
+async def admin_metrics_reset(owner: str = Depends(require_owner_scope("cdss.admin.metrics.write"))):
     ce = diagnostic_assistant.rag_engine if diagnostic_assistant else None
     if not ce or not ce.redis_client:
         return {"reset": 0}
@@ -964,7 +1235,7 @@ async def admin_metrics_reset(owner: str = Depends(require_owner)):
     return {"reset": reset}
 
 @app.get("/admin/metrics")
-async def admin_metrics(owner: str = Depends(require_owner)):
+async def admin_metrics(owner: str = Depends(require_owner_scope("cdss.admin.metrics.read"))):
     docs = None
     cache_keys = 0
     rag_cache_hit = 0
@@ -1031,7 +1302,7 @@ async def admin_audit(
     endDate: str | None = None,
     sortKey: str | None = "created_at",
     sortDir: str | None = "desc",
-    owner: str = Depends(require_owner)
+    owner: str = Depends(require_owner_scope("cdss.admin.audit.read"))
 ):
     if not settings_provider:
         raise HTTPException(status_code=501, detail="Settings store unavailable")
@@ -1081,8 +1352,7 @@ async def transcribe_audio(
                 "generate_soap": generate_soap,
             },
         )
-        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
-        t.start()
+        _dispatch_job(job_id)
         return {"started": True, "jobId": job_id}
 
     try:
@@ -1126,8 +1396,7 @@ async def analyze_medical_image(
                 "filename": file.filename,
             },
         )
-        t = threading.Thread(target=_run_job, args=(job_id,), daemon=True)
-        t.start()
+        _dispatch_job(job_id)
         return {"started": True, "jobId": job_id}
     try:
         return await run_in_threadpool(

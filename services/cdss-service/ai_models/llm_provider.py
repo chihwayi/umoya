@@ -4,7 +4,7 @@ import json
 import hashlib
 import httpx
 from typing import Optional, Dict, Any, List
-from privacy_guard import redact_text
+from privacy_guard import redact_text, assert_no_outbound_phi
 from outbound_guard import assert_egress_allowed
 
 logger = logging.getLogger(__name__)
@@ -85,6 +85,7 @@ class LLMProvider:
         if system_prompt:
             # Simple formatting for models that support it, or just prepend
             full_prompt = f"System: {safe_system_prompt}\n\nUser: {safe_prompt}"
+        assert_no_outbound_phi(full_prompt, purpose="llm_generate")
 
         payload = {
             "model": self.model_name,

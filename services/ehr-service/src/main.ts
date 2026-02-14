@@ -34,12 +34,25 @@ function validateCriticalSecurityEnv(): void {
 
   const requireServiceAuth = parseBoolStrict('CDSS_REQUIRE_SERVICE_AUTH', 'true');
   if (requireServiceAuth) {
+    const authModeRaw = (process.env.CDSS_SERVICE_AUTH_MODE || 'both').trim().toLowerCase();
+    const authMode: 'token' | 'jwt' | 'both' =
+      authModeRaw === 'token' || authModeRaw === 'jwt' ? authModeRaw : 'both';
     const token = (process.env.CDSS_SERVICE_TOKEN || '').trim();
-    if (!token) {
+    const serviceJwtSecret = (process.env.CDSS_SERVICE_JWT_SECRET || '').trim();
+    if ((authMode === 'token' || authMode === 'both') && !token) {
       throw new Error('CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_TOKEN is missing.');
     }
-    if (!isDevLike && token === 'dev_cdss_service_token_change_in_production') {
+    if ((authMode === 'jwt' || authMode === 'both') && !serviceJwtSecret) {
+      throw new Error('CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_JWT_SECRET is missing.');
+    }
+    if ((authMode === 'jwt' || authMode === 'both') && serviceJwtSecret.length < 24) {
+      throw new Error('CDSS_SERVICE_JWT_SECRET must be at least 24 characters when JWT service auth is enabled.');
+    }
+    if (!isDevLike && (authMode === 'token' || authMode === 'both') && token === 'dev_cdss_service_token_change_in_production') {
       throw new Error('CDSS_SERVICE_TOKEN is using insecure default in non-development environment.');
+    }
+    if (!isDevLike && (authMode === 'jwt' || authMode === 'both') && serviceJwtSecret === 'dev_cdss_service_jwt_secret_change_in_production') {
+      throw new Error('CDSS_SERVICE_JWT_SECRET is using insecure default in non-development environment.');
     }
   }
 }
