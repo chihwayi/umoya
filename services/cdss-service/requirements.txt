@@ -28,6 +28,7 @@ pypdf>=3.17.0
 pdf2image
 pdfminer.six
 pillow
+psycopg2-binary>=2.9.9
 spacy>=3.7.0
 scispacy>=0.5.4
 

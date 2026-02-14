@@ -2,7 +2,7 @@
 MediCore Clinical Decision Support System (CDSS) Service
 Python FastAPI microservice for advanced clinical reasoning
 """
-from fastapi import FastAPI, HTTPException, Depends, Header, Form
+from fastapi import FastAPI, HTTPException, Depends, Header, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -28,6 +28,7 @@ from high_risk_medications import HighRiskMedicationDetector
 from food_interactions import FoodInteractionChecker
 from ai_models.voice_scribe import VoiceScribe
 from ai_models.medical_vision import MedicalVisionService
+from settings_provider import SettingsProvider
 
 app = FastAPI(
     title="MediCore CDSS Service",
@@ -111,6 +112,13 @@ dosing_calculator = DosingCalculator()
 diagnostic_assistant = DiagnosticAssistant()  # Now includes AI models if available
 trend_analysis_engine = TrendAnalysisEngine()
 
+# Settings Provider (Master DB)
+settings_provider = None
+try:
+    settings_provider = SettingsProvider()
+except Exception as e:
+    print(f"SettingsProvider initialization failed (will use env defaults only): {e}")
+
 # Check for AI enablement
 enable_ai = os.getenv("CDSS_ENABLE_AI", "false").lower() == "true"
 
@@ -174,6 +182,72 @@ async def startup_event():
         print(f"Error checking MinIO connection: {e}")
 
 lab_interpreter = LabResultInterpreter()
+
+def require_owner(x_owner_email: str = Header(None)) -> str:
+    """
+    Phase 1 owner gating: verify X-Owner-Email against OWNER_EMAILS.
+    """
+    allow = os.getenv("OWNER_EMAILS", "")
+    allowed = [e.strip().lower() for e in allow.split(",") if e.strip()]
+    if not x_owner_email or x_owner_email.lower() not in allowed:
+        raise HTTPException(status_code=403, detail="Owner access required")
+    return x_owner_email
+
+@app.get("/admin/status")
+async def admin_status(owner: str = Depends(require_owner)):
+    llm = {
+        "enabled": os.getenv("LLM_ENABLED", "true").lower() == "true",
+        "model": os.getenv("LLM_MODEL_NAME"),
+        "api_url": os.getenv("LLM_API_URL")
+    }
+    if diagnostic_assistant and diagnostic_assistant.llm_provider:
+        try:
+            llm["model"] = diagnostic_assistant.llm_provider.model_name
+            llm["enabled"] = diagnostic_assistant.llm_provider.enabled
+            llm["api_url"] = diagnostic_assistant.llm_provider.base_url
+        except Exception:
+            pass
+
+    rag = {
+        "enabled": diagnostic_assistant.rag_engine is not None,
+        "documents": None,
+        "cache_enabled": False
+    }
+    try:
+        if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.collection:
+            rag["documents"] = diagnostic_assistant.rag_engine.collection.count()
+        if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
+            rag["cache_enabled"] = True
+    except Exception:
+        pass
+
+    return {"llm": llm, "rag": rag}
+
+class SettingsPayload(BaseModel):
+    llm_enabled: Optional[bool] = None
+    llm_api_url: Optional[str] = None
+    llm_model_name: Optional[str] = None
+    rag_enabled: Optional[bool] = None
+    cache_ttl_seconds: Optional[int] = None
+    cache_namespace: Optional[str] = None
+    allow_pdf_uploads: Optional[bool] = None
+
+@app.get("/admin/settings")
+async def get_admin_settings(owner: str = Depends(require_owner)):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    return settings_provider.get_settings()
+
+@app.put("/admin/settings")
+async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(require_owner)):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    # Basic data validation
+    data = {k: v for k, v in payload.dict().items() if v is not None}
+    if "cache_ttl_seconds" in data and (not isinstance(data["cache_ttl_seconds"], int) or data["cache_ttl_seconds"] < 0):
+        raise HTTPException(status_code=400, detail="cache_ttl_seconds must be a non-negative integer")
+    updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
+    return {"settings": updated}
 
 @app.post("/transcribe")
 async def transcribe_audio(
@@ -1181,4 +1255,3 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
-

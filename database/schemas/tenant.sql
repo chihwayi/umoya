@@ -42,6 +42,24 @@ CREATE TABLE tenant_users (
     "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- CDSS Admin: System Settings (global)
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- CDSS Admin: Audit Logs
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE TABLE IF NOT EXISTS cdss_admin_audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    payload JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Tenant analytics table
 CREATE TABLE tenant_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
