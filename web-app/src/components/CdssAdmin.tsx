@@ -41,6 +41,9 @@ export const CdssAdmin: React.FC = () => {
   const [flushCooldown, setFlushCooldown] = useState<number>(0);
   const [ingestCooldown, setIngestCooldown] = useState<number>(0);
   const [saveCooldown, setSaveCooldown] = useState<number>(0);
+  const [denseMode, setDenseMode] = useState<boolean>(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [jobIdQuery, setJobIdQuery] = useState<string>('');
 
   const loadAll = async () => {
     setLoading(true);
@@ -441,38 +444,62 @@ export const CdssAdmin: React.FC = () => {
             >
               Refresh Now
             </button>
+            <div className="ml-3 flex items-center gap-2">
+              <label className="text-xs text-slate-600">Dense</label>
+              <input type="checkbox" checked={denseMode} onChange={(e) => setDenseMode(e.target.checked)} />
+            </div>
           </div>
         </div>
         <div>
           <div className="flex items-center justify-between mt-2 mb-1">
             <div className="text-xs font-semibold text-slate-600 uppercase">Jobs</div>
-            <div className="text-xs">
+            <div className="flex items-center gap-2">
+              <input
+                className="border border-slate-300 rounded px-2 py-1 text-xs"
+                placeholder="Search Job ID"
+                value={jobIdQuery}
+                onChange={(e) => setJobIdQuery(e.target.value)}
+              />
+              <select
+                className="border border-slate-300 rounded px-2 py-1 text-xs"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All</option>
+                <option value="running">Running</option>
+                <option value="failed">Failed</option>
+                <option value="completed">Completed</option>
+                <option value="queued">Queued</option>
+              </select>
               <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                 Running: {runningCount}
               </span>
             </div>
           </div>
-          <div className="overflow-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-sm">
+          <div className="overflow-auto rounded-lg border border-slate-200 max-h-96">
+            <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`}>
               <thead>
-                <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200">
-                  <th className="py-2 pr-4 pl-3">Job ID</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Started</th>
-                  <th className="py-2 pr-4">Finished</th>
-                  <th className="py-2 pr-4">Message</th>
-                  <th className="py-2 pr-4">Actions</th>
+                <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>Job ID</th>
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Status</th>
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Started</th>
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Finished</th>
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Message</th>
+                  <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {(ingestJobs || []).map((j, idx) => (
+                {(ingestJobs || [])
+                  .filter(j => (statusFilter === 'all' ? true : j.status === statusFilter))
+                  .filter(j => (jobIdQuery.trim().length === 0 ? true : String(j.jobId || '').toLowerCase().includes(jobIdQuery.trim().toLowerCase())))
+                  .map((j, idx) => (
                   <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
-                    <td className="py-2 pr-4 pl-3 font-mono text-xs">{j.jobId}</td>
-                    <td className="py-2 pr-4"><span className={statusChip(j.status)}>{j.status}</span></td>
-                    <td className="py-2 pr-4">{j.started_at}</td>
-                    <td className="py-2 pr-4">{j.finished_at || '-'}</td>
-                  <td className="py-2 pr-4 text-xs text-slate-500 max-w-xl truncate" title={j.message || ''}>{j.message || '-'}</td>
-                  <td className="py-2 pr-4">
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 font-mono text-xs`}>{j.jobId}</td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}><span className={statusChip(j.status)}>{j.status}</span></td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{j.started_at}</td>
+                    <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{j.finished_at || '-'}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-500 max-w-xl truncate`} title={j.message || ''}>{j.message || '-'}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>
                     {(j.status === 'failed' || j.status === 'completed') && (
                       <button
                         onClick={async () => {
@@ -520,23 +547,23 @@ export const CdssAdmin: React.FC = () => {
             <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
           </div>
         </div>
-        <div className="overflow-auto rounded-lg border border-slate-200">
-          <table className="min-w-full text-sm">
+        <div className="overflow-auto rounded-lg border border-slate-200 max-h-80">
+          <table className={`min-w-full ${denseMode ? 'text-xs' : 'text-sm'}`}>
             <thead>
-              <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200">
-                <th className="py-2 pr-4 pl-3">Time</th>
-                <th className="py-2 pr-4">Actor</th>
-                <th className="py-2 pr-4">Action</th>
-                <th className="py-2 pr-4">Payload</th>
+              <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3`}>Time</th>
+                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Actor</th>
+                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Action</th>
+                <th className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>Payload</th>
               </tr>
             </thead>
             <tbody>
               {(audit?.logs || []).map((log, idx) => (
                 <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
-                  <td className="py-2 pr-4 pl-3 text-slate-700">{log.created_at}</td>
-                  <td className="py-2 pr-4">{log.actor}</td>
-                  <td className="py-2 pr-4">{log.action}</td>
-                  <td className="py-2 pr-4 text-xs text-slate-600">
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 pl-3 text-slate-700`}>{log.created_at}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.actor}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4`}>{log.action}</td>
+                  <td className={`${denseMode ? 'py-1' : 'py-2'} pr-4 text-xs text-slate-600`}>
                     <pre className="whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
                   </td>
                 </tr>
