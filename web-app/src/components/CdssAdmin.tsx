@@ -605,7 +605,28 @@ export const CdssAdmin: React.FC = () => {
           <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
           <div className="flex items-center gap-2">
             <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 disabled:opacity-50">Prev</button>
-            <span className="text-xs text-slate-500">offset {auditOffset} • limit {auditLimit}</span>
+            <span className="text-xs text-slate-500">offset {auditOffset}</span>
+            <select
+              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              value={auditLimit}
+              onChange={async (e) => {
+                const newLimit = Number(e.target.value);
+                setAuditLimit(newLimit);
+                const newOffset = 0;
+                setAuditOffset(newOffset);
+                setLoading(true);
+                try {
+                  const au = await cdssAdminAPI.getAuditLogs(newLimit, newOffset);
+                  setAudit({ logs: au?.logs || [], limit: newLimit, offset: newOffset });
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <option value={20}>limit 20</option>
+              <option value={50}>limit 50</option>
+              <option value={100}>limit 100</option>
+            </select>
             <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Next</button>
             <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
           </div>
