@@ -2,7 +2,7 @@
 MediCore Clinical Decision Support System (CDSS) Service
 Python FastAPI microservice for advanced clinical reasoning
 """
-from fastapi import FastAPI, HTTPException, Depends, Header, Form, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -35,6 +35,8 @@ import jwt
 import threading
 import pathlib
 import redis as redis_pkg
+from uuid import uuid4
+from threading import Lock
 
 app = FastAPI(
     title="MediCore CDSS Service",
@@ -188,8 +190,10 @@ async def startup_event():
         print(f"Error checking MinIO connection: {e}")
 
 lab_interpreter = LabResultInterpreter()
+_INGEST_JOBS = {}
+_INGEST_LOCK = Lock()
 
-def require_owner(request: Request, x_owner_email: str = Header(None), authorization: str = Header(None)) -> str:
+def require_owner(request: Request, response: Response, x_owner_email: str = Header(None), authorization: str = Header(None)) -> str:
     """
     Owner gating with JWT verification:
     - Prefer Authorization: Bearer <token>, extract email from JWT, check against OWNER_EMAILS
@@ -236,6 +240,17 @@ def require_owner(request: Request, x_owner_email: str = Header(None), authoriza
             count = r.incr(key)
             if count == 1:
                 r.expire(key, 60)
+            try:
+                ttl = r.ttl(key)
+            except Exception:
+                ttl = 60
+            remaining = max(0, limit_per_min - count)
+            try:
+                response.headers["X-RateLimit-Limit"] = str(limit_per_min)
+                response.headers["X-RateLimit-Remaining"] = str(remaining)
+                response.headers["X-RateLimit-Reset"] = str(ttl if isinstance(ttl, int) and ttl >= 0 else 60)
+            except Exception:
+                pass
             if count > limit_per_min:
                 raise HTTPException(status_code=429, detail="Rate limit exceeded")
         except HTTPException:
@@ -311,12 +326,27 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
 
-def _run_ingest():
+def _run_ingest(job_id: str = None):
+    ok = False
+    err = None
     try:
         from ingest_guidelines import ingest_guidelines
         ingest_guidelines()
+        ok = True
     except Exception as e:
-        print(f"Ingestion failed: {e}")
+        err = str(e)
+    finally:
+        if job_id:
+            try:
+                with _INGEST_LOCK:
+                    job = _INGEST_JOBS.get(job_id)
+                    if job:
+                        job["status"] = "completed" if ok else "failed"
+                        job["finished_at"] = datetime.utcnow().isoformat()
+                        job["message"] = None if ok else err
+                        _INGEST_JOBS[job_id] = job
+            except Exception:
+                pass
 
 @app.post("/admin/ingest")
 async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner)):
@@ -331,14 +361,23 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
         content = await file.read()
         with open(dest, "wb") as f:
             f.write(content)
-    t = threading.Thread(target=_run_ingest, daemon=True)
+    job_id = str(uuid4())
+    with _INGEST_LOCK:
+        _INGEST_JOBS[job_id] = {
+            "jobId": job_id,
+            "status": "running",
+            "started_at": datetime.utcnow().isoformat(),
+            "finished_at": None,
+            "message": None
+        }
+    t = threading.Thread(target=_run_ingest, args=(job_id,), daemon=True)
     t.start()
     if settings_provider:
         try:
-            settings_provider.log_action(actor=owner, action="ingest_start", payload={"filename": getattr(file, 'filename', None)})
+            settings_provider.log_action(actor=owner, action="ingest_start", payload={"filename": getattr(file, 'filename', None), "jobId": job_id})
         except Exception:
             pass
-    return {"started": True}
+    return {"started": True, "jobId": job_id}
 
 @app.post("/admin/reindex")
 async def admin_reindex(owner: str = Depends(require_owner)):
@@ -360,6 +399,20 @@ async def admin_reindex(owner: str = Depends(require_owner)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/admin/ingest/jobs")
+async def admin_ingest_jobs(limit: int = 20, owner: str = Depends(require_owner)):
+    with _INGEST_LOCK:
+        arr = list(_INGEST_JOBS.values())
+    arr.sort(key=lambda x: x.get("started_at") or "", reverse=True)
+    return {"jobs": arr[:limit], "limit": limit}
+
+@app.get("/admin/ingest/status/{job_id}")
+async def admin_ingest_status(job_id: str, owner: str = Depends(require_owner)):
+    with _INGEST_LOCK:
+        job = _INGEST_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 @app.post("/admin/cache/flush")
 async def admin_cache_flush(owner: str = Depends(require_owner)):
     if not diagnostic_assistant or not diagnostic_assistant.rag_engine:
@@ -393,6 +446,10 @@ async def admin_cache_flush(owner: str = Depends(require_owner)):
 async def admin_metrics(owner: str = Depends(require_owner)):
     docs = None
     cache_keys = 0
+    rag_cache_hit = 0
+    rag_cache_miss = 0
+    llm_cache_hit = 0
+    llm_cache_miss = 0
     ce = diagnostic_assistant.rag_engine if diagnostic_assistant else None
     if ce and ce.collection:
         try:
@@ -402,6 +459,26 @@ async def admin_metrics(owner: str = Depends(require_owner)):
     if ce and ce.redis_client:
         try:
             cache_keys = len(list(ce.redis_client.scan_iter(match="*")))
+            try:
+                val = ce.redis_client.get("metrics:rag:cache_hit")
+                rag_cache_hit = int(val or 0)
+            except Exception:
+                rag_cache_hit = 0
+            try:
+                val = ce.redis_client.get("metrics:rag:cache_miss")
+                rag_cache_miss = int(val or 0)
+            except Exception:
+                rag_cache_miss = 0
+            try:
+                val = ce.redis_client.get("metrics:llm:cache_hit")
+                llm_cache_hit = int(val or 0)
+            except Exception:
+                llm_cache_hit = 0
+            try:
+                val = ce.redis_client.get("metrics:llm:cache_miss")
+                llm_cache_miss = int(val or 0)
+            except Exception:
+                llm_cache_miss = 0
         except Exception:
             cache_keys = 0
     if settings_provider:
@@ -409,7 +486,15 @@ async def admin_metrics(owner: str = Depends(require_owner)):
             settings_provider.log_action(actor=owner, action="metrics_view", payload={"documents": docs, "cache_keys": cache_keys})
         except Exception:
             pass
-    return {"documents": docs, "cache_keys": cache_keys}
+    def _rate(h, m):
+        total = h + m
+        return round((h / total) * 100, 2) if total > 0 else 0.0
+    return {
+        "documents": docs,
+        "cache_keys": cache_keys,
+        "rag_cache": {"hit": rag_cache_hit, "miss": rag_cache_miss, "hit_rate_percent": _rate(rag_cache_hit, rag_cache_miss)},
+        "llm_cache": {"hit": llm_cache_hit, "miss": llm_cache_miss, "hit_rate_percent": _rate(llm_cache_hit, llm_cache_miss)}
+    }
 
 class AuditQuery(BaseModel):
     limit: Optional[int] = 50
@@ -734,12 +819,21 @@ async def search_guidelines(request: GuidelineSearchRequest):
                 try:
                     cached = cache_client.get(cache_key)
                     if cached:
+                        try:
+                            cache_client.incr("metrics:llm:cache_hit")
+                        except Exception:
+                            pass
                         analysis = json.loads(cached)
                 except Exception:
                     analysis = None
             if analysis is None:
                 print(f"[CDSS] Generating analysis for patient context...")
                 analysis = await diagnostic_assistant.llm_provider.generate_response(prompt)
+                try:
+                    if cache_client:
+                        cache_client.incr("metrics:llm:cache_miss")
+                except Exception:
+                    pass
                 # Persist to cache
                 if cache_client and analysis:
                     try:

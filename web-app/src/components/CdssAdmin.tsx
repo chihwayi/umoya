@@ -13,24 +13,29 @@ export const CdssAdmin: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [metrics, setMetrics] = useState<any>(null);
+  const [rateLimit, setRateLimit] = useState<{ limit: number; remaining: number; reset: number } | null>(null);
   const [audit, setAudit] = useState<{ logs: any[]; limit: number; offset: number } | null>(null);
   const [auditLimit, setAuditLimit] = useState<number>(20);
   const [auditOffset, setAuditOffset] = useState<number>(0);
+  const [ingestJobs, setIngestJobs] = useState<any[]>([]);
 
   const loadAll = async () => {
     setLoading(true);
     setMessage('');
     try {
-      const [st, se, me, au] = await Promise.all([
+      const [st, se, meResp, au, jobs] = await Promise.all([
         cdssAdminAPI.getStatus(),
         cdssAdminAPI.getSettings(),
         cdssAdminAPI.getMetrics(),
         cdssAdminAPI.getAuditLogs(auditLimit, auditOffset),
+        cdssAdminAPI.getIngestJobs(20),
       ]);
       setStatus(st);
       setSettings(se?.settings || se);
-      setMetrics(me);
+      setMetrics(meResp.metrics || meResp);
+      if (meResp.rateLimit) setRateLimit(meResp.rateLimit);
       setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
+      setIngestJobs(jobs?.jobs || []);
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load CDSS admin data');
     } finally {
@@ -69,8 +74,13 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      await cdssAdminAPI.ingest(file || undefined);
-      setMessage('Ingestion started');
+      const res = await cdssAdminAPI.ingest(file || undefined);
+      const jobId = res?.jobId || res?.job_id;
+      setMessage(jobId ? `Ingestion started • Job ${jobId}` : 'Ingestion started');
+      try {
+        const jobs = await cdssAdminAPI.getIngestJobs(20);
+        setIngestJobs(jobs?.jobs || []);
+      } catch {}
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to start ingestion');
     } finally {
@@ -109,8 +119,9 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      const me = await cdssAdminAPI.getMetrics();
-      setMetrics(me);
+      const meResp = await cdssAdminAPI.getMetrics();
+      setMetrics(meResp.metrics || meResp);
+      if (meResp.rateLimit) setRateLimit(meResp.rateLimit);
       setMessage('Metrics refreshed');
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load metrics');
@@ -190,6 +201,11 @@ export const CdssAdmin: React.FC = () => {
           <div className="mt-2 text-sm">
             <div>Doc count: {metrics?.documents ?? '-'}</div>
             <div>Cache keys: {metrics?.cache_keys ?? '-'}</div>
+            <div>RAG cache: {metrics?.rag_cache ? `${metrics.rag_cache.hit} hit / ${metrics.rag_cache.miss} miss (${metrics.rag_cache.hit_rate_percent}% hit)` : '-'}</div>
+            <div>LLM cache: {metrics?.llm_cache ? `${metrics.llm_cache.hit} hit / ${metrics.llm_cache.miss} miss (${metrics.llm_cache.hit_rate_percent}% hit)` : '-'}</div>
+            {rateLimit && (
+              <div className="text-xs text-slate-500 mt-1">Rate limit: {rateLimit.remaining}/{rateLimit.limit} • resets in {rateLimit.reset}s</div>
+            )}
           </div>
           <button onClick={handleRefreshMetrics} className="mt-3 px-3 py-1.5 text-sm rounded bg-slate-900 text-white">
             Refresh
@@ -249,6 +265,33 @@ export const CdssAdmin: React.FC = () => {
           <button onClick={handleIngest} className="px-4 py-2 rounded bg-blue-600 text-white">Upload & Ingest</button>
           <button onClick={handleReindex} className="px-4 py-2 rounded bg-amber-600 text-white">Reindex</button>
           <button onClick={handleFlushCache} className="px-4 py-2 rounded bg-rose-600 text-white">Flush Cache</button>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-slate-500 uppercase mt-2 mb-1">Jobs</div>
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500">
+                  <th className="py-2 pr-4">Job ID</th>
+                  <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Started</th>
+                  <th className="py-2 pr-4">Finished</th>
+                  <th className="py-2 pr-4">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ingestJobs || []).map((j, idx) => (
+                  <tr key={idx} className="border-t border-slate-100">
+                    <td className="py-2 pr-4">{j.jobId}</td>
+                    <td className="py-2 pr-4">{j.status}</td>
+                    <td className="py-2 pr-4">{j.started_at}</td>
+                    <td className="py-2 pr-4">{j.finished_at || '-'}</td>
+                    <td className="py-2 pr-4 text-xs text-slate-500">{j.message || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

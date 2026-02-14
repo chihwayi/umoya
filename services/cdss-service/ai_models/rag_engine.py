@@ -174,10 +174,19 @@ class RAGEngine:
                 try:
                     cached_results = self.redis_client.get(cache_key)
                     if cached_results:
+                        try:
+                            self.redis_client.incr("metrics:rag:cache_hit")
+                        except Exception:
+                            pass
                         logger.info(f"Cache hit for query: {query}")
                         return json.loads(cached_results)
                 except Exception as e:
                     logger.warning(f"Cache read failed: {e}")
+            try:
+                if self.redis_client:
+                    self.redis_client.incr("metrics:rag:cache_miss")
+            except Exception:
+                pass
 
             # Retrieve more candidates for re-ranking (e.g., 5x desired results)
             # This improves recall before the precision step

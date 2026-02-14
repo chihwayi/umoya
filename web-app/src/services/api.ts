@@ -271,10 +271,21 @@ export const cdssAdminAPI = {
   },
   getMetrics: async (): Promise<any> => {
     const response = await api.get('/cdss-admin/admin/metrics', { headers: { ...getOwnerHeaders() } });
-    return response.data;
+    const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+    const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+    const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+    return { metrics: response.data, rateLimit: { limit, remaining, reset } };
   },
   getAuditLogs: async (limit = 50, offset = 0): Promise<any> => {
     const response = await api.get(`/cdss-admin/admin/audit?limit=${limit}&offset=${offset}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getIngestJobs: async (limit = 20): Promise<any> => {
+    const response = await api.get(`/cdss-admin/admin/ingest/jobs?limit=${limit}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getIngestJobStatus: async (jobId: string): Promise<any> => {
+    const response = await api.get(`/cdss-admin/admin/ingest/status/${encodeURIComponent(jobId)}`, { headers: { ...getOwnerHeaders() } });
     return response.data;
   }
 };
