@@ -7,6 +7,21 @@ type Status = {
 };
 
 export const CdssAdmin: React.FC = () => {
+  const statusChip = (s: string) => {
+    const base = 'inline-block px-2 py-0.5 text-xs rounded';
+    switch (s) {
+      case 'running':
+        return `${base} bg-amber-100 text-amber-800`;
+      case 'failed':
+        return `${base} bg-rose-100 text-rose-700`;
+      case 'completed':
+        return `${base} bg-emerald-100 text-emerald-700`;
+      case 'queued':
+        return `${base} bg-slate-100 text-slate-700`;
+      default:
+        return `${base} bg-slate-100 text-slate-600`;
+    }
+  };
   const [status, setStatus] = useState<Status | null>(null);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -437,25 +452,26 @@ export const CdssAdmin: React.FC = () => {
               </span>
             </div>
           </div>
-          <div className="overflow-auto">
+          <div className="overflow-auto rounded-lg border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500">
-                  <th className="py-2 pr-4">Job ID</th>
+                <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200">
+                  <th className="py-2 pr-4 pl-3">Job ID</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Started</th>
                   <th className="py-2 pr-4">Finished</th>
                   <th className="py-2 pr-4">Message</th>
+                  <th className="py-2 pr-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {(ingestJobs || []).map((j, idx) => (
-                  <tr key={idx} className="border-t border-slate-100">
-                    <td className="py-2 pr-4">{j.jobId}</td>
-                    <td className="py-2 pr-4">{j.status}</td>
+                  <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
+                    <td className="py-2 pr-4 pl-3 font-mono text-xs">{j.jobId}</td>
+                    <td className="py-2 pr-4"><span className={statusChip(j.status)}>{j.status}</span></td>
                     <td className="py-2 pr-4">{j.started_at}</td>
                     <td className="py-2 pr-4">{j.finished_at || '-'}</td>
-                  <td className="py-2 pr-4 text-xs text-slate-500">{j.message || '-'}</td>
+                  <td className="py-2 pr-4 text-xs text-slate-500 max-w-xl truncate" title={j.message || ''}>{j.message || '-'}</td>
                   <td className="py-2 pr-4">
                     {(j.status === 'failed' || j.status === 'completed') && (
                       <button
@@ -504,11 +520,11 @@ export const CdssAdmin: React.FC = () => {
             <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
           </div>
         </div>
-        <div className="overflow-auto">
+        <div className="overflow-auto rounded-lg border border-slate-200">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500">
-                <th className="py-2 pr-4">Time</th>
+              <tr className="text-left text-slate-600 uppercase text-xs bg-slate-50 border-b border-slate-200">
+                <th className="py-2 pr-4 pl-3">Time</th>
                 <th className="py-2 pr-4">Actor</th>
                 <th className="py-2 pr-4">Action</th>
                 <th className="py-2 pr-4">Payload</th>
@@ -516,12 +532,12 @@ export const CdssAdmin: React.FC = () => {
             </thead>
             <tbody>
               {(audit?.logs || []).map((log, idx) => (
-                <tr key={idx} className="border-t border-slate-100">
-                  <td className="py-2 pr-4 text-slate-700">{log.created_at}</td>
+                <tr key={idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''} hover:bg-slate-50`}>
+                  <td className="py-2 pr-4 pl-3 text-slate-700">{log.created_at}</td>
                   <td className="py-2 pr-4">{log.actor}</td>
                   <td className="py-2 pr-4">{log.action}</td>
-                  <td className="py-2 pr-4 text-xs text-slate-500">
-                    <pre className="whitespace-pre-wrap">{JSON.stringify(log.payload || {}, null, 2)}</pre>
+                  <td className="py-2 pr-4 text-xs text-slate-600">
+                    <pre className="whitespace-pre-wrap bg-slate-50 border border-slate-200 rounded p-2">{JSON.stringify(log.payload || {}, null, 2)}</pre>
                   </td>
                 </tr>
               ))}
