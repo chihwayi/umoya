@@ -24,6 +24,8 @@ export const CdssAdmin: React.FC = () => {
   const [retryCooldown, setRetryCooldown] = useState<number>(0);
   const [reindexCooldown, setReindexCooldown] = useState<number>(0);
   const [flushCooldown, setFlushCooldown] = useState<number>(0);
+  const [ingestCooldown, setIngestCooldown] = useState<number>(0);
+  const [saveCooldown, setSaveCooldown] = useState<number>(0);
 
   const loadAll = async () => {
     setLoading(true);
@@ -100,6 +102,22 @@ export const CdssAdmin: React.FC = () => {
     return () => clearInterval(t);
   }, [flushCooldown]);
 
+  useEffect(() => {
+    if (ingestCooldown <= 0) return;
+    const t = setInterval(() => {
+      setIngestCooldown((v) => (v > 0 ? v - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [ingestCooldown]);
+
+  useEffect(() => {
+    if (saveCooldown <= 0) return;
+    const t = setInterval(() => {
+      setSaveCooldown((v) => (v > 0 ? v - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [saveCooldown]);
+
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
@@ -113,10 +131,15 @@ export const CdssAdmin: React.FC = () => {
         cache_namespace: settings?.cache_namespace,
         allow_pdf_uploads: settings?.allow_pdf_uploads,
       };
-      await cdssAdminAPI.updateSettings(payload);
+      const res = await cdssAdminAPI.updateSettings(payload);
+      if (res?.rateLimit) setRateLimit(res.rateLimit);
       setMessage('Settings updated');
       await loadAll();
     } catch (e: any) {
+      const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
+      if (e?.response?.status === 429 && reset > 0) {
+        setSaveCooldown(reset);
+      }
       setMessage(e?.response?.data?.detail || 'Failed to update settings');
     } finally {
       setLoading(false);
@@ -128,7 +151,8 @@ export const CdssAdmin: React.FC = () => {
     setMessage('');
     try {
       const res = await cdssAdminAPI.ingest(file || undefined);
-      const jobId = res?.jobId || res?.job_id;
+      if (res?.rateLimit) setRateLimit(res.rateLimit);
+      const jobId = res?.data?.jobId || res?.data?.job_id;
       setMessage(jobId ? `Ingestion started • Job ${jobId}` : 'Ingestion started');
       setAutoRefresh(true);
       try {
@@ -136,6 +160,10 @@ export const CdssAdmin: React.FC = () => {
         setIngestJobs(jobs?.jobs || []);
       } catch {}
     } catch (e: any) {
+      const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
+      if (e?.response?.status === 429 && reset > 0) {
+        setIngestCooldown(reset);
+      }
       setMessage(e?.response?.data?.detail || 'Failed to start ingestion');
     } finally {
       setLoading(false);
@@ -251,33 +279,36 @@ export const CdssAdmin: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">CDSS Admin</h2>
-        {loading && <span className="text-sm text-slate-500">Processing...</span>}
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">🧠 CDSS Administration</h2>
+          <div className="text-sm text-slate-500">Manage AI features, ingestion, caching and audit trails</div>
+        </div>
+        {loading && <span className="text-sm text-amber-600">Processing…</span>}
       </div>
 
       {message && (
-        <div className="p-3 rounded-md text-sm bg-slate-50 border border-slate-200">{message}</div>
+        <div className="p-3 rounded-md text-sm bg-emerald-50 border border-emerald-200 text-emerald-800">{message}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs font-semibold text-slate-500 uppercase">LLM</div>
+        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+          <div className="text-xs font-semibold text-slate-600 uppercase">LLM</div>
           <div className="mt-2 text-sm">
             <div>Enabled: {String(status?.llm?.enabled ?? '')}</div>
             <div>Model: {status?.llm?.model || '-'}</div>
             <div>API URL: {status?.llm?.api_url || '-'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs font-semibold text-slate-500 uppercase">RAG</div>
+        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+          <div className="text-xs font-semibold text-slate-600 uppercase">RAG</div>
           <div className="mt-2 text-sm">
             <div>Enabled: {String(status?.rag?.enabled ?? '')}</div>
             <div>Documents: {status?.rag?.documents ?? '-'}</div>
             <div>Cache: {status?.rag?.cache_enabled ? 'Enabled' : 'Disabled'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs font-semibold text-slate-500 uppercase">Metrics</div>
+        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+          <div className="text-xs font-semibold text-slate-600 uppercase">Metrics</div>
           <div className="mt-2 text-sm">
             <div>Doc count: {metrics?.documents ?? '-'}</div>
             <div>Cache keys: {metrics?.cache_keys ?? '-'}</div>
@@ -287,20 +318,20 @@ export const CdssAdmin: React.FC = () => {
               <div className="text-xs text-slate-500 mt-1">Rate limit: {rateLimit.remaining}/{rateLimit.limit} • resets in {rateLimit.reset}s</div>
             )}
           </div>
-          <button onClick={handleRefreshMetrics} className="mt-3 px-3 py-1.5 text-sm rounded bg-slate-900 text-white">
+          <button onClick={handleRefreshMetrics} className="mt-3 px-3 py-1.5 text-sm rounded bg-slate-900 text-white shadow">
             Refresh
           </button>
-          <button onClick={handleResetMetrics} className="mt-3 ml-2 px-3 py-1.5 text-sm rounded bg-rose-700 text-white">
+          <button onClick={handleResetMetrics} className="mt-3 ml-2 px-3 py-1.5 text-sm rounded bg-rose-700 text-white shadow">
             Reset Counters
           </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
-        <div className="text-sm font-semibold text-slate-700">Settings</div>
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5 space-y-4">
+        <div className="text-sm font-semibold text-slate-800">🔧 Settings</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-slate-500 uppercase mb-1">LLM Model Name</label>
+            <label className="block text-xs text-slate-600 uppercase mb-1">LLM Model Name</label>
             <input
               className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
               value={settings?.llm_model_name || ''}
@@ -308,7 +339,7 @@ export const CdssAdmin: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 uppercase mb-1">LLM API URL</label>
+            <label className="block text-xs text-slate-600 uppercase mb-1">LLM API URL</label>
             <input
               className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
               value={settings?.llm_api_url || ''}
@@ -316,7 +347,7 @@ export const CdssAdmin: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 uppercase mb-1">RAG Enabled</label>
+            <label className="block text-xs text-slate-600 uppercase mb-1">RAG Enabled</label>
             <select
               className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
               value={String(settings?.rag_enabled ?? true)}
@@ -327,7 +358,7 @@ export const CdssAdmin: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 uppercase mb-1">Cache TTL (seconds)</label>
+            <label className="block text-xs text-slate-600 uppercase mb-1">Cache TTL (seconds)</label>
             <input
               type="number"
               className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
@@ -337,15 +368,29 @@ export const CdssAdmin: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <button onClick={handleSave} className="px-4 py-2 rounded bg-slate-900 text-white">Save</button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+            disabled={saveCooldown > 0}
+            title={saveCooldown > 0 ? `Rate limited • wait ${saveCooldown}s` : 'Save settings'}
+          >
+            Save
+          </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
-        <div className="text-sm font-semibold text-slate-700">Ingestion & Index</div>
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5 space-y-4">
+        <div className="text-sm font-semibold text-slate-800">📚 Ingestion & Index</div>
         <div className="flex items-center space-x-3">
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <button onClick={handleIngest} className="px-4 py-2 rounded bg-blue-600 text-white">Upload & Ingest</button>
+          <input className="text-sm" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <button
+            onClick={handleIngest}
+            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+            disabled={ingestCooldown > 0}
+            title={ingestCooldown > 0 ? `Rate limited • wait ${ingestCooldown}s` : 'Upload a PDF and start ingestion'}
+          >
+            Upload & Ingest
+          </button>
           <button
             onClick={handleReindex}
             className="px-4 py-2 rounded bg-amber-600 text-white disabled:opacity-50"
@@ -385,7 +430,7 @@ export const CdssAdmin: React.FC = () => {
         </div>
         <div>
           <div className="flex items-center justify-between mt-2 mb-1">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Jobs</div>
+            <div className="text-xs font-semibold text-slate-600 uppercase">Jobs</div>
             <div className="text-xs">
               <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                 Running: {runningCount}
@@ -451,7 +496,7 @@ export const CdssAdmin: React.FC = () => {
 
       <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-700">Audit Logs</div>
+          <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
           <div className="flex items-center gap-2">
             <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 disabled:opacity-50">Prev</button>
             <span className="text-xs text-slate-500">offset {auditOffset} • limit {auditLimit}</span>

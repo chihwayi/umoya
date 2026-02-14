@@ -246,7 +246,10 @@ export const cdssAdminAPI = {
   },
   updateSettings: async (settings: Partial<{ llm_enabled: boolean; llm_api_url: string; llm_model_name: string; rag_enabled: boolean; cache_ttl_seconds: number; cache_namespace: string; allow_pdf_uploads: boolean }>): Promise<any> => {
     const response = await api.put('/cdss-admin/admin/settings', settings, { headers: { ...getOwnerHeaders() } });
-    return response.data;
+    const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+    const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+    const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+    return { data: response.data, rateLimit: { limit, remaining, reset } };
   },
   ingest: async (file?: File): Promise<any> => {
     if (file) {
@@ -255,10 +258,16 @@ export const cdssAdminAPI = {
       const response = await api.post('/cdss-admin/admin/ingest', form, {
         headers: { ...getOwnerHeaders(), 'Content-Type': 'multipart/form-data' }
       });
-      return response.data;
+      const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+      const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+      const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+      return { data: response.data, rateLimit: { limit, remaining, reset } };
     } else {
       const response = await api.post('/cdss-admin/admin/ingest', null, { headers: { ...getOwnerHeaders() } });
-      return response.data;
+      const limit = Number(response.headers['x-ratelimit-limit'] || 0);
+      const remaining = Number(response.headers['x-ratelimit-remaining'] || 0);
+      const reset = Number(response.headers['x-ratelimit-reset'] || 0);
+      return { data: response.data, rateLimit: { limit, remaining, reset } };
     }
   },
   reindex: async (): Promise<any> => {
