@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   whisper-api:
     image: onerahmet/whisper-api:latest-gpu

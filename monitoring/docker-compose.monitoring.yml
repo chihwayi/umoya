@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   prometheus:
     image: prom/prometheus:latest
@@ -42,4 +40,3 @@ volumes:
 networks:
   medicore-network:
     external: true
-
