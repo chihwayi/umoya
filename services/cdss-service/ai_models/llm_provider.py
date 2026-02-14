@@ -24,7 +24,7 @@ class LLMProvider:
             else:
                 self.base_url = None
                 
-        self.model_name = os.getenv("LLM_MODEL_NAME", "llama3")
+        self.model_name = os.getenv("LLM_MODEL_NAME")
         self.timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
         self._available = None
 
@@ -43,6 +43,22 @@ class LLMProvider:
                 response = await client.get(f"{self.base_url}/api/tags")
                 if response.status_code == 200:
                     self._available = True
+                    # Enforce strict model selection from environment
+                    try:
+                        if not self.model_name:
+                            logger.error("LLM model not set. Please configure LLM_MODEL_NAME in environment.")
+                            self._available = False
+                            return False
+                        data = response.json()
+                        available = [m.get("name") for m in data.get("models", []) if m.get("name")]
+                        if available and self.model_name not in available:
+                            logger.error(f"Configured LLM model '{self.model_name}' not found in local tags: {available}.")
+                            self._available = False
+                            return False
+                    except Exception as e:
+                        logger.error(f"Failed to validate LLM model list: {e}")
+                        self._available = False
+                        return False
                     logger.info(f"Connected to Local LLM at {self.base_url}")
                     return True
         except Exception as e:

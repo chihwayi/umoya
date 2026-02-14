@@ -675,7 +675,8 @@ class DiagnosticAssistant:
                         rag_filters["target_population"] = {"$ne": "pregnant_women"}
                         
                     try:
-                        retrieved_docs = self.rag_engine.query(query, filters=rag_filters)
+                        # Pass None when no filters to avoid Chroma 'where' validation errors
+                        retrieved_docs = self.rag_engine.query(query, filters=rag_filters if rag_filters else None)
                         if retrieved_docs:
                             guideline_texts = [f"{doc['text']} (Source: {doc['source']})" for doc in retrieved_docs]
                             guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
@@ -891,4 +892,3 @@ class DiagnosticAssistant:
                 "summary": "Failed to generate summary.",
                 "source": "error"
             }
-

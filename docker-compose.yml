@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Databases
   postgres-master:
@@ -88,7 +86,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT}
       - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
-      - CDSS_ENABLE_AI=${CDSS_ENABLE_AI}
+      - CDSS_ENABLE_AI=${CDSS_ENABLE_AI:-true}
       - MOCK_VISION_AI=${MOCK_VISION_AI}
       - MINIO_ENDPOINT=${SERVICE_MINIO_URL}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
@@ -99,14 +97,15 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_ENABLED=true
       - ANONYMIZED_TELEMETRY=False
-      - LLM_API_URL=http://host.docker.internal:11434
-      - LLM_MODEL_NAME=llama3
+      - LLM_API_URL=${LLM_API_URL:-http://host.docker.internal:11434}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-llama3.1:latest}
       - LLM_TIMEOUT_SECONDS=300
       - WHISPER_API_KEY=${WHISPER_API_KEY}
       - CHROMA_ANONYMIZED_TELEMETRY=False
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./services/cdss-service:/app
       - ./data/chroma_db:/app/data/chroma_db
@@ -231,7 +230,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: medicore-patient-portal
     ports:
-      - "${PORT_PATIENT_PORTAL}:3015"
+      - "${PORT_PATIENT_PORTAL:-3015}:3015"
     environment:
       - PORT=3015
       - REACT_APP_EHR_API_URL=${REACT_APP_EHR_API_URL}
