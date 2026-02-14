@@ -13,6 +13,8 @@ import httpx
 import os
 import shutil
 import tempfile
+import hashlib
+import json
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 from fastapi import UploadFile, File, Form
@@ -274,6 +276,11 @@ async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depend
             f.write(content)
     t = threading.Thread(target=_run_ingest, daemon=True)
     t.start()
+    if settings_provider:
+        try:
+            settings_provider.log_action(actor=owner, action="ingest_start", payload={"filename": getattr(file, 'filename', None)})
+        except Exception:
+            pass
     return {"started": True}
 
 @app.post("/admin/reindex")
@@ -286,7 +293,13 @@ async def admin_reindex(owner: str = Depends(require_owner)):
             ce.chroma_client.delete_collection("medical_guidelines")
             ce.collection = ce.chroma_client.get_or_create_collection("medical_guidelines")
             ce._build_bm25_index()
-        return {"reindexed": True, "documents": ce.collection.count() if ce.collection else 0}
+        count = ce.collection.count() if ce.collection else 0
+        if settings_provider:
+            try:
+                settings_provider.log_action(actor=owner, action="reindex", payload={"documents": count})
+            except Exception:
+                pass
+        return {"reindexed": True, "documents": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -312,6 +325,11 @@ async def admin_cache_flush(owner: str = Depends(require_owner)):
                 deleted += 1
         except Exception:
             continue
+    if settings_provider:
+        try:
+            settings_provider.log_action(actor=owner, action="cache_flush", payload={"deleted": deleted})
+        except Exception:
+            pass
     return {"flushed": deleted}
 
 @app.get("/admin/metrics")
@@ -329,6 +347,11 @@ async def admin_metrics(owner: str = Depends(require_owner)):
             cache_keys = len(list(ce.redis_client.scan_iter(match="*")))
         except Exception:
             cache_keys = 0
+    if settings_provider:
+        try:
+            settings_provider.log_action(actor=owner, action="metrics_view", payload={"documents": docs, "cache_keys": cache_keys})
+        except Exception:
+            pass
     return {"documents": docs, "cache_keys": cache_keys}
 
 @app.post("/transcribe")
@@ -588,7 +611,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
             
-    # 2. Generate Patient-Specific Analysis (LLM)
+    # 2. Generate Patient-Specific Analysis (LLM) with caching
     if diagnostic_assistant.llm_provider:
         try:
             # Construct context-aware prompt
@@ -627,9 +650,34 @@ async def search_guidelines(request: GuidelineSearchRequest):
             **Recommendation:**
             [Actionable advice]
             """
-            
-            print(f"[CDSS] Generating analysis for patient context...")
-            analysis = await diagnostic_assistant.llm_provider.generate_response(prompt)
+            analysis = None
+            # Cache layer
+            cache_client = None
+            cache_ttl = 600
+            try:
+                if settings_provider:
+                    cache_ttl = int(settings_provider.get_settings().get("cache_ttl_seconds", 600))
+            except Exception:
+                cache_ttl = 600
+            if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
+                cache_client = diagnostic_assistant.rag_engine.redis_client
+            cache_key = f"llm:analysis:{hashlib.md5(prompt.encode()).hexdigest()}"
+            if cache_client:
+                try:
+                    cached = cache_client.get(cache_key)
+                    if cached:
+                        analysis = json.loads(cached)
+                except Exception:
+                    analysis = None
+            if analysis is None:
+                print(f"[CDSS] Generating analysis for patient context...")
+                analysis = await diagnostic_assistant.llm_provider.generate_response(prompt)
+                # Persist to cache
+                if cache_client and analysis:
+                    try:
+                        cache_client.setex(cache_key, cache_ttl, json.dumps(analysis))
+                    except Exception:
+                        pass
             
         except Exception as e:
             print(f"[CDSS] LLM analysis failed: {e}")

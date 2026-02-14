@@ -113,10 +113,22 @@ class SettingsProvider:
                 logger.warning(f"Failed to write audit log: {e}")
         return merged
 
+    def log_action(self, actor: str, action: str, payload: Optional[Dict[str, Any]] = None) -> None:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO cdss_admin_audit_logs (actor, action, payload)
+                    VALUES (%s, %s, %s);
+                    """,
+                    (actor, action, Json(payload or {})),
+                )
+        except Exception as e:
+            logger.warning(f"Failed to write audit log: {e}")
+
     def close(self) -> None:
         try:
             if self.conn:
                 self.conn.close()
         except Exception:
             pass
-

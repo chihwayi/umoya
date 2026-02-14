@@ -166,8 +166,10 @@ class RAGEngine:
             return []
             
         try:
-            # 0. Check Cache
-            cache_key = f"rag:query:{hashlib.md5(query.encode()).hexdigest()}:n{n_results}"
+            # 0. Check Cache (key includes filters + n_results)
+            filt_str = "nofilter" if not filters else json.dumps(filters, sort_keys=True)
+            base = f"{query}|{filt_str}|n{n_results}"
+            cache_key = f"rag:query:{hashlib.md5(base.encode()).hexdigest()}"
             if self.redis_client:
                 try:
                     cached_results = self.redis_client.get(cache_key)
@@ -291,9 +293,14 @@ class RAGEngine:
             # Cache Results
             if self.redis_client and final_results:
                 try:
+                    ttl = 3600
+                    try:
+                        ttl = int(os.getenv("RAG_CACHE_TTL_SECONDS", "3600"))
+                    except Exception:
+                        ttl = 3600
                     self.redis_client.setex(
                         cache_key,
-                        3600, # Cache for 1 hour
+                        ttl,
                         json.dumps(final_results)
                     )
                 except Exception as e:
