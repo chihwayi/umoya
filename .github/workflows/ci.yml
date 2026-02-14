@@ -45,7 +45,7 @@ jobs:
       run: npm test
 
     - name: Send mail on failure
-      if: failure()
+      if: failure() && secrets.NOTIFICATION_EMAIL != '' && secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != ''
       uses: dawidd6/action-send-mail@v3
       continue-on-error: true
       with:
