@@ -45,14 +45,20 @@ jobs:
       run: npm test
 
     - name: Send mail on failure
-      if: failure() && secrets.NOTIFICATION_EMAIL != '' && secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != ''
+      if: failure() && env.NOTIFICATION_EMAIL != '' && env.SMTP_HOST != '' && env.SMTP_PORT != '' && env.SMTP_USERNAME != '' && env.SMTP_PASSWORD != ''
       uses: dawidd6/action-send-mail@v3
       continue-on-error: true
+      env:
+        SMTP_HOST: ${{ secrets.SMTP_HOST }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
       with:
-        server_address: ${{ secrets.SMTP_HOST }}
-        server_port: ${{ secrets.SMTP_PORT }}
-        username: ${{ secrets.SMTP_USERNAME }}
-        password: ${{ secrets.SMTP_PASSWORD }}
+        server_address: ${{ env.SMTP_HOST }}
+        server_port: ${{ env.SMTP_PORT }}
+        username: ${{ env.SMTP_USERNAME }}
+        password: ${{ env.SMTP_PASSWORD }}
         subject: GitHub Actions Job Failed - ${{ github.repository }}
         body: |
           The job "${{ github.job }}" in workflow "${{ github.workflow }}" of "${{ github.repository }}" has failed.
@@ -61,5 +67,5 @@ jobs:
           Author: ${{ github.actor }}
           
           Check the logs here: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        to: ${{ secrets.NOTIFICATION_EMAIL }}
-        from: GitHub Actions <${{ secrets.SMTP_USERNAME }}>
+        to: ${{ env.NOTIFICATION_EMAIL }}
+        from: GitHub Actions <${{ env.SMTP_USERNAME }}>
