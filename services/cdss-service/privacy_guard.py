@@ -1,7 +1,10 @@
 import os
 import re
+import hashlib
+import logging
 from typing import Any
 
+logger = logging.getLogger(__name__)
 
 def is_phi_redaction_enabled() -> bool:
     return os.getenv("CDSS_PHI_REDACTION_ENABLED", "true").lower() == "true"
@@ -66,6 +69,13 @@ def assert_no_outbound_phi(text: str, purpose: str = "outbound_payload") -> None
     if not is_outbound_phi_block_enabled():
         return
     if contains_phi(text):
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+        logger.warning(
+            "PHI policy block: purpose=%s len=%s sha256=%s",
+            purpose,
+            len(text),
+            digest,
+        )
         raise RuntimeError(f"Outbound PHI policy blocked payload for {purpose}.")
 
 

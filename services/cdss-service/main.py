@@ -81,6 +81,10 @@ def _validate_security_config() -> None:
 
     # Strict boolean parsing for security switches
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
+    _get_bool_env_strict(
+        "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
+        "false" if env in ("dev", "development", "local", "test") else "true",
+    )
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_BLOCK_OUTBOUND_PHI", "true")
     _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
@@ -157,6 +161,10 @@ ADMIN_JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 _SEC_ENV = os.getenv("ENVIRONMENT", "development").strip().lower()
 OWNER_SCOPE_STRICT = _get_bool_env_strict(
     "CDSS_OWNER_SCOPE_STRICT",
+    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+)
+SERVICE_AUTH_JWT_REPLAY_STRICT = _get_bool_env_strict(
+    "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
     "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
 )
 
@@ -266,6 +274,42 @@ async def request_id_and_envelope_middleware(request: Request, call_next):
             pass
 
 
+def _mark_service_jti_once(claims: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    """
+    Returns (allowed, error_message). Uses Redis SET NX EX to prevent JWT replay.
+    """
+    jti = str(claims.get("jti") or "").strip()
+    if not jti:
+        return (False, "Service JWT missing jti claim")
+
+    exp_raw = claims.get("exp")
+    now = int(time.time())
+    ttl_seconds = 120
+    try:
+        exp_int = int(exp_raw)
+        ttl_seconds = max(30, min(900, (exp_int - now) + 30))
+    except Exception:
+        ttl_seconds = 120
+
+    try:
+        redis_url = os.getenv("REDIS_URL", "").strip()
+        if redis_url:
+            r = redis_pkg.from_url(redis_url, decode_responses=True)
+        else:
+            host = os.getenv("REDIS_HOST", "localhost")
+            port = int(os.getenv("REDIS_PORT", 6379))
+            r = redis_pkg.Redis(host=host, port=port, db=0, decode_responses=True)
+        key = f"auth:service:jti:{SERVICE_AUTH_ISSUER}:{SERVICE_AUTH_AUDIENCE}:{jti}"
+        ok = r.set(key, "1", ex=ttl_seconds, nx=True)
+        if ok:
+            return (True, None)
+        return (False, "Service JWT replay detected")
+    except Exception:
+        if SERVICE_AUTH_JWT_REPLAY_STRICT:
+            return (False, "Replay protection unavailable")
+        return (True, None)
+
+
 @app.middleware("http")
 async def service_to_service_auth_middleware(request: Request, call_next):
     """
@@ -304,8 +348,12 @@ async def service_to_service_auth_middleware(request: Request, call_next):
                         audience=SERVICE_AUTH_AUDIENCE,
                         issuer=SERVICE_AUTH_ISSUER,
                     )
-                    request.state.service_identity = str(claims.get("sub") or "service")
-                    auth_ok = True
+                    replay_ok, replay_err = _mark_service_jti_once(claims)
+                    if replay_ok:
+                        request.state.service_identity = str(claims.get("sub") or "service")
+                        auth_ok = True
+                    else:
+                        auth_errors.append(replay_err or "Service JWT replay validation failed")
                 except Exception as e:
                     auth_errors.append(f"Invalid service JWT: {str(e)}")
             else:
