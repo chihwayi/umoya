@@ -1,8 +1,10 @@
 import os
 import logging
 import json
+import hashlib
 import httpx
 from typing import Optional, Dict, Any, List
+from privacy_guard import redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +76,13 @@ class LLMProvider:
         if not await self.check_availability():
             return None
 
-        full_prompt = prompt
+        safe_prompt = redact_text(prompt)
+        safe_system_prompt = redact_text(system_prompt) if system_prompt else None
+
+        full_prompt = safe_prompt
         if system_prompt:
             # Simple formatting for models that support it, or just prepend
-            full_prompt = f"System: {system_prompt}\n\nUser: {prompt}"
+            full_prompt = f"System: {safe_system_prompt}\n\nUser: {safe_prompt}"
 
         payload = {
             "model": self.model_name,
@@ -134,9 +139,11 @@ class LLMProvider:
             if start != -1 and end != -1 and end > start:
                 return json.loads(response_text[start:end+1])
                 
-            # If all fails, log and return None
-            logger.error(f"Failed to parse LLM JSON response: {response_text}")
+            # If all fails, log only non-sensitive metadata
+            digest = hashlib.sha256(response_text.encode("utf-8")).hexdigest()[:12]
+            logger.error(f"Failed to parse LLM JSON response. len={len(response_text)} sha256={digest}")
             return None
         except json.JSONDecodeError:
-            logger.error(f"Failed to parse LLM JSON response after extraction: {response_text}")
+            digest = hashlib.sha256(response_text.encode("utf-8")).hexdigest()[:12]
+            logger.error(f"Failed to parse LLM JSON response after extraction. len={len(response_text)} sha256={digest}")
             return None

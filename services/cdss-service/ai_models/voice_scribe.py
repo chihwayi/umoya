@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Optional
 from faster_whisper import WhisperModel
 from .llm_provider import LLMProvider
+from privacy_guard import redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +75,15 @@ class VoiceScribe:
         }
         """
 
+        safe_transcript = redact_text(transcript)
+
         prompt = f"""
         You are an expert medical scribe.
         The following text is a transcription of a medical consultation. 
         It may be in English, Shona, or Ndebele (or a mix).
         
         TRANSCRIPT:
-        "{transcript}"
+        "{safe_transcript}"
         
         Task:
         1. Analyze the transcript.

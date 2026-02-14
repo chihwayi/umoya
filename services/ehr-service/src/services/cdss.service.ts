@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 
 @Injectable()
@@ -9,12 +9,14 @@ export class CdssService {
   private readonly logger = new Logger(CdssService.name);
   private readonly cdssClient: AxiosInstance;
   private readonly cdssServiceUrl: string;
+  private readonly cdssServiceToken?: string;
 
   constructor(
     @Optional() @Inject(WhoSmartGuidelinesService) 
     private readonly whoSmartGuidelinesService?: WhoSmartGuidelinesService
   ) {
     this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
+    this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,
       timeout: 15000, // Increased timeout
@@ -25,6 +27,11 @@ export class CdssService {
     
     // Add request interceptor for debugging
     this.cdssClient.interceptors.request.use(request => {
+      if (this.cdssServiceToken) {
+        request.headers = request.headers || {};
+        request.headers['X-Service-Token'] = this.cdssServiceToken;
+        request.headers['X-Service-Name'] = 'ehr-service';
+      }
       this.logger.log(`[CDSS] Request to: ${request.url}`);
       return request;
     });
@@ -40,6 +47,17 @@ export class CdssService {
         return Promise.reject(error);
       }
     );
+  }
+
+  private buildCdssRequestConfig(timeout: number, tenantId?: string): AxiosRequestConfig {
+    const headers: Record<string, string> = {};
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
+    return {
+      timeout,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+    };
   }
 
   /**
@@ -111,7 +129,7 @@ export class CdssService {
    * Diagnostic assistance using Python CDSS service
    * Uses intelligent endpoint (rule-based + AI) if available, falls back to rule-based
    */
-  async diagnosisAssist(symptoms: any, useIntelligent: boolean = true) {
+  async diagnosisAssist(symptoms: any, useIntelligent: boolean = true, tenantId?: string) {
     try {
       // Handle different input formats
       let symptomList: string[] = [];
@@ -154,9 +172,7 @@ export class CdssService {
             gender: symptoms.gender || undefined,
             labs: symptoms.labs || undefined,
             conditions: symptoms.conditions || symptoms.diagnoses || undefined
-          }, {
-            timeout: 20000, // Longer timeout for AI processing
-          });
+          }, this.buildCdssRequestConfig(20000, tenantId));
 
           const intelligentData = intelligentResponse.data;
           this.logger.log(`Intelligent CDSS response received (AI enabled: ${intelligentData?.ai_enabled})`);
@@ -194,9 +210,7 @@ export class CdssService {
         vitals: symptoms.vitals || undefined,
         age: symptoms.age || undefined,
         gender: symptoms.gender || undefined,
-      }, {
-        timeout: 10000,
-      });
+      }, this.buildCdssRequestConfig(10000, tenantId));
 
       const responseData = response.data;
       console.log('[CDSS] Response received:', JSON.stringify(responseData).substring(0, 300));
@@ -247,7 +261,7 @@ export class CdssService {
    * Get clinical guidelines from Python CDSS service
    * Now integrates WHO Smart Guidelines if available
    */
-  async getGuidelines(condition: string, patientData?: any) {
+  async getGuidelines(condition: string, patientData?: any, tenantId?: string) {
     // Try WHO Smart Guidelines first (if service available)
     if (this.whoSmartGuidelinesService) {
       try {
@@ -284,9 +298,7 @@ export class CdssService {
         patient_gender: patientData?.gender,
         comorbidities: patientData?.comorbidities || patientData?.conditions || [],
         medications: patientData?.medications || [],
-      }, {
-        timeout: 10000,
-      });
+      }, this.buildCdssRequestConfig(10000, tenantId));
 
       return {
         guidelines: response.data.guidelines || [],
@@ -307,7 +319,7 @@ export class CdssService {
   /**
    * Search for clinical guidelines using RAG and WHO Smart Guidelines
    */
-  async searchGuidelines(query: string, limit: number = 5, patientContext?: any) {
+  async searchGuidelines(query: string, limit: number = 5, patientContext?: any, tenantId?: string) {
     const results = {
       query,
       citations: [],
@@ -340,7 +352,7 @@ export class CdssService {
           query,
           limit,
           patient_context: patientContext
-        });
+        }, this.buildCdssRequestConfig(15000, tenantId));
         if (response.data && response.data.citations) {
           results.citations.push(...response.data.citations);
         }
@@ -404,7 +416,7 @@ export class CdssService {
   /**
    * Risk assessment using Python CDSS service with historical data
    */
-  async riskAssessment(patientData: any, tenantDb?: DataSource) {
+  async riskAssessment(patientData: any, tenantDb?: DataSource, tenantId?: string) {
     this.logger.log(`[CDSS] ========== riskAssessment ENTRY ==========`);
     this.logger.log(`[CDSS] patientData keys: ${Object.keys(patientData || {}).join(', ')}`);
     this.logger.log(`[CDSS] tenantDb type: ${typeof tenantDb}`);
@@ -477,9 +489,7 @@ export class CdssService {
         requestPayload.visit_history = historicalData.visitHistory;
       }
 
-      const response = await this.cdssClient.post('/risk/calculate', requestPayload, {
-        timeout: 15000,
-      });
+      const response = await this.cdssClient.post('/risk/calculate', requestPayload, this.buildCdssRequestConfig(15000, tenantId));
 
       // Merge trend analysis if available
       const result: any = {

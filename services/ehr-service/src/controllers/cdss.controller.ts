@@ -32,7 +32,7 @@ export class CdssController {
   @ApiOperation({ summary: 'AI-powered diagnostic assistance' })
   @ApiResponse({ status: 200, description: 'Diagnostic suggestions provided' })
   async diagnosisAssist(@Body() symptoms: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.diagnosisAssist(symptoms);
+    return this.cdssService.diagnosisAssist(symptoms, true, req.tenantId);
   }
 
   @Post('guidelines')
@@ -42,14 +42,14 @@ export class CdssController {
     @Body() body: { condition: string, patientData?: any },
     @Request() req: RequestWithTenant
   ) {
-    return this.cdssService.getGuidelines(body.condition, body.patientData);
+    return this.cdssService.getGuidelines(body.condition, body.patientData, req.tenantId);
   }
 
   @Post('guidelines/search')
   @ApiOperation({ summary: 'Search clinical guidelines' })
   @ApiResponse({ status: 200, description: 'Guidelines found' })
   async searchGuidelines(@Body() body: { query: string, limit?: number, patient_context?: any }, @Request() req: RequestWithTenant) {
-    return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context);
+    return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context, req.tenantId);
   }
 
   @Post('risk-assessment')
@@ -57,7 +57,7 @@ export class CdssController {
   @ApiResponse({ status: 200, description: 'Risk assessment completed' })
   async riskAssessment(@Body() patientData: any, @Request() req: RequestWithTenant) {
     this.logger.log(`[CdssController] riskAssessment - tenantDb: ${!!req.tenantDb}, patientId: ${patientData?.patientId || 'undefined'}`);
-    const result = await this.cdssService.riskAssessment(patientData, req.tenantDb);
+    const result = await this.cdssService.riskAssessment(patientData, req.tenantDb, req.tenantId);
     this.logger.log(`[CdssController] riskAssessment result - has historical_context: ${!!result?.historical_context}, has trends: ${!!result?.trends}`);
     return result;
   }

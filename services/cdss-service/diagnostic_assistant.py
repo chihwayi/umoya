@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
 import re
 import logging
+from privacy_guard import redact_text, redact_value
 
 logger = logging.getLogger(__name__)
 
@@ -619,7 +620,8 @@ class DiagnosticAssistant:
         clinical_notes: Optional[str] = None,
         patient_data: Optional[Dict[str, Any]] = None,
         age: Optional[int] = None,
-        gender: Optional[str] = None
+        gender: Optional[str] = None,
+        tenant_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Intelligent diagnostic suggestion combining rule-based CDSS + AI models
@@ -665,7 +667,8 @@ class DiagnosticAssistant:
                 # RAG: Retrieve relevant guidelines
                 guideline_context = ""
                 if self.rag_engine:
-                    query_terms = symptoms + ([clinical_notes] if clinical_notes else [])
+                    safe_notes_for_retrieval = redact_text(clinical_notes) if clinical_notes else None
+                    query_terms = symptoms + ([safe_notes_for_retrieval] if safe_notes_for_retrieval else [])
                     query = " ".join(query_terms)[:200] # Limit query length
                     
                     # Context-Aware Filtering (Sprint 2)
@@ -676,7 +679,11 @@ class DiagnosticAssistant:
                         
                     try:
                         # Pass None when no filters to avoid Chroma 'where' validation errors
-                        retrieved_docs = self.rag_engine.query(query, filters=rag_filters if rag_filters else None)
+                        retrieved_docs = self.rag_engine.query(
+                            query,
+                            filters=rag_filters if rag_filters else None,
+                            tenant_id=tenant_id
+                        )
                         if retrieved_docs:
                             guideline_texts = [f"{doc['text']} (Source: {doc['source']})" for doc in retrieved_docs]
                             guideline_context = "\n\nRelevant Medical Guidelines:\n" + "\n---\n".join(guideline_texts)
@@ -684,15 +691,16 @@ class DiagnosticAssistant:
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed: {e}")
 
-                prompt_history = patient_data.get('conditions', []) if patient_data else []
-                prompt_labs = patient_data.get('labs', {}) if patient_data else {}
+                prompt_history = redact_value(patient_data.get('conditions', [])) if patient_data else []
+                prompt_labs = redact_value(patient_data.get('labs', {})) if patient_data else {}
+                safe_clinical_notes = redact_text(clinical_notes) if clinical_notes else None
                 
                 prompt = f"""
                 Patient Case Analysis:
                 - Demographics: Age {age}, Gender {gender}
                 - Symptoms: {', '.join(symptoms)}
                 - Vitals: {vitals}
-                - Clinical Notes: {clinical_notes or 'None'}
+                - Clinical Notes: {safe_clinical_notes or 'None'}
                 - Medical History: {prompt_history}
                 - Lab Results: {prompt_labs}
                 {guideline_context}
@@ -868,14 +876,16 @@ class DiagnosticAssistant:
              return {"summary": "AI summarization unavailable (Service down)", "source": "fallback"}
 
         notes_text = "\n".join(clinical_notes[-5:]) if clinical_notes else "No recent notes."
+        safe_notes_text = redact_text(notes_text)
+        safe_vitals = redact_value(recent_vitals)
         
         prompt = f"""
         Summarize this patient's medical status into a single professional sentence (the "One-Liner").
         
         Patient: {demographics.get('age')}yo {demographics.get('gender')}
-        Recent Vitals: {recent_vitals}
+        Recent Vitals: {safe_vitals}
         Recent Notes:
-        {notes_text}
+        {safe_notes_text}
         
         Format: "[Age/Sex] with [Key History] presenting with [Current Status]."
         Example: "45yo Male with history of T2DM and HTN presenting with acute chest pain and diaphoresis."

@@ -109,6 +109,14 @@ class RAGEngine:
         else:
             return text.lower().split()
 
+    def _normalize_tenant_key(self, tenant_id: Optional[str]) -> str:
+        """Normalize tenant identifier for safe cache key composition."""
+        if not tenant_id:
+            return "public"
+        raw = str(tenant_id).strip().lower()
+        safe = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in raw)
+        return (safe[:120] if safe else "public")
+
     def _build_bm25_index(self):
         """Builds in-memory BM25 index from ChromaDB documents."""
         try:
@@ -157,7 +165,13 @@ class RAGEngine:
             })
         return entities
 
-    def query(self, query: str, n_results: int = 3, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def query(
+        self,
+        query: str,
+        n_results: int = 3,
+        filters: Dict[str, Any] = None,
+        tenant_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """
         Retrieve relevant guideline snippets using Hybrid Search (Vector + BM25) and RRF.
         Returns structured citations.
@@ -169,7 +183,8 @@ class RAGEngine:
             # 0. Check Cache (key includes filters + n_results)
             filt_str = "nofilter" if not filters else json.dumps(filters, sort_keys=True)
             base = f"{query}|{filt_str}|n{n_results}"
-            cache_key = f"rag:query:{hashlib.md5(base.encode()).hexdigest()}"
+            tenant_key = self._normalize_tenant_key(tenant_id)
+            cache_key = f"rag:query:{tenant_key}:{hashlib.md5(base.encode()).hexdigest()}"
             if self.redis_client:
                 try:
                     cached_results = self.redis_client.get(cache_key)
@@ -178,7 +193,7 @@ class RAGEngine:
                             self.redis_client.incr("metrics:rag:cache_hit")
                         except Exception:
                             pass
-                        logger.info(f"Cache hit for query: {query}")
+                        logger.info("Cache hit for RAG query")
                         return json.loads(cached_results)
                 except Exception as e:
                     logger.warning(f"Cache read failed: {e}")

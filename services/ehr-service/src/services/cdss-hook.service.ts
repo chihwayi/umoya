@@ -89,7 +89,7 @@ export class CdssHookService {
       };
 
       const [risk, diagnosis] = await Promise.all([
-        this.cdssService.riskAssessment(riskPayload, tenantDb).catch((error) => {
+        this.cdssService.riskAssessment(riskPayload, tenantDb, payload.tenantId).catch((error) => {
           this.logger.warn(`CDSS risk hook failed: ${error?.message || error}`);
           return null;
         }),
@@ -100,7 +100,7 @@ export class CdssHookService {
             vitals: vitalsPayload,
             age,
             gender,
-          })
+          }, true, payload.tenantId)
           .catch((error) => {
             this.logger.warn(`CDSS diagnosis hook failed: ${error?.message || error}`);
             return null;
@@ -225,6 +225,7 @@ export class CdssHookService {
             vitals: formattedVitals,
           },
           tenantDb,
+          payload.tenantId,
         )
         .catch((error) => {
           this.logger.warn(`CDSS vitals risk hook failed: ${error?.message || error}`);
@@ -260,7 +261,7 @@ export class CdssHookService {
               age,
               gender,
               comorbidities: [],
-            })
+            }, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS lab guideline hook failed: ${error?.message || error}`);
               return null;
@@ -310,7 +311,7 @@ export class CdssHookService {
               age,
               gender,
               comorbidities: [],
-            })
+            }, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS imaging guideline hook failed: ${error?.message || error}`);
               return null;
@@ -365,7 +366,7 @@ export class CdssHookService {
               vitals: note.vital_signs ?? note.vitals,
               age,
               gender,
-            })
+            }, true, payload.tenantId)
             .catch((error) => {
               this.logger.warn(`CDSS nursing-note diagnosis hook failed: ${error?.message || error}`);
               return null;

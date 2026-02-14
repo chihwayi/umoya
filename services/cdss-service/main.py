@@ -8,9 +8,12 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from fastapi.responses import JSONResponse
+import time
 import uvicorn
 import httpx
 import os
+import hmac
 import shutil
 import tempfile
 import hashlib
@@ -31,6 +34,7 @@ from food_interactions import FoodInteractionChecker
 from ai_models.voice_scribe import VoiceScribe
 from ai_models.medical_vision import MedicalVisionService
 from settings_provider import SettingsProvider
+from privacy_guard import redact_text, redact_value
 import jwt
 import threading
 import pathlib
@@ -57,6 +61,159 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _get_bool_env_strict(name: str, default: str) -> bool:
+    raw = os.getenv(name, default)
+    if raw is None:
+        raw = default
+    val = str(raw).strip().lower()
+    if val not in ("true", "false"):
+        raise RuntimeError(f"Invalid {name} value '{raw}'. Expected 'true' or 'false'.")
+    return val == "true"
+
+
+def _validate_security_config() -> None:
+    """
+    Fail fast on critical security config drift.
+    """
+    env = os.getenv("ENVIRONMENT", "development").strip().lower()
+
+    # Strict boolean parsing for security switches
+    service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
+    _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
+
+    service_token = os.getenv("CDSS_SERVICE_TOKEN", "").strip()
+    if service_auth_required and not service_token:
+        raise RuntimeError("CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_TOKEN is missing.")
+
+    # Prevent insecure default token outside dev-like environments.
+    insecure_default = "dev_cdss_service_token_change_in_production"
+    if env not in ("dev", "development", "local", "test") and service_token == insecure_default:
+        raise RuntimeError("CDSS_SERVICE_TOKEN is using insecure default value in non-development environment.")
+
+
+_validate_security_config()
+SERVICE_AUTH_REQUIRED = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
+SERVICE_AUTH_TOKEN = os.getenv("CDSS_SERVICE_TOKEN", "")
+
+def _status_code_to_code(sc: int) -> str:
+    if sc == 400:
+        return "BAD_REQUEST"
+    if sc == 401:
+        return "UNAUTHORIZED"
+    if sc == 403:
+        return "FORBIDDEN"
+    if sc == 404:
+        return "NOT_FOUND"
+    if sc == 409:
+        return "CONFLICT"
+    if sc == 429:
+        return "TOO_MANY_REQUESTS"
+    if sc == 503:
+        return "SERVICE_UNAVAILABLE"
+    if sc >= 500:
+        return "INTERNAL_ERROR"
+    return "ERROR"
+
+
+def _normalize_tenant_cache_key(raw_tenant_id: Optional[str]) -> str:
+    if not raw_tenant_id:
+        return "public"
+    raw = str(raw_tenant_id).strip().lower()
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in raw)
+    return safe[:120] if safe else "public"
+
+
+def _tenant_cache_key_from_request(req: Request) -> str:
+    tenant_id = req.headers.get("x-tenant-id")
+    return _normalize_tenant_cache_key(tenant_id)
+
+@app.middleware("http")
+async def request_id_and_envelope_middleware(request: Request, call_next):
+    rid = request.headers.get("x-request-id") or str(uuid4())
+    request.state.request_id = rid
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+        try:
+            response.headers["X-Request-ID"] = rid
+        except Exception:
+            pass
+        return response
+    except HTTPException as he:
+        code = _status_code_to_code(he.status_code)
+        payload = {
+            "code": code,
+            "message": he.detail if isinstance(he.detail, str) else str(he.detail),
+            "details": None,
+            "requestId": rid,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        resp = JSONResponse(status_code=he.status_code, content=payload)
+        try:
+            resp.headers["X-Request-ID"] = rid
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        payload = {
+            "code": "INTERNAL_ERROR",
+            "message": "Unexpected server error",
+            "details": {"error": str(e)},
+            "requestId": rid,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        resp = JSONResponse(status_code=500, content=payload)
+        try:
+            resp.headers["X-Request-ID"] = rid
+        except Exception:
+            pass
+        return resp
+    finally:
+        duration_ms = int((time.monotonic() - start) * 1000)
+        try:
+            print(json.dumps({"requestId": rid, "path": str(request.url.path), "method": request.method, "duration_ms": duration_ms}))
+        except Exception:
+            pass
+
+
+@app.middleware("http")
+async def service_to_service_auth_middleware(request: Request, call_next):
+    """
+    Optional service-to-service authentication for non-admin CDSS routes.
+    Enable via CDSS_REQUIRE_SERVICE_AUTH=true and configure CDSS_SERVICE_TOKEN.
+    """
+    if not SERVICE_AUTH_REQUIRED:
+        return await call_next(request)
+
+    path = request.url.path
+    exempt_exact = {"/", "/health", "/openapi.json"}
+    exempt_prefixes = ("/docs", "/redoc", "/admin")
+
+    if path in exempt_exact or any(path.startswith(prefix) for prefix in exempt_prefixes):
+        return await call_next(request)
+
+    if not SERVICE_AUTH_TOKEN:
+        payload = {
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "CDSS service auth is enabled but CDSS_SERVICE_TOKEN is not configured",
+            "details": None,
+            "requestId": getattr(request.state, "request_id", str(uuid4())),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        return JSONResponse(status_code=503, content=payload)
+
+    provided_token = request.headers.get("x-service-token", "")
+    if not provided_token or not hmac.compare_digest(provided_token, SERVICE_AUTH_TOKEN):
+        payload = {
+            "code": "UNAUTHORIZED",
+            "message": "Invalid service authentication token",
+            "details": None,
+            "requestId": getattr(request.state, "request_id", str(uuid4())),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        return JSONResponse(status_code=401, content=payload)
+
+    return await call_next(request)
 
 # Request/Response Models
 class DrugInteractionRequest(BaseModel):
@@ -193,24 +350,27 @@ lab_interpreter = LabResultInterpreter()
 _INGEST_JOBS = {}
 _INGEST_LOCK = Lock()
 
-def require_owner(request: Request, response: Response, x_owner_email: str = Header(None), authorization: str = Header(None)) -> str:
+def require_owner(request: Request, response: Response, authorization: str = Header(None)) -> str:
     """
-    Owner gating with JWT verification:
-    - Prefer Authorization: Bearer <token>, extract email from JWT, check against OWNER_EMAILS
-    - Fallback to X-Owner-Email only if JWT not present
+    Owner gating with JWT verification only:
+    - Requires Authorization: Bearer <token>
+    - Extracts email from JWT and checks against OWNER_EMAILS
     """
     allow = os.getenv("OWNER_EMAILS", "")
     allowed = [e.strip().lower() for e in allow.split(",") if e.strip()]
-    # Try JWT first
-    email_from_jwt = None
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1].strip()
-        secret = os.getenv("JWT_SECRET", "medicore-super-secret-key")
-        try:
-            payload = jwt.decode(token, secret, algorithms=["HS256"])
-            email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
-        except Exception:
-            email_from_jwt = None
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Authorization bearer token required")
+
+    token = authorization.split(" ", 1)[1].strip()
+    secret = os.getenv("JWT_SECRET", "medicore-super-secret-key")
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if not email_from_jwt:
+        raise HTTPException(status_code=401, detail="Token missing required email/sub claim")
     # Rate limiting helper using Redis (if available)
     def _rate_limit(email: str):
         try:
@@ -258,17 +418,11 @@ def require_owner(request: Request, response: Response, x_owner_email: str = Hea
         except Exception:
             # Fail-open on rate limit errors
             return
-    if email_from_jwt:
-        if email_from_jwt in allowed:
-            _rate_limit(email_from_jwt)
-            return email_from_jwt
-        else:
-            raise HTTPException(status_code=403, detail="Owner access required (JWT)")
-    # Fallback header
-    if not x_owner_email or x_owner_email.lower() not in allowed:
+    if email_from_jwt not in allowed:
         raise HTTPException(status_code=403, detail="Owner access required")
-    _rate_limit(x_owner_email.lower())
-    return x_owner_email.lower()
+
+    _rate_limit(email_from_jwt)
+    return email_from_jwt
 
 @app.get("/admin/status")
 async def admin_status(owner: str = Depends(require_owner)):
@@ -553,10 +707,31 @@ class AuditQuery(BaseModel):
     offset: Optional[int] = 0
 
 @app.get("/admin/audit")
-async def admin_audit(limit: int = 50, offset: int = 0, owner: str = Depends(require_owner)):
+async def admin_audit(
+    limit: int = 50,
+    offset: int = 0,
+    actor: str | None = None,
+    action: str | None = None,
+    startDate: str | None = None,
+    endDate: str | None = None,
+    sortKey: str | None = "created_at",
+    sortDir: str | None = "desc",
+    owner: str = Depends(require_owner)
+):
     if not settings_provider:
         raise HTTPException(status_code=501, detail="Settings store unavailable")
-    logs = settings_provider.get_audit_logs(limit=limit, offset=offset)
+    sk = sortKey if sortKey in ["created_at", "actor", "action"] else "created_at"
+    sd = "asc" if (str(sortDir or "").lower() == "asc") else "desc"
+    logs = settings_provider.get_audit_logs(
+        limit=limit,
+        offset=offset,
+        actor=actor,
+        action=action,
+        start_date=startDate,
+        end_date=endDate,
+        sort_key=sk,
+        sort_dir=sd.upper(),
+    )
     return {"logs": logs, "limit": limit, "offset": offset}
 
 @app.post("/transcribe")
@@ -767,17 +942,19 @@ class GuidelineSearchRequest(BaseModel):
 
 
 @app.post("/guidelines/search")
-async def search_guidelines(request: GuidelineSearchRequest):
+async def search_guidelines(request: GuidelineSearchRequest, req: Request):
     """
     Search for clinical guidelines using RAG and optionally generate patient-specific analysis.
     """
     citations = []
     analysis = None
+    tenant_cache_key = _tenant_cache_key_from_request(req)
+    safe_query = redact_text(request.query)
     
     # 1. Retrieve relevant guidelines (RAG)
     if diagnostic_assistant.rag_engine:
         try:
-            print(f"[CDSS] Searching guidelines for: {request.query}")
+            print("[CDSS] Searching guidelines")
             
             # Construct Metadata Filters (Sprint 2: Context-Aware Retrieval)
             filters = {}
@@ -809,9 +986,10 @@ async def search_guidelines(request: GuidelineSearchRequest):
                 print(f"[CDSS] Applying RAG Filters: {filters}")
 
             citations = diagnostic_assistant.rag_engine.query(
-                request.query, 
+                safe_query,
                 n_results=request.limit,
-                filters=filters if filters else None
+                filters=filters if filters else None,
+                tenant_id=tenant_cache_key
             )
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
@@ -822,7 +1000,8 @@ async def search_guidelines(request: GuidelineSearchRequest):
             # Construct context-aware prompt
             context_str = ""
             if request.patient_context:
-                context_str = "\n".join([f"{k}: {v}" for k, v in request.patient_context.items()])
+                safe_patient_context = redact_value(request.patient_context)
+                context_str = "\n".join([f"{k}: {v}" for k, v in safe_patient_context.items()])
             else:
                 context_str = "No specific patient context provided. Answer generally."
 
@@ -838,7 +1017,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
             RELEVANT GUIDELINES:
             {guidelines_str[:12000]}
             
-            USER QUERY: {request.query}
+            USER QUERY: {safe_query}
             
             INSTRUCTIONS:
             1. FIRST, think step-by-step: Analyze the patient's vitals/demographics against the guidelines.
@@ -866,7 +1045,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
                 cache_ttl = 600
             if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
                 cache_client = diagnostic_assistant.rag_engine.redis_client
-            cache_key = f"llm:analysis:{hashlib.md5(prompt.encode()).hexdigest()}"
+            cache_key = f"llm:analysis:{tenant_cache_key}:{hashlib.md5(prompt.encode()).hexdigest()}"
             if cache_client:
                 try:
                     cached = cache_client.get(cache_key)
@@ -894,7 +1073,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
                         pass
             
         except Exception as e:
-            print(f"[CDSS] LLM analysis failed: {e}")
+            print("[CDSS] LLM analysis failed")
             analysis = f"Analysis generation failed due to a temporary error: {str(e)}. Please try again."
 
     return {
@@ -907,7 +1086,7 @@ async def search_guidelines(request: GuidelineSearchRequest):
 
 # Risk Scoring Algorithms
 @app.post("/risk/calculate")  # Removed response_model to allow additional fields (trends, visit_patterns)
-async def calculate_risk_score(request: RiskScoreRequest):
+async def calculate_risk_score(request: RiskScoreRequest, req: Request):
     """
     Calculate patient risk scores:
     - Cardiovascular risk (Framingham)
@@ -1066,6 +1245,7 @@ async def calculate_risk_score(request: RiskScoreRequest):
     
     # RAG-enhanced Guideline Citations
     guideline_citations = []
+    tenant_cache_key = _tenant_cache_key_from_request(req)
     if diagnostic_assistant.rag_engine:
         # Collect terms to search for based on high risks and diagnoses
         search_terms = []
@@ -1097,8 +1277,12 @@ async def calculate_risk_score(request: RiskScoreRequest):
             query_terms = search_terms[:3]
             query = f"Clinical guidelines for {', '.join(query_terms)}"
             try:
-                print(f"[CDSS] Querying RAG for risk guidelines: {query}")
-                retrieved_docs = diagnostic_assistant.rag_engine.query(query, n_results=3)
+                print("[CDSS] Querying RAG for risk guidelines")
+                retrieved_docs = diagnostic_assistant.rag_engine.query(
+                    redact_text(query),
+                    n_results=3,
+                    tenant_id=tenant_cache_key
+                )
                 if retrieved_docs:
                     guideline_citations = retrieved_docs
                     # Also add a general recommendation if we found citations
@@ -1240,7 +1424,7 @@ async def suggest_diagnosis(request: DiagnosisRequest):
 
 
 @app.post("/diagnosis/suggest/intelligent")
-async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
+async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Request):
     """
     Intelligent diagnostic assistance combining:
     - Rule-based CDSS (pattern matching, guidelines)
@@ -1271,7 +1455,8 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest):
         clinical_notes=request.clinical_notes,
         patient_data=patient_data if patient_data else None,
         age=request.age,
-        gender=request.gender
+        gender=request.gender,
+        tenant_id=_tenant_cache_key_from_request(req)
     )
     
     return {
