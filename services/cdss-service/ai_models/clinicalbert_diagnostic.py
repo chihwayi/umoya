@@ -20,6 +20,7 @@ except ImportError:
     logger.warning("Transformers library not available. AI features disabled.")
 
 from .model_loader import get_model_cache, is_ai_enabled
+from .llm_provider import LLMProvider
 
 # Import terminology mappers
 try:
@@ -81,6 +82,11 @@ class ClinicalBERTDiagnostic:
             except Exception as e:
                 logger.warning(f"Failed to initialize terminology mappers: {e}")
         
+        try:
+            self.llm_provider = LLMProvider()
+        except Exception:
+            self.llm_provider = None
+        
         # Always mark as initialized (lightweight mode always available)
         self._initialized = True
         
@@ -115,39 +121,141 @@ class ClinicalBERTDiagnostic:
             logger.warning(f"Failed to load ClinicalBERT model: {e}. Using fallback mode.")
             self._initialized = True
     
-    def _extract_entities_lightweight(self, text: str) -> Dict[str, List[str]]:
+    def _extract_entities_lightweight(self, text: str) -> Dict[str, Any]:
         """
-        Lightweight entity extraction from clinical text
-        Uses pattern matching and keyword extraction
+        Enhanced entity extraction from clinical text using Spacy Lemmatization
+        and SNOMED CT / ICD-10 mapping.
         """
+        # Initialize Spacy if not already loaded (lazy load)
+        if not hasattr(self, 'nlp') or self.nlp is None:
+            import spacy
+            try:
+                # Try scispaCy first (better for medical terms)
+                self.nlp = spacy.load("en_core_sci_sm")
+                logger.info("ClinicalBERT: Loaded scispaCy (en_core_sci_sm) for entity extraction")
+            except Exception:
+                try:
+                    # Fallback to standard model
+                    self.nlp = spacy.load("en_core_web_sm") 
+                    logger.info("ClinicalBERT: Loaded standard Spacy (en_core_web_sm)")
+                except Exception as e:
+                    logger.warning(f"ClinicalBERT: Failed to load Spacy: {e}. Using basic keyword matching.")
+                    self.nlp = None
+
         text_lower = text.lower()
         entities = {
             'symptoms': [],
+            'symptom_details': [], # New field with codes
             'signs': [],
             'medications': [],
             'conditions': [],
             'vitals_mentions': []
         }
+
+        # 1. Advanced Lemmatization & Mapping Strategy
+        if self.nlp:
+            doc = self.nlp(text_lower)
+            canonical_symptoms = {
+                'fever','cough','shortness_of_breath','chest_pain','abdominal_pain',
+                'nausea','vomiting','headache','dizziness','fatigue',
+                'throat_issues','nasal_symptoms','skin_issues','cardiovascular','neurological','psychiatric_cognitive'
+            }
+            lemma_normalization = {
+                'febrile':'fever','pyrexia':'fever','chill':'fever','sweat':'fever',
+                'vomit':'vomiting','emesis':'vomiting','nauseous':'nausea','queasy':'nausea',
+                'breathless':'shortness_of_breath','dyspnea':'shortness_of_breath','dyspnoea':'shortness_of_breath','wheeze':'shortness_of_breath',
+                'angina':'chest_pain','tightness':'chest_pain',
+                'abdomen':'abdominal_pain','belly':'abdominal_pain','tummy':'abdominal_pain','stomach':'abdominal_pain',
+                'dizzy':'dizziness'
+            }
+
+            # Process tokens
+            found_symptoms = set()
+            
+            # 1. Direct Lemma Matching
+            for token in doc:
+                lemma = token.lemma_
+                if lemma in canonical_symptoms:
+                    std_key = lemma
+                elif lemma in lemma_normalization:
+                    std_key = lemma_normalization[lemma]
+                else:
+                    continue
+                    if std_key not in found_symptoms:
+                        found_symptoms.add(std_key)
+                        entities['symptoms'].append(std_key)
+                    detail = {'name': std_key}
+                    if self.icd10_mapper:
+                        icd = self.icd10_mapper.get_icd10_for_symptom(std_key)
+                        if icd:
+                            detail['icd10'] = icd
+                    if self.snomed_mapper:
+                        snomed = self.snomed_mapper.get_snomed_for_symptom(std_key)
+                        if snomed:
+                            detail['snomed'] = snomed
+                    entities['symptom_details'].append(detail)
+            
+            # 2. Phrase Matching (Basic Noun Chunks) - "chest pain", "shortness of breath"
+            for chunk in doc.noun_chunks:
+                chunk_text = chunk.text.lower()
+                # Check for composite terms
+                if "chest" in chunk_text and "pain" in chunk_text:
+                    if 'chest_pain' not in found_symptoms:
+                        found_symptoms.add('chest_pain')
+                        entities['symptoms'].append('chest_pain')
+                        detail = {'name': 'chest_pain'}
+                        if self.icd10_mapper:
+                            icd = self.icd10_mapper.get_icd10_for_symptom('chest_pain')
+                            if icd:
+                                detail['icd10'] = icd
+                        if self.snomed_mapper:
+                            snomed = self.snomed_mapper.get_snomed_for_symptom('chest_pain')
+                            if snomed:
+                                detail['snomed'] = snomed
+                        entities['symptom_details'].append(detail)
+                elif "short" in chunk_text and "breath" in chunk_text:
+                     if 'shortness_of_breath' not in found_symptoms:
+                        found_symptoms.add('shortness_of_breath')
+                        entities['symptoms'].append('shortness_of_breath')
+                        detail = {'name': 'shortness_of_breath'}
+                        if self.icd10_mapper:
+                            icd = self.icd10_mapper.get_icd10_for_symptom('shortness_of_breath')
+                            if icd:
+                                detail['icd10'] = icd
+                        if self.snomed_mapper:
+                            snomed = self.snomed_mapper.get_snomed_for_symptom('shortness_of_breath')
+                            if snomed:
+                                detail['snomed'] = snomed
+                        entities['symptom_details'].append(detail)
+
+        else:
+            # FALLBACK: Use original keyword matching if Spacy fails
+            symptom_keywords = {
+                'fever': ['fever', 'pyrexia', 'temperature', 'hot', 'chills', 'rigors', 'febrile'],
+                'cough': ['cough', 'coughing', 'productive cough', 'dry cough', 'hemoptysis', 'hacking'],
+                'chest_pain': ['chest pain', 'chest discomfort', 'angina', 'pleuritic pain', 'tightness in chest'],
+                'shortness_of_breath': ['shortness of breath', 'sob', 'dyspnea', 'dyspnoea', 'breathless', 'air hunger'],
+                'headache': ['headache', 'head pain', 'cephalgia', 'migraine', 'throbbing head'],
+                'abdominal_pain': ['abdominal pain', 'stomach pain', 'belly pain', 'cramping', 'epigastric pain'],
+                'nausea': ['nausea', 'nauseous', 'feeling sick'],
+                'vomiting': ['vomiting', 'vomit', 'throwing up'],
+                'dizziness': ['dizziness', 'dizzy', 'vertigo', 'lightheaded'],
+                'fatigue': ['fatigue', 'tired', 'exhausted', 'weakness'],
+                'throat_issues': ['sore throat', 'pharyngitis', 'odynophagia', 'difficulty swallowing', 'dysphagia'],
+                'nasal_symptoms': ['congestion', 'rhinorrhea', 'runny nose', 'sneezing', 'post-nasal drip'],
+                'musculoskeletal': ['myalgia', 'arthralgia', 'joint pain', 'back pain', 'stiffness', 'body aches'],
+                'neurological': ['numbness', 'tingling', 'paresthesia', 'seizure', 'tremor', 'fainting', 'syncope'],
+                'psychiatric_cognitive': ['anxiety', 'depression', 'insomnia', 'confusion', 'hallucinations', 'irritability'],
+                'skin_issues': ['rash', 'pruritus', 'itching', 'jaundice', 'cyanosis', 'hives', 'lesion'],
+                'urinary_issues': ['dysuria', 'frequent urination', 'hematuria', 'incontinence', 'burning urination'],
+                'cardiovascular': ['palpitations', 'tachycardia', 'bradycardia', 'irregular heartbeat', 'edema', 'swelling']
+            }
+            
+            for symptom, keywords in symptom_keywords.items():
+                if any(keyword in text_lower for keyword in keywords):
+                    entities['symptoms'].append(symptom)
         
-        # Symptom patterns
-        symptom_keywords = {
-            'fever': ['fever', 'pyrexia', 'temperature', 'hot'],
-            'cough': ['cough', 'coughing', 'productive cough'],
-            'chest_pain': ['chest pain', 'chest discomfort', 'angina'],
-            'shortness_of_breath': ['shortness of breath', 'sob', 'dyspnea', 'dyspnoea', 'breathless'],
-            'headache': ['headache', 'head pain', 'cephalgia'],
-            'abdominal_pain': ['abdominal pain', 'stomach pain', 'belly pain', 'abdominal discomfort'],
-            'nausea': ['nausea', 'nauseous', 'feeling sick'],
-            'vomiting': ['vomiting', 'vomit', 'throwing up'],
-            'dizziness': ['dizziness', 'dizzy', 'vertigo', 'lightheaded'],
-            'fatigue': ['fatigue', 'tired', 'exhausted', 'weakness']
-        }
-        
-        for symptom, keywords in symptom_keywords.items():
-            if any(keyword in text_lower for keyword in keywords):
-                entities['symptoms'].append(symptom)
-        
-        # Vital sign mentions
+        # Vital sign mentions (Regex is robust enough for now)
         vitals_patterns = {
             'blood_pressure': r'\b(?:bp|blood pressure)\s*(?:is|:)?\s*(\d+/\d+)',
             'heart_rate': r'\b(?:hr|heart rate|pulse)\s*(?:is|:)?\s*(\d+)',
@@ -249,51 +357,78 @@ class ClinicalBERTDiagnostic:
         analysis = self._analyze_text_semantics(clinical_text)
         entities = analysis['entities']
         
-        # Map symptoms to potential diagnoses (enhanced with Zimbabwe-specific patterns)
-        symptom_diagnosis_map = {
-            'fever': [
-                {'diagnosis': 'Malaria', 'probability': 0.35},  # High prevalence in Zimbabwe
-                {'diagnosis': 'Viral Upper Respiratory Infection', 'probability': 0.25},
-                {'diagnosis': 'Bacterial Pneumonia', 'probability': 0.15},
-                {'diagnosis': 'Tuberculosis', 'probability': 0.12},  # High prevalence
-                {'diagnosis': 'Urinary Tract Infection', 'probability': 0.08},
-                {'diagnosis': 'COVID-19', 'probability': 0.05}
-            ],
-            'cough': [
-                {'diagnosis': 'Tuberculosis', 'probability': 0.30},  # High prevalence in Zimbabwe
-                {'diagnosis': 'Acute Bronchitis', 'probability': 0.25},
-                {'diagnosis': 'Pneumonia', 'probability': 0.20},
-                {'diagnosis': 'Asthma Exacerbation', 'probability': 0.12},
-                {'diagnosis': 'COPD Exacerbation', 'probability': 0.08},
-                {'diagnosis': 'HIV-related Opportunistic Infection', 'probability': 0.05}  # Common in Zimbabwe
-            ],
-            'chest_pain': [
-                {'diagnosis': 'Acute Coronary Syndrome', 'probability': 0.25},
-                {'diagnosis': 'GERD/Reflux', 'probability': 0.20},
-                {'diagnosis': 'Musculoskeletal Pain', 'probability': 0.18},
-                {'diagnosis': 'Pneumonia', 'probability': 0.15}
-            ],
-            'shortness_of_breath': [
-                {'diagnosis': 'Heart Failure', 'probability': 0.28},
-                {'diagnosis': 'COPD Exacerbation', 'probability': 0.22},
-                {'diagnosis': 'Asthma', 'probability': 0.18},
-                {'diagnosis': 'Pneumonia', 'probability': 0.15}
-            ],
-            'abdominal_pain': [
-                {'diagnosis': 'Gastroenteritis', 'probability': 0.30},
-                {'diagnosis': 'Appendicitis', 'probability': 0.20},
-                {'diagnosis': 'Irritable Bowel Syndrome', 'probability': 0.15}
-            ]
-        }
         
-        # Aggregate diagnoses from symptoms
         diagnosis_scores = {}
         
-        # Check for Zimbabwe-specific conditions first
+        llm_results = None
+        if getattr(self, 'llm_provider', None):
+            try:
+                import asyncio
+                schema = '{"diagnoses":[{"name":"string","probability":"number between 0 and 1"}]}'
+                symptoms_list = entities.get('symptoms', [])
+                vitals_list = entities.get('vitals_mentions', [])
+                prompt = (
+                    "Given these symptoms and vitals from clinical notes, list top 8 differential diagnoses "
+                    "with probabilities between 0 and 1.\n"
+                    f"Symptoms: {', '.join(symptoms_list)}\n"
+                    f"Vitals: {vitals_list}\n"
+                    "Return JSON only."
+                )
+                llm_results = asyncio.run(self.llm_provider.generate_json(prompt, schema))
+            except Exception as e:
+                logger.debug(f"LLM generation failed: {e}")
+                llm_results = None
+        
+        if llm_results and isinstance(llm_results, dict) and 'diagnoses' in llm_results:
+            for item in llm_results['diagnoses']:
+                name = item.get('name')
+                prob = float(item.get('probability', 0))
+                if not name:
+                    continue
+                if ZIMBABWE_TERMINOLOGY_AVAILABLE:
+                    try:
+                        mult = get_zimbabwe_disease_multiplier(name)
+                        prob = prob * mult
+                    except Exception:
+                        pass
+                if name not in diagnosis_scores:
+                    diagnosis_scores[name] = {'diagnosis': name, 'probability': prob, 'supporting_symptoms': symptoms_list or []}
+                else:
+                    diagnosis_scores[name]['probability'] = max(diagnosis_scores[name]['probability'], prob)
+        else:
+            fallback_map = {
+                'fever': ['Malaria','Viral Upper Respiratory Infection','Bacterial Pneumonia','Tuberculosis','Urinary Tract Infection','COVID-19'],
+                'cough': ['Tuberculosis','Acute Bronchitis','Pneumonia','Asthma Exacerbation','COPD Exacerbation'],
+                'chest_pain': ['Acute Coronary Syndrome','GERD/Reflux','Musculoskeletal Pain','Pneumonia'],
+                'shortness_of_breath': ['Heart Failure','COPD Exacerbation','Asthma','Pneumonia'],
+                'abdominal_pain': ['Gastroenteritis','Appendicitis','Irritable Bowel Syndrome','Peptic Ulcer Disease'],
+                'nausea': ['Gastroenteritis','Food Poisoning','Migraine','Pregnancy'],
+                'vomiting': ['Gastroenteritis','Food Poisoning','Intestinal Obstruction'],
+                'headache': ['Tension Headache','Migraine','Sinusitis','Hypertension'],
+                'dizziness': ['Benign Paroxysmal Positional Vertigo','Dehydration','Anemia','Hypoglycemia'],
+                'fatigue': ['Anemia','Hypothyroidism','Depression','Viral Infection']
+            }
+            base_probs = {
+                0: 0.35, 1: 0.25, 2: 0.18, 3: 0.12, 4: 0.08, 5: 0.05
+            }
+            for symptom in entities.get('symptoms', []):
+                if symptom in fallback_map:
+                    for idx, diag in enumerate(fallback_map[symptom]):
+                        prob = base_probs.get(idx, 0.05)
+                        if ZIMBABWE_TERMINOLOGY_AVAILABLE:
+                            try:
+                                prob = prob * get_zimbabwe_disease_multiplier(diag)
+                            except Exception:
+                                pass
+                        if diag not in diagnosis_scores:
+                            diagnosis_scores[diag] = {'diagnosis': diag, 'probability': prob, 'supporting_symptoms': [symptom]}
+                        else:
+                            diagnosis_scores[diag]['probability'] = min(diagnosis_scores[diag]['probability'] + (prob * 0.3), 0.95)
+                            diagnosis_scores[diag]['supporting_symptoms'].append(symptom)
+        
         if ZIMBABWE_TERMINOLOGY_AVAILABLE:
             zimbabwe_conditions = extract_zimbabwe_conditions(clinical_text)
             for condition in zimbabwe_conditions:
-                # Map to standard diagnosis names
                 condition_map = {
                     'hiv': 'HIV/AIDS',
                     'tuberculosis': 'Tuberculosis',
@@ -306,34 +441,9 @@ class ClinicalBERTDiagnostic:
                 if diag_name not in diagnosis_scores:
                     diagnosis_scores[diag_name] = {
                         'diagnosis': diag_name,
-                        'probability': 0.25,  # Base probability for detected condition
+                        'probability': 0.25,
                         'supporting_symptoms': ['zimbabwe_condition_detected']
                     }
-        
-        for symptom in entities.get('symptoms', []):
-            if symptom in symptom_diagnosis_map:
-                for diag_info in symptom_diagnosis_map[symptom]:
-                    diag_name = diag_info['diagnosis']
-                    prob = diag_info['probability']
-                    
-                    # Apply Zimbabwe-specific multiplier
-                    if ZIMBABWE_TERMINOLOGY_AVAILABLE:
-                        multiplier = get_zimbabwe_disease_multiplier(diag_name)
-                        prob = prob * multiplier
-                    
-                    if diag_name not in diagnosis_scores:
-                        diagnosis_scores[diag_name] = {
-                            'diagnosis': diag_name,
-                            'probability': prob,
-                            'supporting_symptoms': [symptom]
-                        }
-                    else:
-                        # Increase probability if multiple symptoms support
-                        diagnosis_scores[diag_name]['probability'] = min(
-                            diagnosis_scores[diag_name]['probability'] + (prob * 0.3),
-                            0.95
-                        )
-                        diagnosis_scores[diag_name]['supporting_symptoms'].append(symptom)
         
         # Sort by probability
         suggestions = sorted(

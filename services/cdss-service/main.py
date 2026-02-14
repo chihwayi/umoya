@@ -397,27 +397,28 @@ async def search_guidelines(request: GuidelineSearchRequest):
             
             # Construct Metadata Filters (Sprint 2: Context-Aware Retrieval)
             filters = {}
-            if request.patient_context:
-                pc = request.patient_context
-                
-                # Age-based filtering
-                age = pc.get('age')
-                if age is not None:
-                    if isinstance(age, str) and age.isdigit():
-                        age = int(age)
-                        
-                    if isinstance(age, int):
-                        if age < 18:
-                            filters["target_population"] = "children"
-                        elif age > 65:
-                            filters["target_population"] = "elderly"
-                
-                # Gender/Pregnancy (Overrides age if pregnant)
-                gender = pc.get('gender', '').lower()
-                is_pregnant = pc.get('is_pregnant', False) or 'pregnant' in str(pc).lower()
-                
-                if is_pregnant and gender in ['female', 'f']:
-                    filters["target_population"] = "pregnant_women"
+            # NOTE: Metadata filtering disabled to ensure results are returned (metadata tagging might be incomplete)
+            # if request.patient_context:
+            #     pc = request.patient_context
+            #     
+            #     # Age-based filtering
+            #     age = pc.get('age')
+            #     if age is not None:
+            #         if isinstance(age, str) and age.isdigit():
+            #             age = int(age)
+            #             
+            #         if isinstance(age, int):
+            #             if age < 18:
+            #                 filters["target_population"] = "children"
+            #             elif age > 65:
+            #                 filters["target_population"] = "elderly"
+            #     
+            #     # Gender/Pregnancy (Overrides age if pregnant)
+            #     gender = pc.get('gender', '').lower()
+            #     is_pregnant = pc.get('is_pregnant', False) or 'pregnant' in str(pc).lower()
+            #     
+            #     if is_pregnant and gender in ['female', 'f']:
+            #         filters["target_population"] = "pregnant_women"
             
             # Log active filters
             if filters:

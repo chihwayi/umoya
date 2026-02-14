@@ -48,7 +48,10 @@ class RAGEngine:
                 settings=Settings(anonymized_telemetry=False)
             )
             self.collection = self.chroma_client.get_or_create_collection(name="medical_guidelines")
+            
+            count = self.collection.count()
             logger.info(f"ChromaDB initialized at {self.persistence_path} (Telemetry Disabled)")
+            logger.info(f"📚 Loaded Medical Guidelines Collection. Total Documents: {count}")
 
             # 2. Initialize Embedding Model & Cross-Encoder
             # Bi-Encoder for fast retrieval
