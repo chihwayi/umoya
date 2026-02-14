@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { TenantService } from './tenant.service';
 import { CreateClinicUserDto } from '../dto/create-clinic-user.dto';
 import { TenantUser as TenantUserEntity, UserRole, UserStatus } from '../entities/tenant-user.entity';
@@ -44,7 +45,7 @@ export class TenantDatabaseService {
       type: 'postgres',
       url: tenant.connectionString,
       synchronize: false,
-      logging: true, // Enable logging to debug connection issues
+      logging: false,
     });
 
     await dataSource.initialize();
@@ -65,8 +66,12 @@ export class TenantDatabaseService {
         throw new Error('User with this email already exists in this clinic');
       }
 
-      // Hash password - default to 'MediCore@123' if not provided
-      const password = createUserDto.temporaryPassword || 'MediCore@123';
+      if (!createUserDto.temporaryPassword) {
+        throw new Error('Temporary password is required when creating a clinic user');
+      }
+
+      // Hash password supplied by admin/UI flow
+      const password = createUserDto.temporaryPassword;
       const passwordHash = await bcrypt.hash(password, 10);
 
       const query = `
@@ -182,155 +187,171 @@ export class TenantDatabaseService {
 
   async changePassword(tenantId: string, userId: string, newPassword: string): Promise<TenantUser> {
     const connection = await this.getTenantConnection(tenantId);
-    
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    
-    const query = `
-      UPDATE users 
-      SET password_hash = $1, must_change_password = false, password_changed_at = NOW(), updated_at = NOW()
-      WHERE id = $2
-      RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
-    `;
 
-    const result = await connection.query(query, [passwordHash, userId]);
-    
-    if (result.length === 0) {
-      throw new NotFoundException('User not found');
+    try {
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      
+      const query = `
+        UPDATE users 
+        SET password_hash = $1, must_change_password = false, password_changed_at = NOW(), updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
+      `;
+
+      const result = await connection.query(query, [passwordHash, userId]);
+      
+      if (result.length === 0) {
+        throw new NotFoundException('User not found');
+      }
+
+      const user = result[0];
+
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+        licenseNumber: user.license_number,
+        specialization: user.specialization,
+        phone: user.phone,
+        isActive: user.is_active,
+        mustChangePassword: user.must_change_password,
+        passwordChangedAt: user.password_changed_at,
+        lastLogin: user.last_login,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+      };
+    } finally {
+      await connection.destroy();
     }
-
-    const user = result[0];
-
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      role: user.role,
-      licenseNumber: user.license_number,
-      specialization: user.specialization,
-      phone: user.phone,
-      isActive: user.is_active,
-      mustChangePassword: user.must_change_password,
-      passwordChangedAt: user.password_changed_at,
-      lastLogin: user.last_login,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-    };
   }
 
   async updateUserStatus(tenantId: string, userId: string, isActive: boolean): Promise<TenantUser> {
     const connection = await this.getTenantConnection(tenantId);
-    
-    const query = `
-      UPDATE users 
-      SET is_active = $1, updated_at = NOW()
-      WHERE id = $2
-      RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
-    `;
 
-    const result = await connection.query(query, [isActive, userId]);
-    
-    if (result.length === 0) {
-      throw new NotFoundException('User not found');
-    }
-
-    const user = result[0];
-
-    // Sync to master database
     try {
-      const status = isActive ? UserStatus.ACTIVE : UserStatus.INACTIVE;
-      await this.tenantUserRepository.update(
-        { email: user.email, tenantId },
-        { status }
-      );
-      this.logger.log(`Synced user status update for ${user.email} to master database`);
-    } catch (error) {
-      this.logger.error(`Failed to sync user status update to master database: ${error.message}`);
-    }
+      const query = `
+        UPDATE users 
+        SET is_active = $1, updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
+      `;
 
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      role: user.role,
-      licenseNumber: user.license_number,
-      specialization: user.specialization,
-      phone: user.phone,
-      isActive: user.is_active,
-      mustChangePassword: user.must_change_password,
-      passwordChangedAt: user.password_changed_at,
-      lastLogin: user.last_login,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-    };
+      const result = await connection.query(query, [isActive, userId]);
+      
+      if (result.length === 0) {
+        throw new NotFoundException('User not found');
+      }
+
+      const user = result[0];
+
+      // Sync to master database
+      try {
+        const status = isActive ? UserStatus.ACTIVE : UserStatus.INACTIVE;
+        await this.tenantUserRepository.update(
+          { email: user.email, tenantId },
+          { status }
+        );
+        this.logger.log(`Synced user status update for ${user.email} to master database`);
+      } catch (error) {
+        this.logger.error(`Failed to sync user status update to master database: ${error.message}`);
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+        licenseNumber: user.license_number,
+        specialization: user.specialization,
+        phone: user.phone,
+        isActive: user.is_active,
+        mustChangePassword: user.must_change_password,
+        passwordChangedAt: user.password_changed_at,
+        lastLogin: user.last_login,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+      };
+    } finally {
+      await connection.destroy();
+    }
   }
 
-  async resetPassword(tenantId: string, userId: string): Promise<TenantUser> {
+  async resetPassword(tenantId: string, userId: string): Promise<{ user: TenantUser; temporaryPassword: string }> {
     const connection = await this.getTenantConnection(tenantId);
-    
-    // Generate a temporary password
-    const tempPassword = Math.random().toString(36).slice(-8);
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
-    
-    const query = `
-      UPDATE users 
-      SET password_hash = $1, must_change_password = true, password_changed_at = NULL, updated_at = NOW()
-      WHERE id = $2
-      RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
-    `;
 
-    const result = await connection.query(query, [passwordHash, userId]);
-    
-    if (result.length === 0) {
-      throw new NotFoundException('User not found');
+    try {
+      // Generate a cryptographically strong temporary password.
+      const tempPassword = randomBytes(12).toString('base64url').slice(0, 16);
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      
+      const query = `
+        UPDATE users 
+        SET password_hash = $1, must_change_password = true, password_changed_at = NULL, updated_at = NOW()
+        WHERE id = $2
+        RETURNING id, email, first_name, last_name, role, license_number, specialization, phone, is_active, must_change_password, password_changed_at, last_login, created_at, updated_at
+      `;
+
+      const result = await connection.query(query, [passwordHash, userId]);
+      
+      if (result.length === 0) {
+        throw new NotFoundException('User not found');
+      }
+
+      const user = result[0];
+      
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          role: user.role,
+          licenseNumber: user.license_number,
+          specialization: user.specialization,
+          phone: user.phone,
+          isActive: user.is_active,
+          mustChangePassword: user.must_change_password,
+          passwordChangedAt: user.password_changed_at,
+          lastLogin: user.last_login,
+          createdAt: user.created_at,
+          updatedAt: user.updated_at,
+        },
+        temporaryPassword: tempPassword,
+      };
+    } finally {
+      await connection.destroy();
     }
-
-    const user = result[0];
-    
-    // Log the temporary password for admin to provide to user
-    this.logger.warn(`🔑 TEMPORARY PASSWORD for ${user.email}: ${tempPassword} - User MUST change on first login`);
-    
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      role: user.role,
-      licenseNumber: user.license_number,
-      specialization: user.specialization,
-      phone: user.phone,
-      isActive: user.is_active,
-      mustChangePassword: user.must_change_password,
-      passwordChangedAt: user.password_changed_at,
-      lastLogin: user.last_login,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-    };
   }
 
   async deleteUser(tenantId: string, userId: string): Promise<void> {
     const connection = await this.getTenantConnection(tenantId);
-    
-    // RETURNING email to allow sync
-    const query = `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING email`;
-    const result = await connection.query(query, [userId]);
-    
-    // Check if any row was returned (result is array of rows)
-    if (result.length === 0) {
-      throw new NotFoundException('User not found');
-    }
 
-    // Sync to master database
     try {
-      const email = result[0].email;
-      await this.tenantUserRepository.update(
-        { email, tenantId },
-        { status: UserStatus.INACTIVE } // Soft delete in master
-      );
-      this.logger.log(`Synced user deletion (soft) for ${email} to master database`);
-    } catch (error) {
-      this.logger.error(`Failed to sync user deletion to master database: ${error.message}`);
+      // RETURNING email to allow sync
+      const query = `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING email`;
+      const result = await connection.query(query, [userId]);
+      
+      // Check if any row was returned (result is array of rows)
+      if (result.length === 0) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Sync to master database
+      try {
+        const email = result[0].email;
+        await this.tenantUserRepository.update(
+          { email, tenantId },
+          { status: UserStatus.INACTIVE } // Soft delete in master
+        );
+        this.logger.log(`Synced user deletion (soft) for ${email} to master database`);
+      } catch (error) {
+        this.logger.error(`Failed to sync user deletion to master database: ${error.message}`);
+      }
+    } finally {
+      await connection.destroy();
     }
   }
 

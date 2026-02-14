@@ -136,13 +136,7 @@ export class TenantService {
       const result = await this.masterDb.query(tenantQuery, [tenantIdentifier]);
       
       if (!result || result.length === 0) {
-        this.logger.warn(`Tenant not found in registry: ${tenantIdentifier}. Attempting fallback connection.`);
-        const fallbackConnection = await this.tryFallbackTenantConnection(tenantIdentifier);
-        if (fallbackConnection) {
-          this.tenantConnections.set(tenantIdentifier, fallbackConnection);
-          return fallbackConnection;
-        }
-        this.logger.error(`Unable to resolve tenant "${tenantIdentifier}". Ensure the tenant exists and is active.`);
+        this.logger.warn(`Tenant not found in active registry: ${tenantIdentifier}`);
         return null;
       }
 
@@ -302,30 +296,4 @@ export class TenantService {
     return dataSource;
   }
 
-  private async tryFallbackTenantConnection(tenantIdentifier: string): Promise<DataSource | null> {
-    const normalized = tenantIdentifier.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-    const candidates = Array.from(
-      new Set([
-        tenantIdentifier,
-        normalized,
-        `tenant_${normalized}`,
-        `clinic_${normalized}`,
-        `clinic_${normalized}_db`,
-      ]),
-    );
-
-    for (const candidate of candidates) {
-      try {
-        const connection = await this.createTenantConnection(candidate);
-        this.logger.warn(
-          `Connected to fallback tenant database "${candidate}" for identifier "${tenantIdentifier}". Please register this tenant in the master database.`,
-        );
-        return connection;
-      } catch (error) {
-        this.logger.debug(`Fallback connection attempt failed for database "${candidate}": ${error?.message || error}`);
-      }
-    }
-
-    return null;
-  }
 }

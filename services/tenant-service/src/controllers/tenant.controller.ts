@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantService } from '../services/tenant.service';
@@ -6,6 +6,10 @@ import { StorageService } from '../services/storage.service';
 import { CreateTenantDto } from '../dto/create-tenant.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { Tenant, TenantStatus } from '../entities/tenant.entity';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+
+type SafeTenant = Omit<Tenant, 'connectionString'>;
+type PublicTenant = Pick<Tenant, 'id' | 'subdomain' | 'clinicName' | 'status' | 'logoUrl'>;
 
 @ApiTags('tenants')
 @ApiBearerAuth()
@@ -16,7 +20,25 @@ export class TenantController {
     private readonly storageService: StorageService
   ) {}
 
+  private toSafeTenant(tenant: Tenant): SafeTenant {
+    // Never expose direct tenant DB credentials through API responses.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { connectionString, ...safeTenant } = tenant;
+    return safeTenant;
+  }
+
+  private toPublicTenant(tenant: Tenant): PublicTenant {
+    return {
+      id: tenant.id,
+      subdomain: tenant.subdomain,
+      clinicName: tenant.clinicName,
+      status: tenant.status,
+      logoUrl: tenant.logoUrl,
+    };
+  }
+
   @Post('logo')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -38,60 +60,82 @@ export class TenantController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create new tenant' })
   @ApiResponse({ status: 201, description: 'Tenant created successfully' })
   async createTenant(
     @Body(ValidationPipe) createTenantDto: CreateTenantDto
-  ): Promise<{ tenant: Tenant; message: string }> {
+  ): Promise<{ tenant: SafeTenant; message: string }> {
     const tenant = await this.tenantService.createTenant(createTenantDto);
     return {
-      tenant,
+      tenant: this.toSafeTenant(tenant),
       message: 'Tenant created successfully. Database provisioning in progress.'
     };
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get all tenants' })
   @ApiResponse({ status: 200, description: 'List of all tenants' })
-  async getAllTenants(): Promise<Tenant[]> {
-    return this.tenantService.getAllTenants();
+  async getAllTenants(): Promise<SafeTenant[]> {
+    const tenants = await this.tenantService.getAllTenants();
+    return tenants.map((tenant) => this.toSafeTenant(tenant));
   }
 
-  @Get(':id')
-  async getTenantById(@Param('id') id: string): Promise<Tenant> {
-    return this.tenantService.findById(id);
+  @Get('active')
+  @ApiOperation({ summary: 'Get active tenants (public-safe payload)' })
+  @ApiResponse({ status: 200, description: 'List of active tenants' })
+  async getActiveTenants(): Promise<PublicTenant[]> {
+    const tenants = await this.tenantService.getAllTenants();
+    return tenants
+      .filter((tenant) => tenant.status === TenantStatus.ACTIVE)
+      .map((tenant) => this.toPublicTenant(tenant));
   }
 
   @Get('subdomain/:subdomain')
-  async getTenantBySubdomain(@Param('subdomain') subdomain: string): Promise<Tenant> {
-    return this.tenantService.findBySubdomain(subdomain);
+  async getTenantBySubdomain(@Param('subdomain') subdomain: string): Promise<PublicTenant> {
+    const tenant = await this.tenantService.findBySubdomain(subdomain);
+    return this.toPublicTenant(tenant);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  async getTenantById(@Param('id') id: string): Promise<SafeTenant> {
+    const tenant = await this.tenantService.findById(id);
+    return this.toSafeTenant(tenant);
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Update tenant details' })
   @ApiResponse({ status: 200, description: 'Tenant updated successfully' })
   async updateTenant(
     @Param('id') id: string,
     @Body(ValidationPipe) updateTenantDto: UpdateTenantDto
-  ): Promise<Tenant> {
-    return this.tenantService.updateTenant(id, updateTenantDto);
+  ): Promise<SafeTenant> {
+    const tenant = await this.tenantService.updateTenant(id, updateTenantDto);
+    return this.toSafeTenant(tenant);
   }
 
   @Put(':id/status')
+  @UseGuards(JwtAuthGuard)
   async updateTenantStatus(
     @Param('id') id: string,
     @Body('status') status: TenantStatus
-  ): Promise<Tenant> {
-    return this.tenantService.updateTenantStatus(id, status);
+  ): Promise<SafeTenant> {
+    const tenant = await this.tenantService.updateTenantStatus(id, status);
+    return this.toSafeTenant(tenant);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
   async deleteTenant(@Param('id') id: string): Promise<{ message: string }> {
     await this.tenantService.deleteTenant(id);
     return { message: 'Tenant deleted successfully' };
   }
 
   @Get(':id/health')
+  @UseGuards(JwtAuthGuard)
   async checkTenantHealth(@Param('id') id: string): Promise<{ status: string; database: string }> {
     const tenant = await this.tenantService.findById(id);
     return {

@@ -3,6 +3,9 @@
 ## Overview
 MediCore EHR is a multi-tenant, microservices-based Electronic Health Record system designed for healthcare facilities in Zimbabwe and the SADC region.
 
+Related docs:
+- [Request/Data Flows](./request-data-flows.md)
+
 ## High-Level Architecture
 
 ```

@@ -7,6 +7,11 @@
 - Improve performance and perceived latency via shared caches and request coalescing.
 - Establish repeatable quality gates for every sprint: DB provisioning, lint checks, unit tests, integration tests, data validation, and Git hygiene.
 
+Related execution docs:
+
+- `docs/plans/microservice-communication-hardening-sprint.md`
+- `docs/plans/microservice-communication-task-board.md`
+
 ## Current Architecture (Summary)
 
 - Web Admin (3011): React web-app that proxies to tenant-service (/api) and ehr-service (/api/terminology). No CDSS admin UI today.
@@ -181,4 +186,3 @@
 - [x] Git hygiene for Chroma artifacts and local PDFs.
 
 > The above establishes a stable base for the new owner-focused CDSS Admin module.
-

@@ -24,7 +24,12 @@ async function bootstrap() {
   const corsOrigins = envConfig.security.corsOrigins;
   
   app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : true, // Default to true if not specified (development only)
+    origin:
+      corsOrigins.length > 0
+        ? corsOrigins
+        : process.env.NODE_ENV === 'development'
+          ? true
+          : false,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With', 'x-session-id'],

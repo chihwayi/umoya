@@ -14,7 +14,7 @@ if (!TENANT_API_URL || !EHR_API_URL || !CDSS_API_URL) {
 const createAxiosInstance = (baseURL: string) => {
   const instance = axios.create({ baseURL });
   
-  // Request interceptor to add session ID
+  // Request interceptor to add session ID and X-Request-ID
   instance.interceptors.request.use(
     (config) => {
       let sessionId = localStorage.getItem('ehr_session_id');
@@ -23,6 +23,12 @@ const createAxiosInstance = (baseURL: string) => {
         localStorage.setItem('ehr_session_id', sessionId);
       }
       config.headers['x-session-id'] = sessionId;
+      try {
+        const existing = (config.headers as any)?.['X-Request-ID'] || (config.headers as any)?.['x-request-id'];
+        if (!existing) {
+          (config.headers as any)['X-Request-ID'] = uuidv4();
+        }
+      } catch {}
       return config;
     },
     (error) => Promise.reject(error)
@@ -51,8 +57,8 @@ export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 export const tenantApi = {
   getActiveTenants: async () => {
-    const response = await tenantAxios.get('/tenants');
-    return { data: response.data.filter((tenant: any) => tenant.status === 'active') };
+    const response = await tenantAxios.get('/tenants/active');
+    return { data: response.data };
   },
   getTenantBySlug: async (slug: string) => {
     const response = await tenantAxios.get(`/tenants/subdomain/${slug}`);
@@ -6960,4 +6966,3 @@ export const cdssApi = {
     return { data: response.data };
   }
 };
-

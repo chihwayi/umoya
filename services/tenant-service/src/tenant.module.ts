@@ -26,12 +26,25 @@ import { TenantAnalytics } from './entities/tenant-analytics.entity';
 import { AdminUser } from './entities/admin-user.entity';
 import { AuditLog } from './entities/audit-log.entity';
 
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.trim().length > 0) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    return 'dev-only-tenant-secret-change-me';
+  }
+
+  throw new Error('JWT_SECRET is required for tenant-service outside development/test');
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
     ScheduleModule.forRoot(),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'medicore-super-secret-key',
+      secret: resolveJwtSecret(),
       signOptions: { expiresIn: '24h' },
     }),
     TypeOrmModule.forRoot({

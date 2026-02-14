@@ -15,53 +15,40 @@ export class TenantMiddleware implements NestMiddleware {
   constructor(private tenantService: TenantService) {}
 
   async use(req: RequestWithTenant, res: Response, next: NextFunction) {
-    console.log('🔧 [TenantMiddleware] Processing request:', req.method, req.originalUrl);
-    console.log('🔧 [TenantMiddleware] Headers:', JSON.stringify(req.headers, null, 2));
-    
-    // Skip middleware for public endpoints that don't require tenant
-    // NestJS strips the global prefix 'api' from req.path, so '/api/tenants/active' becomes '/tenants/active'
-    const requestPath = (req.path || '').split('?')[0];
-    const originalUrl = (req.originalUrl || req.url || '').split('?')[0] || '';
-    const method = req.method || '';
-    
-    // Check if this is the tenants/active endpoint (public, no tenant required)
-    // Match all possible path variations (with/without /api prefix, case insensitive)
-    const pathLower = requestPath.toLowerCase();
-    const urlLower = originalUrl.toLowerCase();
-    
-    // Comprehensive check for public tenant endpoints (active list and subdomain lookup)
-    const isPublicTenantEndpoint = 
-      pathLower.includes('tenants/active') ||
-      pathLower.includes('tenants/subdomain') ||
-      urlLower.includes('tenants/active') ||
-      urlLower.includes('tenants/subdomain') ||
-      pathLower.includes('terminology/import') ||
-      urlLower.includes('terminology/import') ||
-      (method.toUpperCase() === 'GET' && pathLower.includes('tenants') && (pathLower.includes('active') || pathLower.includes('subdomain')));
+    const requestPath = ((req.path || '').split('?')[0] || '').toLowerCase();
+    const originalPath = ((req.originalUrl || req.url || '').split('?')[0] || '').toLowerCase();
+
+    const normalize = (pathValue: string) => pathValue.replace(/^\/api\//, '/').replace(/\/+/g, '/');
+    const normalizedPath = normalize(requestPath);
+    const normalizedOriginal = normalize(originalPath);
+
+    const isPublicTenantEndpoint = (
+      normalizedPath === '/tenants/active' ||
+      normalizedOriginal === '/tenants/active' ||
+      normalizedPath.startsWith('/tenants/subdomain/') ||
+      normalizedOriginal.startsWith('/tenants/subdomain/') ||
+      normalizedPath.startsWith('/terminology/import/') ||
+      normalizedOriginal.startsWith('/terminology/import/')
+    );
     
     if (isPublicTenantEndpoint) {
       return next();
     }
 
     const tenantId = req.headers['x-tenant-id'] as string;
-    console.log('🔧 [TenantMiddleware] Tenant ID:', tenantId);
     
     if (!tenantId) {
-      console.log('❌ [TenantMiddleware] No tenant ID provided');
       throw new BadRequestException('Tenant ID is required');
     }
 
     // Validate tenant and get database connection
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     if (!tenantDb) {
-      console.log('❌ [TenantMiddleware] Invalid tenant:', tenantId);
       throw new BadRequestException('Invalid tenant');
     }
 
     req.tenantId = tenantId;
     req.tenantDb = tenantDb;
-    console.log('✅ [TenantMiddleware] Tenant set successfully:', tenantId);
-    console.log('✅ [TenantMiddleware] Calling next() for:', req.originalUrl);
     
     next();
   }

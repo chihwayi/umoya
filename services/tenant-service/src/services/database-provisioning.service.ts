@@ -29,6 +29,13 @@ export class DatabaseProvisioningService {
 
   constructor(private dataSource: DataSource) {}
 
+  private assertSafeDatabaseName(databaseName: string): void {
+    // Allow quoted Postgres identifier characters we use in generated tenant DB names.
+    if (!/^[a-zA-Z0-9_-]+$/.test(databaseName)) {
+      throw new Error(`Unsafe database name: ${databaseName}`);
+    }
+  }
+
   private emitProvisioningEvent(event: string, details: Record<string, any>) {
     this.logger.log(JSON.stringify({ source: 'provisioning', event, ...details }));
   }
@@ -579,6 +586,7 @@ export class DatabaseProvisioningService {
 
   async createDatabase(databaseName: string): Promise<string> {
     try {
+      this.assertSafeDatabaseName(databaseName);
       this.logger.log(`Creating database: ${databaseName}`);
       
       // Create database
@@ -6609,12 +6617,16 @@ RECOMMENDATIONS:
 
   async deleteDatabase(databaseName: string): Promise<void> {
     try {
+      this.assertSafeDatabaseName(databaseName);
       // Terminate connections to the database
-      await this.dataSource.query(`
+      await this.dataSource.query(
+        `
         SELECT pg_terminate_backend(pid)
         FROM pg_stat_activity
-        WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()
-      `);
+        WHERE datname = $1 AND pid <> pg_backend_pid()
+      `,
+        [databaseName],
+      );
       
       // Drop database
       await this.dataSource.query(`DROP DATABASE IF EXISTS "${databaseName}"`);

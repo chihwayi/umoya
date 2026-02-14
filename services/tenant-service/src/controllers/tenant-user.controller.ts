@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, ValidationPipe, UseGuards } from '@nestjs/common';
 import { TenantDatabaseService, TenantUser } from '../services/tenant-database.service';
 import { CreateClinicUserDto } from '../dto/create-clinic-user.dto';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('tenants/:tenantId/users')
+@UseGuards(JwtAuthGuard)
 export class TenantUserController {
   constructor(private readonly tenantDatabaseService: TenantDatabaseService) {}
 
@@ -49,10 +51,11 @@ export class TenantUserController {
   async resetPassword(
     @Param('tenantId') tenantId: string,
     @Param('userId') userId: string
-  ): Promise<{ user: TenantUser; message: string }> {
-    const user = await this.tenantDatabaseService.resetPassword(tenantId, userId);
+  ): Promise<{ user: TenantUser; temporaryPassword: string; message: string }> {
+    const { user, temporaryPassword } = await this.tenantDatabaseService.resetPassword(tenantId, userId);
     return {
       user,
+      temporaryPassword,
       message: 'Password reset successfully. User must change password on first login.'
     };
   }

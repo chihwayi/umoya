@@ -6,10 +6,15 @@ import { AuthService, JwtPayload } from '../services/auth.service';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private authService: AuthService) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if ((!jwtSecret || jwtSecret.trim().length === 0) && process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
+      throw new Error('JWT_SECRET is required for JwtStrategy outside development/test');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'medicore-super-secret-key',
+      secretOrKey: jwtSecret || 'dev-only-tenant-secret-change-me',
     });
   }
 
