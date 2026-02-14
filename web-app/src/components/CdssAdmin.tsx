@@ -13,19 +13,22 @@ export const CdssAdmin: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [metrics, setMetrics] = useState<any>(null);
+  const [audit, setAudit] = useState<{ logs: any[]; limit: number; offset: number } | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
     setMessage('');
     try {
-      const [st, se, me] = await Promise.all([
+      const [st, se, me, au] = await Promise.all([
         cdssAdminAPI.getStatus(),
         cdssAdminAPI.getSettings(),
         cdssAdminAPI.getMetrics(),
+        cdssAdminAPI.getAuditLogs(20, 0),
       ]);
       setStatus(st);
       setSettings(se?.settings || se);
       setMetrics(me);
+      setAudit({ logs: au?.logs || [], limit: 20, offset: 0 });
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load CDSS admin data');
     } finally {
@@ -109,6 +112,20 @@ export const CdssAdmin: React.FC = () => {
       setMessage('Metrics refreshed');
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load metrics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefreshAudit = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const au = await cdssAdminAPI.getAuditLogs(20, 0);
+      setAudit({ logs: au?.logs || [], limit: 20, offset: 0 });
+      setMessage('Audit logs refreshed');
+    } catch (e: any) {
+      setMessage(e?.response?.data?.detail || 'Failed to load audit logs');
     } finally {
       setLoading(false);
     }
@@ -208,7 +225,37 @@ export const CdssAdmin: React.FC = () => {
           <button onClick={handleFlushCache} className="px-4 py-2 rounded bg-rose-600 text-white">Flush Cache</button>
         </div>
       </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold text-slate-700">Audit Logs</div>
+          <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
+        </div>
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500">
+                <th className="py-2 pr-4">Time</th>
+                <th className="py-2 pr-4">Actor</th>
+                <th className="py-2 pr-4">Action</th>
+                <th className="py-2 pr-4">Payload</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(audit?.logs || []).map((log, idx) => (
+                <tr key={idx} className="border-t border-slate-100">
+                  <td className="py-2 pr-4 text-slate-700">{log.created_at}</td>
+                  <td className="py-2 pr-4">{log.actor}</td>
+                  <td className="py-2 pr-4">{log.action}</td>
+                  <td className="py-2 pr-4 text-xs text-slate-500">
+                    <pre className="whitespace-pre-wrap">{JSON.stringify(log.payload || {}, null, 2)}</pre>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
-

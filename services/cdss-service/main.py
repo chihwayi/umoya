@@ -31,6 +31,7 @@ from food_interactions import FoodInteractionChecker
 from ai_models.voice_scribe import VoiceScribe
 from ai_models.medical_vision import MedicalVisionService
 from settings_provider import SettingsProvider
+import jwt
 import threading
 import pathlib
 import redis as redis_pkg
@@ -188,12 +189,30 @@ async def startup_event():
 
 lab_interpreter = LabResultInterpreter()
 
-def require_owner(x_owner_email: str = Header(None)) -> str:
+def require_owner(request: Request, x_owner_email: str = Header(None), authorization: str = Header(None)) -> str:
     """
-    Phase 1 owner gating: verify X-Owner-Email against OWNER_EMAILS.
+    Owner gating with JWT verification:
+    - Prefer Authorization: Bearer <token>, extract email from JWT, check against OWNER_EMAILS
+    - Fallback to X-Owner-Email only if JWT not present
     """
     allow = os.getenv("OWNER_EMAILS", "")
     allowed = [e.strip().lower() for e in allow.split(",") if e.strip()]
+    # Try JWT first
+    email_from_jwt = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        secret = os.getenv("JWT_SECRET", "medicore-super-secret-key")
+        try:
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+            email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
+        except Exception:
+            email_from_jwt = None
+    if email_from_jwt:
+        if email_from_jwt in allowed:
+            return email_from_jwt
+        else:
+            raise HTTPException(status_code=403, detail="Owner access required (JWT)")
+    # Fallback header
     if not x_owner_email or x_owner_email.lower() not in allowed:
         raise HTTPException(status_code=403, detail="Owner access required")
     return x_owner_email
@@ -353,6 +372,17 @@ async def admin_metrics(owner: str = Depends(require_owner)):
         except Exception:
             pass
     return {"documents": docs, "cache_keys": cache_keys}
+
+class AuditQuery(BaseModel):
+    limit: Optional[int] = 50
+    offset: Optional[int] = 0
+
+@app.get("/admin/audit")
+async def admin_audit(limit: int = 50, offset: int = 0, owner: str = Depends(require_owner)):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    logs = settings_provider.get_audit_logs(limit=limit, offset=offset)
+    return {"logs": logs, "limit": limit, "offset": offset}
 
 @app.post("/transcribe")
 async def transcribe_audio(

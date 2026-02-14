@@ -126,6 +126,33 @@ class SettingsProvider:
         except Exception as e:
             logger.warning(f"Failed to write audit log: {e}")
 
+    def get_audit_logs(self, limit: int = 50, offset: int = 0) -> list[dict]:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT actor, action, payload, created_at
+                    FROM cdss_admin_audit_logs
+                    ORDER BY created_at DESC
+                    LIMIT %s OFFSET %s;
+                    """,
+                    (limit, offset),
+                )
+                rows = cur.fetchall()
+                result = []
+                for r in rows:
+                    actor, action, payload, created_at = r
+                    result.append({
+                        "actor": actor,
+                        "action": action,
+                        "payload": payload,
+                        "created_at": created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                    })
+                return result
+        except Exception as e:
+            logger.warning(f"Failed to fetch audit logs: {e}")
+            return []
+
     def close(self) -> None:
         try:
             if self.conn:

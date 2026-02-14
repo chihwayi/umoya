@@ -272,5 +272,9 @@ export const cdssAdminAPI = {
   getMetrics: async (): Promise<any> => {
     const response = await api.get('/cdss-admin/admin/metrics', { headers: { ...getOwnerHeaders() } });
     return response.data;
+  },
+  getAuditLogs: async (limit = 50, offset = 0): Promise<any> => {
+    const response = await api.get(`/cdss-admin/admin/audit?limit=${limit}&offset=${offset}`, { headers: { ...getOwnerHeaders() } });
+    return response.data;
   }
 };
