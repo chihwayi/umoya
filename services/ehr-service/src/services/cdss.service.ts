@@ -28,10 +28,11 @@ export class CdssService {
     // Add request interceptor for debugging
     this.cdssClient.interceptors.request.use(request => {
       if (this.cdssServiceToken) {
-        const headers = AxiosHeaders.from(request.headers);
-        headers.set('X-Service-Token', this.cdssServiceToken);
-        headers.set('X-Service-Name', 'ehr-service');
-        request.headers = headers;
+        if (!request.headers) {
+          request.headers = new AxiosHeaders();
+        }
+        (request.headers as AxiosHeaders).set('X-Service-Token', this.cdssServiceToken);
+        (request.headers as AxiosHeaders).set('X-Service-Name', 'ehr-service');
       }
       this.logger.log(`[CDSS] Request to: ${request.url}`);
       return request;
