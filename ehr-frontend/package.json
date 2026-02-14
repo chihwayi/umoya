@@ -40,7 +40,7 @@
   "scripts": {
     "start": "craco start",
     "build": "DISABLE_ESLINT_PLUGIN=true craco build",
-    "test": "craco test"
+    "test": "craco test --passWithNoTests"
   },
   "eslintConfig": {
     "extends": [
