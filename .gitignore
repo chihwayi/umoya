@@ -115,3 +115,11 @@ htmlcov/
 # Data
 downloads/
 who-smart-guidelines-repos/
+
+# RAG vector DB artifacts (local, auto-generated)
+data/chroma_db/
+services/cdss-service/data/chroma_db/
+
+# Local guideline PDFs and debug helpers (not for source control)
+services/cdss-service/who-smart-guidelines/dak/
+services/cdss-service/debug_rag.py
