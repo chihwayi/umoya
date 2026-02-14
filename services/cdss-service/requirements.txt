@@ -32,6 +32,7 @@ psycopg2-binary>=2.9.9
 spacy>=3.7.0
 scispacy>=0.5.4
 PyJWT>=2.9.0
+cryptography>=42.0.0
 
 # Voice AI
 faster-whisper>=1.0.0

@@ -1,10 +1,10 @@
 import os
-import json
 import logging
 from typing import Any, Dict, Optional
 
 import psycopg2
 from psycopg2.extras import Json
+from envelope_crypto import EnvelopeCrypto
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class SettingsProvider:
     """
 
     def __init__(self) -> None:
+        self.crypto = EnvelopeCrypto()
         self.conn = None
         self._connect()
         self._ensure_tables()
@@ -63,6 +64,31 @@ class SettingsProvider:
                 );
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cdss_encryption_keys (
+                  key_id TEXT PRIMARY KEY,
+                  provider TEXT NOT NULL,
+                  key_fingerprint TEXT,
+                  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                  rotated_at TIMESTAMPTZ DEFAULT NOW(),
+                  created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                """
+            )
+            if self.crypto.enabled:
+                cur.execute(
+                    """
+                    INSERT INTO cdss_encryption_keys (key_id, provider, key_fingerprint, is_active, rotated_at)
+                    VALUES (%s, %s, %s, TRUE, NOW())
+                    ON CONFLICT (key_id) DO UPDATE
+                      SET provider = EXCLUDED.provider,
+                          key_fingerprint = EXCLUDED.key_fingerprint,
+                          is_active = TRUE,
+                          rotated_at = NOW();
+                    """,
+                    (self.crypto.key_id, self.crypto.provider, self.crypto.key_fingerprint()),
+                )
 
     def get_settings(self) -> Dict[str, Any]:
         with self.conn.cursor() as cur:
@@ -84,13 +110,14 @@ class SettingsProvider:
                 }
                 self.set_settings(defaults, actor="system", action="init_defaults")
                 return defaults
-            return row[0]
+            return self.crypto.decrypt_json(row[0])
 
     def set_settings(self, settings: Dict[str, Any], actor: str, action: str) -> Dict[str, Any]:
         # Merge with existing
         current = self.get_settings()
         merged = {**current, **settings}
         with self.conn.cursor() as cur:
+            encrypted_payload = self.crypto.encrypt_json(merged)
             cur.execute(
                 """
                 INSERT INTO system_settings (key, value, updated_at)
@@ -98,16 +125,17 @@ class SettingsProvider:
                 ON CONFLICT (key) DO UPDATE
                 SET value = EXCLUDED.value, updated_at = NOW();
                 """,
-                ("cdss_settings", Json(merged)),
+                ("cdss_settings", Json(encrypted_payload)),
             )
             # Audit
             try:
+                audit_payload = self.crypto.encrypt_json(settings)
                 cur.execute(
                     """
                     INSERT INTO cdss_admin_audit_logs (actor, action, payload)
                     VALUES (%s, %s, %s);
                     """,
-                    (actor, action, Json(settings)),
+                    (actor, action, Json(audit_payload)),
                 )
             except Exception as e:
                 logger.warning(f"Failed to write audit log: {e}")
@@ -116,12 +144,13 @@ class SettingsProvider:
     def log_action(self, actor: str, action: str, payload: Optional[Dict[str, Any]] = None) -> None:
         try:
             with self.conn.cursor() as cur:
+                audit_payload = self.crypto.encrypt_json(payload or {})
                 cur.execute(
                     """
                     INSERT INTO cdss_admin_audit_logs (actor, action, payload)
                     VALUES (%s, %s, %s);
                     """,
-                    (actor, action, Json(payload or {})),
+                    (actor, action, Json(audit_payload)),
                 )
         except Exception as e:
             logger.warning(f"Failed to write audit log: {e}")
@@ -170,6 +199,10 @@ class SettingsProvider:
                 result = []
                 for r in rows:
                     actor, action, payload, created_at = r
+                    try:
+                        payload = self.crypto.decrypt_json(payload)
+                    except Exception:
+                        payload = {"_error": "payload_decrypt_failed"}
                     result.append({
                         "actor": actor,
                         "action": action,

@@ -82,6 +82,8 @@ def _validate_security_config() -> None:
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
+    encryption_enabled = _get_bool_env_strict("CDSS_ENCRYPTION_ENABLED", "true")
+    _get_bool_env_strict("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS", "true")
 
     service_token = os.getenv("CDSS_SERVICE_TOKEN", "").strip()
     if service_auth_required and not service_token:
@@ -108,6 +110,21 @@ def _validate_security_config() -> None:
     owner_emails = [e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()]
     if env not in ("dev", "development", "local", "test") and not owner_emails:
         raise RuntimeError("OWNER_EMAILS must be configured in non-development environment.")
+
+    if encryption_enabled:
+        provider = os.getenv("CDSS_ENCRYPTION_PROVIDER", "local").strip().lower() or "local"
+        if provider not in ("local", "kms"):
+            raise RuntimeError("CDSS_ENCRYPTION_PROVIDER must be one of: local, kms.")
+        encryption_key = os.getenv("CDSS_ENCRYPTION_KEY", "").strip()
+        if not encryption_key:
+            raise RuntimeError("CDSS_ENCRYPTION_ENABLED=true but CDSS_ENCRYPTION_KEY is missing.")
+        encryption_key_id = os.getenv("CDSS_ENCRYPTION_KEY_ID", "").strip()
+        if not encryption_key_id:
+            raise RuntimeError("CDSS_ENCRYPTION_KEY_ID is required when CDSS_ENCRYPTION_ENABLED=true.")
+
+        insecure_default_enc = "h7X7Tr_3k0-Tl3xw8tS9AqK3f7fjoGv0VGfT3d2i-9o="
+        if env not in ("dev", "development", "local", "test") and encryption_key == insecure_default_enc:
+            raise RuntimeError("CDSS_ENCRYPTION_KEY is using insecure default in non-development environment.")
 
 
 _validate_security_config()
