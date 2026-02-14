@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Import local mappers
 from .icd10_mapper import Icd10Mapper
 from .snomed_mapper import SnomedMapper
+from outbound_guard import assert_egress_allowed
 
 
 class TerminologyService:
@@ -55,9 +56,11 @@ class TerminologyService:
         # Optionally query EHR service for more comprehensive lookup
         if use_ehr_service and self.use_ehr_service:
             try:
+                endpoint = f"{self.ehr_service_url}/api/terminology/icd10/search"
+                assert_egress_allowed(endpoint, purpose="terminology_icd10_lookup")
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     response = await client.get(
-                        f"{self.ehr_service_url}/api/terminology/icd10/search",
+                        endpoint,
                         params={'term': diagnosis, 'limit': 1},
                     )
                     if response.status_code == 200:
@@ -97,9 +100,11 @@ class TerminologyService:
         # Optionally query EHR service
         if use_ehr_service and self.use_ehr_service:
             try:
+                endpoint = f"{self.ehr_service_url}/api/terminology/snomed/search"
+                assert_egress_allowed(endpoint, purpose="terminology_snomed_lookup")
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     response = await client.get(
-                        f"{self.ehr_service_url}/api/terminology/snomed/search",
+                        endpoint,
                         params={'term': finding, 'limit': 1},
                     )
                     if response.status_code == 200:
@@ -149,5 +154,4 @@ class TerminologyService:
             List of enriched diagnosis dictionaries
         """
         return [self.enrich_diagnosis_with_codes(diag) for diag in diagnoses]
-
 

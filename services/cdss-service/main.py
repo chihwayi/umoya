@@ -81,6 +81,7 @@ def _validate_security_config() -> None:
     # Strict boolean parsing for security switches
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
+    _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
 
     service_token = os.getenv("CDSS_SERVICE_TOKEN", "").strip()
     if service_auth_required and not service_token:

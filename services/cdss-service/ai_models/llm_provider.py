@@ -5,6 +5,7 @@ import hashlib
 import httpx
 from typing import Optional, Dict, Any, List
 from privacy_guard import redact_text
+from outbound_guard import assert_egress_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class LLMProvider:
         #    return self._available
 
         try:
+            assert_egress_allowed(f"{self.base_url}/api/tags", purpose="llm_availability")
             async with httpx.AsyncClient(timeout=5.0) as client:
                 # Ollama has a /api/tags endpoint to list models
                 response = await client.get(f"{self.base_url}/api/tags")
@@ -98,6 +100,7 @@ class LLMProvider:
             payload["format"] = "json"
 
         try:
+            assert_egress_allowed(f"{self.base_url}/api/generate", purpose="llm_generate")
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(f"{self.base_url}/api/generate", json=payload)
                 response.raise_for_status()
