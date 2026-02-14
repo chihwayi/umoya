@@ -99,6 +99,8 @@ services:
       - MINIO_BUCKET=medicore-documents
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - CDSS_USE_EHR_TERMINOLOGY=true
+      - JWT_SECRET=${JWT_SECRET}
+      - OWNER_EMAILS=${OWNER_EMAILS:-owner@medicore.local}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_ENABLED=true
       - ANONYMIZED_TELEMETRY=False

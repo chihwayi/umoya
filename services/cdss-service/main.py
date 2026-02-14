@@ -86,16 +86,34 @@ def _validate_security_config() -> None:
     service_token = os.getenv("CDSS_SERVICE_TOKEN", "").strip()
     if service_auth_required and not service_token:
         raise RuntimeError("CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_TOKEN is missing.")
+    if service_auth_required and len(service_token) < 24:
+        raise RuntimeError("CDSS_SERVICE_TOKEN must be at least 24 characters when service auth is enabled.")
 
     # Prevent insecure default token outside dev-like environments.
     insecure_default = "dev_cdss_service_token_change_in_production"
     if env not in ("dev", "development", "local", "test") and service_token == insecure_default:
         raise RuntimeError("CDSS_SERVICE_TOKEN is using insecure default value in non-development environment.")
 
+    jwt_secret = os.getenv("JWT_SECRET", "").strip()
+    insecure_jwt_defaults = {
+        "dev_secret_key_change_in_production",
+        "medicore-super-secret-key",
+        "ehr-super-secret-key",
+    }
+    if not jwt_secret:
+        raise RuntimeError("JWT_SECRET is required for CDSS admin JWT verification.")
+    if env not in ("dev", "development", "local", "test") and (jwt_secret in insecure_jwt_defaults or len(jwt_secret) < 24):
+        raise RuntimeError("JWT_SECRET is insecure for non-development environment.")
+
+    owner_emails = [e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()]
+    if env not in ("dev", "development", "local", "test") and not owner_emails:
+        raise RuntimeError("OWNER_EMAILS must be configured in non-development environment.")
+
 
 _validate_security_config()
 SERVICE_AUTH_REQUIRED = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
 SERVICE_AUTH_TOKEN = os.getenv("CDSS_SERVICE_TOKEN", "")
+ADMIN_JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 
 def _status_code_to_code(sc: int) -> str:
     if sc == 400:
@@ -389,9 +407,8 @@ def require_owner(request: Request, response: Response, authorization: str = Hea
         raise HTTPException(status_code=401, detail="Authorization bearer token required")
 
     token = authorization.split(" ", 1)[1].strip()
-    secret = os.getenv("JWT_SECRET", "medicore-super-secret-key")
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        payload = jwt.decode(token, ADMIN_JWT_SECRET, algorithms=["HS256"])
         email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
