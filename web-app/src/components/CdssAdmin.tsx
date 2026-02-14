@@ -20,6 +20,7 @@ export const CdssAdmin: React.FC = () => {
   const [ingestJobs, setIngestJobs] = useState<any[]>([]);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [refreshSecs, setRefreshSecs] = useState<number>(5);
+  const runningCount = ingestJobs.filter(j => j.status === 'running').length;
 
   const loadAll = async () => {
     setLoading(true);
@@ -66,6 +67,12 @@ export const CdssAdmin: React.FC = () => {
     };
   }, [autoRefresh, refreshSecs]);
 
+  useEffect(() => {
+    if (runningCount === 0 && autoRefresh) {
+      setAutoRefresh(false);
+    }
+  }, [runningCount]);
+
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
@@ -96,6 +103,7 @@ export const CdssAdmin: React.FC = () => {
       const res = await cdssAdminAPI.ingest(file || undefined);
       const jobId = res?.jobId || res?.job_id;
       setMessage(jobId ? `Ingestion started • Job ${jobId}` : 'Ingestion started');
+      setAutoRefresh(true);
       try {
         const jobs = await cdssAdminAPI.getIngestJobs(20);
         setIngestJobs(jobs?.jobs || []);
@@ -325,7 +333,14 @@ export const CdssAdmin: React.FC = () => {
           </div>
         </div>
         <div>
-          <div className="text-xs font-semibold text-slate-500 uppercase mt-2 mb-1">Jobs</div>
+          <div className="flex items-center justify-between mt-2 mb-1">
+            <div className="text-xs font-semibold text-slate-500 uppercase">Jobs</div>
+            <div className="text-xs">
+              <span className={`inline-block px-2 py-0.5 rounded ${runningCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                Running: {runningCount}
+              </span>
+            </div>
+          </div>
           <div className="overflow-auto">
             <table className="min-w-full text-sm">
               <thead>
