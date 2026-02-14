@@ -139,6 +139,71 @@ services:
     networks:
       - medicore-network
 
+  cdss-worker:
+    build:
+      context: ./services/cdss-service
+      dockerfile: Dockerfile
+    container_name: medicore-cdss-worker
+    command: ["python", "worker_main.py"]
+    healthcheck:
+      disable: true
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT}
+      - REDIS_URL=${SERVICE_REDIS_URL}
+      - PYTHONUNBUFFERED=1
+      - CDSS_ENABLE_AI=${CDSS_ENABLE_AI:-true}
+      - CDSS_REQUIRE_SERVICE_AUTH=${CDSS_REQUIRE_SERVICE_AUTH:-true}
+      - CDSS_SERVICE_AUTH_MODE=${CDSS_SERVICE_AUTH_MODE:-both}
+      - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN:-dev_cdss_service_token_change_in_production}
+      - CDSS_SERVICE_JWT_SECRET=${CDSS_SERVICE_JWT_SECRET:-dev_cdss_service_jwt_secret_change_in_production}
+      - CDSS_SERVICE_AUTH_ISSUER=${CDSS_SERVICE_AUTH_ISSUER:-medicore.ehr-service}
+      - CDSS_SERVICE_AUTH_AUDIENCE=${CDSS_SERVICE_AUTH_AUDIENCE:-medicore.cdss}
+      - CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT=${CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT:-false}
+      - CDSS_PHI_REDACTION_ENABLED=${CDSS_PHI_REDACTION_ENABLED:-true}
+      - CDSS_BLOCK_OUTBOUND_PHI=${CDSS_BLOCK_OUTBOUND_PHI:-true}
+      - CDSS_STRICT_EGRESS_ALLOWLIST=${CDSS_STRICT_EGRESS_ALLOWLIST:-true}
+      - CDSS_ENCRYPTION_ENABLED=${CDSS_ENCRYPTION_ENABLED:-true}
+      - CDSS_ENCRYPTION_PROVIDER=${CDSS_ENCRYPTION_PROVIDER:-local}
+      - CDSS_ENCRYPTION_KEY_ID=${CDSS_ENCRYPTION_KEY_ID:-local-dev-v1}
+      - CDSS_ENCRYPTION_KEY=${CDSS_ENCRYPTION_KEY:-h7X7Tr_3k0-Tl3xw8tS9AqK3f7fjoGv0VGfT3d2i-9o=}
+      - CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS=${CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS:-true}
+      - CDSS_JOB_WORKER_ENABLED=${CDSS_JOB_WORKER_ENABLED:-true}
+      - CDSS_JOB_QUEUE_NAME=${CDSS_JOB_QUEUE_NAME:-cdss:jobs:queue}
+      - CDSS_JOB_DLQ_NAME=${CDSS_JOB_DLQ_NAME:-cdss:jobs:dead_letter}
+      - CDSS_JOB_WORKER_POLL_SECONDS=${CDSS_JOB_WORKER_POLL_SECONDS:-5}
+      - CDSS_EGRESS_ALLOWLIST=${CDSS_EGRESS_ALLOWLIST:-}
+      - MOCK_VISION_AI=${MOCK_VISION_AI}
+      - MINIO_ENDPOINT=${SERVICE_MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=medicore-documents
+      - EHR_SERVICE_URL=${SERVICE_EHR_URL}
+      - CDSS_USE_EHR_TERMINOLOGY=true
+      - JWT_SECRET=${JWT_SECRET}
+      - OWNER_EMAILS=${OWNER_EMAILS:-owner@medicore.local}
+      - CDSS_OWNER_SCOPE_STRICT=${CDSS_OWNER_SCOPE_STRICT:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - LLM_ENABLED=true
+      - ANONYMIZED_TELEMETRY=False
+      - LLM_API_URL=${LLM_API_URL:-http://host.docker.internal:11434}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME:-llama3.1:latest}
+      - LLM_TIMEOUT_SECONDS=300
+      - WHISPER_API_KEY=${WHISPER_API_KEY}
+      - CHROMA_ANONYMIZED_TELEMETRY=False
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./services/cdss-service:/app
+      - ./data/chroma_db:/app/data/chroma_db
+    depends_on:
+      - redis
+      - postgres-master
+      - minio
+    networks:
+      - medicore-network
+
   ehr-service:
     build:
       context: .
