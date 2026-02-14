@@ -1033,6 +1033,19 @@ class SettingsPayload(BaseModel):
     cache_ttl_seconds: Optional[int] = None
     cache_namespace: Optional[str] = None
     allow_pdf_uploads: Optional[bool] = None
+    ai_min_confidence_score: Optional[float] = None
+    ai_require_citations: Optional[bool] = None
+    ai_min_citation_count: Optional[int] = None
+    ai_abstain_on_low_confidence: Optional[bool] = None
+
+
+class ModelRegistryEntryPayload(BaseModel):
+    model_id: str
+    model_type: Optional[str] = "custom"
+    provider: Optional[str] = "custom"
+    version: Optional[str] = "unknown"
+    status: Optional[str] = "active"
+    config: Optional[Dict[str, Any]] = None
 
 @app.get("/admin/settings")
 async def get_admin_settings(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
@@ -1050,6 +1063,24 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
         raise HTTPException(status_code=400, detail="cache_ttl_seconds must be a non-negative integer")
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
+
+
+@app.get("/admin/models")
+async def admin_models(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    return {"models": settings_provider.get_model_registry(active_only=False)}
+
+
+@app.post("/admin/models")
+async def admin_models_upsert(payload: ModelRegistryEntryPayload, owner: str = Depends(require_owner_scope("cdss.admin.settings.write"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    try:
+        saved = settings_provider.upsert_model_registry_entry(actor=owner, entry=payload.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "model": saved}
 
 @app.post("/admin/ingest")
 async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
@@ -2078,6 +2109,15 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         patient_data['labs'] = request.labs
     if request.conditions:
         patient_data['conditions'] = request.conditions
+
+    cfg = settings_provider.get_settings() if settings_provider else {}
+    model_registry = settings_provider.get_active_model_registry_map() if settings_provider else {}
+    governance_policy = {
+        "min_confidence_score": cfg.get("ai_min_confidence_score", 0.55),
+        "require_citations": cfg.get("ai_require_citations", True),
+        "min_citation_count": cfg.get("ai_min_citation_count", 1),
+        "abstain_on_low_confidence": cfg.get("ai_abstain_on_low_confidence", True),
+    }
     
     # Get intelligent suggestions
     result = await diagnostic_assistant.intelligent_suggest(
@@ -2087,7 +2127,9 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         patient_data=patient_data if patient_data else None,
         age=request.age,
         gender=request.gender,
-        tenant_id=_tenant_cache_key_from_request(req)
+        tenant_id=_tenant_cache_key_from_request(req),
+        governance_policy=governance_policy,
+        model_registry=model_registry,
     )
     
     return {
@@ -2103,7 +2145,10 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         "rule_based_contributions": result.get('rule_based_contributions', 0),
         "ai_contributions": result.get('ai_contributions', 0),
         "total_sources": result.get('total_sources', 1),
-        "explanation": result.get('explanation', 'Combined results from rule-based CDSS and AI models')
+        "explanation": result.get('explanation', 'Combined results from rule-based CDSS and AI models'),
+        "safety_gate": result.get("safety_gate", {}),
+        "abstained": result.get("abstained", False),
+        "model_registry": result.get("model_registry", {}),
     }
 
 

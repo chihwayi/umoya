@@ -100,6 +100,23 @@ class SettingsProvider:
                 """
             )
             cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cdss_model_registry (
+                  model_id TEXT PRIMARY KEY,
+                  model_type TEXT NOT NULL,
+                  provider TEXT NOT NULL,
+                  version TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'active',
+                  config JSONB NOT NULL DEFAULT '{}'::jsonb,
+                  created_at TIMESTAMPTZ DEFAULT NOW(),
+                  updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);"
+            )
+            cur.execute(
                 "ALTER TABLE cdss_admin_jobs ADD COLUMN IF NOT EXISTS dead_lettered BOOLEAN NOT NULL DEFAULT FALSE;"
             )
             cur.execute(
@@ -127,6 +144,32 @@ class SettingsProvider:
                     """,
                     (self.crypto.key_id, self.crypto.provider, self.crypto.key_fingerprint()),
                 )
+            self._seed_model_registry(cur)
+
+    def _seed_model_registry(self, cur) -> None:
+        seeds = [
+            ("rule_engine", "rules", "cdss", "2026.02", "active", {"always_on": True}),
+            ("rag", "retrieval", "chromadb", "v1", "active", {"collection": "medical_guidelines"}),
+            ("llm_primary", "llm", "ollama", os.getenv("LLM_MODEL_NAME", "unset"), "active", {"base_url": os.getenv("LLM_API_URL")}),
+            ("medbert_local", "classifier", "medbert", "local", "active", {}),
+            ("clinicalbert_local", "classifier", "clinicalbert", "local", "active", {}),
+            ("fusion_engine", "ensemble", "fusion", "local", "active", {}),
+        ]
+        for model_id, model_type, provider, version, status, config in seeds:
+            cur.execute(
+                """
+                INSERT INTO cdss_model_registry (model_id, model_type, provider, version, status, config, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (model_id) DO UPDATE
+                SET model_type = EXCLUDED.model_type,
+                    provider = EXCLUDED.provider,
+                    version = EXCLUDED.version,
+                    status = EXCLUDED.status,
+                    config = EXCLUDED.config,
+                    updated_at = NOW();
+                """,
+                (model_id, model_type, provider, version, status, Json(config)),
+            )
 
     def get_settings(self) -> Dict[str, Any]:
         with self.conn.cursor() as cur:
@@ -145,10 +188,97 @@ class SettingsProvider:
                     "cache_ttl_seconds": 300,
                     "cache_namespace": "cdss",
                     "allow_pdf_uploads": True,
+                    "ai_min_confidence_score": 0.55,
+                    "ai_require_citations": True,
+                    "ai_min_citation_count": 1,
+                    "ai_abstain_on_low_confidence": True,
                 }
                 self.set_settings(defaults, actor="system", action="init_defaults")
                 return defaults
             return self.crypto.decrypt_json(row[0])
+
+    def get_model_registry(self, active_only: bool = False) -> list[dict]:
+        try:
+            with self.conn.cursor() as cur:
+                where = "WHERE status = 'active'" if active_only else ""
+                cur.execute(
+                    f"""
+                    SELECT model_id, model_type, provider, version, status, config, updated_at
+                    FROM cdss_model_registry
+                    {where}
+                    ORDER BY model_type, model_id;
+                    """
+                )
+                rows = cur.fetchall()
+                out: list[dict] = []
+                for r in rows:
+                    model_id, model_type, provider, version, status, config, updated_at = r
+                    out.append(
+                        {
+                            "model_id": model_id,
+                            "model_type": model_type,
+                            "provider": provider,
+                            "version": version,
+                            "status": status,
+                            "config": config or {},
+                            "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else str(updated_at),
+                        }
+                    )
+                return out
+        except Exception as e:
+            logger.warning(f"Failed to fetch model registry: {e}")
+            return []
+
+    def get_active_model_registry_map(self) -> Dict[str, Any]:
+        rows = self.get_model_registry(active_only=True)
+        out: Dict[str, Any] = {}
+        for row in rows:
+            out[row.get("model_id")] = {
+                "model_type": row.get("model_type"),
+                "provider": row.get("provider"),
+                "version": row.get("version"),
+                "status": row.get("status"),
+                "config": row.get("config") or {},
+            }
+        return out
+
+    def upsert_model_registry_entry(self, actor: str, entry: Dict[str, Any]) -> Dict[str, Any]:
+        model_id = str(entry.get("model_id") or "").strip()
+        if not model_id:
+            raise ValueError("model_id is required")
+
+        model_type = str(entry.get("model_type") or "custom").strip()
+        provider = str(entry.get("provider") or "custom").strip()
+        version = str(entry.get("version") or "unknown").strip()
+        status = str(entry.get("status") or "active").strip().lower()
+        if status not in ("active", "canary", "disabled"):
+            raise ValueError("status must be one of: active, canary, disabled")
+        config = entry.get("config") if isinstance(entry.get("config"), dict) else {}
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cdss_model_registry (model_id, model_type, provider, version, status, config, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (model_id) DO UPDATE
+                SET model_type = EXCLUDED.model_type,
+                    provider = EXCLUDED.provider,
+                    version = EXCLUDED.version,
+                    status = EXCLUDED.status,
+                    config = EXCLUDED.config,
+                    updated_at = NOW();
+                """,
+                (model_id, model_type, provider, version, status, Json(config)),
+            )
+        self.log_action(actor=actor, action="model_registry_upsert", payload={"model_id": model_id, "status": status})
+        return {
+            "model_id": model_id,
+            "model_type": model_type,
+            "provider": provider,
+            "version": version,
+            "status": status,
+            "config": config,
+        }
 
     def set_settings(self, settings: Dict[str, Any], actor: str, action: str) -> Dict[str, Any]:
         # Merge with existing

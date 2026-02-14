@@ -1,0 +1,48 @@
+from ai_governance import apply_safety_gate, compute_confidence_score
+
+
+def test_compute_confidence_score_with_evidence_boost():
+    score = compute_confidence_score(
+        suggested_diagnoses=[{"diagnosis": "A", "probability": 0.62}],
+        clinical_recommendation={"evidence_level": "High"},
+    )
+    assert score >= 0.75
+
+
+def test_apply_safety_gate_abstains_on_low_confidence_and_no_citations():
+    result = {
+        "suggested_diagnoses": [{"diagnosis": "A", "probability": 0.4}],
+        "guideline_citations": [],
+    }
+    gated = apply_safety_gate(
+        result,
+        {
+            "min_confidence_score": 0.7,
+            "require_citations": True,
+            "min_citation_count": 1,
+            "abstain_on_low_confidence": True,
+        },
+    )
+    assert gated["abstained"] is True
+    assert gated["safety_gate"]["passed"] is False
+    assert "low_confidence" in gated["safety_gate"]["reasons"]
+    assert "insufficient_citations" in gated["safety_gate"]["reasons"]
+
+
+def test_apply_safety_gate_passes_when_thresholds_met():
+    result = {
+        "suggested_diagnoses": [{"diagnosis": "A", "probability": 0.82}],
+        "guideline_citations": [{"source": "WHO"}],
+        "clinical_recommendation": {"evidence_level": "Moderate"},
+    }
+    gated = apply_safety_gate(
+        result,
+        {
+            "min_confidence_score": 0.7,
+            "require_citations": True,
+            "min_citation_count": 1,
+            "abstain_on_low_confidence": True,
+        },
+    )
+    assert gated["abstained"] is False
+    assert gated["safety_gate"]["passed"] is True

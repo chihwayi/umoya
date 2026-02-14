@@ -137,7 +137,7 @@ Status legend:
   - Safety layer rejects unsupported confident recommendations.
   - API responses include confidence + evidence metadata.
 
-### E3-B3 (`P1`, `Todo`) Model registry and release governance
+### E3-B3 (`P1`, `In Progress`) Model registry and release governance
 
 - Owner: AI/ML Platform
 - Effort: 2 weeks
@@ -148,6 +148,9 @@ Status legend:
 - Acceptance criteria:
   - Every prediction is traceable to model/prompt/version hash.
   - Rollback can be executed within 15 minutes.
+ - Implementation notes:
+   - Added `cdss_model_registry` and admin APIs (`GET/POST /admin/models`) for model metadata and status controls.
+   - Intelligent diagnosis responses now include active model registry snapshot and safety gate output.
 
 ### E3-B4 (`P1`, `Todo`) Human-in-the-loop for high-risk actions
 

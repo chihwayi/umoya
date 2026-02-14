@@ -95,6 +95,20 @@ CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_started_at ON cdss_admin_jobs(sta
 CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_status ON cdss_admin_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_type ON cdss_admin_jobs(job_type);
 
+-- CDSS Admin: Model registry for versioned AI governance
+CREATE TABLE IF NOT EXISTS cdss_model_registry (
+    model_id TEXT PRIMARY KEY,
+    model_type TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    version TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);
+
 -- Tenant analytics table
 CREATE TABLE tenant_analytics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

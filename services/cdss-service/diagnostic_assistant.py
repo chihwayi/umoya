@@ -10,6 +10,7 @@ from collections import Counter
 import re
 import logging
 from privacy_guard import redact_text, redact_value
+from ai_governance import apply_safety_gate
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,20 @@ class DiagnosticAssistant:
                 logger.warning(f"Failed to initialize terminology mappers: {e}")
                 self.icd10_mapper = None
                 self.snomed_mapper = None
+
+    def _runtime_model_versions(self) -> Dict[str, Dict[str, Any]]:
+        return {
+            "rule_engine": {"name": "rule_engine", "version": "2026.02", "enabled": True},
+            "medbert": {"name": "medbert", "version": "local", "enabled": self.medbert is not None},
+            "clinicalbert": {"name": "clinicalbert", "version": "local", "enabled": self.clinicalbert is not None},
+            "fusion_engine": {"name": "fusion_engine", "version": "local", "enabled": self.fusion_engine is not None},
+            "rag": {"name": "rag", "version": "v1", "enabled": self.rag_engine is not None},
+            "llm": {
+                "name": self.llm_provider.model_name if self.llm_provider else "llm",
+                "version": self.llm_provider.model_name if self.llm_provider else "unavailable",
+                "enabled": self.llm_provider is not None,
+            },
+        }
     
     # Symptom-diagnosis mapping database (simplified clinical knowledge base)
     DIAGNOSTIC_DATABASE = {
@@ -621,7 +636,9 @@ class DiagnosticAssistant:
         patient_data: Optional[Dict[str, Any]] = None,
         age: Optional[int] = None,
         gender: Optional[str] = None,
-        tenant_id: Optional[str] = None
+        tenant_id: Optional[str] = None,
+        governance_policy: Optional[Dict[str, Any]] = None,
+        model_registry: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Intelligent diagnostic suggestion combining rule-based CDSS + AI models
@@ -654,11 +671,13 @@ class DiagnosticAssistant:
         # If no AI models at all, return rule-based only
         if not has_ai_models and not has_llm:
             logger.debug("AI models not available, using rule-based only")
-            return {
+            base = {
                 **rule_based_results,
                 'source': 'rule_based_only',
                 'ai_enabled': False
             }
+            base["model_registry"] = model_registry or self._runtime_model_versions()
+            return apply_safety_gate(base, governance_policy)
             
         # 1. Run Local LLM (if available)
         llm_results = None
@@ -775,12 +794,14 @@ class DiagnosticAssistant:
         
         # If no AI results, return rule-based
         if not medbert_results and not clinicalbert_results and not llm_results:
-            return {
+            base = {
                 **rule_based_results,
                 'source': 'rule_based_only',
                 'ai_enabled': True,
                 'ai_models_available': False
             }
+            base["model_registry"] = model_registry or self._runtime_model_versions()
+            return apply_safety_gate(base, governance_policy)
         
         # 4. Fusion: Combine all results
         # If fusion engine is available, use it for MedBERT/ClinicalBERT
@@ -849,7 +870,7 @@ class DiagnosticAssistant:
                     'action_items': llm_results.get('action_items', [])
                 }
 
-        return {
+        final_result = {
             **fused_results,
             'recommended_tests': fused_results.get('recommended_tests', []),
             'red_flags': fused_results.get('red_flags', []),
@@ -859,6 +880,8 @@ class DiagnosticAssistant:
             'ai_enabled': True,
             'source': 'hybrid_cdss_ai_llm'
         }
+        final_result["model_registry"] = model_registry or self._runtime_model_versions()
+        return apply_safety_gate(final_result, governance_policy)
 
     async def summarize_patient_history(
         self,
