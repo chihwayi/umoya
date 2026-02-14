@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 
 @Injectable()
@@ -28,9 +28,10 @@ export class CdssService {
     // Add request interceptor for debugging
     this.cdssClient.interceptors.request.use(request => {
       if (this.cdssServiceToken) {
-        request.headers = request.headers || {};
-        request.headers['X-Service-Token'] = this.cdssServiceToken;
-        request.headers['X-Service-Name'] = 'ehr-service';
+        const headers = AxiosHeaders.from(request.headers);
+        headers.set('X-Service-Token', this.cdssServiceToken);
+        headers.set('X-Service-Name', 'ehr-service');
+        request.headers = headers;
       }
       this.logger.log(`[CDSS] Request to: ${request.url}`);
       return request;

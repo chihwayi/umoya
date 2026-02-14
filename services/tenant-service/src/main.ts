@@ -8,7 +8,23 @@ import { config as envConfig } from '@medicore/config';
 import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
+function validateCriticalSecurityEnv(): void {
+  const env = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'development').toLowerCase();
+  const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
+
+  const jwt = (process.env.JWT_SECRET || '').trim();
+  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'medicore-super-secret-key', 'ehr-super-secret-key']);
+
+  if (!jwt) {
+    throw new Error('JWT_SECRET is required for tenant-service startup.');
+  }
+  if (!isDevLike && insecureJwtDefaults.has(jwt)) {
+    throw new Error('JWT_SECRET is using an insecure default in non-development environment.');
+  }
+}
+
 async function bootstrap() {
+  validateCriticalSecurityEnv();
   const app = await NestFactory.create(TenantModule);
   
   app.use((req: Request, res: Response, next: NextFunction) => {

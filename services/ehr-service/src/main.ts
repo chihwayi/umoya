@@ -11,7 +11,41 @@ import { config as envConfig } from '@medicore/config';
 import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
+function parseBoolStrict(name: string, defaultValue: string): boolean {
+  const raw = (process.env[name] ?? defaultValue).toString().trim().toLowerCase();
+  if (raw !== 'true' && raw !== 'false') {
+    throw new Error(`Invalid ${name} value '${process.env[name]}'. Expected 'true' or 'false'.`);
+  }
+  return raw === 'true';
+}
+
+function validateCriticalSecurityEnv(): void {
+  const env = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'development').toLowerCase();
+  const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
+
+  const jwt = (process.env.JWT_SECRET || '').trim();
+  const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'medicore-super-secret-key', 'ehr-super-secret-key']);
+  if (!jwt) {
+    throw new Error('JWT_SECRET is required for ehr-service startup.');
+  }
+  if (!isDevLike && insecureJwtDefaults.has(jwt)) {
+    throw new Error('JWT_SECRET is using an insecure default in non-development environment.');
+  }
+
+  const requireServiceAuth = parseBoolStrict('CDSS_REQUIRE_SERVICE_AUTH', 'true');
+  if (requireServiceAuth) {
+    const token = (process.env.CDSS_SERVICE_TOKEN || '').trim();
+    if (!token) {
+      throw new Error('CDSS_REQUIRE_SERVICE_AUTH=true but CDSS_SERVICE_TOKEN is missing.');
+    }
+    if (!isDevLike && token === 'dev_cdss_service_token_change_in_production') {
+      throw new Error('CDSS_SERVICE_TOKEN is using insecure default in non-development environment.');
+    }
+  }
+}
+
 async function bootstrap() {
+  validateCriticalSecurityEnv();
   const app = await NestFactory.create(EhrModule);
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));

@@ -14,6 +14,7 @@ import uvicorn
 import httpx
 import os
 import hmac
+import re
 import shutil
 import tempfile
 import hashlib
@@ -126,6 +127,31 @@ def _normalize_tenant_cache_key(raw_tenant_id: Optional[str]) -> str:
 def _tenant_cache_key_from_request(req: Request) -> str:
     tenant_id = req.headers.get("x-tenant-id")
     return _normalize_tenant_cache_key(tenant_id)
+
+
+def _safe_filename(filename: Optional[str], fallback: str = "upload.bin") -> str:
+    base = os.path.basename(filename or "").strip()
+    if not base:
+        base = fallback
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return safe[:180] or fallback
+
+
+def _tenant_temp_dir(tenant_key: str) -> str:
+    root = os.getenv("CDSS_TMP_ROOT", "/tmp/medicore-cdss")
+    path = os.path.join(root, tenant_key)
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    return path
+
+
+def _save_upload_to_tenant_temp(file: UploadFile, tenant_key: str) -> str:
+    safe_name = _safe_filename(getattr(file, "filename", None))
+    suffix = pathlib.Path(safe_name).suffix or ".tmp"
+    temp_dir = _tenant_temp_dir(tenant_key)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir, prefix="upload_") as temp_file:
+        file.file.seek(0)
+        shutil.copyfileobj(file.file, temp_file)
+        return temp_file.name
 
 @app.middleware("http")
 async def request_id_and_envelope_middleware(request: Request, call_next):
@@ -736,6 +762,7 @@ async def admin_audit(
 
 @app.post("/transcribe")
 async def transcribe_audio(
+    req: Request,
     file: UploadFile = File(...),
     generate_soap: bool = True,
     language: Optional[str] = Form(None)
@@ -748,10 +775,8 @@ async def transcribe_audio(
         raise HTTPException(status_code=503, detail="Voice service unavailable")
     
     # Save uploaded file to temp file
-    suffix = f".{file.filename.split('.')[-1]}" if '.' in file.filename else ".tmp"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-        shutil.copyfileobj(file.file, temp_file)
-        temp_path = temp_file.name
+    tenant_key = _tenant_cache_key_from_request(req)
+    temp_path = _save_upload_to_tenant_temp(file, tenant_key)
     
     try:
         # 1. Transcribe
@@ -769,8 +794,8 @@ async def transcribe_audio(
         # 2. Upload to MinIO
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = os.path.basename(temp_path)
-            file_key = f"voice-consultations/{timestamp}_{filename}"
+            filename = _safe_filename(file.filename)
+            file_key = f"tenants/{tenant_key}/voice-consultations/{timestamp}_{filename}"
             
             await run_in_threadpool(s3_client.upload_file, temp_path, MINIO_BUCKET, file_key)
             
@@ -795,6 +820,7 @@ async def transcribe_audio(
 
 @app.post("/analyze-image")
 async def analyze_medical_image(
+    req: Request,
     file: UploadFile = File(...)
 ):
     """
@@ -804,8 +830,11 @@ async def analyze_medical_image(
     if not medical_vision:
         raise HTTPException(status_code=503, detail="Medical Vision service unavailable")
 
+    tenant_key = _tenant_cache_key_from_request(req)
+    temp_path = _save_upload_to_tenant_temp(file, tenant_key)
     try:
-        content = await file.read()
+        with open(temp_path, "rb") as f:
+            content = f.read()
         
         # Run inference in threadpool to avoid blocking
         result = await run_in_threadpool(
@@ -822,6 +851,9 @@ async def analyze_medical_image(
     except Exception as e:
         print(f"Image analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 duplicate_detector = DuplicateTherapyDetector()
@@ -1736,7 +1768,8 @@ async def check_food_interactions(request: FoodInteractionRequest):
 
 
 @app.post("/transcribe")
-async def transcribe_audio(
+async def transcribe_audio_basic(
+    req: Request,
     file: UploadFile = File(...),
     generate_soap: bool = True
 ):
@@ -1748,9 +1781,8 @@ async def transcribe_audio(
         raise HTTPException(status_code=503, detail="Voice service unavailable")
     
     # Save uploaded file to temp
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
-        shutil.copyfileobj(file.file, temp_file)
-        temp_path = temp_file.name
+    tenant_key = _tenant_cache_key_from_request(req)
+    temp_path = _save_upload_to_tenant_temp(file, tenant_key)
     
     try:
         # Transcribe
