@@ -90,12 +90,20 @@ class SettingsProvider:
                   payload JSONB,
                   result JSONB,
                   message TEXT,
+                  dead_lettered BOOLEAN NOT NULL DEFAULT FALSE,
+                  dead_letter_reason TEXT,
                   started_at TIMESTAMPTZ NOT NULL,
                   finished_at TIMESTAMPTZ,
                   created_at TIMESTAMPTZ DEFAULT NOW(),
                   updated_at TIMESTAMPTZ DEFAULT NOW()
                 );
                 """
+            )
+            cur.execute(
+                "ALTER TABLE cdss_admin_jobs ADD COLUMN IF NOT EXISTS dead_lettered BOOLEAN NOT NULL DEFAULT FALSE;"
+            )
+            cur.execute(
+                "ALTER TABLE cdss_admin_jobs ADD COLUMN IF NOT EXISTS dead_letter_reason TEXT;"
             )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_started_at ON cdss_admin_jobs(started_at DESC);"
@@ -253,11 +261,11 @@ class SettingsProvider:
                     """
                     INSERT INTO cdss_admin_jobs (
                       job_id, job_type, status, owner, tenant_id,
-                      attempt, max_attempts, retry_of, payload, result, message,
+                      attempt, max_attempts, retry_of, payload, result, message, dead_lettered, dead_letter_reason,
                       started_at, finished_at, created_at, updated_at
                     ) VALUES (
                       %s, %s, %s, %s, %s,
-                      %s, %s, %s, %s, %s, %s,
+                      %s, %s, %s, %s, %s, %s, %s, %s,
                       %s, %s, NOW(), NOW()
                     )
                     ON CONFLICT (job_id) DO UPDATE SET
@@ -271,6 +279,8 @@ class SettingsProvider:
                       payload = EXCLUDED.payload,
                       result = EXCLUDED.result,
                       message = EXCLUDED.message,
+                      dead_lettered = EXCLUDED.dead_lettered,
+                      dead_letter_reason = EXCLUDED.dead_letter_reason,
                       started_at = EXCLUDED.started_at,
                       finished_at = EXCLUDED.finished_at,
                       updated_at = NOW();
@@ -287,6 +297,8 @@ class SettingsProvider:
                         Json(payload),
                         Json(result) if result is not None else None,
                         job.get("message"),
+                        bool(job.get("dead_lettered") or False),
+                        job.get("dead_letter_reason"),
                         job.get("started_at"),
                         job.get("finished_at"),
                     ),
@@ -312,6 +324,7 @@ class SettingsProvider:
                     SELECT
                       job_id, job_type, status, owner, tenant_id,
                       attempt, max_attempts, retry_of, payload, result, message,
+                      dead_lettered, dead_letter_reason,
                       started_at, finished_at
                     FROM cdss_admin_jobs
                     {where_clause}
@@ -326,6 +339,7 @@ class SettingsProvider:
                     (
                         job_id, jt, st, owner, tenant_id,
                         attempt, max_attempts, retry_of, payload, result, message,
+                        dead_lettered, dead_letter_reason,
                         started_at, finished_at,
                     ) = r
                     try:
@@ -349,6 +363,8 @@ class SettingsProvider:
                             "payload": payload,
                             "result": result,
                             "message": message,
+                            "dead_lettered": dead_lettered,
+                            "dead_letter_reason": dead_letter_reason,
                             "started_at": started_at.isoformat() if hasattr(started_at, "isoformat") else str(started_at),
                             "finished_at": finished_at.isoformat() if hasattr(finished_at, "isoformat") else (str(finished_at) if finished_at else None),
                         }
@@ -366,6 +382,7 @@ class SettingsProvider:
                     SELECT
                       job_id, job_type, status, owner, tenant_id,
                       attempt, max_attempts, retry_of, payload, result, message,
+                      dead_lettered, dead_letter_reason,
                       started_at, finished_at
                     FROM cdss_admin_jobs
                     WHERE job_id = %s
@@ -379,6 +396,7 @@ class SettingsProvider:
                 (
                     job_id_v, jt, st, owner, tenant_id,
                     attempt, max_attempts, retry_of, payload, result, message,
+                    dead_lettered, dead_letter_reason,
                     started_at, finished_at,
                 ) = r
                 try:
@@ -401,6 +419,8 @@ class SettingsProvider:
                     "payload": payload,
                     "result": result,
                     "message": message,
+                    "dead_lettered": dead_lettered,
+                    "dead_letter_reason": dead_letter_reason,
                     "started_at": started_at.isoformat() if hasattr(started_at, "isoformat") else str(started_at),
                     "finished_at": finished_at.isoformat() if hasattr(finished_at, "isoformat") else (str(finished_at) if finished_at else None),
                 }

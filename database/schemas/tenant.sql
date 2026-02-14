@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS cdss_admin_jobs (
     payload JSONB,
     result JSONB,
     message TEXT,
+    dead_lettered BOOLEAN NOT NULL DEFAULT FALSE,
+    dead_letter_reason TEXT,
     started_at TIMESTAMP WITH TIME ZONE NOT NULL,
     finished_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

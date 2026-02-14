@@ -583,6 +583,8 @@ def _create_job(
             "retry_of": retry_of,
             "payload": payload or {},
             "result": None,
+            "dead_lettered": False,
+            "dead_letter_reason": None,
         }
         if settings_provider:
             try:
@@ -656,6 +658,23 @@ def _read_dead_letter(limit: int = 100) -> List[Dict[str, Any]]:
             pass
         out.append({"raw": str(raw)})
     return out
+
+
+def _drop_dead_letter_record(job_id: str) -> None:
+    client = _get_queue_redis_client()
+    if not client:
+        return
+    try:
+        items = client.lrange(_JOB_DLQ_NAME, 0, -1)
+        for raw in items:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict) and str(parsed.get("jobId")) == str(job_id):
+                    client.lrem(_JOB_DLQ_NAME, 1, raw)
+            except Exception:
+                continue
+    except Exception:
+        return
 
 
 def _dispatch_job(job_id: str) -> str:
@@ -1241,6 +1260,35 @@ async def admin_job_retry(job_id: str, owner: str = Depends(require_owner_scope(
 @app.get("/admin/jobs/dead-letter")
 async def admin_dead_letter_jobs(limit: int = 100, owner: str = Depends(require_owner_scope("cdss.admin.jobs.read"))):
     return {"jobs": _read_dead_letter(limit=limit), "limit": max(1, min(limit, 500))}
+
+
+@app.post("/admin/jobs/dead-letter/requeue/{job_id}")
+async def admin_dead_letter_requeue(job_id: str, owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
+    existing = None
+    if settings_provider:
+        try:
+            existing = settings_provider.get_job(job_id)
+        except Exception:
+            existing = None
+    if not existing:
+        with _ADMIN_JOBS_LOCK:
+            existing = _ADMIN_JOBS.get(job_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not bool(existing.get("dead_lettered")):
+        raise HTTPException(status_code=409, detail="Job is not in dead-letter state")
+
+    new_id = _create_job(
+        job_type=str(existing.get("type") or ""),
+        owner=owner,
+        tenant_id=str(existing.get("tenant_id") or "public"),
+        payload=existing.get("payload") or {},
+        retry_of=str(existing.get("jobId") or job_id),
+        attempt=1,
+    )
+    _dispatch_job(new_id)
+    _drop_dead_letter_record(job_id)
+    return {"started": True, "jobId": new_id, "retry_of": job_id}
 
 
 @app.post("/admin/cache/flush")
