@@ -10,6 +10,7 @@ import { AuditLogs } from '../components/AuditLogs';
 import { SecurityPanel } from '../components/SecurityPanel';
 import { BackupManager } from '../components/BackupManager';
 import { TerminologyImport } from '../components/TerminologyImport';
+import { CdssAdmin } from '../components/CdssAdmin';
 import { useNotification } from '../contexts/NotificationContext';
 
 interface DashboardProps {
@@ -25,7 +26,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [error, setError] = useState('');
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'health' | 'audit' | 'security' | 'backups' | 'terminology'>('overview');
+  const [currentView, setCurrentView] = useState<'overview' | 'tenants' | 'health' | 'audit' | 'security' | 'backups' | 'terminology' | 'cdss'>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -107,6 +108,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      )
+    },
+    { 
+      id: 'cdss', 
+      label: 'CDSS Admin', 
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.567-3 3.5S10.343 15 12 15s3-1.567 3-3.5S13.657 8 12 8z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.4 15a7.5 7.5 0 10-14.8 0M12 17v4" />
         </svg>
       )
     },
@@ -289,6 +300,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {currentView === 'security' && <SecurityPanel />}
             {currentView === 'backups' && <BackupManager />}
             {currentView === 'terminology' && <TerminologyImport />}
+            {currentView === 'cdss' && <CdssAdmin />}
             
             {currentView === 'tenants' && (
               <div className="space-y-6">

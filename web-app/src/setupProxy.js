@@ -19,6 +19,27 @@ module.exports = function(app) {
     })
   );
 
+  // Proxy CDSS Admin requests to cdss-service
+  app.use(
+    '/api/cdss-admin',
+    createProxyMiddleware({
+      target: process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000',
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'debug',
+      pathRewrite: {
+        '^/api/cdss-admin': '',
+      },
+      onError: (err, req, res) => {
+        console.error('CDSS Admin Proxy error:', err.message);
+        res.status(502).send('Proxy Error: ' + err.message);
+      },
+      onProxyReq: (proxyReq, req, res) => {
+        console.log('Proxying CDSS admin request:', req.method, req.url, '->', proxyReq.path);
+      }
+    })
+  );
+
   // Proxy API requests to tenant-service
   app.use(
     '/api',

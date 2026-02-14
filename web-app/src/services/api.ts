@@ -77,6 +77,17 @@ if (authAPI.isAuthenticated()) {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 }
 
+// Helper: owner header for CDSS admin endpoints
+const getOwnerHeaders = (): Record<string, string> => {
+  try {
+    const user = authAPI.getCurrentUser();
+    if (user && typeof user.email === 'string' && user.email.length > 0) {
+      return { 'X-Owner-Email': String(user.email) };
+    }
+  } catch {}
+  return {};
+};
+
 // Tenant API
 export const tenantAPI = {
   getAllTenants: async (): Promise<Tenant[]> => {
@@ -219,6 +230,47 @@ export const terminologyAPI = {
 
   getStats: async (): Promise<{ snomedConcepts: number; icd10Codes: number }> => {
     const response = await api.get('/terminology/import/stats');
+    return response.data;
+  }
+};
+
+// CDSS Admin API (owner-only)
+export const cdssAdminAPI = {
+  getStatus: async (): Promise<any> => {
+    const response = await api.get('/cdss-admin/admin/status', { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getSettings: async (): Promise<any> => {
+    const response = await api.get('/cdss-admin/admin/settings', { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  updateSettings: async (settings: Partial<{ llm_enabled: boolean; llm_api_url: string; llm_model_name: string; rag_enabled: boolean; cache_ttl_seconds: number; cache_namespace: string; allow_pdf_uploads: boolean }>): Promise<any> => {
+    const response = await api.put('/cdss-admin/admin/settings', settings, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  ingest: async (file?: File): Promise<any> => {
+    if (file) {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await api.post('/cdss-admin/admin/ingest', form, {
+        headers: { ...getOwnerHeaders(), 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } else {
+      const response = await api.post('/cdss-admin/admin/ingest', null, { headers: { ...getOwnerHeaders() } });
+      return response.data;
+    }
+  },
+  reindex: async (): Promise<any> => {
+    const response = await api.post('/cdss-admin/admin/reindex', null, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  flushCache: async (): Promise<any> => {
+    const response = await api.post('/cdss-admin/admin/cache/flush', null, { headers: { ...getOwnerHeaders() } });
+    return response.data;
+  },
+  getMetrics: async (): Promise<any> => {
+    const response = await api.get('/cdss-admin/admin/metrics', { headers: { ...getOwnerHeaders() } });
     return response.data;
   }
 };
