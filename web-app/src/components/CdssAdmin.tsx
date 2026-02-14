@@ -18,6 +18,8 @@ export const CdssAdmin: React.FC = () => {
   const [auditLimit, setAuditLimit] = useState<number>(20);
   const [auditOffset, setAuditOffset] = useState<number>(0);
   const [ingestJobs, setIngestJobs] = useState<any[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [refreshSecs, setRefreshSecs] = useState<number>(5);
 
   const loadAll = async () => {
     setLoading(true);
@@ -46,6 +48,23 @@ export const CdssAdmin: React.FC = () => {
   useEffect(() => {
     loadAll();
   }, []);
+
+  useEffect(() => {
+    let timer: any;
+    if (autoRefresh) {
+      const tick = async () => {
+        try {
+          const jobs = await cdssAdminAPI.getIngestJobs(20);
+          setIngestJobs(jobs?.jobs || []);
+        } catch {}
+      };
+      timer = setInterval(tick, Math.max(2, refreshSecs) * 1000);
+      tick();
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [autoRefresh, refreshSecs]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -284,6 +303,26 @@ export const CdssAdmin: React.FC = () => {
           <button onClick={handleIngest} className="px-4 py-2 rounded bg-blue-600 text-white">Upload & Ingest</button>
           <button onClick={handleReindex} className="px-4 py-2 rounded bg-amber-600 text-white">Reindex</button>
           <button onClick={handleFlushCache} className="px-4 py-2 rounded bg-rose-600 text-white">Flush Cache</button>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-slate-600">Auto-refresh</label>
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+            <label className="text-xs text-slate-600">Every (s)</label>
+            <input
+              type="number"
+              className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
+              value={String(refreshSecs)}
+              onChange={(e) => setRefreshSecs(Math.max(2, Number(e.target.value || 5)))}
+            />
+            <button
+              onClick={async () => {
+                const jobs = await cdssAdminAPI.getIngestJobs(20);
+                setIngestJobs(jobs?.jobs || []);
+              }}
+              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+            >
+              Refresh Now
+            </button>
+          </div>
         </div>
         <div>
           <div className="text-xs font-semibold text-slate-500 uppercase mt-2 mb-1">Jobs</div>
