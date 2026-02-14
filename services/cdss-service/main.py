@@ -207,15 +207,53 @@ def require_owner(request: Request, x_owner_email: str = Header(None), authoriza
             email_from_jwt = str(payload.get("email") or payload.get("sub") or "").lower()
         except Exception:
             email_from_jwt = None
+    # Rate limiting helper using Redis (if available)
+    def _rate_limit(email: str):
+        try:
+            limit_per_min = int(os.getenv("ADMIN_RATE_LIMIT_PER_MIN", "60"))
+            if limit_per_min <= 0:
+                return
+            # Use RAG engine's Redis if available, else try new client
+            r = None
+            try:
+                if diagnostic_assistant and diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
+                    r = diagnostic_assistant.rag_engine.redis_client
+                else:
+                    redis_url = os.getenv("REDIS_URL")
+                    if redis_url:
+                        r = redis_pkg.from_url(redis_url, decode_responses=True)
+                    else:
+                        host = os.getenv("REDIS_HOST", "localhost")
+                        port = int(os.getenv("REDIS_PORT", 6379))
+                        r = redis_pkg.Redis(host=host, port=port, db=0, decode_responses=True)
+            except Exception:
+                r = None
+            if not r:
+                return
+            path = request.url.path
+            minute = datetime.utcnow().strftime("%Y%m%d%H%M")
+            key = f"ratelimit:admin:{email}:{path}:{minute}"
+            count = r.incr(key)
+            if count == 1:
+                r.expire(key, 60)
+            if count > limit_per_min:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        except HTTPException:
+            raise
+        except Exception:
+            # Fail-open on rate limit errors
+            return
     if email_from_jwt:
         if email_from_jwt in allowed:
+            _rate_limit(email_from_jwt)
             return email_from_jwt
         else:
             raise HTTPException(status_code=403, detail="Owner access required (JWT)")
     # Fallback header
     if not x_owner_email or x_owner_email.lower() not in allowed:
         raise HTTPException(status_code=403, detail="Owner access required")
-    return x_owner_email
+    _rate_limit(x_owner_email.lower())
+    return x_owner_email.lower()
 
 @app.get("/admin/status")
 async def admin_status(owner: str = Depends(require_owner)):

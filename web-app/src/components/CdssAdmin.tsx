@@ -14,6 +14,8 @@ export const CdssAdmin: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [metrics, setMetrics] = useState<any>(null);
   const [audit, setAudit] = useState<{ logs: any[]; limit: number; offset: number } | null>(null);
+  const [auditLimit, setAuditLimit] = useState<number>(20);
+  const [auditOffset, setAuditOffset] = useState<number>(0);
 
   const loadAll = async () => {
     setLoading(true);
@@ -23,12 +25,12 @@ export const CdssAdmin: React.FC = () => {
         cdssAdminAPI.getStatus(),
         cdssAdminAPI.getSettings(),
         cdssAdminAPI.getMetrics(),
-        cdssAdminAPI.getAuditLogs(20, 0),
+        cdssAdminAPI.getAuditLogs(auditLimit, auditOffset),
       ]);
       setStatus(st);
       setSettings(se?.settings || se);
       setMetrics(me);
-      setAudit({ logs: au?.logs || [], limit: 20, offset: 0 });
+      setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load CDSS admin data');
     } finally {
@@ -121,11 +123,35 @@ export const CdssAdmin: React.FC = () => {
     setLoading(true);
     setMessage('');
     try {
-      const au = await cdssAdminAPI.getAuditLogs(20, 0);
-      setAudit({ logs: au?.logs || [], limit: 20, offset: 0 });
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, auditOffset);
+      setAudit({ logs: au?.logs || [], limit: auditLimit, offset: auditOffset });
       setMessage('Audit logs refreshed');
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Failed to load audit logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAuditNext = async () => {
+    const newOffset = auditOffset + auditLimit;
+    setAuditOffset(newOffset);
+    setLoading(true);
+    try {
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset);
+      setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAuditPrev = async () => {
+    const newOffset = Math.max(0, auditOffset - auditLimit);
+    setAuditOffset(newOffset);
+    setLoading(true);
+    try {
+      const au = await cdssAdminAPI.getAuditLogs(auditLimit, newOffset);
+      setAudit({ logs: au?.logs || [], limit: auditLimit, offset: newOffset });
     } finally {
       setLoading(false);
     }
@@ -229,7 +255,12 @@ export const CdssAdmin: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-700">Audit Logs</div>
-          <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 disabled:opacity-50">Prev</button>
+            <span className="text-xs text-slate-500">offset {auditOffset} • limit {auditLimit}</span>
+            <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Next</button>
+            <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
+          </div>
         </div>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
