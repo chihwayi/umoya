@@ -21,6 +21,7 @@ export const CdssAdmin: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [refreshSecs, setRefreshSecs] = useState<number>(5);
   const runningCount = ingestJobs.filter(j => j.status === 'running').length;
+  const [retryCooldown, setRetryCooldown] = useState<number>(0);
 
   const loadAll = async () => {
     setLoading(true);
@@ -72,6 +73,14 @@ export const CdssAdmin: React.FC = () => {
       setAutoRefresh(false);
     }
   }, [runningCount]);
+
+  useEffect(() => {
+    if (retryCooldown <= 0) return;
+    const t = setInterval(() => {
+      setRetryCooldown((v) => (v > 0 ? v - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [retryCooldown]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -367,16 +376,24 @@ export const CdssAdmin: React.FC = () => {
                           setLoading(true);
                           try {
                             const res = await cdssAdminAPI.retryIngestJob(j.jobId);
-                            setMessage(`Retry started • Job ${res?.jobId || ''}`);
+                            if (res?.rateLimit) setRateLimit(res.rateLimit);
+                            const jobId = res?.data?.jobId || res?.data?.job_id;
+                            setMessage(`Retry started • Job ${jobId || ''}`);
                             const jobs = await cdssAdminAPI.getIngestJobs(20);
                             setIngestJobs(jobs?.jobs || []);
                           } catch (e: any) {
+                            const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
+                            if (e?.response?.status === 429 && reset > 0) {
+                              setRetryCooldown(reset);
+                            }
                             setMessage(e?.response?.data?.detail || 'Retry failed');
                           } finally {
                             setLoading(false);
                           }
                         }}
-                        className="px-2 py-1 text-xs rounded bg-blue-600 text-white"
+                        className="px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50"
+                        title={retryCooldown > 0 ? `Rate limited • wait ${retryCooldown}s` : 'Retry this job'}
+                        disabled={retryCooldown > 0}
                       >
                         Retry
                       </button>
