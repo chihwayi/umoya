@@ -8,7 +8,20 @@ const tenant_module_1 = require("./tenant.module");
 const sentry_filter_1 = require("./filters/sentry.filter");
 const config_1 = require("@medicore/config");
 const crypto_1 = require("crypto");
+function validateCriticalSecurityEnv() {
+    const env = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'development').toLowerCase();
+    const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
+    const jwt = (process.env.JWT_SECRET || '').trim();
+    const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'medicore-super-secret-key', 'ehr-super-secret-key']);
+    if (!jwt) {
+        throw new Error('JWT_SECRET is required for tenant-service startup.');
+    }
+    if (!isDevLike && insecureJwtDefaults.has(jwt)) {
+        throw new Error('JWT_SECRET is using an insecure default in non-development environment.');
+    }
+}
 async function bootstrap() {
+    validateCriticalSecurityEnv();
     const app = await core_1.NestFactory.create(tenant_module_1.TenantModule);
     app.use((req, res, next) => {
         const existing = req.header('x-request-id') || req.header('X-Request-ID');
