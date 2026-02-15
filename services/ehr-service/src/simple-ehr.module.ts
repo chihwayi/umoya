@@ -18,12 +18,17 @@ import { TenantSimpleService } from './services/tenant-simple.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TenantMiddleware } from './middleware/tenant.middleware';
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret.trim().length === 0) {
+  throw new Error('JWT_SECRET is required for ehr-service startup.');
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'ehr-super-secret-key',
+      secret: jwtSecret,
       signOptions: { expiresIn: '8h' },
     }),
   ],

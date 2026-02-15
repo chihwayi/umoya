@@ -17,7 +17,13 @@ async function main() {
     const prov = new DatabaseProvisioningService(master);
 
     for (const t of tenants) {
-      const conn = t.connectionString || `postgresql://medicore:medicore_password@${process.env.DB_HOST || 'postgres-master'}:${process.env.DB_PORT || 5432}/${t.databaseName}`;
+      const host = process.env.DB_HOST || 'postgres-master';
+      const port = process.env.DB_PORT || '5432';
+      const user = encodeURIComponent(process.env.DB_USERNAME || process.env.POSTGRES_USER || 'medicore');
+      const pass = encodeURIComponent(process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'medicore_password');
+      const conn =
+        t.connectionString ||
+        `postgresql://${user}:${pass}@${host}:${port}/${t.databaseName}`;
       console.log(`Applying clinic schema to tenant ${t.id} (${t.databaseName})`);
       await prov.applyClinicSchema(conn);
     }
@@ -32,5 +38,4 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
 

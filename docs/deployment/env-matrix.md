@@ -1,0 +1,83 @@
+# Environment Variable Matrix (Server-Ready)
+
+This matrix is the baseline for running MediCore across environments without code edits.
+Set values in env files, secret manager, or CI/CD variables instead of changing source URLs/hosts.
+
+## Core Platform
+
+| Variable | Required | Used By | Notes |
+|---|---|---|---|
+| `ENVIRONMENT` | Yes | All services | `development`, `staging`, `production` |
+| `JWT_SECRET` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | Must be strong and shared where token verification is required |
+| `DB_HOST` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | Master DB host |
+| `DB_PORT` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | Postgres port |
+| `DB_USERNAME` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | DB user |
+| `DB_PASSWORD` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | DB password |
+| `POSTGRES_DB` | Yes | `ehr-service`, `tenant-service`, `cdss-service` | Master DB name |
+| `DATABASE_URL` | Recommended | `tenant-service` | Preferred single connection string |
+| `REDIS_URL` | Yes | `ehr-service`, `cdss-service` | Cache + queue backend |
+| `CORS_ORIGINS` | Yes | `cdss-service`, `whisper` | Explicitly list frontend origins |
+
+## Service Routing (No Hardcoded Host Switches)
+
+| Variable | Required | Used By | Example |
+|---|---|---|---|
+| `SERVICE_TENANT_URL` / `REACT_APP_TENANT_API_URL` | Yes | Frontends | `https://tenant.example.com/api` |
+| `SERVICE_EHR_URL` / `REACT_APP_EHR_API_URL` | Yes | Frontends + CDSS | `https://ehr.example.com/api` |
+| `SERVICE_CDSS_URL` / `REACT_APP_CDSS_API_URL` | Yes | EHR + Frontends | `https://cdss.example.com` |
+| `FRONTEND_URL` | Yes | `ehr-service` links | Public app URL |
+| `PORTAL_BASE_URL` | Yes | `ehr-service` patient auth links | Patient portal URL |
+| `REACT_APP_BASE_DOMAIN` | Recommended | Admin/web frontends | Tenant URL rendering |
+| `REACT_APP_PROTOCOL` | Recommended | Admin/web frontends | `https` in production |
+
+## CDSS Security and AI
+
+| Variable | Required | Used By | Notes |
+|---|---|---|---|
+| `CDSS_REQUIRE_SERVICE_AUTH` | Yes | `cdss-service` | Keep `true` outside local sandbox |
+| `CDSS_SERVICE_AUTH_MODE` | Yes | EHR + CDSS | `token`, `jwt`, `both` |
+| `CDSS_SERVICE_TOKEN` | If token mode | EHR + CDSS | Shared secret |
+| `CDSS_SERVICE_JWT_SECRET` | If jwt mode | EHR + CDSS | Service JWT signing key |
+| `CDSS_SERVICE_AUTH_ISSUER` | Yes | EHR + CDSS | Must match both sides |
+| `CDSS_SERVICE_AUTH_AUDIENCE` | Yes | EHR + CDSS | Must match both sides |
+| `CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT` | Recommended | `cdss-service` | Enable stricter replay behavior |
+| `CDSS_PHI_REDACTION_ENABLED` | Yes | `cdss-service` | PHI redaction gate |
+| `CDSS_BLOCK_OUTBOUND_PHI` | Yes | `cdss-service` | Fail/deny policy for disallowed PHI egress |
+| `CDSS_STRICT_EGRESS_ALLOWLIST` | Yes | `cdss-service` | Keep `true` in production |
+| `CDSS_EGRESS_ALLOWLIST` | Recommended | `cdss-service` | Comma-separated allowlisted targets |
+| `CDSS_ENCRYPTION_ENABLED` | Yes | `cdss-service` | At-rest envelope encryption switch |
+| `CDSS_ENCRYPTION_PROVIDER` | Yes | `cdss-service` | `local` or `kms` |
+| `CDSS_ENCRYPTION_KEY_ID` | Yes | `cdss-service` | Rotation tracking key id |
+| `CDSS_ENCRYPTION_KEY` | Yes | `cdss-service` | Encryption key material |
+| `CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS` | Transitional | `cdss-service` | Keep `false` after migration |
+| `OWNER_EMAILS` | Yes | `cdss-service` admin | Comma-separated owner principals |
+| `CDSS_OWNER_SCOPE_STRICT` | Recommended | `cdss-service` admin | Enable strict scope enforcement |
+| `LLM_API_URL` | If AI enabled | `cdss-service` | LLM endpoint |
+| `LLM_MODEL_NAME` | If AI enabled | `cdss-service` | Active model |
+| `LLM_TIMEOUT_SECONDS` | Recommended | `cdss-service` | Request timeout |
+
+## Storage and External Services
+
+| Variable | Required | Used By | Notes |
+|---|---|---|---|
+| `STORAGE_S3_ENDPOINT` / `MINIO_ENDPOINT` | Yes | EHR + CDSS | S3/MinIO endpoint |
+| `STORAGE_S3_ACCESS_KEY` / `MINIO_ACCESS_KEY` | Yes | EHR + CDSS | Access key |
+| `STORAGE_S3_SECRET_KEY` / `MINIO_SECRET_KEY` | Yes | EHR + CDSS | Secret key |
+| `STORAGE_S3_BUCKET` / `MINIO_BUCKET` | Yes | EHR + CDSS | Bucket name |
+| `STORAGE_S3_REGION` | Yes | EHR + CDSS | Region |
+| `STORAGE_S3_FORCE_PATH_STYLE` | Recommended | EHR + CDSS | Usually `true` for MinIO |
+| `MINIO_PUBLIC_URL` | Recommended | Frontend links | Public object URL base |
+| `SENTRY_DSN` | Optional | EHR + tenant services | Observability |
+
+## Migration Rule
+
+When moving to server, only change environment values.
+Do not change source files for hostnames, IP addresses, or protocol changes.
+
+## Quick Validation
+
+1. Run startup checks in each service with production-like env values.
+2. Verify frontend can call tenant, EHR, and CDSS APIs using env URLs.
+3. Verify EHR->CDSS auth (`issuer`/`audience`/secret mode) end-to-end.
+4. Verify CDSS egress allowlist blocks unknown outbound hosts.
+5. Verify email/portal links resolve to `FRONTEND_URL` and `PORTAL_BASE_URL`.
