@@ -150,7 +150,22 @@ class SettingsProvider:
         seeds = [
             ("rule_engine", "rules", "cdss", "2026.02", "active", {"always_on": True}),
             ("rag", "retrieval", "chromadb", "v1", "active", {"collection": "medical_guidelines"}),
-            ("llm_primary", "llm", "ollama", os.getenv("LLM_MODEL_NAME", "unset"), "active", {"base_url": os.getenv("LLM_API_URL")}),
+            (
+                "llm_primary",
+                "llm",
+                "ollama",
+                os.getenv("LLM_MODEL_NAME", "unset"),
+                "active",
+                {"base_url": os.getenv("LLM_API_URL"), "model_name": os.getenv("LLM_MODEL_NAME", "unset")},
+            ),
+            (
+                "llm_canary",
+                "llm",
+                "ollama",
+                os.getenv("LLM_MODEL_NAME", "unset"),
+                "disabled",
+                {"base_url": os.getenv("LLM_API_URL"), "model_name": os.getenv("LLM_MODEL_NAME", "unset"), "canary_percent": 0},
+            ),
             ("medbert_local", "classifier", "medbert", "local", "active", {}),
             ("clinicalbert_local", "classifier", "clinicalbert", "local", "active", {}),
             ("fusion_engine", "ensemble", "fusion", "local", "active", {}),
@@ -192,6 +207,7 @@ class SettingsProvider:
                     "ai_require_citations": True,
                     "ai_min_citation_count": 1,
                     "ai_abstain_on_low_confidence": True,
+                    "ai_contradiction_check_enabled": True,
                 }
                 self.set_settings(defaults, actor="system", action="init_defaults")
                 return defaults
@@ -233,6 +249,22 @@ class SettingsProvider:
         rows = self.get_model_registry(active_only=True)
         out: Dict[str, Any] = {}
         for row in rows:
+            out[row.get("model_id")] = {
+                "model_type": row.get("model_type"),
+                "provider": row.get("provider"),
+                "version": row.get("version"),
+                "status": row.get("status"),
+                "config": row.get("config") or {},
+            }
+        return out
+
+    def get_runtime_model_registry_map(self) -> Dict[str, Any]:
+        rows = self.get_model_registry(active_only=False)
+        out: Dict[str, Any] = {}
+        for row in rows:
+            status = str(row.get("status") or "").lower()
+            if status not in ("active", "canary"):
+                continue
             out[row.get("model_id")] = {
                 "model_type": row.get("model_type"),
                 "provider": row.get("provider"),

@@ -608,10 +608,10 @@ export class DatabaseProvisioningService {
   }
 
   private generateConnectionString(databaseName: string): string {
-    const host = process.env.DB_HOST || 'localhost';
+    const host = process.env.DB_HOST || process.env.SERVICE_POSTGRES_HOST || 'postgres-master';
     const port = process.env.DB_PORT || '5432';
-    const username = process.env.DB_USERNAME || 'medicore';
-    const password = process.env.DB_PASSWORD || 'medicore_password';
+    const username = process.env.DB_USERNAME || process.env.POSTGRES_USER || 'postgres';
+    const password = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'postgres';
     
     return `postgresql://${username}:${password}@${host}:${port}/${databaseName}`;
   }

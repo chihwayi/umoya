@@ -9,8 +9,10 @@ from typing import Dict, List, Optional, Any, Tuple
 from collections import Counter
 import re
 import logging
+import hashlib
+import json
 from privacy_guard import redact_text, redact_value
-from ai_governance import apply_safety_gate
+from ai_governance import apply_safety_gate, compute_request_hash
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,63 @@ class DiagnosticAssistant:
                 "version": self.llm_provider.model_name if self.llm_provider else "unavailable",
                 "enabled": self.llm_provider is not None,
             },
+        }
+
+    def _select_llm_model(self, tenant_id: Optional[str], model_registry: Dict[str, Any]) -> Dict[str, Any]:
+        default_model = self.llm_provider.model_name if self.llm_provider else None
+        primary = model_registry.get("llm_primary") if isinstance(model_registry, dict) else None
+        canary = model_registry.get("llm_canary") if isinstance(model_registry, dict) else None
+
+        selected = default_model
+        route = "default"
+        canary_percent = 0
+
+        if isinstance(primary, dict):
+            selected = (primary.get("config") or {}).get("model_name") or primary.get("version") or selected
+            route = "primary"
+
+        if isinstance(canary, dict) and str(canary.get("status") or "").lower() == "canary":
+            cfg = canary.get("config") or {}
+            canary_model = cfg.get("model_name") or canary.get("version")
+            try:
+                canary_percent = int(cfg.get("canary_percent", 0))
+            except Exception:
+                canary_percent = 0
+            canary_percent = max(0, min(canary_percent, 100))
+            if canary_model and canary_percent > 0:
+                tenant_key = tenant_id or "public"
+                bucket = int(hashlib.sha256(tenant_key.encode("utf-8")).hexdigest()[:8], 16) % 100
+                if bucket < canary_percent:
+                    selected = str(canary_model)
+                    route = "canary"
+
+        return {
+            "model_name": selected,
+            "route": route,
+            "canary_percent": canary_percent,
+        }
+
+    def _build_model_trace(
+        self,
+        tenant_id: Optional[str],
+        model_registry: Dict[str, Any],
+        llm_route: Dict[str, Any],
+        request_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        trace_payload = {
+            "tenant_id": tenant_id or "public",
+            "llm_model": llm_route.get("model_name"),
+            "route": llm_route.get("route"),
+            "models": model_registry,
+        }
+        return {
+            "request_sha256": compute_request_hash(request_payload),
+            "model_registry_sha256": hashlib.sha256(
+                json.dumps(trace_payload, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest(),
+            "llm_model": llm_route.get("model_name"),
+            "llm_route": llm_route.get("route"),
+            "canary_percent": llm_route.get("canary_percent", 0),
         }
     
     # Symptom-diagnosis mapping database (simplified clinical knowledge base)
@@ -679,6 +738,9 @@ class DiagnosticAssistant:
             base["model_registry"] = model_registry or self._runtime_model_versions()
             return apply_safety_gate(base, governance_policy)
             
+        model_snapshot = model_registry or self._runtime_model_versions()
+        llm_route = self._select_llm_model(tenant_id=tenant_id, model_registry=model_snapshot)
+
         # 1. Run Local LLM (if available)
         llm_results = None
         if has_llm and await self.llm_provider.check_availability():
@@ -748,7 +810,11 @@ class DiagnosticAssistant:
                 }
                 """
                 
-                llm_json = await self.llm_provider.generate_json(prompt, schema)
+                llm_json = await self.llm_provider.generate_json(
+                    prompt,
+                    schema,
+                    model_name=llm_route.get("model_name"),
+                )
                 if llm_json:
                     llm_results = llm_json
                     logger.info(f"Local LLM generated {len(llm_results.get('diagnoses', []))} diagnoses")
@@ -880,7 +946,19 @@ class DiagnosticAssistant:
             'ai_enabled': True,
             'source': 'hybrid_cdss_ai_llm'
         }
-        final_result["model_registry"] = model_registry or self._runtime_model_versions()
+        final_result["model_registry"] = model_snapshot
+        final_result["model_trace"] = self._build_model_trace(
+            tenant_id=tenant_id,
+            model_registry=model_snapshot,
+            llm_route=llm_route,
+            request_payload={
+                "symptoms": symptoms,
+                "vitals": vitals,
+                "age": age,
+                "gender": gender,
+                "patient_data": patient_data,
+            },
+        )
         return apply_safety_gate(final_result, governance_policy)
 
     async def summarize_patient_history(

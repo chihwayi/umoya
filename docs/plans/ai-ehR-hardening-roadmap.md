@@ -125,7 +125,7 @@ Status legend:
   - No raw PHI appears in LLM debug logs.
   - Policy violations are blocked and audited.
 
-### E3-B2 (`P1`, `Todo`) Citation-grounded response enforcement
+### E3-B2 (`P1`, `In Progress`) Citation-grounded response enforcement
 
 - Owner: AI/ML + Backend
 - Effort: 1 week
@@ -136,6 +136,10 @@ Status legend:
 - Acceptance criteria:
   - Safety layer rejects unsupported confident recommendations.
   - API responses include confidence + evidence metadata.
+ - Implementation notes:
+   - Added citation + confidence gates with abstain behavior for weak evidence.
+   - Added contradiction heuristics (overconfident language / unsupported high-probability diagnosis checks).
+   - Intelligent diagnosis responses now include `safety_gate`, `abstained`, and `model_trace`.
 
 ### E3-B3 (`P1`, `In Progress`) Model registry and release governance
 
@@ -150,7 +154,7 @@ Status legend:
   - Rollback can be executed within 15 minutes.
  - Implementation notes:
    - Added `cdss_model_registry` and admin APIs (`GET/POST /admin/models`) for model metadata and status controls.
-   - Intelligent diagnosis responses now include active model registry snapshot and safety gate output.
+   - Added runtime model routing support with deterministic tenant canary selection and model trace hashes.
 
 ### E3-B4 (`P1`, `Todo`) Human-in-the-loop for high-risk actions
 

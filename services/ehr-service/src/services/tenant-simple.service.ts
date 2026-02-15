@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
+import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
 export class TenantSimpleService {
@@ -11,13 +12,14 @@ export class TenantSimpleService {
 
   constructor() {
     // Initialize master database connection
+    const cfg = getMasterDbConfig();
     this.masterDb = new DataSource({
       type: 'postgres',
-      host: process.env.DB_HOST || 'postgres-master',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'medicore',
-      password: process.env.DB_PASSWORD || 'medicore_password',
-      database: process.env.POSTGRES_DB || 'medicore',
+      host: cfg.host,
+      port: cfg.port,
+      username: cfg.username,
+      password: cfg.password,
+      database: cfg.database,
     });
     this.masterDb.initialize().catch(console.error);
   }
@@ -49,13 +51,14 @@ export class TenantSimpleService {
       }
 
       // Create new connection for tenant
+      const cfg = getMasterDbConfig(databaseName);
       const dataSource = new DataSource({
         type: 'postgres',
-        host: process.env.DB_HOST || 'postgres-master',
-        port: parseInt(process.env.DB_PORT) || 5432,
-        username: process.env.DB_USERNAME || 'medicore',
-        password: process.env.DB_PASSWORD || 'medicore_password',
-        database: databaseName,
+        host: cfg.host,
+        port: cfg.port,
+        username: cfg.username,
+        password: cfg.password,
+        database: cfg.database,
         entities: [User, Patient, AppointmentSimple],
         synchronize: false, // Schema already exists
         logging: false,

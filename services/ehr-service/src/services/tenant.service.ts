@@ -101,6 +101,7 @@ import { PharmacyFormulary } from '../entities/pharmacy-formulary.entity';
 import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
+import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
 export class TenantService {
@@ -110,13 +111,14 @@ export class TenantService {
 
   constructor() {
     // Initialize master database connection
+    const cfg = getMasterDbConfig();
     this.masterDb = new DataSource({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'medicore',
-      password: process.env.DB_PASSWORD || 'medicore_password',
-      database: process.env.POSTGRES_DB || 'medicore',
+      host: cfg.host,
+      port: cfg.port,
+      username: cfg.username,
+      password: cfg.password,
+      database: cfg.database,
     });
     this.masterDb.initialize().catch(console.error);
   }
@@ -179,13 +181,14 @@ export class TenantService {
   }
 
   private async createTenantConnection(databaseName: string) {
+    const cfg = getMasterDbConfig(databaseName);
     const dataSource = new DataSource({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USERNAME || 'medicore',
-      password: process.env.DB_PASSWORD || 'medicore_password',
-      database: databaseName,
+      host: cfg.host,
+      port: cfg.port,
+      username: cfg.username,
+      password: cfg.password,
+      database: cfg.database,
       synchronize: false,
       entities: [
         User,

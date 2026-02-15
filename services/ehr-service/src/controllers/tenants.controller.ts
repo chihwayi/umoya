@@ -1,6 +1,7 @@
 import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
+import { getMasterDbConfig } from '../utils/runtime-env';
 
 @ApiTags('Tenants')
 @Controller('tenants')
@@ -9,13 +10,14 @@ export class TenantsController {
 
   constructor() {
     // Initialize master database connection once
+    const cfg = getMasterDbConfig();
     this.masterDb = new DataSource({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      username: process.env.DB_USERNAME || 'medicore',
-      password: process.env.DB_PASSWORD || 'medicore_password',
-      database: process.env.POSTGRES_DB || 'medicore',
+      host: cfg.host,
+      port: cfg.port,
+      username: cfg.username,
+      password: cfg.password,
+      database: cfg.database,
     });
     
     this.masterDb.initialize().catch((error) => {
@@ -32,13 +34,14 @@ export class TenantsController {
       // Ensure master database is initialized
       if (!this.masterDb || !this.masterDb.isInitialized) {
         if (!this.masterDb) {
+          const cfg = getMasterDbConfig();
           this.masterDb = new DataSource({
             type: 'postgres',
-            host: process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DB_PORT || '5432'),
-            username: process.env.DB_USERNAME || 'medicore',
-            password: process.env.DB_PASSWORD || 'medicore_password',
-            database: process.env.POSTGRES_DB || 'medicore',
+            host: cfg.host,
+            port: cfg.port,
+            username: cfg.username,
+            password: cfg.password,
+            database: cfg.database,
           });
         }
         await this.masterDb.initialize();
@@ -79,13 +82,14 @@ export class TenantsController {
       // Ensure master database is initialized
       if (!this.masterDb || !this.masterDb.isInitialized) {
         if (!this.masterDb) {
+          const cfg = getMasterDbConfig();
           this.masterDb = new DataSource({
             type: 'postgres',
-            host: process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DB_PORT || '5432'),
-            username: process.env.DB_USERNAME || 'medicore',
-            password: process.env.DB_PASSWORD || 'medicore_password',
-            database: process.env.POSTGRES_DB || 'medicore',
+            host: cfg.host,
+            port: cfg.port,
+            username: cfg.username,
+            password: cfg.password,
+            database: cfg.database,
           });
         }
         await this.masterDb.initialize();
@@ -138,4 +142,3 @@ export class TenantsController {
     }
   }
 }
-

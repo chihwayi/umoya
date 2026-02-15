@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
 import { TerminologyPostgresService } from './terminology-postgres.service';
+import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface RxNormConcept {
   rxcui: string;
@@ -103,13 +104,14 @@ export class TerminologyService {
    */
   private async initializeMasterDb() {
     try {
+      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore');
       this.masterDb = new DataSource({
         type: 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
-        username: process.env.DB_USERNAME || 'medicore',
-        password: process.env.DB_PASSWORD || 'medicore_password',
-        database: process.env.POSTGRES_DB || 'medicore_master',
+        host: cfg.host,
+        port: cfg.port,
+        username: cfg.username,
+        password: cfg.password,
+        database: cfg.database,
       });
       await this.masterDb.initialize();
       this.logger.log('✅ Master database connected for SNOMED CT PostgreSQL search');

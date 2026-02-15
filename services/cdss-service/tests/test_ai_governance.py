@@ -46,3 +46,23 @@ def test_apply_safety_gate_passes_when_thresholds_met():
     )
     assert gated["abstained"] is False
     assert gated["safety_gate"]["passed"] is True
+
+
+def test_apply_safety_gate_blocks_overconfident_language_when_low_confidence():
+    result = {
+        "suggested_diagnoses": [{"diagnosis": "Pneumonia", "probability": 0.45}],
+        "guideline_citations": [{"text": "General fever and cough management guidance"}],
+        "clinical_recommendation": {"text": "This is definitively bacterial pneumonia."},
+    }
+    gated = apply_safety_gate(
+        result,
+        {
+            "min_confidence_score": 0.4,
+            "require_citations": True,
+            "min_citation_count": 1,
+            "abstain_on_low_confidence": True,
+            "contradiction_check_enabled": True,
+        },
+    )
+    assert gated["abstained"] is True
+    assert "overconfident_language" in gated["safety_gate"]["reasons"]

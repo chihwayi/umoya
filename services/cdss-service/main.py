@@ -1037,6 +1037,7 @@ class SettingsPayload(BaseModel):
     ai_require_citations: Optional[bool] = None
     ai_min_citation_count: Optional[int] = None
     ai_abstain_on_low_confidence: Optional[bool] = None
+    ai_contradiction_check_enabled: Optional[bool] = None
 
 
 class ModelRegistryEntryPayload(BaseModel):
@@ -2111,12 +2112,13 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         patient_data['conditions'] = request.conditions
 
     cfg = settings_provider.get_settings() if settings_provider else {}
-    model_registry = settings_provider.get_active_model_registry_map() if settings_provider else {}
+    model_registry = settings_provider.get_runtime_model_registry_map() if settings_provider else {}
     governance_policy = {
         "min_confidence_score": cfg.get("ai_min_confidence_score", 0.55),
         "require_citations": cfg.get("ai_require_citations", True),
         "min_citation_count": cfg.get("ai_min_citation_count", 1),
         "abstain_on_low_confidence": cfg.get("ai_abstain_on_low_confidence", True),
+        "contradiction_check_enabled": cfg.get("ai_contradiction_check_enabled", True),
     }
     
     # Get intelligent suggestions
@@ -2149,6 +2151,7 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         "safety_gate": result.get("safety_gate", {}),
         "abstained": result.get("abstained", False),
         "model_registry": result.get("model_registry", {}),
+        "model_trace": result.get("model_trace", {}),
     }
 
 

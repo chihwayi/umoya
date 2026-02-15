@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as AdmZip from 'adm-zip';
 import * as readline from 'readline';
+import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface ImportStatus {
   jobId: string;
@@ -39,13 +40,14 @@ export class TerminologyImportService implements OnModuleDestroy {
 
   private async initializeMasterDb() {
     try {
+      const cfg = getMasterDbConfig(process.env.MASTER_POSTGRES_DB || process.env.POSTGRES_DB || 'medicore');
       this.masterDb = new DataSource({
         type: 'postgres',
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
-        username: process.env.DB_USERNAME || 'medicore',
-        password: process.env.DB_PASSWORD || 'medicore_password',
-        database: process.env.POSTGRES_DB || 'medicore_master',
+        host: cfg.host,
+        port: cfg.port,
+        username: cfg.username,
+        password: cfg.password,
+        database: cfg.database,
       });
       await this.masterDb.initialize();
       this.logger.log('✅ Master database connected for Terminology Import');

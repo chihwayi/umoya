@@ -71,7 +71,13 @@ class LLMProvider:
             
         return False
 
-    async def generate_response(self, prompt: str, system_prompt: Optional[str] = None, json_mode: bool = False) -> Optional[str]:
+    async def generate_response(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        json_mode: bool = False,
+        model_name: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Generate a text response from the LLM.
         """
@@ -87,8 +93,9 @@ class LLMProvider:
             full_prompt = f"System: {safe_system_prompt}\n\nUser: {safe_prompt}"
         assert_no_outbound_phi(full_prompt, purpose="llm_generate")
 
+        selected_model = model_name or self.model_name
         payload = {
-            "model": self.model_name,
+            "model": selected_model,
             "prompt": full_prompt,
             "stream": False,
             "options": {
@@ -113,13 +120,18 @@ class LLMProvider:
             logger.error(traceback.format_exc())
             return None
 
-    async def generate_json(self, prompt: str, schema_description: str) -> Optional[Dict[str, Any]]:
+    async def generate_json(
+        self,
+        prompt: str,
+        schema_description: str,
+        model_name: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Generate a structured JSON response.
         """
         system_prompt = f"You are a medical AI assistant. Output ONLY valid JSON matching this schema: {schema_description}. Do not include markdown formatting or explanations."
         
-        response_text = await self.generate_response(prompt, system_prompt, json_mode=True)
+        response_text = await self.generate_response(prompt, system_prompt, json_mode=True, model_name=model_name)
         if not response_text:
             return None
 
