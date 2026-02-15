@@ -97,6 +97,11 @@ Status legend:
 - Acceptance criteria:
   - Key IDs and rotation timestamps are auditable.
   - Secrets are no longer long-lived static defaults in prod.
+ - Implementation notes:
+   - Added runtime keyring support for decrypting legacy encrypted payloads during key rotation (`CDSS_ENCRYPTION_PREVIOUS_KEYS_JSON`).
+   - Added KMS-mode config enforcement (`CDSS_ENCRYPTION_KMS_KEY_ARN`) and stricter non-dev guardrails (`CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS=false`).
+   - Added admin migration endpoint/job for batch re-encryption: `POST /admin/encryption/reencrypt` (`job_type=reencrypt`).
+   - Added rotation runbook: `docs/compliance/cdss-key-rotation-runbook.md`.
 
 ### E2-B3 (`P1`, `Todo`) Row-level and query-level tenant policy tests
 

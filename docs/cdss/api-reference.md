@@ -117,6 +117,18 @@ Base URL: `http://cdss-service:8000` (Internal) or via EHR Proxy `/api/cdss/*`
 *   **POST** `/medications/food-interactions`
 *   **Description:** Flags food interactions for active medication list.
 
+### 13. Admin Encryption Re-Encryption Job
+*   **POST** `/admin/encryption/reencrypt`
+*   **Description:** Runs a key-rotation migration to re-encrypt stored payloads to the active encryption key.
+*   **Request Body:**
+    ```json
+    {
+      "async_job": true,
+      "dry_run": false,
+      "per_table_limit": 500
+    }
+    ```
+
 ## Error Handling
 
 *   **400 Bad Request:** Invalid input data.

@@ -53,7 +53,9 @@ Set values in env files, secret manager, or CI/CD variables instead of changing 
 | `CDSS_ENCRYPTION_ENABLED` | Yes | `cdss-service` | At-rest envelope encryption switch |
 | `CDSS_ENCRYPTION_PROVIDER` | Yes | `cdss-service` | `local` or `kms` |
 | `CDSS_ENCRYPTION_KEY_ID` | Yes | `cdss-service` | Rotation tracking key id |
+| `CDSS_ENCRYPTION_KMS_KEY_ARN` | Required when `provider=kms` | `cdss-service` | KMS CMK/alias ARN for envelope control plane |
 | `CDSS_ENCRYPTION_KEY` | Yes | `cdss-service` | Encryption key material |
+| `CDSS_ENCRYPTION_PREVIOUS_KEYS_JSON` | Optional | `cdss-service` | Decrypt-only legacy keyring during rotations |
 | `CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS` | Transitional | `cdss-service` | Keep `false` after migration |
 | `OWNER_EMAILS` | Yes | `cdss-service` admin | Comma-separated owner principals |
 | `CDSS_OWNER_SCOPE_STRICT` | Recommended | `cdss-service` admin | Enable strict scope enforcement |

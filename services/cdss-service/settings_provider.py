@@ -132,18 +132,29 @@ class SettingsProvider:
                 "CREATE INDEX IF NOT EXISTS idx_cdss_admin_jobs_type ON cdss_admin_jobs(job_type);"
             )
             if self.crypto.enabled:
-                cur.execute(
-                    """
-                    INSERT INTO cdss_encryption_keys (key_id, provider, key_fingerprint, is_active, rotated_at)
-                    VALUES (%s, %s, %s, TRUE, NOW())
-                    ON CONFLICT (key_id) DO UPDATE
-                      SET provider = EXCLUDED.provider,
-                          key_fingerprint = EXCLUDED.key_fingerprint,
-                          is_active = TRUE,
-                          rotated_at = NOW();
-                    """,
-                    (self.crypto.key_id, self.crypto.provider, self.crypto.key_fingerprint()),
-                )
+                key_rows = self.crypto.key_metadata()
+                for row in key_rows:
+                    cur.execute(
+                        """
+                        INSERT INTO cdss_encryption_keys (key_id, provider, key_fingerprint, is_active, rotated_at)
+                        VALUES (%s, %s, %s, %s, NOW())
+                        ON CONFLICT (key_id) DO UPDATE
+                          SET provider = EXCLUDED.provider,
+                              key_fingerprint = EXCLUDED.key_fingerprint,
+                              is_active = EXCLUDED.is_active,
+                              rotated_at = CASE
+                                WHEN cdss_encryption_keys.is_active IS DISTINCT FROM EXCLUDED.is_active
+                                  THEN NOW()
+                                ELSE cdss_encryption_keys.rotated_at
+                              END;
+                        """,
+                        (
+                            row.get("key_id"),
+                            row.get("provider"),
+                            row.get("key_fingerprint"),
+                            bool(row.get("is_active")),
+                        ),
+                    )
             self._seed_model_registry(cur)
 
     def _seed_model_registry(self, cur) -> None:
@@ -589,6 +600,104 @@ class SettingsProvider:
         except Exception as e:
             logger.warning(f"Failed to fetch admin job {job_id}: {e}")
             return None
+
+    def reencrypt_payloads(self, per_table_limit: int = 500, dry_run: bool = False) -> Dict[str, Any]:
+        """
+        Re-encrypt encrypted JSON payloads that are still wrapped with a non-active key_id.
+        This migrates existing ciphertext to the currently active key.
+        """
+        if not self.crypto.enabled:
+            raise RuntimeError("Encryption is disabled; re-encryption is not applicable.")
+
+        limit = max(1, min(int(per_table_limit or 500), 5000))
+        active_key_id = self.crypto.key_id
+
+        specs = [
+            ("system_settings", "key", "value"),
+            ("cdss_admin_audit_logs", "id", "payload"),
+            ("cdss_admin_jobs", "job_id", "payload"),
+            ("cdss_admin_jobs", "job_id", "result"),
+        ]
+        summary: Dict[str, Any] = {
+            "active_key_id": active_key_id,
+            "dry_run": bool(dry_run),
+            "tables": {},
+            "totals": {"scanned": 0, "reencrypted": 0, "errors": 0},
+        }
+
+        for table_name, id_col, json_col in specs:
+            stats = self._reencrypt_column(
+                table_name=table_name,
+                id_col=id_col,
+                json_col=json_col,
+                active_key_id=active_key_id,
+                limit=limit,
+                dry_run=bool(dry_run),
+            )
+            summary["tables"][f"{table_name}.{json_col}"] = stats
+            summary["totals"]["scanned"] += stats["scanned"]
+            summary["totals"]["reencrypted"] += stats["reencrypted"]
+            summary["totals"]["errors"] += stats["errors"]
+
+        return summary
+
+    def _reencrypt_column(
+        self,
+        *,
+        table_name: str,
+        id_col: str,
+        json_col: str,
+        active_key_id: str,
+        limit: int,
+        dry_run: bool,
+    ) -> Dict[str, Any]:
+        scanned = 0
+        reencrypted = 0
+        errors = 0
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {id_col}, {json_col}
+                FROM {table_name}
+                WHERE {json_col} IS NOT NULL
+                  AND jsonb_typeof({json_col}) = 'object'
+                  AND {json_col} ? '__enc_v1'
+                  AND COALESCE({json_col}->'__enc_v1'->>'key_id', '') <> %s
+                ORDER BY {id_col}
+                LIMIT %s;
+                """,
+                (active_key_id, limit),
+            )
+            rows = cur.fetchall()
+
+            for row_id, row_payload in rows:
+                scanned += 1
+                try:
+                    decrypted = self.crypto.decrypt_json(row_payload)
+                    updated = self.crypto.encrypt_json(decrypted)
+                    if not dry_run:
+                        cur.execute(
+                            f"UPDATE {table_name} SET {json_col} = %s WHERE {id_col} = %s;",
+                            (Json(updated), row_id),
+                        )
+                    reencrypted += 1
+                except Exception as exc:
+                    errors += 1
+                    logger.warning(
+                        "Failed to re-encrypt %s.%s row %s: %s",
+                        table_name,
+                        json_col,
+                        row_id,
+                        exc,
+                    )
+
+        return {
+            "scanned": scanned,
+            "reencrypted": reencrypted,
+            "errors": errors,
+            "dry_run": bool(dry_run),
+        }
 
     def close(self) -> None:
         try:

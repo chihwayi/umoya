@@ -143,16 +143,23 @@ def _validate_security_config() -> None:
         provider = os.getenv("CDSS_ENCRYPTION_PROVIDER", "local").strip().lower() or "local"
         if provider not in ("local", "kms"):
             raise RuntimeError("CDSS_ENCRYPTION_PROVIDER must be one of: local, kms.")
+        allow_plaintext_reads = _get_bool_env_strict("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS", "true")
         encryption_key = os.getenv("CDSS_ENCRYPTION_KEY", "").strip()
         if not encryption_key:
             raise RuntimeError("CDSS_ENCRYPTION_ENABLED=true but CDSS_ENCRYPTION_KEY is missing.")
         encryption_key_id = os.getenv("CDSS_ENCRYPTION_KEY_ID", "").strip()
         if not encryption_key_id:
             raise RuntimeError("CDSS_ENCRYPTION_KEY_ID is required when CDSS_ENCRYPTION_ENABLED=true.")
+        if provider == "kms":
+            kms_key_arn = os.getenv("CDSS_ENCRYPTION_KMS_KEY_ARN", "").strip()
+            if not kms_key_arn:
+                raise RuntimeError("CDSS_ENCRYPTION_PROVIDER=kms requires CDSS_ENCRYPTION_KMS_KEY_ARN.")
 
         insecure_default_enc = "h7X7Tr_3k0-Tl3xw8tS9AqK3f7fjoGv0VGfT3d2i-9o="
         if env not in ("dev", "development", "local", "test") and encryption_key == insecure_default_enc:
             raise RuntimeError("CDSS_ENCRYPTION_KEY is using insecure default in non-development environment.")
+        if env not in ("dev", "development", "local", "test") and allow_plaintext_reads:
+            raise RuntimeError("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS must be false in non-development environment.")
 
 
 _validate_security_config()
@@ -697,8 +704,9 @@ def _dispatch_job(job_id: str) -> str:
                 pass
 
     # Fallback path for local/dev or redis outage
-    _dispatch_job(job_id)
-    _update_job(job_id, queue_backend="thread", status="queued")
+    t = threading.Thread(target=_run_job, args=(job_id,), daemon=True, name=f"cdss-job-fallback-{job_id[:8]}")
+    t.start()
+    _update_job(job_id, queue_backend="thread", status="running")
     return "thread"
 
 
@@ -781,6 +789,14 @@ def _run_cache_flush_job() -> Dict[str, Any]:
         except Exception:
             continue
     return {"flushed": deleted}
+
+
+def _run_reencrypt_job(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not settings_provider:
+        raise RuntimeError("Settings provider unavailable")
+    per_table_limit = int(payload.get("per_table_limit") or 500)
+    dry_run = bool(payload.get("dry_run", False))
+    return settings_provider.reencrypt_payloads(per_table_limit=per_table_limit, dry_run=dry_run)
 
 
 def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -866,6 +882,8 @@ def _run_job(job_id: str) -> None:
             result = _run_reindex_job()
         elif job_type == "cache_flush":
             result = _run_cache_flush_job()
+        elif job_type == "reencrypt":
+            result = _run_reencrypt_job(payload)
         elif job_type == "transcribe":
             result = _run_transcribe_job(payload)
         elif job_type == "analyze_image":
@@ -1048,6 +1066,12 @@ class ModelRegistryEntryPayload(BaseModel):
     status: Optional[str] = "active"
     config: Optional[Dict[str, Any]] = None
 
+
+class EncryptionReencryptPayload(BaseModel):
+    async_job: bool = True
+    dry_run: bool = False
+    per_table_limit: int = 500
+
 @app.get("/admin/settings")
 async def get_admin_settings(owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
     if not settings_provider:
@@ -1082,6 +1106,39 @@ async def admin_models_upsert(payload: ModelRegistryEntryPayload, owner: str = D
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True, "model": saved}
+
+
+@app.post("/admin/encryption/reencrypt")
+async def admin_encryption_reencrypt(
+    payload: EncryptionReencryptPayload,
+    owner: str = Depends(require_owner_scope("cdss.admin.settings.write")),
+):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    if not settings_provider.crypto.enabled:
+        raise HTTPException(status_code=409, detail="Encryption is disabled")
+
+    per_table_limit = max(1, min(int(payload.per_table_limit or 500), 5000))
+    job_payload = {
+        "dry_run": bool(payload.dry_run),
+        "per_table_limit": per_table_limit,
+    }
+
+    if payload.async_job:
+        job_id = _create_job(job_type="reencrypt", owner=owner, payload=job_payload)
+        _dispatch_job(job_id)
+        return {"started": True, "jobId": job_id}
+
+    try:
+        result = _run_reencrypt_job(job_payload)
+        settings_provider.log_action(
+            actor=owner,
+            action="encryption_reencrypt",
+            payload={"mode": "sync", **job_payload, "summary": result},
+        )
+        return {"started": False, "result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/ingest")
 async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
