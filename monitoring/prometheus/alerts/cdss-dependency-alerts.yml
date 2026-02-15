@@ -1,0 +1,45 @@
+groups:
+  - name: cdss-dependency-health
+    interval: 30s
+    rules:
+      - alert: CdssHighErrorRate
+        expr: |
+          (
+            sum(rate(cdss_hooks_total{status="error"}[5m]))
+            /
+            clamp_min(sum(rate(cdss_hooks_total[5m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS dependency error rate is high"
+          description: "EHR to CDSS error ratio has exceeded 5% for 10 minutes."
+
+      - alert: CdssHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(cdss_hook_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS dependency latency is high"
+          description: "EHR to CDSS p95 latency has exceeded 2 seconds for 10 minutes."
+
+      - alert: CdssDependencyTimeoutBurst
+        expr: sum(rate(cdss_dependency_timeouts_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS dependency timeout burst detected"
+          description: "Timeouts against CDSS are above 0.2/s for at least 5 minutes."

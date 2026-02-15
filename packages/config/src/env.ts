@@ -43,18 +43,40 @@ const envSchema = z.object({
   SMS_GATEWAY_NETONE: z.string().default('https://api.netone.co.zw/sms'),
 });
 
+const rawNodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
+const isDevLike = rawNodeEnv === 'development';
+
 // Parse and validate
-// Note: We use safeParse to allow partial configs in some environments if needed,
-// but for strictness we should handle errors.
 const _env = envSchema.safeParse(process.env);
 
 if (!_env.success) {
-  console.error('⚠️  Environment Validation Warning:', _env.error.format());
-  // In strict mode, we might want to throw. For now, we warn.
+  if (isDevLike) {
+    console.error('⚠️  Environment Validation Warning:', _env.error.format());
+  } else {
+    throw new Error(`Environment validation failed: ${JSON.stringify(_env.error.format())}`);
+  }
 }
 
-// Fallback to defaults if parsing fails (or use partial data)
-const envData = _env.success ? _env.data : process.env as any;
+// Fallback only in dev-like environments to keep local setup simple.
+const envData = _env.success
+  ? _env.data
+  : (process.env as any);
+
+if (!isDevLike) {
+  const insecureJwtDefault = 'your-super-secret-jwt-key-change-this-in-production';
+  if (!envData.JWT_SECRET || envData.JWT_SECRET === insecureJwtDefault || envData.JWT_SECRET.length < 24) {
+    throw new Error('Invalid JWT_SECRET for non-development environment.');
+  }
+
+  const serviceUrls = [
+    envData.SERVICE_TENANT_URL,
+    envData.SERVICE_EHR_URL,
+    envData.SERVICE_CDSS_URL,
+  ];
+  if (serviceUrls.some((url) => !url || String(url).includes('localhost'))) {
+    throw new Error('Service URLs must be explicitly configured and not localhost in non-development environment.');
+  }
+}
 
 export const env = envData;
 

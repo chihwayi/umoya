@@ -4,6 +4,7 @@ import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 import { createHmac, randomUUID } from 'crypto';
+import { MetricsService } from './metrics.service';
 
 @Injectable()
 export class CdssService {
@@ -15,10 +16,20 @@ export class CdssService {
   private readonly cdssServiceJwtIssuer: string;
   private readonly cdssServiceJwtAudience: string;
   private readonly cdssServiceAuthMode: 'token' | 'jwt' | 'both';
+  private readonly defaultTimeoutMs: number;
+  private readonly retryMax: number;
+  private readonly retryBaseDelayMs: number;
+  private readonly circuitFailureThreshold: number;
+  private readonly circuitOpenMs: number;
+  private circuitState: 'closed' | 'open' | 'half_open' = 'closed';
+  private circuitOpenedAt: number | null = null;
+  private consecutiveFailures = 0;
 
   constructor(
-    @Optional() @Inject(WhoSmartGuidelinesService) 
-    private readonly whoSmartGuidelinesService?: WhoSmartGuidelinesService
+    @Optional() @Inject(WhoSmartGuidelinesService)
+    private readonly whoSmartGuidelinesService?: WhoSmartGuidelinesService,
+    @Optional() @Inject(MetricsService)
+    private readonly metricsService?: MetricsService,
   ) {
     this.cdssServiceUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
     this.cdssServiceToken = process.env.CDSS_SERVICE_TOKEN;
@@ -27,9 +38,15 @@ export class CdssService {
     this.cdssServiceJwtAudience = process.env.CDSS_SERVICE_AUTH_AUDIENCE || 'medicore.cdss';
     const modeRaw = (process.env.CDSS_SERVICE_AUTH_MODE || 'both').toLowerCase();
     this.cdssServiceAuthMode = modeRaw === 'jwt' || modeRaw === 'token' ? modeRaw : 'both';
+    this.defaultTimeoutMs = this.parsePositiveInt(process.env.CDSS_OUTBOUND_TIMEOUT_MS, 15000);
+    this.retryMax = this.parsePositiveInt(process.env.CDSS_OUTBOUND_RETRY_MAX, 2);
+    this.retryBaseDelayMs = this.parsePositiveInt(process.env.CDSS_OUTBOUND_RETRY_BASE_MS, 200);
+    this.circuitFailureThreshold = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_FAIL_THRESHOLD, 5);
+    this.circuitOpenMs = this.parsePositiveInt(process.env.CDSS_CIRCUIT_BREAKER_OPEN_MS, 30000);
+
     this.cdssClient = axios.create({
       baseURL: this.cdssServiceUrl,
-      timeout: 15000, // Increased timeout
+      timeout: this.defaultTimeoutMs,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -78,6 +95,127 @@ export class CdssService {
       timeout,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
     };
+  }
+
+  private parsePositiveInt(raw: string | undefined, fallback: number): number {
+    const parsed = Number.parseInt(raw || '', 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return parsed;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private ensureCircuitClosed(eventType: string): void {
+    if (this.circuitState !== 'open') {
+      return;
+    }
+    const openedAt = this.circuitOpenedAt ?? Date.now();
+    const elapsed = Date.now() - openedAt;
+    if (elapsed >= this.circuitOpenMs) {
+      this.circuitState = 'half_open';
+      return;
+    }
+    const err = new Error(`CDSS circuit breaker is open for ${eventType}`);
+    (err as any).code = 'CDSS_CIRCUIT_OPEN';
+    throw err;
+  }
+
+  private onCdssCallSuccess(): void {
+    this.consecutiveFailures = 0;
+    this.circuitState = 'closed';
+    this.circuitOpenedAt = null;
+  }
+
+  private onCdssCallFailure(): void {
+    this.consecutiveFailures += 1;
+    if (this.circuitState === 'half_open' || this.consecutiveFailures >= this.circuitFailureThreshold) {
+      this.circuitState = 'open';
+      this.circuitOpenedAt = Date.now();
+      this.logger.warn(`[CDSS] Circuit opened after ${this.consecutiveFailures} consecutive failures`);
+    }
+  }
+
+  private isRetryableError(error: any): boolean {
+    if (!axios.isAxiosError(error)) {
+      return false;
+    }
+    if (!error.response) {
+      return true;
+    }
+    return [408, 429, 500, 502, 503, 504].includes(error.response.status);
+  }
+
+  private classifyCdssError(error: any): string {
+    if ((error as any)?.code === 'CDSS_CIRCUIT_OPEN') {
+      return 'circuit_open';
+    }
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        return 'timeout';
+      }
+      if (error.response) {
+        return `http_${error.response.status}`;
+      }
+      return 'network';
+    }
+    return 'unknown';
+  }
+
+  private async postWithPolicy<T>(
+    eventType: string,
+    path: string,
+    payload: any,
+    timeoutMs: number,
+    tenantId?: string,
+  ): Promise<T> {
+    this.ensureCircuitClosed(eventType);
+    const startedAt = Date.now();
+    const maxAttempts = this.retryMax + 1;
+    let lastError: any;
+    let retries = 0;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await this.cdssClient.post(
+          path,
+          payload,
+          this.buildCdssRequestConfig(timeoutMs, tenantId),
+        );
+        const durationSeconds = (Date.now() - startedAt) / 1000;
+        this.metricsService?.recordCdssHook(eventType, 'success', durationSeconds);
+        this.onCdssCallSuccess();
+        return response.data as T;
+      } catch (error: any) {
+        lastError = error;
+        const errorType = this.classifyCdssError(error);
+        if (errorType === 'timeout') {
+          this.metricsService?.recordCdssTimeout(eventType);
+        }
+        const retryable = this.isRetryableError(error);
+        if (retryable && attempt < maxAttempts) {
+          retries += 1;
+          this.metricsService?.recordCdssRetry(eventType, errorType);
+          const delayMs = this.retryBaseDelayMs * Math.pow(2, attempt - 1);
+          await this.sleep(delayMs);
+          continue;
+        }
+
+        const durationSeconds = (Date.now() - startedAt) / 1000;
+        this.metricsService?.recordCdssHook(eventType, 'error', durationSeconds);
+        this.metricsService?.recordCdssHookError(eventType, errorType);
+        if (retries > 0) {
+          this.logger.warn(`[CDSS] ${eventType} failed after ${retries} retries`);
+        }
+        this.onCdssCallFailure();
+        break;
+      }
+    }
+
+    throw lastError;
   }
 
   private createServiceJwt(): string | null {
@@ -140,19 +278,22 @@ export class CdssService {
       }
 
       // Try advanced checking via Python CDSS service
-      const response = await this.cdssClient.post('/drugs/interactions/advanced', {
+      const responseData = await this.postWithPolicy<any>(
+        'drug_interactions',
+        '/drugs/interactions/advanced',
+        {
         drug_ids: drugIds,
         patient_id: patientId,
         drugs_data: drugsData.length > 0 ? drugsData : undefined,
-      }, {
-        timeout: 15000, // 15 second timeout
-      });
+        },
+        15000,
+      );
 
       return {
-        hasInteractions: response.data.interactions?.length > 0,
-        interactions: response.data.interactions || [],
-        severity_summary: response.data.severity_summary,
-        recommendations: response.data.recommendations || [],
+        hasInteractions: responseData.interactions?.length > 0,
+        interactions: responseData.interactions || [],
+        severity_summary: responseData.severity_summary,
+        recommendations: responseData.recommendations || [],
         source: 'advanced_cdss',
       };
     } catch (error: any) {
@@ -208,7 +349,10 @@ export class CdssService {
       
       if (useIntelligent && (hasClinicalNotes || hasPatientData)) {
         try {
-          const intelligentResponse = await this.cdssClient.post('/diagnosis/suggest/intelligent', {
+          const intelligentData = await this.postWithPolicy<any>(
+            'diagnosis_assist_intelligent',
+            '/diagnosis/suggest/intelligent',
+            {
             symptoms: normalizedSymptoms,
             vitals: symptoms.vitals || undefined,
             clinical_notes: symptoms.clinicalNotes || symptoms.chiefComplaint || symptoms.historyOfPresentIllness || undefined,
@@ -221,11 +365,12 @@ export class CdssService {
             },
             age: symptoms.age || undefined,
             gender: symptoms.gender || undefined,
-            labs: symptoms.labs || undefined,
-            conditions: symptoms.conditions || symptoms.diagnoses || undefined
-          }, this.buildCdssRequestConfig(20000, tenantId));
-
-          const intelligentData = intelligentResponse.data;
+              labs: symptoms.labs || undefined,
+              conditions: symptoms.conditions || symptoms.diagnoses || undefined
+            },
+            20000,
+            tenantId,
+          );
           this.logger.log(`Intelligent CDSS response received (AI enabled: ${intelligentData?.ai_enabled})`);
           
           // Return intelligent results if available
@@ -256,14 +401,19 @@ export class CdssService {
       }
       
       // Fallback to rule-based endpoint
-      const response = await this.cdssClient.post('/diagnosis/suggest', {
+      const responseData = await this.postWithPolicy<any>(
+        'diagnosis_assist',
+        '/diagnosis/suggest',
+        {
         symptoms: normalizedSymptoms,
         vitals: symptoms.vitals || undefined,
         age: symptoms.age || undefined,
         gender: symptoms.gender || undefined,
-      }, this.buildCdssRequestConfig(10000, tenantId));
+        },
+        10000,
+        tenantId,
+      );
 
-      const responseData = response.data;
       console.log('[CDSS] Response received:', JSON.stringify(responseData).substring(0, 300));
       this.logger.log(`CDSS response received: ${JSON.stringify(responseData).substring(0, 200)}...`);
       
@@ -343,21 +493,27 @@ export class CdssService {
     
     // Fallback to CDSS guidelines
     try {
-      const response = await this.cdssClient.post('/guidelines/check', {
+      const responseData = await this.postWithPolicy<any>(
+        'guidelines_check',
+        '/guidelines/check',
+        {
         condition,
         patient_age: patientData?.age,
         patient_gender: patientData?.gender,
         comorbidities: patientData?.comorbidities || patientData?.conditions || [],
         medications: patientData?.medications || [],
-      }, this.buildCdssRequestConfig(10000, tenantId));
+        },
+        10000,
+        tenantId,
+      );
 
       return {
-        guidelines: response.data.guidelines || [],
-        recommendations: response.data.recommendations || [],
-        contraindications: response.data.contraindications || [],
-        medication_warnings: response.data.medication_warnings || [],
-        evidence_level: response.data.evidence_level,
-        matched_condition: response.data.matched_condition,
+        guidelines: responseData.guidelines || [],
+        recommendations: responseData.recommendations || [],
+        contraindications: responseData.contraindications || [],
+        medication_warnings: responseData.medication_warnings || [],
+        evidence_level: responseData.evidence_level,
+        matched_condition: responseData.matched_condition,
         source: 'advanced_cdss',
       };
     } catch (error: any) {
@@ -399,13 +555,19 @@ export class CdssService {
 
       // 2. Search External CDSS (RAG)
       try {
-        const response = await this.cdssClient.post('/guidelines/search', {
+        const responseData = await this.postWithPolicy<any>(
+          'guidelines_search',
+          '/guidelines/search',
+          {
           query,
           limit,
           patient_context: patientContext
-        }, this.buildCdssRequestConfig(15000, tenantId));
-        if (response.data && response.data.citations) {
-          results.citations.push(...response.data.citations);
+          },
+          15000,
+          tenantId,
+        );
+        if (responseData && responseData.citations) {
+          results.citations.push(...responseData.citations);
         }
       } catch (error: any) {
         this.logger.warn(`CDSS guideline search failed: ${error.message}`);
@@ -540,15 +702,21 @@ export class CdssService {
         requestPayload.visit_history = historicalData.visitHistory;
       }
 
-      const response = await this.cdssClient.post('/risk/calculate', requestPayload, this.buildCdssRequestConfig(15000, tenantId));
+      const responseData = await this.postWithPolicy<any>(
+        'risk_assessment',
+        '/risk/calculate',
+        requestPayload,
+        15000,
+        tenantId,
+      );
 
       // Merge trend analysis if available
       const result: any = {
-        overall_score: response.data.overall_score,
-        risk_level: response.data.risk_level,
-        factors: response.data.factors || [],
-        recommendations: response.data.recommendations || [],
-        guideline_citations: response.data.guideline_citations || [],
+        overall_score: responseData.overall_score,
+        risk_level: responseData.risk_level,
+        factors: responseData.factors || [],
+        recommendations: responseData.recommendations || [],
+        guideline_citations: responseData.guideline_citations || [],
         source: 'advanced_cdss',
       };
 
@@ -563,13 +731,13 @@ export class CdssService {
       }
 
       // Add trend analysis if available
-      if (response.data.trends) {
-        result.trends = response.data.trends;
+      if (responseData.trends) {
+        result.trends = responseData.trends;
       }
       
       // Add visit patterns if available
-      if (response.data.visit_patterns) {
-        result.visit_patterns = response.data.visit_patterns;
+      if (responseData.visit_patterns) {
+        result.visit_patterns = responseData.visit_patterns;
       }
 
       return result;
@@ -588,13 +756,16 @@ export class CdssService {
    */
   async interpretLabResults(labResults: any, historicalLabs?: any[]) {
     try {
-      const response = await this.cdssClient.post('/labs/interpret', {
+      const responseData = await this.postWithPolicy<any>(
+        'labs_interpret',
+        '/labs/interpret',
+        {
         lab_results: labResults,
         historical_labs: historicalLabs || []
-      }, {
-        timeout: 15000,
-      });
-      return response.data;
+        },
+        15000,
+      );
+      return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS lab interpretation unavailable: ${error.message}`);
       return {
@@ -613,13 +784,16 @@ export class CdssService {
    */
   async detectDuplicateTherapy(medications: any[], prescriptions?: any[]) {
     try {
-      const response = await this.cdssClient.post('/medications/duplicates', {
+      const responseData = await this.postWithPolicy<any>(
+        'medication_duplicates',
+        '/medications/duplicates',
+        {
         medications,
         prescriptions: prescriptions || []
-      }, {
-        timeout: 15000,
-      });
-      return response.data;
+        },
+        15000,
+      );
+      return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS duplicate therapy detection unavailable: ${error.message}`);
       return {
@@ -643,16 +817,19 @@ export class CdssService {
     renalFunction?: number
   ) {
     try {
-      const response = await this.cdssClient.post('/medications/high-risk', {
+      const responseData = await this.postWithPolicy<any>(
+        'medication_high_risk',
+        '/medications/high-risk',
+        {
         medications,
         patient_age: patientAge,
         patient_gender: patientGender,
         diagnoses: diagnoses || [],
         renal_function: renalFunction
-      }, {
-        timeout: 15000,
-      });
-      return response.data;
+        },
+        15000,
+      );
+      return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS high-risk medication check unavailable: ${error.message}`);
       return {
@@ -677,15 +854,18 @@ export class CdssService {
     diagnoses?: string[]
   ) {
     try {
-      const response = await this.cdssClient.post('/care-gaps/detect', {
+      const responseData = await this.postWithPolicy<any>(
+        'care_gaps_detect',
+        '/care-gaps/detect',
+        {
         patient_age: patientAge,
         patient_gender: patientGender,
         visit_history: visitHistory || [],
         diagnoses: diagnoses || []
-      }, {
-        timeout: 15000,
-      });
-      return response.data;
+        },
+        15000,
+      );
+      return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS care gap detection unavailable: ${error.message}`);
       return {
@@ -703,12 +883,15 @@ export class CdssService {
    */
   async checkFoodInteractions(medications: any[]) {
     try {
-      const response = await this.cdssClient.post('/medications/food-interactions', {
+      const responseData = await this.postWithPolicy<any>(
+        'food_interactions',
+        '/medications/food-interactions',
+        {
         medications,
-      }, {
-        timeout: 15000,
-      });
-      return response.data;
+        },
+        15000,
+      );
+      return responseData;
     } catch (error: any) {
       this.logger.warn(`CDSS food interaction check unavailable: ${error.message}`);
       return {
@@ -846,7 +1029,10 @@ export class CdssService {
    */
   async getDosingRecommendation(dosingRequest: any) {
     try {
-      const response = await this.cdssClient.post('/dosing/recommend', {
+      const responseData = await this.postWithPolicy<any>(
+        'dosing_recommendation',
+        '/dosing/recommend',
+        {
         drug_name: dosingRequest.drug_name,
         patient_age: dosingRequest.patient_age,
         patient_weight_kg: dosingRequest.patient_weight_kg,
@@ -856,12 +1042,12 @@ export class CdssService {
         crCl: dosingRequest.crCl,
         hepatic_function: dosingRequest.hepatic_function,
         standard_dose: dosingRequest.standard_dose,
-      }, {
-        timeout: 10000,
-      });
+        },
+        10000,
+      );
 
       return {
-        ...response.data,
+        ...responseData,
         source: 'advanced_cdss',
       };
     } catch (error: any) {

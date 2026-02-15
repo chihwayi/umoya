@@ -151,6 +151,40 @@
             { "value": 1, "color": "green" }
           ]
         }
+      },
+      {
+        "id": 10,
+        "title": "CDSS Dependency Retries",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(cdss_dependency_retries_total[5m])) by (event_type, reason)",
+            "legendFormat": "{{event_type}} - {{reason}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Retries/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "CDSS Dependency Timeouts",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(cdss_dependency_timeouts_total[5m])) by (event_type)",
+            "legendFormat": "{{event_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Timeouts/sec" },
+          { "format": "short" }
+        ]
       }
     ],
     "time": {
@@ -160,4 +194,3 @@
     "timepicker": {}
   }
 }
-

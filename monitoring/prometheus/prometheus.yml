@@ -5,6 +5,9 @@ global:
     cluster: 'medicore'
     environment: 'production'
 
+rule_files:
+  - '/etc/prometheus/alerts/*.yml'
+
 scrape_configs:
   - job_name: 'ehr-service'
     static_configs:
@@ -36,4 +39,3 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-

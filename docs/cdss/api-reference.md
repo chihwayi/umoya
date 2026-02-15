@@ -93,6 +93,30 @@ Base URL: `http://cdss-service:8000` (Internal) or via EHR Proxy `/api/cdss/*`
 *   **Description:** Uses AI models (MedBERT/ClinicalBERT) for deeper analysis.
 *   **Request Body:** Same as `/diagnosis/suggest`.
 
+### 7. Guideline Search (RAG)
+*   **POST** `/guidelines/search`
+*   **Description:** Searches indexed clinical guidance content with optional patient context.
+
+### 8. Lab Interpretation
+*   **POST** `/labs/interpret`
+*   **Description:** Interprets laboratory values and returns critical/abnormal findings.
+
+### 9. Duplicate Therapy Detection
+*   **POST** `/medications/duplicates`
+*   **Description:** Detects therapeutic duplication across active medications.
+
+### 10. High-Risk Medication Screening
+*   **POST** `/medications/high-risk`
+*   **Description:** Screens medications against high-risk criteria (e.g. Beers/SToPP style checks).
+
+### 11. Care Gap Detection
+*   **POST** `/care-gaps/detect`
+*   **Description:** Identifies preventive and longitudinal care gaps from demographics and history.
+
+### 12. Food-Drug Interaction Screening
+*   **POST** `/medications/food-interactions`
+*   **Description:** Flags food interactions for active medication list.
+
 ## Error Handling
 
 *   **400 Bad Request:** Invalid input data.

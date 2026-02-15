@@ -14,6 +14,8 @@ export class MetricsService {
   private readonly cdssHookCounter: promClient.Counter;
   private readonly cdssHookDuration: promClient.Histogram;
   private readonly cdssHookErrors: promClient.Counter;
+  private readonly cdssDependencyRetryCounter: promClient.Counter;
+  private readonly cdssDependencyTimeoutCounter: promClient.Counter;
 
   // Provisioning Metrics
   private readonly provisioningCounter: promClient.Counter;
@@ -52,6 +54,20 @@ export class MetricsService {
       name: 'cdss_hook_errors_total',
       help: 'Total number of CDSS hook errors',
       labelNames: ['event_type', 'error_type'],
+      registers: [this.register],
+    });
+
+    this.cdssDependencyRetryCounter = new promClient.Counter({
+      name: 'cdss_dependency_retries_total',
+      help: 'Total number of EHR to CDSS retry attempts',
+      labelNames: ['event_type', 'reason'],
+      registers: [this.register],
+    });
+
+    this.cdssDependencyTimeoutCounter = new promClient.Counter({
+      name: 'cdss_dependency_timeouts_total',
+      help: 'Total number of EHR to CDSS timeout failures',
+      labelNames: ['event_type'],
       registers: [this.register],
     });
 
@@ -124,6 +140,14 @@ export class MetricsService {
     this.cdssHookErrors.inc({ event_type: eventType, error_type: errorType });
   }
 
+  recordCdssRetry(eventType: string, reason: string) {
+    this.cdssDependencyRetryCounter.inc({ event_type: eventType, reason });
+  }
+
+  recordCdssTimeout(eventType: string) {
+    this.cdssDependencyTimeoutCounter.inc({ event_type: eventType });
+  }
+
   // Provisioning Metrics
   recordProvisioning(bundleId: string, status: 'success' | 'error', durationSeconds?: number) {
     this.provisioningCounter.inc({ bundle_id: bundleId, status });
@@ -170,4 +194,3 @@ export class MetricsService {
     return this.register;
   }
 }
-

@@ -41,6 +41,11 @@ Set values in env files, secret manager, or CI/CD variables instead of changing 
 | `CDSS_SERVICE_AUTH_ISSUER` | Yes | EHR + CDSS | Must match both sides |
 | `CDSS_SERVICE_AUTH_AUDIENCE` | Yes | EHR + CDSS | Must match both sides |
 | `CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT` | Recommended | `cdss-service` | Enable stricter replay behavior |
+| `CDSS_OUTBOUND_TIMEOUT_MS` | Recommended | `ehr-service` | Default timeout for EHR->CDSS calls |
+| `CDSS_OUTBOUND_RETRY_MAX` | Recommended | `ehr-service` | Retry attempts for retryable CDSS failures |
+| `CDSS_OUTBOUND_RETRY_BASE_MS` | Recommended | `ehr-service` | Exponential backoff base delay |
+| `CDSS_CIRCUIT_BREAKER_FAIL_THRESHOLD` | Recommended | `ehr-service` | Consecutive failures before opening circuit |
+| `CDSS_CIRCUIT_BREAKER_OPEN_MS` | Recommended | `ehr-service` | Circuit open duration before half-open probe |
 | `CDSS_PHI_REDACTION_ENABLED` | Yes | `cdss-service` | PHI redaction gate |
 | `CDSS_BLOCK_OUTBOUND_PHI` | Yes | `cdss-service` | Fail/deny policy for disallowed PHI egress |
 | `CDSS_STRICT_EGRESS_ALLOWLIST` | Yes | `cdss-service` | Keep `true` in production |
@@ -79,5 +84,8 @@ Do not change source files for hostnames, IP addresses, or protocol changes.
 1. Run startup checks in each service with production-like env values.
 2. Verify frontend can call tenant, EHR, and CDSS APIs using env URLs.
 3. Verify EHR->CDSS auth (`issuer`/`audience`/secret mode) end-to-end.
-4. Verify CDSS egress allowlist blocks unknown outbound hosts.
-5. Verify email/portal links resolve to `FRONTEND_URL` and `PORTAL_BASE_URL`.
+4. Verify `X-Request-ID` is present and consistent across logs and error envelopes (frontend, EHR, tenant, CDSS).
+5. Verify tenant isolation: missing or invalid `X-Tenant-ID` yields fast 4xx and no data access.
+6. Verify CDSS egress allowlist blocks unknown outbound hosts.
+7. Verify EHR behavior when CDSS (`SERVICE_CDSS_URL`) is slow or down: bounded timeouts and controlled fallback responses.
+8. Verify email/portal links resolve to `FRONTEND_URL` and `PORTAL_BASE_URL`.
