@@ -524,6 +524,7 @@ async def startup_event():
         print(f"Error checking MinIO connection: {e}")
     try:
         _start_job_worker()
+        _rehydrate_queued_jobs_on_startup()
     except Exception as e:
         print(f"Error starting CDSS job worker: {e}")
 
@@ -714,6 +715,7 @@ def _job_worker_loop() -> None:
     """
     Dedicated worker loop for queued jobs.
     """
+    last_requeue_at = 0.0
     while not _JOB_WORKER_STOP.is_set():
         client = _get_queue_redis_client()
         if not client:
@@ -722,6 +724,14 @@ def _job_worker_loop() -> None:
         try:
             item = client.brpop(_JOB_QUEUE_NAME, timeout=max(1, _JOB_WORKER_POLL_SECONDS))
             if not item:
+                now = time.monotonic()
+                if settings_provider and now - last_requeue_at > 30:
+                    try:
+                        queued_jobs = settings_provider.get_jobs(limit=200, status="queued")
+                        _requeue_jobs_if_missing(queued_jobs)
+                    except Exception:
+                        pass
+                    last_requeue_at = now
                 continue
             _, job_id = item
             if not job_id:
@@ -753,6 +763,56 @@ def _start_job_worker() -> None:
     _JOB_WORKER_STOP.clear()
     _JOB_WORKER_THREAD = threading.Thread(target=_job_worker_loop, daemon=True, name="cdss-job-worker")
     _JOB_WORKER_THREAD.start()
+
+
+def _rehydrate_queued_jobs_on_startup() -> None:
+    if not settings_provider:
+        return
+    client = _get_queue_redis_client()
+    if not client:
+        return
+    try:
+        queued_jobs = settings_provider.get_jobs(limit=200, status="queued")
+    except Exception:
+        return
+    for job in queued_jobs:
+        job_id = str(job.get("jobId") or "")
+        if not job_id:
+            continue
+        with _ADMIN_JOBS_LOCK:
+            _ADMIN_JOBS[job_id] = job
+        try:
+            client.lpush(_JOB_QUEUE_NAME, job_id)
+            _update_job(job_id, queue_backend="redis", status="queued")
+        except Exception:
+            continue
+
+
+def _requeue_jobs_if_missing(jobs: list[dict]) -> None:
+    if not jobs:
+        return
+    client = _get_queue_redis_client()
+    if not client:
+        return
+    queued = [j for j in jobs if str(j.get("status")) == "queued" and str(j.get("jobId") or "")]
+    if not queued:
+        return
+    try:
+        if client.llen(_JOB_QUEUE_NAME) > 0:
+            return
+    except Exception:
+        return
+    for job in queued:
+        job_id = str(job.get("jobId") or "")
+        if not job_id:
+            continue
+        with _ADMIN_JOBS_LOCK:
+            _ADMIN_JOBS[job_id] = job
+        try:
+            client.lpush(_JOB_QUEUE_NAME, job_id)
+            _update_job(job_id, queue_backend="redis", status="queued")
+        except Exception:
+            continue
 
 
 def _run_reindex_job() -> Dict[str, Any]:
@@ -1239,6 +1299,7 @@ async def admin_jobs(
                 job_type=type,
                 status=status,
             )
+            _requeue_jobs_if_missing(arr)
             return {"jobs": arr, "limit": limit}
         except Exception:
             pass
