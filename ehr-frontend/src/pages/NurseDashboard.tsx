@@ -85,6 +85,20 @@ interface Appointment {
   };
 }
 
+interface HandoffWorkflowState {
+  patientId: string | null;
+  status: 'draft' | 'finalized' | 'shared';
+  finalized: boolean;
+  finalizedAt: string | null;
+  finalizedBy: string | null;
+  reviewed: boolean;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  shared: boolean;
+  sharedAt: string | null;
+  sharedBy: string | null;
+}
+
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return null;
   const numeric = Number(value);
@@ -261,6 +275,23 @@ const NurseDashboard: React.FC = () => {
   const [notesCopilotProvenance, setNotesCopilotProvenance] = useState<string[]>([]);
   const [handoffCopilotSummary, setHandoffCopilotSummary] = useState<string>('');
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
+  const [handoffWorkflowLoading, setHandoffWorkflowLoading] = useState(false);
+  const [handoffActionLoading, setHandoffActionLoading] = useState(false);
+  const [handoffRecipient, setHandoffRecipient] = useState('Next Shift Nurse');
+  const [handoffReviewNote, setHandoffReviewNote] = useState('');
+  const [handoffWorkflow, setHandoffWorkflow] = useState<HandoffWorkflowState>({
+    patientId: null,
+    status: 'draft',
+    finalized: false,
+    finalizedAt: null,
+    finalizedBy: null,
+    reviewed: false,
+    reviewedAt: null,
+    reviewedBy: null,
+    shared: false,
+    sharedAt: null,
+    sharedBy: null,
+  });
   const resolveTenantSlug = () =>
     tenantSlug || localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 
@@ -1056,6 +1087,158 @@ const NurseDashboard: React.FC = () => {
       setHandoffCopilotLoading(false);
     }
   };
+
+  const loadHandoffWorkflowState = async (patientId: string) => {
+    try {
+      setHandoffWorkflowLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) return;
+      const response = await ehrApi.getNurseHandoffState(patientId, token, activeTenant);
+      const data = response.data || {};
+      setHandoffWorkflow({
+        patientId,
+        status: data.status || 'draft',
+        finalized: !!data.finalized,
+        finalizedAt: data.finalizedAt || null,
+        finalizedBy: data.finalizedBy || null,
+        reviewed: !!data.reviewed,
+        reviewedAt: data.reviewedAt || null,
+        reviewedBy: data.reviewedBy || null,
+        shared: !!data.shared,
+        sharedAt: data.sharedAt || null,
+        sharedBy: data.sharedBy || null,
+      });
+    } catch (error) {
+      console.error('Failed to load handoff workflow state', error);
+    } finally {
+      setHandoffWorkflowLoading(false);
+    }
+  };
+
+  const handleFinalizeHandoffWorkflow = async () => {
+    if (!selectedPatient || !handoffCopilotSummary) {
+      showError('Missing handoff', 'Generate handoff summary before finalizing.');
+      return;
+    }
+    try {
+      setHandoffActionLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Session expired', 'Please log in again.');
+        return;
+      }
+
+      await ehrApi.finalizeNurseHandoff(
+        selectedPatient.id,
+        {
+          summary: handoffCopilotSummary,
+          reason: handoffReviewNote || undefined,
+          context: { source: 'nurse_dashboard_handoff' },
+        },
+        token,
+        activeTenant,
+      );
+
+      showSuccess('Handoff Finalized', 'Summary is now finalized for shift handover.');
+      await loadHandoffWorkflowState(selectedPatient.id);
+    } catch (error) {
+      console.error('Failed to finalize handoff', error);
+      showError('Finalize Failed', 'Could not finalize handoff summary.');
+    } finally {
+      setHandoffActionLoading(false);
+    }
+  };
+
+  const handleConfirmHandoffReview = async () => {
+    if (!selectedPatient) return;
+    try {
+      setHandoffActionLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Session expired', 'Please log in again.');
+        return;
+      }
+
+      await ehrApi.confirmNurseHandoffReview(
+        selectedPatient.id,
+        {
+          reviewerName: currentUser?.fullName || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.email,
+          reviewerRole: currentUser?.role || 'nurse',
+          reason: handoffReviewNote || undefined,
+          context: { source: 'nurse_dashboard_handoff' },
+        },
+        token,
+        activeTenant,
+      );
+
+      showSuccess('Reviewer Confirmed', 'Reviewer confirmation has been recorded.');
+      await loadHandoffWorkflowState(selectedPatient.id);
+    } catch (error) {
+      console.error('Failed to confirm handoff review', error);
+      showError('Review Failed', 'Could not record reviewer confirmation.');
+    } finally {
+      setHandoffActionLoading(false);
+    }
+  };
+
+  const handleShareHandoffWorkflow = async () => {
+    if (!selectedPatient || !handoffCopilotSummary) {
+      showError('Missing handoff', 'Generate handoff summary before sharing.');
+      return;
+    }
+    try {
+      setHandoffActionLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Session expired', 'Please log in again.');
+        return;
+      }
+
+      await ehrApi.shareNurseHandoff(
+        selectedPatient.id,
+        {
+          channel: 'in_app',
+          recipient: handoffRecipient || 'next_shift',
+          reason: handoffReviewNote || undefined,
+          context: { source: 'nurse_dashboard_handoff', summary: handoffCopilotSummary.slice(0, 240) },
+        },
+        token,
+        activeTenant,
+      );
+
+      showSuccess('Handoff Shared', `Handoff marked as shared to ${handoffRecipient || 'next shift'}.`);
+      await loadHandoffWorkflowState(selectedPatient.id);
+    } catch (error) {
+      console.error('Failed to share handoff', error);
+      showError('Share Failed', 'Could not share handoff summary.');
+    } finally {
+      setHandoffActionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedPatient?.id) {
+      setHandoffWorkflow({
+        patientId: null,
+        status: 'draft',
+        finalized: false,
+        finalizedAt: null,
+        finalizedBy: null,
+        reviewed: false,
+        reviewedAt: null,
+        reviewedBy: null,
+        shared: false,
+        sharedAt: null,
+        sharedBy: null,
+      });
+      return;
+    }
+    loadHandoffWorkflowState(selectedPatient.id);
+  }, [selectedPatient?.id]);
 
   const handleCopilotDecision = async (
     copilotType: 'triage' | 'vitals' | 'notes' | 'handoff',
@@ -2915,10 +3098,83 @@ const NurseDashboard: React.FC = () => {
                   <div className="rounded-lg bg-white border border-teal-200 p-3">
                     <p className="text-xs font-semibold text-teal-800 mb-1">Handoff Summary</p>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{handoffCopilotSummary}</p>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                        <span className="font-semibold text-slate-700">Workflow:</span>{' '}
+                        <span className="capitalize">{handoffWorkflow.status}</span>
+                      </div>
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                        <span className="font-semibold text-slate-700">Reviewed:</span>{' '}
+                        <span>{handoffWorkflow.reviewed ? 'Yes' : 'No'}</span>
+                      </div>
+                      {handoffWorkflow.finalizedAt && (
+                        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                          <span className="font-semibold text-slate-700">Finalized:</span>{' '}
+                          {new Date(handoffWorkflow.finalizedAt).toLocaleString()}
+                          {handoffWorkflow.finalizedBy ? ` by ${handoffWorkflow.finalizedBy}` : ''}
+                        </div>
+                      )}
+                      {handoffWorkflow.reviewedAt && (
+                        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                          <span className="font-semibold text-slate-700">Reviewer Confirmation:</span>{' '}
+                          {new Date(handoffWorkflow.reviewedAt).toLocaleString()}
+                          {handoffWorkflow.reviewedBy ? ` by ${handoffWorkflow.reviewedBy}` : ''}
+                        </div>
+                      )}
+                      {handoffWorkflow.sharedAt && (
+                        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 md:col-span-2">
+                          <span className="font-semibold text-slate-700">Shared:</span>{' '}
+                          {new Date(handoffWorkflow.sharedAt).toLocaleString()}
+                          {handoffWorkflow.sharedBy ? ` by ${handoffWorkflow.sharedBy}` : ''}
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-2 flex gap-2">
                       <button type="button" onClick={() => handleCopilotDecision('handoff', 'accept', 'Generated handoff summary')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
                       <button type="button" onClick={() => handleCopilotDecision('handoff', 'modify', 'Generated handoff summary')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
                       <button type="button" onClick={() => handleCopilotDecision('handoff', 'reject', 'Generated handoff summary')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={handoffRecipient}
+                        onChange={(e) => setHandoffRecipient(e.target.value)}
+                        placeholder="Share recipient (e.g. Next Shift Nurse)"
+                        className="px-3 py-2 border border-teal-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={handoffReviewNote}
+                        onChange={(e) => setHandoffReviewNote(e.target.value)}
+                        placeholder="Reviewer/finalize note (optional)"
+                        className="px-3 py-2 border border-teal-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleFinalizeHandoffWorkflow}
+                        disabled={handoffActionLoading || handoffWorkflowLoading || !selectedPatient}
+                        className="px-2 py-1 rounded bg-teal-700 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {handoffActionLoading ? 'Working...' : 'Finalize'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmHandoffReview}
+                        disabled={handoffActionLoading || handoffWorkflowLoading || !selectedPatient}
+                        className="px-2 py-1 rounded bg-cyan-700 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {handoffActionLoading ? 'Working...' : 'Confirm Reviewer'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleShareHandoffWorkflow}
+                        disabled={handoffActionLoading || handoffWorkflowLoading || !selectedPatient || !handoffWorkflow.finalized}
+                        className="px-2 py-1 rounded bg-indigo-700 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {handoffActionLoading ? 'Working...' : 'Share'}
+                      </button>
                     </div>
                   </div>
                 )}

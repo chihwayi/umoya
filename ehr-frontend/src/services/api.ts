@@ -1240,6 +1240,65 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getNurseHandoffState: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.get(`/nurse-worklist/handoff/${patientId}/state`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  finalizeNurseHandoff: async (
+    patientId: string,
+    payload: { summary?: string; context?: any; reason?: string },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/handoff/${patientId}/finalize`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  confirmNurseHandoffReview: async (
+    patientId: string,
+    payload: { reviewerName?: string; reviewerRole?: string; context?: any; reason?: string },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/handoff/${patientId}/review`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  shareNurseHandoff: async (
+    patientId: string,
+    payload: { channel?: string; recipient?: string; context?: any; reason?: string },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/handoff/${patientId}/share`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
       headers: { 

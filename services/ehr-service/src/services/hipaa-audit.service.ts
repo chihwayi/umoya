@@ -69,6 +69,9 @@ export enum HipaaAuditAction {
   CDSS_GUIDELINES_SEARCH = 'cdss_guidelines_search',
   NURSE_TASK_COMPLETE = 'nurse_task_complete',
   NURSE_ALERT_ACKNOWLEDGE = 'nurse_alert_acknowledge',
+  NURSE_HANDOFF_FINALIZE = 'nurse_handoff_finalize',
+  NURSE_HANDOFF_REVIEW_CONFIRM = 'nurse_handoff_review_confirm',
+  NURSE_HANDOFF_SHARE = 'nurse_handoff_share',
 
   // Breach Events
   BREACH_DETECTED = 'breach_detected',
@@ -706,7 +709,10 @@ export class HipaaAuditService {
       action === HipaaAuditAction.CDSS_HANDOFF_SUMMARY ||
       action === HipaaAuditAction.CDSS_GUIDELINES_SEARCH ||
       action === HipaaAuditAction.NURSE_TASK_COMPLETE ||
-      action === HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE
+      action === HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE ||
+      action === HipaaAuditAction.NURSE_HANDOFF_FINALIZE ||
+      action === HipaaAuditAction.NURSE_HANDOFF_REVIEW_CONFIRM ||
+      action === HipaaAuditAction.NURSE_HANDOFF_SHARE
     ) {
       return 'medium';
     }

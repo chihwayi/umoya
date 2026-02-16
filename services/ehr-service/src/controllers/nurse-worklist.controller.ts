@@ -68,4 +68,81 @@ export class NurseWorklistController {
       },
     );
   }
+
+  @Get('handoff/:patientId/state')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get nurse handoff workflow state for a patient' })
+  @ApiResponse({ status: 200, description: 'Handoff state fetched' })
+  async getHandoffState(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.nurseWorklistService.getHandoffState(req.tenantDb, patientId);
+  }
+
+  @Post('handoff/:patientId/finalize')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Finalize nurse handoff summary for a patient' })
+  @ApiResponse({ status: 200, description: 'Handoff finalized' })
+  async finalizeHandoff(
+    @Param('patientId') patientId: string,
+    @Body() body: { summary?: string; context?: any; reason?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.finalizeHandoff(
+      req.tenantDb,
+      user,
+      patientId,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('handoff/:patientId/review')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Confirm reviewer acknowledgement for nurse handoff' })
+  @ApiResponse({ status: 200, description: 'Handoff review confirmation recorded' })
+  async reviewHandoff(
+    @Param('patientId') patientId: string,
+    @Body() body: { reviewerName?: string; reviewerRole?: string; context?: any; reason?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.confirmHandoffReview(
+      req.tenantDb,
+      user,
+      patientId,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('handoff/:patientId/share')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Share finalized handoff summary to next shift/recipient' })
+  @ApiResponse({ status: 200, description: 'Handoff share recorded' })
+  async shareHandoff(
+    @Param('patientId') patientId: string,
+    @Body() body: { channel?: string; recipient?: string; context?: any; reason?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.shareHandoff(
+      req.tenantDb,
+      user,
+      patientId,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
 }

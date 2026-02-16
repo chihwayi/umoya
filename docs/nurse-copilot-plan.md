@@ -209,9 +209,10 @@
 - [x] Integrate smart note draft + provenance rendering (`@codex 2026-02-16`)
   - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
   - [x] `ehr-frontend/src/components/NursingNotes.tsx`
-- [~] Integrate handoff summary generation/review UI (`@codex 2026-02-16`)
+- [x] Integrate handoff summary generation/review UI (`@codex 2026-02-16`)
   - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
-  Remaining scope: add finalize/share workflow and explicit reviewer confirmation status.
+  - [x] `services/ehr-service/src/controllers/nurse-worklist.controller.ts`
+  - [x] `services/ehr-service/src/services/nurse-worklist.service.ts`
 
 ### Wave 3 — Server-Scoped Tasks & Alerts (Replace localStorage)
 
