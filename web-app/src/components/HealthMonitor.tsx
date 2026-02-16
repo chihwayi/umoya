@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { healthAPI } from '../services/api';
 
 interface HealthStatus {
   tenantId: string;
@@ -22,6 +23,7 @@ export const HealthMonitor: React.FC = () => {
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
   const [tenantHealth, setTenantHealth] = useState<HealthStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadHealthData();
@@ -31,24 +33,37 @@ export const HealthMonitor: React.FC = () => {
 
   const loadHealthData = async () => {
     try {
-      // Real API integration would go here
-      const mockSystemHealth: SystemHealth = {
-        totalTenants: 0,
-        healthy: 0,
-        unhealthy: 0,
-        unknown: 0,
-        lastCheck: Date.now(),
-        averageConnectionTime: 0
-      };
+      const data = await healthAPI.getSystemHealth();
+      const system: SystemHealth = data.system;
+      const tenants: HealthStatus[] = (data.tenants || []).map((t: any) => ({
+        tenantId: t.tenantId,
+        tenantName: t.tenantName,
+        databaseStatus: t.databaseStatus,
+        connectionTime: t.connectionTime,
+        lastChecked: t.lastChecked ? new Date(t.lastChecked) : new Date(),
+        error: t.error,
+      }));
 
-      const mockTenantHealth: HealthStatus[] = [];
-
-      setSystemHealth(mockSystemHealth);
-      setTenantHealth(mockTenantHealth);
+      setSystemHealth(system);
+      setTenantHealth(tenants);
     } catch (error) {
       console.error('Failed to load health data:', error);
+      setSystemHealth(null);
+      setTenantHealth([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshNow = async () => {
+    try {
+      setRefreshing(true);
+      await healthAPI.refreshSystemHealth();
+      await loadHealthData();
+    } catch (error) {
+      console.error('Failed to refresh health data:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -73,9 +88,22 @@ export const HealthMonitor: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-slate-800">System Health</h2>
-        <div className="text-sm text-slate-500 flex items-center">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-          Live Monitoring
+        <div className="flex items-center space-x-3">
+          <div className="text-sm text-slate-500 flex items-center">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
+            Live Monitoring
+          </div>
+          <button
+            type="button"
+            onClick={handleRefreshNow}
+            disabled={refreshing}
+            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {refreshing && (
+              <span className="mr-2 inline-block h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
+            Refresh now
+          </button>
         </div>
       </div>
 
@@ -128,7 +156,9 @@ export const HealthMonitor: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Avg Response</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{systemHealth.averageConnectionTime}ms</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">
+                  {Math.round(systemHealth.averageConnectionTime)}ms
+                </p>
               </div>
               <div className="p-3 bg-indigo-50 rounded-md">
                 <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

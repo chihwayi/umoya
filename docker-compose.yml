@@ -65,6 +65,7 @@ services:
       - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
       - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
       - AWS_ENDPOINT=${SERVICE_MINIO_URL}
+      - JWT_SECRET=${JWT_SECRET}
     volumes:
       - ./services/tenant-service:/app/services/tenant-service
       - /app/services/tenant-service/node_modules
@@ -86,6 +87,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT}
       - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
+      - MASTER_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_POSTGRES_HOST}:5432/${POSTGRES_DB}
       - CDSS_ENABLE_AI=${CDSS_ENABLE_AI:-true}
       - CDSS_REQUIRE_SERVICE_AUTH=${CDSS_REQUIRE_SERVICE_AUTH:-true}
       - CDSS_SERVICE_AUTH_MODE=${CDSS_SERVICE_AUTH_MODE:-both}

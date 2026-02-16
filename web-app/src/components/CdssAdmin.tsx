@@ -710,8 +710,8 @@ export const CdssAdmin: React.FC = () => {
   }, [auditLimit]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">🧠 CDSS Administration</h2>
           <div className="text-sm text-slate-500">Manage AI features, ingestion, caching and audit trails</div>
@@ -723,26 +723,26 @@ export const CdssAdmin: React.FC = () => {
         <div className="p-3 rounded-md text-sm bg-emerald-50 border border-emerald-200 text-emerald-800">{message}</div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
-          <div className="text-xs font-semibold text-slate-600 uppercase">LLM</div>
-          <div className="mt-2 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-indigo-500">
+          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">LLM</div>
+          <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Enabled: {String(status?.llm?.enabled ?? '')}</div>
             <div>Model: {status?.llm?.model || '-'}</div>
             <div>API URL: {status?.llm?.api_url || '-'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
-          <div className="text-xs font-semibold text-slate-600 uppercase">RAG</div>
-          <div className="mt-2 text-sm">
+        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-amber-500">
+          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">RAG</div>
+          <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Enabled: {String(status?.rag?.enabled ?? '')}</div>
             <div>Documents: {status?.rag?.documents ?? '-'}</div>
             <div>Cache: {status?.rag?.cache_enabled ? 'Enabled' : 'Disabled'}</div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
-          <div className="text-xs font-semibold text-slate-600 uppercase">Metrics</div>
-          <div className="mt-2 text-sm">
+        <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-4 border-t-4 border-emerald-500">
+          <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Metrics</div>
+          <div className="mt-2 text-sm space-y-1 text-slate-800">
             <div>Doc count: {metrics?.documents ?? '-'}</div>
             <div>Cache keys: {metrics?.cache_keys ?? '-'}</div>
             <div>RAG cache: {metrics?.rag_cache ? `${metrics.rag_cache.hit} hit / ${metrics.rag_cache.miss} miss (${metrics.rag_cache.hit_rate_percent}% hit)` : '-'}</div>
@@ -751,22 +751,33 @@ export const CdssAdmin: React.FC = () => {
               <div className="text-xs text-slate-500 mt-1">Rate limit: {rateLimit.remaining}/{rateLimit.limit} • resets in {rateLimit.reset}s</div>
             )}
           </div>
-          <button onClick={handleRefreshMetrics} className="mt-3 px-3 py-1.5 text-sm rounded bg-slate-900 text-white shadow">
+          <button
+            onClick={handleRefreshMetrics}
+            className="mt-3 px-3 py-1.5 text-sm rounded-lg bg-slate-900 text-white shadow-sm hover:bg-slate-800 transition"
+          >
             Refresh
           </button>
-          <button onClick={handleResetMetrics} className="mt-3 ml-2 px-3 py-1.5 text-sm rounded bg-rose-700 text-white shadow">
+          <button
+            onClick={handleResetMetrics}
+            className="mt-3 ml-2 px-3 py-1.5 text-sm rounded-lg bg-rose-700 text-white shadow-sm hover:bg-rose-800 transition"
+          >
             Reset Counters
           </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5 space-y-4">
-        <div className="text-sm font-semibold text-slate-800">🔧 Settings</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-5 space-y-5">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Configuration</div>
+            <div className="mt-1 text-sm font-semibold text-slate-800">🔧 Settings</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div>
             <label className="block text-xs text-slate-600 uppercase mb-1">LLM Model Name</label>
             <input
-              className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={settings?.llm_model_name || ''}
               onChange={(e) => setSettings({ ...settings, llm_model_name: e.target.value })}
             />
@@ -774,7 +785,7 @@ export const CdssAdmin: React.FC = () => {
           <div>
             <label className="block text-xs text-slate-600 uppercase mb-1">LLM API URL</label>
             <input
-              className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={settings?.llm_api_url || ''}
               onChange={(e) => setSettings({ ...settings, llm_api_url: e.target.value })}
             />
@@ -782,7 +793,7 @@ export const CdssAdmin: React.FC = () => {
           <div>
             <label className="block text-xs text-slate-600 uppercase mb-1">RAG Enabled</label>
             <select
-              className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={String(settings?.rag_enabled ?? true)}
               onChange={(e) => setSettings({ ...settings, rag_enabled: e.target.value === 'true' })}
             >
@@ -794,16 +805,16 @@ export const CdssAdmin: React.FC = () => {
             <label className="block text-xs text-slate-600 uppercase mb-1">Cache TTL (seconds)</label>
             <input
               type="number"
-              className="w-full border border-slate-300 rounded px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400"
               value={String(settings?.cache_ttl_seconds ?? 300)}
               onChange={(e) => setSettings({ ...settings, cache_ttl_seconds: Number(e.target.value || 0) })}
             />
           </div>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-slate-900 text-white shadow-sm hover:bg-slate-800 transition disabled:opacity-50"
             disabled={saveCooldown > 0}
             title={saveCooldown > 0 ? `Rate limited • wait ${saveCooldown}s` : 'Save settings'}
           >
@@ -812,13 +823,22 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5 space-y-4">
-        <div className="text-sm font-semibold text-slate-800">📚 Ingestion & Index</div>
-        <div className="flex items-center space-x-3">
-          <input className="text-sm" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      <div className="bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-2xl p-5 space-y-5">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Pipelines</div>
+            <div className="mt-1 text-sm font-semibold text-slate-800">📚 Ingestion & Index</div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            className="text-sm w-full sm:w-auto"
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+          />
           <button
             onClick={handleIngest}
-            className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50 shadow-sm hover:bg-blue-700 transition w-full sm:w-auto"
             disabled={ingestCooldown > 0}
             title={ingestCooldown > 0 ? `Rate limited • wait ${ingestCooldown}s` : 'Upload a PDF and start ingestion'}
           >
@@ -826,7 +846,7 @@ export const CdssAdmin: React.FC = () => {
           </button>
           <button
             onClick={handleReindex}
-            className="px-4 py-2 rounded bg-amber-600 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-amber-600 text-white disabled:opacity-50 shadow-sm hover:bg-amber-700 transition w-full sm:w-auto"
             disabled={reindexCooldown > 0}
             title={reindexCooldown > 0 ? `Rate limited • wait ${reindexCooldown}s` : 'Rebuild vector + BM25 indexes'}
           >
@@ -834,13 +854,13 @@ export const CdssAdmin: React.FC = () => {
           </button>
           <button
             onClick={handleFlushCache}
-            className="px-4 py-2 rounded bg-rose-600 text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-50 shadow-sm hover:bg-rose-700 transition w-full sm:w-auto"
             disabled={flushCooldown > 0}
             title={flushCooldown > 0 ? `Rate limited • wait ${flushCooldown}s` : 'Delete cache entries'}
           >
             Flush Cache
           </button>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
             <label className="text-xs text-slate-600">Auto-refresh</label>
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
             <label className="text-xs text-slate-600">Every (s)</label>
@@ -855,7 +875,7 @@ export const CdssAdmin: React.FC = () => {
                 const jobs = await cdssAdminAPI.getAdminJobs(50);
                 setIngestJobs(jobs?.jobs || []);
               }}
-              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
             >
               Refresh Now
             </button>
@@ -868,15 +888,15 @@ export const CdssAdmin: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mt-2 mb-1">
             <div className="text-xs font-semibold text-slate-600 uppercase">Jobs</div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
-                className="border border-slate-300 rounded px-2 py-1 text-xs"
+                className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 placeholder="Search Job ID"
                 value={jobIdQuery}
                 onChange={(e) => setJobIdQuery(e.target.value)}
               />
               <select
-                className="border border-slate-300 rounded px-2 py-1 text-xs"
+                className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -890,21 +910,21 @@ export const CdssAdmin: React.FC = () => {
                 Running: {runningCount}
               </span>
               <button
-                className="ml-2 px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                className="ml-2 px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
                 onClick={() => { setStatusFilter('all'); setJobIdQuery(''); }}
                 title="Clear status filter and Job ID search"
               >
                 Clear Filters
               </button>
               <button
-                className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+                className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
                 onClick={resetJobsColWidths}
                 title="Reset column widths"
               >
                 Reset Cols
               </button>
               <button
-                className="px-2 py-1 text-xs rounded bg-emerald-600 text-white"
+                className="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700 transition"
                 onClick={exportJobsCsv}
                 title="Export current Jobs view to CSV"
               >
@@ -1030,33 +1050,33 @@ export const CdssAdmin: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="bg-white/90 backdrop-blur border border-slate-200 rounded-2xl p-4 space-y-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-semibold text-slate-700">🧾 Audit Logs</div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 disabled:opacity-50">Prev</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={handleAuditPrev} disabled={auditOffset <= 0} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50 transition">Prev</button>
             <span className="text-xs text-slate-500">page {Math.floor(auditOffset / auditLimit) + 1}</span>
             <span className="text-xs text-slate-400">•</span>
             <span className="text-xs text-slate-500">offset {auditOffset}</span>
             <div className="flex items-center gap-1">
               <span className="text-xs text-slate-500">page</span>
               <input
-                className="w-16 border border-slate-300 rounded px-2 py-1 text-xs"
+                className="w-16 border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
                 value={auditPageInput}
                 onChange={(e) => setAuditPageInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAuditJump(); }}
               />
-              <button onClick={handleAuditJump} className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700">Go</button>
+              <button onClick={handleAuditJump} className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Go</button>
             </div>
             <input
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               placeholder="Filter actor"
               value={auditActorQuery}
               onChange={(e) => setAuditActorQuery(e.target.value)}
               title="Filter by actor"
             />
             <input
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               placeholder="Filter action"
               value={auditActionQuery}
               onChange={(e) => setAuditActionQuery(e.target.value)}
@@ -1064,27 +1084,27 @@ export const CdssAdmin: React.FC = () => {
             />
             <input
               type="date"
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditDateFrom}
               onChange={(e) => setAuditDateFrom(e.target.value)}
               title="From date"
             />
             <input
               type="date"
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditDateTo}
               onChange={(e) => setAuditDateTo(e.target.value)}
               title="To date"
             />
             <button
               onClick={() => { setAuditActorQuery(''); setAuditActionQuery(''); setAuditDateFrom(''); setAuditDateTo(''); }}
-              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700"
+              className="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
               title="Clear audit filters"
             >
               Clear
             </button>
             <select
-              className="border border-slate-300 rounded px-2 py-1 text-xs"
+              className="border border-slate-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900/10 focus:border-slate-400"
               value={auditLimit}
               onChange={(e) => {
                 const newLimit = Number(e.target.value);
@@ -1096,11 +1116,11 @@ export const CdssAdmin: React.FC = () => {
               <option value={50}>limit 50</option>
               <option value={100}>limit 100</option>
             </select>
-            <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Next</button>
-            <button onClick={resetAuditColWidths} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700">Reset Cols</button>
-            <button onClick={exportAllAuditCsv} disabled={exportingAll} className="px-3 py-1.5 text-sm rounded bg-emerald-700 text-white disabled:opacity-50">{exportingAll ? `Exporting… ${exportAllCount}` : 'Export All CSV'}</button>
-            <button onClick={exportAuditCsv} className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white">Export CSV</button>
-            <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white">Refresh</button>
+            <button onClick={handleAuditNext} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Next</button>
+            <button onClick={resetAuditColWidths} className="px-3 py-1.5 text-sm rounded bg-slate-200 text-slate-700 hover:bg-slate-300 transition">Reset Cols</button>
+            <button onClick={exportAllAuditCsv} disabled={exportingAll} className="px-3 py-1.5 text-sm rounded bg-emerald-700 text-white disabled:opacity-50 hover:bg-emerald-800 transition">{exportingAll ? `Exporting… ${exportAllCount}` : 'Export All CSV'}</button>
+            <button onClick={exportAuditCsv} className="px-3 py-1.5 text-sm rounded bg-emerald-600 text-white hover:bg-emerald-700 transition">Export CSV</button>
+            <button onClick={handleRefreshAudit} className="px-3 py-1.5 text-sm rounded bg-slate-900 text-white hover:bg-slate-800 transition">Refresh</button>
           </div>
         </div>
         <div className="overflow-auto rounded-lg border border-slate-200 max-h-80">

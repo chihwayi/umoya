@@ -1,8 +1,9 @@
-import { Controller, Post, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Param, UseGuards, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { DatabaseProvisioningService } from '../services/database-provisioning.service';
 import { TenantService } from '../services/tenant.service';
+import { HealthMonitorService } from '../services/health-monitor.service';
 
 @ApiTags('admin-maintenance')
 @ApiBearerAuth()
@@ -12,6 +13,7 @@ export class AdminMaintenanceController {
   constructor(
     private readonly tenantService: TenantService,
     private readonly provisioning: DatabaseProvisioningService,
+    private readonly healthMonitor: HealthMonitorService,
   ) {}
 
   private buildTenantConnection(databaseName: string, existing?: string | null): string {
@@ -74,5 +76,19 @@ export class AdminMaintenanceController {
       results,
     };
   }
-}
 
+  @Get('system-health')
+  async getSystemHealth() {
+    const system = await this.healthMonitor.getSystemHealth();
+    const tenants = this.healthMonitor.getAllHealthStatuses();
+    return { system, tenants };
+  }
+
+  @Post('system-health/refresh')
+  async refreshSystemHealth() {
+    await this.healthMonitor.performHealthChecks();
+    const system = await this.healthMonitor.getSystemHealth();
+    const tenants = this.healthMonitor.getAllHealthStatuses();
+    return { message: 'Health checks completed', system, tenants };
+  }
+}

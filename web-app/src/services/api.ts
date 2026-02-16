@@ -225,6 +225,17 @@ export const backupAPI = {
   }
 };
 
+export const healthAPI = {
+  getSystemHealth: async () => {
+    const response = await api.get('/admin/system-health');
+    return response.data;
+  },
+  refreshSystemHealth: async () => {
+    const response = await api.post('/admin/system-health/refresh');
+    return response.data;
+  },
+};
+
 // Terminology API
 export const terminologyAPI = {
   importFile: async (file: File, type: 'snomed' | 'icd10'): Promise<{ jobId: string; message: string }> => {

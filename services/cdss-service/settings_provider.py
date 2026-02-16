@@ -205,7 +205,6 @@ class SettingsProvider:
             )
             row = cur.fetchone()
             if not row:
-                # Default baseline
                 defaults = {
                     "llm_enabled": os.getenv("LLM_ENABLED", "true").lower() == "true",
                     "llm_api_url": os.getenv("LLM_API_URL"),
@@ -220,9 +219,74 @@ class SettingsProvider:
                     "ai_abstain_on_low_confidence": True,
                     "ai_contradiction_check_enabled": True,
                 }
-                self.set_settings(defaults, actor="system", action="init_defaults")
+                try:
+                    encrypted_payload = self.crypto.encrypt_json(defaults)
+                    cur.execute(
+                        """
+                        INSERT INTO system_settings (key, value, updated_at)
+                        VALUES (%s, %s, NOW())
+                        ON CONFLICT (key) DO UPDATE
+                        SET value = EXCLUDED.value, updated_at = NOW();
+                        """,
+                        ("cdss_settings", Json(encrypted_payload)),
+                    )
+                    try:
+                        audit_payload = self.crypto.encrypt_json({"seed": True})
+                        cur.execute(
+                            """
+                            INSERT INTO cdss_admin_audit_logs (actor, action, payload)
+                            VALUES (%s, %s, %s);
+                            """,
+                            ("system", "init_defaults", Json(audit_payload)),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to write default settings audit log: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to persist default settings: {e}")
                 return defaults
-            return self.crypto.decrypt_json(row[0])
+            try:
+                return self.crypto.decrypt_json(row[0])
+            except Exception as e:
+                logger.warning(f"Failed to decrypt settings; resetting to defaults: {e}")
+                defaults = {
+                    "llm_enabled": os.getenv("LLM_ENABLED", "true").lower() == "true",
+                    "llm_api_url": os.getenv("LLM_API_URL"),
+                    "llm_model_name": os.getenv("LLM_MODEL_NAME"),
+                    "rag_enabled": True,
+                    "cache_ttl_seconds": 300,
+                    "cache_namespace": "cdss",
+                    "allow_pdf_uploads": True,
+                    "ai_min_confidence_score": 0.55,
+                    "ai_require_citations": True,
+                    "ai_min_citation_count": 1,
+                    "ai_abstain_on_low_confidence": True,
+                    "ai_contradiction_check_enabled": True,
+                }
+                try:
+                    encrypted_payload = self.crypto.encrypt_json(defaults)
+                    cur.execute(
+                        """
+                        INSERT INTO system_settings (key, value, updated_at)
+                        VALUES (%s, %s, NOW())
+                        ON CONFLICT (key) DO UPDATE
+                        SET value = EXCLUDED.value, updated_at = NOW();
+                        """,
+                        ("cdss_settings", Json(encrypted_payload)),
+                    )
+                    try:
+                        audit_payload = self.crypto.encrypt_json({"reset": True})
+                        cur.execute(
+                            """
+                            INSERT INTO cdss_admin_audit_logs (actor, action, payload)
+                            VALUES (%s, %s, %s);
+                            """,
+                            ("system", "reset_defaults", Json(audit_payload)),
+                        )
+                    except Exception as e2:
+                        logger.warning(f"Failed to write reset settings audit log: {e2}")
+                except Exception as e2:
+                    logger.warning(f"Failed to persist reset default settings: {e2}")
+                return defaults
 
     def get_model_registry(self, active_only: bool = False) -> list[dict]:
         try:
