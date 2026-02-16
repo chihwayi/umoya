@@ -393,6 +393,7 @@ export const TenantDetailsModal: React.FC<TenantDetailsModalProps> = ({
                       <option value="admin">Admin</option>
                       <option value="doctor">Doctor</option>
                       <option value="nurse">Nurse</option>
+                      <option value="nurse_accounts">Nurse (Mini Accounts)</option>
                       <option value="receptionist">Receptionist</option>
                     </select>
                   </div>

@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post, Put, Query, Request, UseGuards, Res
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { RolesGuard } from '../guards/roles.guard';
 import { FinanceService } from '../services/finance.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
@@ -15,7 +17,7 @@ import { InvoiceTemplateService } from '../services/invoice-template.service';
 
 @ApiTags('Finance')
 @Controller('finance')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class FinanceController {
   constructor(
@@ -102,6 +104,7 @@ export class FinanceController {
 
   @Post('transactions')
   @ApiOperation({ summary: 'Create a finance transaction for a clinical service' })
+  @Roles('accounts', 'nurse_accounts')
   async createTransaction(
     @Request() req: RequestWithTenant,
     @Body() payload: CreateFinanceTransactionDto,
@@ -112,6 +115,7 @@ export class FinanceController {
 
   @Post('transactions/:id/payments')
   @ApiOperation({ summary: 'Record a payment for a transaction' })
+  @Roles('accounts', 'nurse_accounts')
   async recordPayment(
     @Request() req: RequestWithTenant,
     @Param('id') transactionId: string,
@@ -222,4 +226,3 @@ export class FinanceController {
     return this.financeService.getReconciliationReport(req.tenantDb, dateFrom, dateTo);
   }
 }
-

@@ -4,6 +4,7 @@ import { Users, Plus, Edit, Trash2, Key, UserCheck, UserX, Search, Filter, Arrow
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
 import CreateUserModal from '../components/CreateUserModal';
+import EditUserModal from '../components/EditUserModal';
 import PasswordDisplayModal from '../components/PasswordDisplayModal';
 
 interface User {
@@ -30,9 +31,10 @@ const UserManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [resetUser, setResetUser] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const { showSuccess, showError, showInfo } = useNotification();
 
-  const roles = ['admin', 'doctor', 'nurse', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist', 'accounts'];
+  const roles = ['admin', 'doctor', 'nurse', 'nurse_accounts', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist', 'accounts'];
 
   useEffect(() => {
     fetchUsers();
@@ -58,6 +60,35 @@ const UserManagement: React.FC = () => {
     user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+  };
+
+  const handleUpdateUser = async (updated: Partial<User>) => {
+    if (!editingUser || !tenantSlug) return;
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const payload = {
+        firstName: updated.firstName ?? editingUser.firstName,
+        lastName: updated.lastName ?? editingUser.lastName,
+        email: updated.email ?? editingUser.email,
+        phone: updated.phone ?? editingUser.phone,
+        role: updated.role ?? editingUser.role,
+        licenseNumber: updated.licenseNumber ?? editingUser.licenseNumber,
+        specialization: updated.specialization ?? editingUser.specialization,
+      };
+
+      await ehrApi.updateUser(editingUser.id, payload, token, tenantSlug);
+      showSuccess('User Updated', 'User details have been updated');
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error) {
+      showError('Error', 'Failed to update user');
+    }
+  };
 
   const handleResetPassword = async (userId: string, userName: string) => {
     try {
@@ -104,6 +135,7 @@ const UserManagement: React.FC = () => {
       case 'admin': return 'bg-purple-100 text-purple-800';
       case 'doctor': return 'bg-blue-100 text-blue-800';
       case 'nurse': return 'bg-green-100 text-green-800';
+      case 'nurse_accounts': return 'bg-emerald-100 text-emerald-800';
       case 'receptionist': return 'bg-orange-100 text-orange-800';
       case 'pharmacist': return 'bg-teal-100 text-teal-800';
       case 'lab_tech':
@@ -264,7 +296,10 @@ const UserManagement: React.FC = () => {
                 )}
               </button>
               
-              <button className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
+              <button
+                onClick={() => handleEditUser(user)}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+              >
                 <Edit className="w-3 h-3" />
                 Edit
               </button>
@@ -288,6 +323,16 @@ const UserManagement: React.FC = () => {
         onUserCreated={fetchUsers}
         tenantSlug={tenantSlug!}
       />
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          roles={roles}
+          onClose={() => setEditingUser(null)}
+          onSave={handleUpdateUser}
+        />
+      )}
 
       {/* Password Display Modal */}
       <PasswordDisplayModal

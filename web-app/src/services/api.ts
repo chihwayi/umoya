@@ -177,6 +177,11 @@ export const tenantAPI = {
     const response = await api.delete(`/tenants/${tenantId}/users/${userId}`);
     return response.data;
   },
+
+  repairAllTenants: async (): Promise<{ message: string; count: number }> => {
+    const response = await api.post('/admin/tenants/repair-all');
+    return response.data;
+  },
 };
 
 // Analytics API

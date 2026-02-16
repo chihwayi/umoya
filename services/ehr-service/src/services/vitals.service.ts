@@ -99,6 +99,7 @@ export class VitalsService {
       where: { patientId },
       order: { recordedAt: 'DESC' },
       take: limit,
+      relations: ['recordedByUser'],
     });
     
     // Convert blood_pressure string to bloodPressureSystolic/diastolic for frontend compatibility

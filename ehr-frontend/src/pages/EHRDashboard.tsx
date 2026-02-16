@@ -48,7 +48,7 @@ const EHRDashboard: React.FC = () => {
         return;
       }
       // Redirect nurses directly to nurse dashboard
-      if (parsedUser.role === 'nurse') {
+      if (parsedUser.role === 'nurse' || parsedUser.role === 'nurse_accounts') {
         navigate(`/ehr/${tenantSlug}/nurse`);
         return;
       }
@@ -109,6 +109,7 @@ const EHRDashboard: React.FC = () => {
           { icon: Eye, label: 'Ophthalmology Suite', desc: 'Eye exams, imaging, follow-ups', color: 'from-sky-500 to-cyan-500', route: 'doctor/ophthalmology' },
         ];
       case 'nurse':
+      case 'nurse_accounts':
         return [
           { icon: Users, label: 'Patients', desc: 'Manage patient records', color: 'from-blue-500 to-cyan-500', route: 'patients' },
           { icon: Calendar, label: 'Nurse Dashboard', desc: 'Today\'s schedule', color: 'from-emerald-500 to-teal-500', route: 'nurse' },

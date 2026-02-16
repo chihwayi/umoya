@@ -118,7 +118,7 @@ export class DatabaseProvisioningService {
       await tenantDb.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
       await tenantDb.query(`
         ALTER TABLE users ADD CONSTRAINT users_role_check 
-        CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
+        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
       `);
     } catch (e) {
       this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
@@ -130,14 +130,13 @@ export class DatabaseProvisioningService {
       {
         id: 'core',
         label: 'Core Clinic Schema',
-        version: '2025.03.03',
+        version: '2025.03.04',
         description: 'Baseline tables, triggers, and seed data for every tenant',
         statements: () => this.getClinicSchema(),
         triggers: () => this.getTriggerStatements(),
         tasks: [
           (db) => this.ensureUpdatedAtTriggerFunction(db),
           (db) => this.enforceUserRoleConstraint(db),
-          (db) => this.seedDefaultUsers(db), // Re-enabled to seed gina@gmail.com
           (db) => this.seedLabCatalog(db),
           (db) => this.seedImagingCatalog(db),
           (db) => this.seedLookupTables(db),
@@ -715,7 +714,7 @@ export class DatabaseProvisioningService {
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts')),
           license_number VARCHAR(100),
           specialization VARCHAR(100),
           phone VARCHAR(50),

@@ -2842,7 +2842,12 @@ const DoctorDashboard: React.FC = () => {
                         <span className="text-sm font-medium text-slate-700">
                           {new Date(v.recordedAt).toLocaleString()}
                         </span>
-                        <span className="text-xs bg-white/70 text-slate-600 px-2 py-1 rounded">Recorded by: {v.recordedBy}</span>
+        <span className="text-xs bg-white/70 text-slate-600 px-2 py-1 rounded">
+          Recorded by:{' '}
+          {v.recordedByUser && (v.recordedByUser.firstName || v.recordedByUser.lastName)
+            ? `${v.recordedByUser.firstName || ''} ${v.recordedByUser.lastName || ''}`.trim()
+            : v.recordedByName || v.recorded_by_name || v.recordedBy}
+        </span>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                         <div className="flex items-center gap-2">

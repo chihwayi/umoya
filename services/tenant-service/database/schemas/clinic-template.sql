@@ -10,7 +10,7 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('tenant_admin', 'doctor', 'nurse', 'receptionist', 'pharmacist', 'lab_technician', 'accounts', 'radiologist')),
+    role VARCHAR(50) NOT NULL CHECK (role IN ('tenant_admin', 'doctor', 'nurse', 'nurse_accounts', 'receptionist', 'pharmacist', 'lab_technician', 'accounts', 'radiologist')),
     license_number VARCHAR(100),
     specialization VARCHAR(100),
     phone VARCHAR(50),
@@ -2157,4 +2157,3 @@ BEGIN
   
   RAISE NOTICE '✅ Migration completed successfully!';
 END $$;
-

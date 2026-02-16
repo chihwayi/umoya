@@ -513,6 +513,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  updateUser: async (userId: string, userData: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/users/${userId}`, userData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   detectBreaches: async (token: string, tenantSlug: string, lookbackDays: number = 30) => {
     const response = await ehrAxios.get('/hipaa-audit/detect-breaches', {
       headers: { 

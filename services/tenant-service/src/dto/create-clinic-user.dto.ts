@@ -4,6 +4,7 @@ export enum ClinicUserRole {
   ADMIN = 'admin',
   DOCTOR = 'doctor',
   NURSE = 'nurse',
+  NURSE_ACCOUNTS = 'nurse_accounts',
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
   LAB_TECHNICIAN = 'lab_technician',

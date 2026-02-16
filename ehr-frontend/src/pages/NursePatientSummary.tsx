@@ -972,7 +972,11 @@ const NursePatientSummary: React.FC = () => {
                             </div>
                             <div className="text-right">
                               <p className="text-sm text-slate-600">Recorded by</p>
-                              <p className="font-semibold text-slate-900">{visit.vitals!.recordedBy}</p>
+                              <p className="font-semibold text-slate-900">
+                                {visit.vitals!.recordedByUser && (visit.vitals!.recordedByUser.firstName || visit.vitals!.recordedByUser.lastName)
+                                  ? `${visit.vitals!.recordedByUser.firstName || ''} ${visit.vitals!.recordedByUser.lastName || ''}`.trim()
+                                  : visit.vitals!.recordedByName || (visit.vitals as any).recorded_by_name || visit.vitals!.recordedBy}
+                              </p>
                             </div>
                           </div>
 

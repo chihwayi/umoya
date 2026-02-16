@@ -7,7 +7,7 @@ import {
   TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
   CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
-  Bed, AlertCircle, BookOpen, Loader2, Sparkles
+  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown
 } from 'lucide-react';
 import { ehrApi, cdssApi, tenantApi } from '../services/api';
 import ModalPortal from '../components/ModalPortal';
@@ -155,6 +155,11 @@ const NurseDashboard: React.FC = () => {
   const [showLabResultsModal, setShowLabResultsModal] = useState(false);
   const [labResultsPatientId, setLabResultsPatientId] = useState<string | null>(null);
   const [labResultsPatientName, setLabResultsPatientName] = useState<string>('');
+  const [showVitalsHistoryModal, setShowVitalsHistoryModal] = useState(false);
+  const [vitalsHistoryPatientId, setVitalsHistoryPatientId] = useState<string | null>(null);
+  const [vitalsHistoryPatientName, setVitalsHistoryPatientName] = useState<string | null>(null);
+  const [vitalsHistory, setVitalsHistory] = useState<any[]>([]);
+  const [vitalsHistoryLoading, setVitalsHistoryLoading] = useState(false);
   const [ltfuDays, setLtfuDays] = useState(90);
   const [calendarAppointments, setCalendarAppointments] = useState<Appointment[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -245,6 +250,72 @@ const NurseDashboard: React.FC = () => {
       'Awaiting payment',
       `${context}. Accounts must confirm payment before continuing.${detailSuffix}`
     );
+  };
+
+  const isNurseAccountsUser = () => {
+    return currentUser?.role === 'nurse_accounts';
+  };
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAppointment, setPaymentAppointment] = useState<Appointment | null>(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    paymentMethod: 'cash',
+    paymentReference: '',
+    gatewayReference: '',
+    note: '',
+  });
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+
+  const openPaymentForAppointment = (appointment: Appointment) => {
+    setPaymentAppointment(appointment);
+    setPaymentForm({
+      amount: appointment.feeAmount != null ? String(appointment.feeAmount) : '',
+      paymentMethod: 'cash',
+      paymentReference: '',
+      gatewayReference: '',
+      note: '',
+    });
+    setShowPaymentModal(true);
+  };
+
+  const submitPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!paymentAppointment || !paymentAppointment.financeTransactionId) {
+      showError('Payment Error', 'No finance transaction is linked to this appointment.');
+      return;
+    }
+
+    const token = localStorage.getItem('ehr_token');
+    const activeTenant = resolveTenantSlug();
+    if (!token || !activeTenant) {
+      showError('Payment Error', 'Missing authentication or tenant information.');
+      return;
+    }
+
+    try {
+      setPaymentSubmitting(true);
+      await ehrApi.recordFinancialPayment(activeTenant, token, paymentAppointment.financeTransactionId, {
+        amount: Number(paymentForm.amount),
+        paymentMethod: paymentForm.paymentMethod,
+        paymentReference: paymentForm.paymentReference || undefined,
+        gatewayReference: paymentForm.gatewayReference || undefined,
+        note: paymentForm.note || undefined,
+      });
+
+      showSuccess('Payment Recorded', 'The payment has been captured successfully.');
+      setShowPaymentModal(false);
+      setPaymentAppointment(null);
+      await fetchTodayAppointments();
+    } catch (error: any) {
+      console.error('Failed to record payment from nurse dashboard', error);
+      showError(
+        'Payment Error',
+        error.response?.data?.message || 'Failed to record payment. Please try again or contact Accounts.',
+      );
+    } finally {
+      setPaymentSubmitting(false);
+    }
   };
 
   // Calculate task counts from appointments directly
@@ -842,7 +913,7 @@ const NurseDashboard: React.FC = () => {
   };
 
   const handleRecordVitals = (appointment: Appointment) => {
-    if (appointment.paymentStatus === 'awaiting_payment') {
+    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser()) {
       notifyPaymentBlocked(appointment, 'Vitals cannot be recorded while payment is pending');
       return;
     }
@@ -851,13 +922,45 @@ const NurseDashboard: React.FC = () => {
   };
 
   const handleTriageAssessment = (appointment: Appointment) => {
-    if (appointment.paymentStatus === 'awaiting_payment') {
+    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser()) {
       notifyPaymentBlocked(appointment, 'Triage assessment is locked until payment is confirmed');
       return;
     }
     setSelectedPatient(appointment.patient);
     setActiveTab('triage');
     // setShowAssessmentModal(true); // Switch to tab view instead of modal for better history visibility
+  };
+
+  const openVitalsHistory = async (patientId: string, patientName: string) => {
+    try {
+      setVitalsHistoryPatientId(patientId);
+      setVitalsHistoryPatientName(patientName);
+      setShowVitalsHistoryModal(true);
+      setVitalsHistoryLoading(true);
+
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Error', 'Missing authentication or tenant information for vitals history.');
+        setVitalsHistory([]);
+        return;
+      }
+
+      const response = await ehrApi.getVitals(patientId, token, activeTenant);
+      const vitals = response.data.vitals || [];
+      vitals.sort(
+        (a: any, b: any) =>
+          new Date(b.recordedAt || b.recorded_at).getTime() -
+          new Date(a.recordedAt || a.recorded_at).getTime(),
+      );
+      setVitalsHistory(vitals);
+    } catch (error) {
+      console.error('Failed to load vitals history', error);
+      showError('Error', 'Failed to load vitals history.');
+      setVitalsHistory([]);
+    } finally {
+      setVitalsHistoryLoading(false);
+    }
   };
 
   const fetchPatients = async () => {
@@ -922,7 +1025,7 @@ const NurseDashboard: React.FC = () => {
     }
 
     const awaitingAppointment = upcomingAppointments.find(apt => apt.paymentStatus === 'awaiting_payment');
-    if (awaitingAppointment) {
+    if (awaitingAppointment && !isNurseAccountsUser()) {
       notifyPaymentBlocked(awaitingAppointment, 'Vitals cannot be recorded until payment is confirmed');
       return;
     }
@@ -1110,9 +1213,25 @@ const NurseDashboard: React.FC = () => {
                     </p>
                   )}
                   {awaitingPayment && (
-                    <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center gap-2">
-                      <Lock className="w-3 h-3" />
-                      Accounts must confirm payment before vitals or triage can begin.
+                    <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Lock className="w-3 h-3" />
+                        <span>
+                          {isNurseAccountsUser()
+                            ? 'Payment pending. Record payment to unlock vitals and triage.'
+                            : 'Accounts must confirm payment before vitals or triage can begin.'}
+                        </span>
+                      </div>
+                      {isNurseAccountsUser() && (
+                        <button
+                          type="button"
+                          onClick={() => openPaymentForAppointment(appointment)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-600 text-white font-semibold hover:bg-amber-700 transition-colors"
+                        >
+                          <CreditCard className="w-3 h-3" />
+                          Record Payment
+                        </button>
+                      )}
                     </div>
                   )}
                   
@@ -2146,9 +2265,9 @@ const NurseDashboard: React.FC = () => {
           </div>
         )}
         {activeTab === 'queue' && (
-          <TriageQueue 
-            appointments={appointments} 
-            onRecordVitals={handleRecordVitals} 
+          <TriageQueue
+            appointments={appointments}
+            onRecordVitals={handleRecordVitals}
             onTriageAssessment={handleTriageAssessment}
             onViewCarePlans={(patientId, patientName) => {
               setCarePlansPatientId(patientId);
@@ -2160,7 +2279,183 @@ const NurseDashboard: React.FC = () => {
               setLabResultsPatientName(patientName);
               setShowLabResultsModal(true);
             }}
+            onViewVitalsHistory={(patientId, patientName) => {
+              openVitalsHistory(patientId, patientName);
+            }}
+            canManagePayments={isNurseAccountsUser()}
+            onOpenPayment={isNurseAccountsUser() ? openPaymentForAppointment : undefined}
           />
+        )}
+
+        {isNurseAccountsUser() && showPaymentModal && (
+          <ModalPortal>
+            <div className="fixed inset-0 bg-slate-900/70 z-50 flex items-center justify-center p-4">
+              <div className="bg-gradient-to-br from-emerald-500/10 via-sky-50 to-emerald-50 rounded-2xl shadow-2xl border border-emerald-100 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-emerald-100/60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-emerald-900">Record Patient Payment</h3>
+                      <p className="text-xs text-emerald-700">
+                        Nurse payment capture only – full finance workflows stay in Accounts.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowPaymentModal(false);
+                      setPaymentAppointment(null);
+                    }}
+                    className="text-emerald-500 hover:text-emerald-700 rounded-full p-1 hover:bg-emerald-50 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={submitPayment} className="p-5 space-y-4">
+                  <div className="rounded-xl bg-white/80 border border-emerald-100 px-4 py-3 flex items-start gap-3">
+                    <div className="mt-0.5 w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-sm font-semibold">
+                      {paymentAppointment
+                        ? `${paymentAppointment.patient.firstName.charAt(0)}${paymentAppointment.patient.lastName.charAt(0)}`
+                        : '?'}
+                    </div>
+                    <div className="text-sm">
+                      {paymentAppointment && (
+                        <>
+                          <div className="font-semibold text-slate-900">
+                            {paymentAppointment.patient.firstName} {paymentAppointment.patient.lastName}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            ID: {paymentAppointment.patient.patientNumber} •{' '}
+                            {new Date(paymentAppointment.appointmentDate).toLocaleString()}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {paymentAppointment.appointmentType && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                {paymentAppointment.appointmentType}
+                              </span>
+                            )}
+                            {paymentAppointment.feeAmount != null && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                Fee: ${Number(paymentAppointment.feeAmount).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={paymentForm.amount}
+                        onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-emerald-200 bg-white/90 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                        Payment Method
+                      </label>
+                      <select
+                        value={paymentForm.paymentMethod}
+                        onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-emerald-200 bg-white/90 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 text-sm"
+                        required
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="card">Card (POS/EFTPOS)</option>
+                        <option value="mobile_money">Mobile Money</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                        Payment Reference
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.paymentReference}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({ ...prev, paymentReference: e.target.value }))
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/90 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 text-sm"
+                        placeholder="POS slip, mobile money code, etc."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                        Gateway Reference
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentForm.gatewayReference}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({ ...prev, gatewayReference: e.target.value }))
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/90 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 text-sm"
+                        placeholder="Stripe / telco ref (optional)"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                      Note
+                    </label>
+                    <textarea
+                      value={paymentForm.note}
+                      onChange={(e) => setPaymentForm((prev) => ({ ...prev, note: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white/90 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-500 text-sm min-h-[70px]"
+                      placeholder="Optional note for audit trail..."
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full">
+                      <Shield className="w-3 h-3" />
+                      Nurse payment capture – finance audit trail preserved
+                    </span>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPaymentModal(false);
+                        setPaymentAppointment(null);
+                      }}
+                      className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl bg-white/80 hover:bg-slate-50 transition text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={paymentSubmitting}
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-md hover:from-emerald-600 hover:to-teal-600 transition disabled:opacity-60"
+                    >
+                      {paymentSubmitting ? 'Recording...' : 'Record Payment'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </ModalPortal>
         )}
         {activeTab === 'orders' && (
           <div className="space-y-6">
@@ -2279,7 +2574,7 @@ const NurseDashboard: React.FC = () => {
           const appointmentsAwaitingPayment = appointments.filter(apt => apt.paymentStatus === 'awaiting_payment');
           const hasPaymentPending = appointmentsAwaitingPayment.length > 0;
 
-          if (hasPaymentPending) {
+        if (hasPaymentPending && !isNurseAccountsUser()) {
             return (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300 p-8 text-center">
                 <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full mb-4">
@@ -2898,6 +3193,197 @@ const NurseDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showVitalsHistoryModal && vitalsHistoryPatientId && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4 overflow-y-auto">
+            <div className="w-full max-w-3xl bg-gradient-to-br from-slate-50 via-white to-sky-50 rounded-3xl shadow-2xl border border-sky-100/70 my-8 max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="sticky top-0 bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center text-white">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Vitals History</h2>
+                    <p className="text-xs text-sky-100">
+                      {vitalsHistoryPatientName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowVitalsHistoryModal(false);
+                    setVitalsHistoryPatientId(null);
+                    setVitalsHistoryPatientName(null);
+                    setVitalsHistory([]);
+                  }}
+                  className="p-2 rounded-xl hover:bg-white/15 text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                {vitalsHistoryLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-slate-500 text-sm">
+                    <Loader2 className="w-6 h-6 animate-spin mb-3 text-sky-500" />
+                    Loading vitals history...
+                  </div>
+                ) : vitalsHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <Heart className="w-10 h-10 text-slate-300 mb-3" />
+                    <h3 className="text-base font-semibold text-slate-700 mb-1">No Vital Signs Recorded</h3>
+                    <p className="text-sm text-slate-500">
+                      No vitals have been recorded for this patient yet. Use the Record Vitals button from the queue or patient view to capture the first set.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {vitalsHistory.map((v: any, index: number) => (
+                      <div
+                        key={v.id || index}
+                        className="bg-white/90 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-4"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-500 text-white flex items-center justify-center text-sm font-semibold">
+                              {new Date(v.recordedAt || v.recorded_at).getDate()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-semibold text-slate-900">
+                                {formatDateTimeToDDMMYYYYHHMM(v.recordedAt || v.recorded_at)}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                Recorded by{' '}
+                                {v.recordedByUser && (v.recordedByUser.firstName || v.recordedByUser.lastName)
+                                  ? `${v.recordedByUser.firstName || ''} ${v.recordedByUser.lastName || ''}`.trim()
+                                  : v.recordedBy && typeof v.recordedBy === 'object' && (v.recordedBy.firstName || v.recordedBy.lastName)
+                                  ? `${v.recordedBy.firstName || ''} ${v.recordedBy.lastName || ''}`.trim()
+                                  : v.recordedByName || v.recorded_by_name || 'Unknown'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                            <Activity className="w-3 h-3" />
+                            Visit #{v.visitNumber || vitalsHistory.length - index}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-700">
+                          {v.temperature != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center">
+                                <Thermometer className="w-4 h-4 text-rose-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Temperature</div>
+                                <div className="font-semibold">
+                                  {v.temperature}°C
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.bloodPressure && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+                                <Activity className="w-4 h-4 text-amber-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Blood Pressure</div>
+                                <div className="font-semibold">
+                                  {v.bloodPressure}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.heartRate != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+                                <Heart className="w-4 h-4 text-red-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Heart Rate</div>
+                                <div className="font-semibold">
+                                  {v.heartRate} bpm
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.oxygenSaturation != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                                <Droplets className="w-4 h-4 text-emerald-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">SpO₂</div>
+                                <div className="font-semibold">
+                                  {v.oxygenSaturation}%
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.respiratoryRate != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center">
+                                <Activity className="w-4 h-4 text-sky-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Respiratory Rate</div>
+                                <div className="font-semibold">
+                                  {v.respiratoryRate} /min
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.weight != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center">
+                                <User className="w-4 h-4 text-slate-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Weight</div>
+                                <div className="font-semibold">
+                                  {v.weight} kg
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.height != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center">
+                                <ArrowDown className="w-4 h-4 text-slate-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">Height</div>
+                                <div className="font-semibold">
+                                  {v.height} cm
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {v.bmi != null && (
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center">
+                                <BarChart3 className="w-4 h-4 text-violet-500" />
+                              </div>
+                              <div>
+                                <div className="text-xs text-slate-500">BMI</div>
+                                <div className="font-semibold">
+                                  {v.bmi}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* AI Guideline Search Modal */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { healthAPI } from '../services/api';
+import { healthAPI, tenantAPI } from '../services/api';
 
 interface HealthStatus {
   tenantId: string;
@@ -24,6 +24,8 @@ export const HealthMonitor: React.FC = () => {
   const [tenantHealth, setTenantHealth] = useState<HealthStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [repairMessage, setRepairMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadHealthData();
@@ -67,6 +69,20 @@ export const HealthMonitor: React.FC = () => {
     }
   };
 
+  const handleRepairAll = async () => {
+    try {
+      setRepairing(true);
+      setRepairMessage(null);
+      const result = await tenantAPI.repairAllTenants();
+      setRepairMessage(`Schema applied to ${result.count} tenants`);
+      await loadHealthData();
+    } catch (error: any) {
+      setRepairMessage(error?.message || 'Failed to repair tenants');
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'healthy': return 'text-emerald-700 bg-emerald-50 border border-emerald-200';
@@ -104,6 +120,22 @@ export const HealthMonitor: React.FC = () => {
             )}
             Refresh now
           </button>
+          <button
+            type="button"
+            onClick={handleRepairAll}
+            disabled={repairing}
+            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {repairing && (
+              <span className="mr-2 inline-block h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
+            Repair all tenants schema
+          </button>
+          {repairMessage && (
+            <span className="ml-2 text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-full">
+              {repairMessage}
+            </span>
+          )}
         </div>
       </div>
 

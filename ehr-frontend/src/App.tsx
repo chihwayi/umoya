@@ -231,7 +231,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -239,7 +239,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/queue"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -247,7 +247,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/vitals"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -263,7 +263,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/triage"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -271,7 +271,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/notes"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -279,7 +279,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/care-plans"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -287,7 +287,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/medications"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NurseDashboard />
                 </RoleProtectedRoute>
               }
@@ -295,7 +295,7 @@ function App() {
             <Route
               path="/ehr/:tenantSlug/nurse/patients/:patientId"
               element={
-                <RoleProtectedRoute allowedRoles={['nurse']}>
+                <RoleProtectedRoute allowedRoles={['nurse', 'nurse_accounts']}>
                   <NursePatientSummary />
                 </RoleProtectedRoute>
               }

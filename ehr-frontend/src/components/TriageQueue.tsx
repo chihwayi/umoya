@@ -60,14 +60,20 @@ interface TriageQueueProps {
   onTriageAssessment: (appointment: Appointment) => void;
   onViewCarePlans?: (patientId: string, patientName: string) => void;
   onViewLabResults?: (patientId: string, patientName: string) => void;
+  onViewVitalsHistory?: (patientId: string, patientName: string) => void;
+  canManagePayments?: boolean;
+  onOpenPayment?: (appointment: Appointment) => void;
 }
 
-const TriageQueue: React.FC<TriageQueueProps> = ({ 
-  appointments, 
-  onRecordVitals, 
+const TriageQueue: React.FC<TriageQueueProps> = ({
+  appointments,
+  onRecordVitals,
   onTriageAssessment,
   onViewCarePlans,
-  onViewLabResults
+  onViewLabResults,
+  onViewVitalsHistory,
+  canManagePayments,
+  onOpenPayment,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -444,6 +450,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
             const feeEstimate = formatCurrency(appointment.feeAmount ?? null);
             const financeReference = appointment.financeTransactionId;
             const latestVitals = appointment.vitals || null;
+            const hasVisitVitals =
+              !!latestVitals &&
+              !!latestVitals.recordedAt &&
+              new Date(latestVitals.recordedAt).toDateString() ===
+                new Date(appointment.appointmentDate).toDateString();
 
             return (
               <div key={appointment.id} className={`p-8 transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
@@ -485,7 +496,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
                       {/* Vitals Status */}
                       <div className="flex flex-wrap items-center gap-4">
-                        {latestVitals ? (
+                        {hasVisitVitals ? (
                           <div className="flex items-center gap-2 text-green-600">
                             <CheckCircle className="w-4 h-4" />
                             <span className="text-sm font-semibold">Vitals Recorded</span>
@@ -497,7 +508,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                           </div>
                         )}
                         
-                        {latestVitals && (
+                        {hasVisitVitals && latestVitals && (
                           <div className="flex items-center gap-4 text-sm text-slate-600">
                             <div className="flex items-center gap-1">
                               <Heart className="w-3 h-3" />
@@ -516,7 +527,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                       </div>
 
                       {/* Critical Vitals Tags */}
-                      {latestVitals && getCriticalVitals(latestVitals).length > 0 && (
+                      {hasVisitVitals && latestVitals && getCriticalVitals(latestVitals).length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {getCriticalVitals(latestVitals).map((alert, idx) => (
                             <span key={idx} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border ${alert.severity === 'high' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
@@ -557,10 +568,24 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                             <Lock className="w-4 h-4" /> Payment required before nursing actions
                           </span>
                           <span>
-                            Coordinate with Accounts to unlock vitals, triage, and status updates.
+                            {canManagePayments
+                              ? 'Record payment in Billing to unlock vitals, triage, and status updates.'
+                              : 'Coordinate with Accounts to unlock vitals, triage, and status updates.'}
                           </span>
                           {financeReference && (
-                            <span className="text-xs text-amber-600">Finance reference: <span className="font-mono">{financeReference}</span></span>
+                            <span className="text-xs text-amber-600">
+                              Finance reference: <span className="font-mono">{financeReference}</span>
+                            </span>
+                          )}
+                          {canManagePayments && onOpenPayment && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenPayment(appointment)}
+                              className="mt-2 inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                            >
+                              <CreditCard className="w-3 h-3 mr-1" />
+                              Record Payment
+                            </button>
                           )}
                         </div>
                       )}
@@ -574,7 +599,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {latestVitals ? (
+                    {hasVisitVitals ? (
                       <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
                     ) : (
                       <button
@@ -601,6 +626,21 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                       <ClipboardList className="w-4 h-4" />
                       Triage Assessment
                     </button>
+                    {onViewVitalsHistory && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onViewVitalsHistory(
+                            appointment.patient.id,
+                            `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+                          )
+                        }
+                        className="px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 bg-gradient-to-r from-sky-500 to-indigo-600 text-white hover:from-sky-600 hover:to-indigo-700"
+                      >
+                        <Activity className="w-4 h-4" />
+                        Vitals History
+                      </button>
+                    )}
                     {onViewCarePlans && (
                       <button
                         onClick={() => onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`)}

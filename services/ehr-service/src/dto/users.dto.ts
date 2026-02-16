@@ -5,6 +5,7 @@ export enum UserRole {
   ADMIN = 'admin',
   DOCTOR = 'doctor',
   NURSE = 'nurse',
+  NURSE_ACCOUNTS = 'nurse_accounts',
   RADIOLOGIST = 'radiologist',
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
