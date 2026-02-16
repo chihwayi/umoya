@@ -1139,6 +1139,46 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  analyzeTriageCopilot: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/triage/analyze', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  interpretVitalsCopilot: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/vitals/interpret', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  generateNurseNoteDraft: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/notes/draft', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  generateNurseHandoffSummary: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/handoff/summary', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
       headers: { 

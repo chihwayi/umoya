@@ -61,6 +61,13 @@ export enum HipaaAuditAction {
   USER_ROLE_CHANGE = 'user_role_change',
   PERMISSION_CHANGE = 'permission_change',
 
+  // CDSS Copilot Events
+  CDSS_TRIAGE_ANALYZE = 'cdss_triage_analyze',
+  CDSS_VITALS_INTERPRET = 'cdss_vitals_interpret',
+  CDSS_NOTES_DRAFT = 'cdss_notes_draft',
+  CDSS_HANDOFF_SUMMARY = 'cdss_handoff_summary',
+  CDSS_GUIDELINES_SEARCH = 'cdss_guidelines_search',
+
   // Breach Events
   BREACH_DETECTED = 'breach_detected',
   BREACH_REPORTED = 'breach_reported',
@@ -690,6 +697,16 @@ export class HipaaAuditService {
       return 'medium';
     }
 
+    if (
+      action === HipaaAuditAction.CDSS_TRIAGE_ANALYZE ||
+      action === HipaaAuditAction.CDSS_VITALS_INTERPRET ||
+      action === HipaaAuditAction.CDSS_NOTES_DRAFT ||
+      action === HipaaAuditAction.CDSS_HANDOFF_SUMMARY ||
+      action === HipaaAuditAction.CDSS_GUIDELINES_SEARCH
+    ) {
+      return 'medium';
+    }
+
     // Modification actions are medium risk
     if (action.includes('_create') || action.includes('_update') || action.includes('_delete')) {
       return 'medium';
@@ -723,5 +740,3 @@ export class HipaaAuditService {
     };
   }
 }
-
-

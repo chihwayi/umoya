@@ -43,7 +43,8 @@ export class HipaaAuditInterceptor implements NestInterceptor {
 
     // Determine action and resource type from route
     const method = request.method;
-    const route = request.route?.path || request.url;
+    const routePath = request.route?.path || request.path || request.url;
+    const route = `${request.baseUrl || ''}${routePath}`;
     const action = this.determineAction(method, route, handler.name);
     const resourceType = this.determineResourceType(route, controller.name);
 
@@ -82,6 +83,13 @@ export class HipaaAuditInterceptor implements NestInterceptor {
                 handler: handler.name,
                 controller: controller.name,
                 responseTime: Date.now() - startTime,
+                requestId: request.headers['x-request-id'] || null,
+                copilotUserAction:
+                  request.body?.userAction ||
+                  request.body?.action ||
+                  request.body?.decision ||
+                  null,
+                copilotAudit: (data as any)?.audit || null,
               },
             );
           } catch (error) {
@@ -120,6 +128,23 @@ export class HipaaAuditInterceptor implements NestInterceptor {
   private determineAction(method: string, route: string, handlerName: string): HipaaAuditAction {
     const lowerRoute = route.toLowerCase();
     const lowerHandler = handlerName.toLowerCase();
+
+    // CDSS Copilot operations
+    if (lowerRoute.includes('cdss/guidelines/search')) {
+      return HipaaAuditAction.CDSS_GUIDELINES_SEARCH;
+    }
+    if (lowerRoute.includes('cdss/triage/analyze')) {
+      return HipaaAuditAction.CDSS_TRIAGE_ANALYZE;
+    }
+    if (lowerRoute.includes('cdss/vitals/interpret')) {
+      return HipaaAuditAction.CDSS_VITALS_INTERPRET;
+    }
+    if (lowerRoute.includes('cdss/notes/draft')) {
+      return HipaaAuditAction.CDSS_NOTES_DRAFT;
+    }
+    if (lowerRoute.includes('cdss/handoff/summary')) {
+      return HipaaAuditAction.CDSS_HANDOFF_SUMMARY;
+    }
 
     // View/Read operations
     if (method === 'GET') {
@@ -280,6 +305,9 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     if (lowerRoute.includes('billing') || lowerController.includes('billing')) {
       return 'billing';
     }
+    if (lowerRoute.includes('cdss')) {
+      return 'cdss_copilot';
+    }
 
     return 'unknown';
   }
@@ -321,7 +349,7 @@ export class HipaaAuditInterceptor implements NestInterceptor {
       Object.keys(obj).forEach((key) => {
         // Exclude non-PHI fields
         if (
-          !['id', 'createdAt', 'updatedAt', 'created_at', 'updated_at'].includes(key) &&
+          !['id', 'createdAt', 'updatedAt', 'created_at', 'updated_at', 'audit'].includes(key) &&
           !key.startsWith('_')
         ) {
           fields.push(key);
@@ -332,5 +360,4 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     return fields;
   }
 }
-
 

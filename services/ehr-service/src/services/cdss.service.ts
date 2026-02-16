@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
-import { createHmac, randomUUID } from 'crypto';
+import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
 
 @Injectable()
@@ -997,6 +997,253 @@ export class CdssService {
       source: 'fallback_empty',
       error: 'CDSS service unavailable'
     };
+  }
+
+  private buildCopilotAuditMetadata(actionType: string, tenantId: string | undefined, promptContext: any, recommendationSummary: string) {
+    const contextPayload = JSON.stringify(promptContext ?? {});
+    const promptContextHash = createHash('sha256').update(contextPayload).digest('hex');
+    return {
+      actionType,
+      tenantId: tenantId || null,
+      modelVersion: process.env.CDSS_MODEL_VERSION || 'cdss-service-v1',
+      promptContextHash,
+      recommendationSummary,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private mapRiskToTriageLevel(riskLevel: string | undefined): 'resuscitation' | 'emergency' | 'urgent' | 'semi-urgent' | 'non-urgent' {
+    const normalized = (riskLevel || '').toLowerCase();
+    if (normalized === 'critical' || normalized === 'high') return 'emergency';
+    if (normalized === 'moderate') return 'urgent';
+    if (normalized === 'low') return 'semi-urgent';
+    return 'non-urgent';
+  }
+
+  async analyzeNurseTriage(payload: any, tenantDb?: DataSource, tenantId?: string) {
+    const triageInput = payload || {};
+    const symptoms = Array.isArray(triageInput.symptoms)
+      ? triageInput.symptoms
+      : [triageInput.chiefComplaint || triageInput.reason || 'general assessment'].filter(Boolean);
+
+    const diagnosis = await this.diagnosisAssist(
+      {
+        symptoms,
+        chiefComplaint: triageInput.chiefComplaint,
+        historyOfPresentIllness: triageInput.historyOfPresentIllness,
+        clinicalNotes: triageInput.clinicalNotes,
+        vitals: triageInput.vitals,
+        age: triageInput.age,
+        gender: triageInput.gender,
+        labs: triageInput.labs,
+        conditions: triageInput.conditions || triageInput.diagnoses || [],
+      },
+      true,
+      tenantId,
+    );
+
+    let risk: any = null;
+    try {
+      if (triageInput.vitals || triageInput.patientId) {
+        risk = await this.riskAssessment(
+          {
+            patientId: triageInput.patientId,
+            age: triageInput.age,
+            gender: triageInput.gender,
+            vitals: triageInput.vitals || {},
+            diagnoses: triageInput.conditions || triageInput.diagnoses || [],
+            medications: triageInput.medications || [],
+            medicalHistory: triageInput.medicalHistory || [],
+            labResults: triageInput.labs,
+          },
+          tenantDb,
+          tenantId,
+        );
+      }
+    } catch (error: any) {
+      this.logger.warn(`Nurse triage risk assessment unavailable: ${error.message}`);
+    }
+
+    const riskLevel = risk?.risk_level || diagnosis?.urgencyLevel || 'unknown';
+    const suggestedTriageLevel = this.mapRiskToTriageLevel(riskLevel);
+    const reasons: string[] = [
+      ...(Array.isArray(diagnosis?.red_flags) ? diagnosis.red_flags : []),
+      ...(Array.isArray(risk?.factors) ? risk.factors.map((f: any) => String(f?.name || f?.factor || f)) : []),
+    ].slice(0, 8);
+
+    const missingData: string[] = [];
+    if (!triageInput.vitals) missingData.push('vitals');
+    if (!triageInput.chiefComplaint) missingData.push('chiefComplaint');
+    if (!triageInput.age) missingData.push('age');
+    if (!triageInput.gender) missingData.push('gender');
+
+    const recommendationSummary = `Suggested triage level ${suggestedTriageLevel} with risk ${riskLevel}`;
+    return {
+      riskLevel,
+      suggestedTriageLevel,
+      reasons,
+      missingData,
+      diagnosis,
+      risk,
+      source: 'ehr_cdss_proxy',
+      audit: this.buildCopilotAuditMetadata('triage', tenantId, triageInput, recommendationSummary),
+    };
+  }
+
+  async interpretNurseVitals(payload: any, tenantDb?: DataSource, tenantId?: string) {
+    const vitalsInput = payload || {};
+    const risk = await this.riskAssessment(
+      {
+        patientId: vitalsInput.patientId,
+        age: vitalsInput.age,
+        gender: vitalsInput.gender,
+        vitals: vitalsInput.vitals || vitalsInput,
+        diagnoses: vitalsInput.conditions || vitalsInput.diagnoses || [],
+        medications: vitalsInput.medications || [],
+        medicalHistory: vitalsInput.medicalHistory || [],
+        labResults: vitalsInput.labs,
+      },
+      tenantDb,
+      tenantId,
+    );
+
+    const interpretation = {
+      riskLevel: risk?.risk_level || 'unknown',
+      overallScore: risk?.overall_score ?? null,
+      factors: risk?.factors || [],
+      recommendations: risk?.recommendations || [],
+      trendSignals: risk?.trends || null,
+      visitPatterns: risk?.visit_patterns || null,
+      guidance: 'AI suggestion only. Nurse confirmation is required before clinical action.',
+    };
+
+    const recommendationSummary = `Vitals interpreted with risk ${interpretation.riskLevel}`;
+    return {
+      ...interpretation,
+      source: 'ehr_cdss_proxy',
+      audit: this.buildCopilotAuditMetadata('vitals', tenantId, vitalsInput, recommendationSummary),
+    };
+  }
+
+  async generateNurseNoteDraft(payload: any, tenantId?: string) {
+    const noteInput = payload || {};
+    const noteFragments: string[] = [];
+    if (noteInput.chiefComplaint) noteFragments.push(`Chief complaint: ${noteInput.chiefComplaint}`);
+    if (noteInput.observations) noteFragments.push(`Observations: ${noteInput.observations}`);
+    if (noteInput.interventions) noteFragments.push(`Interventions: ${noteInput.interventions}`);
+    if (noteInput.outcomes) noteFragments.push(`Outcomes: ${noteInput.outcomes}`);
+    if (Array.isArray(noteInput.previousNotes)) {
+      for (const n of noteInput.previousNotes.slice(0, 10)) {
+        if (typeof n === 'string' && n.trim()) {
+          noteFragments.push(n.trim());
+        } else if (n?.content) {
+          noteFragments.push(String(n.content));
+        }
+      }
+    }
+    if (noteFragments.length === 0) {
+      noteFragments.push('Nursing assessment performed. Populate structured fields before finalizing.');
+    }
+
+    try {
+      const responseData = await this.postWithPolicy<any>(
+        'notes_draft',
+        '/patient/summarize',
+        {
+          clinical_notes: noteFragments,
+          age: Number(noteInput.age || 0),
+          gender: String(noteInput.gender || 'unknown'),
+          recent_vitals: noteInput.vitals || {},
+        },
+        15000,
+        tenantId,
+      );
+
+      const draftText = responseData?.summary || responseData?.one_liner || responseData?.text || '';
+      const recommendationSummary = draftText ? 'Generated nursing note draft' : 'No draft generated';
+      return {
+        draft: draftText,
+        provenance: {
+          notesUsed: noteFragments.length,
+          hasVitalsContext: !!noteInput.vitals,
+          source: 'patient/summarize',
+        },
+        source: 'ehr_cdss_proxy',
+        audit: this.buildCopilotAuditMetadata('notes', tenantId, noteInput, recommendationSummary),
+      };
+    } catch (error: any) {
+      this.logger.warn(`Nurse note draft generation unavailable: ${error.message}`);
+      return {
+        draft: '',
+        provenance: {
+          notesUsed: noteFragments.length,
+          hasVitalsContext: !!noteInput.vitals,
+          source: 'fallback_empty',
+        },
+        warnings: ['CDSS service unavailable - nursing draft not generated'],
+        source: 'error',
+        audit: this.buildCopilotAuditMetadata('notes', tenantId, noteInput, 'Draft unavailable'),
+      };
+    }
+  }
+
+  async generateNurseHandoffSummary(payload: any, tenantId?: string) {
+    const handoffInput = payload || {};
+    const summaryNotes: string[] = [];
+
+    const pushSection = (title: string, value: any) => {
+      if (!value) return;
+      if (typeof value === 'string') {
+        if (value.trim()) summaryNotes.push(`${title}: ${value.trim()}`);
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (value.length > 0) summaryNotes.push(`${title}: ${value.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(' | ')}`);
+        return;
+      }
+      summaryNotes.push(`${title}: ${JSON.stringify(value)}`);
+    };
+
+    pushSection('Shift notes', handoffInput.shiftNotes);
+    pushSection('Pending tasks', handoffInput.pendingTasks);
+    pushSection('Safety alerts', handoffInput.alerts);
+    pushSection('Recent nursing notes', handoffInput.nursingNotes);
+    pushSection('Recent vitals', handoffInput.vitals);
+
+    if (summaryNotes.length === 0) {
+      summaryNotes.push('No major events captured during shift.');
+    }
+
+    try {
+      const responseData = await this.postWithPolicy<any>(
+        'handoff_summary',
+        '/patient/summarize',
+        {
+          clinical_notes: summaryNotes,
+          age: Number(handoffInput.age || 0),
+          gender: String(handoffInput.gender || 'unknown'),
+          recent_vitals: handoffInput.vitals || {},
+        },
+        15000,
+        tenantId,
+      );
+
+      const summary = responseData?.summary || responseData?.one_liner || responseData?.text || '';
+      const recommendationSummary = summary ? 'Generated nurse handoff summary' : 'No handoff summary generated';
+      return {
+        summary,
+        source: 'ehr_cdss_proxy',
+        audit: this.buildCopilotAuditMetadata('handoff', tenantId, handoffInput, recommendationSummary),
+      };
+    } catch (error: any) {
+      this.logger.warn(`Nurse handoff summary generation unavailable: ${error.message}`);
+      return {
+        summary: '',
+        warnings: ['CDSS service unavailable - handoff summary not generated'],
+        source: 'error',
+        audit: this.buildCopilotAuditMetadata('handoff', tenantId, handoffInput, 'Handoff summary unavailable'),
+      };
+    }
   }
 
   async allergyCheck(patientId: string, medication: string, tenantDb: DataSource) {

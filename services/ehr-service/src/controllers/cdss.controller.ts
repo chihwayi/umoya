@@ -3,11 +3,13 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '
 import { CdssService } from '../services/cdss.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @ApiTags('Clinical Decision Support System')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('cdss')
 export class CdssController {
   private readonly logger = new Logger(CdssController.name);
@@ -120,5 +122,37 @@ export class CdssController {
       body.visitHistory,
       body.diagnoses
     );
+  }
+
+  @Post('triage/analyze')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Analyze triage context and return copilot recommendations' })
+  @ApiResponse({ status: 200, description: 'Triage copilot analysis completed' })
+  async analyzeTriage(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.analyzeNurseTriage(body, req.tenantDb, req.tenantId);
+  }
+
+  @Post('vitals/interpret')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Interpret vitals and return risk-oriented recommendations' })
+  @ApiResponse({ status: 200, description: 'Vitals interpretation completed' })
+  async interpretVitals(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.interpretNurseVitals(body, req.tenantDb, req.tenantId);
+  }
+
+  @Post('notes/draft')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Generate structured nursing note draft from contextual inputs' })
+  @ApiResponse({ status: 200, description: 'Nursing note draft generated' })
+  async draftNursingNotes(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.generateNurseNoteDraft(body, req.tenantId);
+  }
+
+  @Post('handoff/summary')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Generate nurse handoff summary from patient shift context' })
+  @ApiResponse({ status: 200, description: 'Nurse handoff summary generated' })
+  async generateHandoffSummary(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.generateNurseHandoffSummary(body, req.tenantId);
   }
 }

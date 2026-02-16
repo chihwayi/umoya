@@ -22,19 +22,20 @@
 ### 1.1 CDSS Access Boundary
 
 - [x] Identify all direct frontend → cdss-service calls in ehr-frontend (`local changes pending commit`)
-- [ ] Define ehr-service proxy endpoints for CDSS usage
-  - [ ] POST /cdss/triage/analyze
-  - [ ] POST /cdss/vitals/interpret
-  - [ ] POST /cdss/notes/draft
-- [ ] Define role and tenant access rules for each endpoint
-- [ ] Define audit logging fields
-  - [ ] userId, tenantId
-  - [ ] action type (triage/vitals/notes)
-  - [ ] model name/version
-  - [ ] prompt context hash
-  - [ ] recommendation summary
-  - [ ] user action (accept/modify/reject)
-  - [ ] timestamp
+- [x] Define ehr-service proxy endpoints for CDSS usage (`local changes pending commit`)
+  - [x] POST /cdss/triage/analyze
+  - [x] POST /cdss/vitals/interpret
+  - [x] POST /cdss/notes/draft
+- [x] Define role and tenant access rules for each endpoint (`local changes pending commit`)
+- [~] Define audit logging fields (`@codex 2026-02-16`)
+  - [x] userId, tenantId
+  - [x] action type (triage/vitals/notes)
+  - [x] model name/version
+  - [x] prompt context hash
+  - [x] recommendation summary
+  - [x] user action (accept/modify/reject)
+  - [x] timestamp
+  Remaining scope: frontend copilot UI still needs to consistently send explicit accept/modify/reject decisions on all interaction flows.
 
 ### 1.2 Remove PHI Debug Logging
 
@@ -183,18 +184,19 @@
 
 ### Wave 1 — Backend CDSS Boundary + New Endpoints
 
-- [ ] Add/extend nurse-focused CDSS proxy routes
-  - [ ] `services/ehr-service/src/controllers/cdss.controller.ts`
-  - [ ] `services/ehr-service/src/services/cdss.service.ts`
-- [ ] Add new nurse copilot endpoint contracts
-  - [ ] `POST /cdss/triage/analyze`
-  - [ ] `POST /cdss/vitals/interpret`
-  - [ ] `POST /cdss/notes/draft`
-  - [ ] `POST /cdss/handoff/summary`
-- [ ] Wire strict tenant/role enforcement and audit metadata
-  - [ ] `services/ehr-service/src/guards/roles.guard.ts`
-  - [ ] `services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts`
-  - [ ] `services/ehr-service/src/services/hipaa-audit.service.ts`
+- [x] Add/extend nurse-focused CDSS proxy routes (`local changes pending commit`)
+  - [x] `services/ehr-service/src/controllers/cdss.controller.ts`
+  - [x] `services/ehr-service/src/services/cdss.service.ts`
+- [x] Add new nurse copilot endpoint contracts (`local changes pending commit`)
+  - [x] `POST /cdss/triage/analyze`
+  - [x] `POST /cdss/vitals/interpret`
+  - [x] `POST /cdss/notes/draft`
+  - [x] `POST /cdss/handoff/summary`
+- [~] Wire strict tenant/role enforcement and audit metadata (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/guards/roles.guard.ts`
+  - [x] `services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts`
+  - [x] `services/ehr-service/src/services/hipaa-audit.service.ts`
+  Remaining scope: align frontend payload contracts so copilot user-action fields are always present in requests.
 
 ### Wave 2 — Nurse UI Integration
 
