@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { HipaaAuditAction, HipaaAuditService } from './hipaa-audit.service';
 
@@ -96,9 +96,19 @@ export class NurseWorklistService {
     tenantDb: DataSource,
     user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
     taskId: string,
-    payload?: { reason?: string; patientId?: string; context?: any },
+    payload?: { action?: 'accept' | 'override'; reason?: string; patientId?: string; context?: any },
     requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
   ) {
+    const normalizedAction = payload?.action === 'override' ? 'override' : 'accept';
+    if (normalizedAction === 'override' && !payload?.reason?.trim()) {
+      throw new BadRequestException('reason is required when task action is override');
+    }
+
+    const mergedContext = {
+      ...(payload?.context || {}),
+      action: normalizedAction,
+    };
+
     try {
       await tenantDb.query(
         `
@@ -115,7 +125,7 @@ export class NurseWorklistService {
           completed_at = NOW(),
           updated_at = NOW()
         `,
-        [user.id, taskId, payload?.patientId || null, payload?.reason || null, JSON.stringify(payload?.context || null)],
+        [user.id, taskId, payload?.patientId || null, payload?.reason || null, JSON.stringify(mergedContext)],
       );
     } catch (error) {
       if (!this.isMissingTableError(error)) {
@@ -137,8 +147,9 @@ export class NurseWorklistService {
       outcome: 'success',
       metadata: {
         taskId,
+        action: normalizedAction,
         reason: payload?.reason || null,
-        context: payload?.context || null,
+        context: mergedContext,
       },
       riskLevel: 'medium',
       timestamp: new Date(),
@@ -151,9 +162,19 @@ export class NurseWorklistService {
     tenantDb: DataSource,
     user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
     alertId: string,
-    payload?: { reason?: string; patientId?: string; context?: any },
+    payload?: { action?: 'accept' | 'override'; reason?: string; patientId?: string; context?: any },
     requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
   ) {
+    const normalizedAction = payload?.action === 'override' ? 'override' : 'accept';
+    if (normalizedAction === 'override' && !payload?.reason?.trim()) {
+      throw new BadRequestException('reason is required when alert action is override');
+    }
+
+    const mergedContext = {
+      ...(payload?.context || {}),
+      action: normalizedAction,
+    };
+
     try {
       await tenantDb.query(
         `
@@ -170,7 +191,7 @@ export class NurseWorklistService {
           acknowledged_at = NOW(),
           updated_at = NOW()
         `,
-        [user.id, alertId, payload?.patientId || null, payload?.reason || null, JSON.stringify(payload?.context || null)],
+        [user.id, alertId, payload?.patientId || null, payload?.reason || null, JSON.stringify(mergedContext)],
       );
     } catch (error) {
       if (!this.isMissingTableError(error)) {
@@ -192,8 +213,9 @@ export class NurseWorklistService {
       outcome: 'success',
       metadata: {
         alertId,
+        action: normalizedAction,
         reason: payload?.reason || null,
-        context: payload?.context || null,
+        context: mergedContext,
       },
       riskLevel: 'medium',
       timestamp: new Date(),

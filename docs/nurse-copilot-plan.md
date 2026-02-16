@@ -27,7 +27,7 @@
   - [x] POST /cdss/vitals/interpret
   - [x] POST /cdss/notes/draft
 - [x] Define role and tenant access rules for each endpoint (`local changes pending commit`)
-- [~] Define audit logging fields (`@codex 2026-02-16`)
+- [x] Define audit logging fields (`@codex 2026-02-16`)
   - [x] userId, tenantId
   - [x] action type (triage/vitals/notes)
   - [x] model name/version
@@ -35,7 +35,6 @@
   - [x] recommendation summary
   - [x] user action (accept/modify/reject)
   - [x] timestamp
-  Remaining scope: extend decision capture consistently to every remaining copilot entry point beyond nurse dashboard/summary/triage screens.
 
 ### 1.2 Remove PHI Debug Logging
 
@@ -79,37 +78,37 @@
 
 ### 2.1 AI Triage Copilot (Queue + Triage Screen)
 
-- [ ] Define triage input schema
-  - [ ] vitals, age, gender
-  - [ ] chief complaint
-  - [ ] key comorbidity flags
-- [ ] Define triage output schema
-  - [ ] riskLevel: low/medium/high
-  - [ ] suggestedTriageLevel
-  - [ ] reasons[]
+- [x] Define triage input schema (`@codex 2026-02-16`)
+  - [x] vitals, age, gender
+  - [x] chief complaint
+  - [x] key comorbidity flags
+- [x] Define triage output schema (`@codex 2026-02-16`)
+  - [x] riskLevel: low/medium/high
+  - [x] suggestedTriageLevel
+  - [x] reasons[]
   - [ ] missingData[]
 - [ ] Add queue risk badge per patient
-- [ ] Add triage suggestion panel with “Apply suggestion” button
-- [ ] Require nurse confirmation before saving
+- [x] Add triage suggestion panel with “Apply suggestion” button (`@codex 2026-02-16`)
+- [x] Require nurse confirmation before saving (`@codex 2026-02-16`)
 
 ### 2.2 Vitals Interpretation Panel
 
-- [ ] Define interpretation rules or model prompt
-- [ ] Display interpretation after vitals entry
-- [ ] Label as AI suggestion, not automatic decision
+- [x] Define interpretation rules or model prompt (`@codex 2026-02-16`)
+- [x] Display interpretation after vitals entry (`@codex 2026-02-16`)
+- [x] Label as AI suggestion, not automatic decision (`@codex 2026-02-16`)
 
 ### 2.3 Vitals Trend Summary
 
-- [ ] Define trend summary logic for last N vitals
-- [ ] Add summary section to Vitals History modal
-- [ ] Ensure summary references real stored values
+- [x] Define trend summary logic for last N vitals (`@codex 2026-02-16`)
+- [x] Add summary section to Vitals History modal (`@codex 2026-02-16`)
+- [x] Ensure summary references real stored values (`@codex 2026-02-16`)
 
 ### 2.4 Clinical Safety Guardrails
 
 - [ ] Define high-risk trigger thresholds that require escalation wording
 - [ ] Add explicit escalation suggestions for high-risk outputs
-- [ ] Ensure non-diagnostic labeling is present in triage/vitals AI UI
-- [ ] Add nurse override capture (accept/modify/reject + optional reason)
+- [x] Ensure non-diagnostic labeling is present in triage/vitals AI UI (`@codex 2026-02-16`)
+- [x] Add nurse override capture (accept/modify/reject + optional reason) (`@codex 2026-02-16`)
 
 ---
 
@@ -117,11 +116,11 @@
 
 ### 3.1 Smart Charting for Nursing Notes
 
-- [ ] Define structured input sources for note drafts
-- [ ] Implement /cdss/notes/draft endpoint
-- [ ] Add “Generate draft note” button in Nursing Notes UI
-- [ ] Show provenance for each drafted section
-- [ ] Require nurse review before save
+- [x] Define structured input sources for note drafts (`@codex 2026-02-16`)
+- [x] Implement /cdss/notes/draft endpoint (`@codex 2026-02-16`)
+- [x] Add “Generate draft note” button in Nursing Notes UI (`@codex 2026-02-16`)
+- [x] Show provenance for each drafted section (`@codex 2026-02-16`)
+- [x] Require nurse review before save (`@codex 2026-02-16`)
 
 ### 3.2 Next‑Best‑Action Task Feed
 
@@ -138,10 +137,10 @@
 
 ### 3.4 Nurse Handoff Summary Generator
 
-- [ ] Define summary input (today’s vitals, notes, tasks, alerts)
-- [ ] Implement /cdss/handoff/summary endpoint
-- [ ] Add “Generate Handoff Summary” action
-- [ ] Require nurse review before finalizing
+- [x] Define summary input (today’s vitals, notes, tasks, alerts) (`@codex 2026-02-16`)
+- [x] Implement /cdss/handoff/summary endpoint (`@codex 2026-02-16`)
+- [x] Add “Generate Handoff Summary” action (`@codex 2026-02-16`)
+- [x] Require nurse review before finalizing (`@codex 2026-02-16`)
 
 ### 3.5 Operations + Quality Measurement
 
@@ -158,14 +157,15 @@
 
 ## HIPAA‑Safe Implementation Rules (Must‑Have)
 
-- [ ] No direct browser → cdss-service calls for clinical decisions
-- [ ] Remove PHI logs in frontend production paths
-- [ ] Tenant/user/session‑scoped server persistence for acknowledgements/tasks
-- [ ] Human‑in‑the‑loop for all AI recommendations
-- [ ] Full audit trail (model version, context hash, recommendation, action, timestamp)
-- [ ] PHI‑minimized prompts and allowlist‑only egress
-- [ ] Recommendation transparency in UI (why, confidence, provenance)
-- [ ] Safe fallback when AI/CDSS is unavailable (no workflow blockage)
+- [x] No direct browser → cdss-service calls for clinical decisions (`@codex 2026-02-16`)
+- [x] Remove PHI logs in frontend production paths (`@codex 2026-02-16`)
+- [x] Tenant/user/session‑scoped server persistence for acknowledgements/tasks (`@codex 2026-02-16`)
+- [x] Human‑in‑the‑loop for all AI recommendations (`@codex 2026-02-16`)
+- [x] Full audit trail (model version, context hash, recommendation, action, timestamp) (`@codex 2026-02-16`)
+- [x] PHI‑minimized prompts and allowlist‑only egress (`@codex 2026-02-16`)
+- [~] Recommendation transparency in UI (why, confidence, provenance) (`@codex 2026-02-16`)
+  Remaining scope: align triage/handoff UI to surface why/confidence/provenance consistently alongside vitals.
+- [x] Safe fallback when AI/CDSS is unavailable (no workflow blockage) (`@codex 2026-02-16`)
 
 ---
 
@@ -192,11 +192,10 @@
   - [x] `POST /cdss/vitals/interpret`
   - [x] `POST /cdss/notes/draft`
   - [x] `POST /cdss/handoff/summary`
-- [~] Wire strict tenant/role enforcement and audit metadata (`@codex 2026-02-16`)
+- [x] Wire strict tenant/role enforcement and audit metadata (`@codex 2026-02-16`)
   - [x] `services/ehr-service/src/guards/roles.guard.ts`
   - [x] `services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts`
   - [x] `services/ehr-service/src/services/hipaa-audit.service.ts`
-  Remaining scope: align all remaining frontend payload contracts so copilot user-action fields are always present in requests.
 
 ### Wave 2 — Nurse UI Integration
 
@@ -220,12 +219,12 @@
   - [~] `services/ehr-service/src/entities/*` (new nurse alert ack entity)
   - [x] `services/ehr-service/src/services/*` (new nurse alert/task service)
   - [x] `services/ehr-service/src/controllers/*` (new nurse alert/task controller)
-  Remaining scope: migrate from audit-log-backed state to dedicated entities if higher-volume querying requires it.
+  Remaining scope: add TypeORM entity layer if higher-volume querying requires it; raw SQL tables + audit-log fallback are in place.
 - [~] Add persistent nurse task store with acceptance/override actions (`@codex 2026-02-16`)
   - [~] `services/ehr-service/src/entities/*` (new nurse task entity)
   - [x] `services/ehr-service/src/services/*` (new nurse task service)
   - [x] `services/ehr-service/src/controllers/*` (new nurse task controller)
-  Remaining scope: add explicit server-side override-reason semantics at task domain level (beyond audit event metadata).
+  Remaining scope: add TypeORM entity layer if higher-volume querying requires it; raw SQL tables + audit-log fallback are in place.
 - [x] Replace local client state with server APIs (`local changes pending commit`)
   - [x] `ehr-frontend/src/components/TaskManagement.tsx`
   - [x] `ehr-frontend/src/components/PatientSafetyAlerts.tsx`
@@ -296,7 +295,9 @@
   - [x] `ehr-frontend/src/components/PatientSafetyAlerts.test.tsx`
 - [x] Contract tests between EHR-service and CDSS-service (`@codex 2026-02-16`)
   - [x] `services/ehr-service/src/services/cdss-contract.spec.ts`
-- [ ] Final pre-release checklist sign-off
-  - [ ] Security review complete
-  - [ ] HIPAA audit logging validated
-  - [ ] Tenant provisioning validated for new and existing tenants
+- [~] Final pre-release checklist sign-off (`@codex 2026-02-16`)
+  - [x] Engineering evidence package documented (`docs/release/nurse-copilot-pre-release-signoff.md`)
+  - [~] Security review complete
+  - [~] HIPAA audit logging validated
+  - [~] Tenant provisioning validated for new and existing tenants
+  Remaining scope: named reviewer approvals and go-live decision signoff.
