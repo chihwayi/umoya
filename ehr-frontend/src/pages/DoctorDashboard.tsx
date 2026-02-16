@@ -120,6 +120,13 @@ interface VitalsAlert {
   color: string;
 }
 
+type PatientVitalsWithUser = PatientVitals & {
+  recordedByUser?: {
+    firstName?: string;
+    lastName?: string;
+  };
+};
+
 const DoctorDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -2842,7 +2849,7 @@ const DoctorDashboard: React.FC = () => {
               {(vitalsData[currentAppointment.patient.id] || []).length > 0 && (
                 <div className="mb-6 space-y-4">
                   <h4 className="text-lg font-semibold text-slate-900">Recent Vitals</h4>
-                  {(vitalsData[currentAppointment.patient.id] || []).slice(0, 3).map((v: PatientVitals) => (
+                  {(vitalsData[currentAppointment.patient.id] || []).slice(0, 3).map((v: PatientVitalsWithUser) => (
                     <div key={v.id} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/50 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-slate-700">
