@@ -144,6 +144,24 @@ POST /tenants/provision-database/:tenantId/:bundleId
   npm run ts-node scripts/seed-message-templates.ts
   ```
 
+### Nurse Copilot Persistence Bundle (Sprint 46 / Wave 6)
+- **Bundle ID**: `sprint46_nurse_copilot`
+- **Script**: `scripts/provision-sprint46-nurse-copilot.ts`
+- **Migration**: `database/migrations/034-nurse-copilot-persistence.sql`
+- **Tables**:
+  - `nurse_copilot_task_events` - server-scoped task completion state
+  - `nurse_copilot_alert_events` - server-scoped alert acknowledgement state
+  - `nurse_handoff_workflow_state` - handoff finalize/review/share lifecycle state
+- **Indexes**:
+  - user/status and patient indexes for task and alert event lookup
+  - handoff status/finalized/shared timestamp indexes
+- **Provisioning (existing tenants)**:
+  ```bash
+  npx ts-node scripts/provision-sprint46-nurse-copilot.ts
+  ```
+- **Provisioning (new tenants)**:
+  - Applied automatically through `DatabaseProvisioningService` bundle list.
+
 ## Schema Versioning
 
 ### Version Tracking
@@ -196,6 +214,9 @@ npm run provision:sprint14-2
 
 # Run all pending migrations
 npm run provision:all
+
+# Wave 6 nurse copilot provisioning across existing tenants
+npx ts-node scripts/provision-sprint46-nurse-copilot.ts
 ```
 
 ## Best Practices
@@ -255,4 +276,3 @@ POST /tenants/provision-database/:tenantId/:bundleId
 - Long-running provisioning
 - Schema version mismatches
 - Database connection issues
-

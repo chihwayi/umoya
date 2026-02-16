@@ -5,6 +5,7 @@ import hashlib
 import json
 from typing import List, Dict, Any, Optional
 import numpy as np
+from privacy_guard import redact_text
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -180,9 +181,12 @@ class RAGEngine:
             return []
             
         try:
+            safe_query = redact_text(str(query or "").strip())[:800]
+            if not safe_query:
+                return []
             # 0. Check Cache (key includes filters + n_results)
             filt_str = "nofilter" if not filters else json.dumps(filters, sort_keys=True)
-            base = f"{query}|{filt_str}|n{n_results}"
+            base = f"{safe_query}|{filt_str}|n{n_results}"
             tenant_key = self._normalize_tenant_key(tenant_id)
             cache_key = f"rag:query:{tenant_key}:{hashlib.md5(base.encode()).hexdigest()}"
             if self.redis_client:
@@ -208,7 +212,7 @@ class RAGEngine:
             initial_k = n_results * 5 if self.cross_encoder else n_results
             
             # 1. Vector Search
-            query_embedding = self.embedding_model.encode([query]).tolist()
+            query_embedding = self.embedding_model.encode([safe_query]).tolist()
             vector_res = self.collection.query(
                 query_embeddings=query_embedding,
                 n_results=initial_k,
@@ -222,7 +226,7 @@ class RAGEngine:
             # 2. BM25 Search
             bm25_indices = []
             if self.bm25:
-                tokenized_query = self._tokenize(query)
+                tokenized_query = self._tokenize(safe_query)
                 scores = self.bm25.get_scores(tokenized_query)
                 # Get top indices (use numpy if available, else manual sort)
                 bm25_indices = np.argsort(scores)[::-1][:initial_k]
@@ -296,7 +300,7 @@ class RAGEngine:
             if self.cross_encoder and candidates:
                 try:
                     # Prepare pairs for Cross-Encoder: [[query, doc_text], ...]
-                    pairs = [[query, c["text"]] for c in candidates]
+                    pairs = [[safe_query, c["text"]] for c in candidates]
                     
                     # Predict scores (logits)
                     scores = self.cross_encoder.predict(pairs)

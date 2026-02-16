@@ -17,23 +17,18 @@ class LLMProvider:
     def __init__(self):
         self.base_url = os.getenv("LLM_API_URL")
         self.enabled = os.getenv("LLM_ENABLED", "true").lower() == "true"
-        
+        if not self.base_url and self.enabled:
+            logger.warning("LLM_ENABLED=true but LLM_API_URL is not configured; LLM calls will be disabled.")
         if not self.base_url:
-            if self.enabled:
-                # Default to Docker internal host if not specified
-                default_url = "http://host.docker.internal:11434"
-                logger.info(f"LLM_API_URL not set, defaulting to {default_url}")
-                self.base_url = default_url
-            else:
-                self.base_url = None
-                
+            self.base_url = None
         self.model_name = os.getenv("LLM_MODEL_NAME")
         self.timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+        self.max_retries = max(0, int(os.getenv("LLM_MAX_RETRIES", "1")))
         self._available = None
 
     async def check_availability(self) -> bool:
         """Check if the LLM service is reachable."""
-        if not self.enabled:
+        if not self.enabled or not self.base_url:
             return False
             
         # Re-check availability every time to handle transient failures or restarts
@@ -107,18 +102,26 @@ class LLMProvider:
         if json_mode:
             payload["format"] = "json"
 
-        try:
-            assert_egress_allowed(f"{self.base_url}/api/generate", purpose="llm_generate")
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(f"{self.base_url}/api/generate", json=payload)
-                response.raise_for_status()
-                result = response.json()
-                return result.get("response", "")
-        except Exception as e:
-            logger.error(f"Error generating LLM response: {repr(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return None
+        assert_egress_allowed(f"{self.base_url}/api/generate", purpose="llm_generate")
+        last_error: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(f"{self.base_url}/api/generate", json=payload)
+                    response.raise_for_status()
+                    result = response.json()
+                    return result.get("response", "")
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "LLM generate attempt %s/%s failed: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    repr(e),
+                )
+
+        logger.error(f"Error generating LLM response after retries: {repr(last_error)}")
+        return None
 
     async def generate_json(
         self,

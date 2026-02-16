@@ -41,6 +41,17 @@ const httpRequestDuration = new Histogram({
 - **Memory Usage**: Application memory consumption
 - **CPU Usage**: CPU utilization
 
+### Nurse Copilot + CDSS Reliability Metrics
+- `cdss_hooks_total{event_type,status}`: CDSS call volume and success/error rate.
+- `cdss_hook_duration_seconds{event_type}`: CDSS end-to-end latency.
+- `cdss_dependency_retries_total{event_type,reason}`: retry pressure on downstream CDSS dependencies.
+- `cdss_dependency_timeouts_total{event_type}`: timeout count by hook type.
+- `nurse_copilot_recommendations_total{copilot_type,risk_level}`: recommendation volume split by flow.
+- `nurse_copilot_decisions_total{copilot_type,decision}`: accept/modify/reject decision behavior.
+- `nurse_copilot_time_to_triage_seconds`: queue-to-triage response latency.
+- `nurse_copilot_documentation_duration_seconds{documentation_type}`: note/handoff drafting cycle time.
+- `nurse_copilot_alert_response_seconds`: alert acknowledgement latency.
+
 ## Grafana Dashboards
 
 ### Overview Dashboard
@@ -117,6 +128,16 @@ services:
 - **Backup Failure**: Backup job failed
 - **High Database Connections**: Connections > 80% of pool
 
+### Nurse Copilot/CDSS Alert Rules (Recommended)
+- **CDSS timeout spike**: `increase(cdss_dependency_timeouts_total[10m]) > 10`
+- **CDSS retry spike**: `increase(cdss_dependency_retries_total[10m]) > 50`
+- **Copilot error ratio high**:
+  `sum(rate(cdss_hooks_total{status="error"}[5m])) / sum(rate(cdss_hooks_total[5m])) > 0.1`
+- **Slow nurse triage response**:
+  `histogram_quantile(0.95, rate(nurse_copilot_time_to_triage_seconds_bucket[15m])) > 900`
+- **Slow alert acknowledgement**:
+  `histogram_quantile(0.95, rate(nurse_copilot_alert_response_seconds_bucket[15m])) > 600`
+
 ### Alert Configuration
 ```yaml
 # alertmanager.yml
@@ -168,6 +189,9 @@ docker compose logs -f ehr-service
 
 # Check service metrics
 curl http://localhost:3001/metrics
+
+# Nurse copilot KPI snapshot (EHR service)
+curl http://localhost:3001/metrics/nurse-copilot/kpis
 ```
 
 ## Performance Monitoring
@@ -228,3 +252,22 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 - Label metrics properly
 - Document metric meanings
 
+## CDSS Fallback Runbook
+
+### Trigger Conditions
+- Rising `cdss_dependency_timeouts_total`.
+- High error ratio in `cdss_hooks_total`.
+- Nurse reports empty/abstained copilot responses.
+
+### Immediate Actions
+1. Confirm CDSS and AI upstream health (`/health`, model backend availability, Redis connectivity).
+2. Verify timeout/retry env values:
+   - EHR: `CDSS_OUTBOUND_TIMEOUT_MS`, `CDSS_OUTBOUND_RETRY_MAX`, `CDSS_OUTBOUND_RETRY_BASE_MS`
+   - CDSS: `CDSS_COPILOT_TIMEOUT_SECONDS`, `CDSS_COPILOT_RETRY_MAX`, `CDSS_COPILOT_RETRY_BASE_SECONDS`
+3. Check whether circuit-breaker is opening repeatedly from EHR logs.
+4. Keep workflows in safe mode (fallback/abstain), do not bypass audit or auth controls.
+
+### Recovery Validation
+1. Confirm timeout and retry metrics return to baseline.
+2. Confirm copilot recommendation/decision metrics resume normal flow.
+3. Record incident summary with start/end times, impacted tenants, and mitigation changes.

@@ -16,6 +16,24 @@ export class MetricsService {
   private readonly cdssHookErrors: promClient.Counter;
   private readonly cdssDependencyRetryCounter: promClient.Counter;
   private readonly cdssDependencyTimeoutCounter: promClient.Counter;
+  private readonly nurseCopilotRecommendationCounter: promClient.Counter;
+  private readonly nurseCopilotDecisionCounter: promClient.Counter;
+  private readonly nurseCopilotTimeToTriage: promClient.Histogram;
+  private readonly nurseCopilotDocumentationDuration: promClient.Histogram;
+  private readonly nurseCopilotAlertResponseDuration: promClient.Histogram;
+
+  private readonly nurseCopilotKpiState = {
+    recommendationsTotal: 0,
+    decisionsTotal: 0,
+    decisionsByType: {} as Record<string, number>,
+    recommendationsByType: {} as Record<string, number>,
+    timeToTriageSamples: 0,
+    timeToTriageTotalSeconds: 0,
+    documentationSamples: 0,
+    documentationTotalSeconds: 0,
+    alertResponseSamples: 0,
+    alertResponseTotalSeconds: 0,
+  };
 
   // Provisioning Metrics
   private readonly provisioningCounter: promClient.Counter;
@@ -68,6 +86,42 @@ export class MetricsService {
       name: 'cdss_dependency_timeouts_total',
       help: 'Total number of EHR to CDSS timeout failures',
       labelNames: ['event_type'],
+      registers: [this.register],
+    });
+
+    this.nurseCopilotRecommendationCounter = new promClient.Counter({
+      name: 'nurse_copilot_recommendations_total',
+      help: 'Total nurse copilot recommendations emitted by type and risk level',
+      labelNames: ['copilot_type', 'risk_level'],
+      registers: [this.register],
+    });
+
+    this.nurseCopilotDecisionCounter = new promClient.Counter({
+      name: 'nurse_copilot_decisions_total',
+      help: 'Total nurse copilot decisions by copilot type and decision',
+      labelNames: ['copilot_type', 'decision'],
+      registers: [this.register],
+    });
+
+    this.nurseCopilotTimeToTriage = new promClient.Histogram({
+      name: 'nurse_copilot_time_to_triage_seconds',
+      help: 'Elapsed time from queue entry to copilot triage recommendation',
+      buckets: [30, 60, 120, 300, 600, 900, 1800],
+      registers: [this.register],
+    });
+
+    this.nurseCopilotDocumentationDuration = new promClient.Histogram({
+      name: 'nurse_copilot_documentation_duration_seconds',
+      help: 'Elapsed time from documentation start to copilot note/handoff output',
+      labelNames: ['documentation_type'],
+      buckets: [15, 30, 60, 120, 300, 600, 900],
+      registers: [this.register],
+    });
+
+    this.nurseCopilotAlertResponseDuration = new promClient.Histogram({
+      name: 'nurse_copilot_alert_response_seconds',
+      help: 'Elapsed time from alert creation to nurse acknowledgement',
+      buckets: [10, 30, 60, 120, 300, 600, 900, 1800],
       registers: [this.register],
     });
 
@@ -146,6 +200,86 @@ export class MetricsService {
 
   recordCdssTimeout(eventType: string) {
     this.cdssDependencyTimeoutCounter.inc({ event_type: eventType });
+  }
+
+  recordNurseCopilotRecommendation(copilotType: string, riskLevel?: string) {
+    const type = (copilotType || 'unknown').toLowerCase();
+    const risk = (riskLevel || 'unknown').toLowerCase();
+    this.nurseCopilotRecommendationCounter.inc({ copilot_type: type, risk_level: risk });
+    this.nurseCopilotKpiState.recommendationsTotal += 1;
+    this.nurseCopilotKpiState.recommendationsByType[type] =
+      (this.nurseCopilotKpiState.recommendationsByType[type] || 0) + 1;
+  }
+
+  recordNurseCopilotDecision(copilotType: string, decision: string) {
+    const type = (copilotType || 'unknown').toLowerCase();
+    const normalizedDecision = (decision || 'unknown').toLowerCase();
+    this.nurseCopilotDecisionCounter.inc({ copilot_type: type, decision: normalizedDecision });
+    this.nurseCopilotKpiState.decisionsTotal += 1;
+    const stateKey = `${type}:${normalizedDecision}`;
+    this.nurseCopilotKpiState.decisionsByType[stateKey] =
+      (this.nurseCopilotKpiState.decisionsByType[stateKey] || 0) + 1;
+  }
+
+  recordNurseCopilotTimeToTriage(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return;
+    }
+    this.nurseCopilotTimeToTriage.observe(seconds);
+    this.nurseCopilotKpiState.timeToTriageSamples += 1;
+    this.nurseCopilotKpiState.timeToTriageTotalSeconds += seconds;
+  }
+
+  recordNurseCopilotDocumentationDuration(seconds: number, documentationType: 'note' | 'handoff' = 'note') {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return;
+    }
+    this.nurseCopilotDocumentationDuration.observe({ documentation_type: documentationType }, seconds);
+    this.nurseCopilotKpiState.documentationSamples += 1;
+    this.nurseCopilotKpiState.documentationTotalSeconds += seconds;
+  }
+
+  recordNurseCopilotAlertResponseTime(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return;
+    }
+    this.nurseCopilotAlertResponseDuration.observe(seconds);
+    this.nurseCopilotKpiState.alertResponseSamples += 1;
+    this.nurseCopilotKpiState.alertResponseTotalSeconds += seconds;
+  }
+
+  getNurseCopilotKpis() {
+    const triageAvg =
+      this.nurseCopilotKpiState.timeToTriageSamples > 0
+        ? this.nurseCopilotKpiState.timeToTriageTotalSeconds / this.nurseCopilotKpiState.timeToTriageSamples
+        : null;
+    const documentationAvg =
+      this.nurseCopilotKpiState.documentationSamples > 0
+        ? this.nurseCopilotKpiState.documentationTotalSeconds / this.nurseCopilotKpiState.documentationSamples
+        : null;
+    const alertAvg =
+      this.nurseCopilotKpiState.alertResponseSamples > 0
+        ? this.nurseCopilotKpiState.alertResponseTotalSeconds / this.nurseCopilotKpiState.alertResponseSamples
+        : null;
+
+    return {
+      recommendationsTotal: this.nurseCopilotKpiState.recommendationsTotal,
+      decisionsTotal: this.nurseCopilotKpiState.decisionsTotal,
+      recommendationsByType: this.nurseCopilotKpiState.recommendationsByType,
+      decisionsByType: this.nurseCopilotKpiState.decisionsByType,
+      timeToTriage: {
+        samples: this.nurseCopilotKpiState.timeToTriageSamples,
+        averageSeconds: triageAvg,
+      },
+      documentation: {
+        samples: this.nurseCopilotKpiState.documentationSamples,
+        averageSeconds: documentationAvg,
+      },
+      alertResponse: {
+        samples: this.nurseCopilotKpiState.alertResponseSamples,
+        averageSeconds: alertAvg,
+      },
+    };
   }
 
   // Provisioning Metrics

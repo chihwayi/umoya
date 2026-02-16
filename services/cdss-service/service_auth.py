@@ -69,3 +69,37 @@ def decode_service_jwt(token: str, secret: str, audience: str, issuer: str) -> D
         issuer=issuer,
     )
 
+
+def extract_service_claim_scopes(payload: Dict[str, Any]) -> Set[str]:
+    scopes: Set[str] = set()
+    raw_scope = payload.get("scope")
+    if isinstance(raw_scope, str) and raw_scope.strip():
+        for item in raw_scope.split():
+            if item.strip():
+                scopes.add(item.strip().lower())
+    for key in ("scopes", "permissions"):
+        vals = payload.get(key)
+        if isinstance(vals, list):
+            for item in vals:
+                if isinstance(item, str) and item.strip():
+                    scopes.add(item.strip().lower())
+    return scopes
+
+
+def is_service_scope_allowed(scopes: Set[str], required_scope: str) -> bool:
+    required = str(required_scope or "").strip().lower()
+    if not required:
+        return True
+    granted = set(scopes or set())
+    if "*" in granted:
+        return True
+    if required in granted:
+        return True
+    if required.startswith("cdss.") and "cdss.*" in granted:
+        return True
+    parts = required.split(".")
+    if len(parts) >= 3:
+        wildcard = ".".join(parts[:2]) + ".*"
+        if wildcard in granted:
+            return True
+    return False

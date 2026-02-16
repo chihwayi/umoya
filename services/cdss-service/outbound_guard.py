@@ -53,12 +53,15 @@ def _build_allowlist() -> set[str]:
             if host_port:
                 allowlist.add(host_port)
 
-    # Safe defaults for current architecture
-    defaults = [
-        os.getenv("LLM_API_URL", "http://host.docker.internal:11434"),
-        os.getenv("EHR_SERVICE_URL", "http://ehr-service:3013"),
+    # Derive allowlist from explicitly configured internal service URLs only.
+    # No hardcoded hosts/ports to avoid accidental open egress drift.
+    configured_targets = [
+        os.getenv("LLM_API_URL", "").strip(),
+        os.getenv("EHR_SERVICE_URL", "").strip(),
     ]
-    for item in defaults:
+    for item in configured_targets:
+        if not item:
+            continue
         host, host_port = _normalize_host_entry(item)
         if host:
             allowlist.add(host)
@@ -83,4 +86,3 @@ def assert_egress_allowed(target_url: str, purpose: str = "outbound_call") -> No
         return
 
     raise RuntimeError(f"Egress blocked ({purpose}): target '{host_port}' not in CDSS allowlist")
-

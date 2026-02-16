@@ -24,10 +24,9 @@ class TerminologyService:
         """Initialize terminology service"""
         self.icd10_mapper = Icd10Mapper()
         self.snomed_mapper = SnomedMapper()
-        self.ehr_service_url = os.getenv('EHR_SERVICE_URL')
+        self.ehr_service_url = os.getenv('EHR_SERVICE_URL', '').strip() or None
         if not self.ehr_service_url:
-            logger.warning("EHR_SERVICE_URL not set, defaulting to http://ehr-service:3013")
-            self.ehr_service_url = 'http://ehr-service:3013'
+            logger.warning("EHR_SERVICE_URL not configured; remote terminology enrichment is disabled.")
             
         self.use_ehr_service = os.getenv('CDSS_USE_EHR_TERMINOLOGY', 'false').lower() == 'true'
         
@@ -54,7 +53,7 @@ class TerminologyService:
             return code
         
         # Optionally query EHR service for more comprehensive lookup
-        if use_ehr_service and self.use_ehr_service:
+        if use_ehr_service and self.use_ehr_service and self.ehr_service_url:
             try:
                 endpoint = f"{self.ehr_service_url}/api/terminology/icd10/search"
                 assert_egress_allowed(endpoint, purpose="terminology_icd10_lookup")
@@ -98,7 +97,7 @@ class TerminologyService:
             return code
         
         # Optionally query EHR service
-        if use_ehr_service and self.use_ehr_service:
+        if use_ehr_service and self.use_ehr_service and self.ehr_service_url:
             try:
                 endpoint = f"{self.ehr_service_url}/api/terminology/snomed/search"
                 assert_egress_allowed(endpoint, purpose="terminology_snomed_lookup")
@@ -154,4 +153,3 @@ class TerminologyService:
             List of enriched diagnosis dictionaries
         """
         return [self.enrich_diagnosis_with_codes(diag) for diag in diagnoses]
-

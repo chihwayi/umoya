@@ -39,7 +39,9 @@ from settings_provider import SettingsProvider
 from privacy_guard import redact_text, redact_value
 from service_auth import (
     decode_service_jwt,
+    extract_service_claim_scopes,
     extract_owner_claim_sets,
+    is_service_scope_allowed,
     is_owner_scope_allowed,
 )
 import jwt
@@ -92,9 +94,10 @@ def _validate_security_config() -> None:
     )
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_BLOCK_OUTBOUND_PHI", "true")
-    _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
+    strict_egress = _get_bool_env_strict("CDSS_STRICT_EGRESS_ALLOWLIST", "true")
     encryption_enabled = _get_bool_env_strict("CDSS_ENCRYPTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS", "true")
+    llm_enabled = _get_bool_env_strict("LLM_ENABLED", "true")
 
     service_auth_mode = os.getenv("CDSS_SERVICE_AUTH_MODE", "both").strip().lower() or "both"
     if service_auth_mode not in ("token", "jwt", "both"):
@@ -134,6 +137,12 @@ def _validate_security_config() -> None:
     owner_emails = [e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()]
     if env not in ("dev", "development", "local", "test") and not owner_emails:
         raise RuntimeError("OWNER_EMAILS must be configured in non-development environment.")
+    if env not in ("dev", "development", "local", "test") and strict_egress:
+        allowlist_raw = os.getenv("CDSS_EGRESS_ALLOWLIST", "").strip()
+        if not allowlist_raw:
+            raise RuntimeError("CDSS_STRICT_EGRESS_ALLOWLIST=true requires CDSS_EGRESS_ALLOWLIST in non-development environment.")
+    if env not in ("dev", "development", "local", "test") and llm_enabled and not os.getenv("LLM_API_URL", "").strip():
+        raise RuntimeError("LLM_ENABLED=true requires LLM_API_URL in non-development environment.")
     _get_bool_env_strict(
         "CDSS_OWNER_SCOPE_STRICT",
         "false" if env in ("dev", "development", "local", "test") else "true",
@@ -179,6 +188,13 @@ SERVICE_AUTH_JWT_REPLAY_STRICT = _get_bool_env_strict(
     "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
     "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
 )
+SERVICE_AUTH_SCOPE_STRICT = _get_bool_env_strict(
+    "CDSS_SERVICE_AUTH_SCOPE_STRICT",
+    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+)
+COPILOT_TIMEOUT_SECONDS = float(os.getenv("CDSS_COPILOT_TIMEOUT_SECONDS", "20"))
+COPILOT_RETRY_MAX = max(0, int(os.getenv("CDSS_COPILOT_RETRY_MAX", "1")))
+COPILOT_RETRY_BASE_SECONDS = float(os.getenv("CDSS_COPILOT_RETRY_BASE_SECONDS", "0.25"))
 
 def _status_code_to_code(sc: int) -> str:
     if sc == 400:
@@ -200,6 +216,38 @@ def _status_code_to_code(sc: int) -> str:
     return "ERROR"
 
 
+def _is_retryable_copilot_error(error: Exception) -> bool:
+    if isinstance(error, asyncio.TimeoutError):
+        return True
+    message = str(error).lower()
+    retry_markers = (
+        "timeout",
+        "tempor",
+        "connection reset",
+        "connection aborted",
+        "503",
+        "504",
+        "service unavailable",
+    )
+    return any(marker in message for marker in retry_markers)
+
+
+async def _run_copilot_with_resilience(action: str, fn):
+    attempts = COPILOT_RETRY_MAX + 1
+    last_error: Optional[Exception] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return await asyncio.wait_for(fn(), timeout=COPILOT_TIMEOUT_SECONDS)
+        except Exception as e:
+            last_error = e
+            if attempt < attempts and _is_retryable_copilot_error(e):
+                delay = COPILOT_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+                continue
+            break
+    raise RuntimeError(f"{action} unavailable: {str(last_error) if last_error else 'unknown error'}")
+
+
 def _normalize_tenant_cache_key(raw_tenant_id: Optional[str]) -> str:
     if not raw_tenant_id:
         return "public"
@@ -211,6 +259,124 @@ def _normalize_tenant_cache_key(raw_tenant_id: Optional[str]) -> str:
 def _tenant_cache_key_from_request(req: Request) -> str:
     tenant_id = req.headers.get("x-tenant-id")
     return _normalize_tenant_cache_key(tenant_id)
+
+
+_COPILOT_ALLOWLIST_DEFAULTS: Dict[str, List[str]] = {
+    "symptoms": ["symptoms", "age", "gender"],
+    "vitals": [
+        "bloodPressure", "heartRate", "temperature", "oxygenSaturation",
+        "respiratoryRate", "weight", "height", "bmi", "painLevel", "bloodGlucose",
+        "age", "gender"
+    ],
+    "patient_data": ["age", "gender", "vitals", "labs", "conditions"],
+    "summary": ["clinical_notes", "age", "gender", "recent_vitals"],
+}
+
+_MAX_CLINICAL_NOTES = 8
+_MAX_SYMPTOMS = 25
+
+
+def _get_copilot_allowlists() -> Dict[str, List[str]]:
+    cfg = settings_provider.get_settings() if settings_provider else {}
+    from_settings = cfg.get("copilot_input_allowlists") if isinstance(cfg, dict) else None
+    out: Dict[str, List[str]] = {}
+    if isinstance(from_settings, dict):
+        for k, v in from_settings.items():
+            if isinstance(v, list):
+                out[str(k)] = [str(item) for item in v if isinstance(item, str) and item.strip()]
+    for key, defaults in _COPILOT_ALLOWLIST_DEFAULTS.items():
+        if key not in out or not out[key]:
+            out[key] = list(defaults)
+    return out
+
+
+def _apply_allowlist(payload: Dict[str, Any], allowed_keys: List[str]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    allowed = set(allowed_keys or [])
+    return {k: payload[k] for k in payload.keys() if k in allowed}
+
+
+def _sanitize_summary_payload(request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    allowlists = _get_copilot_allowlists()
+    safe_payload = _apply_allowlist(request_payload, allowlists.get("summary", []))
+
+    raw_notes = safe_payload.get("clinical_notes")
+    cleaned_notes: List[str] = []
+    if isinstance(raw_notes, list):
+        for note in raw_notes[:_MAX_CLINICAL_NOTES]:
+            if isinstance(note, str) and note.strip():
+                cleaned_notes.append(redact_text(note.strip())[:1200])
+    safe_payload["clinical_notes"] = cleaned_notes
+
+    safe_payload["recent_vitals"] = redact_value(_apply_allowlist(
+        safe_payload.get("recent_vitals") if isinstance(safe_payload.get("recent_vitals"), dict) else {},
+        allowlists.get("vitals", []),
+    ))
+    return safe_payload
+
+
+def _sanitize_intelligent_diagnosis_payload(request_payload: Dict[str, Any]) -> Dict[str, Any]:
+    allowlists = _get_copilot_allowlists()
+
+    raw_symptoms = request_payload.get("symptoms")
+    symptoms: List[str] = []
+    if isinstance(raw_symptoms, list):
+        for symptom in raw_symptoms[:_MAX_SYMPTOMS]:
+            if isinstance(symptom, str) and symptom.strip():
+                symptoms.append(redact_text(symptom.strip())[:180])
+
+    cleaned = {
+        "symptoms": symptoms,
+        "age": request_payload.get("age"),
+        "gender": request_payload.get("gender"),
+        "clinical_notes": redact_text(str(request_payload.get("clinical_notes", ""))[:4000]) if request_payload.get("clinical_notes") else None,
+    }
+
+    safe_vitals = _apply_allowlist(
+        request_payload.get("vitals") if isinstance(request_payload.get("vitals"), dict) else {},
+        allowlists.get("vitals", []),
+    )
+    cleaned["vitals"] = redact_value(safe_vitals) if safe_vitals else None
+
+    safe_patient_data = _apply_allowlist(
+        request_payload.get("patient_data") if isinstance(request_payload.get("patient_data"), dict) else {},
+        allowlists.get("patient_data", []),
+    )
+    if isinstance(request_payload.get("labs"), dict):
+        safe_patient_data["labs"] = request_payload.get("labs")
+    if isinstance(request_payload.get("conditions"), list):
+        safe_patient_data["conditions"] = [str(v)[:120] for v in request_payload.get("conditions", []) if isinstance(v, (str, int, float))]
+    if cleaned.get("age") is not None:
+        safe_patient_data["age"] = cleaned["age"]
+    if cleaned.get("gender"):
+        safe_patient_data["gender"] = cleaned["gender"]
+    if cleaned.get("vitals"):
+        safe_patient_data["vitals"] = cleaned["vitals"]
+
+    cleaned["patient_data"] = redact_value(safe_patient_data) if safe_patient_data else None
+    return cleaned
+
+
+def _copilot_transparency(
+    action: str,
+    confidence: Any,
+    explanation: Optional[str],
+    citations: Optional[List[Any]],
+    source: str,
+    model_trace: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    why_recommended = explanation or f"{action} recommendation generated from structured clinical context and available guideline evidence."
+    return {
+        "why_recommended": why_recommended,
+        "confidence": confidence if confidence is not None else "unknown",
+        "provenance": {
+            "source": source,
+            "citations_count": len(citations or []),
+            "has_model_trace": bool(model_trace),
+            "model_trace": model_trace or {},
+        },
+    }
 
 
 def _safe_filename(filename: Optional[str], fallback: str = "upload.bin") -> str:
@@ -322,6 +488,23 @@ def _mark_service_jti_once(claims: Dict[str, Any]) -> tuple[bool, Optional[str]]
         return (True, None)
 
 
+def _required_service_scope_for_request(path: str, method: str) -> str:
+    """
+    Returns required service scope for route.
+    Keep mapping explicit for copilot-sensitive routes.
+    """
+    m = method.upper()
+    if path == "/diagnosis/suggest/intelligent" and m == "POST":
+        return "cdss.copilot.diagnosis.write"
+    if path == "/patient/summarize" and m == "POST":
+        return "cdss.copilot.summary.write"
+    if path == "/guidelines/search" and m == "POST":
+        return "cdss.copilot.guidelines.read"
+    if path.startswith("/admin/"):
+        return "cdss.admin.*"
+    return "cdss.api.invoke"
+
+
 @app.middleware("http")
 async def service_to_service_auth_middleware(request: Request, call_next):
     """
@@ -361,8 +544,18 @@ async def service_to_service_auth_middleware(request: Request, call_next):
                     )
                     replay_ok, replay_err = _mark_service_jti_once(claims)
                     if replay_ok:
-                        request.state.service_identity = str(claims.get("sub") or "service")
-                        auth_ok = True
+                        required_scope = _required_service_scope_for_request(path, request.method)
+                        scopes = extract_service_claim_scopes(claims)
+                        if is_service_scope_allowed(scopes, required_scope):
+                            request.state.service_identity = str(claims.get("sub") or "service")
+                            request.state.service_scopes = sorted(scopes)
+                            auth_ok = True
+                        elif SERVICE_AUTH_SCOPE_STRICT:
+                            auth_errors.append(f"Missing required service scope: {required_scope}")
+                        else:
+                            request.state.service_identity = str(claims.get("sub") or "service")
+                            request.state.service_scopes = sorted(scopes)
+                            auth_ok = True
                     else:
                         auth_errors.append(replay_err or "Service JWT replay validation failed")
                 except Exception as e:
@@ -1107,10 +1300,13 @@ class SettingsPayload(BaseModel):
     llm_enabled: Optional[bool] = None
     llm_api_url: Optional[str] = None
     llm_model_name: Optional[str] = None
+    llm_max_retries: Optional[int] = None
     rag_enabled: Optional[bool] = None
     cache_ttl_seconds: Optional[int] = None
     cache_namespace: Optional[str] = None
     allow_pdf_uploads: Optional[bool] = None
+    copilot_transparency_enabled: Optional[bool] = None
+    copilot_input_allowlists: Optional[Dict[str, List[str]]] = None
     ai_min_confidence_score: Optional[float] = None
     ai_require_citations: Optional[bool] = None
     ai_min_citation_count: Optional[int] = None
@@ -1146,6 +1342,15 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
     data = {k: v for k, v in payload.dict().items() if v is not None}
     if "cache_ttl_seconds" in data and (not isinstance(data["cache_ttl_seconds"], int) or data["cache_ttl_seconds"] < 0):
         raise HTTPException(status_code=400, detail="cache_ttl_seconds must be a non-negative integer")
+    if "llm_max_retries" in data and (not isinstance(data["llm_max_retries"], int) or data["llm_max_retries"] < 0 or data["llm_max_retries"] > 5):
+        raise HTTPException(status_code=400, detail="llm_max_retries must be an integer between 0 and 5")
+    if "copilot_input_allowlists" in data:
+        allowlists = data["copilot_input_allowlists"]
+        if not isinstance(allowlists, dict):
+            raise HTTPException(status_code=400, detail="copilot_input_allowlists must be an object")
+        for key, value in allowlists.items():
+            if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+                raise HTTPException(status_code=400, detail=f"copilot_input_allowlists.{key} must be a non-empty string array")
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
 
@@ -2156,6 +2361,9 @@ class DiagnosisRequest(BaseModel):
     age: Optional[int] = Field(None, description="Patient age")
     gender: Optional[str] = Field(None, description="Patient gender")
 
+    class Config:
+        extra = "forbid"
+
 
 class IntelligentDiagnosisRequest(BaseModel):
     symptoms: List[str] = Field(..., description="List of presenting symptoms")
@@ -2167,12 +2375,18 @@ class IntelligentDiagnosisRequest(BaseModel):
     labs: Optional[Dict[str, Any]] = Field(None, description="Lab results")
     conditions: Optional[List[str]] = Field(None, description="Existing conditions")
 
+    class Config:
+        extra = "forbid"
+
 
 class PatientSummaryRequest(BaseModel):
     clinical_notes: List[str] = Field(..., description="List of historical clinical notes")
     age: int = Field(..., description="Patient age")
     gender: str = Field(..., description="Patient gender")
     recent_vitals: Optional[Dict[str, Any]] = Field(None, description="Most recent vital signs")
+
+    class Config:
+        extra = "forbid"
 
 
 @app.post("/diagnosis/suggest")
@@ -2216,18 +2430,8 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
     
     This is the "thinking" CDSS that combines rule-based logic with AI models for enhanced accuracy.
     """
-    # Prepare patient data for MedBERT
-    patient_data = request.patient_data or {}
-    if request.age:
-        patient_data['age'] = request.age
-    if request.gender:
-        patient_data['gender'] = request.gender
-    if request.vitals:
-        patient_data['vitals'] = request.vitals
-    if request.labs:
-        patient_data['labs'] = request.labs
-    if request.conditions:
-        patient_data['conditions'] = request.conditions
+    sanitized = _sanitize_intelligent_diagnosis_payload(request.dict())
+    patient_data = sanitized.get("patient_data") or {}
 
     cfg = settings_provider.get_settings() if settings_provider else {}
     model_registry = settings_provider.get_runtime_model_registry_map() if settings_provider else {}
@@ -2239,22 +2443,73 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         "contradiction_check_enabled": cfg.get("ai_contradiction_check_enabled", True),
     }
     
-    # Get intelligent suggestions
-    result = await diagnostic_assistant.intelligent_suggest(
-        symptoms=request.symptoms,
-        vitals=request.vitals,
-        clinical_notes=request.clinical_notes,
-        patient_data=patient_data if patient_data else None,
-        age=request.age,
-        gender=request.gender,
-        tenant_id=_tenant_cache_key_from_request(req),
-        governance_policy=governance_policy,
-        model_registry=model_registry,
+    try:
+        result = await _run_copilot_with_resilience(
+            "intelligent_diagnosis",
+            lambda: diagnostic_assistant.intelligent_suggest(
+                symptoms=sanitized.get("symptoms") or [],
+                vitals=sanitized.get("vitals"),
+                clinical_notes=sanitized.get("clinical_notes"),
+                patient_data=patient_data if patient_data else None,
+                age=sanitized.get("age"),
+                gender=sanitized.get("gender"),
+                tenant_id=_tenant_cache_key_from_request(req),
+                governance_policy=governance_policy,
+                model_registry=model_registry,
+            ),
+        )
+    except Exception as e:
+        transparency = _copilot_transparency(
+            action="intelligent_diagnosis",
+            confidence="low",
+            explanation="Intelligent diagnosis assistant unavailable; returned safe abstained response.",
+            citations=[],
+            source="safe_fallback",
+            model_trace={},
+        )
+        return {
+            "suggested_diagnoses": [],
+            "confidence": transparency["confidence"],
+            "recommended_tests": [],
+            "red_flags": [],
+            "vitals_clues": [],
+            "guideline_citations": [],
+            "source": "safe_fallback",
+            "ai_enabled": False,
+            "ai_models_used": {},
+            "rule_based_contributions": 0,
+            "ai_contributions": 0,
+            "total_sources": 0,
+            "explanation": "Intelligent diagnosis unavailable at this time. Use manual clinical workflow.",
+            "safety_gate": {"status": "fallback", "reason": "service_unavailable"},
+            "abstained": True,
+            "model_registry": {},
+            "model_trace": {},
+            "why_recommended": transparency["why_recommended"],
+            "provenance": transparency["provenance"],
+            "warnings": [str(e)],
+            "input_policy": {
+                "allowlist_applied": True,
+                "phi_minimized": True,
+                "symptoms_count": len(sanitized.get("symptoms") or []),
+            },
+        }
+
+    explanation = result.get('explanation') or (
+        result.get('clinical_recommendation', {}) or {}
+    ).get('reasoning')
+    transparency = _copilot_transparency(
+        action="intelligent_diagnosis",
+        confidence=result.get('confidence', 'moderate'),
+        explanation=explanation,
+        citations=result.get('guideline_citations', []),
+        source=result.get('source', 'hybrid_cdss_ai'),
+        model_trace=result.get("model_trace", {}),
     )
-    
+
     return {
         "suggested_diagnoses": result.get('suggested_diagnoses', []),
-        "confidence": result.get('confidence', 'moderate'),
+        "confidence": transparency["confidence"],
         "recommended_tests": result.get('recommended_tests', []),
         "red_flags": result.get('red_flags', []),
         "vitals_clues": result.get('vitals_clues', []),
@@ -2270,6 +2525,13 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         "abstained": result.get("abstained", False),
         "model_registry": result.get("model_registry", {}),
         "model_trace": result.get("model_trace", {}),
+        "why_recommended": transparency["why_recommended"],
+        "provenance": transparency["provenance"],
+        "input_policy": {
+            "allowlist_applied": True,
+            "phi_minimized": True,
+            "symptoms_count": len(sanitized.get("symptoms") or []),
+        },
     }
 
 
@@ -2279,13 +2541,67 @@ async def summarize_patient_history(request: PatientSummaryRequest):
     Generate a concise "One-Liner" summary of the patient's history using LLM.
     Useful for patient headers and quick context.
     """
-    demographics = {"age": request.age, "gender": request.gender}
-    
-    return await diagnostic_assistant.summarize_patient_history(
-        clinical_notes=request.clinical_notes,
-        demographics=demographics,
-        recent_vitals=request.recent_vitals
+    sanitized = _sanitize_summary_payload(request.dict())
+    demographics = {"age": sanitized.get("age"), "gender": sanitized.get("gender")}
+
+    try:
+        result = await _run_copilot_with_resilience(
+            "patient_summarization",
+            lambda: diagnostic_assistant.summarize_patient_history(
+                clinical_notes=sanitized.get("clinical_notes") or [],
+                demographics=demographics,
+                recent_vitals=sanitized.get("recent_vitals"),
+            ),
+        )
+    except Exception as e:
+        fallback_result = {
+            "summary": "",
+            "one_liner": "",
+            "source": "safe_fallback",
+            "warnings": [f"Patient summary unavailable: {str(e)}"],
+        }
+        transparency = _copilot_transparency(
+            action="patient_summarization",
+            confidence="low",
+            explanation="Summary assistant unavailable; returned safe empty summary.",
+            citations=[],
+            source="safe_fallback",
+        )
+        return {
+            **fallback_result,
+            "why_recommended": transparency["why_recommended"],
+            "confidence": transparency["confidence"],
+            "provenance": {
+                **transparency["provenance"],
+                "notes_used": len(sanitized.get("clinical_notes") or []),
+                "vitals_context": bool(sanitized.get("recent_vitals")),
+            },
+            "input_policy": {
+                "allowlist_applied": True,
+                "phi_minimized": True,
+            },
+        }
+    transparency = _copilot_transparency(
+        action="patient_summarization",
+        confidence="moderate" if result.get("source") == "llm" else "low",
+        explanation="Summary generated from recent de-identified nursing context and vitals.",
+        citations=[],
+        source=result.get("source", "unknown"),
     )
+    return {
+        **result,
+        "why_recommended": transparency["why_recommended"],
+        "confidence": transparency["confidence"],
+        "provenance": {
+            **transparency["provenance"],
+            "notes_used": len(sanitized.get("clinical_notes") or []),
+            "vitals_context": bool(sanitized.get("recent_vitals")),
+        },
+        "input_policy": {
+            "allowlist_applied": True,
+            "phi_minimized": True,
+        },
+    }
 
 
 # Forecast Glucose Endpoint

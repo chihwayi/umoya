@@ -243,51 +243,59 @@
 
 ### Wave 5 — CDSS Service Hardening for Nurse Copilot
 
-- [ ] Implement copilot endpoints/functions in CDSS service
-  - [ ] `services/cdss-service/main.py`
-  - [ ] `services/cdss-service/ai_models/llm_provider.py`
-  - [ ] `services/cdss-service/ai_models/rag_engine.py`
-- [ ] Enforce PHI-minimized input allowlists and outbound egress policy
-  - [ ] `services/cdss-service/settings_provider.py`
-  - [ ] `services/cdss-service/service_auth.py`
-- [ ] Add transparent recommendation payload fields
-  - [ ] `why_recommended`
-  - [ ] `confidence`
-  - [ ] `provenance`
+- [x] Implement copilot endpoint hardening in CDSS service (`@codex 2026-02-16`)
+  - [x] `services/cdss-service/main.py`
+  - [x] `services/cdss-service/ai_models/llm_provider.py`
+  - [x] `services/cdss-service/ai_models/rag_engine.py`
+- [x] Enforce PHI-minimized input allowlists and outbound egress policy (`@codex 2026-02-16`)
+  - [x] `services/cdss-service/settings_provider.py`
+  - [x] `services/cdss-service/outbound_guard.py`
+  - [x] `services/cdss-service/terminology/terminology_service.py`
+  - [x] `services/cdss-service/service_auth.py`
+- [x] Add transparent recommendation payload fields (`@codex 2026-02-16`)
+  - [x] `why_recommended`
+  - [x] `confidence`
+  - [x] `provenance`
 
 ### Wave 6 — Database + Provisioning (Critical Requirement)
 
-- [ ] Add schema changes for nurse copilot persistence
-  - [ ] `database/migrations/*` (new migration files for nurse tasks/acknowledgements/audit expansion)
-- [ ] Add tenant provisioning statements for all new tables/columns/indexes
-  - [ ] `services/tenant-service/src/services/database-provisioning.service.ts`
-- [ ] If needed, add central tenant metadata updates
-  - [ ] `database/schemas/tenant.sql`
-- [ ] Add/refresh provisioning run script for existing tenants
-  - [ ] `scripts/provision-*.ts`
-  - [ ] `docs/deployment/database-provisioning.md`
+- [x] Add schema changes for nurse copilot persistence (`@codex 2026-02-16`)
+  - [x] `database/migrations/034-nurse-copilot-persistence.sql`
+  - [x] `services/ehr-service/src/services/nurse-worklist.service.ts` (reads/writes dedicated persistence tables with fallback)
+- [x] Add tenant provisioning statements for all new tables/columns/indexes (`@codex 2026-02-16`)
+  - [x] `services/tenant-service/src/services/database-provisioning.service.ts` (`sprint46_nurse_copilot` bundle)
+- [x] If needed, add central tenant metadata updates (`@codex 2026-02-16`)
+  - [x] Not required for this wave (`database/schemas/tenant.sql` unchanged; tenant DB schema handled via migration + bundle)
+- [x] Add/refresh provisioning run script for existing tenants (`@codex 2026-02-16`)
+  - [x] `scripts/provision-sprint46-nurse-copilot.ts`
+  - [x] `docs/deployment/database-provisioning.md`
 
 ### Wave 7 — Reliability, Metrics, and Safety Ops
 
-- [ ] Add AI timeout/retry + safe fallback behavior
-  - [ ] `services/ehr-service/src/services/cdss.service.ts`
-  - [ ] `services/cdss-service/main.py`
-- [ ] Add KPI capture for nurse copilot outcomes
-  - [ ] `services/ehr-service/src/services/metrics.service.ts`
-  - [ ] `services/ehr-service/src/controllers/metrics.controller.ts`
-- [ ] Add monitoring and runbook updates
-  - [ ] `docs/compliance/hipaa-nist-control-register.md`
-  - [ ] `docs/deployment/monitoring.md`
+- [x] Add AI timeout/retry + safe fallback behavior (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/services/cdss.service.ts`
+  - [x] `services/cdss-service/main.py`
+- [x] Add KPI capture for nurse copilot outcomes (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/services/metrics.service.ts`
+  - [x] `services/ehr-service/src/controllers/metrics.controller.ts`
+- [x] Add monitoring and runbook updates (`@codex 2026-02-16`)
+  - [x] `docs/compliance/hipaa-nist-control-register.md`
+  - [x] `docs/deployment/monitoring.md`
 
 ### Wave 8 — Test & Release Gates (Before Go-Live)
 
-- [ ] Unit tests for new EHR/CDSS routes and services
-  - [ ] `services/ehr-service/src/**/*.spec.ts`
-  - [ ] `services/cdss-service/tests/*.py`
-- [ ] UI integration tests for nurse copilot flows
-  - [ ] `ehr-frontend/src/**/*.test.tsx`
-- [ ] Contract tests between EHR-service and CDSS-service
-  - [ ] `services/ehr-service/src/services/cdss-contract.spec.ts`
+- [x] Unit tests for new EHR/CDSS routes and services (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/services/metrics.service.spec.ts`
+  - [x] `services/ehr-service/src/controllers/metrics.controller.spec.ts`
+  - [x] `services/ehr-service/src/services/cdss.service.nurse-metrics.spec.ts`
+  - [x] `services/ehr-service/src/services/cdss-contract.spec.ts`
+  - [x] `services/cdss-service/tests/test_copilot_resilience.py`
+- [x] UI integration tests for nurse copilot flows (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/components/TriageQueue.test.tsx`
+  - [x] `ehr-frontend/src/components/TaskManagement.test.tsx`
+  - [x] `ehr-frontend/src/components/PatientSafetyAlerts.test.tsx`
+- [x] Contract tests between EHR-service and CDSS-service (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/services/cdss-contract.spec.ts`
 - [ ] Final pre-release checklist sign-off
   - [ ] Security review complete
   - [ ] HIPAA audit logging validated

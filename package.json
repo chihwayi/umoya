@@ -17,7 +17,8 @@
     "backup": "./scripts/backup.sh",
     "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
     "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
-    "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts"
+    "seed:thandeka": "ts-node scripts/seed-thandeka-data.ts",
+    "provision:sprint46-nurse-copilot": "npx ts-node scripts/provision-sprint46-nurse-copilot.ts"
   },
   "workspaces": [
     "packages/*",

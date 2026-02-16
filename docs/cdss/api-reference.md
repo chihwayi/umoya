@@ -97,27 +97,31 @@ Base URL: `http://cdss-service:8000` (Internal) or via EHR Proxy `/api/cdss/*`
 *   **POST** `/guidelines/search`
 *   **Description:** Searches indexed clinical guidance content with optional patient context.
 
-### 8. Lab Interpretation
+### 8. Patient Summarization
+*   **POST** `/patient/summarize`
+*   **Description:** Generates concise clinical summaries from de-identified note context and recent vitals.
+
+### 9. Lab Interpretation
 *   **POST** `/labs/interpret`
 *   **Description:** Interprets laboratory values and returns critical/abnormal findings.
 
-### 9. Duplicate Therapy Detection
+### 10. Duplicate Therapy Detection
 *   **POST** `/medications/duplicates`
 *   **Description:** Detects therapeutic duplication across active medications.
 
-### 10. High-Risk Medication Screening
+### 11. High-Risk Medication Screening
 *   **POST** `/medications/high-risk`
 *   **Description:** Screens medications against high-risk criteria (e.g. Beers/SToPP style checks).
 
-### 11. Care Gap Detection
+### 12. Care Gap Detection
 *   **POST** `/care-gaps/detect`
 *   **Description:** Identifies preventive and longitudinal care gaps from demographics and history.
 
-### 12. Food-Drug Interaction Screening
+### 13. Food-Drug Interaction Screening
 *   **POST** `/medications/food-interactions`
 *   **Description:** Flags food interactions for active medication list.
 
-### 13. Admin Encryption Re-Encryption Job
+### 14. Admin Encryption Re-Encryption Job
 *   **POST** `/admin/encryption/reencrypt`
 *   **Description:** Runs a key-rotation migration to re-encrypt stored payloads to the active encryption key.
 *   **Request Body:**

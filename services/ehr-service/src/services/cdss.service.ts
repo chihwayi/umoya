@@ -109,6 +109,22 @@ export class CdssService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private parseDateInput(raw: any): Date | null {
+    if (!raw) return null;
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw;
+    const parsed = new Date(String(raw));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
+
+  private secondsSince(rawStart: any): number | null {
+    const start = this.parseDateInput(rawStart);
+    if (!start) return null;
+    const seconds = (Date.now() - start.getTime()) / 1000;
+    if (!Number.isFinite(seconds) || seconds < 0) return null;
+    return seconds;
+  }
+
   private ensureCircuitClosed(eventType: string): void {
     if (this.circuitState !== 'open') {
       return;
@@ -1078,6 +1094,15 @@ export class CdssService {
     if (!triageInput.gender) missingData.push('gender');
 
     const recommendationSummary = `Suggested triage level ${suggestedTriageLevel} with risk ${riskLevel}`;
+    this.metricsService?.recordNurseCopilotRecommendation('triage', String(riskLevel || 'unknown'));
+    const triageElapsedSeconds =
+      this.secondsSince(triageInput?.queueEnteredAt) ??
+      this.secondsSince(triageInput?.queue_created_at) ??
+      this.secondsSince(triageInput?.arrivedAt);
+    if (triageElapsedSeconds !== null) {
+      this.metricsService?.recordNurseCopilotTimeToTriage(triageElapsedSeconds);
+    }
+
     return {
       riskLevel,
       suggestedTriageLevel,
@@ -1118,6 +1143,7 @@ export class CdssService {
     };
 
     const recommendationSummary = `Vitals interpreted with risk ${interpretation.riskLevel}`;
+    this.metricsService?.recordNurseCopilotRecommendation('vitals', String(interpretation.riskLevel || 'unknown'));
     return {
       ...interpretation,
       source: 'ehr_cdss_proxy',
@@ -1161,6 +1187,14 @@ export class CdssService {
 
       const draftText = responseData?.summary || responseData?.one_liner || responseData?.text || '';
       const recommendationSummary = draftText ? 'Generated nursing note draft' : 'No draft generated';
+      this.metricsService?.recordNurseCopilotRecommendation('notes', 'n/a');
+      const docElapsedSeconds =
+        this.secondsSince(noteInput?.documentationStartedAt) ??
+        this.secondsSince(noteInput?.startedAt) ??
+        this.secondsSince(noteInput?.started_at);
+      if (docElapsedSeconds !== null) {
+        this.metricsService?.recordNurseCopilotDocumentationDuration(docElapsedSeconds, 'note');
+      }
       return {
         draft: draftText,
         provenance: {
@@ -1230,6 +1264,14 @@ export class CdssService {
 
       const summary = responseData?.summary || responseData?.one_liner || responseData?.text || '';
       const recommendationSummary = summary ? 'Generated nurse handoff summary' : 'No handoff summary generated';
+      this.metricsService?.recordNurseCopilotRecommendation('handoff', 'n/a');
+      const handoffElapsedSeconds =
+        this.secondsSince(handoffInput?.handoffStartedAt) ??
+        this.secondsSince(handoffInput?.startedAt) ??
+        this.secondsSince(handoffInput?.started_at);
+      if (handoffElapsedSeconds !== null) {
+        this.metricsService?.recordNurseCopilotDocumentationDuration(handoffElapsedSeconds, 'handoff');
+      }
       return {
         summary,
         source: 'ehr_cdss_proxy',
@@ -1255,6 +1297,15 @@ export class CdssService {
       payload?.recommendationSummary
         ? String(payload.recommendationSummary)
         : `copilot ${copilotType} decision ${decision}`;
+
+    this.metricsService?.recordNurseCopilotDecision(copilotType, decision);
+    const alertResponseSeconds =
+      this.secondsSince(payload?.alertCreatedAt) ??
+      this.secondsSince(payload?.alert_created_at) ??
+      this.secondsSince(payload?.triggeredAt);
+    if (alertResponseSeconds !== null) {
+      this.metricsService?.recordNurseCopilotAlertResponseTime(alertResponseSeconds);
+    }
 
     return {
       ok: true,
