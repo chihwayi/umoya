@@ -155,4 +155,12 @@ export class CdssController {
   async generateHandoffSummary(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.cdssService.generateNurseHandoffSummary(body, req.tenantId);
   }
+
+  @Post('copilot/action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Record copilot decision lifecycle event (accept/modify/reject)' })
+  @ApiResponse({ status: 200, description: 'Copilot action recorded' })
+  async recordCopilotAction(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.cdssService.recordCopilotAction(body, req.tenantId);
+  }
 }

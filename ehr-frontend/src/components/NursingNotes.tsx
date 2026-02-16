@@ -40,9 +40,21 @@ interface NursingNotesProps {
   onClose?: () => void;
   onSave?: () => void;
   preset?: 'care_plans' | 'medications';
+  copilotDraft?: string;
+  copilotProvenance?: string[];
+  copilotDraftPatientId?: string;
 }
 
-const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [], onClose, onSave, preset }) => {
+const NursingNotes: React.FC<NursingNotesProps> = ({
+  patient,
+  appointments = [],
+  onClose,
+  onSave,
+  preset,
+  copilotDraft,
+  copilotProvenance = [],
+  copilotDraftPatientId,
+}) => {
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -104,6 +116,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   const [pendingOutcomeConcept, setPendingOutcomeConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [lastAppliedCopilotDraft, setLastAppliedCopilotDraft] = useState('');
 
   // Apply preset behaviors
   useEffect(() => {
@@ -130,6 +143,32 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
   useEffect(() => {
     setCdssInsights(null);
   }, [selectedPatient?.id]);
+
+  useEffect(() => {
+    if (!copilotDraft || !copilotDraft.trim()) {
+      return;
+    }
+
+    if (copilotDraftPatientId && selectedPatient?.id && selectedPatient.id !== copilotDraftPatientId) {
+      return;
+    }
+
+    const draftKey = `${copilotDraftPatientId || 'any'}:${copilotDraft}`;
+    if (lastAppliedCopilotDraft === draftKey) {
+      return;
+    }
+
+    setShowNewNote(true);
+    setNewNote((prev) => ({
+      ...prev,
+      patientId: prev.patientId || selectedPatient?.id || copilotDraftPatientId || '',
+      content:
+        prev.content.trim().length > 0
+          ? `${prev.content}\n\n---\nAI Draft Suggestion:\n${copilotDraft}`
+          : copilotDraft,
+    }));
+    setLastAppliedCopilotDraft(draftKey);
+  }, [copilotDraft, copilotDraftPatientId, selectedPatient?.id, lastAppliedCopilotDraft]);
 
   // Filter patients based on search term
   useEffect(() => {
@@ -372,6 +411,24 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
                   </p>
                 </div>
               </div>
+              {copilotDraft && (
+                <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3">
+                  <p className="text-xs font-semibold text-emerald-900 mb-2">AI Draft Bound To Editor</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-white border border-emerald-200 text-emerald-800">
+                      Source: CDSS Notes Draft
+                    </span>
+                    {copilotProvenance.slice(0, 3).map((item, idx) => (
+                      <span
+                        key={`copilot-prov-${idx}`}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-white border border-emerald-200 text-emerald-800"
+                      >
+                        {String(item)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
             <div className="space-y-6">
               {/* AI Guidelines Search */}

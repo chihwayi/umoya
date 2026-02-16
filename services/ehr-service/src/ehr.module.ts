@@ -89,6 +89,7 @@ import { DietaryController } from './controllers/dietary.controller';
 import { TranscriptionController } from './controllers/transcription.controller';
 import { WhoSmartGuidelinesController } from './controllers/who-smart-guidelines.controller';
 import { DiagnosticController } from './controllers/diagnostic.controller';
+import { NurseWorklistController } from './controllers/nurse-worklist.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -219,6 +220,7 @@ import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
 import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.interceptor';
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
 import { QualityMeasuresService } from './services/quality-measures.service';
+import { NurseWorklistService } from './services/nurse-worklist.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -327,6 +329,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TranscriptionController,
     WhoSmartGuidelinesController,
     DiagnosticController,
+    NurseWorklistController,
   ],
   providers: [
     AuthService,
@@ -457,6 +460,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DietaryService,
     TranscriptionService,
     WhoSmartGuidelinesService,
+    NurseWorklistService,
     RolesGuard,
     JwtStrategy,
   ],

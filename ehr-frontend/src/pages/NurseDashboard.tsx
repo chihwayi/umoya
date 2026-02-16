@@ -166,17 +166,28 @@ const NurseDashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Persistent acknowledged alerts
-  const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(() => {
-    const saved = localStorage.getItem('nurse_acknowledged_alerts');
-    return saved ? new Set(JSON.parse(saved)) : new Set();
-  });
+  // Server-scoped acknowledged alerts
+  const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const loadWorklistState = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        const activeTenant = resolveTenantSlug();
+        if (!token || !activeTenant) return;
+        const response = await ehrApi.getNurseWorklistState(token, activeTenant);
+        setAcknowledgedAlertIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
+      } catch (error) {
+        console.error('Failed to load nurse worklist state', error);
+      }
+    };
+    loadWorklistState();
+  }, [tenantSlug, currentUser?.id]);
 
   const handleAlertAcknowledge = (alertId: string) => {
     setAcknowledgedAlertIds(prev => {
       const newSet = new Set(prev);
       newSet.add(alertId);
-      localStorage.setItem('nurse_acknowledged_alerts', JSON.stringify(Array.from(newSet)));
       return newSet;
     });
   };
@@ -247,7 +258,9 @@ const NurseDashboard: React.FC = () => {
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
   const [notesCopilotDraft, setNotesCopilotDraft] = useState<string>('');
+  const [notesCopilotProvenance, setNotesCopilotProvenance] = useState<string[]>([]);
   const [handoffCopilotSummary, setHandoffCopilotSummary] = useState<string>('');
+  const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const resolveTenantSlug = () =>
     tenantSlug || localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 
@@ -879,30 +892,31 @@ const NurseDashboard: React.FC = () => {
     return patientApt?.vitals || null;
   };
 
-  const handleTriageCopilotAnalyze = async () => {
+  const handleTriageCopilotAnalyze = async (targetPatient?: Patient, sourceAppointment?: Appointment) => {
     try {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
-      if (!token || !activeTenant || !selectedPatient) {
+      const patientContext = targetPatient || selectedPatient;
+      if (!token || !activeTenant || !patientContext) {
         showError('Missing context', 'Select a patient and ensure session is active.');
         return;
       }
 
       setTriageCopilotLoading(true);
-      const vitals = getSelectedPatientLatestVitals();
+      const vitals = sourceAppointment?.vitals || getSelectedPatientLatestVitals();
       const response = await ehrApi.analyzeTriageCopilot(
         {
-          patientId: selectedPatient.id,
-          age: selectedPatient.age,
-          gender: selectedPatient.gender,
-          chiefComplaint: appointments.find(a => a.patient.id === selectedPatient.id)?.reason || '',
+          patientId: patientContext.id,
+          age: patientContext.age,
+          gender: patientContext.gender,
+          chiefComplaint: sourceAppointment?.reason || appointments.find(a => a.patient.id === patientContext.id)?.reason || '',
           symptoms: appointments
-            .filter(a => a.patient.id === selectedPatient.id)
+            .filter(a => a.patient.id === patientContext.id)
             .map(a => a.reason)
             .filter((r) => typeof r === 'string' && r.trim().length > 0),
           vitals,
-          allergies: selectedPatient.allergies,
-          chronicConditions: selectedPatient.chronicConditions,
+          allergies: patientContext.allergies,
+          chronicConditions: patientContext.chronicConditions,
         },
         token,
         activeTenant
@@ -915,6 +929,12 @@ const NurseDashboard: React.FC = () => {
     } finally {
       setTriageCopilotLoading(false);
     }
+  };
+
+  const handleQueueTriageCopilotAnalyze = async (appointment: Appointment) => {
+    setSelectedPatient(appointment.patient);
+    setActiveTab('triage');
+    await handleTriageCopilotAnalyze(appointment.patient, appointment);
   };
 
   const handleVitalsCopilotInterpret = async () => {
@@ -980,6 +1000,11 @@ const NurseDashboard: React.FC = () => {
       );
 
       setNotesCopilotDraft(response.data?.draft || '');
+      setNotesCopilotProvenance(
+        Array.isArray(response.data?.provenance)
+          ? response.data.provenance.map((item: any) => String(item)).filter(Boolean)
+          : [],
+      );
       if (response.data?.draft) {
         showSuccess('Draft Generated', 'Review and edit before saving to chart.');
       } else {
@@ -1029,6 +1054,41 @@ const NurseDashboard: React.FC = () => {
       showError('Handoff Error', 'Unable to generate handoff summary right now.');
     } finally {
       setHandoffCopilotLoading(false);
+    }
+  };
+
+  const handleCopilotDecision = async (
+    copilotType: 'triage' | 'vitals' | 'notes' | 'handoff',
+    decision: 'accept' | 'modify' | 'reject',
+    recommendationSummary: string,
+  ) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Session expired', 'Please log in again.');
+        return;
+      }
+
+      await ehrApi.recordCopilotAction(
+        {
+          copilotType,
+          decision,
+          reason: copilotDecisionNote || undefined,
+          patientId: selectedPatient?.id,
+          recommendationSummary,
+        },
+        token,
+        activeTenant,
+      );
+
+      showSuccess('Decision Captured', `${copilotType} suggestion marked as ${decision}.`);
+      if (decision === 'accept') {
+        setCopilotDecisionNote('');
+      }
+    } catch (error) {
+      console.error('Failed to record copilot decision', error);
+      showError('Audit Error', 'Could not record copilot decision.');
     }
   };
 
@@ -2403,6 +2463,9 @@ const NurseDashboard: React.FC = () => {
             appointments={appointments}
             onRecordVitals={handleRecordVitals}
             onTriageAssessment={handleTriageAssessment}
+            onTriageCopilotAnalyze={handleQueueTriageCopilotAnalyze}
+            triageCopilotLoading={triageCopilotLoading}
+            triageCopilotPatientId={selectedPatient?.id || null}
             onViewCarePlans={(patientId, patientName) => {
               setCarePlansPatientId(patientId);
               setCarePlansPatientName(patientName);
@@ -2704,6 +2767,11 @@ const NurseDashboard: React.FC = () => {
                   {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
                     <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
                   )}
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" onClick={() => handleCopilotDecision('vitals', 'accept', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                    <button type="button" onClick={() => handleCopilotDecision('vitals', 'modify', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                    <button type="button" onClick={() => handleCopilotDecision('vitals', 'reject', `Risk ${vitalsCopilotResult.riskLevel || 'unknown'}`)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2726,7 +2794,7 @@ const NurseDashboard: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={handleTriageCopilotAnalyze}
+                  onClick={() => handleTriageCopilotAnalyze()}
                   disabled={triageCopilotLoading || !selectedPatient}
                   className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
                 >
@@ -2740,6 +2808,11 @@ const NurseDashboard: React.FC = () => {
                   {Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0 && (
                     <p><strong>Top Reason:</strong> {String(triageCopilotResult.reasons[0])}</p>
                   )}
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" onClick={() => handleCopilotDecision('triage', 'accept', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                    <button type="button" onClick={() => handleCopilotDecision('triage', 'modify', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                    <button type="button" onClick={() => handleCopilotDecision('triage', 'reject', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2831,16 +2904,40 @@ const NurseDashboard: React.FC = () => {
                   <div className="rounded-lg bg-white border border-emerald-200 p-3">
                     <p className="text-xs font-semibold text-emerald-800 mb-1">Draft Note</p>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{notesCopilotDraft}</p>
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" onClick={() => handleCopilotDecision('notes', 'accept', 'Generated note draft')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                      <button type="button" onClick={() => handleCopilotDecision('notes', 'modify', 'Generated note draft')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                      <button type="button" onClick={() => handleCopilotDecision('notes', 'reject', 'Generated note draft')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                    </div>
                   </div>
                 )}
                 {handoffCopilotSummary && (
                   <div className="rounded-lg bg-white border border-teal-200 p-3">
                     <p className="text-xs font-semibold text-teal-800 mb-1">Handoff Summary</p>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{handoffCopilotSummary}</p>
+                    <div className="mt-2 flex gap-2">
+                      <button type="button" onClick={() => handleCopilotDecision('handoff', 'accept', 'Generated handoff summary')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                      <button type="button" onClick={() => handleCopilotDecision('handoff', 'modify', 'Generated handoff summary')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                      <button type="button" onClick={() => handleCopilotDecision('handoff', 'reject', 'Generated handoff summary')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                    </div>
                   </div>
                 )}
+                <input
+                  type="text"
+                  value={copilotDecisionNote}
+                  onChange={(e) => setCopilotDecisionNote(e.target.value)}
+                  placeholder="Optional reason for modify/reject decisions"
+                  className="w-full px-3 py-2 border border-emerald-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
               </div>
-              <NursingNotes appointments={appointments} preset={notesPreset} />
+              <NursingNotes
+                patient={selectedPatient || undefined}
+                appointments={appointments}
+                preset={notesPreset}
+                copilotDraft={notesCopilotDraft}
+                copilotProvenance={notesCopilotProvenance}
+                copilotDraftPatientId={selectedPatient?.id}
+              />
             </div>
           );
         })()}

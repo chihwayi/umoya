@@ -72,6 +72,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
+  const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const [recentVitals, setRecentVitals] = useState<any>(null);
   const [triageHistory, setTriageHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -233,6 +234,29 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
       showError('Error', 'Failed to analyze triage context');
     } finally {
       setTriageCopilotLoading(false);
+    }
+  };
+
+  const handleTriageCopilotDecision = async (decision: 'accept' | 'modify' | 'reject') => {
+    if (!patient) return;
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) return;
+
+      await Api.ehrApi.recordCopilotAction(
+        {
+          copilotType: 'triage',
+          decision,
+          reason: copilotDecisionNote || undefined,
+          patientId: patient.id,
+          recommendationSummary: `Suggested ${triageCopilotResult?.suggestedTriageLevel || 'n/a'}`,
+        },
+        token,
+        tenantSlug
+      );
+    } catch (error) {
+      console.error('Failed to record triage copilot decision', error);
     }
   };
 
@@ -1108,6 +1132,18 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
                 <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
                 <p><strong>Suggested:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={() => handleTriageCopilotDecision('accept')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                  <button type="button" onClick={() => handleTriageCopilotDecision('modify')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                  <button type="button" onClick={() => handleTriageCopilotDecision('reject')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                </div>
+                <input
+                  type="text"
+                  value={copilotDecisionNote}
+                  onChange={(e) => setCopilotDecisionNote(e.target.value)}
+                  placeholder="Optional reason for modify/reject"
+                  className="w-full mt-2 px-2 py-1 border border-amber-200 rounded text-xs focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                />
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

@@ -1179,6 +1179,67 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  recordCopilotAction: async (
+    payload: {
+      copilotType: 'triage' | 'vitals' | 'notes' | 'handoff';
+      decision: 'accept' | 'modify' | 'reject';
+      reason?: string;
+      patientId?: string;
+      recommendationSummary?: string;
+      context?: any;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/cdss/copilot/action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getNurseWorklistState: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/nurse-worklist/state', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  completeNurseTask: async (
+    taskId: string,
+    payload: { reason?: string; patientId?: string; context?: any },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/tasks/${taskId}/complete`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  acknowledgeNurseAlert: async (
+    alertId: string,
+    payload: { reason?: string; patientId?: string; context?: any },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/nurse-worklist/alerts/${alertId}/acknowledge`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
       headers: { 

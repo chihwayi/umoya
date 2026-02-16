@@ -35,7 +35,7 @@
   - [x] recommendation summary
   - [x] user action (accept/modify/reject)
   - [x] timestamp
-  Remaining scope: frontend copilot UI still needs to consistently send explicit accept/modify/reject decisions on all interaction flows.
+  Remaining scope: extend decision capture consistently to every remaining copilot entry point beyond nurse dashboard/summary/triage screens.
 
 ### 1.2 Remove PHI Debug Logging
 
@@ -46,15 +46,15 @@
 
 ### 1.3 Reduce Over‑Fetch in Nurse Patient Summary
 
-- [ ] Add backend endpoint for appointments by patient
-- [ ] Replace broad appointment fetch with patient‑scoped fetch
-- [ ] Verify only the selected patient’s appointments are returned
+- [x] Add backend endpoint for appointments by patient (`@codex 2026-02-16`)
+- [x] Replace broad appointment fetch with patient‑scoped fetch (`@codex 2026-02-16`)
+- [x] Verify only the selected patient’s appointments are returned (`@codex 2026-02-16`)
 
 ### 1.4 Server‑Scoped Alerts and Tasks
 
-- [ ] Replace localStorage alert acknowledgements with server persistence
-- [ ] Replace localStorage task state with server persistence
-- [ ] Ensure tenant + user scoping for acknowledgements and task history
+- [x] Replace localStorage alert acknowledgements with server persistence (`@codex 2026-02-16`)
+- [x] Replace localStorage task state with server persistence (`@codex 2026-02-16`)
+- [x] Ensure tenant + user scoping for acknowledgements and task history (`@codex 2026-02-16`)
 
 ### 1.5 PHI‑Minimized AI Inputs
 
@@ -196,49 +196,49 @@
   - [x] `services/ehr-service/src/guards/roles.guard.ts`
   - [x] `services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts`
   - [x] `services/ehr-service/src/services/hipaa-audit.service.ts`
-  Remaining scope: align frontend payload contracts so copilot user-action fields are always present in requests.
+  Remaining scope: align all remaining frontend payload contracts so copilot user-action fields are always present in requests.
 
 ### Wave 2 — Nurse UI Integration
 
-- [~] Integrate triage copilot panel + apply-confirm flow (`@codex 2026-02-16`)
-  - [ ] `ehr-frontend/src/components/TriageQueue.tsx`
+- [x] Integrate triage copilot panel + apply-confirm flow (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/components/TriageQueue.tsx`
   - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
-  Remaining scope: add nurse override reason capture to complete accept/modify/reject lifecycle.
-- [~] Integrate vitals interpretation and trend summaries (`@codex 2026-02-16`)
+- [x] Integrate vitals interpretation and trend summaries (`@codex 2026-02-16`)
   - [x] `ehr-frontend/src/components/VitalsPanel.tsx`
   - [x] `ehr-frontend/src/pages/NursePatientSummary.tsx`
-  Remaining scope: wire interpretation directly into `VitalsPanel` save workflow and capture explicit accept/override action.
-- [~] Integrate smart note draft + provenance rendering (`@codex 2026-02-16`)
-  - [ ] `ehr-frontend/src/pages/NursePatientSummary.tsx`
-  Remaining scope: bind generated draft directly into nursing-note editor with provenance tags.
+- [x] Integrate smart note draft + provenance rendering (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
+  - [x] `ehr-frontend/src/components/NursingNotes.tsx`
 - [~] Integrate handoff summary generation/review UI (`@codex 2026-02-16`)
   - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
   Remaining scope: add finalize/share workflow and explicit reviewer confirmation status.
 
 ### Wave 3 — Server-Scoped Tasks & Alerts (Replace localStorage)
 
-- [ ] Add persistent nurse alert acknowledgement store
-  - [ ] `services/ehr-service/src/entities/*` (new nurse alert ack entity)
-  - [ ] `services/ehr-service/src/services/*` (new nurse alert/task service)
-  - [ ] `services/ehr-service/src/controllers/*` (new nurse alert/task controller)
-- [ ] Add persistent nurse task store with acceptance/override actions
-  - [ ] `services/ehr-service/src/entities/*` (new nurse task entity)
-  - [ ] `services/ehr-service/src/services/*` (new nurse task service)
-  - [ ] `services/ehr-service/src/controllers/*` (new nurse task controller)
-- [ ] Replace local client state with server APIs
-  - [ ] `ehr-frontend/src/components/TaskManagement.tsx`
-  - [ ] `ehr-frontend/src/components/PatientSafetyAlerts.tsx`
-  - [ ] `ehr-frontend/src/pages/NurseDashboard.tsx`
-  - [ ] `ehr-frontend/src/services/api.ts`
+- [~] Add persistent nurse alert acknowledgement store (`@codex 2026-02-16`)
+  - [~] `services/ehr-service/src/entities/*` (new nurse alert ack entity)
+  - [x] `services/ehr-service/src/services/*` (new nurse alert/task service)
+  - [x] `services/ehr-service/src/controllers/*` (new nurse alert/task controller)
+  Remaining scope: migrate from audit-log-backed state to dedicated entities if higher-volume querying requires it.
+- [~] Add persistent nurse task store with acceptance/override actions (`@codex 2026-02-16`)
+  - [~] `services/ehr-service/src/entities/*` (new nurse task entity)
+  - [x] `services/ehr-service/src/services/*` (new nurse task service)
+  - [x] `services/ehr-service/src/controllers/*` (new nurse task controller)
+  Remaining scope: add explicit server-side override-reason semantics at task domain level (beyond audit event metadata).
+- [x] Replace local client state with server APIs (`local changes pending commit`)
+  - [x] `ehr-frontend/src/components/TaskManagement.tsx`
+  - [x] `ehr-frontend/src/components/PatientSafetyAlerts.tsx`
+  - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
+  - [x] `ehr-frontend/src/services/api.ts`
 
 ### Wave 4 — Data Access Optimization
 
-- [ ] Add patient-scoped appointment endpoint (no broad fetch + client filter)
-  - [ ] `services/ehr-service/src/controllers/appointment.controller.ts`
-  - [ ] `services/ehr-service/src/services/appointment.service.ts`
-- [ ] Update nurse summary screen to consume patient-scoped endpoint
-  - [ ] `ehr-frontend/src/pages/NursePatientSummary.tsx`
-  - [ ] `ehr-frontend/src/services/api.ts`
+- [x] Add patient-scoped appointment endpoint (no broad fetch + client filter) (`@codex 2026-02-16`)
+  - [x] `services/ehr-service/src/controllers/appointment.controller.ts` (reused existing `GET /appointments` + query DTO extension)
+  - [x] `services/ehr-service/src/services/appointment.service.ts`
+- [x] Update nurse summary screen to consume patient-scoped endpoint (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/pages/NursePatientSummary.tsx`
+  - [x] `ehr-frontend/src/services/api.ts` (no new method required; existing `params` support reused)
 
 ### Wave 5 — CDSS Service Hardening for Nurse Copilot
 

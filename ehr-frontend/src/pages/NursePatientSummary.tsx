@@ -124,6 +124,7 @@ const NursePatientSummary: React.FC = () => {
   const [notesSortOrder, setNotesSortOrder] = useState<'asc' | 'desc'>('desc');
   const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
+  const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
 
   useEffect(() => {
     if (patientId) {
@@ -163,12 +164,9 @@ const NursePatientSummary: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
 
-      // Fetch appointments
-      const appointmentsResponse = await ehrApi.getAppointments(token, tenantSlug!);
-      const allAppointments = appointmentsResponse.data.appointments || [];
-      const patientAppointments = allAppointments.filter(
-        (apt: any) => apt.patient.id === patientId
-      );
+      // Fetch patient-scoped appointments
+      const appointmentsResponse = await ehrApi.getAppointments(token, tenantSlug!, { patientId: patientId! });
+      const patientAppointments = appointmentsResponse.data.appointments || [];
       
       // Fetch vitals for the patient
       let allVitals: any[] = [];
@@ -450,6 +448,30 @@ const NursePatientSummary: React.FC = () => {
       showError('Vitals Copilot Error', 'Unable to interpret vitals right now.');
     } finally {
       setVitalsCopilotLoading(false);
+    }
+  };
+
+  const handleVitalsCopilotDecision = async (decision: 'accept' | 'modify' | 'reject') => {
+    try {
+      if (!patient || !tenantSlug) {
+        return;
+      }
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      await ehrApi.recordCopilotAction(
+        {
+          copilotType: 'vitals',
+          decision,
+          reason: copilotDecisionNote || undefined,
+          patientId: patient.id,
+          recommendationSummary: `Vitals risk ${vitalsCopilotResult?.riskLevel || 'unknown'}`,
+        },
+        token,
+        tenantSlug
+      );
+    } catch (error) {
+      console.error('Failed to record vitals copilot decision');
     }
   };
 
@@ -1025,6 +1047,18 @@ const NursePatientSummary: React.FC = () => {
                       {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
                         <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
                       )}
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={() => handleVitalsCopilotDecision('accept')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
+                        <button type="button" onClick={() => handleVitalsCopilotDecision('modify')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
+                        <button type="button" onClick={() => handleVitalsCopilotDecision('reject')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                      </div>
+                      <input
+                        type="text"
+                        value={copilotDecisionNote}
+                        onChange={(e) => setCopilotDecisionNote(e.target.value)}
+                        placeholder="Optional reason for modify/reject"
+                        className="w-full mt-2 px-2 py-1 border border-blue-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
                   )}
                 </div>

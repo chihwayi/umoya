@@ -3,7 +3,7 @@ import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
   Heart, Thermometer, Droplets, Plus, Search, Filter,
   ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList,
-  CreditCard, Lock, Target, TestTube
+  CreditCard, Lock, Target, TestTube, Brain
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from './GlobalNotification';
@@ -58,6 +58,9 @@ interface TriageQueueProps {
   appointments: Appointment[];
   onRecordVitals: (appointment: Appointment) => void;
   onTriageAssessment: (appointment: Appointment) => void;
+  onTriageCopilotAnalyze?: (appointment: Appointment) => Promise<void> | void;
+  triageCopilotLoading?: boolean;
+  triageCopilotPatientId?: string | null;
   onViewCarePlans?: (patientId: string, patientName: string) => void;
   onViewLabResults?: (patientId: string, patientName: string) => void;
   onViewVitalsHistory?: (patientId: string, patientName: string) => void;
@@ -69,6 +72,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   appointments,
   onRecordVitals,
   onTriageAssessment,
+  onTriageCopilotAnalyze,
+  triageCopilotLoading = false,
+  triageCopilotPatientId = null,
   onViewCarePlans,
   onViewLabResults,
   onViewVitalsHistory,
@@ -289,6 +295,17 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
   const handleTriageClick = (appointment: Appointment) => {
     if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'Triage assessment is locked until payment is confirmed')) {
+      return;
+    }
+    onTriageAssessment(appointment);
+  };
+
+  const handleTriageCopilotClick = async (appointment: Appointment) => {
+    if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'AI triage support is locked until payment is confirmed')) {
+      return;
+    }
+    if (onTriageCopilotAnalyze) {
+      await onTriageCopilotAnalyze(appointment);
       return;
     }
     onTriageAssessment(appointment);
@@ -625,6 +642,20 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     >
                       <ClipboardList className="w-4 h-4" />
                       Triage Assessment
+                    </button>
+                    <button
+                      onClick={() => handleTriageCopilotClick(appointment)}
+                      disabled={(awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)}
+                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${
+                        (awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700'
+                      }`}
+                    >
+                      <Brain className="w-4 h-4" />
+                      {triageCopilotLoading && triageCopilotPatientId === appointment.patient.id
+                        ? 'Analyzing...'
+                        : 'AI Suggest + Open'}
                     </button>
                     {onViewVitalsHistory && (
                       <button

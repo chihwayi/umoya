@@ -1246,6 +1246,32 @@ export class CdssService {
     }
   }
 
+  async recordCopilotAction(payload: any, tenantId?: string) {
+    const decision = String(payload?.decision || payload?.userAction || 'unknown').toLowerCase();
+    const copilotType = String(payload?.copilotType || payload?.actionType || 'unknown').toLowerCase();
+    const reason = payload?.reason ? String(payload.reason) : null;
+    const patientId = payload?.patientId ? String(payload.patientId) : null;
+    const recommendationSummary =
+      payload?.recommendationSummary
+        ? String(payload.recommendationSummary)
+        : `copilot ${copilotType} decision ${decision}`;
+
+    return {
+      ok: true,
+      copilotType,
+      decision,
+      reason,
+      patientId,
+      source: 'ehr_cdss_proxy',
+      audit: this.buildCopilotAuditMetadata(
+        `copilot_${copilotType}_decision`,
+        tenantId,
+        payload,
+        recommendationSummary,
+      ),
+    };
+  }
+
   async allergyCheck(patientId: string, medication: string, tenantDb: DataSource) {
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await patientRepository.findOne({ where: { id: patientId } });

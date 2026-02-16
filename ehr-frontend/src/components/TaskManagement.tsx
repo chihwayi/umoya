@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, Star, Flag, Bell, Eye, TestTube, Sparkles, Zap, RefreshCw
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
-import { cdssApi } from '../services/api';
+import { ehrApi } from '../services/api';
 
 interface Task {
   id: string;
@@ -56,24 +56,30 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+  const [serverCompletedTaskIds, setServerCompletedTaskIds] = useState<Set<string>>(new Set());
 
-  // Load completed tasks from local storage
-  const getLocalCompletedTasks = (): Set<string> => {
-    try {
-      const saved = localStorage.getItem('nurse_completed_tasks');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch (e) {
-      console.error('Failed to load completed tasks', e);
-      return new Set();
-    }
-  };
+  useEffect(() => {
+    const loadState = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (!token || !tenantSlug) return;
+        const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
+        const completed = new Set<string>(response.data?.completedTaskIds || []);
+        setServerCompletedTaskIds(completed);
+      } catch (e) {
+        console.error('Failed to load server task state', e);
+      }
+    };
+    loadState();
+  }, [currentUser?.id]);
 
   // Load tasks from real data - create tasks based on actual appointments
   useEffect(() => {
     const generateTasksFromAppointments = () => {
       const realTasks: Task[] = [];
       const now = new Date();
-      const localCompleted = getLocalCompletedTasks();
+      const completedTaskIds = serverCompletedTaskIds;
       
       // Only create tasks from real appointments with actual data
       appointments.forEach((apt, index) => {
@@ -86,7 +92,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           // 1. Triage Task
           if (!apt.triage) {
             const taskId = `triage-${apt.id}`;
-            const isLocalCompleted = localCompleted.has(taskId);
+            const isLocalCompleted = completedTaskIds.has(taskId);
             
             // Pending Triage - Visible to ALL nurses
             realTasks.push({
@@ -135,7 +141,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           // 2. Vital Signs Task
           if (!apt.vitals) {
             const taskId = `vitals-${apt.id}`;
-            const isLocalCompleted = localCompleted.has(taskId);
+            const isLocalCompleted = completedTaskIds.has(taskId);
 
             // Show pending tasks to ALL nurses so any available nurse can pick it up.
             // This ensures tasks are visible even if the nurse didn't create the appointment.
@@ -190,7 +196,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           // Show if created by user OR if user is serving (we don't strictly know if serving without notes, so we default to creator)
           if (isCreatedByCurrentUser) {
             const taskId = `doc-${apt.id}`;
-            const isLocalCompleted = localCompleted.has(taskId);
+            const isLocalCompleted = completedTaskIds.has(taskId);
 
             realTasks.push({
               id: taskId,
@@ -222,7 +228,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
     } else {
       setTasks([]);
     }
-  }, [appointments, currentUser]);
+  }, [appointments, currentUser, serverCompletedTaskIds]);
 
   // Notify parent of task count changes
   // Use useRef to store the callback to avoid recreating it on every render
@@ -333,23 +339,36 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
     return { total, pending, inProgress, completed, overdue, urgent };
   };
 
-  const handleTaskComplete = (taskId: string) => {
-    // Save to local storage
+  const handleTaskComplete = async (taskId: string) => {
     try {
-      const saved = localStorage.getItem('nurse_completed_tasks');
-      const completedSet = saved ? new Set(JSON.parse(saved)) : new Set();
-      completedSet.add(taskId);
-      localStorage.setItem('nurse_completed_tasks', JSON.stringify(Array.from(completedSet)));
-    } catch (e) {
-      console.error('Failed to save completed task', e);
-    }
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) return;
+      const task = tasks.find((t) => t.id === taskId);
+      await ehrApi.completeNurseTask(
+        taskId,
+        {
+          patientId: task?.patientId,
+          context: { taskType: task?.taskType, priority: task?.priority },
+        },
+        token,
+        tenantSlug,
+      );
 
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, status: 'completed' as const, completedAt: new Date().toISOString() }
-        : task
-    ));
-    onTaskComplete?.(taskId);
+      setServerCompletedTaskIds((prev) => {
+        const next = new Set(prev);
+        next.add(taskId);
+        return next;
+      });
+      setTasks(prev => prev.map(taskItem =>
+        taskItem.id === taskId
+          ? { ...taskItem, status: 'completed' as const, completedAt: new Date().toISOString() }
+          : taskItem
+      ));
+      onTaskComplete?.(taskId);
+    } catch (e) {
+      console.error('Failed to persist completed task', e);
+    }
   };
 
   const handleTaskStart = (taskId: string) => {

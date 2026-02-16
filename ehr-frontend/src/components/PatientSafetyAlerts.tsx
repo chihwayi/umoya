@@ -3,6 +3,7 @@ import {
   AlertTriangle, Heart, Shield, Droplets, Activity, Eye,
   Bell, X, CheckCircle, Clock, User, MapPin, Pill, ChevronDown, ChevronRight
 } from 'lucide-react';
+import { ehrApi } from '../services/api';
 
 interface SafetyAlert {
   id: string;
@@ -47,6 +48,22 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
   const [showAcknowledged, setShowAcknowledged] = useState(false);
 
   const [expandedAlerts, setExpandedAlerts] = useState<Set<string>>(new Set());
+  const [serverAcknowledgedIds, setServerAcknowledgedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const loadState = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+        if (!token || !tenantSlug) return;
+        const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
+        setServerAcknowledgedIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
+      } catch (e) {
+        console.error('Failed to load server alert state', e);
+      }
+    };
+    loadState();
+  }, [currentUser?.id]);
 
   // Generate real safety alerts based on actual patient data
   useEffect(() => {
@@ -185,9 +202,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
       });
 
       // Apply acknowledgment status from props
-      if (acknowledgedAlertIds) {
+      if (acknowledgedAlertIds || serverAcknowledgedIds.size > 0) {
         realAlerts.forEach(alert => {
-          if (acknowledgedAlertIds.has(alert.id)) {
+          if ((acknowledgedAlertIds && acknowledgedAlertIds.has(alert.id)) || serverAcknowledgedIds.has(alert.id)) {
             alert.acknowledgedAt = new Date().toISOString();
             alert.isActive = false;
             alert.acknowledgedBy = currentUser?.id || 'current_user';
@@ -203,7 +220,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
     } else {
       setAlerts([]);
     }
-  }, [appointments, acknowledgedAlertIds]);
+  }, [appointments, acknowledgedAlertIds, serverAcknowledgedIds, currentUser?.id]);
 
   // Notify parent of alert count changes
   // Use useRef to store the callback to avoid recreating it on every render
@@ -275,18 +292,40 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
     return { total, active, critical, high, acknowledged };
   };
 
-  const handleAcknowledge = (alertId: string) => {
-    setAlerts(prev => prev.map(alert => 
-      alert.id === alertId 
-        ? { 
-            ...alert, 
-            acknowledgedBy: currentUser?.id || 'current_user',
-            acknowledgedAt: new Date().toISOString(),
-            isActive: false
-          }
-        : alert
-    ));
-    onAlertAcknowledge?.(alertId);
+  const handleAcknowledge = async (alertId: string) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) return;
+      const alert = alerts.find((a) => a.id === alertId);
+      await ehrApi.acknowledgeNurseAlert(
+        alertId,
+        {
+          patientId: alert?.patientId,
+          context: { alertType: alert?.alertType, severity: alert?.severity },
+        },
+        token,
+        tenantSlug,
+      );
+      setServerAcknowledgedIds((prev) => {
+        const next = new Set(prev);
+        next.add(alertId);
+        return next;
+      });
+      setAlerts(prev => prev.map(alertItem =>
+        alertItem.id === alertId
+          ? {
+              ...alertItem,
+              acknowledgedBy: currentUser?.id || 'current_user',
+              acknowledgedAt: new Date().toISOString(),
+              isActive: false
+            }
+          : alertItem
+      ));
+      onAlertAcknowledge?.(alertId);
+    } catch (e) {
+      console.error('Failed to persist alert acknowledgement', e);
+    }
   };
 
   const handleDismiss = (alertId: string) => {

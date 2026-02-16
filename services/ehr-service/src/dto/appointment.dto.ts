@@ -117,6 +117,10 @@ export class AppointmentQueryDto {
   doctorId?: string;
 
   @IsOptional()
+  @IsUUID()
+  patientId?: string;
+
+  @IsOptional()
   @IsString()
   status?: string;
 

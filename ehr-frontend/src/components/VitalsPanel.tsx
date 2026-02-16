@@ -103,6 +103,8 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
   const [bmi, setBmi] = useState(0);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(patient || null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
+  const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const [trendOverview, setTrendOverview] = useState<VitalTrendsResponse | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
   const [guidelineQuery, setGuidelineQuery] = useState('');
@@ -296,6 +298,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         response.data?.vitals?.cdssInsights ??
         null;
       setCdssInsights(insights);
+      setCopilotDecisionNote('');
       showSuccess('Success', 'Vitals recorded successfully');
       fetchVitalsTrend(selectedPatient.id);
       onSave?.(insights);
@@ -304,6 +307,51 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       showError('Error', 'Failed to save vitals');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVitalsCopilotDecision = async (decision: 'accept' | 'modify' | 'reject') => {
+    if (!selectedPatient || !cdssInsights?.risk) {
+      return;
+    }
+    try {
+      setCopilotDecisionSaving(true);
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) {
+        showError('Error', 'Authentication required');
+        return;
+      }
+
+      const topRecommendation = Array.isArray(cdssInsights.risk.recommendations) && cdssInsights.risk.recommendations.length > 0
+        ? String(
+            typeof cdssInsights.risk.recommendations[0] === 'string'
+              ? cdssInsights.risk.recommendations[0]
+              : cdssInsights.risk.recommendations[0]?.recommendation || 'No recommendation',
+          )
+        : 'No recommendation';
+
+      await ehrApi.recordCopilotAction(
+        {
+          copilotType: 'vitals',
+          decision,
+          reason: copilotDecisionNote || undefined,
+          patientId: selectedPatient.id,
+          recommendationSummary: `Risk ${cdssInsights.risk.risk_level || 'unknown'} | ${topRecommendation}`,
+        },
+        token,
+        tenantSlug,
+      );
+
+      showSuccess('Decision Captured', `Vitals insight marked as ${decision}.`);
+      if (decision === 'accept') {
+        setCopilotDecisionNote('');
+      }
+    } catch (error) {
+      console.error('Failed to record vitals copilot decision', error);
+      showError('Error', 'Failed to capture vitals copilot decision');
+    } finally {
+      setCopilotDecisionSaving(false);
     }
   };
 
@@ -534,6 +582,42 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                   {typeof cdssInsights.risk.overall_score === 'number' && (
                     <p className="text-xs text-slate-500">Score: {cdssInsights.risk.overall_score.toFixed(1)}</p>
                   )}
+                </div>
+              </div>
+              <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
+                <p className="text-xs font-semibold text-indigo-900">Copilot Decision (required for governance)</p>
+                <input
+                  type="text"
+                  value={copilotDecisionNote}
+                  onChange={(e) => setCopilotDecisionNote(e.target.value)}
+                  placeholder="Optional note (e.g. override rationale)"
+                  className="w-full px-3 py-2 text-sm rounded-md border border-indigo-200 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={copilotDecisionSaving}
+                    onClick={() => handleVitalsCopilotDecision('accept')}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    disabled={copilotDecisionSaving}
+                    onClick={() => handleVitalsCopilotDecision('modify')}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    Modify
+                  </button>
+                  <button
+                    type="button"
+                    disabled={copilotDecisionSaving}
+                    onClick={() => handleVitalsCopilotDecision('reject')}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
                 </div>
               </div>
 

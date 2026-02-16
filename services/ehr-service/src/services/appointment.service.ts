@@ -246,7 +246,9 @@ export class AppointmentService {
       queryBuilder.andWhere('appointment.doctorId = :doctorId', { doctorId: query.doctorId });
     }
 
-    // Note: patientId filter not available in AppointmentQueryDto
+    if (query.patientId) {
+      queryBuilder.andWhere('appointment.patientId = :patientId', { patientId: query.patientId });
+    }
 
     // Apply pagination
     const page = query.page || 1;
