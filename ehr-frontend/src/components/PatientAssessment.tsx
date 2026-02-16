@@ -70,6 +70,8 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [guidelineAnalysis, setGuidelineAnalysis] = useState<string | null>(null);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
+  const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
   const [recentVitals, setRecentVitals] = useState<any>(null);
   const [triageHistory, setTriageHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -168,7 +170,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
 
       const finalQuery = `${searchContext}: ${guidelineQuery}`;
       
-      const response = await Api.cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      const response = await Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data) {
         setGuidelineResults(response.data.citations || []);
         setGuidelineAnalysis(response.data.analysis || null);
@@ -187,6 +189,52 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
   useEffect(() => {
     setCdssInsights(null);
   }, [patient?.id]);
+
+  const handleTriageCopilot = async () => {
+    if (!patient) {
+      showError('Error', 'No patient selected');
+      return;
+    }
+    try {
+      setTriageCopilotLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) {
+        showError('Error', 'Authentication required');
+        return;
+      }
+
+      const patientAge = patient.dateOfBirth
+        ? Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+        : undefined;
+
+      const response = await Api.ehrApi.analyzeTriageCopilot(
+        {
+          patientId: patient.id,
+          age: patientAge,
+          gender: patient.gender,
+          chiefComplaint,
+          symptoms: [chiefComplaint, symptoms].filter(Boolean),
+          vitals: recentVitals || undefined,
+          conditions: history ? [history] : [],
+        },
+        token,
+        tenantSlug
+      );
+      setTriageCopilotResult(response.data || null);
+
+      const suggested = response.data?.suggestedTriageLevel;
+      if (suggested && ['urgent', 'high', 'normal', 'low'].includes(suggested)) {
+        setPriority(suggested as 'urgent' | 'high' | 'normal' | 'low');
+      }
+      showSuccess('Copilot Ready', 'Review suggestion before final save.');
+    } catch (error) {
+      console.error('Triage copilot failed', error);
+      showError('Error', 'Failed to analyze triage context');
+    } finally {
+      setTriageCopilotLoading(false);
+    }
+  };
 
   // Load existing allergies from structured table when patient is selected
   useEffect(() => {
@@ -1048,6 +1096,20 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               </div>
               <h4 className="text-sm font-bold text-slate-900">Priority</h4>
             </div>
+            <button
+              type="button"
+              onClick={handleTriageCopilot}
+              disabled={triageCopilotLoading}
+              className="w-full mb-3 px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+            >
+              {triageCopilotLoading ? 'Analyzing...' : 'Analyze + Apply Copilot Priority'}
+            </button>
+            {triageCopilotResult && (
+              <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
+                <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                <p><strong>Suggested:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               {(['urgent','high','normal','low'] as const).map((p) => (
                 <button

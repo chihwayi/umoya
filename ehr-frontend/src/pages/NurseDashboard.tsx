@@ -240,6 +240,14 @@ const NurseDashboard: React.FC = () => {
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
+  const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
+  const [notesCopilotLoading, setNotesCopilotLoading] = useState(false);
+  const [handoffCopilotLoading, setHandoffCopilotLoading] = useState(false);
+  const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
+  const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
+  const [notesCopilotDraft, setNotesCopilotDraft] = useState<string>('');
+  const [handoffCopilotSummary, setHandoffCopilotSummary] = useState<string>('');
   const resolveTenantSlug = () =>
     tenantSlug || localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 
@@ -860,6 +868,167 @@ const NurseDashboard: React.FC = () => {
       showError('Error', 'Failed to search guidelines');
     } finally {
       setLoadingGuidelines(false);
+    }
+  };
+
+  const getSelectedPatientLatestVitals = () => {
+    if (!selectedPatient) {
+      return null;
+    }
+    const patientApt = appointments.find(a => a.patient.id === selectedPatient.id && a.vitals);
+    return patientApt?.vitals || null;
+  };
+
+  const handleTriageCopilotAnalyze = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant || !selectedPatient) {
+        showError('Missing context', 'Select a patient and ensure session is active.');
+        return;
+      }
+
+      setTriageCopilotLoading(true);
+      const vitals = getSelectedPatientLatestVitals();
+      const response = await ehrApi.analyzeTriageCopilot(
+        {
+          patientId: selectedPatient.id,
+          age: selectedPatient.age,
+          gender: selectedPatient.gender,
+          chiefComplaint: appointments.find(a => a.patient.id === selectedPatient.id)?.reason || '',
+          symptoms: appointments
+            .filter(a => a.patient.id === selectedPatient.id)
+            .map(a => a.reason)
+            .filter((r) => typeof r === 'string' && r.trim().length > 0),
+          vitals,
+          allergies: selectedPatient.allergies,
+          chronicConditions: selectedPatient.chronicConditions,
+        },
+        token,
+        activeTenant
+      );
+      setTriageCopilotResult(response.data || null);
+      showSuccess('Triage Copilot Ready', 'Review and confirm suggestions before applying clinically.');
+    } catch (error) {
+      console.error('Triage copilot failed', error);
+      showError('Triage Copilot Error', 'Unable to analyze triage context right now.');
+    } finally {
+      setTriageCopilotLoading(false);
+    }
+  };
+
+  const handleVitalsCopilotInterpret = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      const vitals = getSelectedPatientLatestVitals();
+      if (!token || !activeTenant || !selectedPatient || !vitals) {
+        showError('Missing vitals', 'Select a patient with recorded vitals first.');
+        return;
+      }
+
+      setVitalsCopilotLoading(true);
+      const response = await ehrApi.interpretVitalsCopilot(
+        {
+          patientId: selectedPatient.id,
+          age: selectedPatient.age,
+          gender: selectedPatient.gender,
+          vitals,
+          conditions: selectedPatient.chronicConditions
+            ? selectedPatient.chronicConditions.split(',').map((c: string) => c.trim()).filter(Boolean)
+            : [],
+          allergies: selectedPatient.allergies
+            ? selectedPatient.allergies.split(',').map((a: string) => a.trim()).filter(Boolean)
+            : [],
+        },
+        token,
+        activeTenant
+      );
+      setVitalsCopilotResult(response.data || null);
+      showSuccess('Vitals Copilot Ready', 'Interpretation generated. Confirm clinically before action.');
+    } catch (error) {
+      console.error('Vitals copilot failed', error);
+      showError('Vitals Copilot Error', 'Unable to interpret vitals right now.');
+    } finally {
+      setVitalsCopilotLoading(false);
+    }
+  };
+
+  const handleGenerateNursingDraft = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant || !selectedPatient) {
+        showError('Missing context', 'Select a patient first.');
+        return;
+      }
+
+      setNotesCopilotLoading(true);
+      const relatedAppointments = appointments.filter(a => a.patient.id === selectedPatient.id);
+      const response = await ehrApi.generateNurseNoteDraft(
+        {
+          patientId: selectedPatient.id,
+          age: selectedPatient.age,
+          gender: selectedPatient.gender,
+          chiefComplaint: relatedAppointments[0]?.reason || '',
+          observations: relatedAppointments[0]?.notes || '',
+          previousNotes: relatedAppointments.map(a => a.notes).filter(Boolean),
+          vitals: getSelectedPatientLatestVitals(),
+        },
+        token,
+        activeTenant
+      );
+
+      setNotesCopilotDraft(response.data?.draft || '');
+      if (response.data?.draft) {
+        showSuccess('Draft Generated', 'Review and edit before saving to chart.');
+      } else {
+        showError('No Draft', 'No draft could be generated with the available context.');
+      }
+    } catch (error) {
+      console.error('Nursing draft generation failed', error);
+      showError('Draft Error', 'Unable to generate nursing draft right now.');
+    } finally {
+      setNotesCopilotLoading(false);
+    }
+  };
+
+  const handleGenerateHandoff = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant || !selectedPatient) {
+        showError('Missing context', 'Select a patient first.');
+        return;
+      }
+
+      setHandoffCopilotLoading(true);
+      const patientAppointments = appointments.filter(a => a.patient.id === selectedPatient.id);
+      const response = await ehrApi.generateNurseHandoffSummary(
+        {
+          patientId: selectedPatient.id,
+          age: selectedPatient.age,
+          gender: selectedPatient.gender,
+          shiftNotes: patientAppointments.map(a => a.notes).filter(Boolean),
+          pendingTasks: [`Pending tasks: ${taskCounts.pending}`, `In progress tasks: ${taskCounts.inProgress}`],
+          alerts: [`Active alerts: ${alertCounts.active}`, `Critical alerts: ${alertCounts.critical}`],
+          vitals: getSelectedPatientLatestVitals(),
+        },
+        token,
+        activeTenant
+      );
+
+      setHandoffCopilotSummary(response.data?.summary || '');
+      if (response.data?.summary) {
+        showSuccess('Handoff Summary Ready', 'Review before sharing with next shift.');
+      } else {
+        showError('No Summary', 'No handoff summary was generated.');
+      }
+    } catch (error) {
+      console.error('Handoff summary generation failed', error);
+      showError('Handoff Error', 'Unable to generate handoff summary right now.');
+    } finally {
+      setHandoffCopilotLoading(false);
     }
   };
 
@@ -2513,7 +2682,31 @@ const NurseDashboard: React.FC = () => {
           </div>
         )}
         {activeTab === 'vitals' && (
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto space-y-4">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900">Vitals Copilot</h3>
+                  <p className="text-xs text-blue-700">AI suggestion only. Nurse confirmation is required.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleVitalsCopilotInterpret}
+                  disabled={vitalsCopilotLoading || !selectedPatient}
+                  className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {vitalsCopilotLoading ? 'Interpreting...' : 'Interpret Current Vitals'}
+                </button>
+              </div>
+              {vitalsCopilotResult && (
+                <div className="mt-3 text-sm text-slate-700 space-y-1">
+                  <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                  {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
+                    <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
+                  )}
+                </div>
+              )}
+            </div>
             <VitalsPanel 
               patient={selectedPatient || undefined}
               onSave={() => {
@@ -2524,7 +2717,32 @@ const NurseDashboard: React.FC = () => {
           </div>
         )}
         {activeTab === 'triage' && (
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto space-y-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900">Triage Copilot</h3>
+                  <p className="text-xs text-amber-700">Use as decision support only. Confirm before saving triage.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTriageCopilotAnalyze}
+                  disabled={triageCopilotLoading || !selectedPatient}
+                  className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {triageCopilotLoading ? 'Analyzing...' : 'Analyze Triage Context'}
+                </button>
+              </div>
+              {triageCopilotResult && (
+                <div className="mt-3 text-sm text-slate-700 space-y-1">
+                  <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                  <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
+                  {Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0 && (
+                    <p><strong>Top Reason:</strong> {String(triageCopilotResult.reasons[0])}</p>
+                  )}
+                </div>
+              )}
+            </div>
             <PatientAssessment 
               patient={selectedPatient || undefined}
               appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))} 
@@ -2583,7 +2801,45 @@ const NurseDashboard: React.FC = () => {
           }
 
           return (
-            <div className="w-full overflow-x-auto">
+            <div className="w-full overflow-x-auto space-y-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-emerald-900">Smart Charting Copilot</h3>
+                    <p className="text-xs text-emerald-700">Generate draft notes and handoff summary. Review before use.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGenerateNursingDraft}
+                      disabled={notesCopilotLoading || !selectedPatient}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {notesCopilotLoading ? 'Drafting...' : 'Generate Note Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateHandoff}
+                      disabled={handoffCopilotLoading || !selectedPatient}
+                      className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      {handoffCopilotLoading ? 'Summarizing...' : 'Generate Handoff'}
+                    </button>
+                  </div>
+                </div>
+                {notesCopilotDraft && (
+                  <div className="rounded-lg bg-white border border-emerald-200 p-3">
+                    <p className="text-xs font-semibold text-emerald-800 mb-1">Draft Note</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{notesCopilotDraft}</p>
+                  </div>
+                )}
+                {handoffCopilotSummary && (
+                  <div className="rounded-lg bg-white border border-teal-200 p-3">
+                    <p className="text-xs font-semibold text-teal-800 mb-1">Handoff Summary</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{handoffCopilotSummary}</p>
+                  </div>
+                )}
+              </div>
               <NursingNotes appointments={appointments} preset={notesPreset} />
             </div>
           );

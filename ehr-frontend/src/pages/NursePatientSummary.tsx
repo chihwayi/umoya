@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, User, Calendar, Clock, FileText, Heart, Activity, 
   Stethoscope, Pill, AlertTriangle, ChevronRight, Calendar as CalendarIcon,
-  Thermometer, Droplets, Eye, Activity as ActivityIcon
+  Thermometer, Droplets, Eye, Activity as ActivityIcon, Sparkles
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
@@ -122,6 +122,8 @@ const NursePatientSummary: React.FC = () => {
   const [notesSortBy, setNotesSortBy] = useState<'date' | 'type'>('date');
   const [vitalsSortOrder, setVitalsSortOrder] = useState<'asc' | 'desc'>('desc');
   const [notesSortOrder, setNotesSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
+  const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
 
   useEffect(() => {
     if (patientId) {
@@ -373,6 +375,82 @@ const NursePatientSummary: React.FC = () => {
       total: filteredNotes.length,
       totalPages: Math.ceil(filteredNotes.length / notesPerPage)
     };
+  };
+
+  const getVitalsTrendSummary = () => {
+    const vitalsOnly = visitSummaries
+      .map((visit) => visit.vitals)
+      .filter(Boolean) as PatientVitals[];
+    const recent = vitalsOnly
+      .slice()
+      .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+      .slice(0, 5);
+
+    if (recent.length < 2) {
+      return null;
+    }
+
+    const latest = recent[0];
+    const oldest = recent[recent.length - 1];
+    const hrDelta = latest.heartRate - oldest.heartRate;
+    const tempDelta = latest.temperature - oldest.temperature;
+    const bmiDelta = latest.bmi - oldest.bmi;
+
+    return {
+      sampleSize: recent.length,
+      heartRateTrend: hrDelta > 3 ? 'up' : hrDelta < -3 ? 'down' : 'stable',
+      temperatureTrend: tempDelta > 0.2 ? 'up' : tempDelta < -0.2 ? 'down' : 'stable',
+      bmiTrend: bmiDelta > 0.3 ? 'up' : bmiDelta < -0.3 ? 'down' : 'stable',
+      latest,
+    };
+  };
+
+  const handleInterpretLatestVitals = async () => {
+    try {
+      if (!patient || !tenantSlug) {
+        showError('Missing context', 'Patient context is incomplete.');
+        return;
+      }
+
+      const token = localStorage.getItem('ehr_token');
+      if (!token) {
+        showError('Session expired', 'Please log in again.');
+        return;
+      }
+
+      const vitalsOnly = visitSummaries
+        .map((visit) => visit.vitals)
+        .filter(Boolean) as PatientVitals[];
+      const latest = vitalsOnly
+        .slice()
+        .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
+
+      if (!latest) {
+        showError('No vitals', 'Record vitals first before AI interpretation.');
+        return;
+      }
+
+      setVitalsCopilotLoading(true);
+      const response = await ehrApi.interpretVitalsCopilot(
+        {
+          patientId: patient.id,
+          age: patient.age,
+          gender: patient.gender,
+          vitals: latest,
+          conditions: patient.chronicConditions
+            ? patient.chronicConditions.split(',').map((c: string) => c.trim()).filter(Boolean)
+            : [],
+        },
+        token,
+        tenantSlug
+      );
+      setVitalsCopilotResult(response.data || null);
+    } catch (error) {
+      console.error('Failed to interpret vitals');
+      showError('Vitals Copilot Error', 'Unable to interpret vitals right now.');
+    } finally {
+      setVitalsCopilotLoading(false);
+    }
   };
 
   // Reset pagination when switching tabs
@@ -905,6 +983,50 @@ const NursePatientSummary: React.FC = () => {
                   <div className="text-sm text-slate-600">
                     {getPaginatedVitals().total} records found
                   </div>
+                </div>
+
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Vitals Copilot + Trend Summary
+                      </h4>
+                      <p className="text-xs text-blue-700">AI suggestions are assistive and require nurse confirmation.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleInterpretLatestVitals}
+                      disabled={vitalsCopilotLoading}
+                      className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {vitalsCopilotLoading ? 'Interpreting...' : 'Interpret Latest Vitals'}
+                    </button>
+                  </div>
+                  {getVitalsTrendSummary() && (
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-white p-2 border border-blue-100">
+                        <span className="text-xs text-slate-500">Heart Rate Trend</span>
+                        <p className="font-semibold capitalize">{getVitalsTrendSummary()!.heartRateTrend}</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 border border-blue-100">
+                        <span className="text-xs text-slate-500">Temperature Trend</span>
+                        <p className="font-semibold capitalize">{getVitalsTrendSummary()!.temperatureTrend}</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-2 border border-blue-100">
+                        <span className="text-xs text-slate-500">BMI Trend</span>
+                        <p className="font-semibold capitalize">{getVitalsTrendSummary()!.bmiTrend}</p>
+                      </div>
+                    </div>
+                  )}
+                  {vitalsCopilotResult && (
+                    <div className="mt-3 rounded-lg bg-white p-3 border border-blue-100 text-sm text-slate-700 space-y-1">
+                      <p><strong>Risk:</strong> {vitalsCopilotResult.riskLevel || 'unknown'}</p>
+                      {Array.isArray(vitalsCopilotResult.recommendations) && vitalsCopilotResult.recommendations.length > 0 && (
+                        <p><strong>Top Recommendation:</strong> {String(vitalsCopilotResult.recommendations[0])}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Controls */}

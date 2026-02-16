@@ -200,16 +200,20 @@
 
 ### Wave 2 — Nurse UI Integration
 
-- [ ] Integrate triage copilot panel + apply-confirm flow
+- [~] Integrate triage copilot panel + apply-confirm flow (`@codex 2026-02-16`)
   - [ ] `ehr-frontend/src/components/TriageQueue.tsx`
-  - [ ] `ehr-frontend/src/pages/NurseDashboard.tsx`
-- [ ] Integrate vitals interpretation and trend summaries
-  - [ ] `ehr-frontend/src/components/VitalsPanel.tsx`
+  - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
+  Remaining scope: add nurse override reason capture to complete accept/modify/reject lifecycle.
+- [~] Integrate vitals interpretation and trend summaries (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/components/VitalsPanel.tsx`
+  - [x] `ehr-frontend/src/pages/NursePatientSummary.tsx`
+  Remaining scope: wire interpretation directly into `VitalsPanel` save workflow and capture explicit accept/override action.
+- [~] Integrate smart note draft + provenance rendering (`@codex 2026-02-16`)
   - [ ] `ehr-frontend/src/pages/NursePatientSummary.tsx`
-- [ ] Integrate smart note draft + provenance rendering
-  - [ ] `ehr-frontend/src/pages/NursePatientSummary.tsx`
-- [ ] Integrate handoff summary generation/review UI
-  - [ ] `ehr-frontend/src/pages/NurseDashboard.tsx`
+  Remaining scope: bind generated draft directly into nursing-note editor with provenance tags.
+- [~] Integrate handoff summary generation/review UI (`@codex 2026-02-16`)
+  - [x] `ehr-frontend/src/pages/NurseDashboard.tsx`
+  Remaining scope: add finalize/share workflow and explicit reviewer confirmation status.
 
 ### Wave 3 — Server-Scoped Tasks & Alerts (Replace localStorage)
 

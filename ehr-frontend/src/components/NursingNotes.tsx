@@ -4,7 +4,7 @@ import {
   FileText, Save, X, Plus, Search, Filter, Clock, User,
   AlertTriangle, CheckCircle, Activity, Heart, Stethoscope, Eye, Brain, FileCode, BookOpen
 } from 'lucide-react';
-import { ehrApi, clinicalTemplateApi, cdssApi } from '../services/api';
+import { ehrApi, clinicalTemplateApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
@@ -67,7 +67,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({ patient, appointments = [],
         return;
       }
       
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      const response = await ehrApi.searchGuidelines(guidelineQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {

@@ -4,7 +4,7 @@ import {
   Weight, Ruler, Calculator, AlertTriangle, CheckCircle, Brain, Loader2, Search, Plus
 } from 'lucide-react';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi } from '../services/api';
 import { GuidelineRecommendationCard, ClinicalRecommendation } from './GuidelineRecommendationCard';
 import { useNotification } from '../components/GlobalNotification';
 import {
@@ -159,7 +159,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       if (vitals.oxygenSaturation < 95 && vitals.oxygenSaturation > 0) patientContext.abnormalities.push(`SpO2 ${vitals.oxygenSaturation}% (Low)`);
       if (vitals.temperature > 37.5) patientContext.abnormalities.push(`Temp ${vitals.temperature}C (Fever)`);
 
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug, 5, patientContext);
+      const response = await ehrApi.searchGuidelines(guidelineQuery, token, tenantSlug, 5, patientContext);
       
       if (response.data) {
         if (response.data.citations) {
