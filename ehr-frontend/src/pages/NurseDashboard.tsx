@@ -9,7 +9,7 @@ import {
   CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
   Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown
 } from 'lucide-react';
-import { ehrApi, cdssApi, tenantApi } from '../services/api';
+import { ehrApi, tenantApi } from '../services/api';
 import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
@@ -550,13 +550,6 @@ const NurseDashboard: React.FC = () => {
     else setActiveTab('dashboard'); // Default to dashboard if no match
   }, [location.pathname]);
 
-  useEffect(() => {
-    console.log('NurseDashboard: appointments state changed:', appointments.length);
-    if (appointments.length > 0) {
-      console.log('NurseDashboard: First appointment:', appointments[0]);
-    }
-  }, [appointments]);
-
   // Load Quality Metrics and LTFU when in HIV section
   useEffect(() => {
     if (activeSection === 'hiv' && (activeTab === 'quality-metrics' || activeTab === 'ltfu' || activeTab === 'monthly-return')) {
@@ -593,11 +586,9 @@ const NurseDashboard: React.FC = () => {
 
       const response = await ehrApi.getAuthorizedOrders(token, activeTenant);
       setAuthorizedOrders(response.data.orders || []);
-      console.log('🔍 NurseDashboard - Fetched authorized orders:', response.data.orders);
     } catch (error: any) {
       // Handle 500 error gracefully - likely means no orders exist yet
       if (error?.response?.status === 500) {
-        console.log('🔍 NurseDashboard - No authorized orders found (500 error - likely no orders exist yet)');
         setAuthorizedOrders([]);
       } else {
         console.error('Error fetching authorized orders:', error);
@@ -629,7 +620,6 @@ const NurseDashboard: React.FC = () => {
               vitals: latestVitals
             };
           } catch (error) {
-            console.log(`No vitals found for patient ${appointment.patient.id}:`, error);
             return {
               ...appointment,
               vitals: null
@@ -662,21 +652,13 @@ const NurseDashboard: React.FC = () => {
       const day = String(today.getDate()).padStart(2, '0');
       const todayString = `${year}-${month}-${day}`;
       
-      console.log('🔍 Fetching appointments for date:', todayString);
-      console.log('🔍 Today object:', today);
-      console.log('🔍 Today timezone offset:', today.getTimezoneOffset());
-      
       const response = await ehrApi.getAppointments(token, activeTenant, { date: todayString });
-      console.log('📅 Raw appointments response:', response.data);
-      console.log('📊 Total appointments:', response.data.appointments?.length || 0);
 
       // Show ALL appointments for today - nurses need to see everything
       let allAppointments = response.data.appointments || [];
-      console.log('👩‍⚕️ Setting appointments for nurse:', allAppointments);
       
       // If no appointments for today, let's also check yesterday and day before
       if (allAppointments.length === 0) {
-        console.log('📅 No appointments for today, checking recent days...');
         try {
           const getLocalDateString = (date: Date) => {
             const year = date.getFullYear();
@@ -693,9 +675,6 @@ const NurseDashboard: React.FC = () => {
           dayBefore.setDate(dayBefore.getDate() - 2);
           const dayBeforeString = getLocalDateString(dayBefore);
           
-          console.log('🔍 Also checking yesterday:', yesterdayString);
-          console.log('🔍 And day before:', dayBeforeString);
-          
           // Fetch appointments for yesterday and day before
           const [yesterdayResponse, dayBeforeResponse] = await Promise.all([
             ehrApi.getAppointments(token, activeTenant, { date: yesterdayString }),
@@ -706,8 +685,6 @@ const NurseDashboard: React.FC = () => {
             ...(yesterdayResponse.data.appointments || []),
             ...(dayBeforeResponse.data.appointments || [])
           ];
-          
-          console.log('📅 Recent appointments found:', recentAppointments.length);
           
           // Fetch vitals for recent appointments
           const appointmentsWithVitals = await fetchVitalsForAppointments(recentAppointments);
@@ -872,7 +849,7 @@ const NurseDashboard: React.FC = () => {
 
       const finalQuery = `${searchContext}: ${guidelineQuery}`;
 
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      const response = await ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -1391,7 +1368,6 @@ const NurseDashboard: React.FC = () => {
           token,
           tenantSlug!
         );
-        console.log('📅 Month view API response:', response.data);
         // Flatten appointmentsByDate into array and transform structure
         const allAppointments: Appointment[] = [];
         Object.values(response.data.appointmentsByDate || {}).forEach((dayAppointments: any) => {
@@ -1438,7 +1414,6 @@ const NurseDashboard: React.FC = () => {
             allAppointments.push(transformed);
           });
         });
-        console.log('📅 Transformed appointments for month view:', allAppointments);
         fetchedAppointments = allAppointments;
       } else if (calendarView === 'week') {
         // Use enhanced week view API
@@ -1454,7 +1429,6 @@ const NurseDashboard: React.FC = () => {
         const weekStartString = `${year}-${month}-${day}`;
         
         const response = await ehrApi.getWeekView(weekStartString, token, tenantSlug!);
-        console.log('📅 Week view API response:', response.data);
         // Flatten appointmentsByDay into array and transform structure
         const allAppointments: Appointment[] = [];
         Object.values(response.data.appointmentsByDay || {}).forEach((dayAppointments: any) => {
@@ -1499,7 +1473,6 @@ const NurseDashboard: React.FC = () => {
             allAppointments.push(transformed);
           });
         });
-        console.log('📅 Transformed appointments for week view:', allAppointments);
         fetchedAppointments = allAppointments;
       } else {
         // Day view - use existing API
@@ -1511,7 +1484,6 @@ const NurseDashboard: React.FC = () => {
           return `${year}-${month}-${day}`;
         };
         const dateStr = getLocalDateString(calendarDate);
-        console.log('📅 Fetching calendar appointments for date:', dateStr);
         const response = await ehrApi.getAppointments(token, tenantSlug!, { date: dateStr });
         fetchedAppointments = response.data.appointments || [];
       }
@@ -1541,10 +1513,6 @@ const NurseDashboard: React.FC = () => {
     const dayAppointments = getAppointmentsForDate(calendarDate, appointmentsToDisplay);
     const isToday = calendarDate.toDateString() === today.toDateString();
     
-    console.log('📅 Calendar render - View:', calendarView);
-    console.log('📅 Calendar render - Total appointments:', appointmentsToDisplay.length);
-    console.log('📅 Calendar render - Selected day appointments:', dayAppointments.length);
-
     return (
       <div className="space-y-6">
         {/* Today's Schedule Header */}
@@ -2077,12 +2045,10 @@ const NurseDashboard: React.FC = () => {
           <TaskManagement 
             currentUser={currentUser}
             appointments={appointments}
-            onTaskComplete={(taskId) => {
-              console.log('Task completed:', taskId);
+            onTaskComplete={(_taskId) => {
               // Could trigger refresh of other data
             }}
-            onTaskUpdate={(task) => {
-              console.log('Task updated:', task);
+            onTaskUpdate={(_task) => {
               // Could update task in real-time
             }}
             onTaskCountsChange={(counts) => {
@@ -2098,7 +2064,6 @@ const NurseDashboard: React.FC = () => {
             acknowledgedAlertIds={acknowledgedAlertIds}
             onAlertAcknowledge={handleAlertAcknowledge}
             onAlertDismiss={(alertId) => {
-              console.log('Alert dismissed:', alertId);
               handleAlertAcknowledge(alertId);
             }}
             onAlertCountsChange={(counts) => {
@@ -2630,9 +2595,8 @@ const NurseDashboard: React.FC = () => {
             tenantSlug={tenantSlug || ''}
             token={localStorage.getItem('ehr_token') || ''}
             patientId={selectedPatient?.id}
-            onTestComplete={(testData) => {
+            onTestComplete={(_testData) => {
               // Handle test completion
-              console.log('HIV test completed:', testData);
             }}
           />
         )}
@@ -2644,8 +2608,7 @@ const NurseDashboard: React.FC = () => {
             tenantSlug={tenantSlug || ''}
             token={localStorage.getItem('ehr_token') || ''}
             patientId={selectedPatient?.id}
-            onScreeningComplete={(screeningData) => {
-              console.log('TB screening completed:', screeningData);
+            onScreeningComplete={(_screeningData) => {
             }}
           />
         )}

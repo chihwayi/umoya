@@ -1119,6 +1119,26 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  searchGuidelines: async (
+    query: string,
+    token: string,
+    tenantSlug: string,
+    limit: number = 5,
+    patientContext?: any
+  ) => {
+    const response = await ehrAxios.post('/cdss/guidelines/search', {
+      query,
+      limit,
+      patient_context: patientContext
+    }, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
       headers: { 

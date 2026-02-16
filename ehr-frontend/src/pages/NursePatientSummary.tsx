@@ -150,7 +150,7 @@ const NursePatientSummary: React.FC = () => {
       
       setPatient({ ...patientData, age });
     } catch (error) {
-      console.error('Error fetching patient details:', error);
+      console.error('Error fetching patient details');
       showError('Error', 'Failed to fetch patient details');
     }
   };
@@ -168,16 +168,12 @@ const NursePatientSummary: React.FC = () => {
         (apt: any) => apt.patient.id === patientId
       );
       
-      console.log('🔍 NursePatientSummary - All appointments:', allAppointments.length);
-      console.log('🔍 NursePatientSummary - Patient appointments:', patientAppointments.length);
-
       // Fetch vitals for the patient
       let allVitals: any[] = [];
       try {
         const vitalsResponse = await ehrApi.getVitals(patientId!, token, tenantSlug!);
         allVitals = vitalsResponse.data.vitals || [];
       } catch (error) {
-        console.log('No vitals found for patient:', error);
         allVitals = [];
       }
 
@@ -185,11 +181,8 @@ const NursePatientSummary: React.FC = () => {
       let nursingNotes: any[] = [];
       try {
         const notesResponse = await ehrApi.getNursingNotes(patientId!, token, tenantSlug!);
-        console.log('🔍 NursePatientSummary - Nursing notes response:', notesResponse);
         nursingNotes = notesResponse.data.notes || [];
-        console.log('🔍 NursePatientSummary - Nursing notes extracted:', nursingNotes);
       } catch (error) {
-        console.log('No nursing notes found for patient:', error);
         nursingNotes = [];
       }
 
@@ -200,7 +193,6 @@ const NursePatientSummary: React.FC = () => {
         fetchedProblems = problemsResponse.data || [];
         setProblems(fetchedProblems);
       } catch (error) {
-        console.log('No problems found for patient:', error);
         setProblems([]);
       }
 
@@ -211,7 +203,6 @@ const NursePatientSummary: React.FC = () => {
         fetchedAllergies = allergiesResponse.data || [];
         setAllergies(fetchedAllergies);
       } catch (error) {
-        console.log('No allergies found for patient:', error);
         setAllergies([]);
       }
 
@@ -219,11 +210,8 @@ const NursePatientSummary: React.FC = () => {
       let triageAssessments: any[] = [];
       try {
         const triageResponse = await ehrApi.getTriageAssessments(patientId!, token, tenantSlug!);
-        console.log('🔍 NursePatientSummary - Triage response:', triageResponse);
         triageAssessments = triageResponse.data.triageAssessments || [];
-        console.log('🔍 NursePatientSummary - Triage extracted:', triageAssessments);
       } catch (error) {
-        console.log('No triage assessments found for patient:', error);
         triageAssessments = [];
       }
 
@@ -272,14 +260,9 @@ const NursePatientSummary: React.FC = () => {
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
-      console.log('🔍 NursePatientSummary - Vitals found:', allVitals.length);
-      console.log('🔍 NursePatientSummary - Nursing notes found:', nursingNotes.length);
-      console.log('🔍 NursePatientSummary - Triage assessments found:', triageAssessments.length);
-      console.log('🔍 NursePatientSummary - Visit summaries created:', sortedVisits.length);
-
       setVisitSummaries(sortedVisits);
     } catch (error) {
-      console.error('Error fetching patient history:', error);
+      console.error('Error fetching patient history');
       showError('Error', 'Failed to fetch patient history');
     } finally {
       setLoading(false);
