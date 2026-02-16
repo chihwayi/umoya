@@ -60,6 +60,12 @@ interface PatientVitals {
   notes: string;
   recordedAt: string;
   recordedBy: string;
+  recordedByUser?: {
+    firstName?: string;
+    lastName?: string;
+  };
+  recordedByName?: string;
+  recorded_by_name?: string;
 }
 
 interface NursingNote {

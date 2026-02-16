@@ -105,6 +105,12 @@ interface PatientVitals {
   bloodGlucose?: number;
   recordedAt: string;
   recordedBy: string;
+  recordedByUser?: {
+    firstName?: string;
+    lastName?: string;
+  };
+  recordedByName?: string;
+  recorded_by_name?: string;
 }
 
 interface VitalsAlert {
