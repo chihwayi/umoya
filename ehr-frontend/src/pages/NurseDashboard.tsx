@@ -160,6 +160,8 @@ const NurseDashboard: React.FC = () => {
   const [selectedPatientForWorkflow, setSelectedPatientForWorkflow] = useState<Patient | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
+  const [nurseCopilotKpis, setNurseCopilotKpis] = useState<any | null>(null);
+  const [nurseCopilotKpisLoading, setNurseCopilotKpisLoading] = useState(false);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCarePlansModal, setShowCarePlansModal] = useState(false);
@@ -220,6 +222,7 @@ const NurseDashboard: React.FC = () => {
           { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
           { label: 'My Tasks', tab: 'tasks', icon: Activity },
           { label: 'Safety Alerts', tab: 'alerts', icon: Bell },
+          { label: 'Copilot KPIs', tab: 'copilot-metrics', icon: BarChart3 },
           { label: 'Today\'s Schedule', tab: 'calendar', icon: Calendar },
           { label: 'Patients', tab: 'patients', icon: Users },
           { label: 'Patient Queue', tab: 'queue', icon: Activity },
@@ -270,10 +273,12 @@ const NurseDashboard: React.FC = () => {
   const [notesCopilotLoading, setNotesCopilotLoading] = useState(false);
   const [handoffCopilotLoading, setHandoffCopilotLoading] = useState(false);
   const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
+  const [triageSuggestedPriority, setTriageSuggestedPriority] = useState<'urgent' | 'high' | 'normal' | 'low' | null>(null);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
   const [notesCopilotDraft, setNotesCopilotDraft] = useState<string>('');
   const [notesCopilotProvenance, setNotesCopilotProvenance] = useState<string[]>([]);
   const [handoffCopilotSummary, setHandoffCopilotSummary] = useState<string>('');
+  const [handoffCopilotMeta, setHandoffCopilotMeta] = useState<any | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
   const [handoffWorkflowLoading, setHandoffWorkflowLoading] = useState(false);
   const [handoffActionLoading, setHandoffActionLoading] = useState(false);
@@ -627,6 +632,29 @@ const NurseDashboard: React.FC = () => {
     }
   }, [activeSection, activeTab, tenantSlug, ltfuDays]);
 
+  useEffect(() => {
+    if (activeTab !== 'copilot-metrics') {
+      return;
+    }
+    const token = localStorage.getItem('ehr_token');
+    const activeTenant = resolveTenantSlug();
+    if (!token || !activeTenant) {
+      return;
+    }
+    const loadKpis = async () => {
+      try {
+        setNurseCopilotKpisLoading(true);
+        const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
+        setNurseCopilotKpis(res.data || null);
+      } catch (error) {
+        console.error('Failed to load nurse copilot KPIs', error);
+      } finally {
+        setNurseCopilotKpisLoading(false);
+      }
+    };
+    loadKpis();
+  }, [activeTab]);
+
   const fetchAuthorizedOrders = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
@@ -927,19 +955,55 @@ const NurseDashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
-      const patientContext = targetPatient || selectedPatient;
+      let patientContext = targetPatient || selectedPatient;
       if (!token || !activeTenant || !patientContext) {
         showError('Missing context', 'Select a patient and ensure session is active.');
         return;
       }
+
+      if ((!patientContext.dateOfBirth || !patientContext.gender) && patientContext.id) {
+        try {
+          const enrichedResponse = await ehrApi.getPatientById(patientContext.id, token, activeTenant);
+          if (enrichedResponse?.data) {
+            patientContext = {
+              ...patientContext,
+              dateOfBirth: enrichedResponse.data.dateOfBirth || patientContext.dateOfBirth,
+              gender: enrichedResponse.data.gender || patientContext.gender,
+            };
+          }
+        } catch (e) {
+        }
+      }
+
+      const derivedAge =
+        typeof patientContext.age === 'number' && !Number.isNaN(patientContext.age)
+          ? patientContext.age
+          : patientContext.dateOfBirth
+          ? (() => {
+              const dob = new Date(patientContext.dateOfBirth);
+              if (Number.isNaN(dob.getTime())) {
+                return undefined;
+              }
+              const diffMs = new Date().getTime() - dob.getTime();
+              if (!Number.isFinite(diffMs) || diffMs <= 0) {
+                return undefined;
+              }
+              return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25));
+            })()
+          : undefined;
+
+      const normalizedGender =
+        typeof patientContext.gender === 'string' && patientContext.gender.trim().length > 0
+          ? patientContext.gender
+          : undefined;
 
       setTriageCopilotLoading(true);
       const vitals = sourceAppointment?.vitals || getSelectedPatientLatestVitals();
       const response = await ehrApi.analyzeTriageCopilot(
         {
           patientId: patientContext.id,
-          age: patientContext.age,
-          gender: patientContext.gender,
+          age: derivedAge,
+          gender: normalizedGender,
           chiefComplaint: sourceAppointment?.reason || appointments.find(a => a.patient.id === patientContext.id)?.reason || '',
           symptoms: appointments
             .filter(a => a.patient.id === patientContext.id)
@@ -953,6 +1017,20 @@ const NurseDashboard: React.FC = () => {
         activeTenant
       );
       setTriageCopilotResult(response.data || null);
+      if (response.data?.suggestedTriageLevel) {
+        const level = String(response.data.suggestedTriageLevel).toLowerCase();
+        let mapped: 'urgent' | 'high' | 'normal' | 'low' | null = null;
+        if (level.includes('resuscitation') || level.includes('emergency') || level === 'immediate') {
+          mapped = 'urgent';
+        } else if (level.includes('semi-urgent') || level.includes('semiurgent') || level === 'semi_urgent') {
+          mapped = 'high';
+        } else if (level.includes('non-urgent') || level.includes('nonurgent') || level === 'non_urgent') {
+          mapped = 'normal';
+        } else if (['urgent', 'high', 'normal', 'low'].includes(level)) {
+          mapped = level as 'urgent' | 'high' | 'normal' | 'low';
+        }
+        setTriageSuggestedPriority(mapped);
+      }
       showSuccess('Triage Copilot Ready', 'Review and confirm suggestions before applying clinically.');
     } catch (error) {
       console.error('Triage copilot failed', error);
@@ -1075,6 +1153,7 @@ const NurseDashboard: React.FC = () => {
       );
 
       setHandoffCopilotSummary(response.data?.summary || '');
+      setHandoffCopilotMeta(response.data || null);
       if (response.data?.summary) {
         showSuccess('Handoff Summary Ready', 'Review before sharing with next shift.');
       } else {
@@ -2469,6 +2548,152 @@ const NurseDashboard: React.FC = () => {
           />
         )}
 
+        {activeTab === 'copilot-metrics' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
+                    <BarChart3 className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Nurse Copilot KPIs</h2>
+                    <p className="text-sm text-slate-600">
+                      Time-to-triage, documentation time, alert response, and usage patterns.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const token = localStorage.getItem('ehr_token');
+                    const activeTenant = resolveTenantSlug();
+                    if (!token || !activeTenant) {
+                      return;
+                    }
+                    try {
+                      setNurseCopilotKpisLoading(true);
+                      const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
+                      setNurseCopilotKpis(res.data || null);
+                    } catch (error) {
+                      console.error('Failed to refresh nurse copilot KPIs', error);
+                    } finally {
+                      setNurseCopilotKpisLoading(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-semibold text-sm"
+                >
+                  <RefreshCw className={`w-4 h-4 ${nurseCopilotKpisLoading ? 'animate-spin' : ''}`} />
+                  Refresh KPIs
+                </button>
+              </div>
+
+              {nurseCopilotKpisLoading && (
+                <div className="py-12 flex flex-col items-center justify-center">
+                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
+                  <p className="text-sm text-slate-600">Loading nurse copilot metrics...</p>
+                </div>
+              )}
+
+              {!nurseCopilotKpisLoading && nurseCopilotKpis && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Total Recommendations</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {nurseCopilotKpis.recommendationsTotal ?? 0}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Total Decisions</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {nurseCopilotKpis.decisionsTotal ?? 0}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Avg Time to Triage</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {nurseCopilotKpis.timeToTriage?.averageSeconds != null
+                          ? `${Math.round(nurseCopilotKpis.timeToTriage.averageSeconds)}s`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-1">Avg Alert Response</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {nurseCopilotKpis.alertResponse?.averageSeconds != null
+                          ? `${Math.round(nurseCopilotKpis.alertResponse.averageSeconds)}s`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-3">Recommendations by Type</p>
+                      <div className="space-y-2 text-sm text-slate-700">
+                        {Object.entries(nurseCopilotKpis.recommendationsByType || {}).map(([key, value]) => (
+                          <div key={key} className="flex items-center justify-between">
+                            <span className="capitalize">{key}</span>
+                            <span className="font-semibold">{value as number}</span>
+                          </div>
+                        ))}
+                        {(!nurseCopilotKpis.recommendationsByType ||
+                          Object.keys(nurseCopilotKpis.recommendationsByType).length === 0) && (
+                          <p className="text-xs text-slate-500">No recommendations recorded yet.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-3">Decisions by Type</p>
+                      <div className="space-y-2 text-sm text-slate-700">
+                        {Object.entries(nurseCopilotKpis.decisionsByType || {}).map(([key, value]) => (
+                          <div key={key} className="flex items-center justify-between">
+                            <span className="capitalize">{key}</span>
+                            <span className="font-semibold">{value as number}</span>
+                          </div>
+                        ))}
+                        {(!nurseCopilotKpis.decisionsByType ||
+                          Object.keys(nurseCopilotKpis.decisionsByType).length === 0) && (
+                          <p className="text-xs text-slate-500">No decisions recorded yet.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-3">Documentation Duration</p>
+                      <div className="space-y-2 text-sm text-slate-700">
+                        <div className="flex items-center justify-between">
+                          <span>Samples</span>
+                          <span className="font-semibold">
+                            {nurseCopilotKpis.documentation?.samples ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Average</span>
+                          <span className="font-semibold">
+                            {nurseCopilotKpis.documentation?.averageSeconds != null
+                              ? `${Math.round(nurseCopilotKpis.documentation.averageSeconds)}s`
+                              : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!nurseCopilotKpisLoading && !nurseCopilotKpis && (
+                <div className="py-12 flex flex-col items-center justify-center">
+                  <Activity className="w-10 h-10 text-slate-300 mb-3" />
+                  <p className="text-sm text-slate-600">
+                    No nurse copilot metrics available yet. Metrics will appear after copilot usage.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'alerts' && (
           <PatientSafetyAlerts 
             currentUser={currentUser}
@@ -2975,26 +3200,137 @@ const NurseDashboard: React.FC = () => {
                   <h3 className="text-sm font-semibold text-amber-900">Triage Copilot</h3>
                   <p className="text-xs text-amber-700">Use as decision support only. Confirm before saving triage.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleTriageCopilotAnalyze()}
-                  disabled={triageCopilotLoading || !selectedPatient}
-                  className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {triageCopilotLoading ? 'Analyzing...' : 'Analyze Triage Context'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTriageCopilotAnalyze()}
+                    disabled={triageCopilotLoading || !selectedPatient}
+                    className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {triageCopilotLoading ? 'Analyzing...' : 'Analyze Triage Context'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('main');
+                      setActiveTab('copilot-metrics');
+                    }}
+                    className="px-3 py-2 rounded-lg border border-amber-300 text-amber-800 text-xs font-semibold bg-amber-50 hover:bg-amber-100"
+                  >
+                    View Copilot KPIs
+                  </button>
+                </div>
               </div>
               {triageCopilotResult && (
-                <div className="mt-3 text-sm text-slate-700 space-y-1">
-                  <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
-                  <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
-                  {Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0 && (
-                    <p><strong>Top Reason:</strong> {String(triageCopilotResult.reasons[0])}</p>
-                  )}
-                  <div className="mt-2 flex gap-2">
-                    <button type="button" onClick={() => handleCopilotDecision('triage', 'accept', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
-                    <button type="button" onClick={() => handleCopilotDecision('triage', 'modify', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
-                    <button type="button" onClick={() => handleCopilotDecision('triage', 'reject', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
+                <div className="mt-3 text-sm text-slate-700 space-y-2">
+                  <div>
+                    <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                    {triageCopilotResult.riskLevel &&
+                      ['high', 'critical'].includes(String(triageCopilotResult.riskLevel).toLowerCase()) && (
+                        <p className="text-xs text-red-700">
+                          Escalation suggested: consider urgent provider review and continuous monitoring.
+                        </p>
+                    )}
+                    <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
+                    {(() => {
+                      let topReason: string | null = null;
+                      if (Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0) {
+                        topReason = String(triageCopilotResult.reasons[0]);
+                      } else if (Array.isArray(triageCopilotResult.risk?.factors) && triageCopilotResult.risk.factors.length > 0) {
+                        const f = triageCopilotResult.risk.factors[0];
+                        topReason = String((f && (f.name || f.factor || f.label)) || f || '');
+                      }
+                      return topReason ? (
+                        <p><strong>Top Reason:</strong> {topReason}</p>
+                      ) : null;
+                    })()}
+                    {Array.isArray(triageCopilotResult.missingData) && triageCopilotResult.missingData.length > 0 && (
+                      <p>
+                        <strong>Missing data:</strong>{' '}
+                        {triageCopilotResult.missingData
+                          .map((field: string) => {
+                            if (!field) return '';
+                            const key = field.toString();
+                            if (key === 'chiefComplaint') return 'Chief complaint';
+                            if (key === 'age') return 'Age';
+                            if (key === 'gender') return 'Gender';
+                            if (key === 'vitals') return 'Vitals';
+                            return key;
+                          })
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-600 space-y-1">
+                    <p className="font-semibold text-slate-700">Transparency</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-[11px] font-semibold text-amber-800">
+                        Source: {triageCopilotResult.source || 'CDSS Nurse Triage Copilot'}
+                      </span>
+                      {triageCopilotResult.audit?.modelVersion && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700">
+                          Model: {String(triageCopilotResult.audit.modelVersion)}
+                        </span>
+                      )}
+                      {typeof triageCopilotResult.risk?.overall_score === 'number' && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-[11px] font-semibold text-indigo-800">
+                          Confidence score: {triageCopilotResult.risk.overall_score.toFixed(1)}
+                        </span>
+                      )}
+                      {triageCopilotResult.audit?.promptContextHash && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700">
+                          Context hash: {String(triageCopilotResult.audit.promptContextHash).slice(0, 8)}…
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopilotDecision('triage', 'accept', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
+                      className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopilotDecision('triage', 'modify', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
+                      className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold"
+                    >
+                      Modify
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopilotDecision('triage', 'reject', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
+                      className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!triageCopilotResult?.suggestedTriageLevel) return;
+                        const level = String(triageCopilotResult.suggestedTriageLevel).toLowerCase();
+                        let mapped: 'urgent' | 'high' | 'normal' | 'low' | null = null;
+                        if (level.includes('resuscitation') || level.includes('emergency') || level === 'immediate') {
+                          mapped = 'urgent';
+                        } else if (level.includes('semi-urgent') || level.includes('semiurgent') || level === 'semi_urgent') {
+                          mapped = 'high';
+                        } else if (level.includes('non-urgent') || level.includes('nonurgent') || level === 'non_urgent') {
+                          mapped = 'normal';
+                        } else if (['urgent', 'high', 'normal', 'low'].includes(level)) {
+                          mapped = level as 'urgent' | 'high' | 'normal' | 'low';
+                        }
+                        setTriageSuggestedPriority(mapped);
+                        if (mapped) {
+                          showSuccess('Suggestion applied', `Triage priority set to ${mapped} from copilot recommendation.`);
+                        }
+                      }}
+                      className="px-2 py-1 rounded border border-amber-300 text-amber-800 text-xs font-semibold bg-amber-50 hover:bg-amber-100"
+                    >
+                      Apply suggestion to form
+                    </button>
                   </div>
                 </div>
               )}
@@ -3002,6 +3338,7 @@ const NurseDashboard: React.FC = () => {
             <PatientAssessment 
               patient={selectedPatient || undefined}
               appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))} 
+              suggestedPriority={triageSuggestedPriority || undefined}
               onSave={() => {
                 fetchTodayAppointments();
                 showSuccess('Triage Saved', 'Assessment recorded successfully.');
@@ -3064,7 +3401,7 @@ const NurseDashboard: React.FC = () => {
                     <h3 className="text-sm font-semibold text-emerald-900">Smart Charting Copilot</h3>
                     <p className="text-xs text-emerald-700">Generate draft notes and handoff summary. Review before use.</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={handleGenerateNursingDraft}
@@ -3080,6 +3417,16 @@ const NurseDashboard: React.FC = () => {
                       className="px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
                     >
                       {handoffCopilotLoading ? 'Summarizing...' : 'Generate Handoff'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSection('main');
+                        setActiveTab('copilot-metrics');
+                      }}
+                      className="px-3 py-2 rounded-lg border border-emerald-300 text-emerald-800 text-xs font-semibold bg-emerald-50 hover:bg-emerald-100"
+                    >
+                      View Copilot KPIs
                     </button>
                   </div>
                 </div>
@@ -3097,6 +3444,21 @@ const NurseDashboard: React.FC = () => {
                 {handoffCopilotSummary && (
                   <div className="rounded-lg bg-white border border-teal-200 p-3">
                     <p className="text-xs font-semibold text-teal-800 mb-1">Handoff Summary</p>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-teal-50 border border-teal-200 text-teal-800">
+                        Source: {handoffCopilotMeta?.source || 'CDSS Nurse Handoff Copilot'}
+                      </span>
+                      {handoffCopilotMeta?.audit?.modelVersion && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-slate-50 border border-slate-200 text-slate-700">
+                          Model: {String(handoffCopilotMeta.audit.modelVersion)}
+                        </span>
+                      )}
+                      {handoffCopilotMeta?.audit?.promptContextHash && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-slate-50 border border-slate-200 text-slate-700">
+                          Context hash: {String(handoffCopilotMeta.audit.promptContextHash).slice(0, 8)}…
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{handoffCopilotSummary}</p>
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                       <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
@@ -3540,6 +3902,7 @@ const NurseDashboard: React.FC = () => {
               <PatientAssessment
                 patient={selectedPatient}
                 appointments={appointments.filter(apt => apt.patient.id === selectedPatient?.id)}
+                suggestedPriority={triageSuggestedPriority || undefined}
                 onClose={() => setShowAssessmentModal(false)}
                 onSave={() => {
                   setShowAssessmentModal(false);

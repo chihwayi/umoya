@@ -249,6 +249,44 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     }
   };
 
+  const getQueueRiskLevel = (appointment: Appointment): 'low' | 'medium' | 'high' => {
+    let level = 0;
+
+    if (appointment.priorityLevel === 'urgent' || appointment.priorityLevel === 'high') {
+      level = Math.max(level, 2);
+    }
+
+    const vitals = appointment.vitals || null;
+    const criticalVitals = vitals ? getCriticalVitals(vitals) : [];
+    if (criticalVitals.some((alert) => alert.severity === 'high')) {
+      level = Math.max(level, 2);
+    } else if (criticalVitals.length > 0) {
+      level = Math.max(level, 1);
+    }
+
+    const hasAllergies = !!appointment.patient?.allergies && appointment.patient.allergies.trim().length > 0;
+    const hasConditions = !!appointment.patient?.chronicConditions && appointment.patient.chronicConditions.trim().length > 0;
+    if (hasAllergies || hasConditions || isElderly(appointment.patient?.dateOfBirth)) {
+      level = Math.max(level, 1);
+    }
+
+    if (level >= 2) return 'high';
+    if (level === 1) return 'medium';
+    return 'low';
+  };
+
+  const getQueueRiskColor = (risk: 'low' | 'medium' | 'high') => {
+    switch (risk) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'low':
+      default:
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    }
+  };
+
   const handleStatusChange = async (appointment: Appointment, newStatus: string) => {
     if (!ensurePaymentCleared(appointment, 'Cannot update appointment status while payment is pending')) {
       return;
@@ -472,6 +510,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
               !!latestVitals.recordedAt &&
               new Date(latestVitals.recordedAt).toDateString() ===
                 new Date(appointment.appointmentDate).toDateString();
+            const queueRiskLevel = getQueueRiskLevel(appointment);
 
             return (
               <div key={appointment.id} className={`p-8 transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
@@ -500,6 +539,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         </span>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appointment.status)}`}>
                           {appointment.status}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getQueueRiskColor(queueRiskLevel)}`}>
+                          Queue risk: {queueRiskLevel === 'high' ? 'High' : queueRiskLevel === 'medium' ? 'Medium' : 'Low'}
                         </span>
                         <span className="text-sm text-slate-500">
                           {formatDateTimeToDDMMYYYYHHMM(appointment.appointmentDate)}

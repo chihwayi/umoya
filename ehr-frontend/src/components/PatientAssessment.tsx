@@ -37,12 +37,24 @@ interface PatientAssessmentProps {
   appointments?: AppointmentLite[];
   onClose?: () => void;
   onSave?: () => void;
+  suggestedPriority?: 'urgent' | 'high' | 'normal' | 'low';
 }
 
-const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointments = [], onClose, onSave }) => {
+const PatientAssessment: React.FC<PatientAssessmentProps> = ({
+  patient,
+  appointments = [],
+  onClose,
+  onSave,
+  suggestedPriority,
+}) => {
   const { showSuccess, showError } = useNotification();
 
-  const [chiefComplaint, setChiefComplaint] = useState('');
+  const [chiefComplaint, setChiefComplaint] = useState(() => {
+    if (appointments.length > 0 && appointments[0]?.reason) {
+      return appointments[0].reason;
+    }
+    return '';
+  });
   const [chiefComplaintConcept, setChiefComplaintConcept] = useState<SnomedConcept | null>(null);
   const [symptoms, setSymptoms] = useState('');
   const [symptomsConcepts, setSymptomsConcepts] = useState<SnomedConcept[]>([]);
@@ -259,6 +271,18 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
       console.error('Failed to record triage copilot decision', error);
     }
   };
+
+  useEffect(() => {
+    if (!chiefComplaint && appointments.length > 0 && appointments[0]?.reason) {
+      setChiefComplaint(appointments[0].reason);
+    }
+  }, [appointments, chiefComplaint]);
+
+  useEffect(() => {
+    if (suggestedPriority) {
+      setPriority(suggestedPriority);
+    }
+  }, [suggestedPriority]);
 
   // Load existing allergies from structured table when patient is selected
   useEffect(() => {
@@ -1168,7 +1192,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({ patient, appointm
               <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
                 <Activity className="w-5 h-5 text-white" />
               </div>
-              <h4 className="text-sm font-bold text-slate-900">Severity Score</h4>
+              <h4 className="text-sm font-bold text-slate-900">Triage severity index (derived)</h4>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-3xl font-bold text-indigo-600">{severityScore}</span>

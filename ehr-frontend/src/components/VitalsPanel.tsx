@@ -426,7 +426,11 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
           </div>
           {showBadge && (
             <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${badge}`}>
-              {direction === 'up' ? 'Rising' : direction === 'down' ? 'Falling' : 'Stable'}
+              {direction === 'up'
+                ? 'Trend: rising'
+                : direction === 'down'
+                ? 'Trend: falling'
+                : 'Trend: flat'}
               {direction !== 'stable' && ` ${Math.abs(delta).toFixed(1)}`}
             </span>
           )}

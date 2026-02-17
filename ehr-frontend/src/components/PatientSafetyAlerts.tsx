@@ -22,6 +22,8 @@ interface SafetyAlert {
   requiresAction: boolean;
   actionRequired?: string;
   relatedData?: any;
+  whyShown?: string;
+  whyNow?: string;
 }
 
 interface PatientSafetyAlertsProps {
@@ -89,7 +91,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
             isActive: true,
             requiresAction: true,
             actionRequired: 'Verify medication compatibility',
-            relatedData: { allergies: apt.patient.allergies }
+            relatedData: { allergies: apt.patient.allergies },
+            whyShown: 'Patient has recorded allergies in chart.',
+            whyNow: 'Alert raised while patient is on today’s triage queue.'
           });
         }
 
@@ -136,7 +140,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                   isActive: true,
                   requiresAction: true,
                   actionRequired: 'Notify physician immediately',
-                  relatedData: { vitals }
+                  relatedData: { vitals },
+                  whyShown: 'Blood pressure is in critical range.',
+                  whyNow: 'Most recent vitals crossed critical BP threshold.'
                 });
               }
             }
@@ -157,7 +163,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
               isActive: true,
               requiresAction: true,
               actionRequired: 'Monitor closely and reassess',
-              relatedData: { vitals }
+              relatedData: { vitals },
+              whyShown: 'Heart rate outside defined safe range.',
+              whyNow: 'Latest vitals show tachycardia or bradycardia.'
             });
           }
 
@@ -176,7 +184,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
               isActive: true,
               requiresAction: true,
               actionRequired: 'Assess for infection or other causes',
-              relatedData: { vitals }
+              relatedData: { vitals },
+              whyShown: 'Temperature suggests fever or hypothermia.',
+              whyNow: 'Latest vitals temperature is outside configured range.'
             });
           }
 
@@ -195,7 +205,9 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
               isActive: true,
               requiresAction: true,
               actionRequired: 'Administer oxygen and notify physician',
-              relatedData: { vitals }
+              relatedData: { vitals },
+              whyShown: 'Oxygen saturation below 90%.',
+              whyNow: 'Latest vitals show hypoxia requiring urgent review.'
             });
           }
         }
@@ -544,6 +556,21 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
                         )}
                       </div>
                     </div>
+
+                      {expandedAlerts.has(alert.id) && (
+                        <div className="mt-3 text-xs text-slate-600 space-y-0.5">
+                          {(alert.whyShown || alert.whyNow) && (
+                            <>
+                              {alert.whyShown && (
+                                <p><span className="font-semibold">Why shown:</span> {alert.whyShown}</p>
+                              )}
+                              {alert.whyNow && (
+                                <p><span className="font-semibold">Why now:</span> {alert.whyNow}</p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">

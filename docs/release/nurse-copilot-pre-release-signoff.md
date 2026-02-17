@@ -85,6 +85,36 @@ Reviewer confirmation:
 - [~] Cross-functional reviewer approvals pending (security/compliance/ops)
 - [ ] Go-live approved
 
+### Reviewer Checklist (Security / Compliance / Ops)
+
+Use this quick checklist when performing the final reviews. Update the table below and then flip the corresponding `[~]` items to `[x]` in `docs/nurse-copilot-plan.md`.
+
+1. Security Review
+   - [ ] Confirm CDSS boundary and allowlist configuration match current deployment manifests
+   - [ ] Confirm no direct browser → CDSS clinical decision calls in running environment
+   - [ ] Confirm service-to-service auth is enforced for all CDSS endpoints
+   - [ ] Record decision and notes in the table below
+
+2. HIPAA Audit Logging Validation
+   - [ ] Trigger sample nurse copilot flows (triage, vitals, notes, handoff) in a non-production tenant
+   - [ ] Verify corresponding HIPAA audit events are present with model version and context hash
+   - [ ] Verify nurse task/alert accept/override events include decision + reason where applicable
+   - [ ] Record decision and notes in the table below
+
+3. Tenant Provisioning Validation
+   - [ ] Run or verify `sprint46_nurse_copilot` bundle execution on at least one new tenant
+   - [ ] Verify migration presence and table/index existence on at least one existing tenant
+   - [ ] Confirm `docs/deployment/database-provisioning.md` steps match actual run procedure
+   - [ ] Record decision and notes in the table below
+
+#### Cross-Functional Approval Record
+
+| Area        | Reviewer        | Date       | Decision (Approved / Changes required) | Notes |
+|------------|-----------------|-----------|----------------------------------------|-------|
+| Security   |                 |           |                                        |       |
+| HIPAA/Audit|                 |           |                                        |       |
+| Ops/DB     |                 |           |                                        |       |
+
 ## Signoff Summary
 
 - Engineering owner: `@codex`

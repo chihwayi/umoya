@@ -302,6 +302,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getNurseCopilotKpis: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/metrics/nurse-copilot/kpis', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   getAuditLogs: async (token: string, tenantSlug: string, params: any) => {
     const response = await ehrAxios.get('/hipaa-audit/logs', {
       headers: {

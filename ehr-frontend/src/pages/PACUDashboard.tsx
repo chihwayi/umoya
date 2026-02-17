@@ -153,7 +153,7 @@ const PACUDashboard: React.FC = () => {
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-slate-600 mb-1">Pain Score</p>
+                    <p className="text-xs text-slate-600 mb-1">Post-op pain score (0-10)</p>
                     <p className={`text-2xl font-bold ${getPainColor(patient.painScoreDischarge || patient.painScoreAdmission || 0)}`}>
                       {patient.painScoreDischarge || patient.painScoreAdmission || '-'}/10
                     </p>

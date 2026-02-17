@@ -28,6 +28,7 @@ interface Task {
   recurringPattern?: string;
   relatedAppointmentId?: string;
   relatedOrderId?: string;
+  source?: 'manual' | 'copilot';
 }
 
 interface TaskManagementProps {
@@ -701,6 +702,15 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
                         </span>
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStatusColor(task.status)}`}>
                           {task.status.replace('_', ' ').toUpperCase()}
+                        </span>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold border ${
+                            task.notes && task.notes.includes('[AI Priority')
+                              ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {task.notes && task.notes.includes('[AI Priority') ? 'SUGGESTED' : 'MANUAL'}
                         </span>
                         {task.notes && task.notes.includes('[AI Priority') && (
                           <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">

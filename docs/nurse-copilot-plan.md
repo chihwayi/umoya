@@ -57,20 +57,20 @@
 
 ### 1.5 PHI‑Minimized AI Inputs
 
-- [ ] Define allowed fields per AI/CDSS action (triage/vitals/notes)
-- [ ] Exclude direct identifiers unless strictly required
-- [ ] Document allowlist for prompt fields
+- [x] Define allowed fields per AI/CDSS action (triage/vitals/notes) (`@codex 2026-02-16`)
+- [x] Exclude direct identifiers unless strictly required (`@codex 2026-02-16`)
+- [x] Document allowlist for prompt fields (`@codex 2026-02-16`)
 
 ### 1.6 Reliability + Governance Baseline
 
-- [ ] Define fail-safe behavior when CDSS/AI is unavailable (nurse workflow must continue)
-- [ ] Add timeout and retry policy for AI calls with safe fallback messaging
-- [ ] Add recommendation transparency fields in responses
-  - [ ] why this recommendation
-  - [ ] confidence/uncertainty indicator
-  - [ ] source/provenance references
-- [ ] Define model versioning policy (active version, rollback version, release timestamp)
-- [ ] Define minimum retention and access policy for AI/CDSS audit logs
+- [x] Define fail-safe behavior when CDSS/AI is unavailable (nurse workflow must continue) (`@codex 2026-02-16`)
+- [x] Add timeout and retry policy for AI calls with safe fallback messaging (`@codex 2026-02-16`)
+- [x] Add recommendation transparency fields in responses (`@codex 2026-02-16`)
+  - [x] why this recommendation
+  - [x] confidence/uncertainty indicator
+  - [x] source/provenance references
+- [x] Define model versioning policy (active version, rollback version, release timestamp) (`@codex 2026-02-16`)
+- [x] Define minimum retention and access policy for AI/CDSS audit logs (`@codex 2026-02-16`)
 
 ---
 
@@ -86,8 +86,8 @@
   - [x] riskLevel: low/medium/high
   - [x] suggestedTriageLevel
   - [x] reasons[]
-  - [ ] missingData[]
-- [ ] Add queue risk badge per patient
+  - [x] missingData[] (`@codex 2026-02-16`)
+- [x] Add queue risk badge per patient (`@codex 2026-02-16`)
 - [x] Add triage suggestion panel with “Apply suggestion” button (`@codex 2026-02-16`)
 - [x] Require nurse confirmation before saving (`@codex 2026-02-16`)
 
@@ -105,8 +105,8 @@
 
 ### 2.4 Clinical Safety Guardrails
 
-- [ ] Define high-risk trigger thresholds that require escalation wording
-- [ ] Add explicit escalation suggestions for high-risk outputs
+- [x] Define high-risk trigger thresholds that require escalation wording (`@codex 2026-02-16`)
+- [x] Add explicit escalation suggestions for high-risk outputs (`@codex 2026-02-16`)
 - [x] Ensure non-diagnostic labeling is present in triage/vitals AI UI (`@codex 2026-02-16`)
 - [x] Add nurse override capture (accept/modify/reject + optional reason) (`@codex 2026-02-16`)
 
@@ -124,16 +124,16 @@
 
 ### 3.2 Next‑Best‑Action Task Feed
 
-- [ ] Define CDSS task generation rules
-- [ ] Store tasks server‑side with priority and reason
-- [ ] Show Suggested vs Manual tasks
-- [ ] Allow accept/dismiss with audit trail
+- [x] Define CDSS task generation rules (`@codex 2026-02-16`)
+- [x] Store tasks server‑side with priority and reason (`@codex 2026-02-16`)
+- [x] Show Suggested vs Manual tasks (`@codex 2026-02-16`)
+- [x] Allow accept/dismiss with audit trail (`@codex 2026-02-16`)
 
 ### 3.3 Patient Safety Alerts 2.0
 
-- [ ] Rank alerts by urgency + confidence + recency
-- [ ] Suppress repeated low‑value alerts
-- [ ] Display “why shown / why now” explanation
+- [x] Rank alerts by urgency + confidence + recency (`@codex 2026-02-16`)
+- [x] Suppress repeated low‑value alerts (`@codex 2026-02-16`)
+- [x] Display “why shown / why now” explanation (`@codex 2026-02-16`)
 
 ### 3.4 Nurse Handoff Summary Generator
 
@@ -144,14 +144,14 @@
 
 ### 3.5 Operations + Quality Measurement
 
-- [ ] Define KPI dashboard for nurse copilot outcomes
-  - [ ] time-to-triage
-  - [ ] documentation time per encounter
-  - [ ] alert acceptance/override rate
-  - [ ] high-risk alert response time
-- [ ] Add model quality monitoring by tenant and global aggregate
-- [ ] Add drift/degradation checks with rollback playbook
-- [ ] Add quarterly safety review cadence for AI recommendation quality
+- [x] Define KPI dashboard for nurse copilot outcomes (`@codex 2026-02-16`)
+  - [x] time-to-triage
+  - [x] documentation time per encounter
+  - [x] alert acceptance/override rate
+  - [x] high-risk alert response time
+- [x] Add model quality monitoring by tenant and global aggregate (`@codex 2026-02-16`)
+- [x] Add drift/degradation checks with rollback playbook (`@codex 2026-02-16`)
+- [x] Add quarterly safety review cadence for AI recommendation quality (`@codex 2026-02-16`)
 
 ---
 
@@ -163,8 +163,7 @@
 - [x] Human‑in‑the‑loop for all AI recommendations (`@codex 2026-02-16`)
 - [x] Full audit trail (model version, context hash, recommendation, action, timestamp) (`@codex 2026-02-16`)
 - [x] PHI‑minimized prompts and allowlist‑only egress (`@codex 2026-02-16`)
-- [~] Recommendation transparency in UI (why, confidence, provenance) (`@codex 2026-02-16`)
-  Remaining scope: align triage/handoff UI to surface why/confidence/provenance consistently alongside vitals.
+- [x] Recommendation transparency in UI (why, confidence, provenance) (`@codex 2026-02-16`)
 - [x] Safe fallback when AI/CDSS is unavailable (no workflow blockage) (`@codex 2026-02-16`)
 
 ---

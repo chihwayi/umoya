@@ -805,6 +805,14 @@ const NursePatientSummary: React.FC = () => {
                                 <span className="font-semibold text-slate-700">Pain Score:</span>
                                 <p className="text-slate-600">{visit.triageAssessment.painScore}/10</p>
                               </div>
+                              <div>
+                                <span className="font-semibold text-slate-700">Triage severity index:</span>
+                                <p className="text-slate-600">
+                                  {typeof visit.triageAssessment.severityScore === 'number'
+                                    ? `${visit.triageAssessment.severityScore}/10`
+                                    : '—'}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         )}
