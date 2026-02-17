@@ -5,6 +5,7 @@ import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import HIVQuickReferenceGuide from './HIVQuickReferenceGuide';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { getHivCdssConfig } from './HIV/hivCdssConfig';
 
 interface HIVClinicalVisitModalProps {
   enrollment: any;
@@ -20,6 +21,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   tenantSlug
 }) => {
   const { showSuccess, showError } = useNotification();
+  const cdssConfig = getHivCdssConfig(tenantSlug);
   const [loading, setLoading] = useState(false);
   const [loadingLookups, setLoadingLookups] = useState(true);
   const [lookups, setLookups] = useState<any>({});
@@ -2320,8 +2322,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="font-semibold text-slate-900 mb-3">Lab Results</h4>
                   
-                  {/* EAC Warning for High Viral Load */}
-                  {form.viralLoad && parseFloat(form.viralLoad) > 1000 && (
+                  {form.viralLoad && parseFloat(form.viralLoad) > cdssConfig.thresholds.highViralLoad && (
                     <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -2330,7 +2331,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                             ⚠️ High Viral Load Detected: {form.viralLoad} copies/mL
                           </p>
                           <p className="text-xs text-red-800">
-                            If this is the second consecutive VL &gt;1000 copies/mL (3-6 months apart), patient will require EAC (Enhanced Adherence Counseling) per WHO guidelines. Check the EAC tab in patient details after saving.
+                            {cdssConfig.messages.highViralLoadVisit}
                           </p>
                         </div>
                       </div>
@@ -2893,4 +2894,3 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
 };
 
 export default HIVClinicalVisitModal;
-

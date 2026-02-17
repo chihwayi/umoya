@@ -8,6 +8,7 @@ import HIVPatientSummaryCard from './HIVPatientSummaryCard';
 import { exportVisitToPDF, VisitPDFData } from '../utils/pdfExport';
 import { HIVCareVisitWithSmartForms, HIVWorkflowIntegration } from './HIV';
 import { GuidelineResult } from '../types/guidelines';
+import { getHivCdssConfig } from './HIV/hivCdssConfig';
 
 interface HIVPatientDetailModalProps {
   enrollment: any;
@@ -21,6 +22,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
   tenantSlug
 }) => {
   const { showError } = useNotification();
+  const cdssConfig = getHivCdssConfig(tenantSlug);
   const [loading, setLoading] = useState(true);
   const [patientDetails, setPatientDetails] = useState<any>(null);
   const [artInitiationDetails, setArtInitiationDetails] = useState<any>(null);
@@ -38,6 +40,12 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
   const [clinicalAlerts, setClinicalAlerts] = useState<any[]>([]);
   const [showSummaryCard, setShowSummaryCard] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const daysOnCare = enrollment.enrollment_date
+    ? Math.floor(
+        (new Date().getTime() - new Date(enrollment.enrollment_date).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    : 0;
 
   // AI Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -208,6 +216,110 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
     };
     return statuses[status] || status;
   };
+
+  const hivStatusBanner: any = (() => {
+    const hasConfirmedPositive = !!enrollment.date_confirmed_positive;
+    const onArt = !!enrollment.current_regimen;
+
+    const visitsWithVl = clinicalVisits.filter(
+      (v) => v.viral_load !== null && v.viral_load !== undefined
+    );
+
+    let latestVlVisit: any = null;
+    if (visitsWithVl.length > 0) {
+      latestVlVisit = [...visitsWithVl].sort((a, b) => {
+        const aDate = a.viral_load_test_date || a.visit_date;
+        const bDate = b.viral_load_test_date || b.visit_date;
+        return new Date(bDate || '').getTime() - new Date(aDate || '').getTime();
+      })[0];
+    }
+
+    if (!onArt && hasConfirmedPositive) {
+      return {
+        tone: 'danger',
+        title: 'HIV positive – not on ART',
+        description:
+          'Patient has confirmed HIV infection but no current ART regimen recorded.',
+        detail: 'WHO DAK: Ensure same-day ART initiation unless contraindicated.'
+      };
+    }
+
+    if (latestVlVisit && typeof latestVlVisit.viral_load === 'number') {
+      const vlValue = latestVlVisit.viral_load;
+      const vlDate = latestVlVisit.viral_load_test_date || latestVlVisit.visit_date;
+      const vlUnit = latestVlVisit.viral_load_unit || 'copies/mL';
+
+      if (vlValue > 1000) {
+        return {
+          tone: 'danger',
+          title: 'Unsuppressed viral load',
+          description: `Last VL ${vlValue} ${vlUnit} on ${
+            vlDate ? formatDateToDDMMYYYY(vlDate) : 'N/A'
+          }.`,
+          detail:
+            'WHO DAK: Provide enhanced adherence support and repeat VL in 3 months.'
+        };
+      }
+
+      return {
+        tone: 'good',
+        title: 'Viral load suppressed',
+        description: `Last VL ${vlValue} ${vlUnit} on ${
+          vlDate ? formatDateToDDMMYYYY(vlDate) : 'N/A'
+        }.`,
+        detail:
+          'WHO DAK: Continue current regimen and routine annual VL monitoring.'
+      };
+    }
+
+    if (onArt && daysOnCare > 180) {
+      return {
+        tone: 'warning',
+        title: 'No viral load on record',
+        description: `On ART for ${daysOnCare} days with no VL documented.`,
+        detail:
+          'WHO DAK: Ensure baseline and at least annual viral load testing is performed.'
+      };
+    }
+
+    return null;
+  })();
+
+  const eacStatusSummary: any = (() => {
+    if (!eacEligibility) {
+      return null;
+    }
+
+    if (eacEligibility.activeEac && eacEligibility.eacProgram) {
+      const sessionsCompleted =
+        eacEligibility.eacProgram.sessions_completed ?? 0;
+      const status =
+        eacEligibility.eacProgram.eac_program_status || 'Active';
+
+      return {
+        tone: 'info',
+        label: `EAC active (${status}) – ${sessionsCompleted} session${
+          sessionsCompleted === 1 ? '' : 's'
+        } completed`
+      };
+    }
+
+    if (eacEligibility.eacCompleted) {
+      if (eacEligibility.eacCompletedAndSuppressed) {
+        return {
+          tone: 'good',
+          label: 'EAC completed – viral load now suppressed'
+        };
+      }
+
+      return {
+        tone: 'warning',
+        label: 'EAC completed – monitor for sustained viral load suppression'
+      };
+    }
+
+    return null;
+  })();
 
   if (loading) {
     return (
@@ -445,6 +557,82 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                 </div>
               </div>
 
+              {hivStatusBanner && (
+                <div
+                  className={`rounded-xl p-6 border ${
+                    hivStatusBanner.tone === 'good'
+                      ? 'bg-emerald-50 border-emerald-200'
+                      : hivStatusBanner.tone === 'danger'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    {hivStatusBanner.tone === 'good' ? (
+                      <CheckCircle className="w-7 h-7 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <AlertTriangle
+                        className={`w-7 h-7 flex-shrink-0 ${
+                          hivStatusBanner.tone === 'danger'
+                            ? 'text-red-600'
+                            : 'text-amber-600'
+                        }`}
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h3
+                        className={`text-lg font-bold mb-1 ${
+                          hivStatusBanner.tone === 'good'
+                            ? 'text-emerald-900'
+                            : hivStatusBanner.tone === 'danger'
+                            ? 'text-red-900'
+                            : 'text-amber-900'
+                        }`}
+                      >
+                        {hivStatusBanner.title}
+                      </h3>
+                      <p className="text-sm text-slate-800 mb-1">
+                        {hivStatusBanner.description}
+                      </p>
+                      {hivStatusBanner.detail && (
+                        <p className="text-xs text-slate-700">
+                          {hivStatusBanner.detail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {eacStatusSummary && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div
+                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${
+                      eacStatusSummary.tone === 'good'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : eacStatusSummary.tone === 'danger'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : eacStatusSummary.tone === 'warning'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    }`}
+                  >
+                    {eacStatusSummary.tone === 'good' ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <Activity className="w-4 h-4" />
+                    )}
+                    <span>{eacStatusSummary.label}</span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('eac')}
+                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    View EAC details
+                  </button>
+                </div>
+              )}
+
               {/* Current Treatment */}
               <div className="bg-blue-50 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
@@ -491,7 +679,6 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* EAC Alert in Overview */}
               {eacEligibility?.needsEac && (
                 <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6">
                   <div className="flex items-start gap-4">
@@ -501,7 +688,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                         ⚠️ Patient Requires EAC (Enhanced Adherence Counseling)
                       </h3>
                       <p className="text-red-800 mb-3">
-                        Patient has 2 consecutive viral loads &gt;1000 copies/mL. Enhanced Adherence Counseling is required per WHO guidelines.
+                        {cdssConfig.messages.eacOverview}
                       </p>
                       <button
                         onClick={() => setActiveTab('eac')}
@@ -545,7 +732,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-slate-900">
-                        {enrollment.enrollment_date ? Math.floor((new Date().getTime() - new Date(enrollment.enrollment_date).getTime()) / (1000 * 60 * 60 * 24)) : 0}
+                        {daysOnCare}
                       </p>
                       <p className="text-sm text-slate-600">Days on Care</p>
                     </div>
@@ -570,7 +757,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                       </div>
                       <div>
                         <p className="font-semibold text-slate-900 group-hover:text-emerald-700">Record Clinical Visit</p>
-                        <p className="text-xs text-slate-600">Use WHO Smart Forms</p>
+                        <p className="text-xs text-slate-600">Optional WHO Smart Forms workflow</p>
                       </div>
                     </div>
                   </button>
@@ -586,8 +773,8 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                         <Workflow className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-900 group-hover:text-indigo-700">Start WHO Workflow</p>
-                        <p className="text-xs text-slate-600">Complete care continuum</p>
+                        <p className="font-semibold text-slate-900 group-hover:text-indigo-700">Open guided WHO workflow</p>
+                        <p className="text-xs text-slate-600">End-to-end HIV care continuum</p>
                       </div>
                     </div>
                   </button>
@@ -1135,14 +1322,14 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
                   <h3 className="text-lg font-bold text-slate-900">WHO Smart Guidelines Workflow</h3>
                 </div>
                 <p className="text-slate-700 mb-4">
-                  Use the complete WHO Smart Guidelines workflow to guide patients through Testing, Registration, ART Initiation, and Care & Treatment stages.
+                  Use the guided WHO workflow to support Testing, Registration, ART Initiation, and Care & Treatment stages.
                 </p>
                 <button
                   onClick={() => setShowWorkflowModal(true)}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors"
                 >
                   <Workflow className="w-4 h-4" />
-                  Start WHO Workflow
+                  Open guided WHO workflow
                 </button>
               </div>
               
@@ -1377,4 +1564,3 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
 };
 
 export default HIVPatientDetailModal;
-

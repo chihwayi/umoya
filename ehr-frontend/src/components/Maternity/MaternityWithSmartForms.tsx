@@ -91,14 +91,51 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
       const updatedFormData = { ...formData, ...formAnswers };
       setFormData(updatedFormData);
 
-      // Map and submit data based on form type
-      const mappedData = mapSmartFormToMaternity(updatedFormData, selectedFormId);
-      
-      // Submit to appropriate endpoint based on form type
+      const mappedData: any = mapSmartFormToMaternity(updatedFormData, selectedFormId);
+
       if (selectedFormId?.includes('E4') || selectedFormId?.includes('F8')) {
-        // HIV Testing
         if (patientId) {
-          await ehrApi.createHivTest(mappedData, token, tenantSlug);
+          const storedUser = localStorage.getItem('ehr_user');
+          const currentUser = storedUser ? JSON.parse(storedUser) : {};
+
+          const payload = {
+            patientId,
+            testedBy: currentUser.id,
+            testStage: mappedData.testStage || 'screening',
+            testType: mappedData.testType || 'rapid_antibody',
+            testingReason: mappedData.testingReason || 'diagnostic_symptomatic',
+            testingApproach: mappedData.testingApproach || 'facility',
+            testingLocation: mappedData.testingLocation || 'maternity',
+            testingCadre: mappedData.testingCadre || 'nurse',
+            specimenType: mappedData.specimenType || 'whole blood',
+            kitType: mappedData.kitType || 'rapid_diagnostic_test',
+            testKitName: mappedData.testKitName || 'Determine HIV-1/2',
+            testKitLot: mappedData.testKitLot || '',
+            testKitExpiry: mappedData.testKitExpiry || null,
+            dualKitUsed: mappedData.dualKitUsed ?? false,
+            testResult: mappedData.testResult,
+            resultValue: mappedData.resultValue || null,
+            resultUnit: mappedData.resultUnit || null,
+            selfTestReported: mappedData.selfTestReported ?? false,
+            selfTestConfirmed: mappedData.selfTestConfirmed ?? false,
+            recencyTestPerformed: mappedData.recencyTestPerformed ?? false,
+            recencyResult: mappedData.recencyResult || null,
+            recencyKitLot: mappedData.recencyKitLot || null,
+            recencyKitExpiry: mappedData.recencyKitExpiry || null,
+            partnerNotificationStatus: mappedData.partnerNotificationStatus || null,
+            linkageAction: mappedData.linkageAction || null,
+            linkageCompleted: mappedData.linkageCompleted ?? false,
+            nextTestDueDate: mappedData.nextTestDueDate || null,
+            notes: mappedData.notes || null,
+            followUpActions: mappedData.followUpActions || [],
+            testingContext: mappedData.testingContext || {},
+            testConcept: mappedData.testConcept,
+            specimenConcept: mappedData.specimenConcept,
+            stis: mappedData.stis || [],
+            whoSmartFormData: mappedData.whoSmartFormData || updatedFormData,
+          };
+
+          await ehrApi.createHivTest(payload, token, tenantSlug);
           showSuccess('Success', 'HIV test recorded using WHO Smart Form');
         }
       } else if (selectedFormId?.includes('F16')) {
@@ -122,15 +159,13 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
     }
   };
 
-  const mapSmartFormToMaternity = (formData: Record<string, any>, formId: string | null) => {
-    // Map WHO Smart Form answers to maternity structure
+  const mapSmartFormToMaternity = (formData: Record<string, any>, formId: string | null): any => {
     const baseData = {
       patientId: patientId || '',
       whoSmartFormData: formData,
     };
 
     if (formId?.includes('E4') || formId?.includes('F8')) {
-      // HIV Testing forms
       return {
         ...baseData,
         testDate: formData.testDate || new Date().toISOString().split('T')[0],
@@ -178,9 +213,9 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
           <div className="flex items-center gap-3">
             <Baby className="w-5 h-5 text-pink-600" />
             <div>
-              <h3 className="font-semibold text-slate-900">WHO Smart Forms for Maternity/PMTCT</h3>
+              <h3 className="font-semibold text-slate-900">WHO Maternity/PMTCT Workflow (optional)</h3>
               <p className="text-sm text-slate-600">
-                Use WHO-recommended forms for standardized maternity and PMTCT care
+                Optional WHO-aligned maternity and PMTCT steps. The regular Medicore maternity form remains the main form.
               </p>
             </div>
           </div>
@@ -213,5 +248,3 @@ export const MaternityWithSmartForms: React.FC<MaternityWithSmartFormsProps> = (
     </div>
   );
 };
-
-

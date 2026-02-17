@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Activity, TestTube, CheckCircle, Save, X, Loader2, Search, Brain } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { getHivCdssConfig } from './HIV/hivCdssConfig';
 
 type HIVNursePanelProps = {
   appointmentId: string;
@@ -30,6 +31,7 @@ const createInitialFormState = () => ({
 const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId, tenantSlug, token, onClose, onSaved }) => {
   const [loading, setLoading] = useState(false);
   const { showSuccess, showError } = useNotification();
+  const cdssConfig = getHivCdssConfig(tenantSlug);
   const [form, setForm] = useState(createInitialFormState);
   const [submitting, setSubmitting] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
@@ -312,17 +314,16 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
             )}
           </div>
 
-          {/* Standard CDSS prompts */}
           <div className="p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-4 h-4" />
               <span className="font-semibold">Standard Alerts</span>
             </div>
             <ul className="list-disc pl-5 space-y-1 text-xs">
-              <li>Viral Load due if {'>'}  6 months from last test</li>
-              <li>Consider TB testing if any symptom present</li>
-              <li>Ensure cotrimoxazole prophylaxis when indicated</li>
-              <li>For pregnancy/breastfeeding: ensure PMTCT linkage and VL monitoring</li>
+              <li>{cdssConfig.messages.nurseStandardVlDue}</li>
+              <li>{cdssConfig.messages.nurseStandardTbScreening}</li>
+              <li>{cdssConfig.messages.nurseStandardCotrimoxazole}</li>
+              <li>{cdssConfig.messages.nurseStandardPregnancy}</li>
             </ul>
           </div>
         </div>

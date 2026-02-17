@@ -515,7 +515,7 @@ async def service_to_service_auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     path = request.url.path
-    exempt_exact = {"/", "/health", "/openapi.json"}
+    exempt_exact = {"/", "/health", "/openapi.json", "/hiv/testing/algorithm"}
     exempt_prefixes = ("/docs", "/redoc", "/admin")
 
     if path in exempt_exact or any(path.startswith(prefix) for prefix in exempt_prefixes):
@@ -574,6 +574,11 @@ async def service_to_service_auth_middleware(request: Request, call_next):
                 auth_errors.append("Invalid service authentication token")
 
     if not auth_ok:
+        try:
+            error_summary = ", ".join(auth_errors) if auth_errors else "unknown"
+            print(f"[CDSS] Service auth failed for {path}: {error_summary}")
+        except Exception:
+            pass
         payload = {
             "code": "UNAUTHORIZED",
             "message": "Invalid service authentication credentials",

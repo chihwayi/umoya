@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Save, Calendar, User, ChevronRight, ChevronLeft, Check } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 
 interface HIVEnrollmentModalProps {
   patientId: string;
@@ -28,8 +29,8 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
   const totalSteps = 4;
 
   const [form, setForm] = useState({
-    // Step 1: Basic Enrollment
-    enrollmentDate: new Date().toISOString().split('T')[0],
+    // Step 1: Basic Enrollment Information
+    enrollmentDate: getTodayFormatted(),
     dateConfirmedPositive: new Date().toISOString().split('T')[0],
     baselineCd4: '',
     baselineViralLoad: '',
@@ -150,11 +151,17 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
 
       setLoading(true);
 
+      const mapDateForApi = (value: string) => {
+        if (!value) return null;
+        const iso = formatDateForAPI(value);
+        return iso || null;
+      };
+
       // Step 1: Create enrollment
       const enrollmentResponse = await ehrApi.enrollInHivCare({
         patientId,
-        enrollmentDate: form.enrollmentDate,
-        dateConfirmedPositive: form.dateConfirmedPositive,
+        enrollmentDate: mapDateForApi(form.enrollmentDate),
+        dateConfirmedPositive: mapDateForApi(form.dateConfirmedPositive),
         baselineCd4: form.baselineCd4 ? parseInt(form.baselineCd4) : null,
         baselineViralLoad: form.baselineViralLoad ? parseFloat(form.baselineViralLoad) : null,
         createdBy: currentUser.id,
@@ -170,7 +177,7 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         patientId,
         enrollmentId,
         oiArtNumber: form.oiArtNumber,
-        dateOfRegistration: form.dateOfRegistration,
+        dateOfRegistration: mapDateForApi(form.dateOfRegistration),
         nameOfRegistrationHealthCentre: form.nameOfRegistrationHealthCentre,
         ageAtRegistration: form.ageAtRegistration ? parseInt(form.ageAtRegistration) : null,
         sexAssignedAtBirth: form.sexAssignedAtBirth,
@@ -212,7 +219,7 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         orphanStatusDouble: form.orphanStatusDouble,
         orphanStatusSingle: form.orphanStatusSingle,
         orphanStatusNotOrphan: form.orphanStatusNotOrphan,
-        dateFirstConfirmedHivTest: form.dateFirstConfirmedHivTest || null,
+        dateFirstConfirmedHivTest: mapDateForApi(form.dateFirstConfirmedHivTest),
         institutionNameVctPmtct: form.institutionNameVctPmtct,
         hivTestUsedAntibody: form.hivTestUsedAntibody,
         hivTestUsedPcr: form.hivTestUsedPcr,
@@ -234,12 +241,12 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         medicalInsuranceMemberName: form.medicalInsuranceMemberName,
         medicalInsuranceRelationshipToMember: form.medicalInsuranceRelationshipToMember,
         consentPersonalTracing: form.consentPersonalTracing,
-        consentPersonalTracingDate: form.consentPersonalTracingDate || null,
+        consentPersonalTracingDate: mapDateForApi(form.consentPersonalTracingDate),
         consentIndexCaseTesting: form.consentIndexCaseTesting,
-        consentIndexCaseTestingDate: form.consentIndexCaseTestingDate || null,
+        consentIndexCaseTestingDate: mapDateForApi(form.consentIndexCaseTestingDate),
         disclosureHivStatus: form.disclosureHivStatus,
         disclosureHivStatusToWhom: form.disclosureHivStatusToWhom,
-        disclosureHivStatusFinalDate: form.disclosureHivStatusFinalDate || null,
+        disclosureHivStatusFinalDate: mapDateForApi(form.disclosureHivStatusFinalDate),
         disclosureHivStatusFinalToWhom: form.disclosureHivStatusFinalToWhom
       }, token, tenantSlug);
 
@@ -262,10 +269,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Enrollment Date *</label>
           <input
-            type="date"
+            type="text"
             value={form.enrollmentDate}
             onChange={(e) => setForm({ ...form, enrollmentDate: e.target.value })}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+            placeholder="dd/mm/yyyy"
             required
           />
         </div>
@@ -273,10 +281,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Date Confirmed Positive *</label>
           <input
-            type="date"
+            type="text"
             value={form.dateConfirmedPositive}
             onChange={(e) => setForm({ ...form, dateConfirmedPositive: e.target.value })}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+            placeholder="dd/mm/yyyy"
             required
           />
         </div>
@@ -351,10 +360,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Date of Registration *</label>
           <input
-            type="date"
+            type="text"
             value={form.dateOfRegistration}
             onChange={(e) => setForm({ ...form, dateOfRegistration: e.target.value })}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+            placeholder="dd/mm/yyyy"
             required
           />
         </div>
@@ -658,10 +668,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Date of First Confirmed HIV Test</label>
           <input
-            type="date"
+            type="text"
             value={form.dateFirstConfirmedHivTest}
             onChange={(e) => setForm({ ...form, dateFirstConfirmedHivTest: e.target.value })}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+            placeholder="dd/mm/yyyy"
           />
         </div>
 
@@ -821,11 +832,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
               </label>
               {form.consentPersonalTracing && (
                 <input
-                  type="date"
+                  type="text"
                   value={form.consentPersonalTracingDate}
                   onChange={(e) => setForm({ ...form, consentPersonalTracingDate: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Date"
+                  placeholder="dd/mm/yyyy"
                 />
               )}
             </div>
@@ -842,11 +853,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
               </label>
               {form.consentIndexCaseTesting && (
                 <input
-                  type="date"
+                  type="text"
                   value={form.consentIndexCaseTestingDate}
                   onChange={(e) => setForm({ ...form, consentIndexCaseTestingDate: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Date"
+                  placeholder="dd/mm/yyyy"
                 />
               )}
             </div>
@@ -876,11 +887,11 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
               {form.disclosureHivStatus === 'No' && (
                 <div className="mt-2 space-y-2">
                   <input
-                    type="date"
+                    type="text"
                     value={form.disclosureHivStatusFinalDate}
                     onChange={(e) => setForm({ ...form, disclosureHivStatusFinalDate: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                    placeholder="Date of final disclosure"
+                    placeholder="dd/mm/yyyy"
                   />
                   <input
                     type="text"

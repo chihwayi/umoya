@@ -108,7 +108,6 @@ export const WHOSmartFormIntegration: React.FC<WHOSmartFormIntegrationProps> = (
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <FileText className="w-6 h-6 text-indigo-600" />
@@ -119,6 +118,13 @@ export const WHOSmartFormIntegration: React.FC<WHOSmartFormIntegrationProps> = (
               {form.description && (
                 <p className="text-sm text-slate-600 mt-1">{form.description}</p>
               )}
+              <button
+                onClick={onClose}
+                className="mt-2 inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-900"
+                disabled={submitting}
+              >
+                ← Back to regular form
+              </button>
             </div>
           </div>
           <button
@@ -151,5 +157,4 @@ export const WHOSmartFormIntegration: React.FC<WHOSmartFormIntegrationProps> = (
     </div>
   );
 };
-
 

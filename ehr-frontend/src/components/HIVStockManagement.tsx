@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, AlertTriangle, CheckCircle, TrendingDown, TrendingUp, Plus, RefreshCw } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 
 interface HIVStockManagementProps {
   tenantSlug: string;
@@ -149,7 +150,7 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
                     <div className="pt-3 border-t border-slate-200">
                       <p className="text-xs text-slate-600">Expiry Date</p>
                       <p className="text-sm font-semibold text-slate-900">
-                        {new Date(item.expiry_date).toLocaleDateString()}
+                        {formatDateToDDMMYYYY(item.expiry_date)}
                       </p>
                     </div>
                   )}
@@ -164,4 +165,3 @@ const HIVStockManagement: React.FC<HIVStockManagementProps> = ({ tenantSlug }) =
 };
 
 export default HIVStockManagement;
-

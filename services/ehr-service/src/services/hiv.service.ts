@@ -1,6 +1,5 @@
 import { Injectable, Logger, NotFoundException, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import axios from 'axios';
 import { LabResultsMatchingService } from './lab-results-matching.service';
 import { HivMonitoringService } from './hiv-monitoring.service';
 import { HivQualityMetricsService } from './hiv-quality-metrics.service';
@@ -10,6 +9,7 @@ import { HivPediatricDosingService } from './hiv-pediatric-dosing.service';
 import { AppointmentService } from './appointment.service';
 import { TenantService } from './tenant.service';
 import { TerminologyService } from './terminology.service';
+import { CdssService } from './cdss.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -21,7 +21,6 @@ interface StoredConceptSummary {
 @Injectable()
 export class HivService {
   private readonly logger = new Logger(HivService.name);
-  private readonly cdssUrl = process.env.CDSS_SERVICE_URL || 'http://cdss-service:8000';
   
   constructor(
     private labResultsMatchingService: LabResultsMatchingService,
@@ -34,6 +33,7 @@ export class HivService {
     private appointmentService: AppointmentService,
     private tenantService: TenantService,
     private readonly terminologyService: TerminologyService,
+    private readonly cdssService: CdssService,
   ) {}
 
   private extractConceptId(candidate: any): string | null {
@@ -566,7 +566,15 @@ export class HivService {
     // Get all tests for this patient
     const test = await tenantDb.query('SELECT * FROM hiv_tests WHERE id = $1', [testId]);
     if (!test[0]) throw new NotFoundException('Test not found');
-    
+
+    const normalizeResult = (result: string | null): string => {
+      if (!result) return '';
+      const value = result.toLowerCase();
+      if (value === 'positive') return 'reactive';
+      if (value === 'negative') return 'non_reactive';
+      return value;
+    };
+
     const patientId = test[0].patient_id;
     const allTests = await tenantDb.query(
       'SELECT * FROM hiv_tests WHERE patient_id = $1 ORDER BY test_date ASC',
@@ -575,17 +583,26 @@ export class HivService {
     
     // Send to CDSS algorithm
     try {
-      const response = await axios.post(`${this.cdssUrl}/hiv/testing/algorithm`, {
-        tests: allTests.map(t => ({
+      this.logger.log(
+        `[HivService] Calling CDSS HIV algorithm for patient ${patientId} with ${allTests.length} tests`,
+      );
+      const algorithmData = await this.cdssService.runHivTestingAlgorithm(
+        allTests.map((t) => ({
           test_kit_name: t.test_kit_name,
-          test_result: t.test_result,
+          test_result: normalizeResult(t.test_result),
           test_date: t.test_date,
-          tested_by: t.tested_by
-        }))
-      }, { timeout: 10000 });
-      
-      const algorithmData = response.data;
-      
+          tested_by: t.tested_by,
+        })),
+      );
+      this.logger.log(
+        `[HivService] CDSS HIV algorithm response: ${JSON.stringify({
+          algorithm_result: algorithmData?.algorithm_result,
+          confidence: algorithmData?.confidence,
+          has_interpretation: !!algorithmData?.interpretation,
+          source: (algorithmData as any)?.source,
+        })}`,
+      );
+
       // Update test with algorithm result
       await tenantDb.query(
         `UPDATE hiv_tests SET algorithm_result = $1, updated_at = NOW() WHERE id = $2`,
@@ -593,26 +610,50 @@ export class HivService {
       );
       
       return algorithmData;
-    } catch (error) {
+    } catch (error: any) {
+      const status = (error as any)?.response?.status;
+      const data = (error as any)?.response?.data;
+      this.logger.warn(
+        `[HivService] CDSS HIV algorithm call failed (status=${status ?? 'unknown'}): ${
+          data ? JSON.stringify(data) : String(error?.message || error)
+        }`,
+      );
       this.logger.warn('CDSS algorithm unavailable, using basic logic');
       // Basic fallback
-      const testResult = test[0].test_result;
+      const testResult = normalizeResult(test[0].test_result);
       let algorithmResult = 'incomplete';
       if (testResult === 'non_reactive') algorithmResult = 'negative';
       if (testResult === 'reactive' && allTests.length === 1) algorithmResult = 'incomplete';
       if (allTests.length >= 2) {
-        const reactiveCount = allTests.filter(t => t.test_result === 'reactive').length;
+        const reactiveCount = allTests.filter(
+          (t) => normalizeResult(t.test_result) === 'reactive',
+        ).length;
         if (reactiveCount >= 2) algorithmResult = 'positive';
-        else if (allTests[0].test_result === 'non_reactive') algorithmResult = 'negative';
+        else if (normalizeResult(allTests[0].test_result) === 'non_reactive')
+          algorithmResult = 'negative';
         else algorithmResult = 'indeterminate';
       }
       
       await tenantDb.query(
         `UPDATE hiv_tests SET algorithm_result = $1 WHERE id = $2`,
-        [algorithmResult, testId]
+        [algorithmResult, testId],
       );
-      
-      return { algorithm_result: algorithmResult, confidence: 'low', next_step: 'Continue testing' };
+
+      let nextStep = 'Continue national testing algorithm';
+      if (algorithmResult === 'positive') {
+        nextStep =
+          'HIV Positive: ensure immediate linkage to HIV care, baseline labs, and partner services.';
+      } else if (algorithmResult === 'negative') {
+        nextStep =
+          'HIV Negative: provide post-test counselling, risk reduction package, and schedule retesting as per guidelines.';
+      }
+
+      return {
+        algorithm_result: algorithmResult,
+        confidence: 'low',
+        next_step: nextStep,
+        source: 'ehr_fallback',
+      };
     }
   }
 
@@ -1866,7 +1907,10 @@ export class HivService {
       'arv_status', 'art_initiation_category', 'adverse_events_status',
       'arv_reasons_not_on', 'arv_reasons_start', 'arv_change_stop_reasons',
       'visit_status', 'final_outcome', 'art_regimens', 'precancerous_lesion_treatment',
-      'who_staging'
+      'who_staging',
+      'testing_service_points', 'testing_outreach_events',
+      'testing_partner_services', 'testing_linkage_actions',
+      'testing_sti_methods', 'testing_sti_specimens'
     ];
 
     const tableMap: { [key: string]: string } = {
@@ -1896,7 +1940,13 @@ export class HivService {
       'final_outcome': 'hiv_final_outcome',
       'art_regimens': 'hiv_art_regimens',
       'precancerous_lesion_treatment': 'hiv_precancerous_lesion_treatment',
-      'who_staging': 'hiv_who_staging'
+      'who_staging': 'hiv_who_staging',
+      'testing_service_points': 'hiv_testing_service_points',
+      'testing_outreach_events': 'hiv_testing_outreach_events',
+      'testing_partner_services': 'hiv_testing_partner_services',
+      'testing_linkage_actions': 'hiv_testing_linkage_actions',
+      'testing_sti_methods': 'hiv_testing_sti_methods',
+      'testing_sti_specimens': 'hiv_testing_sti_specimens'
     };
 
     if (!validTables.includes(tableName)) {

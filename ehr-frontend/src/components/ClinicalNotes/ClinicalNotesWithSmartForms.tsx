@@ -162,15 +162,14 @@ export const ClinicalNotesWithSmartForms: React.FC<ClinicalNotesWithSmartFormsPr
 
   return (
     <div className="space-y-4">
-      {/* WHO Smart Forms Option */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <FileText className="w-5 h-5 text-blue-600" />
             <div>
-              <h3 className="font-semibold text-slate-900">Use WHO Smart Forms for Clinical Notes</h3>
+              <h3 className="font-semibold text-slate-900">WHO Clinical Notes Workflow (optional)</h3>
               <p className="text-sm text-slate-600">
-                Use WHO-recommended forms for standardized clinical documentation
+                Optional WHO-aligned documentation steps. The regular Medicore clinical notes remain the main form.
               </p>
             </div>
           </div>
@@ -206,5 +205,4 @@ export const ClinicalNotesWithSmartForms: React.FC<ClinicalNotesWithSmartFormsPr
     </div>
   );
 };
-
 

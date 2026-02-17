@@ -246,7 +246,7 @@ const NurseDashboard: React.FC = () => {
           { label: 'Stock Management', tab: 'stock-management', icon: Package },
           { label: 'LTFU Management', tab: 'ltfu', icon: Clock },
           { label: 'Monthly Return', tab: 'monthly-return', icon: FileText },
-          { label: 'WHO Workflow', tab: 'who-workflow', icon: Activity },
+          { label: 'Guided WHO Workflow', tab: 'who-workflow', icon: Activity },
         ]
       },
       { 
@@ -3766,10 +3766,10 @@ const NurseDashboard: React.FC = () => {
             <div className="mb-6">
               <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2">
                 <Activity className="w-6 h-6 text-indigo-600" />
-                WHO Smart Guidelines Workflow
+                Guided WHO HIV Workflow
               </h2>
               <p className="text-slate-600">
-                Complete HIV care workflow using WHO Smart Guidelines: Testing → Registration → ART Initiation → Care & Treatment
+                Step-by-step WHO-aligned HIV workflow: Testing → Registration → ART Initiation → Care & Treatment
               </p>
             </div>
 
@@ -3789,9 +3789,9 @@ const NurseDashboard: React.FC = () => {
             ) : (
               <div className="text-center py-12 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg border-2 border-indigo-200">
                 <Activity className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">Select a Patient to Start</h3>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Select a patient to begin</h3>
                 <p className="text-slate-600 mb-6">
-                  Choose a patient from the queue or search to begin the WHO Smart Guidelines workflow
+                  Choose a patient from the queue or search to start the guided WHO workflow
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button

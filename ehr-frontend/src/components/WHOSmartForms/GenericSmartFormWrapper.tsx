@@ -135,7 +135,6 @@ export const GenericSmartFormWrapper: React.FC<GenericSmartFormWrapperProps> = (
     return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
         <div className="glass-modal rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col overflow-hidden">
-          {/* Header */}
           <div className="flex items-center justify-between p-8 border-b border-white/20 bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
@@ -147,6 +146,15 @@ export const GenericSmartFormWrapper: React.FC<GenericSmartFormWrapperProps> = (
                 </h2>
                 {(description || form.description) && (
                   <p className="text-sm text-slate-600 mt-1">{description || form.description}</p>
+                )}
+                {onClose && (
+                  <button
+                    onClick={onClose}
+                    className="mt-3 inline-flex items-center text-xs font-medium text-slate-600 hover:text-slate-900"
+                    disabled={submitting}
+                  >
+                    ← Back to regular form
+                  </button>
                 )}
               </div>
             </div>
@@ -187,5 +195,4 @@ export const GenericSmartFormWrapper: React.FC<GenericSmartFormWrapperProps> = (
 
   return formContent;
 };
-
 

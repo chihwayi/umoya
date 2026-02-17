@@ -65,14 +65,50 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
 
   const handleSmartFormSuccess = async (formData: Record<string, any>) => {
     try {
-      console.log('WHO Smart Form submitted:', formData);
-      
-      // Map WHO Smart Form data to HIV test structure
       const mappedData = mapSmartFormToHivTest(formData);
-      
-      // Submit to backend if patientId is available
+
       if (patientId) {
-        await ehrApi.createHivTest(mappedData, token, tenantSlug);
+        const storedUser = localStorage.getItem('ehr_user');
+        const currentUser = storedUser ? JSON.parse(storedUser) : {};
+
+        const payload = {
+          patientId,
+          testedBy: currentUser.id,
+          testStage: mappedData.testStage || 'screening',
+          testType: mappedData.testType || 'rapid_antibody',
+          testingReason: mappedData.testingReason || 'diagnostic_symptomatic',
+          testingApproach: mappedData.testingApproach || 'facility',
+          testingLocation: mappedData.testingLocation || 'outpatient',
+          testingCadre: mappedData.testingCadre || 'nurse',
+          specimenType: mappedData.specimenType || 'whole blood',
+          kitType: mappedData.kitType || 'rapid_diagnostic_test',
+          testKitName: mappedData.testKitName || 'Determine HIV-1/2',
+          testKitLot: mappedData.testKitLot || '',
+          testKitExpiry: mappedData.testKitExpiry || null,
+          dualKitUsed: mappedData.dualKitUsed ?? false,
+          testResult: mappedData.testResult,
+          resultValue: mappedData.resultValue || null,
+          resultUnit: mappedData.resultUnit || null,
+          selfTestReported: mappedData.selfTestReported ?? false,
+          selfTestConfirmed: mappedData.selfTestConfirmed ?? false,
+          recencyTestPerformed: mappedData.recencyTestPerformed ?? false,
+          recencyResult: mappedData.recencyResult || null,
+          recencyKitLot: mappedData.recencyKitLot || null,
+          recencyKitExpiry: mappedData.recencyKitExpiry || null,
+          partnerNotificationStatus: mappedData.partnerNotificationStatus || null,
+          linkageAction: mappedData.linkageAction || null,
+          linkageCompleted: mappedData.linkageCompleted ?? false,
+          nextTestDueDate: mappedData.nextTestDueDate || null,
+          notes: mappedData.notes || null,
+          followUpActions: mappedData.followUpActions || [],
+          testingContext: mappedData.testingContext || {},
+          testConcept: mappedData.testConcept,
+          specimenConcept: mappedData.specimenConcept,
+          stis: mappedData.stis || [],
+          whoSmartFormData: mappedData.whoSmartFormData || formData,
+        };
+
+        await ehrApi.createHivTest(payload, token, tenantSlug);
         showSuccess('Success', 'HIV test recorded using WHO Smart Form');
       }
       
@@ -88,11 +124,8 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
     }
   };
 
-  const mapSmartFormToHivTest = (formData: Record<string, any>) => {
-    // Map WHO Smart Form answers to HIV test structure
-    // This mapping will depend on the specific form fields
+  const mapSmartFormToHivTest = (formData: Record<string, any>): any => {
     return {
-      // Extract relevant fields from formData
       testDate: formData['HIV.B.DE110'] || new Date().toISOString().split('T')[0],
       testResult: formData['HIV.B.DE111'],
       hivStatus: formData['HIV.B.DE115'],
@@ -101,7 +134,6 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
       testResult1: formData['HIV.B.DE94'],
       testResult2: formData['HIV.B.DE98'],
       testResult3: formData['HIV.B.DE102'],
-      // Include all form data for reference
       whoSmartFormData: formData,
     };
   };
@@ -126,17 +158,12 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
           onSuccess={handleSmartFormSuccess}
           title={TESTING_FORMS.find(f => f.id === selectedFormId)?.title}
         />
-        {/* Show regular form in background */}
-        <div className="opacity-50 pointer-events-none">
-          <HIVTestingComponent tenantSlug={tenantSlug} />
-        </div>
       </>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* WHO Smart Forms Option */}
       <div className="glass-gradient rounded-2xl p-6 border border-indigo-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -144,9 +171,9 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Use WHO Smart Forms</h3>
+              <h3 className="text-xl font-bold text-slate-900">WHO HIV Testing Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Use WHO-recommended forms for standardized HIV testing workflow
+                Optional WHO-aligned testing steps. The standard Medicore HIV test remains the main form.
               </p>
             </div>
           </div>
@@ -155,7 +182,7 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
             className="glass-button px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold shadow-lg"
           >
             <TestTube className="w-5 h-5" />
-            Use WHO Forms
+            Open WHO Workflow
           </button>
         </div>
 
@@ -189,16 +216,13 @@ export const HIVTestingWithSmartForms: React.FC<HIVTestingWithSmartFormsProps> =
               onClick={() => setUseSmartForm(false)}
               className="mt-6 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
             >
-              ← Use Standard Form Instead
+              ← Back to standard HIV testing
             </button>
           </div>
         )}
       </div>
 
-      {/* Standard HIV Testing Component */}
       {!useSmartForm && <HIVTestingComponent tenantSlug={tenantSlug} />}
     </div>
   );
 };
-
-

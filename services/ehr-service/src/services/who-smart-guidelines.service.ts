@@ -69,6 +69,26 @@ interface Questionnaire extends FHIRResource {
   item?: QuestionnaireItem[];
 }
 
+interface ValueSet extends FHIRResource {
+  resourceType: 'ValueSet';
+  url?: string;
+  compose?: {
+    include?: Array<{
+      concept?: Array<{
+        code: string;
+        display?: string;
+      }>;
+    }>;
+  };
+  expansion?: {
+    contains?: Array<{
+      system?: string;
+      code?: string;
+      display?: string;
+    }>;
+  };
+}
+
 interface QuestionnaireItem {
   linkId: string;
   text?: string;
@@ -146,6 +166,7 @@ export class WhoSmartGuidelinesService {
   // In-memory cache for loaded guidelines
   private planDefinitions: Map<string, PlanDefinition> = new Map();
   private questionnaires: Map<string, Questionnaire> = new Map();
+  private valueSets: Map<string, ValueSet> = new Map();
   
   // Guidelines directory (where WHO FHIR resources are stored)
   private readonly guidelinesDir = path.join(process.cwd(), 'who-smart-guidelines');
@@ -196,6 +217,12 @@ export class WhoSmartGuidelinesService {
             const id = questionnaire.id || file.replace('.json', '');
             this.questionnaires.set(id, questionnaire);
             this.logger.log(`Loaded Questionnaire: ${id} - ${questionnaire.title || 'Untitled'}`);
+            loadedCount++;
+          } else if (resource.resourceType === 'ValueSet') {
+            const valueSet = resource as ValueSet;
+            const id = valueSet.id || valueSet.url || file.replace('.json', '');
+            this.valueSets.set(id, valueSet);
+            this.logger.log(`Loaded ValueSet: ${id}`);
             loadedCount++;
           }
         } catch (error) {
@@ -394,12 +421,62 @@ export class WhoSmartGuidelinesService {
       items: item.item?.map(subItem => this.convertQuestionnaireItem(subItem))
     };
     
-    // Convert answer options
+    // Convert inline answer options
     if (item.answerOption) {
       formItem.options = item.answerOption.map(option => ({
         value: option.valueCoding?.coding?.[0]?.code || option.valueString || String(option.valueInteger || ''),
         label: option.valueCoding?.coding?.[0]?.display || option.valueString || String(option.valueInteger || '')
       }));
+    }
+    
+    // Resolve answerValueSet if no inline options
+    const anyItem: any = item as any;
+    const answerValueSet: string | undefined = anyItem.answerValueSet;
+    if (!formItem.options && answerValueSet) {
+      const vsId =
+        answerValueSet.startsWith('#') ? answerValueSet.substring(1) : answerValueSet;
+      const valueSet =
+        this.valueSets.get(vsId) ||
+        Array.from(this.valueSets.values()).find(
+          (vs) => vs.url === answerValueSet || vs.url?.endsWith(`/${vsId}`)
+        );
+
+      if (valueSet) {
+        const concepts: { code: string; display?: string }[] = [];
+
+        if (valueSet.compose?.include) {
+          for (const include of valueSet.compose.include) {
+            if (include.concept) {
+              for (const concept of include.concept) {
+                concepts.push({ code: concept.code, display: concept.display });
+              }
+            }
+          }
+        }
+
+        if (valueSet.expansion?.contains) {
+          for (const contain of valueSet.expansion.contains) {
+            if (contain.code) {
+              concepts.push({ code: contain.code, display: contain.display });
+            }
+          }
+        }
+
+        if (concepts.length > 0) {
+          formItem.options = concepts.map((c) => ({
+            value: c.code,
+            label: c.display || c.code,
+          }));
+        } else {
+          this.logger.debug(
+            `ValueSet ${vsId} for item ${item.linkId} has no concepts; dropdown will be empty`
+          );
+        }
+      } else {
+        this.logger.debug(
+          `No ValueSet found for answerValueSet ${answerValueSet} (item ${item.linkId})`
+        );
+      }
     }
     
     // Convert enableWhen conditions

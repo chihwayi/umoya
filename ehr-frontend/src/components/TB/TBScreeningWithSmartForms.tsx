@@ -117,7 +117,6 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
 
   return (
     <div className="space-y-6">
-      {/* WHO Smart Forms Option */}
       <div className="glass-gradient rounded-2xl p-6 border border-indigo-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -125,9 +124,9 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Use WHO Smart Forms</h3>
+              <h3 className="text-xl font-bold text-slate-900">WHO TB Screening Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Use WHO-recommended forms for standardized TB screening workflow
+                Optional WHO-aligned TB screening steps. The regular Medicore TB form remains the main form.
               </p>
             </div>
           </div>
@@ -136,7 +135,7 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
             className="glass-button px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold shadow-lg"
           >
             <Stethoscope className="w-5 h-5" />
-            Use WHO Forms
+            Open WHO Workflow
           </button>
         </div>
 
@@ -167,7 +166,7 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
               onClick={() => setUseSmartForm(false)}
               className="mt-6 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
             >
-              ← Use Standard Form Instead
+              ← Back to regular TB screening
             </button>
           </div>
         )}
@@ -178,5 +177,3 @@ export const TBScreeningWithSmartForms: React.FC<TBScreeningWithSmartFormsProps>
     </div>
   );
 };
-
-

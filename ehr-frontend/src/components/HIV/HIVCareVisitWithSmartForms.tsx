@@ -107,8 +107,10 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
     try {
       setSubmitting(true);
 
-      // Map WHO Smart Form data to clinical visit structure
-      const visitData = mapSmartFormToVisit(formData);
+      const visitData: any = mapSmartFormToVisit(formData);
+      const storedUser = localStorage.getItem('ehr_user');
+      const currentUser = storedUser ? JSON.parse(storedUser) : {};
+      visitData.providerId = currentUser.id;
 
       // Submit clinical visit
       await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
@@ -124,20 +126,44 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
     }
   };
 
-  const mapSmartFormToVisit = (formData: Record<string, any>) => {
-    // Map WHO Smart Form answers to clinical visit structure
+  const mapSmartFormToVisit = (formData: Record<string, any>): any => {
     return {
       enrollmentId: enrollment.id,
       visitDate: formData.visitDate || new Date().toISOString().split('T')[0],
-      visitType: formData.visitType || 'routine',
-      // Map vital signs
+      visitType: formData.visitType || 'A',
       weightKg: formData.weightKg,
       heightCm: formData.heightCm,
+      bmi: formData.bmi,
       bloodPressure: formData.bloodPressure,
-      // Map clinical data
+      pregnancyLactatingStatus: formData.pregnancyLactatingStatus,
+      firstAncBookingDate: formData.firstAncBookingDate,
+      deliveryDate: formData.deliveryDate,
+      familyPlanningStatus: formData.familyPlanningStatus,
+      functionalStatus: formData.functionalStatus,
       whoClinicalStage: formData.whoClinicalStage,
+      opportunisticInfections: formData.opportunisticInfections,
       tbScreening: formData.tbScreening,
-      // Include all WHO Smart Form data
+      tbInvestigationResult: formData.tbInvestigationResult,
+      tbDiagnosed: formData.tbDiagnosed,
+      tbDiagnosisDate: formData.tbDiagnosisDate,
+      tbTreatmentStarted: formData.tbTreatmentStarted,
+      cd4Count: formData.cd4Count,
+      cd4Percentage: formData.cd4Percentage,
+      cd4TestDate: formData.cd4TestDate,
+      viralLoad: formData.viralLoad,
+      viralLoadUnit: formData.viralLoadUnit,
+      viralLoadTestDate: formData.viralLoadTestDate,
+      viralLoadSuppressed: formData.viralLoadSuppressed,
+      arvStatus: formData.arvStatus,
+      arvReason: formData.arvReason,
+      arvRegimenCode: formData.arvRegimenCode,
+      arvRegimenName: formData.arvRegimenName,
+      arvQuantityPrescribed: formData.arvQuantityPrescribed,
+      arvQuantityDispensed: formData.arvQuantityDispensed,
+      arvAdherencePercentage: formData.arvAdherencePercentage,
+      nextReviewDate: formData.nextReviewDate,
+      visitStatus: formData.visitStatus,
+      visitNotes: formData.visitNotes,
       whoSmartFormData: formData,
     };
   };
@@ -202,7 +228,7 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
                 }}
                 className="glass-button-secondary flex-1 px-6 py-3 text-slate-700 rounded-xl font-semibold"
               >
-                Use Standard Form
+                Back to regular visit form
               </button>
               {Object.keys(formData).length > 0 && (
                 <button
@@ -222,7 +248,6 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
 
   return (
     <div className="space-y-6">
-      {/* WHO Smart Forms Option */}
       <div className="glass-gradient rounded-2xl p-6 border border-indigo-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -230,9 +255,9 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Use WHO Smart Forms for Care Visit</h3>
+              <h3 className="text-xl font-bold text-slate-900">WHO HIV Care Visit Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Use WHO-recommended forms for standardized HIV care and treatment visits
+                Optional WHO-aligned care visit steps. The regular Medicore visit form remains the main form.
               </p>
             </div>
           </div>
@@ -241,7 +266,7 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
             className="glass-button px-6 py-3 text-white rounded-xl flex items-center gap-2 font-semibold shadow-lg"
           >
             <Stethoscope className="w-5 h-5" />
-            Use WHO Forms
+            Open WHO Workflow
           </button>
         </div>
 
@@ -279,5 +304,3 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
     </div>
   );
 };
-
-

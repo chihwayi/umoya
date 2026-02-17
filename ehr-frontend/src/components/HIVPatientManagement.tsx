@@ -5,6 +5,7 @@ import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import HIVPatientDetailModal from './HIVPatientDetailModal';
 import HIVClinicalVisitModal from './HIVClinicalVisitModal';
+import { getHivCdssConfig } from './HIV/hivCdssConfig';
 
 interface HIVPatientManagementProps {
   tenantSlug: string;
@@ -12,6 +13,7 @@ interface HIVPatientManagementProps {
 
 const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug }) => {
   const { showSuccess, showError } = useNotification();
+  const cdssConfig = getHivCdssConfig(tenantSlug);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -294,7 +296,6 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                 )}
               </div>
 
-              {/* EAC Warning Message */}
               {needsEac && (
                 <div className="mt-3 mb-3 px-4 py-3 bg-red-100 border-2 border-red-400 rounded-lg shadow-sm">
                   <div className="flex items-start gap-2">
@@ -304,7 +305,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                         Patient Requires Enhanced Adherence Counseling
                       </p>
                       <p className="text-xs text-red-800">
-                        2 consecutive high viral loads detected. EAC intervention required per WHO guidelines.
+                        {cdssConfig.messages.eacCardListing}
                       </p>
                     </div>
                   </div>
@@ -401,4 +402,3 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
 };
 
 export default HIVPatientManagement;
-

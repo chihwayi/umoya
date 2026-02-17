@@ -2183,6 +2183,12 @@ export class DatabaseProvisioningService {
         testing_location VARCHAR(100),
         testing_cadre VARCHAR(100),
         specimen_type VARCHAR(50),
+        test_snomed_code VARCHAR(50),
+        test_snomed_term TEXT,
+        test_snomed_module_id VARCHAR(50),
+        test_snomed_definition_status VARCHAR(50),
+        specimen_snomed_code VARCHAR(50),
+        specimen_snomed_term TEXT,
         kit_type VARCHAR(100),
         test_kit_name VARCHAR(100),
         test_kit_lot VARCHAR(100),
@@ -2220,6 +2226,12 @@ export class DatabaseProvisioningService {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_module_id VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_definition_status VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_code VARCHAR(50)`);
+    statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_term TEXT`);
     statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`);
     statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`);
     statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`);
@@ -3155,6 +3167,72 @@ export class DatabaseProvisioningService {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_visit_types_code ON hiv_visit_types(code)`);
+    
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_service_points (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_outreach_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_partner_services (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_linkage_actions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_sti_methods (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+
+    statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_sti_specimens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
     
     // BMI Classifications (for reference, but can be calculated)
     statements.push(`CREATE TABLE IF NOT EXISTS hiv_bmi_classifications (
@@ -5517,6 +5595,12 @@ export class DatabaseProvisioningService {
 
   private getHivTestingUpgradeStatements(): string[] {
     return [
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_module_id VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_code VARCHAR(50)`,
+      `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_term TEXT`,
       `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`,
       `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`,
       `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`,
@@ -5546,8 +5630,12 @@ export class DatabaseProvisioningService {
           hiv_test_id UUID REFERENCES hiv_tests(id) ON DELETE SET NULL,
           test_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           infection_type VARCHAR(50) NOT NULL,
+          infection_snomed_code VARCHAR(50),
+          infection_snomed_term TEXT,
           test_type VARCHAR(100),
           test_method VARCHAR(100),
+          test_snomed_code VARCHAR(50),
+          test_snomed_term TEXT,
           specimen_type VARCHAR(100),
           anatomic_site VARCHAR(100),
           result VARCHAR(50) CHECK (result IN ('positive','negative','reactive','non_reactive','indeterminate','pending','invalid')),
@@ -5562,6 +5650,10 @@ export class DatabaseProvisioningService {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `,
+      `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_code VARCHAR(50)`,
+      `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_term TEXT`,
+      `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`,
+      `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`,
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_patient_id ON sti_tests(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_type ON sti_tests(infection_type)`,
       `CREATE INDEX IF NOT EXISTS idx_sti_tests_result ON sti_tests(result)`,
@@ -5722,6 +5814,71 @@ export class DatabaseProvisioningService {
         ('W', 'Work/School', 1),
         ('A', 'Ambulatory', 2),
         ('B', 'Bedridden', 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed HIV Testing Service Points
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_service_points (code, name, display_order) VALUES
+        ('OPD', 'Outpatient Department (OPD)', 1),
+        ('IPD', 'Inpatient Ward', 2),
+        ('MCH', 'MCH / ANC Clinic', 3),
+        ('ART', 'ART Clinic', 4),
+        ('VCT', 'VCT / HTC Room', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed HIV Testing Outreach / Campaigns
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_outreach_events (code, name, display_order) VALUES
+        ('NONE', 'No outreach (facility-based)', 1),
+        ('COMMUNITY', 'Community outreach', 2),
+        ('MOBCLINIC', 'Mobile clinic', 3),
+        ('CAMPAIGN', 'Campaign / special event', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Partner Services
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_partner_services (code, name, display_order) VALUES
+        ('OFF', 'Offered', 1),
+        ('ACC', 'Accepted', 2),
+        ('DEC', 'Declined', 3),
+        ('NA', 'Not applicable', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed Linkage Actions
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_linkage_actions (code, name, display_order) VALUES
+        ('ART_INIT', 'ART initiated', 1),
+        ('ART_REF', 'Referred to ART clinic', 2),
+        ('PREP', 'PrEP initiated', 3),
+        ('PEP', 'PEP initiated', 4),
+        ('COUNS', 'Counselling only', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed STI Test Methods
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_sti_methods (code, name, display_order) VALUES
+        ('DUAL', 'Dual HIV/STI rapid kit', 1),
+        ('RDT', 'Rapid test', 2),
+        ('NAAT', 'NAAT / PCR', 3),
+        ('CULT', 'Culture', 4),
+        ('OTHER', 'Other method', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+
+      // Seed STI Specimens
+      await tenantDataSource.query(`
+        INSERT INTO hiv_testing_sti_specimens (code, name, display_order) VALUES
+        ('URETHRAL', 'Urethral swab', 1),
+        ('CERVICAL', 'Cervical swab', 2),
+        ('VAGINAL', 'Vaginal swab', 3),
+        ('URINE', 'Urine', 4),
+        ('BLOOD', 'Blood', 5),
+        ('OTHER', 'Other site', 6)
         ON CONFLICT (code) DO NOTHING
       `);
 

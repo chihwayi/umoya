@@ -125,6 +125,7 @@ const NursePatientSummary: React.FC = () => {
   const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
   const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
+  const [patientVitalsHistory, setPatientVitalsHistory] = useState<PatientVitals[]>([]);
 
   useEffect(() => {
     if (patientId) {
@@ -168,13 +169,14 @@ const NursePatientSummary: React.FC = () => {
       const appointmentsResponse = await ehrApi.getAppointments(token, tenantSlug!, { patientId: patientId! });
       const patientAppointments = appointmentsResponse.data.appointments || [];
       
-      // Fetch vitals for the patient
       let allVitals: any[] = [];
       try {
         const vitalsResponse = await ehrApi.getVitals(patientId!, token, tenantSlug!);
         allVitals = vitalsResponse.data.vitals || [];
+        setPatientVitalsHistory(allVitals);
       } catch (error) {
         allVitals = [];
+        setPatientVitalsHistory([]);
       }
 
       // Fetch nursing notes
@@ -308,15 +310,34 @@ const NursePatientSummary: React.FC = () => {
     }
   };
 
-  // Helper functions for filtering and pagination
   const getFilteredAndSortedVitals = () => {
-    let vitals = visitSummaries.filter(visit => visit.vitals);
+    let vitals = patientVitalsHistory.slice();
+    
+    if (vitalsSearchTerm) {
+      const term = vitalsSearchTerm.toLowerCase();
+      vitals = vitals.filter(v => {
+        const fields = [
+          v.bloodPressure,
+          String(v.heartRate),
+          String(v.temperature),
+          String(v.oxygenSaturation),
+          String(v.respiratoryRate),
+          String(v.weight),
+          String(v.height),
+          String(v.bmi),
+          String(v.painLevel),
+          String(v.bloodGlucose),
+          v.notes || '',
+        ];
+        return fields.some(field => field.toLowerCase().includes(term));
+      });
+    }
     
     // Sort vitals
     vitals.sort((a, b) => {
       let comparison = 0;
       if (vitalsSortBy === 'date') {
-        comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+        comparison = new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime();
       }
       return vitalsSortOrder === 'asc' ? comparison : -comparison;
     });
@@ -376,10 +397,7 @@ const NursePatientSummary: React.FC = () => {
   };
 
   const getVitalsTrendSummary = () => {
-    const vitalsOnly = visitSummaries
-      .map((visit) => visit.vitals)
-      .filter(Boolean) as PatientVitals[];
-    const recent = vitalsOnly
+    const recent = patientVitalsHistory
       .slice()
       .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
       .slice(0, 5);
@@ -416,10 +434,7 @@ const NursePatientSummary: React.FC = () => {
         return;
       }
 
-      const vitalsOnly = visitSummaries
-        .map((visit) => visit.vitals)
-        .filter(Boolean) as PatientVitals[];
-      const latest = vitalsOnly
+      const latest = patientVitalsHistory
         .slice()
         .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
 
@@ -437,6 +452,9 @@ const NursePatientSummary: React.FC = () => {
           vitals: latest,
           conditions: patient.chronicConditions
             ? patient.chronicConditions.split(',').map((c: string) => c.trim()).filter(Boolean)
+            : [],
+          allergies: patient.allergies
+            ? patient.allergies.split(',').map((a: string) => a.trim()).filter(Boolean)
             : [],
         },
         token,
@@ -708,6 +726,54 @@ const NursePatientSummary: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                {patientVitalsHistory.length > 0 && (
+                  <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                      <Heart className="w-5 h-5 text-rose-600" />
+                      Latest Vitals Snapshot
+                    </h3>
+                    {patientVitalsHistory
+                      .slice()
+                      .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+                      .slice(0, 1)
+                      .map((vital) => (
+                        <div key={vital.id} className="space-y-3">
+                          <div className="flex items-center justify-between text-sm text-slate-600">
+                            <span>Recorded</span>
+                            <span className="font-medium">
+                              {formatDateTimeToDDMMYYYYHHMM(vital.recordedAt)}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-700">BP</span>
+                                <span className="font-semibold text-red-800">{vital.bloodPressure}</span>
+                              </div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-pink-50 border border-pink-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-700">HR</span>
+                                <span className="font-semibold text-pink-800">{vital.heartRate} bpm</span>
+                              </div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-700">Temp</span>
+                                <span className="font-semibold text-orange-800">{vital.temperature}°C</span>
+                              </div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-700">SpO₂</span>
+                                <span className="font-semibold text-blue-800">{vital.oxygenSaturation}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
 
                 <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 p-6">
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
@@ -1107,28 +1173,28 @@ const NursePatientSummary: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {getPaginatedVitals().data.map((visit, index) => (
+                    {getPaginatedVitals().data.map((vital, index) => (
                         <div key={index} className="bg-white rounded-xl p-6 border border-slate-200 hover:shadow-md transition-all duration-200">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white font-bold">
-                                {new Date(visit.date).getDate()}
+                                {new Date(vital.recordedAt).getDate()}
                               </div>
                               <div>
                                 <h4 className="text-lg font-semibold text-slate-900">
-                                  {formatDateToDDMMYYYY(visit.date)}
+                                  {formatDateToDDMMYYYY(vital.recordedAt)}
                                 </h4>
                                 <p className="text-slate-600">
-                                  {formatDateTimeToDDMMYYYYHHMM(visit.vitals!.recordedAt)}
+                                  {formatDateTimeToDDMMYYYYHHMM(vital.recordedAt)}
                                 </p>
                               </div>
                             </div>
                             <div className="text-right">
                               <p className="text-sm text-slate-600">Recorded by</p>
                               <p className="font-semibold text-slate-900">
-                                {visit.vitals!.recordedByUser && (visit.vitals!.recordedByUser.firstName || visit.vitals!.recordedByUser.lastName)
-                                  ? `${visit.vitals!.recordedByUser.firstName || ''} ${visit.vitals!.recordedByUser.lastName || ''}`.trim()
-                                  : visit.vitals!.recordedByName || (visit.vitals as any).recorded_by_name || visit.vitals!.recordedBy}
+                                {vital.recordedByUser && (vital.recordedByUser.firstName || vital.recordedByUser.lastName)
+                                  ? `${vital.recordedByUser.firstName || ''} ${vital.recordedByUser.lastName || ''}`.trim()
+                                  : vital.recordedByName || (vital as any).recorded_by_name || vital.recordedBy}
                               </p>
                             </div>
                           </div>
@@ -1140,7 +1206,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Droplets className="w-5 h-5 text-red-600" />
                                 <h5 className="font-semibold text-red-800">Blood Pressure</h5>
                               </div>
-                              <p className="text-2xl font-bold text-red-900">{visit.vitals!.bloodPressure}</p>
+                              <p className="text-2xl font-bold text-red-900">{vital.bloodPressure}</p>
                               <p className="text-sm text-red-700">mmHg</p>
                             </div>
 
@@ -1150,7 +1216,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Activity className="w-5 h-5 text-pink-600" />
                                 <h5 className="font-semibold text-pink-800">Heart Rate</h5>
                               </div>
-                              <p className="text-2xl font-bold text-pink-900">{visit.vitals!.heartRate}</p>
+                              <p className="text-2xl font-bold text-pink-900">{vital.heartRate}</p>
                               <p className="text-sm text-pink-700">bpm</p>
                             </div>
 
@@ -1160,7 +1226,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Thermometer className="w-5 h-5 text-orange-600" />
                                 <h5 className="font-semibold text-orange-800">Temperature</h5>
                               </div>
-                              <p className="text-2xl font-bold text-orange-900">{visit.vitals!.temperature}°C</p>
+                              <p className="text-2xl font-bold text-orange-900">{vital.temperature}°C</p>
                               <p className="text-sm text-orange-700">Celsius</p>
                             </div>
 
@@ -1170,7 +1236,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Eye className="w-5 h-5 text-blue-600" />
                                 <h5 className="font-semibold text-blue-800">Oxygen Sat</h5>
                               </div>
-                              <p className="text-2xl font-bold text-blue-900">{visit.vitals!.oxygenSaturation}%</p>
+                              <p className="text-2xl font-bold text-blue-900">{vital.oxygenSaturation}%</p>
                               <p className="text-sm text-blue-700">SpO2</p>
                             </div>
 
@@ -1180,7 +1246,7 @@ const NursePatientSummary: React.FC = () => {
                                 <ActivityIcon className="w-5 h-5 text-cyan-600" />
                                 <h5 className="font-semibold text-cyan-800">Respiratory Rate</h5>
                               </div>
-                              <p className="text-2xl font-bold text-cyan-900">{visit.vitals!.respiratoryRate}</p>
+                              <p className="text-2xl font-bold text-cyan-900">{vital.respiratoryRate}</p>
                               <p className="text-sm text-cyan-700">breaths/min</p>
                             </div>
 
@@ -1190,7 +1256,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Activity className="w-5 h-5 text-purple-600" />
                                 <h5 className="font-semibold text-purple-800">Weight</h5>
                               </div>
-                              <p className="text-2xl font-bold text-purple-900">{visit.vitals!.weight}</p>
+                              <p className="text-2xl font-bold text-purple-900">{vital.weight}</p>
                               <p className="text-sm text-purple-700">kg</p>
                             </div>
 
@@ -1200,7 +1266,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Activity className="w-5 h-5 text-indigo-600" />
                                 <h5 className="font-semibold text-indigo-800">Height</h5>
                               </div>
-                              <p className="text-2xl font-bold text-indigo-900">{visit.vitals!.height}</p>
+                              <p className="text-2xl font-bold text-indigo-900">{vital.height}</p>
                               <p className="text-sm text-indigo-700">cm</p>
                             </div>
 
@@ -1210,7 +1276,7 @@ const NursePatientSummary: React.FC = () => {
                                 <Activity className="w-5 h-5 text-emerald-600" />
                                 <h5 className="font-semibold text-emerald-800">BMI</h5>
                               </div>
-                              <p className="text-2xl font-bold text-emerald-900">{visit.vitals!.bmi}</p>
+                              <p className="text-2xl font-bold text-emerald-900">{vital.bmi}</p>
                               <p className="text-sm text-emerald-700">kg/m²</p>
                             </div>
                           </div>
@@ -1227,10 +1293,10 @@ const NursePatientSummary: React.FC = () => {
                                 <div className="flex-1 bg-amber-200 rounded-full h-2">
                                   <div 
                                     className="bg-amber-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${(visit.vitals!.painLevel / 10) * 100}%` }}
+                                    style={{ width: `${((vital.painLevel ?? 0) / 10) * 100}%` }}
                                   ></div>
                                 </div>
-                                <span className="text-xl font-bold text-amber-900">{visit.vitals!.painLevel}/10</span>
+                                <span className="text-xl font-bold text-amber-900">{vital.painLevel}/10</span>
                               </div>
                             </div>
 
@@ -1240,16 +1306,16 @@ const NursePatientSummary: React.FC = () => {
                                 <Droplets className="w-5 h-5 text-rose-600" />
                                 <h5 className="font-semibold text-rose-800">Blood Glucose</h5>
                               </div>
-                              <p className="text-2xl font-bold text-rose-900">{visit.vitals!.bloodGlucose}</p>
+                              <p className="text-2xl font-bold text-rose-900">{vital.bloodGlucose}</p>
                               <p className="text-sm text-rose-700">mg/dL</p>
                             </div>
                           </div>
 
                           {/* Notes */}
-                          {visit.vitals!.notes && (
+                          {vital.notes && (
                             <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
                               <h5 className="font-semibold text-slate-800 mb-2">Notes</h5>
-                              <p className="text-slate-700">{visit.vitals!.notes}</p>
+                              <p className="text-slate-700">{vital.notes}</p>
                             </div>
                           )}
                         </div>

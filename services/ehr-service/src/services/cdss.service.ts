@@ -320,6 +320,29 @@ export class CdssService {
   }
 
   /**
+   * Run Zimbabwe HIV testing algorithm via Python CDSS service
+   */
+  async runHivTestingAlgorithm(
+    tests: Array<{ test_kit_name: string; test_result: string; test_date: any; tested_by: any }>,
+    tenantId?: string,
+  ) {
+    const responseData = await this.postWithPolicy<any>(
+      'hiv_testing_algorithm',
+      '/hiv/testing/algorithm',
+      {
+        tests,
+      },
+      10000,
+      tenantId,
+    );
+
+    return {
+      ...responseData,
+      source: responseData?.source || 'cdss_hiv_algorithm',
+    };
+  }
+
+  /**
    * Basic drug interaction checking (fallback) - DISABLED
    */
   private async basicDrugInteractionCheck(drugIds: string[]) {
@@ -1036,6 +1059,132 @@ export class CdssService {
     return 'non-urgent';
   }
 
+  private normalizeVitalsForSafety(vitalsRaw: any) {
+    const vitals = vitalsRaw || {};
+    let systolic: number | null = null;
+    let diastolic: number | null = null;
+    if (typeof vitals.bloodPressure === 'string' && vitals.bloodPressure.includes('/')) {
+      const [sys, dia] = vitals.bloodPressure.split('/').map((v: string) => parseInt(v.trim(), 10));
+      systolic = Number.isFinite(sys) ? sys : null;
+      diastolic = Number.isFinite(dia) ? dia : null;
+    }
+    if (vitals.systolic && Number.isFinite(Number(vitals.systolic))) {
+      systolic = Number(vitals.systolic);
+    }
+    if (vitals.diastolic && Number.isFinite(Number(vitals.diastolic))) {
+      diastolic = Number(vitals.diastolic);
+    }
+
+    const heartRate = Number.isFinite(Number(vitals.heartRate)) ? Number(vitals.heartRate) : null;
+    const temperature = Number.isFinite(Number(vitals.temperature)) ? Number(vitals.temperature) : null;
+    const oxygenSaturation = Number.isFinite(Number(vitals.oxygenSaturation)) ? Number(vitals.oxygenSaturation) : null;
+    const respiratoryRate = Number.isFinite(Number(vitals.respiratoryRate)) ? Number(vitals.respiratoryRate) : null;
+
+    return {
+      systolic,
+      diastolic,
+      heartRate,
+      temperature,
+      oxygenSaturation,
+      respiratoryRate,
+    };
+  }
+
+  private applyVitalsSafetyOverrides(
+    baseRisk: { risk_level?: string; recommendations?: string[]; factors?: any[]; model?: string } | null,
+    vitalsRaw: any,
+  ) {
+    const vitals = this.normalizeVitalsForSafety(vitalsRaw);
+    const factors: string[] = [];
+
+    const highFever = vitals.temperature !== null && vitals.temperature >= 39;
+    const severeFever = vitals.temperature !== null && vitals.temperature >= 40;
+    const tachycardia = vitals.heartRate !== null && vitals.heartRate >= 130;
+    const hypotension =
+      (vitals.systolic !== null && vitals.systolic < 90) ||
+      (vitals.diastolic !== null && vitals.diastolic < 60);
+    const veryLowSpO2 =
+      vitals.oxygenSaturation !== null && vitals.oxygenSaturation > 0 && vitals.oxygenSaturation < 90;
+
+    if (severeFever) {
+      factors.push(`High fever ${vitals.temperature?.toFixed(1)}°C above safety threshold`);
+    } else if (highFever) {
+      factors.push(`Fever ${vitals.temperature?.toFixed(1)}°C above normal range`);
+    }
+    if (tachycardia) {
+      factors.push(`Tachycardia ${vitals.heartRate} bpm`);
+    }
+    if (hypotension) {
+      const bp = `${vitals.systolic ?? '?'} / ${vitals.diastolic ?? '?'}`;
+      factors.push(`Hypotension with blood pressure approximately ${bp}`);
+    }
+    if (veryLowSpO2) {
+      factors.push(`Low oxygen saturation ${vitals.oxygenSaturation}%`);
+    }
+
+    let safetyLevel: 'low' | 'moderate' | 'high' | 'critical' = 'low';
+    const dangerSignals = [highFever, tachycardia, hypotension, veryLowSpO2].filter(Boolean).length;
+
+    if (dangerSignals >= 2 || severeFever || (vitals.systolic !== null && vitals.systolic < 80)) {
+      safetyLevel = 'critical';
+    } else if (dangerSignals === 1) {
+      safetyLevel = 'high';
+    } else if (highFever) {
+      safetyLevel = 'moderate';
+    }
+
+    const baseLevel = (baseRisk?.risk_level || 'unknown').toLowerCase();
+    const order = ['unknown', 'low', 'moderate', 'high', 'critical'];
+    const baseIndex = order.indexOf(baseLevel as any);
+    const safetyIndex = order.indexOf(safetyLevel as any);
+    const finalLevel = safetyIndex > baseIndex ? safetyLevel : (baseLevel as any as 'low' | 'moderate' | 'high' | 'critical' | 'unknown');
+
+    const acuteRecommendations: string[] = [];
+    if (finalLevel === 'critical') {
+      acuteRecommendations.push(
+        'Critical vitals pattern detected: immediate clinical review required.',
+        'Escalate to senior clinician or emergency response according to local protocol.',
+        'Verify measurement accuracy (SpO2, respiratory rate) and repeat vitals urgently.',
+      );
+    } else if (finalLevel === 'high') {
+      acuteRecommendations.push(
+        'High risk vitals pattern: prompt clinical review recommended.',
+        'Consider sepsis, dehydration, shock or other acute causes based on local protocol.',
+        'Repeat vitals within a short interval and monitor closely.',
+      );
+    } else if (finalLevel === 'moderate') {
+      acuteRecommendations.push(
+        'Abnormal vitals detected: clinical review and closer monitoring recommended.',
+        'Repeat vitals and assess for underlying infection, pain or distress.',
+      );
+    } else if (finalLevel === 'low') {
+      acuteRecommendations.push(
+        'No severe danger signals detected in vitals alone.',
+        'Continue routine monitoring and use clinical judgement.',
+      );
+    }
+
+    const baseRecommendations = Array.isArray(baseRisk?.recommendations) ? baseRisk!.recommendations : [];
+    const filteredBaseRecommendations = baseRecommendations.filter((rec) => {
+      const lower = rec.toLowerCase();
+      if (lower.includes('readmission')) return false;
+      if (lower.includes('discharge')) return false;
+      if (lower.includes('follow-up')) return false;
+      return true;
+    });
+
+    const combinedFactors = [
+      ...(Array.isArray(baseRisk?.factors) ? baseRisk!.factors : []),
+      ...factors.map((f) => ({ factor: f, impact: 'major' })),
+    ];
+
+    return {
+      riskLevel: finalLevel,
+      recommendations: [...acuteRecommendations, ...filteredBaseRecommendations],
+      factors: combinedFactors,
+    };
+  }
+
   async analyzeNurseTriage(payload: any, tenantDb?: DataSource, tenantId?: string) {
     const triageInput = payload || {};
     const symptoms = Array.isArray(triageInput.symptoms)
@@ -1132,11 +1281,13 @@ export class CdssService {
       tenantId,
     );
 
+    const safetyAdjusted = this.applyVitalsSafetyOverrides(risk, vitalsInput.vitals || vitalsInput);
+
     const interpretation = {
-      riskLevel: risk?.risk_level || 'unknown',
+      riskLevel: safetyAdjusted.riskLevel || risk?.risk_level || 'unknown',
       overallScore: risk?.overall_score ?? null,
-      factors: risk?.factors || [],
-      recommendations: risk?.recommendations || [],
+      factors: safetyAdjusted.factors,
+      recommendations: safetyAdjusted.recommendations,
       trendSignals: risk?.trends || null,
       visitPatterns: risk?.visit_patterns || null,
       guidance: 'AI suggestion only. Nurse confirmation is required before clinical action.',

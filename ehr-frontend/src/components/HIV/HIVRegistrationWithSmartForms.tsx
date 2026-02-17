@@ -78,8 +78,10 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
     try {
       setSubmitting(true);
 
-      // Map WHO Smart Form data to enrollment structure
-      const enrollmentData = mapSmartFormToEnrollment(allFormData);
+      const enrollmentData: any = mapSmartFormToEnrollment(allFormData);
+      const storedUser = localStorage.getItem('ehr_user');
+      const currentUser = storedUser ? JSON.parse(storedUser) : {};
+      enrollmentData.createdBy = currentUser.id;
 
       // Submit enrollment
       await ehrApi.enrollInHivCare(enrollmentData, token, tenantSlug);
@@ -95,9 +97,7 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
     }
   };
 
-  const mapSmartFormToEnrollment = (formData: Record<string, any>) => {
-    // Map WHO Smart Form answers to enrollment structure
-    // This is a simplified mapping - adjust based on actual form fields
+  const mapSmartFormToEnrollment = (formData: Record<string, any>): any => {
     return {
       patientId,
       enrollmentDate: formData.enrollmentDate || new Date().toISOString().split('T')[0],
@@ -105,7 +105,6 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
       baselineCd4: formData.baselineCd4,
       baselineViralLoad: formData.baselineViralLoad,
       baselineClinicalStage: formData.baselineClinicalStage,
-      // Include all WHO Smart Form data
       whoSmartFormData: formData,
     };
   };
@@ -160,7 +159,6 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
 
   return (
     <div className="space-y-6">
-      {/* WHO Smart Forms Option */}
       <div className="glass-gradient rounded-2xl p-6 border border-indigo-200/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -168,9 +166,9 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
               <FileText className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Use WHO Smart Forms for Registration</h3>
+              <h3 className="text-xl font-bold text-slate-900">WHO HIV Registration Workflow (optional)</h3>
               <p className="text-sm text-slate-600 mt-1">
-                Use WHO-recommended forms for standardized HIV patient registration
+                Optional WHO-aligned registration steps. The standard Medicore enrollment form remains the main form.
               </p>
             </div>
           </div>
@@ -180,7 +178,7 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
             disabled={submitting}
           >
             <UserPlus className="w-5 h-5" />
-            Use WHO Forms
+            Open WHO Workflow
           </button>
         </div>
 
@@ -223,5 +221,3 @@ export const HIVRegistrationWithSmartForms: React.FC<HIVRegistrationWithSmartFor
     </div>
   );
 };
-
-

@@ -159,14 +159,55 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
     }
   };
 
-  const mapToHivTest = (data: Record<string, any>) => ({
-    patientId,
-    testDate: data['HIV.B.DE110'] || new Date().toISOString().split('T')[0],
-    testResult: data['HIV.B.DE111'],
-    hivStatus: data['HIV.B.DE115'],
-    testType: data['HIV.B.DE81'],
-    whoSmartFormData: data,
-  });
+  const mapToHivTest = (data: Record<string, any>): any => {
+    const storedUser = localStorage.getItem('ehr_user');
+    const currentUser = storedUser ? JSON.parse(storedUser) : {};
+
+    const mapped: any = {
+      testDate: data['HIV.B.DE110'] || new Date().toISOString().split('T')[0],
+      testResult: data['HIV.B.DE111'],
+      hivStatus: data['HIV.B.DE115'],
+      testType: data['HIV.B.DE81'],
+      whoSmartFormData: data,
+    };
+
+    return {
+      patientId,
+      testedBy: currentUser.id,
+      testStage: mapped.testStage || 'screening',
+      testType: mapped.testType || 'rapid_antibody',
+      testingReason: mapped.testingReason || 'diagnostic_symptomatic',
+      testingApproach: mapped.testingApproach || 'facility',
+      testingLocation: mapped.testingLocation || 'outpatient',
+      testingCadre: mapped.testingCadre || 'nurse',
+      specimenType: mapped.specimenType || 'whole blood',
+      kitType: mapped.kitType || 'rapid_diagnostic_test',
+      testKitName: mapped.testKitName || 'Determine HIV-1/2',
+      testKitLot: mapped.testKitLot || '',
+      testKitExpiry: mapped.testKitExpiry || null,
+      dualKitUsed: mapped.dualKitUsed ?? false,
+      testResult: mapped.testResult,
+      resultValue: mapped.resultValue || null,
+      resultUnit: mapped.resultUnit || null,
+      selfTestReported: mapped.selfTestReported ?? false,
+      selfTestConfirmed: mapped.selfTestConfirmed ?? false,
+      recencyTestPerformed: mapped.recencyTestPerformed ?? false,
+      recencyResult: mapped.recencyResult || null,
+      recencyKitLot: mapped.recencyKitLot || null,
+      recencyKitExpiry: mapped.recencyKitExpiry || null,
+      partnerNotificationStatus: mapped.partnerNotificationStatus || null,
+      linkageAction: mapped.linkageAction || null,
+      linkageCompleted: mapped.linkageCompleted ?? false,
+      nextTestDueDate: mapped.nextTestDueDate || null,
+      notes: mapped.notes || null,
+      followUpActions: mapped.followUpActions || [],
+      testingContext: mapped.testingContext || {},
+      testConcept: mapped.testConcept,
+      specimenConcept: mapped.specimenConcept,
+      stis: mapped.stis || [],
+      whoSmartFormData: mapped.whoSmartFormData,
+    };
+  };
 
   const mapToEnrollment = (data: Record<string, any>) => ({
     patientId,
@@ -337,5 +378,3 @@ export const HIVWorkflowIntegration: React.FC<HIVWorkflowIntegrationProps> = ({
     </div>
   );
 };
-
-

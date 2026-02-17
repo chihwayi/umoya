@@ -174,15 +174,15 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                       <Activity className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-lg">Use WHO Smart Forms</h4>
-                      <p className="text-sm text-slate-600 mt-1">Standardized clinical documentation forms</p>
+                      <h4 className="font-bold text-slate-900 text-lg">WHO Clinical Notes Workflow (optional)</h4>
+                      <p className="text-sm text-slate-600 mt-1">Optional WHO-aligned forms. The regular Medicore notes remain the main form.</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowSmartForms(true)}
                     className="glass-button px-6 py-3 text-white rounded-xl text-sm font-semibold shadow-lg"
                   >
-                    Use WHO Forms
+                    Open WHO Workflow
                   </button>
                 </div>
               </div>
@@ -196,7 +196,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                     onClick={() => setShowSmartForms(false)}
                     className="text-sm text-slate-600 hover:text-slate-900"
                   >
-                    ← Use Standard Form
+                    ← Back to regular notes
                   </button>
                 </div>
                 <ClinicalNotesWithSmartForms
@@ -532,5 +532,4 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
 };
 
 export default ClinicalNotesModal;
-
 
