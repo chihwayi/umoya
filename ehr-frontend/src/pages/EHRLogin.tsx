@@ -34,19 +34,31 @@ const EHRLogin: React.FC = () => {
             name: tenant.clinicName,
             logoUrl: tenant.logoUrl
           });
+          try {
+            if (tenant.clinicName) {
+              localStorage.setItem('ehr_tenant_name', tenant.clinicName);
+            }
+          } catch {}
           showInfo('Clinic Selected', `Accessing ${tenant.clinicName} EHR system`);
         } else {
-            // Fallback if tenant not found
-             setTenantInfo({
-                name: location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login'
-             });
+          const fallbackName = location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login';
+          setTenantInfo({
+            name: fallbackName
+          });
+          try {
+            localStorage.setItem('ehr_tenant_name', fallbackName);
+          } catch {}
         }
       } catch (error) {
         console.error('Failed to fetch tenant details', error);
-         // Fallback on error
-          setTenantInfo({
-            name: location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login'
-         });
+        // Fallback on error
+        const fallbackName = location.state?.tenantName || tenantSlug?.replace('-', ' ') || 'EHR Login';
+        setTenantInfo({
+          name: fallbackName
+        });
+        try {
+          localStorage.setItem('ehr_tenant_name', fallbackName);
+        } catch {}
       }
     };
 

@@ -699,23 +699,55 @@ export class HivService {
 
   async enrollInCare(body: any, tenantDb: DataSource) {
     const { patientId, enrollmentDate, dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy, whoSmartFormData } = body;
+
+    const existing = await tenantDb.query(
+      `
+      SELECT *
+      FROM hiv_care_enrollments
+      WHERE patient_id = $1
+      ORDER BY enrollment_date DESC
+      `,
+      [patientId],
+    );
+
+    if (existing.length > 0) {
+      await tenantDb.query(
+        `UPDATE hiv_tests SET enrolled_in_care = true WHERE patient_id = $1`,
+        [patientId],
+      );
+      return existing[0];
+    }
+
     const enrollmentNumber = `ENR-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    
-    const result = await tenantDb.query(`
+
+    const result = await tenantDb.query(
+      `
       INSERT INTO hiv_care_enrollments (
         patient_id, enrollment_date, enrollment_number, date_confirmed_positive,
         baseline_cd4, baseline_viral_load, baseline_clinical_stage, baseline_who_stage, enrollment_notes, created_by, who_smart_form_data
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
       RETURNING *
-    `, [patientId, enrollmentDate || new Date().toISOString().split('T')[0], enrollmentNumber, 
-        dateConfirmedPositive, baselineCd4, baselineViralLoad, baselineClinicalStage, baselineWhoStage, enrollmentNotes, createdBy, whoSmartFormData ? JSON.stringify(whoSmartFormData) : null]);
-    
-    // Update test enrollment status
+    `,
+      [
+        patientId,
+        enrollmentDate || new Date().toISOString().split('T')[0],
+        enrollmentNumber,
+        dateConfirmedPositive,
+        baselineCd4,
+        baselineViralLoad,
+        baselineClinicalStage,
+        baselineWhoStage,
+        enrollmentNotes,
+        createdBy,
+        whoSmartFormData ? JSON.stringify(whoSmartFormData) : null,
+      ],
+    );
+
     await tenantDb.query(
       `UPDATE hiv_tests SET enrolled_in_care = true WHERE patient_id = $1`,
-      [patientId]
+      [patientId],
     );
-    
+
     return result[0];
   }
 
@@ -2416,6 +2448,280 @@ export class HivService {
       this.logger.warn(`Regimen history table may not exist: ${error.message}`);
       return { history: [] };
     }
+  }
+
+  async getVlPathway(enrollmentId: string, tenantDb: DataSource) {
+    const enrollmentRows = await tenantDb.query(
+      `SELECT id, enrollment_date, art_start_date 
+       FROM hiv_care_enrollments 
+       WHERE id = $1`,
+      [enrollmentId],
+    );
+
+    if (!enrollmentRows || enrollmentRows.length === 0) {
+      throw new NotFoundException('HIV care enrollment not found');
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    const vlVisits = await tenantDb.query(
+      `SELECT 
+         viral_load,
+         viral_load_unit,
+         COALESCE(viral_load_test_date, visit_date) as vl_date,
+         visit_date,
+         arv_status
+       FROM hiv_clinical_visits
+       WHERE enrollment_id = $1
+       AND viral_load IS NOT NULL
+       ORDER BY COALESCE(viral_load_test_date, visit_date) DESC`,
+      [enrollmentId],
+    );
+
+    const latestVl = vlVisits.length > 0 ? vlVisits[0] : null;
+    const secondLatestVl = vlVisits.length > 1 ? vlVisits[1] : null;
+
+    const onArtRow = await tenantDb.query(
+      `SELECT COUNT(*) as count 
+       FROM hiv_clinical_visits 
+       WHERE enrollment_id = $1
+       AND arv_status IN ('2a','2b','3','4','6')`,
+      [enrollmentId],
+    );
+
+    const everOnArt = parseInt(onArtRow[0]?.count || '0') > 0 || !!enrollment.art_start_date;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const artStartDate = enrollment.art_start_date ? new Date(enrollment.art_start_date) : null;
+    const lastVlDate = latestVl?.vl_date ? new Date(latestVl.vl_date) : null;
+    const lastVlResult =
+      latestVl && latestVl.viral_load !== null && latestVl.viral_load !== undefined
+        ? parseFloat(latestVl.viral_load.toString())
+        : null;
+
+    let nextVlDate: string | null = null;
+    if (everOnArt) {
+      const nextDate = this.monitoringService.calculateNextViralLoadDate(
+        artStartDate,
+        lastVlDate,
+        lastVlResult,
+        null,
+        today,
+      );
+      nextVlDate = nextDate.toISOString().split('T')[0];
+    }
+
+    const eacInfo = await this.checkEacEligibility(enrollmentId, tenantDb);
+
+    let status = 'no_vl';
+    const actions: string[] = [];
+
+    if (!everOnArt) {
+      status = 'not_on_art';
+      actions.push('initiate_art');
+    } else if (!latestVl) {
+      status = 'vl_missing_on_art';
+      actions.push('collect_vl');
+    } else if (lastVlResult !== null && lastVlResult < 1000) {
+      if (eacInfo.eacCompleted && eacInfo.eacCompletedAndSuppressed) {
+        status = 'post_eac_suppressed';
+      } else {
+        status = 'suppressed';
+      }
+    } else if (lastVlResult !== null && lastVlResult >= 1000) {
+      if (eacInfo.activeEac) {
+        status = 'high_vl_on_eac';
+        actions.push('continue_eac');
+        actions.push('repeat_vl');
+      } else if (eacInfo.needsEac) {
+        status = 'high_vl_needs_eac';
+        actions.push('start_eac');
+        actions.push('repeat_vl_after_eac');
+      } else if (eacInfo.eacCompleted && !eacInfo.eacCompletedAndSuppressed) {
+        status = 'failure_after_eac';
+        actions.push('consider_switch');
+      } else {
+        status = 'high_vl';
+        actions.push('start_eac');
+      }
+    }
+
+    let overdue = false;
+    if (nextVlDate) {
+      const next = new Date(nextVlDate);
+      next.setHours(0, 0, 0, 0);
+      overdue = next < today;
+      if (overdue && !actions.includes('collect_vl')) {
+        actions.push('collect_vl');
+      }
+    }
+
+    return {
+      status,
+      everOnArt,
+      lastVlValue: lastVlResult,
+      lastVlDate: lastVlDate ? lastVlDate.toISOString().split('T')[0] : null,
+      lastVlUnit: latestVl?.viral_load_unit || 'copies/mL',
+      secondLastVlValue:
+        secondLatestVl && secondLatestVl.viral_load !== null && secondLatestVl.viral_load !== undefined
+          ? parseFloat(secondLatestVl.viral_load.toString())
+          : null,
+      secondLastVlDate:
+        secondLatestVl && (secondLatestVl.viral_load_test_date || secondLatestVl.visit_date)
+          ? new Date(
+              secondLatestVl.viral_load_test_date || secondLatestVl.visit_date,
+            ).toISOString().split('T')[0]
+          : null,
+      nextVlDate,
+      overdue,
+      actions,
+      eac: eacInfo,
+    };
+  }
+
+  async getDsdStatus(enrollmentId: string, tenantDb: DataSource) {
+    const enrollmentRows = await tenantDb.query(
+      `SELECT id, enrollment_date, art_start_date 
+       FROM hiv_care_enrollments 
+       WHERE id = $1`,
+      [enrollmentId],
+    );
+
+    if (!enrollmentRows || enrollmentRows.length === 0) {
+      throw new NotFoundException('HIV care enrollment not found');
+    }
+
+    const enrollment = enrollmentRows[0];
+
+    const lastVisitRows = await tenantDb.query(
+      `SELECT 
+         visit_type,
+         visit_date,
+         arv_status,
+         cd4_count,
+         cd4_test_date,
+         viral_load,
+         viral_load_test_date
+       FROM hiv_clinical_visits
+       WHERE enrollment_id = $1
+       ORDER BY visit_date DESC, visit_number DESC
+       LIMIT 1`,
+      [enrollmentId],
+    );
+
+    const lastVisit = lastVisitRows.length > 0 ? lastVisitRows[0] : null;
+
+    const adherenceRows = await tenantDb.query(
+      `SELECT adherence_percentage, tracking_date
+       FROM hiv_adherence_tracking
+       WHERE enrollment_id = $1
+       ORDER BY tracking_date DESC
+       LIMIT 1`,
+      [enrollmentId],
+    );
+
+    const adherence = adherenceRows.length > 0 ? adherenceRows[0] : null;
+
+    const artStartDate = enrollment.art_start_date ? new Date(enrollment.art_start_date) : null;
+
+    const onArtRow = await tenantDb.query(
+      `SELECT COUNT(*) as count 
+       FROM hiv_clinical_visits 
+       WHERE enrollment_id = $1
+       AND arv_status IN ('2a','2b','3','4','6')`,
+      [enrollmentId],
+    );
+
+    const everOnArt = parseInt(onArtRow[0]?.count || '0') > 0 || !!enrollment.art_start_date;
+
+    let currentModel = 'conventional';
+    const visitType = lastVisit?.visit_type || null;
+
+    if (visitType) {
+      if (['E', 'F'].includes(visitType)) {
+        currentModel = 'group_dsd';
+      } else if (['B', 'D', 'G', 'J', 'K'].includes(visitType)) {
+        currentModel = 'fast_track';
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const lastVlValue =
+      lastVisit && lastVisit.viral_load !== null && lastVisit.viral_load !== undefined
+        ? parseFloat(lastVisit.viral_load.toString())
+        : null;
+    const lastVlDateRaw = lastVisit
+      ? lastVisit.viral_load_test_date || lastVisit.visit_date || null
+      : null;
+    const lastVlDate = lastVlDateRaw ? new Date(lastVlDateRaw) : null;
+
+    const lastCd4Value =
+      lastVisit && lastVisit.cd4_count !== null && lastVisit.cd4_count !== undefined
+        ? parseInt(lastVisit.cd4_count.toString(), 10)
+        : null;
+    const lastCd4Date = lastVisit && lastVisit.cd4_test_date ? new Date(lastVisit.cd4_test_date) : null;
+
+    const failureCheck = this.monitoringService.checkTreatmentFailure(
+      lastVisit?.arv_status || '',
+      lastVlValue,
+      lastVlDate,
+      lastCd4Value,
+      lastCd4Date,
+      today,
+    );
+
+    const reasons: string[] = [];
+    let eligibleForDsd = false;
+    let recommendedModel: string | null = null;
+
+    if (!everOnArt) {
+      reasons.push('Client is not on ART');
+    } else {
+      if (lastVlValue === null) {
+        reasons.push('No recent viral load result');
+      }
+      if (lastVlValue !== null && lastVlValue >= 1000) {
+        reasons.push('High viral load');
+      }
+      if (failureCheck.isTreatmentFailure) {
+        reasons.push('Possible or confirmed treatment failure');
+      }
+      if (adherence && adherence.adherence_percentage !== null) {
+        const adherenceValue = parseFloat(adherence.adherence_percentage.toString());
+        if (adherenceValue < 95) {
+          reasons.push('Adherence below 95%');
+        }
+      }
+
+      const vlSuppressed = lastVlValue !== null && lastVlValue < 1000;
+      const goodAdherence =
+        !adherence ||
+        (adherence.adherence_percentage !== null &&
+          parseFloat(adherence.adherence_percentage.toString()) >= 95);
+
+      if (vlSuppressed && goodAdherence && !failureCheck.isTreatmentFailure) {
+        eligibleForDsd = true;
+        recommendedModel = currentModel === 'conventional' ? 'fast_track' : currentModel;
+      }
+    }
+
+    return {
+      currentModel,
+      currentModelSourceVisitType: visitType,
+      artStartDate: artStartDate ? artStartDate.toISOString().split('T')[0] : null,
+      lastVisitDate: lastVisit?.visit_date || null,
+      lastVlValue,
+      lastVlDate: lastVlDate ? lastVlDate.toISOString().split('T')[0] : null,
+      adherencePercentage: adherence?.adherence_percentage ?? null,
+      everOnArt,
+      eligibleForDsd,
+      recommendedModel,
+      reasons,
+    };
   }
 
   /**

@@ -222,6 +222,20 @@ export class HivController {
     return this.hivService.getMonitoringSchedules(enrollmentId, req.tenantDb);
   }
 
+  @Get('vl-pathway/:enrollmentId')
+  @ApiOperation({ summary: 'Get viral load pathway state for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Viral load pathway retrieved' })
+  async getVlPathway(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getVlPathway(enrollmentId, req.tenantDb);
+  }
+
+  @Get('dsd-status/:enrollmentId')
+  @ApiOperation({ summary: 'Get DSD status and eligibility for an enrollment' })
+  @ApiResponse({ status: 200, description: 'DSD status retrieved' })
+  async getDsdStatus(@Param('enrollmentId') enrollmentId: string, @Request() req: RequestWithTenant) {
+    return this.hivService.getDsdStatus(enrollmentId, req.tenantDb);
+  }
+
   @Get('alerts/:enrollmentId')
   @ApiOperation({ summary: 'Get clinical alerts for an enrollment' })
   @ApiResponse({ status: 200, description: 'Clinical alerts retrieved' })
@@ -373,4 +387,3 @@ export class HivController {
     return this.hivService.getComparisonReport(query, req.tenantDb);
   }
 }
-

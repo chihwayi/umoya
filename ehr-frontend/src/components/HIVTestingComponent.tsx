@@ -477,17 +477,26 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
 
       if (tests.length > 0) {
         const latestTest = tests[0];
-        if (latestTest.algorithm_result) {
-          setAlgorithmResult({
-            result: latestTest.algorithm_result,
-            confidence: 'high',
-            next_step:
-              latestTest.algorithm_result === 'positive'
-                ? 'Offer enrollment in HIV care and confirm STI treatment links'
-                : latestTest.algorithm_result === 'negative'
-                ? 'Provide post-test counselling and prevention package'
-                : 'Continue national testing algorithm',
-          });
+
+        try {
+          const algoResponse = await ehrApi.processHivAlgorithm(latestTest.id, token, tenantSlug);
+          if (algoResponse.data) {
+            setAlgorithmResult(algoResponse.data);
+          }
+        } catch (error) {
+          console.error('Failed to process HIV algorithm with CDSS:', error);
+          if (latestTest.algorithm_result) {
+            setAlgorithmResult({
+              result: latestTest.algorithm_result,
+              confidence: 'high',
+              next_step:
+                latestTest.algorithm_result === 'positive'
+                  ? 'Offer enrollment in HIV care and confirm STI treatment links'
+                  : latestTest.algorithm_result === 'negative'
+                  ? 'Provide post-test counselling and prevention package'
+                  : 'Continue national testing algorithm',
+            });
+          }
         }
 
         if (
@@ -708,6 +717,23 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
     }
 
     return null;
+  }, [historyWithParsed]);
+
+  const enrollmentSeedTest = useMemo(() => {
+    if (!historyWithParsed.length) {
+      return null;
+    }
+    const positiveTests = historyWithParsed.filter((test: any) => {
+      return (
+        test.test_result === 'positive' ||
+        test.test_result === 'reactive' ||
+        test.algorithm_result === 'positive'
+      );
+    });
+    if (positiveTests.length > 0) {
+      return positiveTests[positiveTests.length - 1];
+    }
+    return historyWithParsed[0];
   }, [historyWithParsed]);
 
   const stageStepMeta = useMemo(() => {
@@ -1631,7 +1657,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
                         </p>
                         <p className="mt-1 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          {algorithmResult.source === 'ehr_fallback' || !algorithmResult.interpretation
+                          {algorithmResult.source === 'ehr_fallback'
                             ? 'Source · Basic EHR fallback (CDSS unavailable)'
                             : 'Source · CDSS HIV algorithm'}
                         </p>
@@ -1832,6 +1858,7 @@ const HIVTestingComponent: React.FC<HIVTestingComponentProps> = ({ tenantSlug, p
               : undefined
           }
           patientSex={selectedPatient.gender}
+          initialHivTest={enrollmentSeedTest || undefined}
           onClose={() => setShowEnrollmentModal(false)}
           onSuccess={() => {
             setShowEnrollmentModal(false);

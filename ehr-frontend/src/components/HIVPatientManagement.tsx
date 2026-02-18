@@ -70,6 +70,21 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
     );
   });
 
+  const uniqueEnrollments: any[] = Array.from(
+    filteredEnrollments
+      .reduce((map, e) => {
+        const key = e.patient_id || e.patientId;
+        if (!key) {
+          return map;
+        }
+        if (!map.has(key)) {
+          map.set(key, e);
+        }
+        return map;
+      }, new Map<string, any>())
+      .values(),
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -137,7 +152,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           <Activity className="w-12 h-12 text-emerald-400 mx-auto animate-spin mb-4" />
           <p className="text-slate-600">Loading patients...</p>
         </div>
-      ) : filteredEnrollments.length === 0 ? (
+      ) : uniqueEnrollments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl shadow-lg">
           <Users className="w-16 h-16 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-slate-600 mb-2">No Patients Found</h3>
@@ -181,7 +196,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEnrollments.map((enrollment) => {
+            {uniqueEnrollments.map((enrollment) => {
               const eacStatus = eacStatusMap[enrollment.id] || {};
               const needsEac = eacStatus.needsEac || false;
               const activeEac = eacStatus.activeEac || false;

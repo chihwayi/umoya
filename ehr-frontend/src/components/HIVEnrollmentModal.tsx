@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { X, Save, Calendar, User, ChevronRight, ChevronLeft, Check } from 'lucide-react';
-import { ehrApi } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, Calendar, User, ChevronRight, ChevronLeft, Check, AlertTriangle, Activity } from 'lucide-react';
+import { ehrApi, cdssAxios } from '../services/api';
 import { useNotification } from './GlobalNotification';
-import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
+import { formatDateForAPI, getTodayFormatted, formatDateToDDMMYYYY } from '../utils/dateUtils';
 
 interface HIVEnrollmentModalProps {
   patientId: string;
   patientName: string;
   patientAge?: number;
   patientSex?: string;
+  initialHivTest?: any;
   onClose: () => void;
   onSuccess: () => void;
   tenantSlug: string;
@@ -19,6 +20,7 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
   patientName,
   patientAge,
   patientSex,
+  initialHivTest,
   onClose,
   onSuccess,
   tenantSlug
@@ -27,6 +29,14 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiPlan, setAiPlan] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
+  let defaultClinicName = '';
+  try {
+    defaultClinicName = localStorage.getItem('ehr_tenant_name') || '';
+  } catch {}
 
   const [form, setForm] = useState({
     // Step 1: Basic Enrollment Information
@@ -42,7 +52,7 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
     // Step 2: ART Initiation Details - Registration
     oiArtNumber: '',
     dateOfRegistration: new Date().toISOString().split('T')[0],
-    nameOfRegistrationHealthCentre: '',
+    nameOfRegistrationHealthCentre: defaultClinicName,
     ageAtRegistration: patientAge?.toString() || '',
     sexAssignedAtBirth: patientSex || '',
     
@@ -135,8 +145,119 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
     disclosureHivStatusFinalToWhom: ''
   });
 
+  const dateFirstConfirmedRef = useRef<HTMLInputElement | null>(null);
+  const consentPersonalTracingRef = useRef<HTMLInputElement | null>(null);
+  const consentIndexCaseTestingRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!initialHivTest) {
+      return;
+    }
+    setForm(prev => {
+      const next = { ...prev };
+      if (!next.dateFirstConfirmedHivTest && initialHivTest.test_date) {
+        next.dateFirstConfirmedHivTest = formatDateToDDMMYYYY(initialHivTest.test_date);
+      }
+      const testType = initialHivTest.testType || initialHivTest.test_type;
+      if (testType === 'rapid_antibody' || testType === 'elisa') {
+        next.hivTestUsedAntibody = true;
+      }
+      if (testType === 'pcr') {
+        next.hivTestUsedPcr = true;
+      }
+      const testStage = initialHivTest.testStage || initialHivTest.test_stage;
+      if (testStage === 'confirmatory') {
+        next.confirmatoryHivTest = true;
+      }
+      if (testStage === 'retest_before_art') {
+        next.retestingHivForArtInitiation = true;
+      }
+      const reason = initialHivTest.testingReason || initialHivTest.testing_reason;
+      if (reason === 'pregnancy_anc') {
+        next.reasonHivTestAntenatal = true;
+      } else if (reason === 'pep_follow_up') {
+        next.reasonHivTestPep = true;
+      } else if (reason === 'prep_follow_up') {
+        next.reasonHivTestPrep = true;
+      } else if (reason === 'tb_clinic') {
+        next.reasonHivTestTb = true;
+      } else if (reason === 'diagnostic_symptomatic') {
+        next.reasonHivTestHospitalIllness = true;
+      } else if (reason === 'retest_before_art') {
+        next.retestingHivForArtInitiation = true;
+      } else if (reason === 'other') {
+        next.reasonHivTestOthers = true;
+      }
+      if (!next.institutionNameVctPmtct && initialHivTest.testing_location) {
+        next.institutionNameVctPmtct = initialHivTest.testing_location;
+      }
+      return next;
+    });
+  }, [initialHivTest]);
+
   const handleCheckboxChange = (field: string, checked: boolean) => {
     setForm(prev => ({ ...prev, [field]: checked }));
+  };
+
+  const buildEnrollmentPayload = () => {
+    const mapDateForApi = (value: string) => {
+      if (!value) return null;
+      const iso = formatDateForAPI(value);
+      return iso || null;
+    };
+
+    return {
+      patientId,
+      enrollmentDate: mapDateForApi(form.enrollmentDate),
+      dateConfirmedPositive: mapDateForApi(form.dateConfirmedPositive),
+      baselineCd4: form.baselineCd4 ? parseInt(form.baselineCd4) : null,
+      baselineViralLoad: form.baselineViralLoad ? parseFloat(form.baselineViralLoad) : null,
+      createdBy: null,
+      baselineClinicalStage: form.baselineClinicalStage,
+      baselineWhoStage: form.baselineWhoStage,
+      enrollmentNotes: form.enrollmentNotes,
+    };
+  };
+
+  const fetchAiSupport = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) {
+        return;
+      }
+
+      setAiStatus('loading');
+
+      const enrollmentPayload = buildEnrollmentPayload();
+
+      const requestBody = {
+        context: 'hiv_care_enrollment',
+        patient_name: patientName,
+        patient_age: patientAge,
+        patient_sex: patientSex,
+        enrollment: enrollmentPayload,
+        linkage: {
+          from_hts: form.linkageFromHts,
+          from_pmtct: form.linkageFromPmtct,
+          from_tb: form.linkageFromTbProgram,
+          from_sti: form.linkageFromSti,
+        },
+      };
+
+      const response = await cdssAxios.post('/guidelines/check', requestBody, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = response.data || {};
+      setAiSummary(data.summary || null);
+      setAiPlan(data.recommended_plan || data.recommendations || null);
+      setAiStatus('ready');
+    } catch (error) {
+      console.error('AI/CDSS enrollment support failed:', error);
+      setAiStatus('error');
+    }
   };
 
   const handleSubmit = async () => {
@@ -157,8 +278,7 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         return iso || null;
       };
 
-      // Step 1: Create enrollment
-      const enrollmentResponse = await ehrApi.enrollInHivCare({
+      const enrollmentPayload = {
         patientId,
         enrollmentDate: mapDateForApi(form.enrollmentDate),
         dateConfirmedPositive: mapDateForApi(form.dateConfirmedPositive),
@@ -167,8 +287,10 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         createdBy: currentUser.id,
         baselineClinicalStage: form.baselineClinicalStage,
         baselineWhoStage: form.baselineWhoStage,
-        enrollmentNotes: form.enrollmentNotes
-      }, token, tenantSlug);
+        enrollmentNotes: form.enrollmentNotes,
+      };
+
+      const enrollmentResponse = await ehrApi.enrollInHivCare(enrollmentPayload, token, tenantSlug);
 
       const enrollmentId = enrollmentResponse.data.id;
 
@@ -667,13 +789,33 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Date of First Confirmed HIV Test</label>
-          <input
-            type="text"
-            value={form.dateFirstConfirmedHivTest}
-            onChange={(e) => setForm({ ...form, dateFirstConfirmedHivTest: e.target.value })}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-            placeholder="dd/mm/yyyy"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={form.dateFirstConfirmedHivTest}
+              onChange={(e) => setForm({ ...form, dateFirstConfirmedHivTest: e.target.value })}
+              className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              placeholder="dd/mm/yyyy"
+            />
+            <button
+              type="button"
+              onClick={() => dateFirstConfirmedRef.current && (dateFirstConfirmedRef.current as any).showPicker && (dateFirstConfirmedRef.current as any).showPicker()}
+              className="absolute inset-y-0 right-2 flex items-center text-slate-400"
+            >
+              <Calendar className="w-4 h-4" />
+            </button>
+            <input
+              type="date"
+              ref={dateFirstConfirmedRef}
+              className="absolute inset-0 opacity-0 pointer-events-none"
+              onChange={(e) => {
+                if (e.target.value) {
+                  const formatted = formatDateToDDMMYYYY(e.target.value);
+                  setForm(prev => ({ ...prev, dateFirstConfirmedHivTest: formatted }));
+                }
+              }}
+            />
+          </div>
         </div>
 
         <div>
@@ -831,13 +973,33 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
                 <span className="text-sm font-medium text-slate-700">1. Personal tracing</span>
               </label>
               {form.consentPersonalTracing && (
-                <input
-                  type="text"
-                  value={form.consentPersonalTracingDate}
-                  onChange={(e) => setForm({ ...form, consentPersonalTracingDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  placeholder="dd/mm/yyyy"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.consentPersonalTracingDate}
+                    onChange={(e) => setForm({ ...form, consentPersonalTracingDate: e.target.value })}
+                    className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    placeholder="dd/mm/yyyy"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => consentPersonalTracingRef.current && (consentPersonalTracingRef.current as any).showPicker && (consentPersonalTracingRef.current as any).showPicker()}
+                    className="absolute inset-y-0 right-2 flex items-center text-slate-400"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="date"
+                    ref={consentPersonalTracingRef}
+                    className="absolute inset-0 opacity-0 pointer-events-none"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const formatted = formatDateToDDMMYYYY(e.target.value);
+                        setForm(prev => ({ ...prev, consentPersonalTracingDate: formatted }));
+                      }
+                    }}
+                  />
+                </div>
               )}
             </div>
 
@@ -852,13 +1014,33 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
                 <span className="text-sm font-medium text-slate-700">2. Index-case Testing Follow-up</span>
               </label>
               {form.consentIndexCaseTesting && (
-                <input
-                  type="text"
-                  value={form.consentIndexCaseTestingDate}
-                  onChange={(e) => setForm({ ...form, consentIndexCaseTestingDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
-                  placeholder="dd/mm/yyyy"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.consentIndexCaseTestingDate}
+                    onChange={(e) => setForm({ ...form, consentIndexCaseTestingDate: e.target.value })}
+                    className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    placeholder="dd/mm/yyyy"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => consentIndexCaseTestingRef.current && (consentIndexCaseTestingRef.current as any).showPicker && (consentIndexCaseTestingRef.current as any).showPicker()}
+                    className="absolute inset-y-0 right-2 flex items-center text-slate-400"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="date"
+                    ref={consentIndexCaseTestingRef}
+                    className="absolute inset-0 opacity-0 pointer-events-none"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const formatted = formatDateToDDMMYYYY(e.target.value);
+                        setForm(prev => ({ ...prev, consentIndexCaseTestingDate: formatted }));
+                      }
+                    }}
+                  />
+                </div>
               )}
             </div>
 
@@ -933,12 +1115,72 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         </div>
 
         <div className="p-6 overflow-y-auto flex-1">
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <User className="w-5 h-5 text-emerald-600" />
-              <span className="font-semibold text-emerald-900">{patientName}</span>
+          <div className="grid gap-4 mb-6 md:grid-cols-3">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg md:col-span-1">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="w-5 h-5 text-emerald-600" />
+                <span className="font-semibold text-emerald-900">{patientName}</span>
+              </div>
+              <p className="text-sm text-emerald-700">
+                Complete all steps to enroll patient in HIV care program.
+              </p>
+              <p className="mt-2 text-xs text-emerald-800">
+                This form is aligned with national HIV care and ART initiation guidelines.
+              </p>
             </div>
-            <p className="text-sm text-emerald-700">Complete all steps to enroll patient in HIV care program</p>
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg md:col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-700" />
+                  <span className="text-sm font-semibold text-slate-900">
+                    CDSS Enrollment Copilot
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchAiSupport}
+                  disabled={aiStatus === 'loading'}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-500 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {aiStatus === 'loading' ? (
+                    <>
+                      <Activity className="w-3 h-3 animate-spin" />
+                      Thinking…
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-3 h-3" />
+                      Ask CDSS to pre-check plan
+                    </>
+                  )}
+                </button>
+              </div>
+              {aiStatus === 'idle' && (
+                <p className="text-xs text-slate-600">
+                  CDSS can review baseline data and highlight required labs, priority actions,
+                  and first visit checklist before you submit enrollment.
+                </p>
+              )}
+              {aiStatus === 'ready' && (
+                <div className="mt-2 space-y-2 text-xs text-slate-700">
+                  {aiSummary && (
+                    <p className="font-semibold text-slate-900">Summary</p>
+                  )}
+                  {aiSummary && <p>{aiSummary}</p>}
+                  {aiPlan && (
+                    <>
+                      <p className="mt-2 font-semibold text-slate-900">Suggested care plan</p>
+                      <p className="whitespace-pre-line">{aiPlan}</p>
+                    </>
+                  )}
+                </div>
+              )}
+              {aiStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-700">
+                  CDSS enrollment helper is temporarily unavailable. You can still continue with manual enrollment.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Progress Steps */}

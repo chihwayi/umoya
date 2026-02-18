@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle, Printer, Download, ArrowRight, Stethoscope, Workflow, BookOpen, Search, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Calendar, Activity, Heart, TrendingUp, User, FileText, TestTube, Pill, AlertTriangle, Clock, CheckCircle, Printer, Download, ArrowRight, Stethoscope, Workflow, BookOpen, Search, Loader2, Sparkles, Droplets } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import EacSessionModal from './EacSessionModal';
 import HIVPatientSummaryCard from './HIVPatientSummaryCard';
+import HIVClinicalVisitModal from './HIVClinicalVisitModal';
 import { exportVisitToPDF, VisitPDFData } from '../utils/pdfExport';
 import { HIVCareVisitWithSmartForms, HIVWorkflowIntegration } from './HIV';
 import { GuidelineResult } from '../types/guidelines';
@@ -40,6 +41,9 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
   const [clinicalAlerts, setClinicalAlerts] = useState<any[]>([]);
   const [showSummaryCard, setShowSummaryCard] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [visitDecisionContext, setVisitDecisionContext] = useState<any | null>(null);
+  const [loadingVisitDecisionContext, setLoadingVisitDecisionContext] = useState(false);
+  const [showClinicalVisitModal, setShowClinicalVisitModal] = useState(false);
   const daysOnCare = enrollment.enrollment_date
     ? Math.floor(
         (new Date().getTime() - new Date(enrollment.enrollment_date).getTime()) /
@@ -82,6 +86,35 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
       loadPatientData();
     }
   }, [enrollment]);
+
+  useEffect(() => {
+    const loadVisitDecisionContext = async () => {
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) return;
+
+        setLoadingVisitDecisionContext(true);
+
+        const [vlPathwayRes, dsdStatusRes] = await Promise.all([
+          ehrApi.getVlPathway(enrollment.id, token, tenantSlug),
+          ehrApi.getDsdStatus(enrollment.id, token, tenantSlug),
+        ]);
+
+        setVisitDecisionContext({
+          vlPathway: vlPathwayRes.data,
+          dsdStatus: dsdStatusRes.data,
+        });
+      } catch (error) {
+        console.error('Failed to load HIV visit decision context:', error);
+      } finally {
+        setLoadingVisitDecisionContext(false);
+      }
+    };
+
+    if (enrollment) {
+      loadVisitDecisionContext();
+    }
+  }, [enrollment, tenantSlug]);
 
   const loadPatientData = async () => {
     try {
@@ -321,6 +354,89 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
     return null;
   })();
 
+  const dsdModelLabels: { [key: string]: string } = {
+    conventional: 'Conventional care',
+    fast_track: 'Fast track (drug collection)',
+    group_dsd: 'Group DSD (CARG/club)',
+  };
+
+  const dsdBadgeClasses = (currentModel: string | undefined, eligibleForDsd: boolean) => {
+    if (!currentModel) {
+      return 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-slate-50/20 text-slate-50 border border-slate-200/60';
+    }
+    if (currentModel === 'fast_track') {
+      return eligibleForDsd
+        ? 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50/20 text-amber-50 border border-amber-200/60'
+        : 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50/10 text-amber-50 border border-amber-200/40';
+    }
+    if (currentModel === 'group_dsd') {
+      return eligibleForDsd
+        ? 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-violet-50/20 text-violet-50 border border-violet-200/60'
+        : 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-violet-50/10 text-violet-50 border border-violet-200/40';
+    }
+    return eligibleForDsd
+      ? 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50/20 text-emerald-50 border border-emerald-200/60'
+      : 'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50/10 text-emerald-50 border border-emerald-200/40';
+  };
+
+  const vlBadgeLabel = () => {
+    if (!visitDecisionContext?.vlPathway) return null;
+    const vl = visitDecisionContext.vlPathway;
+    if (vl.status === 'suppressed' || vl.status === 'post_eac_suppressed') {
+      if (vl.lastVlValue !== null && vl.lastVlValue !== undefined) {
+        return `VL ${vl.lastVlValue} ${vl.lastVlUnit || 'copies/mL'} (${vl.lastVlDate || 'date n/a'})`;
+      }
+      return 'Viral load suppressed';
+    }
+    if (
+      vl.status === 'high_vl' ||
+      vl.status === 'high_vl_needs_eac' ||
+      vl.status === 'high_vl_on_eac' ||
+      vl.status === 'failure_after_eac'
+    ) {
+      if (vl.lastVlValue !== null && vl.lastVlValue !== undefined) {
+        return `High VL ${vl.lastVlValue} ${vl.lastVlUnit || 'copies/mL'} (${vl.lastVlDate || 'date n/a'})`;
+      }
+      return 'High viral load';
+    }
+    if (vl.status === 'vl_missing_on_art' || vl.status === 'no_vl') {
+      return 'VL due – no recent result';
+    }
+    if (vl.status === 'not_on_art') {
+      return 'Not on ART – VL not applicable';
+    }
+    return null;
+  };
+
+  const dsdBadgeLabel = () => {
+    if (!visitDecisionContext?.dsdStatus) return null;
+    const dsd = visitDecisionContext.dsdStatus;
+    const current =
+      dsdModelLabels[dsd.currentModel] || dsd.currentModel || 'Model not set';
+    if (dsd.eligibleForDsd && dsd.recommendedModel) {
+      const recommended =
+        dsdModelLabels[dsd.recommendedModel] || dsd.recommendedModel;
+      return `${current} – eligible for ${recommended}`;
+    }
+    return current;
+  };
+
+  const dsdBadgeTitle = () => {
+    if (!visitDecisionContext?.dsdStatus) return undefined;
+    const dsd = visitDecisionContext.dsdStatus;
+    if (!Array.isArray(dsd.reasons) || dsd.reasons.length === 0) {
+      return undefined;
+    }
+    return `DSD rationale: ${dsd.reasons.join('; ')}`;
+  };
+
+  const dsdEligibilityChanged = useMemo(() => {
+    if (!visitDecisionContext?.dsdStatus) return false;
+    const dsd = visitDecisionContext.dsdStatus;
+    if (!dsd.eligibleForDsd || !dsd.recommendedModel) return false;
+    return dsd.recommendedModel !== dsd.currentModel;
+  }, [visitDecisionContext]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[100000] p-4">
@@ -432,11 +548,48 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
       <div className="w-full max-w-6xl bg-white rounded-2xl shadow-2xl my-8">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              {enrollment.first_name} {enrollment.last_name}
-            </h2>
-            <p className="text-sm text-emerald-100">HIV Care Patient Summary</p>
+          <div className="flex flex-col gap-1">
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                {enrollment.first_name} {enrollment.last_name}
+              </h2>
+              <p className="text-sm text-emerald-100">HIV Care Patient Summary</p>
+            </div>
+            {(vlBadgeLabel() || dsdBadgeLabel()) && (
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {vlBadgeLabel() && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50/20 text-emerald-50 border border-emerald-200/60">
+                    <Droplets className="w-3 h-3" />
+                    {vlBadgeLabel()}
+                  </span>
+                )}
+                {dsdBadgeLabel() && (
+                  <span
+                    className={dsdBadgeClasses(
+                      visitDecisionContext?.dsdStatus?.currentModel,
+                      !!visitDecisionContext?.dsdStatus?.eligibleForDsd
+                    )}
+                    title={dsdBadgeTitle()}
+                  >
+                    <Stethoscope className="w-3 h-3" />
+                    {dsdBadgeLabel()}
+                    <button
+                      type="button"
+                      onClick={() => setShowClinicalVisitModal(true)}
+                      className="ml-2 text-[10px] underline decoration-current/60 hover:decoration-current font-normal"
+                    >
+                      Open Visit Copilot
+                    </button>
+                  </span>
+                )}
+                {loadingVisitDecisionContext && !visitDecisionContext && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-900/40 text-emerald-100">
+                    <Activity className="w-3 h-3 animate-spin" />
+                    Loading DSD/VL status...
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -458,7 +611,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
           <div className="flex gap-4">
             {[
               { key: 'overview', label: 'Overview', icon: User },
-              { key: 'visits', label: 'Clinical Visits', icon: FileText },
+              { key: 'visits', label: 'Clinical Visits', icon: FileText, badge: dsdEligibilityChanged },
               { key: 'tests', label: 'HIV Tests', icon: TestTube },
               { key: 'art-initiation', label: 'ART Initiation', icon: Pill },
               { key: 'eac', label: 'EAC', icon: Activity, badge: eacEligibility?.needsEac },
@@ -1527,6 +1680,18 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {showClinicalVisitModal && (
+        <HIVClinicalVisitModal
+          enrollment={enrollment}
+          tenantSlug={tenantSlug}
+          onClose={() => setShowClinicalVisitModal(false)}
+          onSuccess={() => {
+            setShowClinicalVisitModal(false);
+            loadPatientData();
+          }}
+        />
       )}
 
       {/* Workflow Integration Modal */}

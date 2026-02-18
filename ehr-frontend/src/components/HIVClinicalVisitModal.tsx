@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle, Book } from 'lucide-react';
+import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle, Book, Brain } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
@@ -25,6 +25,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadingLookups, setLoadingLookups] = useState(true);
   const [lookups, setLookups] = useState<any>({});
+  const [visitDecisionContext, setVisitDecisionContext] = useState<any | null>(null);
+  const [loadingVisitDecisionContext, setLoadingVisitDecisionContext] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [lastVisitNextReviewDate, setLastVisitNextReviewDate] = useState<string | null>(null);
   const [hasStartedArv, setHasStartedArv] = useState(false);
@@ -44,6 +46,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [monitoringSchedules, setMonitoringSchedules] = useState<any[]>([]);
   const [tptEligibilityStatus, setTptEligibilityStatus] = useState<any>(null);
   const [tptCompletionStatus, setTptCompletionStatus] = useState<any>(null);
+  const [copilotDecisionNote, setCopilotDecisionNote] = useState('');
+  const [copilotDecisionSaving, setCopilotDecisionSaving] = useState(false);
   const snomedToken = useMemo(() => localStorage.getItem('ehr_token') || '', []);
   const snomedReady = Boolean(snomedToken && tenantSlug);
   const [visitReasonConceptSelection, setVisitReasonConceptSelection] = useState<SnomedConcept | null>(null);
@@ -78,6 +82,28 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     return age;
   };
   
+  const dsdModelLabels: { [key: string]: string } = {
+    conventional: 'Conventional clinic visit',
+    fast_track: 'Fast track (drug collection)',
+    group_dsd: 'Group DSD (CARG/club)',
+  };
+
+  const vlPathwayStatusLabel = (status: string | undefined) => {
+    if (!status) return 'Unknown viral load status';
+    const map: { [key: string]: string } = {
+      no_vl: 'No viral load on record',
+      not_on_art: 'Not yet on ART – VL monitoring not applicable',
+      vl_missing_on_art: 'On ART but VL not done – collect VL sample',
+      suppressed: 'Virally suppressed (VL < 1000 copies/mL)',
+      post_eac_suppressed: 'Suppressed after EAC – continue DSD as per protocol',
+      high_vl: 'Unsuppressed (VL ≥ 1000) – assess adherence and consider EAC',
+      high_vl_needs_eac: 'Two high VLs – start or intensify EAC',
+      high_vl_on_eac: 'High VL while in EAC – repeat VL and review regimen',
+      failure_after_eac: 'Possible treatment failure after EAC – consider switch',
+    };
+    return map[status] || 'Unknown viral load status';
+  };
+
   const patientAge = calculateAge(enrollment?.date_of_birth);
   const isChild = patientAge !== null && patientAge <= 15;
   
@@ -244,6 +270,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     loadCurrentUser();
     checkEacEligibility();
     loadVisitPreparationChecklist();
+    loadVisitDecisionContext();
   }, []);
 
   const loadVisitPreparationChecklist = async () => {
@@ -271,9 +298,9 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           const daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           return daysUntil >= 0 && daysUntil <= 7;
         }),
-        pendingLabResults: [], // Will be populated from lab orders
-        lastVisitNotes: null, // Will be populated from last visit
-        adherenceConcerns: null as any // Will be populated from adherence tracking
+        pendingLabResults: [],
+        lastVisitNotes: null,
+        adherenceConcerns: null as any
       };
 
       // Load last visit for notes
@@ -315,6 +342,95 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
       }
     } catch (error) {
       console.error('Failed to load visit preparation checklist:', error);
+    }
+  };
+
+  const loadVisitDecisionContext = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      setLoadingVisitDecisionContext(true);
+
+      const [vlPathwayRes, dsdStatusRes] = await Promise.all([
+        ehrApi.getVlPathway(enrollment.id, token, tenantSlug),
+        ehrApi.getDsdStatus(enrollment.id, token, tenantSlug)
+      ]);
+
+      setVisitDecisionContext({
+        vlPathway: vlPathwayRes.data,
+        dsdStatus: dsdStatusRes.data
+      });
+    } catch (error) {
+      console.error('Failed to load visit decision context:', error);
+    } finally {
+      setLoadingVisitDecisionContext(false);
+    }
+  };
+
+  const handleVisitCopilotDecision = async (decision: 'accept' | 'modify' | 'reject') => {
+    if (!visitDecisionContext) {
+      return;
+    }
+    try {
+      setCopilotDecisionSaving(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) {
+        showError('Error', 'Authentication required');
+        return;
+      }
+
+      const vl = visitDecisionContext.vlPathway || {};
+      const dsd = visitDecisionContext.dsdStatus || {};
+
+      const summaryParts: string[] = [];
+
+      if (vl.lastVlValue !== null && vl.lastVlValue !== undefined) {
+        const vlDate = vl.lastVlDate || 'unknown date';
+        const vlUnit = vl.lastVlUnit || 'copies/mL';
+        summaryParts.push(`Last VL ${vl.lastVlValue} ${vlUnit} on ${vlDate}`);
+      }
+
+      if (dsd.currentModel) {
+        summaryParts.push(`Current model ${dsd.currentModel}`);
+      }
+
+      if (dsd.recommendedModel) {
+        summaryParts.push(`Recommended model ${dsd.recommendedModel}`);
+      }
+
+      if (Array.isArray(dsd.reasons) && dsd.reasons.length > 0) {
+        summaryParts.push(`Reasons: ${dsd.reasons.join('; ')}`);
+      }
+
+      const recommendationSummary =
+        summaryParts.join(' | ') || 'HIV visit copilot decision';
+
+      await ehrApi.recordCopilotAction(
+        {
+          copilotType: 'hiv_visit',
+          decision,
+          reason: copilotDecisionNote || undefined,
+          patientId: enrollment.patient_id,
+          recommendationSummary,
+          context: {
+            vlPathway: vl,
+            dsdStatus: dsd,
+          },
+        },
+        token,
+        tenantSlug,
+      );
+
+      showSuccess('Decision Captured', `Visit copilot suggestion marked as ${decision}.`);
+      if (decision === 'accept') {
+        setCopilotDecisionNote('');
+      }
+    } catch (error) {
+      console.error('Failed to record visit copilot decision', error);
+      showError('Error', 'Failed to capture visit copilot decision');
+    } finally {
+      setCopilotDecisionSaving(false);
     }
   };
 
@@ -796,7 +912,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           </div>
         </div>
 
-        {/* EAC Urgent Alert Banner - Requires EAC */}
         {eacEligibility?.needsEac && (
           <div className="mx-6 mt-4 mb-6 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl p-6 shadow-2xl border-4 border-red-400 animate-pulse">
             <div className="flex items-start gap-4">
@@ -834,7 +949,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           </div>
         )}
 
-        {/* EAC Active Program Alert - Patient is in EAC */}
         {eacEligibility?.activeEac && !eacEligibility?.needsEac && (
           <div className="mx-6 mt-4 mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl p-6 shadow-xl border-2 border-blue-400">
             <div className="flex items-start gap-4">
@@ -882,7 +996,119 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           </div>
         )}
 
-        {/* Progress Steps */}
+        {visitDecisionContext && (
+          <div className="mx-6 mt-4 mb-6 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 p-2 rounded-xl bg-emerald-600 text-white">
+                <Brain className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-emerald-900 mb-1">
+                  Visit Copilot: Stability and DSD context
+                </h3>
+                <p className="text-xs text-emerald-800 mb-3">
+                  Generated from viral load history, adherence, and visit patterns. Use as decision support only.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-800">
+                  <div>
+                    <p className="font-semibold text-slate-900">Viral load pathway</p>
+                    <p>
+                      Status:{' '}
+                      <span className="font-medium">
+                        {vlPathwayStatusLabel(visitDecisionContext.vlPathway?.status)}
+                      </span>
+                    </p>
+                    {visitDecisionContext.vlPathway?.lastVlValue !== null &&
+                      visitDecisionContext.vlPathway?.lastVlValue !== undefined && (
+                        <p>
+                          Last VL {visitDecisionContext.vlPathway.lastVlValue}{' '}
+                          {visitDecisionContext.vlPathway.lastVlUnit || 'copies/mL'} on{' '}
+                          {visitDecisionContext.vlPathway.lastVlDate || 'unknown date'}
+                        </p>
+                      )}
+                    {visitDecisionContext.vlPathway?.nextVlDate && (
+                      <p>
+                        Next VL due {visitDecisionContext.vlPathway.nextVlDate}{' '}
+                        {visitDecisionContext.vlPathway.overdue ? '(overdue)' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">DSD model</p>
+                    <p>
+                      Current:{' '}
+                      <span className="font-medium">
+                        {dsdModelLabels[visitDecisionContext.dsdStatus?.currentModel] ||
+                          visitDecisionContext.dsdStatus?.currentModel ||
+                          'unknown'}
+                      </span>
+                    </p>
+                    {visitDecisionContext.dsdStatus?.eligibleForDsd && (
+                      <p>
+                        Eligible for DSD. Recommended model:{' '}
+                        <span className="font-medium">
+                          {dsdModelLabels[visitDecisionContext.dsdStatus.recommendedModel] ||
+                            visitDecisionContext.dsdStatus.recommendedModel ||
+                            'conventional'}
+                        </span>
+                      </p>
+                    )}
+                    {Array.isArray(visitDecisionContext.dsdStatus?.reasons) &&
+                      visitDecisionContext.dsdStatus.reasons.length > 0 && (
+                        <p>
+                          Key factors:{' '}
+                          {visitDecisionContext.dsdStatus.reasons.join('; ')}
+                        </p>
+                      )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900 mb-1">Copilot decision</p>
+                    <input
+                      type="text"
+                      value={copilotDecisionNote}
+                      onChange={(e) => setCopilotDecisionNote(e.target.value)}
+                      placeholder="Optional reason for modify/reject"
+                      className="w-full mb-2 px-3 py-2 rounded-md border border-emerald-200 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving}
+                        onClick={() => handleVisitCopilotDecision('accept')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving}
+                        onClick={() => handleVisitCopilotDecision('modify')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        Modify
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving}
+                        onClick={() => handleVisitCopilotDecision('reject')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {loadingVisitDecisionContext && !visitDecisionContext && (
+          <div className="mx-6 mt-4 mb-6 rounded-xl border border-emerald-100 bg-emerald-50/80 p-3 flex items-center gap-3">
+            <Activity className="w-5 h-5 text-emerald-600 animate-spin" />
+            <p className="text-xs text-emerald-900">Preparing visit context for decision support...</p>
+          </div>
+        )}
+
         <div className="px-6 py-4 border-b border-slate-200">
           {(() => {
             // For drug collection visits, only show steps 1 and 6

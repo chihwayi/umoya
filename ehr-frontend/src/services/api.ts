@@ -1191,7 +1191,7 @@ export const ehrApi = {
 
   recordCopilotAction: async (
     payload: {
-      copilotType: 'triage' | 'vitals' | 'notes' | 'handoff';
+      copilotType: 'triage' | 'vitals' | 'notes' | 'handoff' | 'hiv_visit';
       decision: 'accept' | 'modify' | 'reject';
       reason?: string;
       patientId?: string;
@@ -2164,6 +2164,24 @@ export const ehrApi = {
     return { data: response.data };
   },
   // HIV Monitoring & Quality Metrics APIs
+  getVlPathway: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/vl-pathway/${enrollmentId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+  getDsdStatus: async (enrollmentId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/hiv/dsd-status/${enrollmentId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
   getMonitoringSchedules: async (enrollmentId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/hiv/monitoring-schedules/${enrollmentId}`, {
       headers: { 
