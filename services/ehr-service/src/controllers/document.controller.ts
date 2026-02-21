@@ -11,19 +11,24 @@ import {
   Req,
   UploadedFile,
   UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { DocumentService } from '../services/document.service';
+import { UploadSecurityService } from '../services/upload-security.service';
 
 @ApiTags('Documents')
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class DocumentController {
-  constructor(private readonly documentService: DocumentService) {}
+  constructor(
+    private readonly documentService: DocumentService,
+    private readonly uploadSecurityService: UploadSecurityService,
+  ) {}
 
   // ==================== DOCUMENT MANAGEMENT ====================
 
@@ -38,6 +43,11 @@ export class DocumentController {
     @Req() req: RequestWithTenant & { user: any },
   ) {
     try {
+      if (!file) {
+        throw new BadRequestException('Document file is required');
+      }
+      await this.uploadSecurityService.assertCleanUpload(file, 'document');
+
       const documentData = {
         documentType: body.documentType,
         documentName: body.documentName || file.originalname,
@@ -151,6 +161,11 @@ export class DocumentController {
     @UploadedFile() file: any,
     @Req() req: RequestWithTenant & { user: any },
   ) {
+    if (!file) {
+      throw new BadRequestException('Document file is required');
+    }
+    await this.uploadSecurityService.assertCleanUpload(file, 'document');
+
     const fileData = {
       filePath: `/uploads/${file.filename}`,
       fileUrl: null,

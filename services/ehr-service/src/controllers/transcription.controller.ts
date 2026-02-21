@@ -19,6 +19,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity, ApiCons
 import { TranscriptionService } from '../services/transcription.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { UploadSecurityService } from '../services/upload-security.service';
 
 @ApiTags('Transcription')
 @ApiSecurity('tenant-key')
@@ -26,7 +27,10 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 @UseGuards(JwtAuthGuard)
 @Controller('transcription')
 export class TranscriptionController {
-  constructor(private transcriptionService: TranscriptionService) {}
+  constructor(
+    private transcriptionService: TranscriptionService,
+    private readonly uploadSecurityService: UploadSecurityService,
+  ) {}
 
   @Post('whisper')
   @ApiOperation({ 
@@ -121,6 +125,7 @@ export class TranscriptionController {
     if (!file) {
       throw new HttpException('Audio file is required', HttpStatus.BAD_REQUEST);
     }
+    await this.uploadSecurityService.assertCleanUpload(file, 'audio');
 
     try {
       const options = {

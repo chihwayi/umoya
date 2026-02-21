@@ -6,6 +6,7 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadSecurityService } from '../services/upload-security.service';
 
 @ApiTags('Clinical Decision Support System')
 @ApiSecurity('tenant-key')
@@ -15,7 +16,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class CdssController {
   private readonly logger = new Logger(CdssController.name);
   
-  constructor(private cdssService: CdssService) {}
+  constructor(
+    private cdssService: CdssService,
+    private readonly uploadSecurityService: UploadSecurityService,
+  ) {}
 
   @Post('drug-interactions')
   @ApiOperation({ summary: 'Check drug interactions' })
@@ -107,6 +111,7 @@ export class CdssController {
     if (!file) {
       throw new HttpException('Image file is required', HttpStatus.BAD_REQUEST);
     }
+    await this.uploadSecurityService.assertCleanUpload(file, 'image');
     return this.cdssService.analyzeMedicalImage(file, req.tenantId);
   }
 

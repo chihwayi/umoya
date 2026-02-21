@@ -246,7 +246,7 @@ Status key:
 
 ### Sprint 4
 - [x] Route imaging through EHR proxy
-- [~] Harden upload and file handling
+- [x] Harden upload and file handling
 - [ ] Voice SOAP quality gates
 
 ### Sprint 5
@@ -266,3 +266,4 @@ Status key:
 8. Completed: Re-enable context metadata filtering in guideline search (population-aware filters + exclusion tests for irrelevant chunks).
 9. Completed: Restore ingestion defaults to full-corpus processing; targeted/partial ingest is now explicit opt-in via environment settings.
 10. Completed: Add response-contract guard for voice transcription payload shape.
+11. Completed: Add malware scan hook with fail-closed upload blocking for CDSS/EHR file ingestion paths.

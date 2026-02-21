@@ -16,10 +16,12 @@ import httpx
 import os
 import hmac
 import re
+import shlex
 import shutil
 import tempfile
 import hashlib
 import json
+import subprocess
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 from fastapi import UploadFile, File, Form
@@ -698,6 +700,81 @@ def _validate_upload_constraints(
         "content_type": content_type or "application/octet-stream",
         "size_bytes": size,
     }
+
+
+def _parse_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _parse_int_set(raw: str, default: set[int]) -> set[int]:
+    parsed: set[int] = set()
+    for item in str(raw or "").split(","):
+        token = item.strip()
+        if not token:
+            continue
+        try:
+            parsed.add(int(token))
+        except Exception:
+            continue
+    return parsed or set(default)
+
+
+def _scan_file_for_malware(file_path: str, file_label: str) -> None:
+    if not _parse_bool_env("CDSS_MALWARE_SCAN_ENABLED", False):
+        return
+
+    command = str(os.getenv("CDSS_MALWARE_SCAN_COMMAND", "clamscan") or "").strip()
+    if not command:
+        raise HTTPException(status_code=503, detail="Malware scanner command is not configured")
+
+    args_raw = str(os.getenv("CDSS_MALWARE_SCAN_ARGS", "--no-summary") or "").strip()
+    args = shlex.split(args_raw) if args_raw else []
+    timeout_seconds = float(os.getenv("CDSS_MALWARE_SCAN_TIMEOUT_SECONDS", "15") or "15")
+    fail_closed = _parse_bool_env("CDSS_MALWARE_SCAN_FAIL_CLOSED", True)
+    infected_exit_codes = _parse_int_set(
+        os.getenv("CDSS_MALWARE_SCAN_INFECTED_EXIT_CODES", "1"),
+        {1},
+    )
+
+    try:
+        result = subprocess.run(
+            [command, *args, file_path],
+            capture_output=True,
+            text=True,
+            timeout=max(1.0, timeout_seconds),
+        )
+    except FileNotFoundError:
+        if fail_closed:
+            raise HTTPException(status_code=503, detail="Malware scanner unavailable")
+        return
+    except Exception as e:
+        if fail_closed:
+            raise HTTPException(status_code=503, detail=f"Malware scan failed: {str(e)}")
+        return
+
+    if result.returncode in infected_exit_codes:
+        raise HTTPException(status_code=400, detail=f"Malware detected in uploaded {file_label}")
+    if result.returncode != 0 and fail_closed:
+        stderr_text = (result.stderr or "").strip()
+        message = f"Malware scan failed for uploaded {file_label}"
+        if stderr_text:
+            message = f"{message}: {stderr_text[:200]}"
+        raise HTTPException(status_code=503, detail=message)
+
+
+def _scan_upload_or_cleanup(file_path: str, file_label: str) -> None:
+    try:
+        _scan_file_for_malware(file_path, file_label)
+    except HTTPException:
+        try:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        raise
 
 
 def _tenant_temp_dir(tenant_key: str) -> str:
@@ -1809,8 +1886,17 @@ async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Dep
         target_dir.mkdir(parents=True, exist_ok=True)
         dest = target_dir / upload_meta["safe_filename"]
         content = await file.read()
-        with open(dest, "wb") as f:
-            f.write(content)
+        scan_tmp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="ingest_scan_") as tmp:
+                tmp.write(content)
+                scan_tmp_path = tmp.name
+            _scan_file_for_malware(scan_tmp_path, "guideline pdf")
+            with open(dest, "wb") as f:
+                f.write(content)
+        finally:
+            if scan_tmp_path and os.path.exists(scan_tmp_path):
+                os.remove(scan_tmp_path)
     job_id = _create_job(
         job_type="ingest",
         owner=owner,
@@ -2141,6 +2227,7 @@ async def transcribe_audio(
         allowed_extensions=_ALLOWED_AUDIO_EXTENSIONS,
     )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
+    _scan_upload_or_cleanup(temp_path, "audio")
 
     if async_job:
         owner = _job_owner_from_request(req)
@@ -2199,6 +2286,7 @@ async def analyze_medical_image(
         allowed_extensions=_ALLOWED_IMAGE_EXTENSIONS,
     )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
+    _scan_upload_or_cleanup(temp_path, "image")
     if async_job:
         owner = _job_owner_from_request(req)
         job_id = _create_job(
@@ -3349,6 +3437,7 @@ async def transcribe_audio_basic(
         allowed_extensions=_ALLOWED_AUDIO_EXTENSIONS,
     )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
+    _scan_upload_or_cleanup(temp_path, "audio")
     
     try:
         # Transcribe
