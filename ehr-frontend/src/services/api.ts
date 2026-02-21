@@ -7149,6 +7149,16 @@ export const cdssApi = {
     return { data: response.data };
   },
 
+  getDiagnosisSuggestions: async (symptoms: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/cdss/diagnosis-assist', symptoms, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5, patientContext?: any) => {
     const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit, patient_context: patientContext }, {
       headers: {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, User, Calendar, Phone, Mail, MapPin, 
+  ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
-  ChevronLeft, ChevronRight, Stethoscope, Pill, TestTube,
+  Pill,
   Brain, BookOpen, Search, Sparkles, X, Loader2, ArrowRight, Edit
 } from 'lucide-react';
 import { ehrApi, cdssApi, chartApi } from '../services/api';
@@ -65,6 +65,10 @@ const DoctorPatientDetail: React.FC = () => {
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelineResults, setGuidelineResults] = useState<GuidelineResult[]>([]);
+  const [loadingAiSnapshot, setLoadingAiSnapshot] = useState(false);
+  const [aiRiskResult, setAiRiskResult] = useState<any | null>(null);
+  const [aiDiagnosisResult, setAiDiagnosisResult] = useState<any | null>(null);
+  const [aiSnapshotAt, setAiSnapshotAt] = useState<string | null>(null);
 
   // Medical History State
   const [problems, setProblems] = useState<any[]>([]);
@@ -273,6 +277,104 @@ const DoctorPatientDetail: React.FC = () => {
     }
     
     return age;
+  };
+
+  const splitTerms = (value?: string): string[] => {
+    if (!value || typeof value !== 'string') return [];
+    return value
+      .split(/[;,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const runDoctorAiSnapshot = async () => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug || !patient || !patientId) {
+        showError('Session Expired', 'Please login again.');
+        return;
+      }
+
+      setLoadingAiSnapshot(true);
+
+      const age = calculateAge(patient.dateOfBirth);
+      const problemTerms = problems.length
+        ? problems
+            .map((problem) => problem?.snomedTerm || problem?.description || problem?.code)
+            .filter(Boolean)
+        : splitTerms(patient.chronicConditions);
+
+      const allergyTerms = allergiesList.length
+        ? allergiesList
+            .map((allergy) => allergy?.allergenSnomedTerm || allergy?.allergen)
+            .filter(Boolean)
+        : splitTerms(patient.allergies);
+
+      const appointmentContext = appointments
+        .slice(0, 2)
+        .map((appointment) => appointment?.reason)
+        .filter(Boolean);
+
+      const symptoms = Array.from(
+        new Set<string>([
+          ...problemTerms.map((item: string) => String(item).trim()),
+          ...appointmentContext.map((item: string) => String(item).trim()),
+          ...splitTerms(guidelineQuery),
+        ].filter(Boolean)),
+      ).slice(0, 8);
+
+      const vitalsPayload = latestVitals
+        ? {
+            bloodPressure: latestVitals.bloodPressure || latestVitals.blood_pressure,
+            systolicBp: latestVitals.systolicBp || latestVitals.systolic_bp,
+            diastolicBp: latestVitals.diastolicBp || latestVitals.diastolic_bp,
+            heartRate: latestVitals.heartRate || latestVitals.heart_rate,
+            respiratoryRate: latestVitals.respiratoryRate || latestVitals.respiratory_rate,
+            temperature: latestVitals.temperature,
+            oxygenSaturation: latestVitals.oxygenSaturation || latestVitals.oxygen_saturation,
+          }
+        : undefined;
+
+      const riskPayload = {
+        patientId,
+        age,
+        gender: patient.gender,
+        vitals: vitalsPayload,
+        medicalHistory: {
+          chronicConditions: splitTerms(patient.chronicConditions),
+          allergies: allergyTerms,
+          activeProblems: problemTerms,
+        },
+        diagnoses: problemTerms,
+        medications: [],
+      };
+
+      const diagnosisPayload = {
+        symptoms: symptoms.length > 0 ? symptoms : ['clinical review required'],
+        age,
+        gender: patient.gender,
+        vitals: vitalsPayload,
+        patientId,
+        medicalHistory: {
+          chronicConditions: splitTerms(patient.chronicConditions),
+          allergies: allergyTerms,
+        },
+      };
+
+      const [riskResponse, diagnosisResponse] = await Promise.all([
+        cdssApi.getRiskAssessment(riskPayload, token, tenantSlug),
+        cdssApi.getDiagnosisSuggestions(diagnosisPayload, token, tenantSlug),
+      ]);
+
+      setAiRiskResult(riskResponse?.data || null);
+      setAiDiagnosisResult(diagnosisResponse?.data || null);
+      setAiSnapshotAt(new Date().toISOString());
+    } catch (error) {
+      console.error('Error running doctor AI snapshot:', error);
+      showError('AI Error', 'Failed to run doctor AI snapshot');
+    } finally {
+      setLoadingAiSnapshot(false);
+    }
   };
 
   if (loading) {
@@ -667,92 +769,6 @@ const DoctorPatientDetail: React.FC = () => {
         )}
       </div>
 
-      {/* AI Guideline Assistant Sidebar */}
-      {showGuidelineSearch && (
-        <div className="fixed inset-y-0 right-0 w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 border-l border-slate-200 flex flex-col">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-white">
-            <div className="flex items-center gap-2 text-purple-700">
-              <Sparkles className="w-5 h-5" />
-              <h3 className="font-semibold">Clinical Intelligence</h3>
-            </div>
-            <button 
-              onClick={() => setShowGuidelineSearch(false)}
-              className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="p-4 flex-1 overflow-y-auto bg-slate-50/50">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Search Guidelines & Protocols
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={guidelineQuery}
-                  onChange={(e) => setGuidelineQuery(e.target.value)}
-                  placeholder="e.g. hypertension treatment..."
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && handleGuidelineSearch()}
-                />
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              </div>
-              <button
-                onClick={handleGuidelineSearch}
-                disabled={loadingGuidelines}
-                className="mt-3 w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loadingGuidelines ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <BookOpen className="w-4 h-4" />
-                    <span>Search Guidelines</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {guidelineResults.map((result, index) => (
-                <div key={index} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-50 rounded-lg shrink-0">
-                      <BookOpen className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-900 mb-1">
-                        {result.source || 'Clinical Guideline'}
-                      </h4>
-                      <p className="text-sm text-slate-600 leading-relaxed">
-                        {result.text}
-                      </p>
-                      {result.url && (
-                        <a 
-                          href={result.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-xs text-purple-600 hover:underline mt-2 inline-block"
-                        >
-                          View Source
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {guidelineResults.length === 0 && !loadingGuidelines && guidelineQuery && (
-                 <div className="text-center py-8 text-slate-500">
-                   <p>No guidelines found for your search.</p>
-                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       {/* AI Guideline Search Modal */}
       {showGuidelineSearch && (
         <ModalPortal>
@@ -803,6 +819,86 @@ const DoctorPatientDetail: React.FC = () => {
                       </>
                     )}
                   </button>
+                </div>
+
+                <div className="mb-6 bg-white border border-indigo-100 rounded-2xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h4 className="text-base font-bold text-slate-900">Doctor CDSS Snapshot</h4>
+                      <p className="text-xs text-slate-500">
+                        Risk stratification + diagnosis support from current patient context
+                      </p>
+                    </div>
+                    <button
+                      onClick={runDoctorAiSnapshot}
+                      disabled={loadingAiSnapshot}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {loadingAiSnapshot ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+                      <span>{loadingAiSnapshot ? 'Analyzing...' : 'Run Snapshot'}</span>
+                    </button>
+                  </div>
+
+                  {aiSnapshotAt && (
+                    <p className="text-xs text-slate-500 mb-4">
+                      Last analyzed: {formatDateTimeToDDMMYYYYHHMM(aiSnapshotAt)}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-sm font-semibold text-slate-800">Risk Insight</h5>
+                        {aiRiskResult?.risk_level && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 capitalize">
+                            {String(aiRiskResult.risk_level).replace('_', ' ')}
+                          </span>
+                        )}
+                      </div>
+                      {typeof aiRiskResult?.overall_score === 'number' && (
+                        <p className="text-xs text-slate-600 mb-2">Score: {aiRiskResult.overall_score.toFixed(1)}</p>
+                      )}
+                      {Array.isArray(aiRiskResult?.recommendations) && aiRiskResult.recommendations.length > 0 ? (
+                        <ul className="space-y-1 text-xs text-slate-700">
+                          {aiRiskResult.recommendations.slice(0, 3).map((item: any, idx: number) => (
+                            <li key={`risk-rec-${idx}`}>
+                              - {typeof item === 'string' ? item : item?.recommendation || 'Recommendation available'}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-slate-500">Run snapshot to load risk recommendations.</p>
+                      )}
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-sm font-semibold text-slate-800">Diagnosis Assist</h5>
+                        {aiDiagnosisResult?.abstained === true && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            Abstained
+                          </span>
+                        )}
+                      </div>
+                      {aiDiagnosisResult?.abstained === true && (
+                        <p className="text-xs text-amber-700 mb-2">
+                          Reason: {aiDiagnosisResult?.abstain_reason || 'unspecified'}
+                        </p>
+                      )}
+                      {Array.isArray(aiDiagnosisResult?.suggested_diagnoses) && aiDiagnosisResult.suggested_diagnoses.length > 0 ? (
+                        <ul className="space-y-1 text-xs text-slate-700">
+                          {aiDiagnosisResult.suggested_diagnoses.slice(0, 3).map((item: any, idx: number) => (
+                            <li key={`diag-${idx}`}>
+                              - {item?.diagnosis || item?.name || 'Possible diagnosis'}
+                              {typeof item?.probability === 'number' ? ` (${Math.round(item.probability * 100)}%)` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-slate-500">Run snapshot to load differential suggestions.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
