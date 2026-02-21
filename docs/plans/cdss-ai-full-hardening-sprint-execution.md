@@ -257,7 +257,7 @@ Status key:
 ## Immediate Next 10 Tasks
 
 1. Validate all frontend CDSS flows in QA (guideline search, risk, imaging) now that they route via EHR proxy.
-2. Add/expand EHR integration tests for `/cdss/analyze-image` and `/cdss/guidelines*` proxy behavior.
+2. Completed: Add/expand EHR proxy tests for `/cdss/analyze-image` and `/cdss/guidelines*` behavior (`services/ehr-service/src/services/cdss.service.proxy.spec.ts`).
 3. Add/expand transcription integration tests covering `/transcription/whisper` contract and forwarded headers.
 4. Completed: Add explicit service JWT scopes from EHR and validate strict scope checks in CDSS (`services/ehr-service` unit tests passing, `services/cdss-service` tests passing).
 5. Completed: Harden CDSS CORS behavior (no wildcard in non-dev with startup validation and explicit allowlist parsing/tests).
