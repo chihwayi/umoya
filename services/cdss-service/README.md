@@ -37,6 +37,20 @@ All endpoints are integrated with EHR service via `/api/cdss/*` routes:
 
 `http://localhost:8000/docs`
 
+## Offline Clinical Evaluation
+
+Run the Sprint 5 offline quality harness:
+
+```bash
+python evaluation/offline_clinical_eval.py
+```
+
+This generates a versioned baseline report in `evaluation/reports/` with:
+- retrieval recall/hit rate @k
+- citation support rate
+- abstain correctness
+- unsafe overconfident output rate
+
 ## Future: AI Integration
 
 When ready, AI models can enhance:
@@ -44,4 +58,3 @@ When ready, AI models can enhance:
 2. Risk Scoring (population-specific models)
 3. Drug Interactions (novel combinations)
 4. Dosing Calculator (personalized dosing)
-

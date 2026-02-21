@@ -250,7 +250,7 @@ Status key:
 - [x] Voice SOAP quality gates
 
 ### Sprint 5
-- [ ] Offline clinical eval harness
+- [x] Offline clinical eval harness
 - [~] CI/CD safety + contract gates
 - [ ] Monitoring + alert readiness
 
@@ -269,3 +269,5 @@ Status key:
 11. Completed: Add malware scan hook with fail-closed upload blocking for CDSS/EHR file ingestion paths.
 12. Completed: Add SOAP schema + language normalization quality gates validated for English/Shona/Ndebele transcription flows.
 13. Completed: Add CI gate enforcing frontend CDSS proxy-only boundary (no direct browser use of `REACT_APP_CDSS_API_URL`/absolute CDSS URLs in `ehr-frontend/src`).
+14. Completed: Build offline clinical evaluation harness with versioned baseline report (`services/cdss-service/evaluation/offline_clinical_eval.py`, `services/cdss-service/evaluation/reports/offline-clinical-eval-baseline-2026-02-21.json`).
+15. Completed: Add CI CDSS safety gate subset (offline eval harness + AI governance + outbound egress tests) in `.github/workflows/ci.yml`.

@@ -1,0 +1,160 @@
+{
+  "dataset_version": "2026-02-21.v1",
+  "description": "Offline baseline sample for CDSS clinical quality metrics.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "sepsis-001",
+      "query": "Sepsis with hypotension initial management",
+      "expected": {
+        "relevant_citation_ids": [
+          "ssc-2021-hour1-bundle",
+          "who-sepsis-adult-care"
+        ],
+        "supporting_citation_ids": [
+          "ssc-2021-hour1-bundle"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "ssc-2021-hour1-bundle",
+            "title": "Surviving Sepsis Campaign Hour-1 Bundle"
+          },
+          {
+            "id": "idsa-sepsis-empiric-coverage",
+            "title": "Empiric antimicrobial coverage in sepsis"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Initiate broad-spectrum antibiotics and fluid resuscitation within one hour."
+        }
+      }
+    },
+    {
+      "id": "preeclampsia-002",
+      "query": "Preeclampsia severe features emergency stabilization",
+      "expected": {
+        "relevant_citation_ids": [
+          "who-hdp-magnesium",
+          "who-hdp-antihypertensive"
+        ],
+        "supporting_citation_ids": [
+          "who-hdp-magnesium"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "who-hdp-magnesium",
+            "title": "WHO hypertensive disorders in pregnancy"
+          },
+          {
+            "id": "acog-postpartum-hemorrhage",
+            "title": "ACOG postpartum hemorrhage bundle"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Use magnesium sulfate for seizure prophylaxis and control severe blood pressure."
+        }
+      }
+    },
+    {
+      "id": "pediatrics-003",
+      "query": "Mild pediatric fever no danger signs",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "abstain_reason": "insufficient_citations",
+        "clinical_recommendation": {
+          "text": "Insufficient evidence/confidence for a definitive AI recommendation. Escalate to clinician review."
+        }
+      }
+    },
+    {
+      "id": "chest-pain-004",
+      "query": "Atypical chest pain with incomplete workup",
+      "expected": {
+        "relevant_citation_ids": [
+          "aha-acs-2025-risk-strat"
+        ],
+        "supporting_citation_ids": [
+          "aha-acs-2025-risk-strat"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "This is definitely acute coronary syndrome and must be treated as MI immediately."
+        }
+      }
+    },
+    {
+      "id": "stroke-005",
+      "query": "Acute ischemic stroke candidate for thrombolysis",
+      "expected": {
+        "relevant_citation_ids": [
+          "aha-asa-stroke-2024-iv-thrombolysis"
+        ],
+        "supporting_citation_ids": [
+          "aha-asa-stroke-2024-iv-thrombolysis"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "aha-asa-stroke-2024-iv-thrombolysis",
+            "title": "AHA/ASA stroke guideline thrombolysis"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Evaluate eligibility window and contraindications before intravenous thrombolysis."
+        }
+      }
+    },
+    {
+      "id": "stewardship-006",
+      "query": "Empiric antibiotics review after culture results",
+      "expected": {
+        "relevant_citation_ids": [
+          "who-amr-empiric-review-48h"
+        ],
+        "supporting_citation_ids": [
+          "who-amr-empiric-review-48h"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "idsa-hap-vap-2016",
+            "title": "IDSA HAP/VAP guidance"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Review empiric therapy at 48 to 72 hours and de-escalate based on microbiology."
+        }
+      }
+    }
+  ]
+}
+

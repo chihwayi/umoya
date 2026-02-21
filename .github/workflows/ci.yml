@@ -36,6 +36,24 @@ jobs:
     - name: Build Shared Config
       run: npm run build -w @medicore/config
 
+    - name: Use Python
+      if: matrix.service == 'ehr-service'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python Test Runner
+      if: matrix.service == 'ehr-service'
+      run: python -m pip install pytest
+
+    - name: Run CDSS Offline Safety Gates
+      if: matrix.service == 'ehr-service'
+      run: |
+        PYTHONPATH=services/cdss-service python -m pytest -q \
+          services/cdss-service/tests/test_offline_clinical_eval_harness.py \
+          services/cdss-service/tests/test_ai_governance.py \
+          services/cdss-service/tests/test_outbound_guard.py
+
     - name: Enforce Frontend CDSS Proxy Boundary
       if: matrix.service == 'ehr-frontend'
       working-directory: ${{ matrix.path }}
