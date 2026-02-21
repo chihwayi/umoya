@@ -251,7 +251,7 @@ Status key:
 
 ### Sprint 5
 - [ ] Offline clinical eval harness
-- [ ] CI/CD safety + contract gates
+- [~] CI/CD safety + contract gates
 - [ ] Monitoring + alert readiness
 
 ## Immediate Next 10 Tasks
@@ -268,3 +268,4 @@ Status key:
 10. Completed: Add response-contract guard for voice transcription payload shape.
 11. Completed: Add malware scan hook with fail-closed upload blocking for CDSS/EHR file ingestion paths.
 12. Completed: Add SOAP schema + language normalization quality gates validated for English/Shona/Ndebele transcription flows.
+13. Completed: Add CI gate enforcing frontend CDSS proxy-only boundary (no direct browser use of `REACT_APP_CDSS_API_URL`/absolute CDSS URLs in `ehr-frontend/src`).

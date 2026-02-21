@@ -36,6 +36,11 @@ jobs:
     - name: Build Shared Config
       run: npm run build -w @medicore/config
 
+    - name: Enforce Frontend CDSS Proxy Boundary
+      if: matrix.service == 'ehr-frontend'
+      working-directory: ${{ matrix.path }}
+      run: npm run check:proxy-only
+
     - name: Build
       working-directory: ${{ matrix.path }}
       run: npm run build
