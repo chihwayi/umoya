@@ -247,7 +247,7 @@ Status key:
 ### Sprint 4
 - [x] Route imaging through EHR proxy
 - [x] Harden upload and file handling
-- [ ] Voice SOAP quality gates
+- [x] Voice SOAP quality gates
 
 ### Sprint 5
 - [ ] Offline clinical eval harness
@@ -267,3 +267,4 @@ Status key:
 9. Completed: Restore ingestion defaults to full-corpus processing; targeted/partial ingest is now explicit opt-in via environment settings.
 10. Completed: Add response-contract guard for voice transcription payload shape.
 11. Completed: Add malware scan hook with fail-closed upload blocking for CDSS/EHR file ingestion paths.
+12. Completed: Add SOAP schema + language normalization quality gates validated for English/Shona/Ndebele transcription flows.

@@ -32,7 +32,13 @@ export interface TranscriptionResult {
     text: string;
   }>;
   confidence?: number;
-  soap_note?: string;
+  soap_note?: {
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+    original_language_detected?: string;
+  };
   audio_url?: string;
 }
 
@@ -203,7 +209,7 @@ export class TranscriptionService {
         language: this.normalizeLanguage(nested.language, fallbackLanguage),
         segments: this.normalizeSegments(nested.segments),
         confidence: this.normalizeConfidence(nested.language_probability ?? nested.confidence),
-        soap_note: responseData?.soap_note,
+        soap_note: this.normalizeSoapNote(responseData?.soap_note),
         audio_url: this.normalizeOptionalString(responseData?.audio_url),
       };
     }
@@ -215,7 +221,7 @@ export class TranscriptionService {
         language: this.normalizeLanguage(responseData?.language, fallbackLanguage),
         segments: this.normalizeSegments(responseData?.segments),
         confidence: this.normalizeConfidence(responseData?.confidence),
-        soap_note: responseData?.soap_note,
+        soap_note: this.normalizeSoapNote(responseData?.soap_note),
         audio_url: this.normalizeOptionalString(responseData?.audio_url),
       };
     }
@@ -234,8 +240,19 @@ export class TranscriptionService {
   }
 
   private normalizeLanguage(value: any, fallbackLanguage: string): string {
-    const lang = typeof value === 'string' ? value.trim().toLowerCase() : '';
-    return lang || fallbackLanguage || 'en';
+    const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    const fallback = typeof fallbackLanguage === 'string' ? fallbackLanguage.trim().toLowerCase() : 'en';
+    const map: Record<string, string> = {
+      en: 'en',
+      eng: 'en',
+      english: 'en',
+      sn: 'sn',
+      shona: 'sn',
+      nd: 'nd',
+      ndebele: 'nd',
+      auto: 'en',
+    };
+    return map[raw] || map[fallback] || 'en';
   }
 
   private normalizeOptionalString(value: any): string | undefined {
@@ -252,6 +269,34 @@ export class TranscriptionService {
       return undefined;
     }
     return Math.max(0, Math.min(1, num));
+  }
+
+  private normalizeSoapNote(value: any): TranscriptionResult['soap_note'] {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Invalid transcription response contract: soap_note must be an object');
+    }
+
+    const normalizeField = (field: string): string => {
+      const raw = value?.[field];
+      if (typeof raw === 'string' && raw.trim().length > 0) {
+        return raw.trim();
+      }
+      return 'Not provided';
+    };
+
+    return {
+      subjective: normalizeField('subjective'),
+      objective: normalizeField('objective'),
+      assessment: normalizeField('assessment'),
+      plan: normalizeField('plan'),
+      original_language_detected: this.normalizeLanguage(
+        value?.original_language_detected,
+        'en',
+      ),
+    };
   }
 
   private normalizeSegments(rawSegments: any): Array<{ start: number; end: number; text: string }> {

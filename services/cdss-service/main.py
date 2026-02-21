@@ -1525,7 +1525,12 @@ def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
             print(f"MinIO upload failed: {e}")
 
         if generate_soap:
-            result["soap_note"] = asyncio.run(voice_scribe.generate_soap_note(transcription_result["text"]))
+            result["soap_note"] = asyncio.run(
+                voice_scribe.generate_soap_note(
+                    transcription_result["text"],
+                    transcription_result.get("language"),
+                )
+            )
         return result
     finally:
         if temp_path and os.path.exists(temp_path):
@@ -3453,7 +3458,10 @@ async def transcribe_audio_basic(
         
         # Generate SOAP if requested
         if generate_soap:
-            soap_result = await voice_scribe.generate_soap_note(transcription_result["text"])
+            soap_result = await voice_scribe.generate_soap_note(
+                transcription_result["text"],
+                transcription_result.get("language"),
+            )
             result["soap_note"] = soap_result
             
         return result
