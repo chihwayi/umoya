@@ -251,7 +251,7 @@ Status key:
 
 ### Sprint 5
 - [x] Offline clinical eval harness
-- [~] CI/CD safety + contract gates
+- [x] CI/CD safety + contract gates
 - [x] Monitoring + alert readiness
 
 ## Immediate Next 10 Tasks
@@ -272,3 +272,4 @@ Status key:
 14. Completed: Build offline clinical evaluation harness with versioned baseline report (`services/cdss-service/evaluation/offline_clinical_eval.py`, `services/cdss-service/evaluation/reports/offline-clinical-eval-baseline-2026-02-21.json`).
 15. Completed: Add CI CDSS safety gate subset (offline eval harness + AI governance + outbound egress tests) in `.github/workflows/ci.yml`.
 16. Completed: Add tenant-aware CDSS monitoring artifacts (new abstention metric, tenant-labeled dependency metrics, alert rules, and Grafana tenant safety dashboard).
+17. Completed: Expand EHR/CDSS regression tests and CI gates for proxy routing, transcription forwarding, and contract/safety drift checks.
