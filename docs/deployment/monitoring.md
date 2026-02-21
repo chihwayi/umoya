@@ -42,10 +42,11 @@ const httpRequestDuration = new Histogram({
 - **CPU Usage**: CPU utilization
 
 ### Nurse Copilot + CDSS Reliability Metrics
-- `cdss_hooks_total{event_type,status}`: CDSS call volume and success/error rate.
-- `cdss_hook_duration_seconds{event_type}`: CDSS end-to-end latency.
-- `cdss_dependency_retries_total{event_type,reason}`: retry pressure on downstream CDSS dependencies.
-- `cdss_dependency_timeouts_total{event_type}`: timeout count by hook type.
+- `cdss_hooks_total{event_type,status,tenant_id}`: CDSS call volume and success/error rate by tenant.
+- `cdss_hook_duration_seconds{event_type,tenant_id}`: CDSS end-to-end latency by tenant.
+- `cdss_dependency_retries_total{event_type,reason,tenant_id}`: retry pressure by tenant and reason.
+- `cdss_dependency_timeouts_total{event_type,tenant_id}`: timeout count by tenant and hook type.
+- `cdss_abstentions_total{event_type,reason,tenant_id}`: abstained CDSS responses observed by EHR proxy.
 - `nurse_copilot_recommendations_total{copilot_type,risk_level}`: recommendation volume split by flow.
 - `nurse_copilot_decisions_total{copilot_type,decision}`: accept/modify/reject decision behavior.
 - `nurse_copilot_time_to_triage_seconds`: queue-to-triage response latency.
@@ -129,10 +130,13 @@ services:
 - **High Database Connections**: Connections > 80% of pool
 
 ### Nurse Copilot/CDSS Alert Rules (Recommended)
-- **CDSS timeout spike**: `increase(cdss_dependency_timeouts_total[10m]) > 10`
-- **CDSS retry spike**: `increase(cdss_dependency_retries_total[10m]) > 50`
+- **CDSS timeout spike by tenant**: `increase(cdss_dependency_timeouts_total[10m]) > 10`
+- **CDSS retry spike by tenant**: `increase(cdss_dependency_retries_total[10m]) > 50`
 - **Copilot error ratio high**:
   `sum(rate(cdss_hooks_total{status="error"}[5m])) / sum(rate(cdss_hooks_total[5m])) > 0.1`
+- **CDSS auth failures**: `increase(cdss_hook_errors_total{error_type="http_401"}[10m]) > 5`
+- **CDSS abstain spike**: `increase(cdss_abstentions_total[15m]) > 20`
+- **CDSS egress policy blocks**: `increase(cdss_hook_errors_total{error_type="egress_block"}[10m]) > 0`
 - **Slow nurse triage response**:
   `histogram_quantile(0.95, rate(nurse_copilot_time_to_triage_seconds_bucket[15m])) > 900`
 - **Slow alert acknowledgement**:

@@ -34,6 +34,7 @@ curl http://localhost:3001/api/metrics
 1. Open `http://localhost:3000`
 2. Login with `admin` / `admin`
 3. Navigate to **Dashboards** → **MediCore** → **MediCore EHR - Overview**
+4. Open **MediCore CDSS - Tenant Safety Dashboard** for tenant-level CDSS dependency health.
 
 ## Prometheus Configuration
 
@@ -60,6 +61,17 @@ Scrapes metrics from:
 8. ICD-10 Mappings
 9. System Health
 
+### CDSS Tenant Safety Dashboard
+**Location**: `grafana/dashboards/cdss-tenant-safety.json`
+
+**Panels**:
+1. CDSS error ratio by tenant
+2. CDSS p95 latency by tenant
+3. CDSS retries by tenant/event
+4. CDSS timeouts by tenant/event
+5. CDSS abstentions by tenant/event
+6. CDSS auth failures and egress policy blocks
+
 ### Importing Dashboards
 
 1. **Automatic** (via provisioning):
@@ -76,6 +88,11 @@ Scrapes metrics from:
 - `cdss_hooks_total` - Total hooks triggered
 - `cdss_hook_duration_seconds` - Processing duration
 - `cdss_hook_errors_total` - Error count
+- `cdss_dependency_retries_total` - Retry attempts
+- `cdss_dependency_timeouts_total` - Timeout count
+- `cdss_abstentions_total` - Abstained responses observed at EHR proxy
+
+All CDSS dependency metrics include tenant label `tenant_id` for per-tenant dashboards and alerts.
 
 ### Provisioning
 - `provisioning_operations_total` - Total operations
@@ -90,19 +107,17 @@ Scrapes metrics from:
 - `snomed_searches_total` - Search count
 - `icd10_mappings_total` - Mapping lookups
 
-## Alerting Rules (Future)
+## Alerting Rules
 
-Create alert rules in Prometheus:
-```yaml
-groups:
-  - name: medicore_alerts
-    rules:
-      - alert: HighCDSSErrorRate
-        expr: rate(cdss_hook_errors_total[5m]) > 0.1
-        for: 5m
-        annotations:
-          summary: "High CDSS hook error rate"
-```
+CDSS dependency alert rules are versioned in:
+- `prometheus/alerts/cdss-dependency-alerts.yml`
+
+The rules include tenant-aware alerts for:
+- dependency error ratio and latency spikes
+- timeout bursts
+- service auth failures (`http_401`)
+- abstention spikes
+- outbound egress policy blocks (`egress_block`)
 
 ## Troubleshooting
 
@@ -129,4 +144,3 @@ For production:
 3. Configure authentication for Grafana
 4. Set up alerting rules
 5. Configure external alertmanager
-

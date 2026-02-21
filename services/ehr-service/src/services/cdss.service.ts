@@ -170,6 +170,16 @@ export class CdssService {
     if ((error as any)?.code === 'CDSS_CIRCUIT_OPEN') {
       return 'circuit_open';
     }
+    const rawMessage = String(
+      error?.response?.data?.detail ||
+      error?.response?.data?.message ||
+      error?.response?.data ||
+      error?.message ||
+      '',
+    ).toLowerCase();
+    if (rawMessage.includes('allowlist') || rawMessage.includes('egress')) {
+      return 'egress_block';
+    }
     if (axios.isAxiosError(error)) {
       if (error.code === 'ECONNABORTED') {
         return 'timeout';
@@ -180,6 +190,17 @@ export class CdssService {
       return 'network';
     }
     return 'unknown';
+  }
+
+  private recordAbstentionMetric(eventType: string, responseData: any, tenantId?: string): void {
+    if (!this.metricsService || !responseData || typeof responseData !== 'object') {
+      return;
+    }
+    if ((responseData as any).abstained !== true) {
+      return;
+    }
+    const reason = String((responseData as any).abstain_reason || 'unspecified');
+    this.metricsService.recordCdssAbstention(eventType, reason, tenantId);
   }
 
   private async postWithPolicy<T>(
@@ -203,27 +224,28 @@ export class CdssService {
           this.buildCdssRequestConfig(timeoutMs, tenantId),
         );
         const durationSeconds = (Date.now() - startedAt) / 1000;
-        this.metricsService?.recordCdssHook(eventType, 'success', durationSeconds);
+        this.metricsService?.recordCdssHook(eventType, 'success', durationSeconds, tenantId);
+        this.recordAbstentionMetric(eventType, response.data, tenantId);
         this.onCdssCallSuccess();
         return response.data as T;
       } catch (error: any) {
         lastError = error;
         const errorType = this.classifyCdssError(error);
         if (errorType === 'timeout') {
-          this.metricsService?.recordCdssTimeout(eventType);
+          this.metricsService?.recordCdssTimeout(eventType, tenantId);
         }
         const retryable = this.isRetryableError(error);
         if (retryable && attempt < maxAttempts) {
           retries += 1;
-          this.metricsService?.recordCdssRetry(eventType, errorType);
+          this.metricsService?.recordCdssRetry(eventType, errorType, tenantId);
           const delayMs = this.retryBaseDelayMs * Math.pow(2, attempt - 1);
           await this.sleep(delayMs);
           continue;
         }
 
         const durationSeconds = (Date.now() - startedAt) / 1000;
-        this.metricsService?.recordCdssHook(eventType, 'error', durationSeconds);
-        this.metricsService?.recordCdssHookError(eventType, errorType);
+        this.metricsService?.recordCdssHook(eventType, 'error', durationSeconds, tenantId);
+        this.metricsService?.recordCdssHookError(eventType, errorType, tenantId);
         if (retries > 0) {
           this.logger.warn(`[CDSS] ${eventType} failed after ${retries} retries`);
         }
@@ -673,14 +695,14 @@ export class CdssService {
         headers,
       });
       const durationSeconds = (Date.now() - startedAt) / 1000;
-      this.metricsService?.recordCdssHook('analyze_image', 'success', durationSeconds);
+      this.metricsService?.recordCdssHook('analyze_image', 'success', durationSeconds, tenantId);
       this.onCdssCallSuccess();
       return response.data;
     } catch (error: any) {
       const durationSeconds = (Date.now() - startedAt) / 1000;
       const errorType = this.classifyCdssError(error);
-      this.metricsService?.recordCdssHook('analyze_image', 'error', durationSeconds);
-      this.metricsService?.recordCdssHookError('analyze_image', errorType);
+      this.metricsService?.recordCdssHook('analyze_image', 'error', durationSeconds, tenantId);
+      this.metricsService?.recordCdssHookError('analyze_image', errorType, tenantId);
       this.onCdssCallFailure();
       throw error;
     }

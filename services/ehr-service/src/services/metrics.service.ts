@@ -16,6 +16,7 @@ export class MetricsService {
   private readonly cdssHookErrors: promClient.Counter;
   private readonly cdssDependencyRetryCounter: promClient.Counter;
   private readonly cdssDependencyTimeoutCounter: promClient.Counter;
+  private readonly cdssAbstentionCounter: promClient.Counter;
   private readonly nurseCopilotRecommendationCounter: promClient.Counter;
   private readonly nurseCopilotDecisionCounter: promClient.Counter;
   private readonly nurseCopilotTimeToTriage: promClient.Histogram;
@@ -56,14 +57,14 @@ export class MetricsService {
     this.cdssHookCounter = new promClient.Counter({
       name: 'cdss_hooks_total',
       help: 'Total number of CDSS hooks triggered',
-      labelNames: ['event_type', 'status'],
+      labelNames: ['event_type', 'status', 'tenant_id'],
       registers: [this.register],
     });
 
     this.cdssHookDuration = new promClient.Histogram({
       name: 'cdss_hook_duration_seconds',
       help: 'CDSS hook processing duration in seconds',
-      labelNames: ['event_type'],
+      labelNames: ['event_type', 'tenant_id'],
       buckets: [0.1, 0.5, 1, 2, 5, 10],
       registers: [this.register],
     });
@@ -71,21 +72,28 @@ export class MetricsService {
     this.cdssHookErrors = new promClient.Counter({
       name: 'cdss_hook_errors_total',
       help: 'Total number of CDSS hook errors',
-      labelNames: ['event_type', 'error_type'],
+      labelNames: ['event_type', 'error_type', 'tenant_id'],
       registers: [this.register],
     });
 
     this.cdssDependencyRetryCounter = new promClient.Counter({
       name: 'cdss_dependency_retries_total',
       help: 'Total number of EHR to CDSS retry attempts',
-      labelNames: ['event_type', 'reason'],
+      labelNames: ['event_type', 'reason', 'tenant_id'],
       registers: [this.register],
     });
 
     this.cdssDependencyTimeoutCounter = new promClient.Counter({
       name: 'cdss_dependency_timeouts_total',
       help: 'Total number of EHR to CDSS timeout failures',
-      labelNames: ['event_type'],
+      labelNames: ['event_type', 'tenant_id'],
+      registers: [this.register],
+    });
+
+    this.cdssAbstentionCounter = new promClient.Counter({
+      name: 'cdss_abstentions_total',
+      help: 'Total number of CDSS abstained responses observed by EHR proxy',
+      labelNames: ['event_type', 'reason', 'tenant_id'],
       registers: [this.register],
     });
 
@@ -180,26 +188,54 @@ export class MetricsService {
   }
 
   // CDSS Hook Metrics
-  recordCdssHook(eventType: string, status: 'success' | 'error', durationSeconds?: number) {
-    this.cdssHookCounter.inc({ event_type: eventType, status });
+  private normalizeTenantId(tenantId?: string): string {
+    const raw = String(tenantId || 'unknown').trim().toLowerCase();
+    if (!raw) {
+      return 'unknown';
+    }
+    return raw.replace(/[^a-z0-9._-]/g, '_').slice(0, 80) || 'unknown';
+  }
+
+  recordCdssHook(eventType: string, status: 'success' | 'error', durationSeconds?: number, tenantId?: string) {
+    const normalizedTenantId = this.normalizeTenantId(tenantId);
+    this.cdssHookCounter.inc({ event_type: eventType, status, tenant_id: normalizedTenantId });
     if (durationSeconds !== undefined) {
-      this.cdssHookDuration.observe({ event_type: eventType }, durationSeconds);
+      this.cdssHookDuration.observe({ event_type: eventType, tenant_id: normalizedTenantId }, durationSeconds);
     }
     if (status === 'error') {
-      this.cdssHookErrors.inc({ event_type: eventType, error_type: 'unknown' });
+      this.cdssHookErrors.inc({ event_type: eventType, error_type: 'unknown', tenant_id: normalizedTenantId });
     }
   }
 
-  recordCdssHookError(eventType: string, errorType: string) {
-    this.cdssHookErrors.inc({ event_type: eventType, error_type: errorType });
+  recordCdssHookError(eventType: string, errorType: string, tenantId?: string) {
+    this.cdssHookErrors.inc({
+      event_type: eventType,
+      error_type: errorType,
+      tenant_id: this.normalizeTenantId(tenantId),
+    });
   }
 
-  recordCdssRetry(eventType: string, reason: string) {
-    this.cdssDependencyRetryCounter.inc({ event_type: eventType, reason });
+  recordCdssRetry(eventType: string, reason: string, tenantId?: string) {
+    this.cdssDependencyRetryCounter.inc({
+      event_type: eventType,
+      reason,
+      tenant_id: this.normalizeTenantId(tenantId),
+    });
   }
 
-  recordCdssTimeout(eventType: string) {
-    this.cdssDependencyTimeoutCounter.inc({ event_type: eventType });
+  recordCdssTimeout(eventType: string, tenantId?: string) {
+    this.cdssDependencyTimeoutCounter.inc({
+      event_type: eventType,
+      tenant_id: this.normalizeTenantId(tenantId),
+    });
+  }
+
+  recordCdssAbstention(eventType: string, reason?: string, tenantId?: string) {
+    this.cdssAbstentionCounter.inc({
+      event_type: eventType,
+      reason: (reason || 'unspecified').toString().trim().toLowerCase() || 'unspecified',
+      tenant_id: this.normalizeTenantId(tenantId),
+    });
   }
 
   recordNurseCopilotRecommendation(copilotType: string, riskLevel?: string) {

@@ -40,5 +40,19 @@ describe('MetricsService', () => {
     expect(snapshot.alertResponse.samples).toBe(1);
     expect(snapshot.alertResponse.averageSeconds).toBe(45);
   });
-});
 
+  it('records tenant-labeled CDSS dependency and abstention metrics', async () => {
+    service.recordCdssHook('guidelines_search', 'success', 0.25, 'Tenant-A');
+    service.recordCdssHookError('guidelines_search', 'http_401', 'Tenant-A');
+    service.recordCdssRetry('guidelines_search', 'timeout', 'Tenant-A');
+    service.recordCdssTimeout('guidelines_search', 'Tenant-A');
+    service.recordCdssAbstention('guidelines_search', 'low_confidence', 'Tenant-A');
+
+    const metrics = await service.getMetrics();
+    expect(metrics).toContain('cdss_hooks_total');
+    expect(metrics).toContain('cdss_hook_errors_total');
+    expect(metrics).toContain('cdss_abstentions_total');
+    expect(metrics).toContain('tenant_id="tenant-a"');
+    expect(metrics).toContain('reason="low_confidence"');
+  });
+});

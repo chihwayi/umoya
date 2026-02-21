@@ -6,6 +6,7 @@ describe('CdssService nurse copilot metrics instrumentation', () => {
     recordCdssHookError: jest.fn(),
     recordCdssRetry: jest.fn(),
     recordCdssTimeout: jest.fn(),
+    recordCdssAbstention: jest.fn(),
     recordNurseCopilotRecommendation: jest.fn(),
     recordNurseCopilotDecision: jest.fn(),
     recordNurseCopilotTimeToTriage: jest.fn(),
@@ -63,4 +64,3 @@ describe('CdssService nurse copilot metrics instrumentation', () => {
     expect(metricsMock.recordNurseCopilotAlertResponseTime).toHaveBeenCalledWith(expect.any(Number));
   });
 });
-

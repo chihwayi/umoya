@@ -2,12 +2,12 @@ groups:
   - name: cdss-dependency-health
     interval: 30s
     rules:
-      - alert: CdssHighErrorRate
+      - alert: CdssHighErrorRateByTenant
         expr: |
           (
-            sum(rate(cdss_hooks_total{status="error"}[5m]))
+            sum by (tenant_id) (rate(cdss_hooks_total{status="error"}[5m]))
             /
-            clamp_min(sum(rate(cdss_hooks_total[5m])), 0.001)
+            clamp_min(sum by (tenant_id) (rate(cdss_hooks_total[5m])), 0.001)
           ) > 0.05
         for: 10m
         labels:
@@ -15,14 +15,14 @@ groups:
           service: ehr-service
           dependency: cdss-service
         annotations:
-          summary: "CDSS dependency error rate is high"
-          description: "EHR to CDSS error ratio has exceeded 5% for 10 minutes."
+          summary: "CDSS dependency error rate is high for tenant {{ $labels.tenant_id }}"
+          description: "EHR to CDSS error ratio has exceeded 5% for 10 minutes for tenant {{ $labels.tenant_id }}."
 
-      - alert: CdssHighP95Latency
+      - alert: CdssHighP95LatencyByTenant
         expr: |
           histogram_quantile(
             0.95,
-            sum(rate(cdss_hook_duration_seconds_bucket[5m])) by (le)
+            sum by (le, tenant_id) (rate(cdss_hook_duration_seconds_bucket[5m]))
           ) > 2
         for: 10m
         labels:
@@ -30,16 +30,49 @@ groups:
           service: ehr-service
           dependency: cdss-service
         annotations:
-          summary: "CDSS dependency latency is high"
-          description: "EHR to CDSS p95 latency has exceeded 2 seconds for 10 minutes."
+          summary: "CDSS dependency latency is high for tenant {{ $labels.tenant_id }}"
+          description: "EHR to CDSS p95 latency has exceeded 2 seconds for 10 minutes for tenant {{ $labels.tenant_id }}."
 
-      - alert: CdssDependencyTimeoutBurst
-        expr: sum(rate(cdss_dependency_timeouts_total[5m])) > 0.2
+      - alert: CdssDependencyTimeoutBurstByTenant
+        expr: sum by (tenant_id) (rate(cdss_dependency_timeouts_total[5m])) > 0.2
         for: 5m
         labels:
           severity: critical
           service: ehr-service
           dependency: cdss-service
         annotations:
-          summary: "CDSS dependency timeout burst detected"
-          description: "Timeouts against CDSS are above 0.2/s for at least 5 minutes."
+          summary: "CDSS dependency timeout burst for tenant {{ $labels.tenant_id }}"
+          description: "Timeouts against CDSS are above 0.2/s for at least 5 minutes for tenant {{ $labels.tenant_id }}."
+
+      - alert: CdssAuthFailuresSpike
+        expr: increase(cdss_hook_errors_total{error_type="http_401"}[10m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS auth failures detected"
+          description: "More than 5 CDSS auth failures (HTTP 401) observed over 10 minutes."
+
+      - alert: CdssAbstainSpikeByTenant
+        expr: increase(cdss_abstentions_total[15m]) > 20
+        for: 10m
+        labels:
+          severity: warning
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS abstention spike for tenant {{ $labels.tenant_id }}"
+          description: "CDSS abstentions exceeded 20 in 15 minutes for tenant {{ $labels.tenant_id }} (event {{ $labels.event_type }})."
+
+      - alert: CdssEgressPolicyBlocked
+        expr: increase(cdss_hook_errors_total{error_type="egress_block"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ehr-service
+          dependency: cdss-service
+        annotations:
+          summary: "CDSS outbound egress policy block detected"
+          description: "At least one outbound allowlist block was observed in the last 10 minutes."

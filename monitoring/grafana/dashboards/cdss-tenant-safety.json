@@ -1,0 +1,125 @@
+{
+  "dashboard": {
+    "title": "MediCore CDSS - Tenant Safety Dashboard",
+    "tags": ["medicore", "cdss", "tenant", "safety"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "CDSS Error Ratio by Tenant",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "(sum by (tenant_id) (rate(cdss_hooks_total{status=\"error\"}[5m])) / clamp_min(sum by (tenant_id) (rate(cdss_hooks_total[5m])), 0.001))",
+            "legendFormat": "{{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "percentunit", "label": "Error Ratio" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "CDSS p95 Latency by Tenant",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(cdss_hook_duration_seconds_bucket[5m])))",
+            "legendFormat": "{{tenant_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "s", "label": "Latency" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "CDSS Retries by Tenant/Event",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum by (tenant_id, event_type, reason) (rate(cdss_dependency_retries_total[5m]))",
+            "legendFormat": "{{tenant_id}} · {{event_type}} · {{reason}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Retries/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "CDSS Timeouts by Tenant/Event",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum by (tenant_id, event_type) (rate(cdss_dependency_timeouts_total[5m]))",
+            "legendFormat": "{{tenant_id}} · {{event_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Timeouts/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "CDSS Abstentions by Tenant/Event",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum by (tenant_id, event_type, reason) (increase(cdss_abstentions_total[15m]))",
+            "legendFormat": "{{tenant_id}} · {{event_type}} · {{reason}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Abstentions/15m" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Auth Failures / Egress Blocks",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum by (tenant_id) (increase(cdss_hook_errors_total{error_type=\"http_401\"}[10m]))",
+            "legendFormat": "{{tenant_id}} · auth_401",
+            "refId": "A"
+          },
+          {
+            "expr": "sum by (tenant_id) (increase(cdss_hook_errors_total{error_type=\"egress_block\"}[10m]))",
+            "legendFormat": "{{tenant_id}} · egress_block",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Events/10m" },
+          { "format": "short" }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {}
+  }
+}
+
