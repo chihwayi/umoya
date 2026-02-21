@@ -88,8 +88,10 @@ def test_intelligent_diagnosis_returns_safe_fallback(monkeypatch):
     result = asyncio.run(cdss_main.intelligent_diagnosis(payload, _DummyRequest()))
 
     assert result["abstained"] is True
+    assert result["abstain_reason"] == "service_unavailable"
     assert result["source"] == "safe_fallback"
     assert result["suggested_diagnoses"] == []
+    assert result["model_trace"]["request_sha256"]
     assert result["input_policy"]["allowlist_applied"] is True
 
 

@@ -17,6 +17,11 @@ export interface TranscriptionResult {
     language: string;
     language_probability: number;
     duration: number;
+    segments?: Array<{
+      start: number;
+      end: number;
+      text: string;
+    }>;
   };
   soap_note?: {
     subjective: string;
@@ -24,6 +29,7 @@ export interface TranscriptionResult {
     assessment: string;
     plan: string;
   };
+  audio_url?: string;
 }
 
 class TranscriptionService {
@@ -44,17 +50,15 @@ class TranscriptionService {
       } = options;
 
       const formData = new FormData();
-      formData.append('file', audioFile); // Changed 'audio' to 'file' to match backend
-      formData.append('generate_soap', 'true'); // Request SOAP note generation
+      formData.append('audio', audioFile);
       
       if (language !== 'auto') {
         formData.append('language', language);
       }
-      
-      // Note: Backend currently might not support temperature/prompt in the simple /transcribe endpoint
-      // but we keep them for future extensibility or if we update backend to accept them.
+      formData.append('temperature', temperature.toString());
+      formData.append('prompt', prompt);
 
-      const response = await ehrAxios.post('/transcribe', formData, { // Changed endpoint to /transcribe
+      const response = await ehrAxios.post('/transcription/whisper', formData, {
         headers: {
           'X-Tenant-ID': tenantSlug,
           'Authorization': `Bearer ${token}`,
@@ -62,7 +66,22 @@ class TranscriptionService {
         },
       });
 
-      return response.data;
+      const data = response.data || {};
+      if (data.transcription) {
+        return data as TranscriptionResult;
+      }
+
+      return {
+        transcription: {
+          text: data.text || data.rawText || '',
+          language: data.language || 'en',
+          language_probability: typeof data.confidence === 'number' ? data.confidence : 0,
+          duration: typeof data.duration === 'number' ? data.duration : 0,
+          segments: data.segments || [],
+        },
+        soap_note: data.soap_note,
+        audio_url: data.audio_url,
+      };
     } catch (error: any) {
       console.error('Transcription error:', error);
       throw new Error(`Transcription failed: ${error.response?.data?.detail || error.message}`);

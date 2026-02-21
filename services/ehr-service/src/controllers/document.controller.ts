@@ -51,7 +51,8 @@ export class DocumentController {
         documentData, 
         req.user.userId, 
         req.tenantDb,
-        file.buffer
+        file.buffer,
+        req.tenantId,
       );
       return { success: true, data: result };
     } catch (error) {

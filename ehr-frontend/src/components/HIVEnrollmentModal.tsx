@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Calendar, User, ChevronRight, ChevronLeft, Check, AlertTriangle, Activity } from 'lucide-react';
-import { ehrApi, cdssAxios } from '../services/api';
+import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateForAPI, getTodayFormatted, formatDateToDDMMYYYY } from '../utils/dateUtils';
 
@@ -244,15 +244,39 @@ const HIVEnrollmentModal: React.FC<HIVEnrollmentModalProps> = ({
         },
       };
 
-      const response = await cdssAxios.post('/guidelines/check', requestBody, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await cdssApi.getGuidelines(
+        'hiv care enrollment',
+        {
+          age: patientAge,
+          gender: patientSex,
+          comorbidities: [],
+          medications: [],
+          context: requestBody,
         },
-      });
+        token,
+        tenantSlug,
+      );
 
       const data = response.data || {};
-      setAiSummary(data.summary || null);
-      setAiPlan(data.recommended_plan || data.recommendations || null);
+      const recommendations = Array.isArray(data.recommendations) ? data.recommendations.filter(Boolean) : [];
+      const guidelineLines = Array.isArray(data.guidelines)
+        ? data.guidelines
+            .flatMap((item: any) => {
+              if (!item) return [];
+              if (typeof item === 'string') return [item];
+              if (Array.isArray(item.guidelines)) return item.guidelines.filter(Boolean);
+              if (typeof item.guidelines === 'string') return [item.guidelines];
+              return [];
+            })
+            .filter(Boolean)
+        : [];
+
+      setAiSummary(data.summary || recommendations[0] || guidelineLines[0] || null);
+      setAiPlan(
+        data.recommended_plan
+          || (recommendations.length ? recommendations.join('\n') : null)
+          || (guidelineLines.length ? guidelineLines.join('\n') : null),
+      );
       setAiStatus('ready');
     } catch (error) {
       console.error('AI/CDSS enrollment support failed:', error);

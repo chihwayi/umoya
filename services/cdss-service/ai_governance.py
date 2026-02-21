@@ -65,6 +65,38 @@ def detect_citation_contradictions(result: Dict[str, Any], confidence_score: flo
     return reasons
 
 
+# ----------------------------------------------------------------------------
+# PHI / prompt scanning helpers
+# ----------------------------------------------------------------------------
+
+def _scan_for_phi(item: Any) -> bool:
+    """Recursively scan a payload for PHI-sensitive strings.
+    Returns True if any string element contains PHI according to privacy_guard.contains_phi.
+    """
+    from privacy_guard import contains_phi
+
+    if isinstance(item, str):
+        return contains_phi(item)
+    if isinstance(item, dict):
+        for v in item.values():
+            if _scan_for_phi(v):
+                return True
+        return False
+    if isinstance(item, list):
+        for v in item:
+            if _scan_for_phi(v):
+                return True
+        return False
+    # other types (int, float, None) cannot contain PHI
+    return False
+
+
+def assert_no_phi_in_payload(payload: Any) -> None:
+    """Raise RuntimeError if payload contains PHI string patterns."""
+    if _scan_for_phi(payload):
+        raise RuntimeError("PHI detected in input payload")
+
+
 def apply_safety_gate(result: Dict[str, Any], policy: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     policy = policy or {}
     min_confidence = _safe_float(policy.get("min_confidence_score"), 0.55)
@@ -89,6 +121,7 @@ def apply_safety_gate(result: Dict[str, Any], policy: Optional[Dict[str, Any]] =
         blocked_reasons.extend(detect_citation_contradictions(result, confidence_score))
 
     gate = {
+        "status": "passed" if len(blocked_reasons) == 0 else "blocked",
         "passed": len(blocked_reasons) == 0,
         "confidence_score": round(confidence_score, 4),
         "citation_count": citation_count,
@@ -104,9 +137,11 @@ def apply_safety_gate(result: Dict[str, Any], policy: Optional[Dict[str, Any]] =
 
     out = dict(result)
     out["safety_gate"] = gate
+    out["model_trace"] = out.get("model_trace") or {}
 
     if blocked_reasons and abstain_on_low_confidence:
         out["abstained"] = True
+        out["abstain_reason"] = blocked_reasons[0] if blocked_reasons else "safety_gate_blocked"
         out["clinical_recommendation"] = {
             "text": "Insufficient evidence/confidence for a definitive AI recommendation. Escalate to clinician review.",
             "evidence_level": "Low",
@@ -119,5 +154,6 @@ def apply_safety_gate(result: Dict[str, Any], policy: Optional[Dict[str, Any]] =
         }
     else:
         out["abstained"] = False
+        out["abstain_reason"] = None
 
     return out

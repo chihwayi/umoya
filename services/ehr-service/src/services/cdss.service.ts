@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
+import * as FormData from 'form-data';
 import { WhoSmartGuidelinesService, GuidelineRecommendation } from './who-smart-guidelines.service';
 import { createHash, createHmac, randomUUID } from 'crypto';
 import { MetricsService } from './metrics.service';
@@ -63,9 +64,9 @@ export class CdssService {
         }
       }
       if (this.cdssServiceAuthMode === 'jwt' || this.cdssServiceAuthMode === 'both') {
-        const jwt = this.createServiceJwt();
-        if (jwt) {
-          (request.headers as AxiosHeaders).set('Authorization', `Bearer ${jwt}`);
+        const serviceJwt = this.createServiceJwt(request.url, request.method);
+        if (serviceJwt) {
+          (request.headers as AxiosHeaders).set('Authorization', `Bearer ${serviceJwt}`);
         }
       }
       (request.headers as AxiosHeaders).set('X-Service-Name', 'ehr-service');
@@ -234,12 +235,37 @@ export class CdssService {
     throw lastError;
   }
 
-  private createServiceJwt(): string | null {
+  private requiredServiceScopeForRequest(path: string, method?: string): string {
+    const normalizedPath = String(path || '').split('?')[0];
+    const upperMethod = String(method || 'POST').toUpperCase();
+    if (normalizedPath === '/diagnosis/suggest/intelligent' && upperMethod === 'POST') {
+      return 'cdss.copilot.diagnosis.write';
+    }
+    if (normalizedPath === '/patient/summarize' && upperMethod === 'POST') {
+      return 'cdss.copilot.summary.write';
+    }
+    if (normalizedPath === '/guidelines/search' && upperMethod === 'POST') {
+      return 'cdss.copilot.guidelines.read';
+    }
+    if (normalizedPath.startsWith('/admin/')) {
+      return 'cdss.admin.*';
+    }
+    return 'cdss.api.invoke';
+  }
+
+  private buildServiceScopesForRequest(path?: string, method?: string): string[] {
+    const required = this.requiredServiceScopeForRequest(path || '', method);
+    const scopes = new Set<string>(['cdss.api.invoke', required]);
+    return Array.from(scopes);
+  }
+
+  private createServiceJwt(path?: string, method?: string): string | null {
     const secret = this.cdssServiceJwtSecret;
     if (!secret || secret.length < 24) {
       return null;
     }
     const now = Math.floor(Date.now() / 1000);
+    const scopes = this.buildServiceScopesForRequest(path, method);
     const header = { alg: 'HS256', typ: 'JWT' };
     const payload = {
       iss: this.cdssServiceJwtIssuer,
@@ -248,6 +274,8 @@ export class CdssService {
       iat: now,
       exp: now + 60,
       jti: randomUUID(),
+      scope: scopes.join(' '),
+      scopes,
     };
     const enc = (obj: Record<string, any>) =>
       Buffer.from(JSON.stringify(obj))
@@ -380,8 +408,6 @@ export class CdssService {
         .filter(s => s.length > 0)
         .map(s => s.toLowerCase());
       
-      this.logger.debug(`Calling CDSS with symptoms: ${JSON.stringify(normalizedSymptoms)}`);
-      
       // Try intelligent endpoint first (if enabled and data available)
       const hasClinicalNotes = symptoms.clinicalNotes || symptoms.chiefComplaint || symptoms.historyOfPresentIllness;
       const hasPatientData = symptoms.age || symptoms.gender || symptoms.vitals || symptoms.labs;
@@ -452,15 +478,10 @@ export class CdssService {
         10000,
         tenantId,
       );
-
-      console.log('[CDSS] Response received:', JSON.stringify(responseData).substring(0, 300));
-      this.logger.log(`CDSS response received: ${JSON.stringify(responseData).substring(0, 200)}...`);
       
       // Ensure the response has diagnoses (not just empty arrays)
       const hasDiagnoses = responseData?.suggested_diagnoses?.length > 0 || 
                           responseData?.differentialDiagnoses?.length > 0;
-      
-      console.log('[CDSS] Has diagnoses?', hasDiagnoses, 'suggested_diagnoses length:', responseData?.suggested_diagnoses?.length, 'differentialDiagnoses length:', responseData?.differentialDiagnoses?.length);
       
       if (responseData && hasDiagnoses) {
         this.logger.log(`CDSS returned ${responseData.suggested_diagnoses?.length || responseData.differentialDiagnoses?.length} diagnoses`);
@@ -468,12 +489,10 @@ export class CdssService {
       }
       
       // If Python service returns empty, use fallback
-      console.warn('[CDSS] Empty response from Python, using fallback');
       this.logger.warn(`CDSS returned empty diagnoses (suggested_diagnoses: ${responseData?.suggested_diagnoses?.length || 0}, differentialDiagnoses: ${responseData?.differentialDiagnoses?.length || 0}), using fallback`);
       return this.basicDiagnosisAssist(symptoms);
     } catch (error: any) {
       this.logger.warn(`CDSS diagnostic assistance unavailable: ${error.message}`);
-      this.logger.log(`CDSS error details: ${error.code || 'unknown'} - ${error.message}`);
       // Fallback to basic logic
       return this.basicDiagnosisAssist(symptoms);
     }
@@ -633,6 +652,40 @@ export class CdssService {
     }
   }
 
+  async analyzeMedicalImage(file: Express.Multer.File, tenantId?: string) {
+    const formData = new FormData();
+    formData.append('file', file.buffer, {
+      filename: file.originalname || 'medical-image.bin',
+      contentType: file.mimetype || 'application/octet-stream',
+    });
+
+    const headers: Record<string, string> = {
+      ...(formData.getHeaders() as Record<string, string>),
+    };
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
+
+    const startedAt = Date.now();
+    try {
+      const response = await this.cdssClient.post('/analyze-image', formData, {
+        timeout: 45000,
+        headers,
+      });
+      const durationSeconds = (Date.now() - startedAt) / 1000;
+      this.metricsService?.recordCdssHook('analyze_image', 'success', durationSeconds);
+      this.onCdssCallSuccess();
+      return response.data;
+    } catch (error: any) {
+      const durationSeconds = (Date.now() - startedAt) / 1000;
+      const errorType = this.classifyCdssError(error);
+      this.metricsService?.recordCdssHook('analyze_image', 'error', durationSeconds);
+      this.metricsService?.recordCdssHookError('analyze_image', errorType);
+      this.onCdssCallFailure();
+      throw error;
+    }
+  }
+
   /**
    * Basic guideline search (fallback) - NOW DISABLED to prevent fake data
    */
@@ -669,39 +722,20 @@ export class CdssService {
    * Risk assessment using Python CDSS service with historical data
    */
   async riskAssessment(patientData: any, tenantDb?: DataSource, tenantId?: string) {
-    this.logger.log(`[CDSS] ========== riskAssessment ENTRY ==========`);
-    this.logger.log(`[CDSS] patientData keys: ${Object.keys(patientData || {}).join(', ')}`);
-    this.logger.log(`[CDSS] tenantDb type: ${typeof tenantDb}`);
-    this.logger.log(`[CDSS] tenantDb is DataSource: ${tenantDb instanceof DataSource}`);
-    this.logger.log(`[CDSS] tenantDb exists: ${!!tenantDb}`);
-    
     try {
       const { patientId, age, gender, vitals, medicalHistory, medications, diagnoses, labResults } = patientData;
-      this.logger.log(`[CDSS] Extracted patientId: ${patientId}`);
       
       // Fetch historical data if database connection available
       let historicalData: any = {};
       
       // Always try to fetch historical data if we have tenantDb and patientId
       if (tenantDb && patientId) {
-        this.logger.log(`[CDSS] ✅ Conditions met - attempting to fetch historical data`);
         try {
-          this.logger.log(`[CDSS] Calling fetchPatientHistory for patient: ${patientId}`);
           historicalData = await this.fetchPatientHistory(patientId, tenantDb);
-          this.logger.log(`[CDSS] ✅ fetchPatientHistory completed`);
-          this.logger.log(`[CDSS] Historical data: ${JSON.stringify({
-            totalVisits: historicalData.totalVisits,
-            totalVitals: historicalData.totalVitals,
-            hasHistoricalVitals: !!(historicalData.historicalVitals && historicalData.historicalVitals.length > 0),
-            hasVisitHistory: !!(historicalData.visitHistory && historicalData.visitHistory.length > 0)
-          })}`);
         } catch (error: any) {
           this.logger.error(`[CDSS] ❌ ERROR in fetchPatientHistory: ${error.message}`);
-          this.logger.error(`[CDSS] Error name: ${error.name}`);
-          this.logger.error(`[CDSS] Error stack: ${error.stack?.substring(0, 500)}`);
         }
       } else {
-        this.logger.warn(`[CDSS] ⚠️ Conditions NOT met - tenantDb: ${!!tenantDb}, patientId: ${patientId || 'undefined'}`);
         historicalData = {
           totalVisits: 0,
           totalVitals: 0,
@@ -943,35 +977,25 @@ export class CdssService {
   }
 
   private async fetchPatientHistory(patientId: string, tenantDb: DataSource) {
-    this.logger.log(`[CDSS] fetchPatientHistory START - patientId: ${patientId}`);
     try {
-      this.logger.log(`[CDSS] Importing entities...`);
       const { AppointmentSimple } = await import('../entities/appointment-simple.entity');
       const { Vitals } = await import('../entities/vitals.entity');
-      this.logger.log(`[CDSS] Entities imported successfully`);
-      
-      this.logger.log(`[CDSS] Getting repositories...`);
       const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
       const vitalsRepo = tenantDb.getRepository(Vitals);
-      this.logger.log(`[CDSS] Repositories obtained`);
       
       // Fetch all appointments
-      this.logger.log(`[CDSS] Querying appointments for patientId: ${patientId}`);
       const appointments = await appointmentRepo.find({
         where: { patientId },
         order: { appointmentDate: 'DESC' },
         take: 50, // Last 50 visits
       });
-      this.logger.log(`[CDSS] Found ${appointments.length} appointments`);
       
       // Fetch all vitals
-      this.logger.log(`[CDSS] Querying vitals for patientId: ${patientId}`);
       const vitals = await vitalsRepo.find({
         where: { patientId },
         order: { recordedAt: 'DESC' },
         take: 50, // Last 50 vitals
       });
-      this.logger.log(`[CDSS] Found ${vitals.length} vitals records`);
       
       // Calculate visit statistics
       const completedAppointments = appointments.filter(a => a.status === 'completed');

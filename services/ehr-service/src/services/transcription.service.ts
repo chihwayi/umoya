@@ -18,6 +18,11 @@ export interface TranscriptionOptions {
   prompt?: string;
 }
 
+export interface TranscriptionRequestContext {
+  tenantId?: string;
+  authorization?: string;
+}
+
 export interface TranscriptionResult {
   text: string;
   language: string;
@@ -53,6 +58,7 @@ export class TranscriptionService {
   async transcribe(
     audioFile: Express.Multer.File,
     options: TranscriptionOptions = {},
+    requestContext: TranscriptionRequestContext = {},
   ): Promise<TranscriptionResult> {
     try {
       const {
@@ -63,7 +69,7 @@ export class TranscriptionService {
 
       // Use local Whisper if configured, otherwise use OpenAI API
       if (this.USE_LOCAL_WHISPER) {
-        return await this.transcribeWithLocalWhisper(audioFile, { language, temperature, prompt });
+        return await this.transcribeWithLocalWhisper(audioFile, { language, temperature, prompt }, requestContext);
       } else {
         return await this.transcribeWithOpenAI(audioFile, { language, temperature, prompt });
       }
@@ -140,6 +146,7 @@ export class TranscriptionService {
   private async transcribeWithLocalWhisper(
     audioFile: Express.Multer.File,
     options: TranscriptionOptions,
+    requestContext: TranscriptionRequestContext = {},
   ): Promise<TranscriptionResult> {
     try {
       const formData = new FormData();
@@ -162,51 +169,113 @@ export class TranscriptionService {
 
       this.logger.log(`Sending transcription request to ${this.LOCAL_WHISPER_URL}`);
 
+      const headers: Record<string, string> = {
+        ...(formData.getHeaders() as Record<string, string>),
+      };
+      if (requestContext.tenantId) {
+        headers['X-Tenant-ID'] = requestContext.tenantId;
+      }
+      if (requestContext.authorization) {
+        headers['Authorization'] = requestContext.authorization;
+      }
+
       const response = await axios.post(this.LOCAL_WHISPER_URL, formData, {
-        headers: formData.getHeaders(),
+        headers,
         timeout: 300000, // 5 minute timeout for local processing
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
 
-      const responseData = response.data;
-      
-      // Handle CDSS Service response format
-      // { "transcription": { "text": "...", "language": "...", "segments": [...] }, "soap_note": "...", "audio_url": "..." }
-      if (responseData.transcription) {
-        return {
-          text: responseData.transcription.text || '',
-          language: responseData.transcription.language || options.language || 'en',
-          segments: responseData.transcription.segments || [],
-          soap_note: responseData.soap_note,
-          audio_url: responseData.audio_url
-        };
-      }
-      
-      // Fallback for other formats (legacy/generic)
-      if (responseData.text) {
-        return {
-          text: responseData.text || '',
-          language: responseData.language || options.language || 'en',
-          segments: responseData.segments || [],
-          confidence: responseData.confidence,
-        };
-      }
-      
-      // Format 2: whisper-asr-webservice
-      if (responseData.data && responseData.data.text) {
-        return {
-          text: responseData.data.text || '',
-          language: responseData.data.language || options.language || 'en',
-          segments: responseData.data.segments || [],
-        };
-      }
-      
-      throw new Error('Unknown response format from local Whisper service');
+      return this.parseLocalWhisperResponse(response.data, options.language || 'en');
     } catch (error: any) {
       this.logger.error(`Local Whisper API error: ${error.message}`, error.response?.data);
       throw new Error(`Local Whisper API error: ${error.message}`);
     }
+  }
+
+  private parseLocalWhisperResponse(responseData: any, fallbackLanguage: string): TranscriptionResult {
+    // Preferred CDSS contract
+    const nested = responseData?.transcription;
+    if (nested && typeof nested === 'object') {
+      const text = this.requireNonEmptyString(nested.text, 'transcription.text');
+      return {
+        text,
+        language: this.normalizeLanguage(nested.language, fallbackLanguage),
+        segments: this.normalizeSegments(nested.segments),
+        confidence: this.normalizeConfidence(nested.language_probability ?? nested.confidence),
+        soap_note: responseData?.soap_note,
+        audio_url: this.normalizeOptionalString(responseData?.audio_url),
+      };
+    }
+
+    // Legacy flat contract
+    if (typeof responseData?.text === 'string') {
+      return {
+        text: this.requireNonEmptyString(responseData.text, 'text'),
+        language: this.normalizeLanguage(responseData?.language, fallbackLanguage),
+        segments: this.normalizeSegments(responseData?.segments),
+        confidence: this.normalizeConfidence(responseData?.confidence),
+        soap_note: responseData?.soap_note,
+        audio_url: this.normalizeOptionalString(responseData?.audio_url),
+      };
+    }
+
+    // whisper-asr-webservice style
+    if (typeof responseData?.data?.text === 'string') {
+      return {
+        text: this.requireNonEmptyString(responseData.data.text, 'data.text'),
+        language: this.normalizeLanguage(responseData?.data?.language, fallbackLanguage),
+        segments: this.normalizeSegments(responseData?.data?.segments),
+        confidence: this.normalizeConfidence(responseData?.data?.confidence),
+      };
+    }
+
+    throw new Error('Invalid transcription response contract from local Whisper service');
+  }
+
+  private normalizeLanguage(value: any, fallbackLanguage: string): string {
+    const lang = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return lang || fallbackLanguage || 'en';
+  }
+
+  private normalizeOptionalString(value: any): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeConfidence(value: any): number | undefined {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return undefined;
+    }
+    return Math.max(0, Math.min(1, num));
+  }
+
+  private normalizeSegments(rawSegments: any): Array<{ start: number; end: number; text: string }> {
+    if (!Array.isArray(rawSegments)) {
+      return [];
+    }
+    const segments: Array<{ start: number; end: number; text: string }> = [];
+    for (const seg of rawSegments) {
+      const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
+      const start = Number(seg?.start);
+      const end = Number(seg?.end);
+      if (!text || !Number.isFinite(start) || !Number.isFinite(end)) {
+        continue;
+      }
+      segments.push({ start, end, text });
+    }
+    return segments;
+  }
+
+  private requireNonEmptyString(value: any, fieldName: string): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error(`Invalid transcription response contract: ${fieldName} must be a non-empty string`);
+    }
+    return value.trim();
   }
 
   /**

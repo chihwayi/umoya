@@ -48,6 +48,8 @@ class MedBERTPredictor:
         self.model = None
         self.tokenizer = None
         self._initialized = False
+        self._full_model_attempted = False
+        self._ai_enabled = is_ai_enabled()
         self.icd10_mapper = None
         self.snomed_mapper = None
         
@@ -55,7 +57,10 @@ class MedBERTPredictor:
         if not TRANSFORMERS_AVAILABLE:
             logger.info("Transformers not available. MedBERT will use lightweight fallback mode.")
         
-        if not is_ai_enabled():
+        # Lightweight mode is always available once the class is constructed.
+        self._initialized = True
+
+        if not self._ai_enabled:
             logger.info("AI models disabled via CDSS_ENABLE_AI. MedBERT will use fallback mode.")
             return
         
@@ -67,18 +72,18 @@ class MedBERTPredictor:
             except Exception as e:
                 logger.warning(f"Failed to initialize terminology mappers: {e}")
         
-        # Always mark as initialized (lightweight mode always available)
-        self._initialized = True
-        
         # Try to load full model if transformers available (lazy loading)
         if TRANSFORMERS_AVAILABLE:
             self._try_load_model()
     
     def _try_load_model(self):
         """Try to load the model, fallback to lightweight mode if fails"""
-        if self._initialized:
+        if self._full_model_attempted:
             return
-        
+        self._full_model_attempted = True
+        if not self._ai_enabled or not TRANSFORMERS_AVAILABLE:
+            return
+
         try:
             # Check cache first
             cache_key = f"medbert_{self.model_name}"
@@ -90,15 +95,27 @@ class MedBERTPredictor:
                 self._initialized = True
                 logger.info(f"Loaded MedBERT from cache: {self.model_name}")
                 return
-            
-            # Try to load from HuggingFace (this may fail if model doesn't exist)
-            # For now, we'll use a lightweight embedding approach
-            logger.info("MedBERT: Using lightweight embedding approach (full model requires GPU)")
-            self._initialized = True
+
+            allow_model_download = os.getenv("CDSS_ALLOW_MODEL_DOWNLOAD", "false").strip().lower() == "true"
+            if allow_model_download:
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModel.from_pretrained(self.model_name)
+                if hasattr(self.model, "eval"):
+                    self.model.eval()
+                cache[cache_key] = {
+                    "model": self.model,
+                    "tokenizer": self.tokenizer,
+                }
+                logger.info(f"Loaded MedBERT model via transformers: {self.model_name}")
+                return
+
+            logger.info(
+                "MedBERT: Full model download disabled (CDSS_ALLOW_MODEL_DOWNLOAD=false). "
+                "Using lightweight embedding approach."
+            )
             
         except Exception as e:
             logger.warning(f"Failed to load MedBERT model: {e}. Using fallback mode.")
-            self._initialized = True  # Mark as initialized to prevent retries
     
     def _encode_structured_data(self, patient_data: Dict[str, Any]) -> np.ndarray:
         """
@@ -309,7 +326,7 @@ class MedBERTPredictor:
                 'source': 'medbert'
             }
         """
-        if not self._initialized:
+        if TRANSFORMERS_AVAILABLE and self._ai_enabled and not self._full_model_attempted:
             self._try_load_model()
         
         # Use lightweight approach for now

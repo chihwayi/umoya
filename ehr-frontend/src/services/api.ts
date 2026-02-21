@@ -4,9 +4,8 @@ import { handleAutoLogout } from '../utils/autoLogout';
 
 const TENANT_API_URL = process.env.REACT_APP_TENANT_API_URL || process.env.REACT_APP_API_URL || '';
 const EHR_API_URL = process.env.REACT_APP_EHR_API_URL || '';
-const CDSS_API_URL = process.env.REACT_APP_CDSS_API_URL || '';
 
-if (!TENANT_API_URL || !EHR_API_URL || !CDSS_API_URL) {
+if (!TENANT_API_URL || !EHR_API_URL) {
   console.warn('One or more API URLs are missing in environment variables. Application may not function correctly.');
 }
 
@@ -63,7 +62,6 @@ const createAxiosInstance = (baseURL: string) => {
 // Create instances
 export const tenantAxios = createAxiosInstance(TENANT_API_URL);
 export const ehrAxios = createAxiosInstance(EHR_API_URL);
-export const cdssAxios = createAxiosInstance(CDSS_API_URL);
 
 export const tenantApi = {
   getActiveTenants: async () => {
@@ -7142,9 +7140,7 @@ export const clinicalPathwaysApi = {
 
 export const cdssApi = {
   getRiskAssessment: async (patientData: any, token: string, tenantSlug: string) => {
-    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
-    // Endpoint on cdss-service is /risk/calculate, not /risk-assessment
-    const response = await cdssAxios.post('/risk/calculate', patientData, {
+    const response = await ehrAxios.post('/cdss/risk-assessment', patientData, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
@@ -7154,8 +7150,7 @@ export const cdssApi = {
   },
 
   searchGuidelines: async (query: string, token: string, tenantSlug: string, limit: number = 5, patientContext?: any) => {
-    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
-    const response = await cdssAxios.post('/guidelines/search', { query, limit, patient_context: patientContext }, {
+    const response = await ehrAxios.post('/cdss/guidelines/search', { query, limit, patient_context: patientContext }, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,
@@ -7165,14 +7160,9 @@ export const cdssApi = {
   },
   
   getGuidelines: async (condition: string, patientData: any, token: string, tenantSlug: string) => {
-    // Direct call to CDSS service to avoid double-serialization issues in ehr-service proxy
-    // Endpoint on cdss-service is /guidelines/check
-    const response = await cdssAxios.post('/guidelines/check', { 
-      condition, 
-      patient_age: patientData?.age,
-      patient_gender: patientData?.gender,
-      comorbidities: patientData?.comorbidities || [],
-      medications: patientData?.medications || []
+    const response = await ehrAxios.post('/cdss/guidelines', {
+      condition,
+      patientData,
     }, {
       headers: {
         'X-Tenant-ID': tenantSlug,
@@ -7183,12 +7173,11 @@ export const cdssApi = {
   },
 
   analyzeMedicalImage: async (formData: FormData, token: string, tenantSlug: string) => {
-    // Direct call to CDSS service for performance on large files
-    const response = await cdssAxios.post('/analyze-image', formData, {
+    const response = await ehrAxios.post('/cdss/analyze-image', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
-        // Optional: Pass auth if CDSS service requires it eventually
-        'Authorization': `Bearer ${token}` 
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
       },
     });
     return { data: response.data };

@@ -1,10 +1,11 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Param, UseGuards, Request, Logger, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { CdssService } from '../services/cdss.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Clinical Decision Support System')
 @ApiSecurity('tenant-key')
@@ -52,6 +53,61 @@ export class CdssController {
   @ApiResponse({ status: 200, description: 'Guidelines found' })
   async searchGuidelines(@Body() body: { query: string, limit?: number, patient_context?: any }, @Request() req: RequestWithTenant) {
     return this.cdssService.searchGuidelines(body.query, body.limit, body.patient_context, req.tenantId);
+  }
+
+  @Post('analyze-image')
+  @ApiOperation({ summary: 'Analyze medical image through CDSS' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Medical image analyzed' })
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: 25 * 1024 * 1024 },
+    fileFilter: (_req, file, callback) => {
+      const allowedMimes = new Set([
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/bmp',
+        'image/tiff',
+        'application/dicom',
+        'application/octet-stream',
+      ]);
+      const original = (file.originalname || '').toLowerCase();
+      const allowedByExt = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.dcm']
+        .some((ext) => original.endsWith(ext));
+      const allowedByMime = allowedMimes.has((file.mimetype || '').toLowerCase());
+      if (allowedByMime || allowedByExt) {
+        callback(null, true);
+      } else {
+        callback(
+          new HttpException(
+            'Invalid image file type. Allowed: JPEG, PNG, WEBP, BMP, TIFF, DICOM',
+            HttpStatus.BAD_REQUEST,
+          ),
+          false,
+        );
+      }
+    },
+  }))
+  async analyzeMedicalImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: RequestWithTenant,
+  ) {
+    if (!file) {
+      throw new HttpException('Image file is required', HttpStatus.BAD_REQUEST);
+    }
+    return this.cdssService.analyzeMedicalImage(file, req.tenantId);
   }
 
   @Post('risk-assessment')

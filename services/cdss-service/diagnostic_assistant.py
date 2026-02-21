@@ -726,6 +726,15 @@ class DiagnosticAssistant:
         has_ai_models = (self.medbert is not None) or (self.clinicalbert is not None)
         has_fusion = self.fusion_engine is not None
         has_llm = self.llm_provider is not None
+        model_snapshot = model_registry or self._runtime_model_versions()
+        llm_route = self._select_llm_model(tenant_id=tenant_id, model_registry=model_snapshot)
+        trace_input = {
+            "symptoms": symptoms,
+            "vitals": vitals,
+            "age": age,
+            "gender": gender,
+            "patient_data": patient_data,
+        }
         
         # If no AI models at all, return rule-based only
         if not has_ai_models and not has_llm:
@@ -735,11 +744,14 @@ class DiagnosticAssistant:
                 'source': 'rule_based_only',
                 'ai_enabled': False
             }
-            base["model_registry"] = model_registry or self._runtime_model_versions()
+            base["model_registry"] = model_snapshot
+            base["model_trace"] = self._build_model_trace(
+                tenant_id=tenant_id,
+                model_registry=model_snapshot,
+                llm_route=llm_route,
+                request_payload=trace_input,
+            )
             return apply_safety_gate(base, governance_policy)
-            
-        model_snapshot = model_registry or self._runtime_model_versions()
-        llm_route = self._select_llm_model(tenant_id=tenant_id, model_registry=model_snapshot)
 
         # 1. Run Local LLM (if available)
         llm_results = None
@@ -866,7 +878,13 @@ class DiagnosticAssistant:
                 'ai_enabled': True,
                 'ai_models_available': False
             }
-            base["model_registry"] = model_registry or self._runtime_model_versions()
+            base["model_registry"] = model_snapshot
+            base["model_trace"] = self._build_model_trace(
+                tenant_id=tenant_id,
+                model_registry=model_snapshot,
+                llm_route=llm_route,
+                request_payload=trace_input,
+            )
             return apply_safety_gate(base, governance_policy)
         
         # 4. Fusion: Combine all results
@@ -951,13 +969,7 @@ class DiagnosticAssistant:
             tenant_id=tenant_id,
             model_registry=model_snapshot,
             llm_route=llm_route,
-            request_payload={
-                "symptoms": symptoms,
-                "vitals": vitals,
-                "age": age,
-                "gender": gender,
-                "patient_data": patient_data,
-            },
+            request_payload=trace_input,
         )
         return apply_safety_gate(final_result, governance_policy)
 

@@ -14,17 +14,37 @@ export class DocumentService {
     }
   }
 
+  private normalizeTenantKey(tenantId: string): string {
+    const normalized = String(tenantId || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (!normalized) {
+      throw new BadRequestException('Valid tenant context is required for document storage');
+    }
+    return normalized;
+  }
+
   // ==================== DOCUMENT CRUD ====================
 
-  async uploadDocument(patientId: string, documentData: any, userId: string, tenantDb: DataSource, fileBuffer?: Buffer) {
+  async uploadDocument(
+    patientId: string,
+    documentData: any,
+    userId: string,
+    tenantDb: DataSource,
+    fileBuffer?: Buffer,
+    tenantId?: string,
+  ) {
     this.ensureTenantDb(tenantDb);
 
     let filePath = documentData.filePath;
     
     // Upload to MinIO if file buffer is provided
     if (fileBuffer) {
-      const tenantId = 'bulawayo-general'; // TODO: Get from context
-      const fileKey = this.minioService.generateFileKey(tenantId, patientId, documentData.documentName);
+      const tenantStorageKey = this.normalizeTenantKey(tenantId || '');
+      const fileKey = this.minioService.generateFileKey(tenantStorageKey, patientId, documentData.documentName);
       await this.minioService.uploadFile(fileKey, fileBuffer, documentData.mimeType);
       filePath = fileKey;
     }
@@ -606,4 +626,3 @@ export class DocumentService {
     };
   }
 }
-

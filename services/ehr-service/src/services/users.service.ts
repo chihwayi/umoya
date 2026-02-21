@@ -55,9 +55,6 @@ export class UsersService {
 
     const savedUser = await userRepository.save(user);
     
-    // Log temporary password for admin
-    console.log(`🔑 TEMPORARY PASSWORD for ${savedUser.email}: ${tempPassword}`);
-    
     return Object.assign(savedUser, { tempPassword });
   }
 
@@ -117,8 +114,6 @@ export class UsersService {
     user.passwordChangedAt = null;
     
     await userRepository.save(user);
-    
-    console.log(`🔑 PASSWORD RESET for ${user.email}: ${tempPassword}`);
     
     return { 
       message: 'Password reset successfully',

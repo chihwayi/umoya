@@ -35,6 +35,14 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(MRN|Patient\s*ID|PID)\s*[:#]?\s*[A-Za-z0-9\-_/]+\b", re.IGNORECASE), "[REDACTED_MRN]"),
     # DOB labels + date-like values
     (re.compile(r"\b(DOB|Date\s*of\s*Birth)\s*[:#]?\s*[0-9]{1,4}[\/\-][0-9]{1,2}[\/\-][0-9]{1,4}\b", re.IGNORECASE), "[REDACTED_DOB]"),
+    # Explicit "patient name" labels
+    (
+        re.compile(
+            r"\b(?:patient\s*)?name\s*[:#]?\s*[A-Za-z][A-Za-z'\-]+(?:\s+[A-Za-z][A-Za-z'\-]+){1,3}\b",
+            re.IGNORECASE,
+        ),
+        "[REDACTED_NAME]",
+    ),
 ]
 
 _SENSITIVE_KEYS = {

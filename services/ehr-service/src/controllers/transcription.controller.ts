@@ -129,12 +129,24 @@ export class TranscriptionController {
         prompt: body.prompt || 'This is a medical consultation between a doctor and patient. Medical terminology, vitals, symptoms, and diagnoses should be transcribed accurately.',
       };
 
-      const result = await this.transcriptionService.transcribe(file, options);
+      const result = await this.transcriptionService.transcribe(file, options, {
+        tenantId: req.tenantId,
+        authorization: req.headers?.authorization as string | undefined,
+      });
 
       // Format the transcription
       const formattedText = this.transcriptionService.formatTranscription(result.text);
 
       return {
+        transcription: {
+          text: formattedText,
+          language: result.language,
+          language_probability: typeof result.confidence === 'number' ? result.confidence : 0,
+          duration: 0,
+          segments: result.segments || [],
+        },
+        soap_note: result.soap_note,
+        audio_url: result.audio_url,
         text: formattedText,
         rawText: result.text,
         language: result.language,

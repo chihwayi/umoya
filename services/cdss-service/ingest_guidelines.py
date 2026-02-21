@@ -3,6 +3,7 @@ import sys
 import glob
 import logging
 import hashlib
+import json
 import nltk
 from typing import List, Dict, Any
 
@@ -26,6 +27,66 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 GUIDELINES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "who-smart-guidelines")
+
+
+def _metadata_quality_report(metadatas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    total = len(metadatas or [])
+    required_fields = ["source", "page", "type", "target_population", "clinical_domain"]
+    if total == 0:
+        return {
+            "total_chunks": 0,
+            "required_fields": required_fields,
+            "field_coverage": {field: 0.0 for field in required_fields},
+            "unknown_target_population_rate": 0.0,
+            "unknown_clinical_domain_rate": 0.0,
+        }
+
+    field_counts = {field: 0 for field in required_fields}
+    unknown_target_population = 0
+    unknown_clinical_domain = 0
+    target_population_dist: Dict[str, int] = {}
+    clinical_domain_dist: Dict[str, int] = {}
+
+    for meta in metadatas:
+        for field in required_fields:
+            value = (meta or {}).get(field)
+            if value is None:
+                continue
+            raw = str(value).strip()
+            if raw:
+                field_counts[field] += 1
+
+        target_population = str((meta or {}).get("target_population") or "").strip().lower()
+        clinical_domain = str((meta or {}).get("clinical_domain") or "").strip().lower()
+        target_population_dist[target_population or "missing"] = target_population_dist.get(target_population or "missing", 0) + 1
+        clinical_domain_dist[clinical_domain or "missing"] = clinical_domain_dist.get(clinical_domain or "missing", 0) + 1
+
+        if target_population in {"", "unknown", "other", "general", "missing"}:
+            unknown_target_population += 1
+        if clinical_domain in {"", "unknown", "other", "missing"}:
+            unknown_clinical_domain += 1
+
+    return {
+        "total_chunks": total,
+        "required_fields": required_fields,
+        "field_coverage": {
+            field: round(field_counts[field] / total, 4) for field in required_fields
+        },
+        "unknown_target_population_rate": round(unknown_target_population / total, 4),
+        "unknown_clinical_domain_rate": round(unknown_clinical_domain / total, 4),
+        "target_population_distribution": target_population_dist,
+        "clinical_domain_distribution": clinical_domain_dist,
+    }
+
+
+def _write_metadata_quality_report(report: Dict[str, Any]) -> None:
+    report_path = os.getenv("CDSS_INGEST_METADATA_REPORT_PATH", "").strip()
+    if not report_path:
+        report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ingest_metadata_report.json")
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as fh:
+        json.dump(report, fh, indent=2, sort_keys=True)
+    print(f"📊 Metadata quality report written: {report_path}")
 
 def process_pdf(pdf_path: str) -> List[Dict[str, Any]]:
     """
@@ -182,24 +243,26 @@ def ingest_guidelines():
         logger.warning(f"Could not wipe DB (might be empty): {e}")
 
     files = glob.glob(os.path.join(GUIDELINES_DIR, "**", "*.pdf"), recursive=True)
-    
-    # Prioritize specific files for quick fix (User requested: sepsis, hiv)
-    target_files = [
-        # "hiv_consolidated_2021.pdf", # HIV (Too large, causing OOM)
-        "child-health-dak.pdf",      # Sepsis (likely)
-        "pregnancy-dak.pdf"          # Sepsis (maternal)
-    ]
-    # Filter to only these files if they exist, otherwise use all (fallback logic)
-    filtered_files = [f for f in files if any(t in os.path.basename(f) for t in target_files)]
-    if filtered_files:
-        print(f"🎯 Targeted ingestion mode. Processing {len(filtered_files)} priority files.")
-        files = filtered_files
+
+    # Full corpus is the default behavior. Targeted ingest is explicit opt-in.
+    target_files_env = os.getenv("CDSS_INGEST_TARGET_FILES", "").strip()
+    if target_files_env:
+        target_files = [name.strip() for name in target_files_env.split(",") if name.strip()]
+        filtered_files = [f for f in files if any(t in os.path.basename(f) for t in target_files)]
+        if filtered_files:
+            print(f"🎯 Targeted ingestion mode enabled. Processing {len(filtered_files)} selected files.")
+            files = filtered_files
+        else:
+            print("⚠️ CDSS_INGEST_TARGET_FILES is set but no matching files were found; ingesting full corpus.")
+    else:
+        print(f"📚 Full corpus ingestion mode. Processing {len(files)} files.")
     
     if not files:
         print("❌ No PDF guideline files found.")
         return
 
     total_chunks = 0
+    all_metadatas: List[Dict[str, Any]] = []
     
     for file_path in files:
         print(f"📄 Processing {os.path.basename(file_path)}...")
@@ -211,13 +274,15 @@ def ingest_guidelines():
             print("   ⚠️ No chunks extracted.")
             continue
             
-        # Optimization: Limit large HIV file for quicker ingestion
-        if "hiv_consolidated_2021.pdf" in file_path and len(chunks) > 100:
-            print(f"   ⚠️ Large file detected ({len(chunks)} chunks). Limiting to first 100 chunks for speed.")
-            chunks = chunks[:100]
+        max_chunks_raw = os.getenv("CDSS_INGEST_MAX_CHUNKS_PER_FILE", "0").strip()
+        max_chunks = int(max_chunks_raw) if max_chunks_raw.isdigit() else 0
+        if max_chunks > 0 and len(chunks) > max_chunks:
+            print(f"   ⚠️ Chunk cap enabled. Limiting file to first {max_chunks} chunks.")
+            chunks = chunks[:max_chunks]
 
         texts = [c["text"] for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
+        all_metadatas.extend(metadatas)
         ids = []
         
         # Generate stable IDs
@@ -232,6 +297,19 @@ def ingest_guidelines():
         print(f"   ✅ Added {len(chunks)} chunks. Total in DB: {rag.collection.count()}")
         
     print(f"🎉 Ingestion Complete! Total Chunks: {total_chunks}")
+    report = _metadata_quality_report(all_metadatas)
+    print(
+        "📈 Metadata coverage:",
+        json.dumps(
+            {
+                "field_coverage": report.get("field_coverage", {}),
+                "unknown_target_population_rate": report.get("unknown_target_population_rate"),
+                "unknown_clinical_domain_rate": report.get("unknown_clinical_domain_rate"),
+            },
+            sort_keys=True,
+        ),
+    )
+    _write_metadata_quality_report(report)
 
 if __name__ == "__main__":
     ingest_guidelines()

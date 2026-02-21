@@ -33,10 +33,9 @@ from lab_interpreter import LabResultInterpreter
 from duplicate_therapy import DuplicateTherapyDetector
 from high_risk_medications import HighRiskMedicationDetector
 from food_interactions import FoodInteractionChecker
-from ai_models.voice_scribe import VoiceScribe
-from ai_models.medical_vision import MedicalVisionService
 from settings_provider import SettingsProvider
 from privacy_guard import redact_text, redact_value
+from ai_governance import assert_no_phi_in_payload, compute_request_hash
 from service_auth import (
     decode_service_jwt,
     extract_service_claim_scopes,
@@ -51,6 +50,43 @@ import redis as redis_pkg
 from uuid import uuid4
 from threading import Lock
 
+_DEV_LIKE_ENVIRONMENTS = {"dev", "development", "local", "test"}
+
+
+def _is_dev_like_env(env: str) -> bool:
+    return str(env or "").strip().lower() in _DEV_LIKE_ENVIRONMENTS
+
+
+def _parse_cors_origins(raw_origins: Optional[str]) -> List[str]:
+    if raw_origins is None:
+        return []
+    return [origin.strip() for origin in str(raw_origins).split(",") if origin.strip()]
+
+
+def _validate_cors_origin_format(origin: str) -> None:
+    if origin == "*":
+        return
+    if not re.match(r"^https?://[A-Za-z0-9.-]+(?::\d{1,5})?$", origin):
+        raise RuntimeError(
+            f"Invalid CORS origin '{origin}'. Use explicit origin format like https://app.example.com."
+        )
+
+
+def _resolve_cors_origins(env: Optional[str] = None, raw_origins: Optional[str] = None) -> List[str]:
+    normalized_env = str(env or os.getenv("ENVIRONMENT", "development")).strip().lower() or "development"
+    parsed_origins = _parse_cors_origins(os.getenv("CORS_ORIGINS") if raw_origins is None else raw_origins)
+    if not parsed_origins:
+        if _is_dev_like_env(normalized_env):
+            return ["*"]
+        raise RuntimeError("CORS_ORIGINS must be configured with explicit origins in non-development environment.")
+    for origin in parsed_origins:
+        _validate_cors_origin_format(origin)
+    if not _is_dev_like_env(normalized_env) and "*" in parsed_origins:
+        raise RuntimeError("CORS_ORIGINS cannot include '*' in non-development environment.")
+    # Preserve declared order while removing duplicates.
+    return list(dict.fromkeys(parsed_origins))
+
+
 app = FastAPI(
     title="MediCore CDSS Service",
     description="Clinical Decision Support System API",
@@ -58,9 +94,8 @@ app = FastAPI(
 )
 
 # CORS middleware
-# Load allowed origins from environment variable, default to "*" if not set (for development)
-cors_origins_env = os.getenv("CORS_ORIGINS")
-allowed_origins = cors_origins_env.split(",") if cors_origins_env else ["*"]
+# Resolve and validate origins at import-time for fail-fast behavior.
+allowed_origins = _resolve_cors_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,12 +120,13 @@ def _validate_security_config() -> None:
     Fail fast on critical security config drift.
     """
     env = os.getenv("ENVIRONMENT", "development").strip().lower()
+    _resolve_cors_origins(env=env, raw_origins=os.getenv("CORS_ORIGINS"))
 
     # Strict boolean parsing for security switches
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
     _get_bool_env_strict(
         "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
-        "false" if env in ("dev", "development", "local", "test") else "true",
+        "false" if _is_dev_like_env(env) else "true",
     )
     _get_bool_env_strict("CDSS_PHI_REDACTION_ENABLED", "true")
     _get_bool_env_strict("CDSS_BLOCK_OUTBOUND_PHI", "true")
@@ -117,10 +153,10 @@ def _validate_security_config() -> None:
 
     # Prevent insecure default token outside dev-like environments.
     insecure_default = "dev_cdss_service_token_change_in_production"
-    if env not in ("dev", "development", "local", "test") and service_auth_mode in ("token", "both") and service_token == insecure_default:
+    if not _is_dev_like_env(env) and service_auth_mode in ("token", "both") and service_token == insecure_default:
         raise RuntimeError("CDSS_SERVICE_TOKEN is using insecure default value in non-development environment.")
     insecure_jwt_secret_default = "dev_cdss_service_jwt_secret_change_in_production"
-    if env not in ("dev", "development", "local", "test") and service_auth_mode in ("jwt", "both") and service_jwt_secret == insecure_jwt_secret_default:
+    if not _is_dev_like_env(env) and service_auth_mode in ("jwt", "both") and service_jwt_secret == insecure_jwt_secret_default:
         raise RuntimeError("CDSS_SERVICE_JWT_SECRET is using insecure default value in non-development environment.")
 
     jwt_secret = os.getenv("JWT_SECRET", "").strip()
@@ -131,21 +167,21 @@ def _validate_security_config() -> None:
     }
     if not jwt_secret:
         raise RuntimeError("JWT_SECRET is required for CDSS admin JWT verification.")
-    if env not in ("dev", "development", "local", "test") and (jwt_secret in insecure_jwt_defaults or len(jwt_secret) < 24):
+    if not _is_dev_like_env(env) and (jwt_secret in insecure_jwt_defaults or len(jwt_secret) < 24):
         raise RuntimeError("JWT_SECRET is insecure for non-development environment.")
 
     owner_emails = [e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()]
-    if env not in ("dev", "development", "local", "test") and not owner_emails:
+    if not _is_dev_like_env(env) and not owner_emails:
         raise RuntimeError("OWNER_EMAILS must be configured in non-development environment.")
-    if env not in ("dev", "development", "local", "test") and strict_egress:
+    if not _is_dev_like_env(env) and strict_egress:
         allowlist_raw = os.getenv("CDSS_EGRESS_ALLOWLIST", "").strip()
         if not allowlist_raw:
             raise RuntimeError("CDSS_STRICT_EGRESS_ALLOWLIST=true requires CDSS_EGRESS_ALLOWLIST in non-development environment.")
-    if env not in ("dev", "development", "local", "test") and llm_enabled and not os.getenv("LLM_API_URL", "").strip():
+    if not _is_dev_like_env(env) and llm_enabled and not os.getenv("LLM_API_URL", "").strip():
         raise RuntimeError("LLM_ENABLED=true requires LLM_API_URL in non-development environment.")
     _get_bool_env_strict(
         "CDSS_OWNER_SCOPE_STRICT",
-        "false" if env in ("dev", "development", "local", "test") else "true",
+        "false" if _is_dev_like_env(env) else "true",
     )
 
     if encryption_enabled:
@@ -165,9 +201,9 @@ def _validate_security_config() -> None:
                 raise RuntimeError("CDSS_ENCRYPTION_PROVIDER=kms requires CDSS_ENCRYPTION_KMS_KEY_ARN.")
 
         insecure_default_enc = "h7X7Tr_3k0-Tl3xw8tS9AqK3f7fjoGv0VGfT3d2i-9o="
-        if env not in ("dev", "development", "local", "test") and encryption_key == insecure_default_enc:
+        if not _is_dev_like_env(env) and encryption_key == insecure_default_enc:
             raise RuntimeError("CDSS_ENCRYPTION_KEY is using insecure default in non-development environment.")
-        if env not in ("dev", "development", "local", "test") and allow_plaintext_reads:
+        if not _is_dev_like_env(env) and allow_plaintext_reads:
             raise RuntimeError("CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS must be false in non-development environment.")
 
 
@@ -182,16 +218,21 @@ ADMIN_JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 _SEC_ENV = os.getenv("ENVIRONMENT", "development").strip().lower()
 OWNER_SCOPE_STRICT = _get_bool_env_strict(
     "CDSS_OWNER_SCOPE_STRICT",
-    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+    "false" if _is_dev_like_env(_SEC_ENV) else "true",
 )
 SERVICE_AUTH_JWT_REPLAY_STRICT = _get_bool_env_strict(
     "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
-    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+    "false" if _is_dev_like_env(_SEC_ENV) else "true",
 )
 SERVICE_AUTH_SCOPE_STRICT = _get_bool_env_strict(
     "CDSS_SERVICE_AUTH_SCOPE_STRICT",
-    "false" if _SEC_ENV in ("dev", "development", "local", "test") else "true",
+    "false" if _is_dev_like_env(_SEC_ENV) else "true",
 )
+_PUBLIC_PATH_EXACT = {"/", "/health", "/openapi.json"}
+_PUBLIC_PATH_PREFIXES = ("/docs", "/redoc")
+_SERVICE_AUTH_EXEMPT_PREFIXES = _PUBLIC_PATH_PREFIXES + ("/admin",)
+_TENANT_REQUIRED_EXEMPT_EXACT = set(_PUBLIC_PATH_EXACT)
+_TENANT_REQUIRED_EXEMPT_PREFIXES = _PUBLIC_PATH_PREFIXES + ("/admin",)
 COPILOT_TIMEOUT_SECONDS = float(os.getenv("CDSS_COPILOT_TIMEOUT_SECONDS", "20"))
 COPILOT_RETRY_MAX = max(0, int(os.getenv("CDSS_COPILOT_RETRY_MAX", "1")))
 COPILOT_RETRY_BASE_SECONDS = float(os.getenv("CDSS_COPILOT_RETRY_BASE_SECONDS", "0.25"))
@@ -257,8 +298,44 @@ def _normalize_tenant_cache_key(raw_tenant_id: Optional[str]) -> str:
 
 
 def _tenant_cache_key_from_request(req: Request) -> str:
+    try:
+        state_tenant_id = getattr(req.state, "tenant_id", None)
+        if state_tenant_id:
+            return _normalize_tenant_cache_key(state_tenant_id)
+    except Exception:
+        pass
     tenant_id = req.headers.get("x-tenant-id")
     return _normalize_tenant_cache_key(tenant_id)
+
+
+def _is_path_exempt(path: str, exact: set[str], prefixes: tuple[str, ...]) -> bool:
+    return path in exact or any(path.startswith(prefix) for prefix in prefixes)
+
+
+def _is_tenant_required_path(path: str) -> bool:
+    return not _is_path_exempt(path, _TENANT_REQUIRED_EXEMPT_EXACT, _TENANT_REQUIRED_EXEMPT_PREFIXES)
+
+
+def _require_tenant_cache_key_from_request(req: Request) -> str:
+    tenant_key = _tenant_cache_key_from_request(req)
+    raw = ""
+    try:
+        raw = str(req.headers.get("x-tenant-id") or "").strip()
+    except Exception:
+        raw = ""
+    if not raw or tenant_key == "public":
+        raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
+    return tenant_key
+
+
+def _job_owner_from_request(req: Request) -> str:
+    try:
+        identity = str(getattr(req.state, "service_identity", "") or "").strip()
+        if identity:
+            return identity[:200]
+    except Exception:
+        pass
+    return "service"
 
 
 _COPILOT_ALLOWLIST_DEFAULTS: Dict[str, List[str]] = {
@@ -297,7 +374,35 @@ def _apply_allowlist(payload: Dict[str, Any], allowed_keys: List[str]) -> Dict[s
     return {k: payload[k] for k in payload.keys() if k in allowed}
 
 
+
+async def get_ai_policy(x_tenant_id: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Retrieve tenant-specific AI policy using header value (X-Tenant-ID).
+    If no policy is set or the settings provider is unavailable, return empty dict.
+    """
+    if not settings_provider or not x_tenant_id:
+        return {}
+    return settings_provider.get_tenant_policy(x_tenant_id) or {}
+
+
+def _resolve_ai_policy(ai_policy: Any, req: Optional[Request] = None) -> Dict[str, Any]:
+    if isinstance(ai_policy, dict):
+        return ai_policy
+    if not settings_provider or req is None:
+        return {}
+    try:
+        tenant_id = req.headers.get("x-tenant-id")
+    except Exception:
+        return {}
+    if not tenant_id:
+        return {}
+    try:
+        return settings_provider.get_tenant_policy(tenant_id) or {}
+    except Exception:
+        return {}
+
+
 def _sanitize_summary_payload(request_payload: Dict[str, Any]) -> Dict[str, Any]:
+
     allowlists = _get_copilot_allowlists()
     safe_payload = _apply_allowlist(request_payload, allowlists.get("summary", []))
 
@@ -358,6 +463,97 @@ def _sanitize_intelligent_diagnosis_payload(request_payload: Dict[str, Any]) -> 
     return cleaned
 
 
+def _coerce_int(value: Any) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    raw = str(value).strip()
+    if raw.isdigit():
+        return int(raw)
+    return None
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    raw = str(value).strip().lower()
+    return raw in {"1", "true", "yes", "y", "pregnant"}
+
+
+def _build_guideline_population_filters(patient_context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(patient_context, dict):
+        return None
+
+    context = patient_context or {}
+    explicit_population = str(context.get("target_population") or "").strip().lower()
+    if explicit_population in {"children", "elderly", "pregnant_women", "adults"}:
+        return {"target_population": explicit_population}
+
+    age = _coerce_int(context.get("age") if context.get("age") is not None else context.get("patient_age"))
+    gender = str(context.get("gender") if context.get("gender") is not None else context.get("patient_gender") or "").strip().lower()
+    is_pregnant = (
+        _coerce_bool(context.get("is_pregnant"))
+        or _coerce_bool(context.get("pregnant"))
+        or str(context.get("pregnancy_status") or "").strip().lower() in {"pregnant", "positive", "yes", "true"}
+    )
+    if not is_pregnant:
+        notes_blob = str(context).lower()
+        is_pregnant = "pregnan" in notes_blob
+
+    if is_pregnant and gender in {"female", "f", "woman"}:
+        return {"target_population": "pregnant_women"}
+    if isinstance(age, int):
+        if age < 18:
+            return {"target_population": "children"}
+        if age >= 65:
+            return {"target_population": "elderly"}
+    if gender in {"male", "m", "man", "boy"}:
+        return {"target_population": {"$ne": "pregnant_women"}}
+    return None
+
+
+def _filter_guideline_citations_by_population(
+    citations: List[Dict[str, Any]],
+    patient_context: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    filters = _build_guideline_population_filters(patient_context)
+    if not citations or not filters:
+        return citations
+
+    target_rule = filters.get("target_population")
+    filtered: List[Dict[str, Any]] = []
+
+    if isinstance(target_rule, dict) and target_rule.get("$ne") == "pregnant_women":
+        for c in citations:
+            meta = c.get("metadata") if isinstance(c, dict) else {}
+            pop = str((meta or {}).get("target_population") or "").strip().lower()
+            if pop == "pregnant_women":
+                continue
+            filtered.append(c)
+        return filtered
+
+    if isinstance(target_rule, str):
+        incompatible = {
+            "children": {"pregnant_women", "elderly"},
+            "elderly": {"children", "pregnant_women"},
+            "pregnant_women": {"children", "elderly"},
+        }.get(target_rule, set())
+        for c in citations:
+            meta = c.get("metadata") if isinstance(c, dict) else {}
+            pop = str((meta or {}).get("target_population") or "").strip().lower()
+            if pop and pop in incompatible:
+                continue
+            filtered.append(c)
+        return filtered
+
+    return citations
+
+
 def _copilot_transparency(
     action: str,
     confidence: Any,
@@ -379,12 +575,129 @@ def _copilot_transparency(
     }
 
 
+def _copilot_model_trace_stub(
+    action: str,
+    request_payload: Optional[Dict[str, Any]] = None,
+    model_registry: Optional[Dict[str, Any]] = None,
+    *,
+    llm_model: Optional[str] = None,
+    llm_route: str = "fallback",
+    canary_percent: int = 0,
+) -> Dict[str, Any]:
+    trace_payload = {
+        "action": action,
+        "llm_model": llm_model,
+        "llm_route": llm_route,
+        "canary_percent": canary_percent,
+        "models": model_registry or {},
+    }
+    return {
+        "trace_version": "2026.02",
+        "request_sha256": compute_request_hash(request_payload or {}),
+        "model_registry_sha256": hashlib.sha256(
+            json.dumps(trace_payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest(),
+        "llm_model": llm_model,
+        "llm_route": llm_route,
+        "canary_percent": canary_percent,
+    }
+
+
 def _safe_filename(filename: Optional[str], fallback: str = "upload.bin") -> str:
     base = os.path.basename(filename or "").strip()
     if not base:
         base = fallback
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
     return safe[:180] or fallback
+
+
+def _parse_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = int(raw)
+        return parsed if parsed > 0 else default
+    except Exception:
+        return default
+
+
+_MAX_AUDIO_UPLOAD_BYTES = _parse_positive_int_env("CDSS_MAX_AUDIO_UPLOAD_BYTES", 25 * 1024 * 1024)
+_MAX_IMAGE_UPLOAD_BYTES = _parse_positive_int_env("CDSS_MAX_IMAGE_UPLOAD_BYTES", 25 * 1024 * 1024)
+_MAX_ADMIN_INGEST_UPLOAD_BYTES = _parse_positive_int_env("CDSS_MAX_ADMIN_INGEST_UPLOAD_BYTES", 50 * 1024 * 1024)
+
+_ALLOWED_AUDIO_MIME_TYPES = {
+    "audio/wav",
+    "audio/x-wav",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/m4a",
+    "audio/x-m4a",
+    "audio/webm",
+    "audio/ogg",
+}
+_ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".webm", ".ogg"}
+
+_ALLOWED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "application/dicom",
+    "application/dicom+json",
+}
+_ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".dcm"}
+
+_ALLOWED_ADMIN_INGEST_MIME_TYPES = {"application/pdf"}
+_ALLOWED_ADMIN_INGEST_EXTENSIONS = {".pdf"}
+
+
+def _measure_upload_size(file: UploadFile) -> int:
+    try:
+        file.file.seek(0, os.SEEK_END)
+        size = int(file.file.tell() or 0)
+        file.file.seek(0)
+        return size
+    except Exception:
+        return 0
+
+
+def _validate_upload_constraints(
+    file: UploadFile,
+    *,
+    file_label: str,
+    max_bytes: int,
+    allowed_mime_types: set[str],
+    allowed_extensions: set[str],
+) -> Dict[str, Any]:
+    safe_name = _safe_filename(getattr(file, "filename", None) or f"{file_label}.bin")
+    ext = pathlib.Path(safe_name).suffix.lower()
+    content_type = str(getattr(file, "content_type", "") or "").split(";")[0].strip().lower()
+    allowed_by_mime = content_type in allowed_mime_types
+    allowed_by_ext = ext in allowed_extensions if allowed_extensions else True
+
+    if not allowed_by_mime and not allowed_by_ext:
+        allowed_desc = ", ".join(sorted(allowed_mime_types))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {file_label} file type '{content_type or 'unknown'}'. Allowed: {allowed_desc}",
+        )
+
+    size = _measure_upload_size(file)
+    if size <= 0:
+        raise HTTPException(status_code=400, detail=f"Invalid {file_label} upload: empty file")
+    if size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{file_label.capitalize()} file exceeds max size of {max_bytes} bytes",
+        )
+
+    return {
+        "safe_filename": safe_name,
+        "content_type": content_type or "application/octet-stream",
+        "size_bytes": size,
+    }
 
 
 def _tenant_temp_dir(tenant_key: str) -> str:
@@ -515,8 +828,8 @@ async def service_to_service_auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     path = request.url.path
-    exempt_exact = {"/", "/health", "/openapi.json", "/hiv/testing/algorithm"}
-    exempt_prefixes = ("/docs", "/redoc", "/admin")
+    exempt_exact = _PUBLIC_PATH_EXACT
+    exempt_prefixes = _SERVICE_AUTH_EXEMPT_PREFIXES
 
     if path in exempt_exact or any(path.startswith(prefix) for prefix in exempt_prefixes):
         return await call_next(request)
@@ -588,6 +901,28 @@ async def service_to_service_auth_middleware(request: Request, call_next):
         }
         return JSONResponse(status_code=401, content=payload)
 
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def tenant_context_guard_middleware(request: Request, call_next):
+    path = request.url.path
+    if not _is_tenant_required_path(path):
+        return await call_next(request)
+
+    tenant_header = str(request.headers.get("x-tenant-id") or "").strip()
+    tenant_key = _normalize_tenant_cache_key(tenant_header)
+    if not tenant_header or tenant_key == "public":
+        payload = {
+            "code": "BAD_REQUEST",
+            "message": "X-Tenant-ID header is required",
+            "details": None,
+            "requestId": getattr(request.state, "request_id", str(uuid4())),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        return JSONResponse(status_code=400, content=payload)
+
+    request.state.tenant_id = tenant_key
     return await call_next(request)
 
 # Request/Response Models
@@ -662,25 +997,45 @@ except Exception as e:
 # Check for AI enablement
 enable_ai = os.getenv("CDSS_ENABLE_AI", "false").lower() == "true"
 
-# Initialize Voice Scribe
+# AI services are initialized lazily to avoid hard import failures for optional
+# heavy dependencies during startup and non-AI test runs.
 voice_scribe = None
-if enable_ai:
-    try:
-        voice_scribe = VoiceScribe()
-    except Exception as e:
-        print(f"Voice scribe initialization failed: {e}")
-else:
-    print("Voice Scribe disabled via CDSS_ENABLE_AI=false")
-
-# Initialize Medical Vision Service
 medical_vision = None
-if enable_ai:
-    try:
-        medical_vision = MedicalVisionService()
-    except Exception as e:
-        print(f"Medical Vision initialization failed: {e}")
+
+if not enable_ai:
+    print("AI features disabled via CDSS_ENABLE_AI=false")
 else:
-    print("AI features (Medical Vision) disabled via CDSS_ENABLE_AI=false")
+    print("AI features enabled via CDSS_ENABLE_AI=true (lazy initialization)")
+
+
+def _ensure_voice_scribe_loaded() -> bool:
+    global voice_scribe
+    if voice_scribe:
+        return True
+    if not enable_ai:
+        return False
+    try:
+        from ai_models.voice_scribe import VoiceScribe
+        voice_scribe = VoiceScribe()
+        return bool(voice_scribe)
+    except Exception as e:
+        print(f"Voice scribe lazy initialization failed: {e}")
+        return False
+
+
+def _ensure_medical_vision_loaded() -> bool:
+    global medical_vision
+    if medical_vision:
+        return True
+    if not enable_ai:
+        return False
+    try:
+        from ai_models.medical_vision import MedicalVisionService
+        medical_vision = MedicalVisionService()
+        return bool(medical_vision)
+    except Exception as e:
+        print(f"Medical Vision lazy initialization failed: {e}")
+        return False
 
 # MinIO Configuration
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
@@ -704,7 +1059,9 @@ s3_client = boto3.client(
 
 @app.on_event("startup")
 async def startup_event():
-    """Ensure MinIO bucket exists on startup."""
+    """Validate runtime security config and ensure MinIO bucket exists on startup."""
+    # Startup guard so deployments fail closed if CORS env drifts after import.
+    _resolve_cors_origins(env=os.getenv("ENVIRONMENT", "development"), raw_origins=os.getenv("CORS_ORIGINS"))
     try:
         try:
             s3_client.head_bucket(Bucket=MINIO_BUCKET)
@@ -1058,7 +1415,7 @@ def _run_reencrypt_job(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not voice_scribe:
+    if not _ensure_voice_scribe_loaded():
         raise RuntimeError("Voice service unavailable")
     temp_path = str(payload.get("temp_path") or "")
     language = payload.get("language")
@@ -1099,7 +1456,7 @@ def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _run_image_analysis_job(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not medical_vision:
+    if not _ensure_medical_vision_loaded():
         raise RuntimeError("Medical Vision service unavailable")
     temp_path = str(payload.get("temp_path") or "")
     filename = str(payload.get("filename") or "image.bin")
@@ -1328,6 +1685,12 @@ class ModelRegistryEntryPayload(BaseModel):
     config: Optional[Dict[str, Any]] = None
 
 
+class TenantAIPolicyPayload(BaseModel):
+    ai_enabled: Optional[bool] = None
+    max_requests_per_minute: Optional[int] = None
+    allowed_models: Optional[List[str]] = None
+
+
 class EncryptionReencryptPayload(BaseModel):
     async_job: bool = True
     dry_run: bool = False
@@ -1346,6 +1709,7 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
     # Basic data validation
     data = {k: v for k, v in payload.dict().items() if v is not None}
     if "cache_ttl_seconds" in data and (not isinstance(data["cache_ttl_seconds"], int) or data["cache_ttl_seconds"] < 0):
+
         raise HTTPException(status_code=400, detail="cache_ttl_seconds must be a non-negative integer")
     if "llm_max_retries" in data and (not isinstance(data["llm_max_retries"], int) or data["llm_max_retries"] < 0 or data["llm_max_retries"] > 5):
         raise HTTPException(status_code=400, detail="llm_max_retries must be an integer between 0 and 5")
@@ -1358,6 +1722,23 @@ async def update_admin_settings(payload: SettingsPayload, owner: str = Depends(r
                 raise HTTPException(status_code=400, detail=f"copilot_input_allowlists.{key} must be a non-empty string array")
     updated = settings_provider.set_settings(data, actor=owner, action="update_settings")
     return {"settings": updated}
+
+
+# Tenant AI policy management
+@app.get("/admin/tenants/{tenant_id}/ai-policy")
+async def get_tenant_ai_policy(tenant_id: str, owner: str = Depends(require_owner_scope("cdss.admin.settings.read"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    policy = settings_provider.get_tenant_policy(tenant_id)
+    return {"tenant_id": tenant_id, "policy": policy}
+
+@app.put("/admin/tenants/{tenant_id}/ai-policy")
+async def set_tenant_ai_policy(tenant_id: str, payload: TenantAIPolicyPayload, owner: str = Depends(require_owner_scope("cdss.admin.settings.write"))):
+    if not settings_provider:
+        raise HTTPException(status_code=501, detail="Settings store unavailable")
+    policy = {k: v for k, v in payload.dict().items() if v is not None}
+    saved = settings_provider.upsert_tenant_policy(tenant_id, policy)
+    return {"tenant_id": tenant_id, "policy": saved}
 
 
 @app.get("/admin/models")
@@ -1411,22 +1792,33 @@ async def admin_encryption_reencrypt(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/ingest")
-async def admin_ingest(file: UploadFile | None = File(None), owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
+async def admin_ingest(file: Optional[UploadFile] = File(None), owner: str = Depends(require_owner_scope("cdss.admin.jobs.write"))):
     if settings_provider:
         s = settings_provider.get_settings()
         if not s.get("allow_pdf_uploads", True) and file is not None:
             raise HTTPException(status_code=403, detail="PDF uploads disabled")
     if file is not None:
+        upload_meta = _validate_upload_constraints(
+            file,
+            file_label="guideline pdf",
+            max_bytes=_MAX_ADMIN_INGEST_UPLOAD_BYTES,
+            allowed_mime_types=_ALLOWED_ADMIN_INGEST_MIME_TYPES,
+            allowed_extensions=_ALLOWED_ADMIN_INGEST_EXTENSIONS,
+        )
         target_dir = pathlib.Path(__file__).resolve().parent / "who-smart-guidelines" / "dak"
         target_dir.mkdir(parents=True, exist_ok=True)
-        dest = target_dir / file.filename
+        dest = target_dir / upload_meta["safe_filename"]
         content = await file.read()
         with open(dest, "wb") as f:
             f.write(content)
     job_id = _create_job(
         job_type="ingest",
         owner=owner,
-        payload={"filename": getattr(file, "filename", None)},
+        payload={
+            "filename": upload_meta["safe_filename"] if file is not None else None,
+            "size_bytes": upload_meta["size_bytes"] if file is not None else None,
+            "content_type": upload_meta["content_type"] if file is not None else None,
+        },
     )
     _dispatch_job(job_id)
     if settings_provider:
@@ -1699,12 +2091,12 @@ class AuditQuery(BaseModel):
 async def admin_audit(
     limit: int = 50,
     offset: int = 0,
-    actor: str | None = None,
-    action: str | None = None,
-    startDate: str | None = None,
-    endDate: str | None = None,
-    sortKey: str | None = "created_at",
-    sortDir: str | None = "desc",
+    actor: Optional[str] = None,
+    action: Optional[str] = None,
+    startDate: Optional[str] = None,
+    endDate: Optional[str] = None,
+    sortKey: Optional[str] = "created_at",
+    sortDir: Optional[str] = "desc",
     owner: str = Depends(require_owner_scope("cdss.admin.audit.read"))
 ):
     if not settings_provider:
@@ -1735,14 +2127,23 @@ async def transcribe_audio(
     Transcribe audio file (English, Shona, Ndebele) and optionally generate SOAP note.
     Stores audio in MinIO.
     """
-    if not voice_scribe:
+    if not _ensure_voice_scribe_loaded():
         raise HTTPException(status_code=503, detail="Voice service unavailable")
+    if language and language not in {"en", "sn", "nd", "auto"}:
+        raise HTTPException(status_code=400, detail="Invalid language. Allowed: en, sn, nd, auto")
     
-    tenant_key = _tenant_cache_key_from_request(req)
+    tenant_key = _require_tenant_cache_key_from_request(req)
+    upload_meta = _validate_upload_constraints(
+        file,
+        file_label="audio",
+        max_bytes=_MAX_AUDIO_UPLOAD_BYTES,
+        allowed_mime_types=_ALLOWED_AUDIO_MIME_TYPES,
+        allowed_extensions=_ALLOWED_AUDIO_EXTENSIONS,
+    )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
 
     if async_job:
-        owner = req.headers.get("x-owner-email") or "service"
+        owner = _job_owner_from_request(req)
         job_id = _create_job(
             job_type="transcribe",
             owner=owner,
@@ -1750,7 +2151,9 @@ async def transcribe_audio(
             payload={
                 "tenant_id": tenant_key,
                 "temp_path": temp_path,
-                "filename": file.filename,
+                "filename": upload_meta["safe_filename"],
+                "content_type": upload_meta["content_type"],
+                "size_bytes": upload_meta["size_bytes"],
                 "language": language,
                 "generate_soap": generate_soap,
             },
@@ -1764,7 +2167,9 @@ async def transcribe_audio(
             {
                 "tenant_id": tenant_key,
                 "temp_path": temp_path,
-                "filename": file.filename,
+                "filename": upload_meta["safe_filename"],
+                "content_type": upload_meta["content_type"],
+                "size_bytes": upload_meta["size_bytes"],
                 "language": language,
                 "generate_soap": generate_soap,
             },
@@ -1782,13 +2187,20 @@ async def analyze_medical_image(
     Analyze medical images (X-Ray, DICOM) using Computer Vision.
     Detects: Pneumonia, Tuberculosis, Pleural Effusion, etc.
     """
-    if not medical_vision:
+    if not _ensure_medical_vision_loaded():
         raise HTTPException(status_code=503, detail="Medical Vision service unavailable")
 
-    tenant_key = _tenant_cache_key_from_request(req)
+    tenant_key = _require_tenant_cache_key_from_request(req)
+    upload_meta = _validate_upload_constraints(
+        file,
+        file_label="image",
+        max_bytes=_MAX_IMAGE_UPLOAD_BYTES,
+        allowed_mime_types=_ALLOWED_IMAGE_MIME_TYPES,
+        allowed_extensions=_ALLOWED_IMAGE_EXTENSIONS,
+    )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
     if async_job:
-        owner = req.headers.get("x-owner-email") or "service"
+        owner = _job_owner_from_request(req)
         job_id = _create_job(
             job_type="analyze_image",
             owner=owner,
@@ -1796,7 +2208,9 @@ async def analyze_medical_image(
             payload={
                 "tenant_id": tenant_key,
                 "temp_path": temp_path,
-                "filename": file.filename,
+                "filename": upload_meta["safe_filename"],
+                "content_type": upload_meta["content_type"],
+                "size_bytes": upload_meta["size_bytes"],
             },
         )
         _dispatch_job(job_id)
@@ -1807,7 +2221,9 @@ async def analyze_medical_image(
             {
                 "tenant_id": tenant_key,
                 "temp_path": temp_path,
-                "filename": file.filename,
+                "filename": upload_meta["safe_filename"],
+                "content_type": upload_meta["content_type"],
+                "size_bytes": upload_meta["size_bytes"],
             },
         )
     except Exception as e:
@@ -1941,40 +2357,15 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
     analysis = None
     tenant_cache_key = _tenant_cache_key_from_request(req)
     safe_query = redact_text(request.query)
+    filters = _build_guideline_population_filters(request.patient_context)
     
     # 1. Retrieve relevant guidelines (RAG)
     if diagnostic_assistant.rag_engine:
         try:
             print("[CDSS] Searching guidelines")
-            
-            # Construct Metadata Filters (Sprint 2: Context-Aware Retrieval)
-            filters = {}
-            # NOTE: Metadata filtering disabled to ensure results are returned (metadata tagging might be incomplete)
-            # if request.patient_context:
-            #     pc = request.patient_context
-            #     
-            #     # Age-based filtering
-            #     age = pc.get('age')
-            #     if age is not None:
-            #         if isinstance(age, str) and age.isdigit():
-            #             age = int(age)
-            #             
-            #         if isinstance(age, int):
-            #             if age < 18:
-            #                 filters["target_population"] = "children"
-            #             elif age > 65:
-            #                 filters["target_population"] = "elderly"
-            #     
-            #     # Gender/Pregnancy (Overrides age if pregnant)
-            #     gender = pc.get('gender', '').lower()
-            #     is_pregnant = pc.get('is_pregnant', False) or 'pregnant' in str(pc).lower()
-            #     
-            #     if is_pregnant and gender in ['female', 'f']:
-            #         filters["target_population"] = "pregnant_women"
-            
-            # Log active filters
+
             if filters:
-                print(f"[CDSS] Applying RAG Filters: {filters}")
+                print(f"[CDSS] Applying RAG population filters: {filters}")
 
             citations = diagnostic_assistant.rag_engine.query(
                 safe_query,
@@ -1982,6 +2373,7 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                 filters=filters if filters else None,
                 tenant_id=tenant_cache_key
             )
+            citations = _filter_guideline_citations_by_population(citations, request.patient_context)
         except Exception as e:
             print(f"[CDSS] Guideline search failed: {e}")
             
@@ -2071,7 +2463,8 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
         "query": request.query,
         "citations": citations,
         "analysis": analysis,
-        "count": len(citations)
+        "count": len(citations),
+        "applied_filters": filters or {},
     }
 
 
@@ -2424,7 +2817,7 @@ async def suggest_diagnosis(request: DiagnosisRequest):
 
 
 @app.post("/diagnosis/suggest/intelligent")
-async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Request):
+async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Request, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
     """
     Intelligent diagnostic assistance combining:
     - Rule-based CDSS (pattern matching, guidelines)
@@ -2435,11 +2828,61 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
     
     This is the "thinking" CDSS that combines rule-based logic with AI models for enhanced accuracy.
     """
+    # scan request payload for PHI before proceeding
+    try:
+        assert_no_phi_in_payload(request.dict())
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    effective_ai_policy = _resolve_ai_policy(ai_policy, req)
     sanitized = _sanitize_intelligent_diagnosis_payload(request.dict())
     patient_data = sanitized.get("patient_data") or {}
-
+    trace_payload = {
+        "symptoms": sanitized.get("symptoms") or [],
+        "vitals": sanitized.get("vitals"),
+        "age": sanitized.get("age"),
+        "gender": sanitized.get("gender"),
+        "patient_data": patient_data if patient_data else None,
+    }
     cfg = settings_provider.get_settings() if settings_provider else {}
     model_registry = settings_provider.get_runtime_model_registry_map() if settings_provider else {}
+
+    # enforce tenant-specific AI policy
+    if effective_ai_policy.get("ai_enabled") is False:
+        # perform rule-based diagnosis and return a safe response
+        rb = diagnostic_assistant.suggest_diagnosis(
+            symptoms=request.symptoms,
+            vitals=request.vitals,
+            age=request.age,
+            gender=request.gender,
+        )
+        disabled_trace = _copilot_model_trace_stub(
+            "intelligent_diagnosis",
+            request_payload=trace_payload,
+            model_registry=model_registry,
+            llm_route="policy_disabled",
+        )
+        return {
+            "suggested_diagnoses": rb['suggested_diagnoses'],
+            "confidence_scores": rb.get('confidence_scores', []),
+            "recommended_tests": rb.get('recommended_tests', []),
+            "red_flags": rb.get('red_flags', []),
+            "vitals_clues": rb.get('vitals_clues', []),
+            "source": "rule_based_cdss_policy_disabled",
+            "ai_enabled": False,
+            "ai_models_used": {},
+            "explanation": "AI disabled for tenant by policy",
+            "safety_gate": {"status": "policy_disabled", "passed": True, "reasons": []},
+            "abstained": False,
+            "abstain_reason": None,
+            "model_registry": model_registry,
+            "model_trace": disabled_trace,
+            "input_policy": {
+                "allowlist_applied": True,
+                "phi_minimized": True,
+                "symptoms_count": len(sanitized.get("symptoms") or []),
+            },
+        }
     governance_policy = {
         "min_confidence_score": cfg.get("ai_min_confidence_score", 0.55),
         "require_citations": cfg.get("ai_require_citations", True),
@@ -2464,13 +2907,19 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
             ),
         )
     except Exception as e:
+        fallback_trace = _copilot_model_trace_stub(
+            "intelligent_diagnosis",
+            request_payload=trace_payload,
+            model_registry=model_registry,
+            llm_route="fallback",
+        )
         transparency = _copilot_transparency(
             action="intelligent_diagnosis",
             confidence="low",
             explanation="Intelligent diagnosis assistant unavailable; returned safe abstained response.",
             citations=[],
             source="safe_fallback",
-            model_trace={},
+            model_trace=fallback_trace,
         )
         return {
             "suggested_diagnoses": [],
@@ -2486,10 +2935,15 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
             "ai_contributions": 0,
             "total_sources": 0,
             "explanation": "Intelligent diagnosis unavailable at this time. Use manual clinical workflow.",
-            "safety_gate": {"status": "fallback", "reason": "service_unavailable"},
+            "safety_gate": {
+                "status": "fallback",
+                "passed": False,
+                "reasons": ["service_unavailable"],
+            },
             "abstained": True,
-            "model_registry": {},
-            "model_trace": {},
+            "abstain_reason": "service_unavailable",
+            "model_registry": model_registry,
+            "model_trace": fallback_trace,
             "why_recommended": transparency["why_recommended"],
             "provenance": transparency["provenance"],
             "warnings": [str(e)],
@@ -2528,8 +2982,15 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         "explanation": result.get('explanation', 'Combined results from rule-based CDSS and AI models'),
         "safety_gate": result.get("safety_gate", {}),
         "abstained": result.get("abstained", False),
+        "abstain_reason": result.get("abstain_reason"),
         "model_registry": result.get("model_registry", {}),
-        "model_trace": result.get("model_trace", {}),
+        "model_trace": result.get("model_trace")
+        or _copilot_model_trace_stub(
+            "intelligent_diagnosis",
+            request_payload=trace_payload,
+            model_registry=result.get("model_registry", model_registry),
+            llm_route="unknown",
+        ),
         "why_recommended": transparency["why_recommended"],
         "provenance": transparency["provenance"],
         "input_policy": {
@@ -2541,11 +3002,23 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
 
 
 @app.post("/patient/summarize")
-async def summarize_patient_history(request: PatientSummaryRequest):
+async def summarize_patient_history(request: PatientSummaryRequest, ai_policy: Dict[str, Any] = Depends(get_ai_policy)):
     """
     Generate a concise "One-Liner" summary of the patient's history using LLM.
     Useful for patient headers and quick context.
     """
+    # scan for PHI
+    try:
+        assert_no_phi_in_payload(request.dict())
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    effective_ai_policy = _resolve_ai_policy(ai_policy)
+
+    # policy may disable LLM
+    if effective_ai_policy.get("ai_enabled") is False:
+        raise HTTPException(status_code=403, detail="AI/LLM use disabled for tenant by policy")
+
     sanitized = _sanitize_summary_payload(request.dict())
     demographics = {"age": sanitized.get("age"), "gender": sanitized.get("gender")}
 
@@ -2863,11 +3336,18 @@ async def transcribe_audio_basic(
     Transcribe audio (voice consultation) and optionally generate SOAP notes.
     Supports English, Shona, and Ndebele.
     """
-    if not voice_scribe:
+    if not _ensure_voice_scribe_loaded():
         raise HTTPException(status_code=503, detail="Voice service unavailable")
     
     # Save uploaded file to temp
-    tenant_key = _tenant_cache_key_from_request(req)
+    tenant_key = _require_tenant_cache_key_from_request(req)
+    _validate_upload_constraints(
+        file,
+        file_label="audio",
+        max_bytes=_MAX_AUDIO_UPLOAD_BYTES,
+        allowed_mime_types=_ALLOWED_AUDIO_MIME_TYPES,
+        allowed_extensions=_ALLOWED_AUDIO_EXTENSIONS,
+    )
     temp_path = _save_upload_to_tenant_temp(file, tenant_key)
     
     try:

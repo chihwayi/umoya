@@ -63,6 +63,9 @@ class ClinicalBERTDiagnostic:
         self.tokenizer = None
         self.classifier = None
         self._initialized = False
+        self._full_model_attempted = False
+        self._ai_enabled = is_ai_enabled()
+        self.llm_provider = None
         self.icd10_mapper = None
         self.snomed_mapper = None
         
@@ -70,7 +73,10 @@ class ClinicalBERTDiagnostic:
         if not TRANSFORMERS_AVAILABLE:
             logger.info("Transformers not available. ClinicalBERT will use lightweight fallback mode.")
         
-        if not is_ai_enabled():
+        # Lightweight mode is always available once the class is constructed.
+        self._initialized = True
+
+        if not self._ai_enabled:
             logger.info("AI models disabled via CDSS_ENABLE_AI. ClinicalBERT will use fallback mode.")
             return
         
@@ -87,16 +93,16 @@ class ClinicalBERTDiagnostic:
         except Exception:
             self.llm_provider = None
         
-        # Always mark as initialized (lightweight mode always available)
-        self._initialized = True
-        
         # Try to load full model if transformers available
         if TRANSFORMERS_AVAILABLE:
             self._try_load_model()
     
     def _try_load_model(self):
         """Try to load the model, fallback to lightweight mode if fails"""
-        if self._initialized:
+        if self._full_model_attempted:
+            return
+        self._full_model_attempted = True
+        if not self._ai_enabled or not TRANSFORMERS_AVAILABLE:
             return
         
         try:
@@ -112,14 +118,31 @@ class ClinicalBERTDiagnostic:
                 logger.info(f"Loaded ClinicalBERT from cache: {self.model_name}")
                 return
             
-            # For now, use lightweight text analysis
-            # Full ClinicalBERT would require GPU and model download
-            logger.info("ClinicalBERT: Using lightweight text analysis (full model requires GPU)")
-            self._initialized = True
+            allow_model_download = os.getenv("CDSS_ALLOW_MODEL_DOWNLOAD", "false").strip().lower() == "true"
+            if allow_model_download:
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+                self.classifier = pipeline(
+                    "text-classification",
+                    model=self.model,
+                    tokenizer=self.tokenizer,
+                    truncation=True,
+                )
+                cache[cache_key] = {
+                    "model": self.model,
+                    "tokenizer": self.tokenizer,
+                    "classifier": self.classifier,
+                }
+                logger.info(f"Loaded ClinicalBERT model via transformers: {self.model_name}")
+                return
+
+            logger.info(
+                "ClinicalBERT: Full model download disabled (CDSS_ALLOW_MODEL_DOWNLOAD=false). "
+                "Using lightweight text analysis."
+            )
             
         except Exception as e:
             logger.warning(f"Failed to load ClinicalBERT model: {e}. Using fallback mode.")
-            self._initialized = True
     
     def _extract_entities_lightweight(self, text: str) -> Dict[str, Any]:
         """
@@ -171,6 +194,22 @@ class ClinicalBERTDiagnostic:
 
             # Process tokens
             found_symptoms = set()
+
+            def _add_symptom_with_codes(symptom_key: str) -> None:
+                if symptom_key in found_symptoms:
+                    return
+                found_symptoms.add(symptom_key)
+                entities['symptoms'].append(symptom_key)
+                detail = {'name': symptom_key}
+                if self.icd10_mapper:
+                    icd = self.icd10_mapper.get_icd10_for_symptom(symptom_key)
+                    if icd:
+                        detail['icd10'] = icd
+                if self.snomed_mapper:
+                    snomed = self.snomed_mapper.get_snomed_for_symptom(symptom_key)
+                    if snomed:
+                        detail['snomed'] = snomed
+                entities['symptom_details'].append(detail)
             
             # 1. Direct Lemma Matching
             for token in doc:
@@ -181,52 +220,16 @@ class ClinicalBERTDiagnostic:
                     std_key = lemma_normalization[lemma]
                 else:
                     continue
-                    if std_key not in found_symptoms:
-                        found_symptoms.add(std_key)
-                        entities['symptoms'].append(std_key)
-                    detail = {'name': std_key}
-                    if self.icd10_mapper:
-                        icd = self.icd10_mapper.get_icd10_for_symptom(std_key)
-                        if icd:
-                            detail['icd10'] = icd
-                    if self.snomed_mapper:
-                        snomed = self.snomed_mapper.get_snomed_for_symptom(std_key)
-                        if snomed:
-                            detail['snomed'] = snomed
-                    entities['symptom_details'].append(detail)
+                _add_symptom_with_codes(std_key)
             
             # 2. Phrase Matching (Basic Noun Chunks) - "chest pain", "shortness of breath"
             for chunk in doc.noun_chunks:
                 chunk_text = chunk.text.lower()
                 # Check for composite terms
                 if "chest" in chunk_text and "pain" in chunk_text:
-                    if 'chest_pain' not in found_symptoms:
-                        found_symptoms.add('chest_pain')
-                        entities['symptoms'].append('chest_pain')
-                        detail = {'name': 'chest_pain'}
-                        if self.icd10_mapper:
-                            icd = self.icd10_mapper.get_icd10_for_symptom('chest_pain')
-                            if icd:
-                                detail['icd10'] = icd
-                        if self.snomed_mapper:
-                            snomed = self.snomed_mapper.get_snomed_for_symptom('chest_pain')
-                            if snomed:
-                                detail['snomed'] = snomed
-                        entities['symptom_details'].append(detail)
+                    _add_symptom_with_codes('chest_pain')
                 elif "short" in chunk_text and "breath" in chunk_text:
-                     if 'shortness_of_breath' not in found_symptoms:
-                        found_symptoms.add('shortness_of_breath')
-                        entities['symptoms'].append('shortness_of_breath')
-                        detail = {'name': 'shortness_of_breath'}
-                        if self.icd10_mapper:
-                            icd = self.icd10_mapper.get_icd10_for_symptom('shortness_of_breath')
-                            if icd:
-                                detail['icd10'] = icd
-                        if self.snomed_mapper:
-                            snomed = self.snomed_mapper.get_snomed_for_symptom('shortness_of_breath')
-                            if snomed:
-                                detail['snomed'] = snomed
-                        entities['symptom_details'].append(detail)
+                    _add_symptom_with_codes('shortness_of_breath')
 
         else:
             # FALLBACK: Use original keyword matching if Spacy fails
@@ -341,7 +344,7 @@ class ClinicalBERTDiagnostic:
                 'source': 'clinicalbert'
             }
         """
-        if not self._initialized:
+        if TRANSFORMERS_AVAILABLE and self._ai_enabled and not self._full_model_attempted:
             self._try_load_model()
         
         if not clinical_text or len(clinical_text.strip()) < 5:

@@ -113,6 +113,16 @@ class SettingsProvider:
                 );
                 """
             )
+            # Tenant-specific configuration policies (e.g., AI enablement)
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cdss_tenant_policies (
+                  tenant_id TEXT PRIMARY KEY,
+                  policy JSONB NOT NULL,
+                  updated_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                """
+            )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);"
             )
@@ -196,6 +206,39 @@ class SettingsProvider:
                 """,
                 (model_id, model_type, provider, version, status, Json(config)),
             )
+
+    def get_tenant_policy(self, tenant_id: str) -> Dict[str, Any]:
+        """Retrieve the JSON policy associated with a tenant.
+        Returns an empty dict if no policy exists.
+        """
+        if not tenant_id:
+            return {}
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT policy FROM cdss_tenant_policies WHERE tenant_id = %s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {}
+            return row[0] or {}
+
+    def upsert_tenant_policy(self, tenant_id: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert or update a tenant's policy."""
+        if not tenant_id:
+            raise ValueError("tenant_id is required")
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cdss_tenant_policies (tenant_id, policy, updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (tenant_id) DO UPDATE
+                  SET policy = EXCLUDED.policy,
+                      updated_at = NOW();
+                """,
+                (tenant_id, Json(policy)),
+            )
+        return policy
 
     def get_settings(self) -> Dict[str, Any]:
         with self.conn.cursor() as cur:
