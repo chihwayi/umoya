@@ -27,6 +27,7 @@ interface MaternityEnrollmentDetailModalProps {
 type TabKey = 'summary' | 'anc' | 'delivery' | 'postnatal' | 'risk';
 
 type NumberLike = string | number | null | undefined;
+type VitalsSource = { id?: string; recordedAt?: string | null; recordedByName?: string | null };
 
 const riskStyles: Record<string, string> = {
   high: 'bg-red-100 text-red-700 border-red-300',
@@ -123,6 +124,32 @@ const computeBMI = (weightKg?: NumberLike, heightCm?: NumberLike) => {
   const heightMeters = height / 100;
   if (!heightMeters) return null;
   return Number((weight / (heightMeters * heightMeters)).toFixed(1));
+};
+
+const normalizeIsoDate = (raw: any): string | null => {
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().split('T')[0];
+};
+
+const normalizeTimestamp = (vital: any): number => {
+  const raw =
+    vital?.recordedAt ||
+    vital?.recorded_at ||
+    vital?.createdAt ||
+    vital?.created_at ||
+    vital?.updatedAt ||
+    vital?.updated_at;
+  const ts = raw ? new Date(raw).getTime() : 0;
+  return Number.isNaN(ts) ? 0 : ts;
+};
+
+const formatSourceTimestamp = (raw: string | null | undefined) => {
+  if (!raw) return 'same-day vitals';
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return 'same-day vitals';
+  return parsed.toLocaleString();
 };
 
 const getBMIStatus = (bmi: number | null) => {
@@ -332,6 +359,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const [postnatalFormOpen, setPostnatalFormOpen] = useState(false);
   const [riskFormOpen, setRiskFormOpen] = useState(false);
   const [birthOutcomeFormOpen, setBirthOutcomeFormOpen] = useState(false);
+  const [ancVitalsSyncing, setAncVitalsSyncing] = useState(false);
+  const [postnatalVitalsSyncing, setPostnatalVitalsSyncing] = useState(false);
+  const [ancVitalsSource, setAncVitalsSource] = useState<VitalsSource | null>(null);
+  const [postnatalVitalsSource, setPostnatalVitalsSource] = useState<VitalsSource | null>(null);
 
   // SNOMED concept state for ANC visits
   const [ancComplicationsConcepts, setAncComplicationsConcepts] = useState<SnomedConcept[]>([]);
@@ -504,6 +535,197 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     if (!enrollment) return 1;
     return (enrollment.anc_visits?.length || 0) + 1;
   }, [enrollment]);
+
+  const loadLatestSameDayVitals = useCallback(
+    async (patientId: string, visitDate: string) => {
+      if (!patientId || !visitDate) return null;
+      const response = await ehrApi.getVitals(patientId, token, tenantSlug, { limit: 50 });
+      const vitals = Array.isArray(response?.data?.vitals)
+        ? response.data.vitals
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+
+      const sameDayVitals = vitals
+        .filter((vital: any) => {
+          const vitalDate = normalizeIsoDate(
+            vital?.recordedAt ||
+              vital?.recorded_at ||
+              vital?.createdAt ||
+              vital?.created_at ||
+              vital?.measurementDate ||
+              vital?.measurement_date ||
+              vital?.date,
+          );
+          return vitalDate === visitDate;
+        })
+        .sort((a: any, b: any) => normalizeTimestamp(b) - normalizeTimestamp(a));
+
+      return sameDayVitals[0] || null;
+    },
+    [tenantSlug, token],
+  );
+
+  useEffect(() => {
+    if (!ancFormOpen || !enrollment?.patient_id || !ancForm.visit_date) {
+      return;
+    }
+
+    let cancelled = false;
+    const hydrateAncVitals = async () => {
+      setAncVitalsSyncing(true);
+      try {
+        const latestVital = await loadLatestSameDayVitals(enrollment.patient_id, ancForm.visit_date);
+        if (cancelled) return;
+
+        if (!latestVital) {
+          setAncVitalsSource(null);
+          return;
+        }
+
+        const bpString = latestVital?.bloodPressure || latestVital?.blood_pressure || '';
+        const bpMatch = String(bpString).match(/(\d+)\s*\/\s*(\d+)/);
+        const systolic =
+          latestVital?.bloodPressureSystolic ??
+          latestVital?.blood_pressure_systolic ??
+          (bpMatch ? Number(bpMatch[1]) : null);
+        const diastolic =
+          latestVital?.bloodPressureDiastolic ??
+          latestVital?.blood_pressure_diastolic ??
+          (bpMatch ? Number(bpMatch[2]) : null);
+        const pulse = latestVital?.pulse ?? latestVital?.heartRate ?? latestVital?.heart_rate;
+        const respiratoryRate = latestVital?.respiratoryRate ?? latestVital?.respiratory_rate;
+
+        setAncForm((prev) => ({
+          ...prev,
+          weight:
+            latestVital?.weight !== null && latestVital?.weight !== undefined
+              ? String(latestVital.weight)
+              : prev.weight,
+          height:
+            latestVital?.height !== null && latestVital?.height !== undefined
+              ? String(latestVital.height)
+              : prev.height,
+          blood_pressure_systolic:
+            systolic !== null && systolic !== undefined ? String(systolic) : prev.blood_pressure_systolic,
+          blood_pressure_diastolic:
+            diastolic !== null && diastolic !== undefined ? String(diastolic) : prev.blood_pressure_diastolic,
+          temperature:
+            latestVital?.temperature !== null && latestVital?.temperature !== undefined
+              ? String(latestVital.temperature)
+              : prev.temperature,
+          pulse: pulse !== null && pulse !== undefined ? String(pulse) : prev.pulse,
+          respiratory_rate:
+            respiratoryRate !== null && respiratoryRate !== undefined
+              ? String(respiratoryRate)
+              : prev.respiratory_rate,
+        }));
+
+        setAncVitalsSource({
+          id: latestVital?.id,
+          recordedAt:
+            latestVital?.recordedAt ||
+            latestVital?.recorded_at ||
+            latestVital?.createdAt ||
+            latestVital?.created_at ||
+            null,
+          recordedByName: latestVital?.recordedByUser?.firstName
+            ? `${latestVital.recordedByUser.firstName} ${latestVital.recordedByUser.lastName || ''}`.trim()
+            : null,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to auto-load same-day ANC vitals', error);
+          setAncVitalsSource(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAncVitalsSyncing(false);
+        }
+      }
+    };
+
+    hydrateAncVitals();
+    return () => {
+      cancelled = true;
+    };
+  }, [ancFormOpen, ancForm.visit_date, enrollment?.patient_id, loadLatestSameDayVitals]);
+
+  useEffect(() => {
+    if (!postnatalFormOpen || !enrollment?.patient_id || !postnatalForm.visit_date) {
+      return;
+    }
+
+    let cancelled = false;
+    const hydratePostnatalVitals = async () => {
+      setPostnatalVitalsSyncing(true);
+      try {
+        const latestVital = await loadLatestSameDayVitals(enrollment.patient_id, postnatalForm.visit_date);
+        if (cancelled) return;
+
+        if (!latestVital) {
+          setPostnatalVitalsSource(null);
+          return;
+        }
+
+        const bpString = latestVital?.bloodPressure || latestVital?.blood_pressure || '';
+        const bpMatch = String(bpString).match(/(\d+)\s*\/\s*(\d+)/);
+        const systolic =
+          latestVital?.bloodPressureSystolic ??
+          latestVital?.blood_pressure_systolic ??
+          (bpMatch ? Number(bpMatch[1]) : null);
+        const diastolic =
+          latestVital?.bloodPressureDiastolic ??
+          latestVital?.blood_pressure_diastolic ??
+          (bpMatch ? Number(bpMatch[2]) : null);
+        const pulse = latestVital?.pulse ?? latestVital?.heartRate ?? latestVital?.heart_rate;
+
+        setPostnatalForm((prev) => ({
+          ...prev,
+          weight:
+            latestVital?.weight !== null && latestVital?.weight !== undefined
+              ? String(latestVital.weight)
+              : prev.weight,
+          blood_pressure_systolic:
+            systolic !== null && systolic !== undefined ? String(systolic) : prev.blood_pressure_systolic,
+          blood_pressure_diastolic:
+            diastolic !== null && diastolic !== undefined ? String(diastolic) : prev.blood_pressure_diastolic,
+          temperature:
+            latestVital?.temperature !== null && latestVital?.temperature !== undefined
+              ? String(latestVital.temperature)
+              : prev.temperature,
+          pulse: pulse !== null && pulse !== undefined ? String(pulse) : prev.pulse,
+        }));
+
+        setPostnatalVitalsSource({
+          id: latestVital?.id,
+          recordedAt:
+            latestVital?.recordedAt ||
+            latestVital?.recorded_at ||
+            latestVital?.createdAt ||
+            latestVital?.created_at ||
+            null,
+          recordedByName: latestVital?.recordedByUser?.firstName
+            ? `${latestVital.recordedByUser.firstName} ${latestVital.recordedByUser.lastName || ''}`.trim()
+            : null,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to auto-load same-day postnatal vitals', error);
+          setPostnatalVitalsSource(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPostnatalVitalsSyncing(false);
+        }
+      }
+    };
+
+    hydratePostnatalVitals();
+    return () => {
+      cancelled = true;
+    };
+  }, [postnatalFormOpen, postnatalForm.visit_date, enrollment?.patient_id, loadLatestSameDayVitals]);
 
   const runMaternityPrecheck = useCallback(
     async (runCheck: () => Promise<any>, contextLabel: string) => {
@@ -1005,6 +1227,17 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
           {ancFormOpen && (
             <div className="mb-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-slate-800 mb-3">ANC Visit #{nextVisitNumber}</h4>
+              {ancVitalsSyncing && (
+                <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                  Checking for same-day nurse vitals...
+                </div>
+              )}
+              {!ancVitalsSyncing && ancVitalsSource && (
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                  Vitals auto-populated from {formatSourceTimestamp(ancVitalsSource.recordedAt)}
+                  {ancVitalsSource.recordedByName ? ` by ${ancVitalsSource.recordedByName}` : ''}.
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TextInput
                   label="Visit Date"
@@ -1807,6 +2040,17 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         >
           {postnatalFormOpen && (
             <div className="mb-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
+              {postnatalVitalsSyncing && (
+                <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+                  Checking for same-day nurse vitals...
+                </div>
+              )}
+              {!postnatalVitalsSyncing && postnatalVitalsSource && (
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                  Vitals auto-populated from {formatSourceTimestamp(postnatalVitalsSource.recordedAt)}
+                  {postnatalVitalsSource.recordedByName ? ` by ${postnatalVitalsSource.recordedByName}` : ''}.
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TextInput
                   label="Visit Date"
