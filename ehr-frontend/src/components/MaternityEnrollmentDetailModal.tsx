@@ -127,25 +127,6 @@ const computeBMI = (weightKg?: NumberLike, heightCm?: NumberLike) => {
   return Number((weight / (heightMeters * heightMeters)).toFixed(1));
 };
 
-const normalizeIsoDate = (raw: any): string | null => {
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString().split('T')[0];
-};
-
-const normalizeTimestamp = (vital: any): number => {
-  const raw =
-    vital?.recordedAt ||
-    vital?.recorded_at ||
-    vital?.createdAt ||
-    vital?.created_at ||
-    vital?.updatedAt ||
-    vital?.updated_at;
-  const ts = raw ? new Date(raw).getTime() : 0;
-  return Number.isNaN(ts) ? 0 : ts;
-};
-
 const formatSourceTimestamp = (raw: string | null | undefined) => {
   if (!raw) return 'same-day vitals';
   const parsed = new Date(raw);
@@ -560,29 +541,17 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const loadLatestSameDayVitals = useCallback(
     async (patientId: string, visitDate: string) => {
       if (!patientId || !visitDate) return null;
-      const response = await ehrApi.getVitals(patientId, token, tenantSlug, { limit: 50 });
+      const response = await ehrApi.getVitals(patientId, token, tenantSlug, {
+        limit: 1,
+        recordedDate: visitDate,
+        latestOnDate: true,
+      });
       const vitals = Array.isArray(response?.data?.vitals)
         ? response.data.vitals
         : Array.isArray(response?.data)
           ? response.data
           : [];
-
-      const sameDayVitals = vitals
-        .filter((vital: any) => {
-          const vitalDate = normalizeIsoDate(
-            vital?.recordedAt ||
-              vital?.recorded_at ||
-              vital?.createdAt ||
-              vital?.created_at ||
-              vital?.measurementDate ||
-              vital?.measurement_date ||
-              vital?.date,
-          );
-          return vitalDate === visitDate;
-        })
-        .sort((a: any, b: any) => normalizeTimestamp(b) - normalizeTimestamp(a));
-
-      return sameDayVitals[0] || null;
+      return vitals[0] || null;
     },
     [tenantSlug, token],
   );

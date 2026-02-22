@@ -1009,11 +1009,13 @@ export const ehrApi = {
     patientId: string,
     token: string,
     tenantSlug: string,
-    options?: { trend?: boolean; limit?: number },
+    options?: { trend?: boolean; limit?: number; recordedDate?: string; latestOnDate?: boolean },
   ) => {
     const params: Record<string, any> = {};
     if (options?.trend) params.trend = 'true';
     if (options?.limit) params.limit = options.limit;
+    if (options?.recordedDate) params.recorded_date = options.recordedDate;
+    if (options?.latestOnDate) params.latest_on_date = 'true';
     const response = await ehrAxios.get(`/vitals/patient/${patientId}`, {
       headers: {
         'X-Tenant-ID': tenantSlug,

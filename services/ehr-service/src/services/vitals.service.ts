@@ -20,6 +20,17 @@ export class VitalsService {
     return connection.getRepository(Vitals);
   }
 
+  private normalizeDateOnly(value?: string): string | null {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed.toISOString().split('T')[0];
+  }
+
   async recordVitals(data: Partial<Vitals>, tenantId: string): Promise<Vitals & { cdssInsights?: any }> {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     const repo = tenantDb.getRepository(Vitals);
@@ -93,14 +104,35 @@ export class VitalsService {
     };
   }
 
-  async getByPatient(patientId: string, tenantId: string, limit = 100): Promise<Vitals[]> {
+  async getByPatient(
+    patientId: string,
+    tenantId: string,
+    options: number | { limit?: number; recordedDate?: string; latestOnDate?: boolean } = 100,
+  ): Promise<Vitals[]> {
+    const resolvedOptions =
+      typeof options === 'number'
+        ? { limit: options, recordedDate: null as string | null, latestOnDate: false }
+        : {
+            limit: options.limit ?? 100,
+            recordedDate: this.normalizeDateOnly(options.recordedDate),
+            latestOnDate: Boolean(options.latestOnDate),
+          };
+
     const repo = await this.getRepository(tenantId);
-    const vitals = await repo.find({
-      where: { patientId },
-      order: { recordedAt: 'DESC' },
-      take: limit,
-      relations: ['recordedByUser'],
-    });
+    const query = repo
+      .createQueryBuilder('vitals')
+      .leftJoinAndSelect('vitals.recordedByUser', 'recordedByUser')
+      .where('vitals.patientId = :patientId', { patientId })
+      .orderBy('vitals.recordedAt', 'DESC');
+
+    if (resolvedOptions.recordedDate) {
+      query.andWhere(`DATE(vitals.recordedAt) = :recordedDate`, {
+        recordedDate: resolvedOptions.recordedDate,
+      });
+    }
+
+    query.take(resolvedOptions.latestOnDate ? 1 : resolvedOptions.limit);
+    const vitals = await query.getMany();
     
     // Convert blood_pressure string to bloodPressureSystolic/diastolic for frontend compatibility
     return vitals.map((v: any) => {
@@ -116,7 +148,7 @@ export class VitalsService {
   }
 
   async getPatientVitalTrends(patientId: string, tenantId: string, limit = 30) {
-    const vitals = await this.getByPatient(patientId, tenantId, limit);
+    const vitals = await this.getByPatient(patientId, tenantId, { limit });
     const reverse = [...vitals].reverse();
 
     const formatTrend = (mapper: (v: Vitals) => number | null) =>
