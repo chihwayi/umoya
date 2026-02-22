@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Baby, LogOut, ArrowLeft, Search, BookOpen, X, Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import MaternityDoctorView from '../components/MaternityDoctorView';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
-import { cdssApi } from '../services/api';
+import { ehrApi } from '../services/api';
 import { GuidelineResult } from '../types/guidelines';
 import ModalPortal from '../components/ModalPortal';
 
@@ -49,7 +49,7 @@ const MaternityDoctorDashboard: React.FC = () => {
       const searchContext = "Maternity, Obstetrics, WHO ANC/PNC guidelines";
       const finalQuery = `${searchContext}: ${guidelineQuery}`;
 
-      const response = await cdssApi.searchGuidelines(finalQuery, token, tenantSlug);
+      const response = await ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -251,4 +251,3 @@ const MaternityDoctorDashboard: React.FC = () => {
 };
 
 export default MaternityDoctorDashboard;
-

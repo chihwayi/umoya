@@ -829,6 +829,10 @@ export class MaternityService {
       ...deliveryFields
     } = deliveryData;
 
+    if (!delivery_time || String(delivery_time).trim() === '') {
+      throw new BadRequestException('Delivery time is required');
+    }
+
     // Calculate gestational age at delivery
     const enrollment = await tenantDb.query(
       `SELECT lmp_date FROM maternity_enrollments WHERE id = $1`,
@@ -1402,9 +1406,14 @@ export class MaternityService {
   // ===== INDICATORS & REPORTS =====
 
   async getMaternityIndicators(tenantDb: DataSource, startDate?: string, endDate?: string) {
-    const dateFilter = startDate && endDate
-      ? `AND me.enrollment_date BETWEEN '${startDate}' AND '${endDate}'`
-      : `AND me.enrollment_date > CURRENT_DATE - INTERVAL '12 months'`;
+    const params: any[] = [];
+    const dateFilter =
+      startDate && endDate
+        ? `AND me.enrollment_date BETWEEN $1::date AND $2::date`
+        : `AND me.enrollment_date > CURRENT_DATE - INTERVAL '12 months'`;
+    if (startDate && endDate) {
+      params.push(startDate, endDate);
+    }
 
     const indicators = await tenantDb.query(
       `
@@ -1433,15 +1442,21 @@ export class MaternityService {
       LEFT JOIN birth_outcomes bo ON bo.delivery_id = d.id
       WHERE 1=1 ${dateFilter}
       `,
+      params,
     );
 
     return indicators[0];
   }
 
   async getDeliverySummary(tenantDb: DataSource, startDate?: string, endDate?: string) {
-    const dateFilter = startDate && endDate
-      ? `WHERE d.delivery_date BETWEEN '${startDate}' AND '${endDate}'`
-      : `WHERE d.delivery_date > CURRENT_DATE - INTERVAL '3 months'`;
+    const params: any[] = [];
+    const dateFilter =
+      startDate && endDate
+        ? `WHERE d.delivery_date BETWEEN $1::date AND $2::date`
+        : `WHERE d.delivery_date > CURRENT_DATE - INTERVAL '3 months'`;
+    if (startDate && endDate) {
+      params.push(startDate, endDate);
+    }
 
     const summary = await tenantDb.query(
       `
@@ -1456,15 +1471,21 @@ export class MaternityService {
       GROUP BY d.delivery_type
       ORDER BY count DESC
       `,
+      params,
     );
 
     return { summary, total: summary.length };
   }
 
   async getANCCoverage(tenantDb: DataSource, startDate?: string, endDate?: string) {
-    const dateFilter = startDate && endDate
-      ? `AND me.enrollment_date BETWEEN '${startDate}' AND '${endDate}'`
-      : `AND me.enrollment_date > CURRENT_DATE - INTERVAL '12 months'`;
+    const params: any[] = [];
+    const dateFilter =
+      startDate && endDate
+        ? `AND me.enrollment_date BETWEEN $1::date AND $2::date`
+        : `AND me.enrollment_date > CURRENT_DATE - INTERVAL '12 months'`;
+    if (startDate && endDate) {
+      params.push(startDate, endDate);
+    }
 
     const coverage = await tenantDb.query(
       `
@@ -1492,6 +1513,7 @@ export class MaternityService {
       FROM maternity_enrollments me
       WHERE 1=1 ${dateFilter}
       `,
+      params,
     );
 
     const result = coverage[0];

@@ -17,7 +17,7 @@ import {
   Activity,
   CheckCircle,
 } from 'lucide-react';
-import { ehrApi, cdssApi } from '../services/api';
+import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import MaternityEnrollmentModal from './MaternityEnrollmentModal';
@@ -396,7 +396,7 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
         return;
       }
       
-      const response = await cdssApi.searchGuidelines(guidelineQuery, token, tenantSlug);
+      const response = await ehrApi.searchGuidelines(guidelineQuery, token, tenantSlug);
       if (response.data && response.data.citations) {
         setGuidelineResults(response.data.citations);
       } else {
@@ -958,4 +958,3 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
     </div>
   );
 }
-

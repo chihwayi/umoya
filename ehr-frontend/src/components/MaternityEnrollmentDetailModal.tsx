@@ -587,8 +587,8 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
   const handleCreateDelivery = async () => {
     if (!enrollment) return;
-    if (!deliveryForm.delivery_date || !deliveryForm.delivery_type) {
-      showError('Delivery date and type are required.', 'Please complete the delivery details.');
+    if (!deliveryForm.delivery_date || !deliveryForm.delivery_time || !deliveryForm.delivery_type) {
+      showError('Delivery date, time, and type are required.', 'Please complete the delivery details.');
       return;
     }
 
@@ -1296,6 +1296,7 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   type="time"
                   value={deliveryForm.delivery_time}
                   onChange={(val) => setDeliveryForm((prev) => ({ ...prev, delivery_time: val }))}
+                  required
                 />
                 <TextInput
                   label="Admission Date"
