@@ -2115,6 +2115,15 @@ export const ehrApi = {
   },
   
   // ARV Change Request APIs
+  precheckHivRegimenChange: async (body: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/hiv/regimen-change/precheck', body, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
   createArvChangeRequest: async (body: any, token: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/hiv/arv-change-requests', body, {
       headers: { 

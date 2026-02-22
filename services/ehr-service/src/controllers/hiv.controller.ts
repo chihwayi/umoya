@@ -168,6 +168,13 @@ export class HivController {
     return this.hivService.checkEacEligibility(enrollmentId, req.tenantDb);
   }
 
+  @Post('regimen-change/precheck')
+  @ApiOperation({ summary: 'Precheck regimen contraindication matrix for requested HIV regimen change' })
+  @ApiResponse({ status: 200, description: 'Regimen contraindication precheck completed' })
+  async precheckRegimenChange(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.hivService.precheckRegimenChange(body, req.tenantDb);
+  }
+
   // ARV Change Request Endpoints
   @Post('arv-change-requests')
   @ApiOperation({ summary: 'Create ARV change request' })

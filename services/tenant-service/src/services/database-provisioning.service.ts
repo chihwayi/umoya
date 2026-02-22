@@ -158,6 +158,14 @@ export class DatabaseProvisioningService {
         description: 'Ensures HIV testing workflows and lookup tables are provisioned',
         tasks: [(db) => this.applyHivTestingUpgrades(db)],
       },
+      {
+        id: 'hiv_regimen_hardening',
+        label: 'HIV Regimen Contraindication Matrix',
+        version: '2026.02.22',
+        description: 'Adds regimen contraindication matrix tables and baseline WHO/Zimbabwe guardrail rules',
+        statements: () => this.getHivRegimenHardeningStatements(),
+        tasks: [(db) => this.seedHivRegimenContraindicationMatrix(db)],
+      },
       // ICD-10 Mapping bundle removed to enforce master-only terminology storage
       /*{
         id: 'icd10_mapping',
@@ -5662,6 +5670,54 @@ export class DatabaseProvisioningService {
     ];
   }
 
+  private getHivRegimenHardeningStatements(): string[] {
+    return [
+      `
+        CREATE TABLE IF NOT EXISTS hiv_regimen_rule_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          version_code VARCHAR(80) UNIQUE NOT NULL,
+          guideline_source VARCHAR(255) NOT NULL,
+          guideline_version VARCHAR(120),
+          country_context VARCHAR(120) DEFAULT 'Zimbabwe',
+          effective_from DATE DEFAULT CURRENT_DATE,
+          is_active BOOLEAN DEFAULT false,
+          notes TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `,
+      `
+        CREATE TABLE IF NOT EXISTS hiv_regimen_contraindication_rules (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rule_key VARCHAR(120) UNIQUE NOT NULL,
+          version_id UUID REFERENCES hiv_regimen_rule_versions(id) ON DELETE CASCADE,
+          regimen_code VARCHAR(20),
+          domain VARCHAR(30) NOT NULL CHECK (domain IN ('pregnancy', 'tb_ddi', 'renal', 'hepatic', 'general')),
+          severity VARCHAR(10) NOT NULL CHECK (severity IN ('block', 'warn')),
+          condition_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+          message TEXT NOT NULL,
+          recommended_action TEXT,
+          guideline_reference TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_version ON hiv_regimen_contraindication_rules(version_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_regimen ON hiv_regimen_contraindication_rules(regimen_code)`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_domain ON hiv_regimen_contraindication_rules(domain)`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_severity ON hiv_regimen_contraindication_rules(severity)`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_active ON hiv_regimen_contraindication_rules(is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_condition_gin ON hiv_regimen_contraindication_rules USING GIN(condition_json)`,
+      `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_summary JSONB DEFAULT '{}'::jsonb`,
+      `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_blocked BOOLEAN DEFAULT false`,
+      `CREATE TRIGGER update_hiv_regimen_rule_versions_updated_at BEFORE UPDATE ON hiv_regimen_rule_versions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+      `CREATE TRIGGER update_hiv_regimen_contra_rules_updated_at BEFORE UPDATE ON hiv_regimen_contraindication_rules
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
+    ];
+  }
+
   private async applySnomedUpgrades(tenantDb: DataSource): Promise<void> {
     for (const statement of this.getSnomedUpgradeStatements()) {
       const sql = statement.trim();
@@ -5719,6 +5775,225 @@ export class DatabaseProvisioningService {
           }`,
         );
       }
+    }
+  }
+
+  private async seedHivRegimenContraindicationMatrix(tenantDataSource: DataSource): Promise<void> {
+    const versionCode = 'WHO_ZW_ART_2026Q1';
+    const guidelineSource =
+      'WHO Consolidated HIV Guidelines + Zimbabwe HIV Prevention, Treatment and Care Guidelines';
+
+    try {
+      await tenantDataSource.query(
+        `
+        INSERT INTO hiv_regimen_rule_versions (
+          version_code, guideline_source, guideline_version, country_context, is_active, notes
+        )
+        VALUES ($1, $2, $3, 'Zimbabwe', true, $4)
+        ON CONFLICT (version_code)
+        DO UPDATE SET
+          guideline_source = EXCLUDED.guideline_source,
+          guideline_version = EXCLUDED.guideline_version,
+          country_context = EXCLUDED.country_context,
+          is_active = true,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      `,
+        [
+          versionCode,
+          guidelineSource,
+          '2026-Q1',
+          'Baseline regimen contraindication matrix for pregnancy, TB DDI, renal, and hepatic constraints.',
+        ],
+      );
+
+      await tenantDataSource.query(
+        `UPDATE hiv_regimen_rule_versions SET is_active = (version_code = $1), updated_at = NOW()`,
+        [versionCode],
+      );
+
+      const versionRows = await tenantDataSource.query(
+        `SELECT id FROM hiv_regimen_rule_versions WHERE version_code = $1 LIMIT 1`,
+        [versionCode],
+      );
+      const versionId = versionRows[0]?.id;
+      if (!versionId) {
+        return;
+      }
+
+      const rules = [
+        {
+          ruleKey: 'pregnancy_status_required_female_reproductive_age',
+          regimenCode: null,
+          domain: 'pregnancy',
+          severity: 'block',
+          condition: {
+            gender_in: ['female'],
+            min_age: 15,
+            max_age: 49,
+            requires_data: ['pregnancy_status'],
+          },
+          message:
+            'Pregnancy/lactation status is required before regimen change for women of reproductive age.',
+          action: 'Capture pregnancy/lactation status first, then retry regimen selection.',
+          ref: 'WHO HIV service delivery package (pregnancy status documented at clinical decision points).',
+        },
+        {
+          ruleKey: 'renal_data_required_for_tdf_regimens',
+          regimenCode: null,
+          domain: 'renal',
+          severity: 'block',
+          condition: {
+            requires_components_any: ['TDF'],
+            requires_data: ['creatinine_result'],
+          },
+          message: 'Creatinine result is required before selecting a TDF-containing regimen.',
+          action: 'Order or capture renal function result before regimen switch.',
+          ref: 'WHO ART toxicity monitoring recommendations.',
+        },
+        {
+          ruleKey: 'hepatic_data_required_for_nvp_regimens',
+          regimenCode: null,
+          domain: 'hepatic',
+          severity: 'block',
+          condition: {
+            requires_components_any: ['NVP'],
+            requires_data: ['alt_result'],
+          },
+          message: 'ALT result is required before selecting an NVP-containing regimen.',
+          action: 'Capture hepatic function result before regimen switch.',
+          ref: 'WHO ART toxicity monitoring recommendations.',
+        },
+        {
+          ruleKey: 'tb_rifampicin_with_atv_r_block',
+          regimenCode: null,
+          domain: 'tb_ddi',
+          severity: 'block',
+          condition: {
+            requires_components_any: ['ATV/R'],
+            tb_treatment_required: true,
+            tb_meds_any: ['rifampicin', 'rifampin'],
+          },
+          message:
+            'ATV/r with rifampicin-based TB therapy is contraindicated due to major drug interaction risk.',
+          action: 'Choose an alternative ART strategy compatible with rifampicin-based TB treatment.',
+          ref: 'WHO guidance on ART/TB co-treatment drug interactions.',
+        },
+        {
+          ruleKey: 'tb_rifampicin_with_dtg_warn',
+          regimenCode: null,
+          domain: 'tb_ddi',
+          severity: 'warn',
+          condition: {
+            requires_components_any: ['DTG'],
+            tb_treatment_required: true,
+            tb_meds_any: ['rifampicin', 'rifampin'],
+          },
+          message:
+            'DTG with rifampicin co-treatment requires dosing review and close follow-up per protocol.',
+          action: 'Apply DTG + rifampicin co-treatment dosing protocol and document plan.',
+          ref: 'WHO guidance on ART/TB co-treatment with integrase inhibitors.',
+        },
+        {
+          ruleKey: 'tb_rifampicin_with_lpvr_warn',
+          regimenCode: null,
+          domain: 'tb_ddi',
+          severity: 'warn',
+          condition: {
+            requires_components_any: ['LPV/R'],
+            tb_treatment_required: true,
+            tb_meds_any: ['rifampicin', 'rifampin'],
+          },
+          message:
+            'LPV/r with rifampicin requires protocol-level adjustment and intensified monitoring.',
+          action:
+            'Review TB/ART co-treatment protocol before confirming regimen change and document plan.',
+          ref: 'WHO guidance on boosted PI co-treatment with rifampicin.',
+        },
+        {
+          ruleKey: 'renal_impairment_tdf_warn',
+          regimenCode: null,
+          domain: 'renal',
+          severity: 'warn',
+          condition: {
+            requires_components_any: ['TDF'],
+            creatinine_min: 1.5,
+          },
+          message:
+            'Renal risk warning: elevated creatinine with TDF-containing regimen needs clinical review.',
+          action:
+            'Consider renal-sparing alternative or enhanced renal monitoring per local protocol.',
+          ref: 'WHO ART toxicity and renal monitoring recommendations.',
+        },
+        {
+          ruleKey: 'severe_renal_impairment_tdf_block',
+          regimenCode: null,
+          domain: 'renal',
+          severity: 'block',
+          condition: {
+            requires_components_any: ['TDF'],
+            creatinine_min: 2.0,
+          },
+          message:
+            'TDF-containing regimen is blocked at this renal function level unless specialist override is documented.',
+          action: 'Select a non-TDF regimen and document renal safety rationale.',
+          ref: 'WHO ART toxicity and renal monitoring recommendations.',
+        },
+        {
+          ruleKey: 'high_alt_nvp_block',
+          regimenCode: null,
+          domain: 'hepatic',
+          severity: 'block',
+          condition: {
+            requires_components_any: ['NVP'],
+            alt_min: 120,
+          },
+          message: 'NVP-containing regimen is blocked due to elevated ALT (hepatic risk).',
+          action: 'Select alternative regimen and manage hepatic abnormality before switch.',
+          ref: 'WHO ART toxicity guidance for NNRTI-related hepatotoxicity risk.',
+        },
+      ];
+
+      for (const rule of rules) {
+        await tenantDataSource.query(
+          `
+          INSERT INTO hiv_regimen_contraindication_rules (
+            rule_key, version_id, regimen_code, domain, severity,
+            condition_json, message, recommended_action, guideline_reference, is_active
+          )
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, true)
+          ON CONFLICT (rule_key)
+          DO UPDATE SET
+            version_id = EXCLUDED.version_id,
+            regimen_code = EXCLUDED.regimen_code,
+            domain = EXCLUDED.domain,
+            severity = EXCLUDED.severity,
+            condition_json = EXCLUDED.condition_json,
+            message = EXCLUDED.message,
+            recommended_action = EXCLUDED.recommended_action,
+            guideline_reference = EXCLUDED.guideline_reference,
+            is_active = true,
+            updated_at = NOW()
+        `,
+          [
+            rule.ruleKey,
+            versionId,
+            rule.regimenCode,
+            rule.domain,
+            rule.severity,
+            JSON.stringify(rule.condition),
+            rule.message,
+            rule.action,
+            rule.ref,
+          ],
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to seed HIV regimen contraindication matrix: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

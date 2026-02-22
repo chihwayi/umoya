@@ -27,6 +27,7 @@ export declare class DatabaseProvisioningService {
     private getGatewayConfigurationStatements;
     private getPortalEnhancementStatements;
     private getMedicationRemindersSchemaStatements;
+    private getSprint46NurseCopilotSchemaStatements;
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;
@@ -45,9 +46,11 @@ export declare class DatabaseProvisioningService {
     private getTriggerStatements;
     private getSnomedUpgradeStatements;
     private getHivTestingUpgradeStatements;
+    private getHivRegimenHardeningStatements;
     private applySnomedUpgrades;
     applySnomedUpgradesToTenant(databaseName: string): Promise<void>;
     private applyHivTestingUpgrades;
+    private seedHivRegimenContraindicationMatrix;
     applyHivTestingUpgradesToTenant(databaseName: string): Promise<void>;
     private seedLookupTables;
     private seedDefaultUsers;

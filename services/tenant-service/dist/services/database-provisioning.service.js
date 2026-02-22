@@ -85,7 +85,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             await tenantDb.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
             await tenantDb.query(`
         ALTER TABLE users ADD CONSTRAINT users_role_check 
-        CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
+        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts'));
       `);
         }
         catch (e) {
@@ -97,14 +97,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             {
                 id: 'core',
                 label: 'Core Clinic Schema',
-                version: '2025.03.03',
+                version: '2025.03.04',
                 description: 'Baseline tables, triggers, and seed data for every tenant',
                 statements: () => this.getClinicSchema(),
                 triggers: () => this.getTriggerStatements(),
                 tasks: [
                     (db) => this.ensureUpdatedAtTriggerFunction(db),
                     (db) => this.enforceUserRoleConstraint(db),
-                    (db) => this.seedDefaultUsers(db),
                     (db) => this.seedLabCatalog(db),
                     (db) => this.seedImagingCatalog(db),
                     (db) => this.seedLookupTables(db),
@@ -125,6 +124,14 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 version: '2025.03.01',
                 description: 'Ensures HIV testing workflows and lookup tables are provisioned',
                 tasks: [(db) => this.applyHivTestingUpgrades(db)],
+            },
+            {
+                id: 'hiv_regimen_hardening',
+                label: 'HIV Regimen Contraindication Matrix',
+                version: '2026.02.22',
+                description: 'Adds regimen contraindication matrix tables and baseline WHO/Zimbabwe guardrail rules',
+                statements: () => this.getHivRegimenHardeningStatements(),
+                tasks: [(db) => this.seedHivRegimenContraindicationMatrix(db)],
             },
             {
                 id: 'sprint5_features',
@@ -407,6 +414,13 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 statements: () => this.getPortalEnhancementStatements(),
             },
             {
+                id: 'sprint46_nurse_copilot',
+                label: 'Sprint 46 - Nurse Copilot Persistence',
+                version: '2026.02.16',
+                description: 'Server-side nurse copilot state tables for tasks, alerts, and handoff workflow lifecycle',
+                statements: () => this.getSprint46NurseCopilotSchemaStatements(),
+            },
+            {
                 id: 'medication_reminders',
                 label: 'Medication Reminders',
                 version: '2026.02.12',
@@ -515,6 +529,92 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS idx_medication_reminders_patient_id ON medication_reminders(patient_id)`,
             `CREATE INDEX IF NOT EXISTS idx_medication_reminders_active ON medication_reminders(is_active)`,
             `CREATE INDEX IF NOT EXISTS idx_medication_reminders_prescription ON medication_reminders(prescription_id)`,
+        ];
+    }
+    getSprint46NurseCopilotSchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS nurse_copilot_task_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        task_id VARCHAR(120) NOT NULL,
+        patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('completed')),
+        reason TEXT,
+        context JSONB,
+        source VARCHAR(50) NOT NULL DEFAULT 'nurse_worklist',
+        completed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, task_id)
+      )`,
+            `CREATE TABLE IF NOT EXISTS nurse_copilot_alert_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        alert_id VARCHAR(120) NOT NULL,
+        patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'acknowledged' CHECK (status IN ('acknowledged')),
+        reason TEXT,
+        context JSONB,
+        source VARCHAR(50) NOT NULL DEFAULT 'nurse_worklist',
+        acknowledged_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, alert_id)
+      )`,
+            `CREATE TABLE IF NOT EXISTS nurse_handoff_workflow_state (
+        patient_id UUID PRIMARY KEY REFERENCES patients(id) ON DELETE CASCADE,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'finalized', 'reviewed', 'shared')),
+        finalized_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        finalized_at TIMESTAMP WITH TIME ZONE,
+        finalized_summary_preview TEXT,
+        finalize_reason TEXT,
+        finalize_context JSONB,
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        reviewer_name VARCHAR(255),
+        reviewer_role VARCHAR(100),
+        review_reason TEXT,
+        review_context JSONB,
+        shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        shared_at TIMESTAMP WITH TIME ZONE,
+        share_channel VARCHAR(50),
+        share_recipient VARCHAR(255),
+        share_reason TEXT,
+        share_context JSONB,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_task_events_user_status ON nurse_copilot_task_events(user_id, status)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_task_events_patient ON nurse_copilot_task_events(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_task_events_completed_at ON nurse_copilot_task_events(completed_at DESC)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_alert_events_user_status ON nurse_copilot_alert_events(user_id, status)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_alert_events_patient ON nurse_copilot_alert_events(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_alert_events_ack_at ON nurse_copilot_alert_events(acknowledged_at DESC)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_handoff_status ON nurse_handoff_workflow_state(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_handoff_finalized_at ON nurse_handoff_workflow_state(finalized_at DESC)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_handoff_shared_at ON nurse_handoff_workflow_state(shared_at DESC)`,
+            `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+            `DROP TRIGGER IF EXISTS update_nurse_copilot_task_events_updated_at ON nurse_copilot_task_events`,
+            `CREATE TRIGGER update_nurse_copilot_task_events_updated_at
+        BEFORE UPDATE ON nurse_copilot_task_events
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+            `DROP TRIGGER IF EXISTS update_nurse_copilot_alert_events_updated_at ON nurse_copilot_alert_events`,
+            `CREATE TRIGGER update_nurse_copilot_alert_events_updated_at
+        BEFORE UPDATE ON nurse_copilot_alert_events
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+            `DROP TRIGGER IF EXISTS update_nurse_handoff_workflow_state_updated_at ON nurse_handoff_workflow_state`,
+            `CREATE TRIGGER update_nurse_handoff_workflow_state_updated_at
+        BEFORE UPDATE ON nurse_handoff_workflow_state
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
         ];
     }
     getWhoSmartFormsDataSchemaStatements() {
@@ -641,7 +741,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
           password_hash VARCHAR(255) NOT NULL,
           first_name VARCHAR(100) NOT NULL,
           last_name VARCHAR(100) NOT NULL,
-          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts')),
+          role VARCHAR(50) NOT NULL CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts')),
           license_number VARCHAR(100),
           specialization VARCHAR(100),
           phone VARCHAR(50),
@@ -1932,6 +2032,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         testing_location VARCHAR(100),
         testing_cadre VARCHAR(100),
         specimen_type VARCHAR(50),
+        test_snomed_code VARCHAR(50),
+        test_snomed_term TEXT,
+        test_snomed_module_id VARCHAR(50),
+        test_snomed_definition_status VARCHAR(50),
+        specimen_snomed_code VARCHAR(50),
+        specimen_snomed_term TEXT,
         kit_type VARCHAR(100),
         test_kit_name VARCHAR(100),
         test_kit_lot VARCHAR(100),
@@ -1969,6 +2075,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_module_id VARCHAR(50)`);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_definition_status VARCHAR(50)`);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_code VARCHAR(50)`);
+        statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_term TEXT`);
         statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`);
         statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`);
         statements.push(`ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`);
@@ -2843,6 +2955,66 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_visit_types_code ON hiv_visit_types(code)`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_service_points (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_outreach_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_partner_services (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_linkage_actions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_sti_methods (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
+        statements.push(`CREATE TABLE IF NOT EXISTS hiv_testing_sti_specimens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      is_active BOOLEAN DEFAULT true,
+      display_order INTEGER,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )`);
         statements.push(`CREATE TABLE IF NOT EXISTS hiv_bmi_classifications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       code VARCHAR(10) UNIQUE NOT NULL,
@@ -4996,6 +5168,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
     }
     getHivTestingUpgradeStatements() {
         return [
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`,
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`,
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_module_id VARCHAR(50)`,
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_snomed_definition_status VARCHAR(50)`,
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_code VARCHAR(50)`,
+            `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS specimen_snomed_term TEXT`,
             `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS test_stage VARCHAR(50) DEFAULT 'screening'`,
             `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_reason VARCHAR(100)`,
             `ALTER TABLE hiv_tests ADD COLUMN IF NOT EXISTS testing_approach VARCHAR(50)`,
@@ -5025,8 +5203,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
           hiv_test_id UUID REFERENCES hiv_tests(id) ON DELETE SET NULL,
           test_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           infection_type VARCHAR(50) NOT NULL,
+          infection_snomed_code VARCHAR(50),
+          infection_snomed_term TEXT,
           test_type VARCHAR(100),
           test_method VARCHAR(100),
+          test_snomed_code VARCHAR(50),
+          test_snomed_term TEXT,
           specimen_type VARCHAR(100),
           anatomic_site VARCHAR(100),
           result VARCHAR(50) CHECK (result IN ('positive','negative','reactive','non_reactive','indeterminate','pending','invalid')),
@@ -5041,10 +5223,61 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `,
+            `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_code VARCHAR(50)`,
+            `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS infection_snomed_term TEXT`,
+            `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_code VARCHAR(50)`,
+            `ALTER TABLE sti_tests ADD COLUMN IF NOT EXISTS test_snomed_term TEXT`,
             `CREATE INDEX IF NOT EXISTS idx_sti_tests_patient_id ON sti_tests(patient_id)`,
             `CREATE INDEX IF NOT EXISTS idx_sti_tests_infection_type ON sti_tests(infection_type)`,
             `CREATE INDEX IF NOT EXISTS idx_sti_tests_result ON sti_tests(result)`,
             `CREATE TRIGGER update_sti_tests_updated_at BEFORE UPDATE ON sti_tests
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
+        ];
+    }
+    getHivRegimenHardeningStatements() {
+        return [
+            `
+        CREATE TABLE IF NOT EXISTS hiv_regimen_rule_versions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          version_code VARCHAR(80) UNIQUE NOT NULL,
+          guideline_source VARCHAR(255) NOT NULL,
+          guideline_version VARCHAR(120),
+          country_context VARCHAR(120) DEFAULT 'Zimbabwe',
+          effective_from DATE DEFAULT CURRENT_DATE,
+          is_active BOOLEAN DEFAULT false,
+          notes TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `,
+            `
+        CREATE TABLE IF NOT EXISTS hiv_regimen_contraindication_rules (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rule_key VARCHAR(120) UNIQUE NOT NULL,
+          version_id UUID REFERENCES hiv_regimen_rule_versions(id) ON DELETE CASCADE,
+          regimen_code VARCHAR(20),
+          domain VARCHAR(30) NOT NULL CHECK (domain IN ('pregnancy', 'tb_ddi', 'renal', 'hepatic', 'general')),
+          severity VARCHAR(10) NOT NULL CHECK (severity IN ('block', 'warn')),
+          condition_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+          message TEXT NOT NULL,
+          recommended_action TEXT,
+          guideline_reference TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_version ON hiv_regimen_contraindication_rules(version_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_regimen ON hiv_regimen_contraindication_rules(regimen_code)`,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_domain ON hiv_regimen_contraindication_rules(domain)`,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_severity ON hiv_regimen_contraindication_rules(severity)`,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_active ON hiv_regimen_contraindication_rules(is_active)`,
+            `CREATE INDEX IF NOT EXISTS idx_hiv_regimen_rules_condition_gin ON hiv_regimen_contraindication_rules USING GIN(condition_json)`,
+            `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_summary JSONB DEFAULT '{}'::jsonb`,
+            `ALTER TABLE hiv_arv_change_requests ADD COLUMN IF NOT EXISTS regimen_safety_blocked BOOLEAN DEFAULT false`,
+            `CREATE TRIGGER update_hiv_regimen_rule_versions_updated_at BEFORE UPDATE ON hiv_regimen_rule_versions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+            `CREATE TRIGGER update_hiv_regimen_contra_rules_updated_at BEFORE UPDATE ON hiv_regimen_contraindication_rules
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`
         ];
     }
@@ -5094,6 +5327,195 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             catch (error) {
                 this.logger.warn(`HIV/STI schema statement failed (${sql.substring(0, 80)}…): ${error instanceof Error ? error.message : String(error)}`);
             }
+        }
+    }
+    async seedHivRegimenContraindicationMatrix(tenantDataSource) {
+        const versionCode = 'WHO_ZW_ART_2026Q1';
+        const guidelineSource = 'WHO Consolidated HIV Guidelines + Zimbabwe HIV Prevention, Treatment and Care Guidelines';
+        try {
+            await tenantDataSource.query(`
+        INSERT INTO hiv_regimen_rule_versions (
+          version_code, guideline_source, guideline_version, country_context, is_active, notes
+        )
+        VALUES ($1, $2, $3, 'Zimbabwe', true, $4)
+        ON CONFLICT (version_code)
+        DO UPDATE SET
+          guideline_source = EXCLUDED.guideline_source,
+          guideline_version = EXCLUDED.guideline_version,
+          country_context = EXCLUDED.country_context,
+          is_active = true,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      `, [
+                versionCode,
+                guidelineSource,
+                '2026-Q1',
+                'Baseline regimen contraindication matrix for pregnancy, TB DDI, renal, and hepatic constraints.',
+            ]);
+            await tenantDataSource.query(`UPDATE hiv_regimen_rule_versions SET is_active = (version_code = $1), updated_at = NOW()`, [versionCode]);
+            const versionRows = await tenantDataSource.query(`SELECT id FROM hiv_regimen_rule_versions WHERE version_code = $1 LIMIT 1`, [versionCode]);
+            const versionId = versionRows[0]?.id;
+            if (!versionId) {
+                return;
+            }
+            const rules = [
+                {
+                    ruleKey: 'pregnancy_status_required_female_reproductive_age',
+                    regimenCode: null,
+                    domain: 'pregnancy',
+                    severity: 'block',
+                    condition: {
+                        gender_in: ['female'],
+                        min_age: 15,
+                        max_age: 49,
+                        requires_data: ['pregnancy_status'],
+                    },
+                    message: 'Pregnancy/lactation status is required before regimen change for women of reproductive age.',
+                    action: 'Capture pregnancy/lactation status first, then retry regimen selection.',
+                    ref: 'WHO HIV service delivery package (pregnancy status documented at clinical decision points).',
+                },
+                {
+                    ruleKey: 'renal_data_required_for_tdf_regimens',
+                    regimenCode: null,
+                    domain: 'renal',
+                    severity: 'block',
+                    condition: {
+                        requires_components_any: ['TDF'],
+                        requires_data: ['creatinine_result'],
+                    },
+                    message: 'Creatinine result is required before selecting a TDF-containing regimen.',
+                    action: 'Order or capture renal function result before regimen switch.',
+                    ref: 'WHO ART toxicity monitoring recommendations.',
+                },
+                {
+                    ruleKey: 'hepatic_data_required_for_nvp_regimens',
+                    regimenCode: null,
+                    domain: 'hepatic',
+                    severity: 'block',
+                    condition: {
+                        requires_components_any: ['NVP'],
+                        requires_data: ['alt_result'],
+                    },
+                    message: 'ALT result is required before selecting an NVP-containing regimen.',
+                    action: 'Capture hepatic function result before regimen switch.',
+                    ref: 'WHO ART toxicity monitoring recommendations.',
+                },
+                {
+                    ruleKey: 'tb_rifampicin_with_atv_r_block',
+                    regimenCode: null,
+                    domain: 'tb_ddi',
+                    severity: 'block',
+                    condition: {
+                        requires_components_any: ['ATV/R'],
+                        tb_treatment_required: true,
+                        tb_meds_any: ['rifampicin', 'rifampin'],
+                    },
+                    message: 'ATV/r with rifampicin-based TB therapy is contraindicated due to major drug interaction risk.',
+                    action: 'Choose an alternative ART strategy compatible with rifampicin-based TB treatment.',
+                    ref: 'WHO guidance on ART/TB co-treatment drug interactions.',
+                },
+                {
+                    ruleKey: 'tb_rifampicin_with_dtg_warn',
+                    regimenCode: null,
+                    domain: 'tb_ddi',
+                    severity: 'warn',
+                    condition: {
+                        requires_components_any: ['DTG'],
+                        tb_treatment_required: true,
+                        tb_meds_any: ['rifampicin', 'rifampin'],
+                    },
+                    message: 'DTG with rifampicin co-treatment requires dosing review and close follow-up per protocol.',
+                    action: 'Apply DTG + rifampicin co-treatment dosing protocol and document plan.',
+                    ref: 'WHO guidance on ART/TB co-treatment with integrase inhibitors.',
+                },
+                {
+                    ruleKey: 'tb_rifampicin_with_lpvr_warn',
+                    regimenCode: null,
+                    domain: 'tb_ddi',
+                    severity: 'warn',
+                    condition: {
+                        requires_components_any: ['LPV/R'],
+                        tb_treatment_required: true,
+                        tb_meds_any: ['rifampicin', 'rifampin'],
+                    },
+                    message: 'LPV/r with rifampicin requires protocol-level adjustment and intensified monitoring.',
+                    action: 'Review TB/ART co-treatment protocol before confirming regimen change and document plan.',
+                    ref: 'WHO guidance on boosted PI co-treatment with rifampicin.',
+                },
+                {
+                    ruleKey: 'renal_impairment_tdf_warn',
+                    regimenCode: null,
+                    domain: 'renal',
+                    severity: 'warn',
+                    condition: {
+                        requires_components_any: ['TDF'],
+                        creatinine_min: 1.5,
+                    },
+                    message: 'Renal risk warning: elevated creatinine with TDF-containing regimen needs clinical review.',
+                    action: 'Consider renal-sparing alternative or enhanced renal monitoring per local protocol.',
+                    ref: 'WHO ART toxicity and renal monitoring recommendations.',
+                },
+                {
+                    ruleKey: 'severe_renal_impairment_tdf_block',
+                    regimenCode: null,
+                    domain: 'renal',
+                    severity: 'block',
+                    condition: {
+                        requires_components_any: ['TDF'],
+                        creatinine_min: 2.0,
+                    },
+                    message: 'TDF-containing regimen is blocked at this renal function level unless specialist override is documented.',
+                    action: 'Select a non-TDF regimen and document renal safety rationale.',
+                    ref: 'WHO ART toxicity and renal monitoring recommendations.',
+                },
+                {
+                    ruleKey: 'high_alt_nvp_block',
+                    regimenCode: null,
+                    domain: 'hepatic',
+                    severity: 'block',
+                    condition: {
+                        requires_components_any: ['NVP'],
+                        alt_min: 120,
+                    },
+                    message: 'NVP-containing regimen is blocked due to elevated ALT (hepatic risk).',
+                    action: 'Select alternative regimen and manage hepatic abnormality before switch.',
+                    ref: 'WHO ART toxicity guidance for NNRTI-related hepatotoxicity risk.',
+                },
+            ];
+            for (const rule of rules) {
+                await tenantDataSource.query(`
+          INSERT INTO hiv_regimen_contraindication_rules (
+            rule_key, version_id, regimen_code, domain, severity,
+            condition_json, message, recommended_action, guideline_reference, is_active
+          )
+          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, true)
+          ON CONFLICT (rule_key)
+          DO UPDATE SET
+            version_id = EXCLUDED.version_id,
+            regimen_code = EXCLUDED.regimen_code,
+            domain = EXCLUDED.domain,
+            severity = EXCLUDED.severity,
+            condition_json = EXCLUDED.condition_json,
+            message = EXCLUDED.message,
+            recommended_action = EXCLUDED.recommended_action,
+            guideline_reference = EXCLUDED.guideline_reference,
+            is_active = true,
+            updated_at = NOW()
+        `, [
+                    rule.ruleKey,
+                    versionId,
+                    rule.regimenCode,
+                    rule.domain,
+                    rule.severity,
+                    JSON.stringify(rule.condition),
+                    rule.message,
+                    rule.action,
+                    rule.ref,
+                ]);
+            }
+        }
+        catch (error) {
+            this.logger.warn(`Failed to seed HIV regimen contraindication matrix: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
     async applyHivTestingUpgradesToTenant(databaseName) {
@@ -5174,6 +5596,59 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         ('W', 'Work/School', 1),
         ('A', 'Ambulatory', 2),
         ('B', 'Bedridden', 3)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_service_points (code, name, display_order) VALUES
+        ('OPD', 'Outpatient Department (OPD)', 1),
+        ('IPD', 'Inpatient Ward', 2),
+        ('MCH', 'MCH / ANC Clinic', 3),
+        ('ART', 'ART Clinic', 4),
+        ('VCT', 'VCT / HTC Room', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_outreach_events (code, name, display_order) VALUES
+        ('NONE', 'No outreach (facility-based)', 1),
+        ('COMMUNITY', 'Community outreach', 2),
+        ('MOBCLINIC', 'Mobile clinic', 3),
+        ('CAMPAIGN', 'Campaign / special event', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_partner_services (code, name, display_order) VALUES
+        ('OFF', 'Offered', 1),
+        ('ACC', 'Accepted', 2),
+        ('DEC', 'Declined', 3),
+        ('NA', 'Not applicable', 4)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_linkage_actions (code, name, display_order) VALUES
+        ('ART_INIT', 'ART initiated', 1),
+        ('ART_REF', 'Referred to ART clinic', 2),
+        ('PREP', 'PrEP initiated', 3),
+        ('PEP', 'PEP initiated', 4),
+        ('COUNS', 'Counselling only', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_sti_methods (code, name, display_order) VALUES
+        ('DUAL', 'Dual HIV/STI rapid kit', 1),
+        ('RDT', 'Rapid test', 2),
+        ('NAAT', 'NAAT / PCR', 3),
+        ('CULT', 'Culture', 4),
+        ('OTHER', 'Other method', 5)
+        ON CONFLICT (code) DO NOTHING
+      `);
+            await tenantDataSource.query(`
+        INSERT INTO hiv_testing_sti_specimens (code, name, display_order) VALUES
+        ('URETHRAL', 'Urethral swab', 1),
+        ('CERVICAL', 'Cervical swab', 2),
+        ('VAGINAL', 'Vaginal swab', 3),
+        ('URINE', 'Urine', 4),
+        ('BLOOD', 'Blood', 5),
+        ('OTHER', 'Other site', 6)
         ON CONFLICT (code) DO NOTHING
       `);
             await tenantDataSource.query(`

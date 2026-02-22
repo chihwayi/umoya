@@ -2456,6 +2456,501 @@ export class HivService {
     return program[0] || null;
   }
 
+  private normalizeRegimenToken(value: string): string {
+    return String(value || '').trim().toUpperCase().replace(/\s+/g, '').replace(/_/g, '/');
+  }
+
+  private parseRuleCondition(value: any): Record<string, any> {
+    if (!value) return {};
+    if (typeof value === 'object') return value;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  private computeAgeFromDob(dateOfBirth: any): number | null {
+    if (!dateOfBirth) return null;
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  }
+
+  private hasClinicalData(context: any, dataKey: string): boolean {
+    switch (dataKey) {
+      case 'pregnancy_status':
+        return Boolean(context.pregnancyStatus && String(context.pregnancyStatus).trim() !== '');
+      case 'creatinine_result':
+        return context.creatinineResult !== null && context.creatinineResult !== undefined;
+      case 'alt_result':
+        return context.altResult !== null && context.altResult !== undefined;
+      case 'tb_treatment_status':
+        return context.tbTreatmentStarted !== null && context.tbTreatmentStarted !== undefined;
+      default:
+        return Boolean(context[dataKey]);
+    }
+  }
+
+  private getDefaultRegimenSafetyRules() {
+    return [
+      {
+        rule_key: 'pregnancy_status_required_female_reproductive_age',
+        regimen_code: null,
+        domain: 'pregnancy',
+        severity: 'block',
+        condition_json: {
+          gender_in: ['female'],
+          min_age: 15,
+          max_age: 49,
+          requires_data: ['pregnancy_status'],
+        },
+        message:
+          'Pregnancy/lactation status is required before regimen change for women of reproductive age.',
+        recommended_action: 'Capture pregnancy/lactation status first, then retry regimen selection.',
+        guideline_reference: 'WHO + Zimbabwe HIV ART pregnancy safety data capture requirement.',
+      },
+      {
+        rule_key: 'renal_data_required_for_tdf_regimens',
+        regimen_code: null,
+        domain: 'renal',
+        severity: 'block',
+        condition_json: {
+          requires_components_any: ['TDF'],
+          requires_data: ['creatinine_result'],
+        },
+        message: 'Creatinine result is required before selecting a TDF-containing regimen.',
+        recommended_action: 'Order or capture renal function result before regimen switch.',
+        guideline_reference: 'WHO ART toxicity monitoring recommendations.',
+      },
+      {
+        rule_key: 'hepatic_data_required_for_nvp_regimens',
+        regimen_code: null,
+        domain: 'hepatic',
+        severity: 'block',
+        condition_json: {
+          requires_components_any: ['NVP'],
+          requires_data: ['alt_result'],
+        },
+        message: 'ALT result is required before selecting an NVP-containing regimen.',
+        recommended_action: 'Capture hepatic function result before regimen switch.',
+        guideline_reference: 'WHO ART toxicity monitoring recommendations.',
+      },
+      {
+        rule_key: 'tb_rifampicin_with_atv_r_block',
+        regimen_code: null,
+        domain: 'tb_ddi',
+        severity: 'block',
+        condition_json: {
+          requires_components_any: ['ATV/R'],
+          tb_treatment_required: true,
+          tb_meds_any: ['rifampicin', 'rifampin'],
+        },
+        message:
+          'ATV/r with rifampicin-based TB therapy is contraindicated due to major drug interaction risk.',
+        recommended_action: 'Choose an alternative ART strategy compatible with TB co-treatment.',
+        guideline_reference: 'WHO guidance on ART/TB co-treatment interactions.',
+      },
+      {
+        rule_key: 'tb_rifampicin_with_dtg_warn',
+        regimen_code: null,
+        domain: 'tb_ddi',
+        severity: 'warn',
+        condition_json: {
+          requires_components_any: ['DTG'],
+          tb_treatment_required: true,
+          tb_meds_any: ['rifampicin', 'rifampin'],
+        },
+        message:
+          'DTG with rifampicin co-treatment requires protocol-level dosing review and follow-up.',
+        recommended_action: 'Apply DTG + rifampicin dosing protocol and document plan.',
+        guideline_reference: 'WHO guidance on integrase inhibitor co-treatment with rifampicin.',
+      },
+      {
+        rule_key: 'renal_impairment_tdf_warn',
+        regimen_code: null,
+        domain: 'renal',
+        severity: 'warn',
+        condition_json: {
+          requires_components_any: ['TDF'],
+          creatinine_min: 1.5,
+        },
+        message:
+          'Renal risk warning: elevated creatinine with TDF-containing regimen needs clinical review.',
+        recommended_action: 'Consider renal-sparing alternative or enhanced renal monitoring.',
+        guideline_reference: 'WHO ART toxicity and renal monitoring recommendations.',
+      },
+      {
+        rule_key: 'severe_renal_impairment_tdf_block',
+        regimen_code: null,
+        domain: 'renal',
+        severity: 'block',
+        condition_json: {
+          requires_components_any: ['TDF'],
+          creatinine_min: 2.0,
+        },
+        message: 'TDF-containing regimen is blocked at this renal function level.',
+        recommended_action: 'Select a non-TDF regimen and document renal safety rationale.',
+        guideline_reference: 'WHO ART toxicity and renal monitoring recommendations.',
+      },
+      {
+        rule_key: 'high_alt_nvp_block',
+        regimen_code: null,
+        domain: 'hepatic',
+        severity: 'block',
+        condition_json: {
+          requires_components_any: ['NVP'],
+          alt_min: 120,
+        },
+        message: 'NVP-containing regimen is blocked due to elevated ALT (hepatic risk).',
+        recommended_action: 'Select alternative regimen and manage hepatic abnormality first.',
+        guideline_reference: 'WHO ART toxicity guidance for NNRTI hepatotoxicity risk.',
+      },
+    ];
+  }
+
+  private async loadRegimenSafetyRules(tenantDb: DataSource) {
+    try {
+      const rows = await tenantDb.query(
+        `SELECT r.rule_key, r.regimen_code, r.domain, r.severity, r.condition_json,
+                r.message, r.recommended_action, r.guideline_reference
+         FROM hiv_regimen_contraindication_rules r
+         LEFT JOIN hiv_regimen_rule_versions v ON v.id = r.version_id
+         WHERE r.is_active = true
+           AND (v.id IS NULL OR v.is_active = true)
+         ORDER BY CASE r.severity WHEN 'block' THEN 0 ELSE 1 END, r.domain ASC, r.rule_key ASC`,
+      );
+      if (rows && rows.length > 0) {
+        return rows;
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Regimen contraindication matrix unavailable in tenant DB; using default rules: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    return this.getDefaultRegimenSafetyRules();
+  }
+
+  private evaluateRegimenSafetyRule(rule: any, context: any): { matched: boolean; missingData: string[] } {
+    const condition = this.parseRuleCondition(rule.condition_json);
+    const missingData: string[] = [];
+
+    if (rule.regimen_code && String(rule.regimen_code).trim() !== context.requestedRegimenCode) {
+      return { matched: false, missingData };
+    }
+
+    const requiresComponentsAny = Array.isArray(condition.requires_components_any)
+      ? condition.requires_components_any.map((value: string) => this.normalizeRegimenToken(value))
+      : [];
+    if (
+      requiresComponentsAny.length > 0 &&
+      !requiresComponentsAny.some((component: string) => context.regimenComponentsNormalized.includes(component))
+    ) {
+      return { matched: false, missingData };
+    }
+
+    const requiresComponentsAll = Array.isArray(condition.requires_components_all)
+      ? condition.requires_components_all.map((value: string) => this.normalizeRegimenToken(value))
+      : [];
+    if (
+      requiresComponentsAll.length > 0 &&
+      !requiresComponentsAll.every((component: string) => context.regimenComponentsNormalized.includes(component))
+    ) {
+      return { matched: false, missingData };
+    }
+
+    if (Array.isArray(condition.gender_in) && condition.gender_in.length > 0) {
+      const allowed = condition.gender_in.map((v: string) => String(v).toLowerCase());
+      if (!allowed.includes(String(context.gender || '').toLowerCase())) {
+        return { matched: false, missingData };
+      }
+    }
+
+    if (condition.min_age !== undefined && condition.min_age !== null) {
+      if (context.age === null || context.age < Number(condition.min_age)) {
+        return { matched: false, missingData };
+      }
+    }
+    if (condition.max_age !== undefined && condition.max_age !== null) {
+      if (context.age === null || context.age > Number(condition.max_age)) {
+        return { matched: false, missingData };
+      }
+    }
+
+    const requiresData = Array.isArray(condition.requires_data) ? condition.requires_data : [];
+    for (const key of requiresData) {
+      if (!this.hasClinicalData(context, String(key))) {
+        missingData.push(String(key));
+      }
+    }
+    if (missingData.length > 0) {
+      return { matched: false, missingData };
+    }
+
+    if (condition.pregnancy_required === true && !context.isPregnant) {
+      return { matched: false, missingData };
+    }
+
+    if (condition.tb_treatment_required === true && !context.tbTreatmentStarted) {
+      return { matched: false, missingData };
+    }
+
+    const tbMedsAny = Array.isArray(condition.tb_meds_any)
+      ? condition.tb_meds_any.map((value: string) => String(value).toLowerCase())
+      : [];
+    if (tbMedsAny.length > 0) {
+      const matchedTbMed = context.tbMedicationsLower.some((med: string) =>
+        tbMedsAny.some((needle: string) => med.includes(needle)),
+      );
+      if (!matchedTbMed) {
+        return { matched: false, missingData };
+      }
+    }
+
+    if (condition.creatinine_min !== undefined && condition.creatinine_min !== null) {
+      if (context.creatinineResult === null || context.creatinineResult < Number(condition.creatinine_min)) {
+        return { matched: false, missingData };
+      }
+    }
+    if (condition.creatinine_max !== undefined && condition.creatinine_max !== null) {
+      if (context.creatinineResult === null || context.creatinineResult > Number(condition.creatinine_max)) {
+        return { matched: false, missingData };
+      }
+    }
+
+    if (condition.alt_min !== undefined && condition.alt_min !== null) {
+      if (context.altResult === null || context.altResult < Number(condition.alt_min)) {
+        return { matched: false, missingData };
+      }
+    }
+    if (condition.alt_max !== undefined && condition.alt_max !== null) {
+      if (context.altResult === null || context.altResult > Number(condition.alt_max)) {
+        return { matched: false, missingData };
+      }
+    }
+
+    return { matched: true, missingData };
+  }
+
+  async precheckRegimenChange(body: any, tenantDb: DataSource) {
+    const { enrollmentId, requestedRegimenCode, requestedRegimenName } = body || {};
+
+    if (!enrollmentId) {
+      throw new BadRequestException('enrollmentId is required');
+    }
+    if (!requestedRegimenCode || !String(requestedRegimenCode).trim()) {
+      throw new BadRequestException('requestedRegimenCode is required');
+    }
+
+    const enrollmentRows = await tenantDb.query(
+      `SELECT e.id, e.patient_id, e.art_start_date, p.gender, p.date_of_birth
+       FROM hiv_care_enrollments e
+       JOIN patients p ON p.id = e.patient_id
+       WHERE e.id = $1
+       LIMIT 1`,
+      [enrollmentId],
+    );
+    if (!enrollmentRows || enrollmentRows.length === 0) {
+      throw new NotFoundException('HIV care enrollment not found');
+    }
+    const enrollment = enrollmentRows[0];
+
+    const regimenRows = await tenantDb.query(
+      `SELECT code, name, line, category, components
+       FROM hiv_art_regimens
+       WHERE code = $1
+         AND is_active = true
+       LIMIT 1`,
+      [String(requestedRegimenCode).trim()],
+    );
+    if (!regimenRows || regimenRows.length === 0) {
+      throw new BadRequestException('Requested ART regimen is not recognized or inactive');
+    }
+    const regimen = regimenRows[0];
+
+    const latestVisitRows = await tenantDb.query(
+      `SELECT pregnancy_lactating_status, tb_treatment_started, creatinine_result, alt_result, visit_date
+       FROM hiv_clinical_visits
+       WHERE enrollment_id = $1
+       ORDER BY visit_date DESC, visit_number DESC
+       LIMIT 1`,
+      [enrollmentId],
+    );
+    const latestVisit = latestVisitRows[0] || null;
+
+    const activePrescriptionRows = await tenantDb.query(
+      `SELECT medication_name
+       FROM prescriptions
+       WHERE patient_id = $1
+         AND (
+           status IS NULL
+           OR LOWER(status) NOT IN ('cancelled', 'completed', 'discontinued', 'stopped', 'rejected')
+         )`,
+      [enrollment.patient_id],
+    );
+
+    const activeMedsLower = (activePrescriptionRows || [])
+      .map((row: any) => String(row.medication_name || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const tbMedicationKeywords = ['rifampicin', 'rifampin', 'rifabutin', 'isoniazid', 'pyrazinamide', 'ethambutol'];
+    const tbMedicationsLower = activeMedsLower.filter((medication: string) =>
+      tbMedicationKeywords.some((keyword) => medication.includes(keyword)),
+    );
+
+    const regimenComponentsRaw = Array.isArray(regimen.components)
+      ? regimen.components
+      : (typeof regimen.components === 'string'
+        ? regimen.components.split(',').map((value: string) => value.trim())
+        : []);
+    const regimenComponentsNormalized = regimenComponentsRaw
+      .map((value: string) => this.normalizeRegimenToken(value))
+      .filter(Boolean);
+
+    const pregnancyStatus = latestVisit?.pregnancy_lactating_status || null;
+    const pregnancyStatusNormalized = String(pregnancyStatus || '').trim().toUpperCase();
+    const isPregnant =
+      pregnancyStatusNormalized === 'P' || pregnancyStatusNormalized.includes('PREG');
+
+    const parsedCreatinine =
+      latestVisit?.creatinine_result !== undefined && latestVisit?.creatinine_result !== null
+        ? Number(latestVisit.creatinine_result)
+        : null;
+    const creatinineResult = Number.isFinite(parsedCreatinine) ? parsedCreatinine : null;
+
+    const parsedAlt =
+      latestVisit?.alt_result !== undefined && latestVisit?.alt_result !== null
+        ? Number(latestVisit.alt_result)
+        : null;
+    const altResult = Number.isFinite(parsedAlt) ? parsedAlt : null;
+
+    const context = {
+      requestedRegimenCode: String(requestedRegimenCode).trim(),
+      regimenComponentsNormalized,
+      gender: enrollment.gender || null,
+      age: this.computeAgeFromDob(enrollment.date_of_birth),
+      pregnancyStatus,
+      isPregnant,
+      tbTreatmentStarted: Boolean(latestVisit?.tb_treatment_started),
+      tbMedicationsLower,
+      creatinineResult,
+      altResult,
+      latestVisitDate: latestVisit?.visit_date || null,
+    };
+
+    const rules = await this.loadRegimenSafetyRules(tenantDb);
+    let ruleVersionCode: string | null = null;
+    try {
+      const activeVersionRows = await tenantDb.query(
+        `SELECT version_code
+         FROM hiv_regimen_rule_versions
+         WHERE is_active = true
+         ORDER BY updated_at DESC
+         LIMIT 1`,
+      );
+      ruleVersionCode = activeVersionRows?.[0]?.version_code || null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Unable to resolve active regimen safety rule version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    const blockers: any[] = [];
+    const warnings: any[] = [];
+    const requiredData = new Set<string>();
+    const guidelineReferences = new Set<string>();
+
+    for (const rule of rules) {
+      const evaluation = this.evaluateRegimenSafetyRule(rule, context);
+
+      if (evaluation.missingData.length > 0) {
+        for (const field of evaluation.missingData) {
+          requiredData.add(field);
+        }
+        const payload = {
+          ruleKey: rule.rule_key,
+          domain: rule.domain,
+          severity: rule.severity,
+          message: rule.message,
+          requiredData: evaluation.missingData,
+          recommendedAction: rule.recommended_action || null,
+          guidelineReference: rule.guideline_reference || null,
+        };
+        if (String(rule.severity).toLowerCase() === 'block') {
+          blockers.push(payload);
+        } else {
+          warnings.push(payload);
+        }
+        if (rule.guideline_reference) {
+          guidelineReferences.add(String(rule.guideline_reference));
+        }
+        continue;
+      }
+
+      if (!evaluation.matched) {
+        continue;
+      }
+
+      const payload = {
+        ruleKey: rule.rule_key,
+        domain: rule.domain,
+        severity: rule.severity,
+        message: rule.message,
+        recommendedAction: rule.recommended_action || null,
+        guidelineReference: rule.guideline_reference || null,
+      };
+      if (String(rule.severity).toLowerCase() === 'block') {
+        blockers.push(payload);
+      } else {
+        warnings.push(payload);
+      }
+      if (rule.guideline_reference) {
+        guidelineReferences.add(String(rule.guideline_reference));
+      }
+    }
+
+    return {
+      allowed: blockers.length === 0,
+      enrollmentId,
+      requestedRegimenCode: String(requestedRegimenCode).trim(),
+      requestedRegimenName: requestedRegimenName || regimen.name,
+      regimen: {
+        code: regimen.code,
+        name: regimen.name,
+        line: regimen.line,
+        category: regimen.category,
+        components: regimenComponentsRaw,
+      },
+      context: {
+        gender: context.gender,
+        age: context.age,
+        pregnancyStatus: context.pregnancyStatus,
+        tbTreatmentStarted: context.tbTreatmentStarted,
+        tbMedications: tbMedicationsLower,
+        creatinineResult: context.creatinineResult,
+        altResult: context.altResult,
+        latestVisitDate: context.latestVisitDate,
+      },
+      blockers,
+      warnings,
+      requiredData: Array.from(requiredData),
+      guidelineReferences: Array.from(guidelineReferences),
+      ruleVersionCode,
+    };
+  }
+
   // ARV Change Request Methods
   async createArvChangeRequest(body: any, tenantDb: DataSource) {
     const {
@@ -2568,6 +3063,32 @@ export class HivService {
       );
     }
 
+    const regimenSafetyCheck = await this.precheckRegimenChange(
+      {
+        enrollmentId,
+        requestedRegimenCode,
+        requestedRegimenName,
+      },
+      tenantDb,
+    );
+    if (!regimenSafetyCheck.allowed) {
+      const primaryBlocker =
+        regimenSafetyCheck.blockers?.[0]?.message ||
+        'Requested regimen change is blocked by regimen safety guardrails.';
+      throw new BadRequestException(primaryBlocker);
+    }
+    const regimenSafetySummary = {
+      checkedAt: new Date().toISOString(),
+      allowed: regimenSafetyCheck.allowed,
+      requestedRegimenCode: regimenSafetyCheck.requestedRegimenCode,
+      blockers: regimenSafetyCheck.blockers || [],
+      warnings: regimenSafetyCheck.warnings || [],
+      requiredData: regimenSafetyCheck.requiredData || [],
+      guidelineReferences: regimenSafetyCheck.guidelineReferences || [],
+      context: regimenSafetyCheck.context || {},
+      ruleVersionCode: regimenSafetyCheck.ruleVersionCode || null,
+    };
+
     const eacInfo = await this.checkEacEligibility(enrollmentId, tenantDb);
     const eacSessionCountRows = await tenantDb.query(
       `SELECT COUNT(*) as count
@@ -2628,28 +3149,66 @@ export class HivService {
     const dateToIso = (value: Date | null): string | null =>
       value ? value.toISOString().split('T')[0] : null;
 
-    const result = await tenantDb.query(`
-      INSERT INTO hiv_arv_change_requests (
-        enrollment_id, requested_by, requested_by_name,
-        current_regimen_code, current_regimen_name,
-        current_viral_load, current_viral_load_date,
-        previous_viral_load, previous_viral_load_date,
-        eac_completed, eac_sessions_completed, eac_completion_date,
-        requested_regimen_code, requested_regimen_name,
-        change_reason_code, change_reason_details, clinical_justification
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
-      )
-      RETURNING *
-    `, [
+    const baseInsertParams = [
       enrollmentId, requestedBy, requestedByName || null,
       currentRegimenCode || null, currentRegimenName || null,
       currentViralLoadNumeric, dateToIso(currentViralLoadDateParsed),
       previousViralLoadNumeric, dateToIso(previousViralLoadDateParsed),
       authoritativeEacCompleted, authoritativeEacSessionsCompleted, dateToIso(eacCompletionDateParsed),
       requestedRegimenCode, requestedRegimenName,
-      changeReasonCode || null, changeReasonDetails || null, normalizedJustification
-    ]);
+      changeReasonCode || null, changeReasonDetails || null, normalizedJustification,
+    ];
+
+    let result: any[] = [];
+    try {
+      result = await tenantDb.query(
+        `
+          INSERT INTO hiv_arv_change_requests (
+            enrollment_id, requested_by, requested_by_name,
+            current_regimen_code, current_regimen_name,
+            current_viral_load, current_viral_load_date,
+            previous_viral_load, previous_viral_load_date,
+            eac_completed, eac_sessions_completed, eac_completion_date,
+            requested_regimen_code, requested_regimen_name,
+            change_reason_code, change_reason_details, clinical_justification,
+            regimen_safety_summary, regimen_safety_blocked
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19
+          )
+          RETURNING *
+        `,
+        [...baseInsertParams, JSON.stringify(regimenSafetySummary), false],
+      );
+    } catch (error: any) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        String(error?.code || '') === '42703' ||
+        /regimen_safety_summary|regimen_safety_blocked/i.test(message)
+      ) {
+        this.logger.warn(
+          'hiv_arv_change_requests is missing regimen safety columns; writing legacy row without regimen_safety_summary.',
+        );
+        result = await tenantDb.query(
+          `
+            INSERT INTO hiv_arv_change_requests (
+              enrollment_id, requested_by, requested_by_name,
+              current_regimen_code, current_regimen_name,
+              current_viral_load, current_viral_load_date,
+              previous_viral_load, previous_viral_load_date,
+              eac_completed, eac_sessions_completed, eac_completion_date,
+              requested_regimen_code, requested_regimen_name,
+              change_reason_code, change_reason_details, clinical_justification
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+            )
+            RETURNING *
+          `,
+          baseInsertParams,
+        );
+      } else {
+        throw error;
+      }
+    }
 
     return result[0];
   }

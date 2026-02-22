@@ -89,6 +89,8 @@ const HIVDoctorDashboard: React.FC = () => {
   });
   const [regimenDecisionContext, setRegimenDecisionContext] = useState<any | null>(null);
   const [loadingRegimenDecisionContext, setLoadingRegimenDecisionContext] = useState(false);
+  const [regimenSafetyPrecheck, setRegimenSafetyPrecheck] = useState<any | null>(null);
+  const [loadingRegimenSafetyPrecheck, setLoadingRegimenSafetyPrecheck] = useState(false);
   const [stats, setStats] = useState({
     totalPatients: 0,
     onArv: 0,
@@ -130,6 +132,50 @@ const HIVDoctorDashboard: React.FC = () => {
     // Reload when status filter changes
     loadData();
   }, [statusFilter]);
+
+  useEffect(() => {
+    const runRegimenSafetyPrecheck = async () => {
+      if (
+        !showRegimenChangeModal ||
+        !selectedEnrollmentForChange?.id ||
+        !regimenChangeForm.requestedRegimenCode
+      ) {
+        setRegimenSafetyPrecheck(null);
+        setLoadingRegimenSafetyPrecheck(false);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('ehr_token');
+        if (!token) return;
+
+        setLoadingRegimenSafetyPrecheck(true);
+        const response = await ehrApi.precheckHivRegimenChange(
+          {
+            enrollmentId: selectedEnrollmentForChange.id,
+            requestedRegimenCode: regimenChangeForm.requestedRegimenCode,
+            requestedRegimenName: regimenChangeForm.requestedRegimenName,
+          },
+          token,
+          tenantSlug!,
+        );
+        setRegimenSafetyPrecheck(response.data || null);
+      } catch (error) {
+        console.error('Failed to precheck regimen safety matrix:', error);
+        setRegimenSafetyPrecheck(null);
+      } finally {
+        setLoadingRegimenSafetyPrecheck(false);
+      }
+    };
+
+    runRegimenSafetyPrecheck();
+  }, [
+    showRegimenChangeModal,
+    selectedEnrollmentForChange?.id,
+    regimenChangeForm.requestedRegimenCode,
+    regimenChangeForm.requestedRegimenName,
+    tenantSlug,
+  ]);
 
   const loadRegimens = async () => {
     try {
@@ -377,6 +423,8 @@ const HIVDoctorDashboard: React.FC = () => {
     setShowRegimenChangeModal(true);
     resetRegimenChangeForm();
     setRegimenDecisionContext(null);
+    setRegimenSafetyPrecheck(null);
+    setLoadingRegimenSafetyPrecheck(false);
 
     try {
       const token = localStorage.getItem('ehr_token');
@@ -529,6 +577,15 @@ const HIVDoctorDashboard: React.FC = () => {
 
     return null;
   })();
+
+  const regimenMatrixBlocker =
+    regimenSafetyPrecheck?.allowed === false &&
+    Array.isArray(regimenSafetyPrecheck?.blockers) &&
+    regimenSafetyPrecheck.blockers.length > 0
+      ? regimenSafetyPrecheck.blockers[0].message
+      : null;
+
+  const combinedRegimenBlocker = regimenChangeCdssBlocker || regimenMatrixBlocker;
 
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden">
@@ -1911,6 +1968,8 @@ const HIVDoctorDashboard: React.FC = () => {
                     setSelectedEnrollmentForChange(null);
                     resetRegimenChangeForm();
                     setRegimenDecisionContext(null);
+                    setRegimenSafetyPrecheck(null);
+                    setLoadingRegimenSafetyPrecheck(false);
                   }}
                   className="p-2 hover:bg-white/10 rounded-lg"
                 >
@@ -1976,6 +2035,67 @@ const HIVDoctorDashboard: React.FC = () => {
                     <p className="text-sm text-emerald-700">
                       CDSS context unavailable. You can continue, but verify VL/EAC pathway manually.
                     </p>
+                  )}
+                </div>
+
+                <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-2">
+                    Regimen Safety Matrix
+                  </p>
+                  {!regimenChangeForm.requestedRegimenCode ? (
+                    <p className="text-sm text-blue-700">
+                      Select a new regimen to run pregnancy/TB-DDI/renal/hepatic safety checks.
+                    </p>
+                  ) : loadingRegimenSafetyPrecheck ? (
+                    <p className="text-sm text-blue-700">Running regimen safety precheck...</p>
+                  ) : regimenSafetyPrecheck ? (
+                    <div className="space-y-3">
+                      {Array.isArray(regimenSafetyPrecheck.blockers) && regimenSafetyPrecheck.blockers.length > 0 && (
+                        <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                          <p className="font-semibold mb-1">Blocking issues</p>
+                          {regimenSafetyPrecheck.blockers.map((blocker: any) => (
+                            <p key={blocker.ruleKey || blocker.message}>
+                              - {blocker.message}
+                              {blocker.recommendedAction ? ` (${blocker.recommendedAction})` : ''}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {Array.isArray(regimenSafetyPrecheck.warnings) && regimenSafetyPrecheck.warnings.length > 0 && (
+                        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                          <p className="font-semibold mb-1">Warnings</p>
+                          {regimenSafetyPrecheck.warnings.map((warning: any) => (
+                            <p key={warning.ruleKey || warning.message}>
+                              - {warning.message}
+                              {warning.recommendedAction ? ` (${warning.recommendedAction})` : ''}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {Array.isArray(regimenSafetyPrecheck.requiredData) &&
+                        regimenSafetyPrecheck.requiredData.length > 0 && (
+                          <div className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                            <p className="font-semibold mb-1">Required clinical data</p>
+                            <p>{regimenSafetyPrecheck.requiredData.join(', ')}</p>
+                          </div>
+                        )}
+                      {Array.isArray(regimenSafetyPrecheck.guidelineReferences) &&
+                        regimenSafetyPrecheck.guidelineReferences.length > 0 && (
+                          <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                            <p className="font-semibold mb-1">Guideline references</p>
+                            <p>{regimenSafetyPrecheck.guidelineReferences.join(' | ')}</p>
+                          </div>
+                        )}
+                      {regimenSafetyPrecheck.allowed === true &&
+                        (!Array.isArray(regimenSafetyPrecheck.blockers) ||
+                          regimenSafetyPrecheck.blockers.length === 0) && (
+                          <div className="rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-800">
+                            Regimen safety matrix has no blocking contraindications.
+                          </div>
+                        )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-blue-700">No matrix result yet.</p>
                   )}
                 </div>
 
@@ -2140,12 +2260,15 @@ const HIVDoctorDashboard: React.FC = () => {
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={async () => {
-                      if (loadingRegimenDecisionContext) {
-                        showError('Please wait', 'CDSS decision context is still loading.');
+                      if (loadingRegimenDecisionContext || loadingRegimenSafetyPrecheck) {
+                        showError('Please wait', 'CDSS decision context and regimen safety checks are still loading.');
                         return;
                       }
-                      if (regimenChangeCdssBlocker) {
-                        showError('CDSS Guardrail', regimenChangeCdssBlocker);
+                      if (combinedRegimenBlocker) {
+                        showError(
+                          regimenMatrixBlocker ? 'Regimen Safety Blocker' : 'CDSS Guardrail',
+                          combinedRegimenBlocker,
+                        );
                         return;
                       }
                       if (!regimenChangeForm.requestedRegimenCode || !regimenChangeForm.changeReasonDetails || !regimenChangeForm.clinicalJustification) {
@@ -2223,13 +2346,19 @@ const HIVDoctorDashboard: React.FC = () => {
                         setSelectedEnrollmentForChange(null);
                         resetRegimenChangeForm();
                         setRegimenDecisionContext(null);
+                        setRegimenSafetyPrecheck(null);
+                        setLoadingRegimenSafetyPrecheck(false);
                         loadData();
                       } catch (error: any) {
                         console.error('Failed to create regimen change request:', error);
                         showError('Error', error?.response?.data?.message || 'Failed to create regimen change request');
                       }
                     }}
-                    disabled={loadingRegimenDecisionContext || Boolean(regimenChangeCdssBlocker)}
+                    disabled={
+                      loadingRegimenDecisionContext ||
+                      loadingRegimenSafetyPrecheck ||
+                      Boolean(combinedRegimenBlocker)
+                    }
                     className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Create Regimen Change Request
@@ -2240,6 +2369,8 @@ const HIVDoctorDashboard: React.FC = () => {
                       setSelectedEnrollmentForChange(null);
                       resetRegimenChangeForm();
                       setRegimenDecisionContext(null);
+                      setRegimenSafetyPrecheck(null);
+                      setLoadingRegimenSafetyPrecheck(false);
                     }}
                     className="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-semibold"
                   >
