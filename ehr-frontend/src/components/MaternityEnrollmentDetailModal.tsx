@@ -505,6 +505,53 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     return (enrollment.anc_visits?.length || 0) + 1;
   }, [enrollment]);
 
+  const runMaternityPrecheck = useCallback(
+    async (runCheck: () => Promise<any>, contextLabel: string) => {
+      try {
+        const response = await runCheck();
+        const precheck = response?.data || {};
+        const blockers = Array.isArray(precheck?.blockers) ? precheck.blockers : [];
+        const warnings = Array.isArray(precheck?.warnings) ? precheck.warnings : [];
+
+        if (blockers.length > 0) {
+          const primary = blockers[0]?.message || 'Safety check failed.';
+          const suffix =
+            blockers.length > 1 ? ` (+${blockers.length - 1} more blocker${blockers.length > 2 ? 's' : ''})` : '';
+          showError(`${contextLabel} blocked`, `${primary}${suffix}`);
+          return false;
+        }
+
+        if (precheck?.doctor_escalation_required) {
+          showInfo(
+            `${contextLabel}: escalation recommended`,
+            'Doctor/senior review is recommended by the CDSS safety checks.',
+          );
+        }
+
+        if (warnings.length > 0) {
+          const preview = warnings
+            .slice(0, 4)
+            .map((item: any) => `- ${item?.message || 'Safety warning'}`)
+            .join('\n');
+          const extraCount = warnings.length > 4 ? `\n...and ${warnings.length - 4} more warning(s)` : '';
+          const proceed = window.confirm(
+            `${contextLabel} warnings:\n${preview}${extraCount}\n\nProceed anyway?`,
+          );
+          if (!proceed) {
+            return false;
+          }
+        }
+
+        return true;
+      } catch (error) {
+        console.error(`${contextLabel} precheck failed`, error);
+        showError('Unable to run maternity safety precheck.', 'Please retry.');
+        return false;
+      }
+    },
+    [showError, showInfo],
+  );
+
   const handleCreateANCVisit = async () => {
     if (!enrollment) return;
 
@@ -549,6 +596,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         next_visit_date: ancForm.next_visit_date || null,
         notes: ancForm.notes,
       };
+
+      const ancPrecheckPassed = await runMaternityPrecheck(
+        () => ehrApi.precheckANCVisit(tenantSlug, token, payload),
+        'ANC visit precheck',
+      );
+      if (!ancPrecheckPassed) {
+        return;
+      }
 
       await ehrApi.createANCVisit(tenantSlug, token, payload);
       showSuccess(`ANC visit #${nextVisitNumber} recorded`, 'ANC follow-up saved successfully.');
@@ -621,6 +676,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         notes: deliveryForm.notes || null,
       };
 
+      const deliveryPrecheckPassed = await runMaternityPrecheck(
+        () => ehrApi.precheckDelivery(tenantSlug, token, payload),
+        'Delivery precheck',
+      );
+      if (!deliveryPrecheckPassed) {
+        return;
+      }
+
       await ehrApi.createDelivery(tenantSlug, token, payload);
       showSuccess('Delivery record saved', 'Maternal delivery details stored successfully.');
       setDeliveryFormOpen(false);
@@ -672,6 +735,18 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         cause_of_death: birthOutcomeForm.cause_of_death || null,
         cause_of_death_snomed: birthCauseOfDeathConcept,
       };
+
+      const birthPrecheckPassed = await runMaternityPrecheck(
+        () =>
+          ehrApi.precheckBirthOutcome(tenantSlug, token, {
+            delivery_id: enrollment.delivery.id,
+            ...payload,
+          }),
+        'Birth outcome precheck',
+      );
+      if (!birthPrecheckPassed) {
+        return;
+      }
 
       await ehrApi.createBirthOutcome(tenantSlug, token, enrollment.delivery.id, payload);
       showSuccess('Birth outcome recorded', 'Newborn outcome details saved successfully.');
@@ -742,6 +817,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         notes: postnatalForm.notes || null,
         next_visit_date: postnatalForm.next_visit_date || null,
       };
+
+      const postnatalPrecheckPassed = await runMaternityPrecheck(
+        () => ehrApi.precheckPostnatalVisit(tenantSlug, token, payload),
+        'Postnatal visit precheck',
+      );
+      if (!postnatalPrecheckPassed) {
+        return;
+      }
 
       await ehrApi.createPostnatalVisit(tenantSlug, token, payload);
       showSuccess('Postnatal visit saved', 'Postnatal visit details stored successfully.');

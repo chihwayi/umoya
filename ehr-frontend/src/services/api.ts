@@ -3618,6 +3618,16 @@ export const ehrApi = {
   },
 
   // ANC Visits
+  precheckANCVisit: async (tenantSlug: string, token: string, visitData: any) => {
+    const response = await ehrAxios.post('/maternity/anc-visits/precheck', visitData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   createANCVisit: async (tenantSlug: string, token: string, visitData: any) => {
     const response = await ehrAxios.post('/maternity/anc-visits', visitData, {
       headers: {
@@ -3639,6 +3649,16 @@ export const ehrApi = {
   },
 
   // Deliveries
+  precheckDelivery: async (tenantSlug: string, token: string, deliveryData: any) => {
+    const response = await ehrAxios.post('/maternity/deliveries/precheck', deliveryData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   createDelivery: async (tenantSlug: string, token: string, deliveryData: any) => {
     const response = await ehrAxios.post('/maternity/deliveries', deliveryData, {
       headers: {
@@ -3659,7 +3679,27 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  precheckBirthOutcome: async (tenantSlug: string, token: string, birthData: any) => {
+    const response = await ehrAxios.post('/maternity/birth-outcomes/precheck', birthData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // Postnatal Visits
+  precheckPostnatalVisit: async (tenantSlug: string, token: string, visitData: any) => {
+    const response = await ehrAxios.post('/maternity/postnatal-visits/precheck', visitData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   createPostnatalVisit: async (tenantSlug: string, token: string, visitData: any) => {
     const response = await ehrAxios.post('/maternity/postnatal-visits', visitData, {
       headers: {

@@ -68,6 +68,16 @@ export class MaternityController {
 
   // ===== ANC VISITS =====
 
+  @Post('anc-visits/precheck')
+  @ApiOperation({ summary: 'Precheck ANC visit against maternity safety rules' })
+  @ApiResponse({ status: 200, description: 'ANC precheck results' })
+  async precheckANCVisit(
+    @Request() req: RequestWithTenant,
+    @Body() visitData: any,
+  ) {
+    return this.maternityService.precheckANCVisit(req.tenantDb, visitData);
+  }
+
   @Post('anc-visits')
   @ApiOperation({ summary: 'Record ANC visit' })
   @ApiResponse({ status: 201, description: 'ANC visit recorded successfully' })
@@ -146,6 +156,16 @@ export class MaternityController {
 
   // ===== DELIVERIES =====
 
+  @Post('deliveries/precheck')
+  @ApiOperation({ summary: 'Precheck delivery payload against maternity safety rules' })
+  @ApiResponse({ status: 200, description: 'Delivery precheck results' })
+  async precheckDelivery(
+    @Request() req: RequestWithTenant,
+    @Body() deliveryData: any,
+  ) {
+    return this.maternityService.precheckDelivery(req.tenantDb, deliveryData);
+  }
+
   @Post('deliveries')
   @ApiOperation({ summary: 'Record delivery' })
   @ApiResponse({ status: 201, description: 'Delivery recorded successfully' })
@@ -199,7 +219,27 @@ export class MaternityController {
     return this.maternityService.createBirthOutcome(req.tenantDb, deliveryId, birthData);
   }
 
+  @Post('birth-outcomes/precheck')
+  @ApiOperation({ summary: 'Precheck birth outcome payload against safety rules' })
+  @ApiResponse({ status: 200, description: 'Birth outcome precheck results' })
+  async precheckBirthOutcome(
+    @Request() req: RequestWithTenant,
+    @Body() birthData: any,
+  ) {
+    return this.maternityService.precheckBirthOutcome(req.tenantDb, birthData);
+  }
+
   // ===== POSTNATAL VISITS =====
+
+  @Post('postnatal-visits/precheck')
+  @ApiOperation({ summary: 'Precheck postnatal visit against maternity safety rules' })
+  @ApiResponse({ status: 200, description: 'Postnatal precheck results' })
+  async precheckPostnatalVisit(
+    @Request() req: RequestWithTenant,
+    @Body() visitData: any,
+  ) {
+    return this.maternityService.precheckPostnatalVisit(req.tenantDb, visitData);
+  }
 
   @Post('postnatal-visits')
   @ApiOperation({ summary: 'Record postnatal visit' })
@@ -327,4 +367,3 @@ export class MaternityController {
     return this.maternityService.getRecentPostnatalVisits(req.tenantDb);
   }
 }
-

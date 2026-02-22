@@ -9,11 +9,70 @@ interface StoredConceptSummary {
   definitionStatus?: string;
 }
 
+interface MaternityPrecheckIssue {
+  code: string;
+  field?: string;
+  message: string;
+  guideline_reference?: string;
+}
+
+interface MaternityPrecheckTrace {
+  rule_id: string;
+  severity: 'blocker' | 'warning';
+  message: string;
+}
+
+interface MaternityPrecheckResponse {
+  blockers: MaternityPrecheckIssue[];
+  warnings: MaternityPrecheckIssue[];
+  required_actions: string[];
+  suggested_orders: string[];
+  doctor_escalation_required: boolean;
+  trace: MaternityPrecheckTrace[];
+}
+
 @Injectable()
 export class MaternityService {
   private readonly logger = new Logger(MaternityService.name);
 
   constructor(private readonly terminologyService: TerminologyService) {}
+
+  private parseDate(raw: any): Date | null {
+    if (!raw) {
+      return null;
+    }
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+
+  private normalizeToDateOnly(raw: any): Date | null {
+    const parsed = this.parseDate(raw);
+    if (!parsed) {
+      return null;
+    }
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  }
+
+  private createPrecheckResponse(
+    blockers: MaternityPrecheckIssue[],
+    warnings: MaternityPrecheckIssue[],
+    requiredActions: Set<string>,
+    suggestedOrders: Set<string>,
+    trace: MaternityPrecheckTrace[],
+    doctorEscalationRequired: boolean,
+  ): MaternityPrecheckResponse {
+    return {
+      blockers,
+      warnings,
+      required_actions: Array.from(requiredActions),
+      suggested_orders: Array.from(suggestedOrders),
+      doctor_escalation_required: doctorEscalationRequired,
+      trace,
+    };
+  }
 
   private extractConceptId(candidate: any): string | null {
     if (!candidate) {
@@ -405,6 +464,764 @@ export class MaternityService {
 
     this.logger.log(`Updated maternity enrollment ${enrollmentId}`);
     return result[0];
+  }
+
+  async precheckANCVisit(tenantDb: DataSource, visitData: any): Promise<MaternityPrecheckResponse> {
+    const blockers: MaternityPrecheckIssue[] = [];
+    const warnings: MaternityPrecheckIssue[] = [];
+    const requiredActions = new Set<string>();
+    const suggestedOrders = new Set<string>();
+    const trace: MaternityPrecheckTrace[] = [];
+    let doctorEscalationRequired = false;
+
+    const addIssue = (
+      severity: 'blocker' | 'warning',
+      code: string,
+      message: string,
+      field?: string,
+      guidelineReference?: string,
+    ) => {
+      const issue: MaternityPrecheckIssue = {
+        code,
+        field,
+        message,
+        guideline_reference: guidelineReference,
+      };
+      if (severity === 'blocker') {
+        blockers.push(issue);
+      } else {
+        warnings.push(issue);
+      }
+      trace.push({
+        rule_id: code,
+        severity,
+        message,
+      });
+    };
+
+    const toNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const enrollmentId = visitData?.maternity_enrollment_id;
+    const patientId = visitData?.patient_id;
+    const visitDate = this.normalizeToDateOnly(visitData?.visit_date);
+    const nextVisitDate = this.normalizeToDateOnly(visitData?.next_visit_date);
+    const visitNumber = toNumber(visitData?.visit_number);
+
+    if (!enrollmentId) {
+      addIssue('blocker', 'anc.missing_enrollment_id', 'Maternity enrollment is required.', 'maternity_enrollment_id');
+    }
+    if (!patientId) {
+      addIssue('blocker', 'anc.missing_patient_id', 'Patient is required.', 'patient_id');
+    }
+    if (!visitDate) {
+      addIssue('blocker', 'anc.invalid_visit_date', 'Valid ANC visit date is required.', 'visit_date');
+    }
+
+    let enrollment: any | null = null;
+    let existingDelivery: any | null = null;
+
+    if (enrollmentId) {
+      const enrollmentRows = await tenantDb.query(
+        `SELECT id, patient_id, enrollment_date, lmp_date FROM maternity_enrollments WHERE id = $1`,
+        [enrollmentId],
+      );
+      if (enrollmentRows.length === 0) {
+        addIssue('blocker', 'anc.enrollment_not_found', 'Maternity enrollment was not found.', 'maternity_enrollment_id');
+      } else {
+        enrollment = enrollmentRows[0];
+      }
+
+      const deliveryRows = await tenantDb.query(
+        `SELECT id, delivery_date FROM deliveries WHERE maternity_enrollment_id = $1 ORDER BY delivery_date DESC LIMIT 1`,
+        [enrollmentId],
+      );
+      if (deliveryRows.length > 0) {
+        existingDelivery = deliveryRows[0];
+      }
+    }
+
+    if (enrollment && patientId && enrollment.patient_id !== patientId) {
+      addIssue(
+        'blocker',
+        'anc.patient_enrollment_mismatch',
+        'Patient does not match the selected maternity enrollment.',
+        'patient_id',
+      );
+    }
+
+    if (visitDate && enrollment?.enrollment_date) {
+      const enrollmentDate = this.normalizeToDateOnly(enrollment.enrollment_date);
+      if (enrollmentDate && visitDate < enrollmentDate) {
+        addIssue(
+          'blocker',
+          'anc.visit_before_enrollment',
+          'ANC visit date cannot be before enrollment date.',
+          'visit_date',
+        );
+      }
+    }
+
+    if (visitDate && enrollment?.lmp_date) {
+      const lmpDate = this.normalizeToDateOnly(enrollment.lmp_date);
+      if (lmpDate && visitDate < lmpDate) {
+        addIssue(
+          'blocker',
+          'anc.visit_before_lmp',
+          'ANC visit date cannot be before LMP date.',
+          'visit_date',
+        );
+      }
+    }
+
+    if (visitDate && existingDelivery?.delivery_date) {
+      const deliveryDate = this.normalizeToDateOnly(existingDelivery.delivery_date);
+      if (deliveryDate && visitDate > deliveryDate) {
+        addIssue(
+          'blocker',
+          'anc.visit_after_delivery',
+          'ANC visit date cannot be after delivery date. Use postnatal visit workflow.',
+          'visit_date',
+        );
+      }
+    }
+
+    if (visitDate && nextVisitDate && nextVisitDate < visitDate) {
+      addIssue(
+        'blocker',
+        'anc.next_visit_before_visit',
+        'Next ANC visit date cannot be earlier than current visit date.',
+        'next_visit_date',
+      );
+    }
+
+    if (enrollmentId && visitNumber !== null) {
+      const duplicateRows = await tenantDb.query(
+        `SELECT id FROM anc_visits WHERE maternity_enrollment_id = $1 AND visit_number = $2 LIMIT 1`,
+        [enrollmentId, visitNumber],
+      );
+      if (duplicateRows.length > 0) {
+        addIssue(
+          'blocker',
+          'anc.duplicate_visit_number',
+          'ANC visit number already exists for this enrollment.',
+          'visit_number',
+        );
+      }
+    }
+
+    if (visitData?.referral_needed) {
+      if (!visitData?.referral_reason || String(visitData.referral_reason).trim() === '') {
+        addIssue(
+          'blocker',
+          'anc.referral_reason_required',
+          'Referral reason is required when referral is marked as needed.',
+          'referral_reason',
+        );
+      }
+      if (!visitData?.referral_facility || String(visitData.referral_facility).trim() === '') {
+        addIssue(
+          'blocker',
+          'anc.referral_facility_required',
+          'Referral facility is required when referral is marked as needed.',
+          'referral_facility',
+        );
+      }
+    }
+
+    const systolic = toNumber(visitData?.blood_pressure_systolic);
+    const diastolic = toNumber(visitData?.blood_pressure_diastolic);
+    const temperature = toNumber(visitData?.temperature);
+    const fetalMovement = String(visitData?.fetal_movement || '').trim().toLowerCase();
+
+    if ((systolic !== null && systolic >= 160) || (diastolic !== null && diastolic >= 110)) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Immediate urgent obstetric review is required.');
+      suggestedOrders.add('Urgent urine protein and pre-eclampsia workup');
+      addIssue(
+        'blocker',
+        'anc.severe_hypertension',
+        'Severe hypertension detected. Immediate escalation is required before finalizing visit.',
+        'blood_pressure_systolic',
+        'WHO ANC hypertension danger-sign guidance',
+      );
+    } else if ((systolic !== null && systolic >= 140) || (diastolic !== null && diastolic >= 90)) {
+      doctorEscalationRequired = true;
+      suggestedOrders.add('Urinalysis/proteinuria and repeat blood pressure');
+      addIssue(
+        'warning',
+        'anc.hypertension_warning',
+        'Raised blood pressure detected; evaluate for hypertensive disorder of pregnancy.',
+        'blood_pressure_systolic',
+        'WHO ANC hypertensive disorders screening guidance',
+      );
+    }
+
+    if (temperature !== null && temperature >= 38) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Assess for maternal infection and sepsis risk.');
+      addIssue(
+        'warning',
+        'anc.fever_warning',
+        'Maternal fever detected; evaluate for infection and danger signs.',
+        'temperature',
+        'WHO ANC danger-sign guidance',
+      );
+    }
+
+    if (fetalMovement === 'absent' || fetalMovement === 'reduced') {
+      doctorEscalationRequired = true;
+      requiredActions.add('Assess fetal wellbeing urgently (FHR/ultrasound).');
+      addIssue(
+        'warning',
+        'anc.fetal_movement_concern',
+        'Reduced or absent fetal movement documented; urgent fetal assessment recommended.',
+        'fetal_movement',
+        'WHO ANC fetal surveillance recommendations',
+      );
+    }
+
+    return this.createPrecheckResponse(
+      blockers,
+      warnings,
+      requiredActions,
+      suggestedOrders,
+      trace,
+      doctorEscalationRequired,
+    );
+  }
+
+  async precheckDelivery(tenantDb: DataSource, deliveryData: any): Promise<MaternityPrecheckResponse> {
+    const blockers: MaternityPrecheckIssue[] = [];
+    const warnings: MaternityPrecheckIssue[] = [];
+    const requiredActions = new Set<string>();
+    const suggestedOrders = new Set<string>();
+    const trace: MaternityPrecheckTrace[] = [];
+    let doctorEscalationRequired = false;
+
+    const addIssue = (
+      severity: 'blocker' | 'warning',
+      code: string,
+      message: string,
+      field?: string,
+      guidelineReference?: string,
+    ) => {
+      const issue: MaternityPrecheckIssue = {
+        code,
+        field,
+        message,
+        guideline_reference: guidelineReference,
+      };
+      if (severity === 'blocker') {
+        blockers.push(issue);
+      } else {
+        warnings.push(issue);
+      }
+      trace.push({ rule_id: code, severity, message });
+    };
+
+    const toNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const enrollmentId = deliveryData?.maternity_enrollment_id;
+    const patientId = deliveryData?.patient_id;
+    const deliveryDate = this.normalizeToDateOnly(deliveryData?.delivery_date);
+    const deliveryTime = String(deliveryData?.delivery_time || '').trim();
+    const deliveryType = String(deliveryData?.delivery_type || '').trim();
+
+    if (!enrollmentId) {
+      addIssue('blocker', 'delivery.missing_enrollment_id', 'Maternity enrollment is required.', 'maternity_enrollment_id');
+    }
+    if (!patientId) {
+      addIssue('blocker', 'delivery.missing_patient_id', 'Patient is required.', 'patient_id');
+    }
+    if (!deliveryDate) {
+      addIssue('blocker', 'delivery.invalid_delivery_date', 'Valid delivery date is required.', 'delivery_date');
+    }
+    if (!deliveryTime) {
+      addIssue('blocker', 'delivery.missing_delivery_time', 'Delivery time is required.', 'delivery_time');
+    }
+    if (!deliveryType) {
+      addIssue('blocker', 'delivery.missing_delivery_type', 'Delivery type is required.', 'delivery_type');
+    }
+
+    let enrollment: any | null = null;
+    if (enrollmentId) {
+      const enrollmentRows = await tenantDb.query(
+        `SELECT id, patient_id, enrollment_date, lmp_date FROM maternity_enrollments WHERE id = $1`,
+        [enrollmentId],
+      );
+      if (enrollmentRows.length === 0) {
+        addIssue('blocker', 'delivery.enrollment_not_found', 'Maternity enrollment was not found.', 'maternity_enrollment_id');
+      } else {
+        enrollment = enrollmentRows[0];
+      }
+
+      const existingDeliveryRows = await tenantDb.query(
+        `SELECT id FROM deliveries WHERE maternity_enrollment_id = $1 LIMIT 1`,
+        [enrollmentId],
+      );
+      if (existingDeliveryRows.length > 0) {
+        addIssue(
+          'blocker',
+          'delivery.duplicate_delivery_record',
+          'A delivery record already exists for this enrollment.',
+          'maternity_enrollment_id',
+        );
+      }
+    }
+
+    if (enrollment && patientId && enrollment.patient_id !== patientId) {
+      addIssue(
+        'blocker',
+        'delivery.patient_enrollment_mismatch',
+        'Patient does not match the selected maternity enrollment.',
+        'patient_id',
+      );
+    }
+
+    if (deliveryDate && enrollment?.enrollment_date) {
+      const enrollmentDate = this.normalizeToDateOnly(enrollment.enrollment_date);
+      if (enrollmentDate && deliveryDate < enrollmentDate) {
+        addIssue(
+          'blocker',
+          'delivery.before_enrollment',
+          'Delivery date cannot be before enrollment date.',
+          'delivery_date',
+        );
+      }
+    }
+
+    if (
+      deliveryType === 'cesarean' &&
+      (!deliveryData?.indication_for_intervention ||
+        String(deliveryData.indication_for_intervention).trim() === '')
+    ) {
+      addIssue(
+        'blocker',
+        'delivery.cesarean_indication_required',
+        'Indication for intervention is required for cesarean delivery.',
+        'indication_for_intervention',
+      );
+    }
+
+    const bloodLoss = toNumber(deliveryData?.blood_loss);
+    if (bloodLoss !== null && bloodLoss >= 1000) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Initiate/confirm postpartum hemorrhage management protocol.');
+      addIssue(
+        'warning',
+        'delivery.pph_risk',
+        'Severe blood loss documented (>=1000 mL); urgent senior review is recommended.',
+        'blood_loss',
+        'WHO postpartum hemorrhage management guidance',
+      );
+    }
+
+    const maternalOutcome = String(deliveryData?.maternal_outcome || '').trim().toLowerCase();
+    if (maternalOutcome && maternalOutcome !== 'alive_well') {
+      doctorEscalationRequired = true;
+      requiredActions.add('Document maternal complication pathway and definitive management.');
+      addIssue(
+        'warning',
+        'delivery.adverse_maternal_outcome',
+        'Non-routine maternal outcome captured; escalation and documented follow-up required.',
+        'maternal_outcome',
+      );
+    }
+
+    if (deliveryDate && enrollment?.lmp_date) {
+      const lmpDate = this.normalizeToDateOnly(enrollment.lmp_date);
+      if (lmpDate) {
+        const gestationDays = Math.floor(
+          (deliveryDate.getTime() - lmpDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const gestationWeeks = Math.floor(gestationDays / 7);
+        if (gestationWeeks > 0 && gestationWeeks < 20) {
+          addIssue(
+            'warning',
+            'delivery.gestation_early_warning',
+            `Computed gestation at delivery is approximately ${gestationWeeks} weeks; verify dates for consistency.`,
+            'delivery_date',
+          );
+        }
+      }
+    }
+
+    return this.createPrecheckResponse(
+      blockers,
+      warnings,
+      requiredActions,
+      suggestedOrders,
+      trace,
+      doctorEscalationRequired,
+    );
+  }
+
+  async precheckBirthOutcome(tenantDb: DataSource, birthData: any): Promise<MaternityPrecheckResponse> {
+    const blockers: MaternityPrecheckIssue[] = [];
+    const warnings: MaternityPrecheckIssue[] = [];
+    const requiredActions = new Set<string>();
+    const suggestedOrders = new Set<string>();
+    const trace: MaternityPrecheckTrace[] = [];
+    let doctorEscalationRequired = false;
+
+    const addIssue = (
+      severity: 'blocker' | 'warning',
+      code: string,
+      message: string,
+      field?: string,
+      guidelineReference?: string,
+    ) => {
+      const issue: MaternityPrecheckIssue = {
+        code,
+        field,
+        message,
+        guideline_reference: guidelineReference,
+      };
+      if (severity === 'blocker') {
+        blockers.push(issue);
+      } else {
+        warnings.push(issue);
+      }
+      trace.push({ rule_id: code, severity, message });
+    };
+
+    const toNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const deliveryId = birthData?.delivery_id;
+    const birthOrder = toNumber(birthData?.birth_order) || 1;
+    const birthOutcome = String(birthData?.birth_outcome || '').trim();
+    const sex = String(birthData?.sex || '').trim();
+
+    if (!deliveryId) {
+      addIssue('blocker', 'birth.missing_delivery_id', 'Delivery record is required before birth outcome capture.', 'delivery_id');
+    }
+    if (!birthOutcome) {
+      addIssue('blocker', 'birth.missing_outcome', 'Birth outcome is required.', 'birth_outcome');
+    }
+    if (!sex) {
+      addIssue('blocker', 'birth.missing_sex', 'Newborn sex is required.', 'sex');
+    }
+
+    if (deliveryId) {
+      const deliveryRows = await tenantDb.query(`SELECT id FROM deliveries WHERE id = $1`, [deliveryId]);
+      if (deliveryRows.length === 0) {
+        addIssue('blocker', 'birth.delivery_not_found', 'Delivery record was not found.', 'delivery_id');
+      }
+
+      const duplicateOrderRows = await tenantDb.query(
+        `SELECT id FROM birth_outcomes WHERE delivery_id = $1 AND birth_order = $2 LIMIT 1`,
+        [deliveryId, birthOrder],
+      );
+      if (duplicateOrderRows.length > 0) {
+        addIssue(
+          'blocker',
+          'birth.duplicate_birth_order',
+          'Birth order already exists for this delivery.',
+          'birth_order',
+        );
+      }
+    }
+
+    if (birthData?.resuscitation_required && !String(birthData?.resuscitation_type || '').trim()) {
+      addIssue(
+        'blocker',
+        'birth.resuscitation_type_required',
+        'Resuscitation type is required when resuscitation is marked as required.',
+        'resuscitation_type',
+      );
+    }
+
+    const birthWeight = toNumber(birthData?.birth_weight);
+    if (birthWeight !== null && birthWeight < 2.5) {
+      doctorEscalationRequired = true;
+      suggestedOrders.add('Neonatal low-birth-weight monitoring bundle');
+      addIssue(
+        'warning',
+        'birth.low_birth_weight',
+        'Low birth weight detected (<2.5 kg); enhanced neonatal monitoring recommended.',
+        'birth_weight',
+        'WHO low birth weight newborn care guidance',
+      );
+    }
+
+    const apgar5 = toNumber(birthData?.apgar_5min);
+    if (apgar5 !== null && apgar5 < 7) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Escalate to neonatal resuscitation/review pathway.');
+      addIssue(
+        'warning',
+        'birth.low_apgar_5min',
+        'Low APGAR at 5 minutes detected (<7).',
+        'apgar_5min',
+      );
+    }
+
+    const newbornOutcome = String(birthData?.newborn_outcome || '').trim().toLowerCase();
+    const timeOfDeath = birthData?.time_of_death;
+    if (newbornOutcome === 'neonatal_death' && !timeOfDeath) {
+      addIssue(
+        'blocker',
+        'birth.time_of_death_required',
+        'Time of death is required when newborn outcome is neonatal death.',
+        'time_of_death',
+      );
+    }
+
+    const normalizedOutcome = birthOutcome.toLowerCase();
+    if (
+      (normalizedOutcome === 'stillbirth' || normalizedOutcome === 'neonatal_death') &&
+      !String(birthData?.cause_of_death || '').trim()
+    ) {
+      requiredActions.add('Document cause of death before case closure.');
+      addIssue(
+        'warning',
+        'birth.cause_of_death_missing',
+        'Cause of death should be documented for stillbirth/neonatal death.',
+        'cause_of_death',
+      );
+    }
+
+    return this.createPrecheckResponse(
+      blockers,
+      warnings,
+      requiredActions,
+      suggestedOrders,
+      trace,
+      doctorEscalationRequired,
+    );
+  }
+
+  async precheckPostnatalVisit(tenantDb: DataSource, visitData: any): Promise<MaternityPrecheckResponse> {
+    const blockers: MaternityPrecheckIssue[] = [];
+    const warnings: MaternityPrecheckIssue[] = [];
+    const requiredActions = new Set<string>();
+    const suggestedOrders = new Set<string>();
+    const trace: MaternityPrecheckTrace[] = [];
+    let doctorEscalationRequired = false;
+
+    const addIssue = (
+      severity: 'blocker' | 'warning',
+      code: string,
+      message: string,
+      field?: string,
+      guidelineReference?: string,
+    ) => {
+      const issue: MaternityPrecheckIssue = {
+        code,
+        field,
+        message,
+        guideline_reference: guidelineReference,
+      };
+      if (severity === 'blocker') {
+        blockers.push(issue);
+      } else {
+        warnings.push(issue);
+      }
+      trace.push({ rule_id: code, severity, message });
+    };
+
+    const toNumber = (value: any): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const enrollmentId = visitData?.maternity_enrollment_id;
+    const patientId = visitData?.patient_id;
+    const deliveryId = visitData?.delivery_id;
+    const visitDate = this.normalizeToDateOnly(visitData?.visit_date);
+    const nextVisitDate = this.normalizeToDateOnly(visitData?.next_visit_date);
+
+    if (!enrollmentId) {
+      addIssue('blocker', 'postnatal.missing_enrollment_id', 'Maternity enrollment is required.', 'maternity_enrollment_id');
+    }
+    if (!patientId) {
+      addIssue('blocker', 'postnatal.missing_patient_id', 'Patient is required.', 'patient_id');
+    }
+    if (!deliveryId) {
+      addIssue('blocker', 'postnatal.missing_delivery_id', 'Delivery record is required for postnatal visit.', 'delivery_id');
+    }
+    if (!visitDate) {
+      addIssue('blocker', 'postnatal.invalid_visit_date', 'Valid postnatal visit date is required.', 'visit_date');
+    }
+
+    let enrollment: any | null = null;
+    let delivery: any | null = null;
+
+    if (enrollmentId) {
+      const enrollmentRows = await tenantDb.query(
+        `SELECT id, patient_id FROM maternity_enrollments WHERE id = $1`,
+        [enrollmentId],
+      );
+      if (enrollmentRows.length === 0) {
+        addIssue('blocker', 'postnatal.enrollment_not_found', 'Maternity enrollment was not found.', 'maternity_enrollment_id');
+      } else {
+        enrollment = enrollmentRows[0];
+      }
+    }
+
+    if (deliveryId) {
+      const deliveryRows = await tenantDb.query(
+        `SELECT id, patient_id, delivery_date, maternity_enrollment_id FROM deliveries WHERE id = $1`,
+        [deliveryId],
+      );
+      if (deliveryRows.length === 0) {
+        addIssue('blocker', 'postnatal.delivery_not_found', 'Delivery record was not found.', 'delivery_id');
+      } else {
+        delivery = deliveryRows[0];
+      }
+    }
+
+    if (enrollment && patientId && enrollment.patient_id !== patientId) {
+      addIssue(
+        'blocker',
+        'postnatal.patient_enrollment_mismatch',
+        'Patient does not match the selected maternity enrollment.',
+        'patient_id',
+      );
+    }
+
+    if (delivery && patientId && delivery.patient_id !== patientId) {
+      addIssue(
+        'blocker',
+        'postnatal.patient_delivery_mismatch',
+        'Patient does not match the selected delivery record.',
+        'patient_id',
+      );
+    }
+
+    if (delivery && enrollmentId && delivery.maternity_enrollment_id !== enrollmentId) {
+      addIssue(
+        'blocker',
+        'postnatal.delivery_enrollment_mismatch',
+        'Delivery record does not belong to the selected maternity enrollment.',
+        'delivery_id',
+      );
+    }
+
+    if (visitDate && delivery?.delivery_date) {
+      const deliveryDate = this.normalizeToDateOnly(delivery.delivery_date);
+      if (deliveryDate && visitDate < deliveryDate) {
+        addIssue(
+          'blocker',
+          'postnatal.before_delivery',
+          'Postnatal visit date cannot be before delivery date.',
+          'visit_date',
+        );
+      }
+
+      if (deliveryDate) {
+        const daysPostpartum = Math.floor(
+          (visitDate.getTime() - deliveryDate.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (daysPostpartum > 42) {
+          addIssue(
+            'warning',
+            'postnatal.outside_42_day_window',
+            'Visit is beyond 42 postpartum days; confirm if this should be a routine postpartum follow-up.',
+            'visit_date',
+          );
+        }
+      }
+    }
+
+    if (visitDate && nextVisitDate && nextVisitDate < visitDate) {
+      addIssue(
+        'blocker',
+        'postnatal.next_visit_before_visit',
+        'Next visit date cannot be earlier than current postnatal visit date.',
+        'next_visit_date',
+      );
+    }
+
+    const systolic = toNumber(visitData?.blood_pressure_systolic);
+    const diastolic = toNumber(visitData?.blood_pressure_diastolic);
+    const temperature = toNumber(visitData?.temperature);
+    const dangerSigns = String(visitData?.danger_signs || '').trim();
+
+    if ((systolic !== null && systolic >= 160) || (diastolic !== null && diastolic >= 110)) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Immediate postpartum hypertension/eclampsia review is required.');
+      addIssue(
+        'blocker',
+        'postnatal.severe_hypertension',
+        'Severe postpartum hypertension detected.',
+        'blood_pressure_systolic',
+        'WHO postnatal maternal danger-sign guidance',
+      );
+    } else if ((systolic !== null && systolic >= 140) || (diastolic !== null && diastolic >= 90)) {
+      doctorEscalationRequired = true;
+      addIssue(
+        'warning',
+        'postnatal.hypertension_warning',
+        'Raised postpartum blood pressure detected; review for hypertensive disorders.',
+        'blood_pressure_systolic',
+      );
+    }
+
+    if (temperature !== null && temperature >= 38) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Assess postpartum infection/sepsis risk.');
+      addIssue(
+        'warning',
+        'postnatal.fever_warning',
+        'Postpartum fever detected; evaluate for infection.',
+        'temperature',
+      );
+    }
+
+    if (dangerSigns) {
+      doctorEscalationRequired = true;
+      requiredActions.add('Document and close maternal danger-sign response plan.');
+      addIssue(
+        'warning',
+        'postnatal.danger_signs_recorded',
+        'Postnatal danger signs were documented and require escalation follow-through.',
+        'danger_signs',
+        'WHO postnatal care danger-sign recommendations',
+      );
+    }
+
+    if (
+      Boolean(visitData?.family_planning_discussed) &&
+      (!visitData?.family_planning_method || String(visitData.family_planning_method).trim() === '')
+    ) {
+      addIssue(
+        'warning',
+        'postnatal.fp_method_missing',
+        'Family planning was discussed but no method was captured.',
+        'family_planning_method',
+      );
+    }
+
+    return this.createPrecheckResponse(
+      blockers,
+      warnings,
+      requiredActions,
+      suggestedOrders,
+      trace,
+      doctorEscalationRequired,
+    );
   }
 
   // ===== ANC VISITS =====
