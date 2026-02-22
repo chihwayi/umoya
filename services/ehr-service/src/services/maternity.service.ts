@@ -56,6 +56,103 @@ export class MaternityService {
     return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
   }
 
+  private normalizeString(raw: any): string | null {
+    if (raw === null || raw === undefined) {
+      return null;
+    }
+    const normalized = String(raw).trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private normalizeBoolean(raw: any): boolean {
+    if (typeof raw === 'string') {
+      return raw === 'true';
+    }
+    return Boolean(raw);
+  }
+
+  private async validateVitalsProvenanceForPersistence(
+    tenantDb: DataSource,
+    options: {
+      patientId: string;
+      visitDate: string;
+      context: 'anc' | 'postnatal';
+      sourceVitalId?: any;
+      autoPopulatedAt?: any;
+      overridden?: any;
+      overrideReason?: any;
+    },
+  ): Promise<{
+    sourceVitalId: string | null;
+    autoPopulatedAt: string | null;
+    overridden: boolean;
+    overrideReason: string | null;
+  }> {
+    const sourceVitalId = this.normalizeString(options.sourceVitalId);
+    const overrideReason = this.normalizeString(options.overrideReason);
+    const overridden = this.normalizeBoolean(options.overridden) || Boolean(overrideReason);
+    const contextLabel = options.context === 'anc' ? 'ANC' : 'Postnatal';
+
+    if (overridden && !overrideReason) {
+      throw new BadRequestException(
+        `${contextLabel} vitals override reason is required when auto-populated vitals are edited.`,
+      );
+    }
+    if (overridden && !sourceVitalId) {
+      throw new BadRequestException(
+        `${contextLabel} vitals override requires a source vital record reference.`,
+      );
+    }
+
+    if (!sourceVitalId) {
+      return {
+        sourceVitalId: null,
+        autoPopulatedAt: null,
+        overridden: false,
+        overrideReason: null,
+      };
+    }
+
+    const sourceRows = await tenantDb.query(
+      `SELECT id, patient_id, recorded_at, created_at FROM vitals WHERE id = $1 LIMIT 1`,
+      [sourceVitalId],
+    );
+    if (sourceRows.length === 0) {
+      throw new BadRequestException(`${contextLabel} vitals source record was not found.`);
+    }
+
+    const sourceVital = sourceRows[0];
+    if (options.patientId && sourceVital.patient_id !== options.patientId) {
+      throw new BadRequestException(
+        `${contextLabel} vitals source does not belong to the selected patient.`,
+      );
+    }
+
+    const sourceDate = this.normalizeToDateOnly(sourceVital.recorded_at || sourceVital.created_at);
+    const visitDate = this.normalizeToDateOnly(options.visitDate);
+    if (
+      sourceDate &&
+      visitDate &&
+      sourceDate.getTime() !== visitDate.getTime()
+    ) {
+      throw new BadRequestException(
+        `${contextLabel} vitals source must be captured on the same date as the visit.`,
+      );
+    }
+
+    const parsedAutoPopulatedAt = this.parseDate(options.autoPopulatedAt);
+    const autoPopulatedAt = parsedAutoPopulatedAt
+      ? parsedAutoPopulatedAt.toISOString()
+      : new Date().toISOString();
+
+    return {
+      sourceVitalId,
+      autoPopulatedAt,
+      overridden,
+      overrideReason: overridden ? overrideReason : null,
+    };
+  }
+
   private createPrecheckResponse(
     blockers: MaternityPrecheckIssue[],
     warnings: MaternityPrecheckIssue[],
@@ -598,6 +695,67 @@ export class MaternityService {
         'Next ANC visit date cannot be earlier than current visit date.',
         'next_visit_date',
       );
+    }
+
+    const ancVitalsSourceId = this.normalizeString(visitData?.vitals_source_vital_id);
+    const ancVitalsOverrideReason = this.normalizeString(visitData?.vitals_override_reason);
+    const ancVitalsOverridden =
+      this.normalizeBoolean(visitData?.vitals_overridden) || Boolean(ancVitalsOverrideReason);
+
+    if (ancVitalsOverridden && !ancVitalsOverrideReason) {
+      addIssue(
+        'blocker',
+        'anc.vitals_override_reason_required',
+        'Provide a reason when overriding auto-populated vitals.',
+        'vitals_override_reason',
+      );
+    }
+
+    if (ancVitalsOverridden && !ancVitalsSourceId) {
+      addIssue(
+        'blocker',
+        'anc.vitals_source_required_for_override',
+        'A source vital record is required when overriding auto-populated vitals.',
+        'vitals_source_vital_id',
+      );
+    }
+
+    if (ancVitalsSourceId) {
+      const sourceRows = await tenantDb.query(
+        `SELECT id, patient_id, recorded_at, created_at FROM vitals WHERE id = $1 LIMIT 1`,
+        [ancVitalsSourceId],
+      );
+      if (sourceRows.length === 0) {
+        addIssue(
+          'blocker',
+          'anc.vitals_source_not_found',
+          'Selected source vital record was not found.',
+          'vitals_source_vital_id',
+        );
+      } else {
+        const sourceVital = sourceRows[0];
+        if (patientId && sourceVital.patient_id !== patientId) {
+          addIssue(
+            'blocker',
+            'anc.vitals_source_patient_mismatch',
+            'Selected source vital record belongs to a different patient.',
+            'vitals_source_vital_id',
+          );
+        }
+        if (visitDate) {
+          const sourceDate = this.normalizeToDateOnly(
+            sourceVital.recorded_at || sourceVital.created_at,
+          );
+          if (sourceDate && sourceDate.getTime() !== visitDate.getTime()) {
+            addIssue(
+              'blocker',
+              'anc.vitals_source_date_mismatch',
+              'Selected source vital record is not from the same visit date.',
+              'vitals_source_vital_id',
+            );
+          }
+        }
+      }
     }
 
     if (enrollmentId && visitNumber !== null) {
@@ -1154,6 +1312,67 @@ export class MaternityService {
       );
     }
 
+    const postnatalVitalsSourceId = this.normalizeString(visitData?.vitals_source_vital_id);
+    const postnatalVitalsOverrideReason = this.normalizeString(visitData?.vitals_override_reason);
+    const postnatalVitalsOverridden =
+      this.normalizeBoolean(visitData?.vitals_overridden) || Boolean(postnatalVitalsOverrideReason);
+
+    if (postnatalVitalsOverridden && !postnatalVitalsOverrideReason) {
+      addIssue(
+        'blocker',
+        'postnatal.vitals_override_reason_required',
+        'Provide a reason when overriding auto-populated vitals.',
+        'vitals_override_reason',
+      );
+    }
+
+    if (postnatalVitalsOverridden && !postnatalVitalsSourceId) {
+      addIssue(
+        'blocker',
+        'postnatal.vitals_source_required_for_override',
+        'A source vital record is required when overriding auto-populated vitals.',
+        'vitals_source_vital_id',
+      );
+    }
+
+    if (postnatalVitalsSourceId) {
+      const sourceRows = await tenantDb.query(
+        `SELECT id, patient_id, recorded_at, created_at FROM vitals WHERE id = $1 LIMIT 1`,
+        [postnatalVitalsSourceId],
+      );
+      if (sourceRows.length === 0) {
+        addIssue(
+          'blocker',
+          'postnatal.vitals_source_not_found',
+          'Selected source vital record was not found.',
+          'vitals_source_vital_id',
+        );
+      } else {
+        const sourceVital = sourceRows[0];
+        if (patientId && sourceVital.patient_id !== patientId) {
+          addIssue(
+            'blocker',
+            'postnatal.vitals_source_patient_mismatch',
+            'Selected source vital record belongs to a different patient.',
+            'vitals_source_vital_id',
+          );
+        }
+        if (visitDate) {
+          const sourceDate = this.normalizeToDateOnly(
+            sourceVital.recorded_at || sourceVital.created_at,
+          );
+          if (sourceDate && sourceDate.getTime() !== visitDate.getTime()) {
+            addIssue(
+              'blocker',
+              'postnatal.vitals_source_date_mismatch',
+              'Selected source vital record is not from the same visit date.',
+              'vitals_source_vital_id',
+            );
+          }
+        }
+      }
+    }
+
     const systolic = toNumber(visitData?.blood_pressure_systolic);
     const diastolic = toNumber(visitData?.blood_pressure_diastolic);
     const temperature = toNumber(visitData?.temperature);
@@ -1266,6 +1485,15 @@ export class MaternityService {
     const complicationsList = await this.normalizeConceptArray(tenantDb, complications_snomed);
     const interventionsList = await this.normalizeConceptArray(tenantDb, interventions_snomed);
     const referralConcept = await this.resolveConcept(tenantDb, referral_reason_snomed);
+    const vitalsProvenance = await this.validateVitalsProvenanceForPersistence(tenantDb, {
+      patientId: patient_id,
+      visitDate: visit_date,
+      context: 'anc',
+      sourceVitalId: vitalFields.vitals_source_vital_id,
+      autoPopulatedAt: vitalFields.vitals_auto_populated_at,
+      overridden: vitalFields.vitals_overridden,
+      overrideReason: vitalFields.vitals_override_reason,
+    });
 
     const result = await tenantDb.query(
       `
@@ -1282,13 +1510,14 @@ export class MaternityService {
         complications_snomed, interventions, interventions_snomed, referral_needed,
         referral_reason, referral_reason_snomed_code, referral_reason_snomed_term,
         referral_reason_snomed_module_id, referral_reason_snomed_definition_status,
-        referral_facility, next_visit_date, provider, notes
+        referral_facility, next_visit_date, provider, notes,
+        vitals_source_vital_id, vitals_auto_populated_at, vitals_overridden, vitals_override_reason
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
         $31, $32, $33, $34, $35, $36, $37, $38, $39::jsonb, $40, $41::jsonb,
-        $42, $43, $44, $45, $46, $47, $48
+        $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52
       )
       RETURNING *
       `,
@@ -1342,6 +1571,10 @@ export class MaternityService {
         vitalFields.next_visit_date,
         userId,
         vitalFields.notes,
+        vitalsProvenance.sourceVitalId,
+        vitalsProvenance.autoPopulatedAt,
+        vitalsProvenance.overridden,
+        vitalsProvenance.overrideReason,
       ],
     );
 
@@ -1919,7 +2152,7 @@ export class MaternityService {
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb,
-        $15, $16::jsonb, $17, $18, $19, $20, $21, $22, $23, $24, $25
+        $15, $16::jsonb, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
       )
       RETURNING *
       `,
@@ -1997,6 +2230,15 @@ export class MaternityService {
       tenantDb,
       family_planning_method_snomed,
     );
+    const vitalsProvenance = await this.validateVitalsProvenanceForPersistence(tenantDb, {
+      patientId: patient_id,
+      visitDate: visit_date,
+      context: 'postnatal',
+      sourceVitalId: vitalFields.vitals_source_vital_id,
+      autoPopulatedAt: vitalFields.vitals_auto_populated_at,
+      overridden: vitalFields.vitals_overridden,
+      overrideReason: vitalFields.vitals_override_reason,
+    });
 
     const result = await tenantDb.query(
       `
@@ -2010,12 +2252,13 @@ export class MaternityService {
         family_planning_method_snomed_code, family_planning_method_snomed_term,
         family_planning_method_snomed_module_id, family_planning_method_snomed_definition_status,
         newborn_status, newborn_complications, newborn_complications_snomed,
-        provider, notes, next_visit_date
+        provider, notes, next_visit_date,
+        vitals_source_vital_id, vitals_auto_populated_at, vitals_overridden, vitals_override_reason
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19::jsonb, $20, $21, $22, $23, $24, $25, $26,
-        $27::jsonb, $28, $29
+        $16, $17, $18, $19, $20::jsonb, $21, $22, $23, $24, $25, $26,
+        $27, $28, $29::jsonb, $30, $31, $32, $33, $34, $35, $36
       )
       RETURNING *
       `,
@@ -2052,6 +2295,10 @@ export class MaternityService {
         userId,
         vitalFields.notes,
         vitalFields.next_visit_date,
+        vitalsProvenance.sourceVitalId,
+        vitalsProvenance.autoPopulatedAt,
+        vitalsProvenance.overridden,
+        vitalsProvenance.overrideReason,
       ],
     );
 

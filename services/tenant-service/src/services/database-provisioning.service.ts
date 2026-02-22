@@ -2124,11 +2124,12 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_current_complications_snomed ON maternity_enrollments USING GIN(current_complications_snomed)`);
     
     // ANC Visits (WHO 8-visit model)
-    statements.push(`CREATE TABLE IF NOT EXISTS anc_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_number INTEGER NOT NULL, visit_date DATE NOT NULL, gestational_age INTEGER, gestational_age_days INTEGER, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, respiratory_rate INTEGER, fundal_height DECIMAL(4,1), fetal_heart_rate INTEGER, fetal_presentation VARCHAR(50), fetal_movement VARCHAR(50), edema VARCHAR(50), edema_location TEXT, proteinuria VARCHAR(50), glucose_urine VARCHAR(50), hemoglobin DECIMAL(4,1), blood_group VARCHAR(10), rhesus VARCHAR(10), vdrl_syphilis VARCHAR(20), hiv_status VARCHAR(20), hep_b_status VARCHAR(20), tetanus_immunization BOOLEAN, ipt_malaria INTEGER, iron_folate BOOLEAN, deworming BOOLEAN, insecticide_treated_net BOOLEAN, danger_signs_discussed BOOLEAN, birth_plan_discussed BOOLEAN, complications_identified TEXT, complications_snomed JSONB DEFAULT '[]'::jsonb, interventions TEXT, interventions_snomed JSONB DEFAULT '[]'::jsonb, referral_needed BOOLEAN, referral_reason TEXT, referral_reason_snomed_code VARCHAR(50), referral_reason_snomed_term TEXT, referral_reason_snomed_module_id VARCHAR(50), referral_reason_snomed_definition_status VARCHAR(50), referral_facility VARCHAR(255), next_visit_date DATE, provider UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS anc_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_number INTEGER NOT NULL, visit_date DATE NOT NULL, gestational_age INTEGER, gestational_age_days INTEGER, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, respiratory_rate INTEGER, fundal_height DECIMAL(4,1), fetal_heart_rate INTEGER, fetal_presentation VARCHAR(50), fetal_movement VARCHAR(50), edema VARCHAR(50), edema_location TEXT, proteinuria VARCHAR(50), glucose_urine VARCHAR(50), hemoglobin DECIMAL(4,1), blood_group VARCHAR(10), rhesus VARCHAR(10), vdrl_syphilis VARCHAR(20), hiv_status VARCHAR(20), hep_b_status VARCHAR(20), tetanus_immunization BOOLEAN, ipt_malaria INTEGER, iron_folate BOOLEAN, deworming BOOLEAN, insecticide_treated_net BOOLEAN, danger_signs_discussed BOOLEAN, birth_plan_discussed BOOLEAN, complications_identified TEXT, complications_snomed JSONB DEFAULT '[]'::jsonb, interventions TEXT, interventions_snomed JSONB DEFAULT '[]'::jsonb, referral_needed BOOLEAN, referral_reason TEXT, referral_reason_snomed_code VARCHAR(50), referral_reason_snomed_term TEXT, referral_reason_snomed_module_id VARCHAR(50), referral_reason_snomed_definition_status VARCHAR(50), referral_facility VARCHAR(255), next_visit_date DATE, provider UUID REFERENCES users(id), notes TEXT, vitals_source_vital_id UUID REFERENCES vitals(id), vitals_auto_populated_at TIMESTAMP WITH TIME ZONE, vitals_overridden BOOLEAN DEFAULT false, vitals_override_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_maternity_enrollment_id ON anc_visits(maternity_enrollment_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_patient_id ON anc_visits(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_visit_date ON anc_visits(visit_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_provider ON anc_visits(provider)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_vitals_source ON anc_visits(vitals_source_vital_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_next_visit_date ON anc_visits(next_visit_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_complications_snomed ON anc_visits USING GIN(complications_snomed)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_interventions_snomed ON anc_visits USING GIN(interventions_snomed)`);
@@ -2161,11 +2162,12 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_cause_of_death_snomed ON birth_outcomes(cause_of_death_snomed_code)`);
     
     // Postnatal Visits
-    statements.push(`CREATE TABLE IF NOT EXISTS postnatal_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, delivery_id UUID REFERENCES deliveries(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_date DATE NOT NULL, days_postpartum INTEGER, weight DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, general_condition VARCHAR(50), uterine_involution VARCHAR(50), lochia VARCHAR(50), perineum_condition VARCHAR(50), breast_condition VARCHAR(50), breastfeeding_status VARCHAR(50), breastfeeding_problems TEXT, emotional_status VARCHAR(50), danger_signs TEXT, danger_signs_snomed JSONB DEFAULT '[]'::jsonb, family_planning_discussed BOOLEAN, family_planning_method VARCHAR(100), family_planning_method_snomed_code VARCHAR(50), family_planning_method_snomed_term TEXT, family_planning_method_snomed_module_id VARCHAR(50), family_planning_method_snomed_definition_status VARCHAR(50), newborn_status VARCHAR(50), newborn_complications TEXT, newborn_complications_snomed JSONB DEFAULT '[]'::jsonb, provider UUID REFERENCES users(id), notes TEXT, next_visit_date DATE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+    statements.push(`CREATE TABLE IF NOT EXISTS postnatal_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, delivery_id UUID REFERENCES deliveries(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_date DATE NOT NULL, days_postpartum INTEGER, weight DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, general_condition VARCHAR(50), uterine_involution VARCHAR(50), lochia VARCHAR(50), perineum_condition VARCHAR(50), breast_condition VARCHAR(50), breastfeeding_status VARCHAR(50), breastfeeding_problems TEXT, emotional_status VARCHAR(50), danger_signs TEXT, danger_signs_snomed JSONB DEFAULT '[]'::jsonb, family_planning_discussed BOOLEAN, family_planning_method VARCHAR(100), family_planning_method_snomed_code VARCHAR(50), family_planning_method_snomed_term TEXT, family_planning_method_snomed_module_id VARCHAR(50), family_planning_method_snomed_definition_status VARCHAR(50), newborn_status VARCHAR(50), newborn_complications TEXT, newborn_complications_snomed JSONB DEFAULT '[]'::jsonb, provider UUID REFERENCES users(id), notes TEXT, next_visit_date DATE, vitals_source_vital_id UUID REFERENCES vitals(id), vitals_auto_populated_at TIMESTAMP WITH TIME ZONE, vitals_overridden BOOLEAN DEFAULT false, vitals_override_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_maternity_enrollment_id ON postnatal_visits(maternity_enrollment_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_patient_id ON postnatal_visits(patient_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_visit_date ON postnatal_visits(visit_date)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_provider ON postnatal_visits(provider)`);
+    statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_vitals_source ON postnatal_visits(vitals_source_vital_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_newborn_complications_snomed ON postnatal_visits USING GIN(newborn_complications_snomed)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_family_planning_snomed ON postnatal_visits(family_planning_method_snomed_code)`);
     
@@ -5518,6 +5520,10 @@ export class DatabaseProvisioningService {
       `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_term TEXT`,
       `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_module_id VARCHAR(50)`,
       `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_definition_status VARCHAR(50)`,
+      `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_source_vital_id UUID REFERENCES vitals(id)`,
+      `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_auto_populated_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_overridden BOOLEAN DEFAULT false`,
+      `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_override_reason TEXT`,
       `ALTER TABLE ultrasound_scans ADD COLUMN IF NOT EXISTS anomalies_snomed JSONB DEFAULT '[]'::jsonb`,
       `ALTER TABLE ultrasound_scans ADD COLUMN IF NOT EXISTS findings_snomed JSONB DEFAULT '[]'::jsonb`,
       `ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS indication_snomed_code VARCHAR(50)`,
@@ -5537,6 +5543,10 @@ export class DatabaseProvisioningService {
       `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS family_planning_method_snomed_module_id VARCHAR(50)`,
       `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS family_planning_method_snomed_definition_status VARCHAR(50)`,
       `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS newborn_complications_snomed JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_source_vital_id UUID REFERENCES vitals(id)`,
+      `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_auto_populated_at TIMESTAMP WITH TIME ZONE`,
+      `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_overridden BOOLEAN DEFAULT false`,
+      `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_override_reason TEXT`,
       `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_code VARCHAR(50)`,
       `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_term TEXT`,
       `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_module_id VARCHAR(50)`,
@@ -5558,6 +5568,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_anc_visits_complications_snomed ON anc_visits USING GIN(complications_snomed)`,
       `CREATE INDEX IF NOT EXISTS idx_anc_visits_interventions_snomed ON anc_visits USING GIN(interventions_snomed)`,
       `CREATE INDEX IF NOT EXISTS idx_anc_visits_referral_reason_snomed ON anc_visits(referral_reason_snomed_code)`,
+      `CREATE INDEX IF NOT EXISTS idx_anc_visits_vitals_source ON anc_visits(vitals_source_vital_id)`,
       `CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_anomalies_snomed ON ultrasound_scans USING GIN(anomalies_snomed)`,
       `CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_findings_snomed ON ultrasound_scans USING GIN(findings_snomed)`,
       `CREATE INDEX IF NOT EXISTS idx_deliveries_maternal_complications_snomed ON deliveries USING GIN(maternal_complications_snomed)`,
@@ -5566,6 +5577,7 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_birth_outcomes_cause_of_death_snomed ON birth_outcomes(cause_of_death_snomed_code)`,
       `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_newborn_complications_snomed ON postnatal_visits USING GIN(newborn_complications_snomed)`,
       `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_family_planning_snomed ON postnatal_visits(family_planning_method_snomed_code)`,
+      `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_vitals_source ON postnatal_visits(vitals_source_vital_id)`,
       `CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_snomed ON maternity_risk_factors(risk_factor_snomed_code)`,
       `CREATE INDEX IF NOT EXISTS idx_triage_chief_complaint_snomed ON triage_assessments(chief_complaint_snomed_code)`,
       `CREATE INDEX IF NOT EXISTS idx_triage_observations_snomed ON triage_assessments USING GIN(observations_snomed)`,

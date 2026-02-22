@@ -230,9 +230,9 @@ Planned schema additions (proposed):
 
 Status key: `pending`, `in_progress`, `completed`
 
-- M0 Security + Contract Stabilization: `pending`
-- M1 Core Maternity Rule Engine: `pending`
-- M2 Vitals Auto-Propagation + Provenance: `pending`
+- M0 Security + Contract Stabilization: `completed`
+- M1 Core Maternity Rule Engine: `completed`
+- M2 Vitals Auto-Propagation + Provenance: `in_progress`
 - M3 Nurse-Doctor Sync Pipeline: `pending`
 - M4 Intelligent UI Hardening: `pending`
 - M5 Guideline Encoding + Traceability: `pending`

@@ -28,6 +28,7 @@ type TabKey = 'summary' | 'anc' | 'delivery' | 'postnatal' | 'risk';
 
 type NumberLike = string | number | null | undefined;
 type VitalsSource = { id?: string; recordedAt?: string | null; recordedByName?: string | null };
+type VitalsSnapshot = Record<string, string>;
 
 const riskStyles: Record<string, string> = {
   high: 'bg-red-100 text-red-700 border-red-300',
@@ -363,6 +364,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   const [postnatalVitalsSyncing, setPostnatalVitalsSyncing] = useState(false);
   const [ancVitalsSource, setAncVitalsSource] = useState<VitalsSource | null>(null);
   const [postnatalVitalsSource, setPostnatalVitalsSource] = useState<VitalsSource | null>(null);
+  const [ancVitalsSnapshot, setAncVitalsSnapshot] = useState<VitalsSnapshot | null>(null);
+  const [postnatalVitalsSnapshot, setPostnatalVitalsSnapshot] = useState<VitalsSnapshot | null>(null);
+  const [ancVitalsAutoPopulatedAt, setAncVitalsAutoPopulatedAt] = useState<string | null>(null);
+  const [postnatalVitalsAutoPopulatedAt, setPostnatalVitalsAutoPopulatedAt] = useState<string | null>(null);
+  const [ancVitalsOverrideReason, setAncVitalsOverrideReason] = useState('');
+  const [postnatalVitalsOverrideReason, setPostnatalVitalsOverrideReason] = useState('');
 
   // SNOMED concept state for ANC visits
   const [ancComplicationsConcepts, setAncComplicationsConcepts] = useState<SnomedConcept[]>([]);
@@ -536,6 +543,20 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     return (enrollment.anc_visits?.length || 0) + 1;
   }, [enrollment]);
 
+  const ancVitalsOverridden = useMemo(() => {
+    if (!ancVitalsSource?.id || !ancVitalsSnapshot) return false;
+    return Object.entries(ancVitalsSnapshot).some(
+      ([field, expected]) => String((ancForm as any)[field] ?? '') !== expected,
+    );
+  }, [ancForm, ancVitalsSnapshot, ancVitalsSource?.id]);
+
+  const postnatalVitalsOverridden = useMemo(() => {
+    if (!postnatalVitalsSource?.id || !postnatalVitalsSnapshot) return false;
+    return Object.entries(postnatalVitalsSnapshot).some(
+      ([field, expected]) => String((postnatalForm as any)[field] ?? '') !== expected,
+    );
+  }, [postnatalForm, postnatalVitalsSnapshot, postnatalVitalsSource?.id]);
+
   const loadLatestSameDayVitals = useCallback(
     async (patientId: string, visitDate: string) => {
       if (!patientId || !visitDate) return null;
@@ -580,6 +601,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
         if (!latestVital) {
           setAncVitalsSource(null);
+          setAncVitalsSnapshot(null);
+          setAncVitalsAutoPopulatedAt(null);
+          setAncVitalsOverrideReason('');
           return;
         }
 
@@ -596,30 +620,33 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         const pulse = latestVital?.pulse ?? latestVital?.heartRate ?? latestVital?.heart_rate;
         const respiratoryRate = latestVital?.respiratoryRate ?? latestVital?.respiratory_rate;
 
-        setAncForm((prev) => ({
-          ...prev,
-          weight:
-            latestVital?.weight !== null && latestVital?.weight !== undefined
-              ? String(latestVital.weight)
-              : prev.weight,
-          height:
-            latestVital?.height !== null && latestVital?.height !== undefined
-              ? String(latestVital.height)
-              : prev.height,
-          blood_pressure_systolic:
-            systolic !== null && systolic !== undefined ? String(systolic) : prev.blood_pressure_systolic,
-          blood_pressure_diastolic:
-            diastolic !== null && diastolic !== undefined ? String(diastolic) : prev.blood_pressure_diastolic,
-          temperature:
-            latestVital?.temperature !== null && latestVital?.temperature !== undefined
-              ? String(latestVital.temperature)
-              : prev.temperature,
-          pulse: pulse !== null && pulse !== undefined ? String(pulse) : prev.pulse,
-          respiratory_rate:
-            respiratoryRate !== null && respiratoryRate !== undefined
-              ? String(respiratoryRate)
-              : prev.respiratory_rate,
-        }));
+        const populatedFields: VitalsSnapshot = {};
+        if (latestVital?.weight !== null && latestVital?.weight !== undefined) {
+          populatedFields.weight = String(latestVital.weight);
+        }
+        if (latestVital?.height !== null && latestVital?.height !== undefined) {
+          populatedFields.height = String(latestVital.height);
+        }
+        if (systolic !== null && systolic !== undefined) {
+          populatedFields.blood_pressure_systolic = String(systolic);
+        }
+        if (diastolic !== null && diastolic !== undefined) {
+          populatedFields.blood_pressure_diastolic = String(diastolic);
+        }
+        if (latestVital?.temperature !== null && latestVital?.temperature !== undefined) {
+          populatedFields.temperature = String(latestVital.temperature);
+        }
+        if (pulse !== null && pulse !== undefined) {
+          populatedFields.pulse = String(pulse);
+        }
+        if (respiratoryRate !== null && respiratoryRate !== undefined) {
+          populatedFields.respiratory_rate = String(respiratoryRate);
+        }
+
+        setAncForm((prev) => ({ ...prev, ...populatedFields }));
+        setAncVitalsSnapshot(Object.keys(populatedFields).length > 0 ? populatedFields : null);
+        setAncVitalsAutoPopulatedAt(new Date().toISOString());
+        setAncVitalsOverrideReason('');
 
         setAncVitalsSource({
           id: latestVital?.id,
@@ -637,6 +664,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         if (!cancelled) {
           console.error('Failed to auto-load same-day ANC vitals', error);
           setAncVitalsSource(null);
+          setAncVitalsSnapshot(null);
+          setAncVitalsAutoPopulatedAt(null);
+          setAncVitalsOverrideReason('');
         }
       } finally {
         if (!cancelled) {
@@ -665,6 +695,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
 
         if (!latestVital) {
           setPostnatalVitalsSource(null);
+          setPostnatalVitalsSnapshot(null);
+          setPostnatalVitalsAutoPopulatedAt(null);
+          setPostnatalVitalsOverrideReason('');
           return;
         }
 
@@ -680,22 +713,27 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
           (bpMatch ? Number(bpMatch[2]) : null);
         const pulse = latestVital?.pulse ?? latestVital?.heartRate ?? latestVital?.heart_rate;
 
-        setPostnatalForm((prev) => ({
-          ...prev,
-          weight:
-            latestVital?.weight !== null && latestVital?.weight !== undefined
-              ? String(latestVital.weight)
-              : prev.weight,
-          blood_pressure_systolic:
-            systolic !== null && systolic !== undefined ? String(systolic) : prev.blood_pressure_systolic,
-          blood_pressure_diastolic:
-            diastolic !== null && diastolic !== undefined ? String(diastolic) : prev.blood_pressure_diastolic,
-          temperature:
-            latestVital?.temperature !== null && latestVital?.temperature !== undefined
-              ? String(latestVital.temperature)
-              : prev.temperature,
-          pulse: pulse !== null && pulse !== undefined ? String(pulse) : prev.pulse,
-        }));
+        const populatedFields: VitalsSnapshot = {};
+        if (latestVital?.weight !== null && latestVital?.weight !== undefined) {
+          populatedFields.weight = String(latestVital.weight);
+        }
+        if (systolic !== null && systolic !== undefined) {
+          populatedFields.blood_pressure_systolic = String(systolic);
+        }
+        if (diastolic !== null && diastolic !== undefined) {
+          populatedFields.blood_pressure_diastolic = String(diastolic);
+        }
+        if (latestVital?.temperature !== null && latestVital?.temperature !== undefined) {
+          populatedFields.temperature = String(latestVital.temperature);
+        }
+        if (pulse !== null && pulse !== undefined) {
+          populatedFields.pulse = String(pulse);
+        }
+
+        setPostnatalForm((prev) => ({ ...prev, ...populatedFields }));
+        setPostnatalVitalsSnapshot(Object.keys(populatedFields).length > 0 ? populatedFields : null);
+        setPostnatalVitalsAutoPopulatedAt(new Date().toISOString());
+        setPostnatalVitalsOverrideReason('');
 
         setPostnatalVitalsSource({
           id: latestVital?.id,
@@ -713,6 +751,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         if (!cancelled) {
           console.error('Failed to auto-load same-day postnatal vitals', error);
           setPostnatalVitalsSource(null);
+          setPostnatalVitalsSnapshot(null);
+          setPostnatalVitalsAutoPopulatedAt(null);
+          setPostnatalVitalsOverrideReason('');
         }
       } finally {
         if (!cancelled) {
@@ -726,6 +767,22 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       cancelled = true;
     };
   }, [postnatalFormOpen, postnatalForm.visit_date, enrollment?.patient_id, loadLatestSameDayVitals]);
+
+  useEffect(() => {
+    if (ancFormOpen) return;
+    setAncVitalsSource(null);
+    setAncVitalsSnapshot(null);
+    setAncVitalsAutoPopulatedAt(null);
+    setAncVitalsOverrideReason('');
+  }, [ancFormOpen]);
+
+  useEffect(() => {
+    if (postnatalFormOpen) return;
+    setPostnatalVitalsSource(null);
+    setPostnatalVitalsSnapshot(null);
+    setPostnatalVitalsAutoPopulatedAt(null);
+    setPostnatalVitalsOverrideReason('');
+  }, [postnatalFormOpen]);
 
   const runMaternityPrecheck = useCallback(
     async (runCheck: () => Promise<any>, contextLabel: string) => {
@@ -782,6 +839,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       return;
     }
 
+    if (ancVitalsOverridden && !ancVitalsOverrideReason.trim()) {
+      showError(
+        'Override reason required',
+        'Please capture why auto-populated vitals were overridden before saving.',
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
       const payload = {
@@ -817,6 +882,11 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         referral_facility: ancForm.referral_facility,
         next_visit_date: ancForm.next_visit_date || null,
         notes: ancForm.notes,
+        vitals_source_vital_id: ancVitalsSource?.id || null,
+        vitals_auto_populated_at: ancVitalsSource?.id ? ancVitalsAutoPopulatedAt : null,
+        vitals_overridden: ancVitalsSource?.id ? ancVitalsOverridden : false,
+        vitals_override_reason:
+          ancVitalsSource?.id && ancVitalsOverridden ? ancVitalsOverrideReason.trim() : null,
       };
 
       const ancPrecheckPassed = await runMaternityPrecheck(
@@ -1009,6 +1079,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
       return;
     }
 
+    if (postnatalVitalsOverridden && !postnatalVitalsOverrideReason.trim()) {
+      showError(
+        'Override reason required',
+        'Please capture why auto-populated vitals were overridden before saving.',
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
       const payload = {
@@ -1038,6 +1116,13 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         newborn_complications_snomed: postnatalNewbornComplicationsConcepts,
         notes: postnatalForm.notes || null,
         next_visit_date: postnatalForm.next_visit_date || null,
+        vitals_source_vital_id: postnatalVitalsSource?.id || null,
+        vitals_auto_populated_at: postnatalVitalsSource?.id ? postnatalVitalsAutoPopulatedAt : null,
+        vitals_overridden: postnatalVitalsSource?.id ? postnatalVitalsOverridden : false,
+        vitals_override_reason:
+          postnatalVitalsSource?.id && postnatalVitalsOverridden
+            ? postnatalVitalsOverrideReason.trim()
+            : null,
       };
 
       const postnatalPrecheckPassed = await runMaternityPrecheck(
@@ -1238,6 +1323,11 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   {ancVitalsSource.recordedByName ? ` by ${ancVitalsSource.recordedByName}` : ''}.
                 </div>
               )}
+              {!ancVitalsSyncing && ancVitalsSource && ancVitalsOverridden && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  Auto-populated vitals were edited. Capture the override reason before saving.
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TextInput
                   label="Visit Date"
@@ -1340,6 +1430,18 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   onChange={(val) => setAncForm((prev) => ({ ...prev, hemoglobin: val }))}
                 />
               </div>
+
+              {!ancVitalsSyncing && ancVitalsSource && ancVitalsOverridden && (
+                <div className="mt-4">
+                  <TextAreaInput
+                    label="Reason for overriding auto-populated vitals"
+                    value={ancVitalsOverrideReason}
+                    onChange={setAncVitalsOverrideReason}
+                    rows={2}
+                    placeholder="Explain clinical reason for changing same-day nurse vitals."
+                  />
+                </div>
+              )}
 
               <Divider />
 
@@ -2051,6 +2153,11 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   {postnatalVitalsSource.recordedByName ? ` by ${postnatalVitalsSource.recordedByName}` : ''}.
                 </div>
               )}
+              {!postnatalVitalsSyncing && postnatalVitalsSource && postnatalVitalsOverridden && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  Auto-populated vitals were edited. Capture the override reason before saving.
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TextInput
                   label="Visit Date"
@@ -2165,6 +2272,18 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   onChange={(val) => setPostnatalForm((prev) => ({ ...prev, newborn_complications: val }))}
                 />
               </div>
+
+              {!postnatalVitalsSyncing && postnatalVitalsSource && postnatalVitalsOverridden && (
+                <div className="mt-4">
+                  <TextAreaInput
+                    label="Reason for overriding auto-populated vitals"
+                    value={postnatalVitalsOverrideReason}
+                    onChange={setPostnatalVitalsOverrideReason}
+                    rows={2}
+                    placeholder="Explain clinical reason for changing same-day nurse vitals."
+                  />
+                </div>
+              )}
 
               <Divider />
 
