@@ -41,6 +41,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [showQuickReference, setShowQuickReference] = useState(false);
   const [viralLoadSource, setViralLoadSource] = useState<'lab_system' | 'manual' | null>(null);
   const [viralLoadAutoPopulated, setViralLoadAutoPopulated] = useState(false);
+  const [visitVitalsAutoPopulatedDate, setVisitVitalsAutoPopulatedDate] = useState<string | null>(null);
+  const [visitVitalsManualOverrideDate, setVisitVitalsManualOverrideDate] = useState<string | null>(null);
   const [labOrderCreated, setLabOrderCreated] = useState(false);
   const [creatingLabOrder, setCreatingLabOrder] = useState(false);
   const [visitPreparationChecklist, setVisitPreparationChecklist] = useState<any>(null);
@@ -909,6 +911,135 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     loadMatchingLabResults();
   }, [form.visitDate, enrollment.patient_id]);
 
+  // Auto-populate visit vitals when nurse vitals exist on the same date
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSameDayVitals = async () => {
+      if (!form.visitDate) {
+        return;
+      }
+
+      // Respect manual edits for the current visit date
+      if (visitVitalsManualOverrideDate === form.visitDate) {
+        return;
+      }
+
+      // Avoid repeat fetch once current date has been hydrated
+      if (visitVitalsAutoPopulatedDate === form.visitDate) {
+        return;
+      }
+
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      try {
+        const response = await ehrApi.getVitals(enrollment.patient_id, token, tenantSlug, {
+          limit: 50,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        const vitals = Array.isArray(response.data?.vitals)
+          ? response.data.vitals
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
+
+        const toIsoDate = (raw: any): string | null => {
+          if (!raw) return null;
+          const parsed = new Date(raw);
+          if (Number.isNaN(parsed.getTime())) return null;
+          return parsed.toISOString().split('T')[0];
+        };
+
+        const toTimestamp = (vital: any) => {
+          const raw =
+            vital.recordedAt ||
+            vital.recorded_at ||
+            vital.createdAt ||
+            vital.created_at ||
+            vital.updatedAt ||
+            vital.updated_at;
+          const parsed = raw ? new Date(raw).getTime() : 0;
+          return Number.isNaN(parsed) ? 0 : parsed;
+        };
+
+        const sameDayVitals = vitals
+          .filter((vital: any) => {
+            const vitalDate = toIsoDate(
+              vital.recordedAt ||
+                vital.recorded_at ||
+                vital.createdAt ||
+                vital.created_at ||
+                vital.measurementDate ||
+                vital.measurement_date ||
+                vital.date
+            );
+            return vitalDate === form.visitDate;
+          })
+          .sort((a: any, b: any) => toTimestamp(b) - toTimestamp(a));
+
+        const latestSameDayVitals = sameDayVitals[0];
+
+        if (latestSameDayVitals) {
+          const resolvedWeight = latestSameDayVitals.weight ?? latestSameDayVitals.weightKg;
+          const resolvedHeight = latestSameDayVitals.height ?? latestSameDayVitals.heightCm;
+          const resolvedBloodPressure =
+            latestSameDayVitals.bloodPressure ||
+            latestSameDayVitals.blood_pressure ||
+            ((latestSameDayVitals.bloodPressureSystolic !== undefined ||
+              latestSameDayVitals.bloodPressureDiastolic !== undefined) &&
+            (latestSameDayVitals.bloodPressureSystolic !== null ||
+              latestSameDayVitals.bloodPressureDiastolic !== null)
+              ? `${latestSameDayVitals.bloodPressureSystolic ?? '--'}/${latestSameDayVitals.bloodPressureDiastolic ?? '--'}`
+              : '');
+
+          setForm((prev) => ({
+            ...prev,
+            weightKg:
+              resolvedWeight !== null && resolvedWeight !== undefined
+                ? String(resolvedWeight)
+                : prev.weightKg,
+            heightCm:
+              resolvedHeight !== null && resolvedHeight !== undefined
+                ? String(resolvedHeight)
+                : prev.heightCm,
+            bloodPressure: resolvedBloodPressure ? String(resolvedBloodPressure) : prev.bloodPressure,
+          }));
+          setVisitVitalsAutoPopulatedDate(form.visitDate);
+          return;
+        }
+
+        // Clear stale auto-populated vitals when visit date changes to a date with no nurse vitals
+        if (visitVitalsAutoPopulatedDate && visitVitalsAutoPopulatedDate !== form.visitDate) {
+          setForm((prev) => ({
+            ...prev,
+            weightKg: '',
+            heightCm: '',
+            bloodPressure: '',
+          }));
+          setVisitVitalsAutoPopulatedDate(null);
+        }
+      } catch (error) {
+        console.error('Failed to load same-day vitals for visit form:', error);
+      }
+    };
+
+    loadSameDayVitals();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    form.visitDate,
+    enrollment.patient_id,
+    tenantSlug,
+    visitVitalsManualOverrideDate,
+    visitVitalsAutoPopulatedDate,
+  ]);
+
   // Handle manual override of viral load
   const handleViralLoadChange = (value: string) => {
     setForm(prev => ({ ...prev, viralLoad: value }));
@@ -916,6 +1047,19 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     if (viralLoadAutoPopulated) {
       setViralLoadSource('manual');
       setViralLoadAutoPopulated(false);
+    }
+  };
+
+  const handleVisitVitalFieldChange = (
+    field: 'weightKg' | 'heightCm' | 'bloodPressure',
+    value: string,
+  ) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (form.visitDate) {
+      setVisitVitalsManualOverrideDate(form.visitDate);
+      if (visitVitalsAutoPopulatedDate === form.visitDate) {
+        setVisitVitalsAutoPopulatedDate(null);
+      }
     }
   };
 
@@ -1343,6 +1487,15 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           {activeStep === 2 && shouldShowClinicalFields() && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-slate-900">Step 2: Vital Signs & Measurements</h3>
+
+              {visitVitalsAutoPopulatedDate === form.visitDate && (
+                <div
+                  data-testid="same-day-vitals-autofill-note"
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+                >
+                  Same-day nurse vitals were auto-filled for this visit. You can still edit values if needed.
+                </div>
+              )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -1353,7 +1506,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                     type="number"
                     step="0.1"
                     value={form.weightKg}
-                    onChange={(e) => setForm(prev => ({ ...prev, weightKg: e.target.value }))}
+                    onChange={(e) => handleVisitVitalFieldChange('weightKg', e.target.value)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
@@ -1366,7 +1519,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                     type="number"
                     step="0.1"
                     value={form.heightCm}
-                    onChange={(e) => setForm(prev => ({ ...prev, heightCm: e.target.value }))}
+                    onChange={(e) => handleVisitVitalFieldChange('heightCm', e.target.value)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
@@ -1409,7 +1562,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                     type="text"
                     placeholder="e.g., 120/80"
                     value={form.bloodPressure}
-                    onChange={(e) => setForm(prev => ({ ...prev, bloodPressure: e.target.value }))}
+                    onChange={(e) => handleVisitVitalFieldChange('bloodPressure', e.target.value)}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>

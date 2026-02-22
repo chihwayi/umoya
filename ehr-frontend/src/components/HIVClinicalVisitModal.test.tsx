@@ -16,6 +16,7 @@ jest.mock('../services/api', () => ({
     getHivVisitCount: jest.fn(),
     getApprovedArvChange: jest.fn(),
     getHivLookupData: jest.fn(),
+    getVitals: jest.fn(),
     getMatchingLabResults: jest.fn(),
     createHivClinicalVisit: jest.fn(),
   },
@@ -63,6 +64,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
       },
     });
     (ehrApi.getApprovedArvChange as jest.Mock).mockResolvedValue({ data: null });
+    (ehrApi.getVitals as jest.Mock).mockResolvedValue({ data: { vitals: [] } });
     (ehrApi.getMatchingLabResults as jest.Mock).mockResolvedValue({ data: { matched: false, viralLoad: null } });
     (ehrApi.createHivClinicalVisit as jest.Mock).mockResolvedValue({ data: { id: 'visit-1' } });
 
@@ -122,5 +124,63 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
 
     const saveButton = screen.getByRole('button', { name: /save visit/i }) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
+  });
+
+  it('auto-populates visit vitals from same-day nurse vitals and allows manual override', async () => {
+    const visitDate = new Date().toISOString().split('T')[0];
+    (ehrApi.getVitals as jest.Mock).mockResolvedValue({
+      data: {
+        vitals: [
+          {
+            recordedAt: `${visitDate}T07:45:00.000Z`,
+            weight: 72.5,
+            height: 168,
+            bloodPressure: '118/76',
+          },
+        ],
+      },
+    });
+
+    render(
+      <HIVClinicalVisitModal
+        enrollment={{
+          id: 'enroll-1',
+          patient_id: 'patient-1',
+          first_name: 'Tariro',
+          last_name: 'Dube',
+          enrollment_number: 'ENR-001',
+          gender: 'female',
+          date_of_birth: '1992-03-02',
+        }}
+        tenantSlug="bulawayo-general"
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(ehrApi.getVitals).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Record Clinical Visit/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('same-day-vitals-autofill-note')).toBeTruthy();
+      expect(screen.getByDisplayValue('72.5')).toBeTruthy();
+      expect(screen.getByDisplayValue('168')).toBeTruthy();
+      expect(screen.getByDisplayValue('118/76')).toBeTruthy();
+    });
+
+    const weightInput = screen.getByDisplayValue('72.5') as HTMLInputElement;
+    fireEvent.change(weightInput, { target: { value: '73.1' } });
+
+    await waitFor(() => {
+      expect(weightInput.value).toBe('73.1');
+      expect(screen.queryByTestId('same-day-vitals-autofill-note')).toBeNull();
+    });
   });
 });
