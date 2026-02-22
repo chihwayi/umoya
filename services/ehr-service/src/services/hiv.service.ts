@@ -2319,12 +2319,13 @@ export class HivService {
     }
 
     const enrollmentRows = await tenantDb.query(
-      `SELECT id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
+      `SELECT id, art_start_date FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
       [enrollmentId],
     );
     if (!enrollmentRows || enrollmentRows.length === 0) {
       throw new NotFoundException('HIV care enrollment not found');
     }
+    const enrollment = enrollmentRows[0];
 
     const latestSessionRows = await tenantDb.query(
       `SELECT session_number, session_date
@@ -2543,12 +2544,13 @@ export class HivService {
     }
 
     const enrollmentRows = await tenantDb.query(
-      `SELECT id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
+      `SELECT id, art_start_date FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
       [enrollmentId],
     );
     if (!enrollmentRows || enrollmentRows.length === 0) {
       throw new NotFoundException('HIV care enrollment not found');
     }
+    const enrollment = enrollmentRows[0];
 
     const openChangeRequest = await tenantDb.query(
       `SELECT id, status
@@ -2585,6 +2587,22 @@ export class HivService {
 
     if (vlPathway.status === 'not_on_art') {
       throw new BadRequestException('Regimen change request cannot be created because patient is not currently on ART.');
+    }
+
+    const artStartDate = enrollment?.art_start_date ? new Date(enrollment.art_start_date) : null;
+    const monthsOnArt =
+      artStartDate && !Number.isNaN(artStartDate.getTime())
+        ? (today.getTime() - artStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+        : null;
+    if (
+      monthsOnArt !== null &&
+      monthsOnArt < 6 &&
+      (vlPathway.status === 'high_vl' || vlPathway.status === 'high_vl_needs_eac' || vlPathway.status === 'failure_after_eac') &&
+      !hasNonFailureIndication
+    ) {
+      throw new BadRequestException(
+        'Possible virologic failure before 6 months on ART. Continue adherence support and repeat viral load per guideline timeline unless non-failure indication exists.',
+      );
     }
 
     if (
@@ -2730,14 +2748,24 @@ export class HivService {
       [enrollmentId]
     );
 
+    const enrollmentRows = await tenantDb.query(
+      `SELECT art_start_date
+       FROM hiv_care_enrollments
+       WHERE id = $1
+       LIMIT 1`,
+      [enrollmentId],
+    );
+    const enrollmentHasArtStartDate = Boolean(enrollmentRows[0]?.art_start_date);
+
     const lastTwoVisits = recentVisits.slice(0, 2);
     const onArtStates = new Set(['2a', '2b', '3', '4', '6']);
     const bothHighVl =
       lastTwoVisits.length === 2 &&
       lastTwoVisits.every((visit: any) => Number(visit.viral_load) >= 1000);
-    const bothOnArt =
+    const bothOnArtByVisitStatus =
       lastTwoVisits.length === 2 &&
       lastTwoVisits.every((visit: any) => onArtStates.has(String(visit.arv_status || '').trim()));
+    const bothOnArt = bothOnArtByVisitStatus || enrollmentHasArtStartDate;
     const needsEac = bothHighVl && bothOnArt;
     
     // Check if the two high VL results are 3-6 months apart

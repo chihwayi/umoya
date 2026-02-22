@@ -35,7 +35,7 @@ describe('HivService hardening guardrails', () => {
     const service = makeService();
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('SELECT id FROM hiv_care_enrollments')) {
+        if (sql.includes('FROM hiv_care_enrollments')) {
           return [{ id: 'enroll-1' }];
         }
         if (sql.includes('SELECT session_number, session_date')) {
@@ -65,7 +65,7 @@ describe('HivService hardening guardrails', () => {
     const service = makeService();
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('SELECT id FROM hiv_care_enrollments')) {
+        if (sql.includes('FROM hiv_care_enrollments')) {
           return [{ id: 'enroll-1' }];
         }
         if (sql.includes('SELECT session_number, session_date')) {
@@ -95,7 +95,7 @@ describe('HivService hardening guardrails', () => {
     const service = makeService();
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('SELECT id FROM hiv_care_enrollments')) {
+        if (sql.includes('FROM hiv_care_enrollments')) {
           return [{ id: 'enroll-1' }];
         }
         if (sql.includes('FROM hiv_arv_change_requests')) {
@@ -131,7 +131,7 @@ describe('HivService hardening guardrails', () => {
 
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('SELECT id FROM hiv_care_enrollments')) {
+        if (sql.includes('FROM hiv_care_enrollments')) {
           return [{ id: 'enroll-1' }];
         }
         if (sql.includes('FROM hiv_arv_change_requests')) {
@@ -171,7 +171,7 @@ describe('HivService hardening guardrails', () => {
 
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
-        if (sql.includes('SELECT id FROM hiv_care_enrollments')) {
+        if (sql.includes('FROM hiv_care_enrollments')) {
           return [{ id: 'enroll-1' }];
         }
         if (sql.includes('FROM hiv_arv_change_requests')) {
