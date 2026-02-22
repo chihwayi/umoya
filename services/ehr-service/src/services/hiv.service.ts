@@ -1036,6 +1036,7 @@ export class HivService {
       fluconazoleQuantityPrescribed, fluconazoleQuantityDispensed,
       // ARV Status & Regimens
       arvStatus, arvReason, arvRegimenCode, arvRegimenName,
+      arvInitiationCategoryCode, arvReasonNotOnCode, arvReasonStartCode, arvChangeStopReasonCode,
       arvQuantityPrescribed, arvQuantityDispensed, arvAdherencePercentage,
       regimenChanged, regimenChangeApprovedBy,
       visitReasonConcept,
@@ -1051,7 +1052,7 @@ export class HivService {
       referralReasonConcept,
       // Lab Results
       cd4Count, cd4Percentage, cd4TestDate,
-      viralLoad, viralLoadUnit, viralLoadTestDate, viralLoadSuppressed,
+      viralLoad, viralLoadUnit, viralLoadTestDate, viralLoadSampleCollectedDate, viralLoadResultReceivedDate, viralLoadSuppressed,
       altResult, creatinineResult, otherDiagnostics,
       // Adverse Events
       adverseEventsStatus,
@@ -1063,6 +1064,122 @@ export class HivService {
       // WHO Smart Forms
       whoSmartFormData
     } = body;
+
+    if (!visitDate) {
+      throw new BadRequestException('visitDate is required');
+    }
+
+    const parsedVisitDate = new Date(visitDate);
+    if (Number.isNaN(parsedVisitDate.getTime())) {
+      throw new BadRequestException('visitDate is invalid');
+    }
+    parsedVisitDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parsedVisitDate > today) {
+      throw new BadRequestException('visitDate cannot be in the future');
+    }
+
+    const parseOptionalDate = (value: any, fieldName: string): Date | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`${fieldName} is invalid`);
+      }
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    const parseOptionalNumber = (value: any, fieldName: string): number | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {
+        throw new BadRequestException(`${fieldName} must be numeric`);
+      }
+      return parsed;
+    };
+
+    const validatePercentage = (value: any, fieldName: string) => {
+      const parsed = parseOptionalNumber(value, fieldName);
+      if (parsed !== null && (parsed < 0 || parsed > 100)) {
+        throw new BadRequestException(`${fieldName} must be between 0 and 100`);
+      }
+    };
+
+    const validateNonNegative = (value: any, fieldName: string) => {
+      const parsed = parseOptionalNumber(value, fieldName);
+      if (parsed !== null && parsed < 0) {
+        throw new BadRequestException(`${fieldName} cannot be negative`);
+      }
+    };
+
+    const normalizedViralLoad = parseOptionalNumber(viralLoad, 'viralLoad');
+    if (normalizedViralLoad !== null && normalizedViralLoad < 0) {
+      throw new BadRequestException('viralLoad cannot be negative');
+    }
+
+    const parsedCd4TestDate = parseOptionalDate(cd4TestDate, 'cd4TestDate');
+    const parsedViralLoadTestDate = parseOptionalDate(viralLoadTestDate, 'viralLoadTestDate');
+    const parsedViralLoadSampleDate = parseOptionalDate(
+      viralLoadSampleCollectedDate,
+      'viralLoadSampleCollectedDate',
+    );
+    const parsedViralLoadResultDate = parseOptionalDate(
+      viralLoadResultReceivedDate,
+      'viralLoadResultReceivedDate',
+    );
+
+    if (parsedCd4TestDate && parsedCd4TestDate > parsedVisitDate) {
+      throw new BadRequestException('cd4TestDate cannot be after visitDate');
+    }
+    if (parsedViralLoadTestDate && parsedViralLoadTestDate > parsedVisitDate) {
+      throw new BadRequestException('viralLoadTestDate cannot be after visitDate');
+    }
+    if (parsedViralLoadSampleDate && parsedViralLoadSampleDate > parsedVisitDate) {
+      throw new BadRequestException('viralLoadSampleCollectedDate cannot be after visitDate');
+    }
+    if (parsedViralLoadResultDate && parsedViralLoadResultDate > parsedVisitDate) {
+      throw new BadRequestException('viralLoadResultReceivedDate cannot be after visitDate');
+    }
+    if (
+      parsedViralLoadSampleDate &&
+      parsedViralLoadResultDate &&
+      parsedViralLoadSampleDate > parsedViralLoadResultDate
+    ) {
+      throw new BadRequestException(
+        'viralLoadSampleCollectedDate cannot be after viralLoadResultReceivedDate',
+      );
+    }
+
+    validatePercentage(arvAdherencePercentage, 'arvAdherencePercentage');
+    validatePercentage(tptAdherencePercentage, 'tptAdherencePercentage');
+    validatePercentage(cotrimoxazoleAdherencePercentage, 'cotrimoxazoleAdherencePercentage');
+    validatePercentage(cd4Percentage, 'cd4Percentage');
+
+    validateNonNegative(arvQuantityPrescribed, 'arvQuantityPrescribed');
+    validateNonNegative(arvQuantityDispensed, 'arvQuantityDispensed');
+    validateNonNegative(tptQuantityDispensed, 'tptQuantityDispensed');
+    validateNonNegative(cotrimoxazoleQuantityDispensed, 'cotrimoxazoleQuantityDispensed');
+    validateNonNegative(fluconazoleQuantityPrescribed, 'fluconazoleQuantityPrescribed');
+    validateNonNegative(fluconazoleQuantityDispensed, 'fluconazoleQuantityDispensed');
+    validateNonNegative(cd4Count, 'cd4Count');
+
+    const resolvedIptEligibility =
+      iptEligibility ?? body?.tptEligibility ?? body?.iptEligibility ?? null;
+    const resolvedArvReason =
+      arvReason ||
+      arvReasonNotOnCode ||
+      arvReasonStartCode ||
+      arvChangeStopReasonCode ||
+      body?.arvReasonNotOnCode ||
+      body?.arvReasonStartCode ||
+      body?.arvChangeStopReasonCode ||
+      null;
 
     // Role-based validation for regimen changes
     // For status '4' (Change), check if there's an approved change request
@@ -1124,6 +1241,9 @@ export class HivService {
     const sanitizedTptStatus = (tptStatus && validTptStatuses.includes(tptStatus)) ? tptStatus : null;
     
     const validArvStatuses = ['1', '2', '2a', '2b', '3', '4', '5', '6', '7'];
+    if (arvStatus && !validArvStatuses.includes(arvStatus)) {
+      throw new BadRequestException(`Invalid ARV status "${arvStatus}"`);
+    }
     const sanitizedArvStatus = (arvStatus && validArvStatuses.includes(arvStatus)) ? arvStatus : null;
     
     const validVisitStatuses = ['E', 'OT', 'L', 'D', 'LO'];
@@ -1134,6 +1254,29 @@ export class HivService {
       throw new Error(`Invalid visit type. Must be one of: ${validVisitTypes.join(', ')}`);
     }
     const sanitizedVisitType = visitType;
+
+    if (sanitizedArvStatus && ['2a', '2b', '3', '4', '6'].includes(sanitizedArvStatus) && !arvRegimenCode) {
+      throw new BadRequestException('arvRegimenCode is required when patient is on ART');
+    }
+    if (sanitizedArvStatus === '1' && !resolvedArvReason) {
+      throw new BadRequestException('Reason for not being on ARV is required for ARV status "1"');
+    }
+    if (
+      sanitizedArvStatus &&
+      ['2a', '2b'].includes(sanitizedArvStatus) &&
+      (!arvInitiationCategoryCode || !resolvedArvReason)
+    ) {
+      throw new BadRequestException(
+        'ARV initiation category and start reason are required for ARV status "2a/2b"',
+      );
+    }
+    if (
+      sanitizedArvStatus &&
+      ['4', '5'].includes(sanitizedArvStatus) &&
+      !resolvedArvReason
+    ) {
+      throw new BadRequestException('Reason for ARV change/stop is required for ARV status "4/5"');
+    }
 
     const resolvedVisitReasonConcept = await this.resolveConcept(
       tenantDb,
@@ -1251,14 +1394,14 @@ export class HivService {
       pregnancyLactatingStatus || null, firstAncBookingDate || null, deliveryDate || null, familyPlanningStatus || null,
       functionalStatus || null, whoClinicalStage || null, opportunisticInfections || null,
       tbScreening || null, tbInvestigationResult || null, tbDiagnosed || null, tbDiagnosisDate || null, tbTreatmentStarted || null,
-      iptEligibility || null, sanitizedTptStatus, tptNotStartedStoppedReason || null, tptQuantityDispensed || null, tptAdherencePercentage || null,
+      resolvedIptEligibility || null, sanitizedTptStatus, tptNotStartedStoppedReason || null, tptQuantityDispensed || null, tptAdherencePercentage || null,
       cotrimoxazoleQuantityDispensed || null, cotrimoxazoleAdherencePercentage || null,
       fluconazoleQuantityPrescribed || null, fluconazoleQuantityDispensed || null,
-      sanitizedArvStatus, arvReason || null, arvRegimenCode || null, arvRegimenName || null,
+      sanitizedArvStatus, resolvedArvReason || null, arvRegimenCode || null, arvRegimenName || null,
       arvQuantityPrescribed || null, arvQuantityDispensed || null, arvAdherencePercentage || null,
       regimenChanged || false, finalRegimenChangeApprovedBy, finalRegimenChangeApprovedAt,
       cd4Count || null, cd4Percentage || null, cd4TestDate || null,
-      viralLoad || null, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'), viralLoadTestDate || null, viralLoadSuppressed || null,
+      normalizedViralLoad, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'), viralLoadTestDate || null, viralLoadSuppressed || null,
       altResult || null, creatinineResult || null, otherDiagnostics || null,
       adverseEventsStatus || null,
       referredTo || null, referredToDetails || null, nextReviewDate || null,
@@ -1345,11 +1488,11 @@ export class HivService {
     const arvChangeStopReasonValue = body?.arvChangeStopReason ?? null;
 
     // 1. Update Monitoring Schedules (VL & CD4)
-    if (viralLoad !== null && viralLoadTestDate) {
+    if (normalizedViralLoad !== null && viralLoadTestDate) {
       const nextVlDate = this.monitoringService.calculateNextViralLoadDate(
         artStartDateValue,
         new Date(viralLoadTestDate),
-        parseFloat(viralLoad.toString()),
+        normalizedViralLoad,
         arvStatus === '4' ? visitDateObj : null, // Regimen change date
         visitDateObj
       );
@@ -1370,14 +1513,14 @@ export class HivService {
           days_overdue = 0,
           updated_at = NOW()
           WHERE enrollment_id = $4 AND test_type = 'viral_load'
-        `, [viralLoadTestDate, viralLoad, nextVlDate.toISOString().split('T')[0], enrollmentId]);
+        `, [viralLoadTestDate, normalizedViralLoad, nextVlDate.toISOString().split('T')[0], enrollmentId]);
       } else {
         await tenantDb.query(`
           INSERT INTO hiv_monitoring_schedules (
             enrollment_id, test_type, last_test_date, last_test_result,
             next_scheduled_date, monitoring_frequency_months, is_overdue, days_overdue
           ) VALUES ($1, 'viral_load', $2, $3, $4, 3, false, 0)
-        `, [enrollmentId, viralLoadTestDate, viralLoad, nextVlDate.toISOString().split('T')[0]]);
+        `, [enrollmentId, viralLoadTestDate, normalizedViralLoad, nextVlDate.toISOString().split('T')[0]]);
       }
     }
 
@@ -1447,7 +1590,7 @@ export class HivService {
           arvStatus === '4' ? 'Change' : arvStatus === '2a' ? 'Start' : 'Continue',
           arvChangeStopReasonValue,
           providerId,
-          viralLoad || null,
+          normalizedViralLoad,
           cd4Count || null
         ]);
       }
@@ -1484,7 +1627,7 @@ export class HivService {
     // 5. Generate Clinical Alerts
     const treatmentFailureCheck = this.monitoringService.checkTreatmentFailure(
       sanitizedArvStatus || '',
-      viralLoad ? parseFloat(viralLoad.toString()) : null,
+      normalizedViralLoad,
       viralLoadTestDate ? new Date(viralLoadTestDate) : null,
       cd4Count ? parseInt(cd4Count.toString()) : null,
       cd4TestDate ? new Date(cd4TestDate) : null,
@@ -1504,7 +1647,7 @@ export class HivService {
         'Treatment Failure Detected',
         treatmentFailureCheck.reason || 'Treatment failure detected',
         JSON.stringify({
-          viralLoad,
+          viralLoad: normalizedViralLoad,
           cd4Count,
           visitId,
           visitDate
@@ -1513,7 +1656,7 @@ export class HivService {
     }
 
     // High VL alert
-    if (viralLoad && parseFloat(viralLoad.toString()) > 1000 && ['2a', '2b', '3', '4'].includes(sanitizedArvStatus || '')) {
+    if (normalizedViralLoad !== null && normalizedViralLoad > 1000 && ['2a', '2b', '3', '4'].includes(sanitizedArvStatus || '')) {
       await tenantDb.query(`
         INSERT INTO hiv_clinical_alerts (
           enrollment_id, alert_type, severity, title, message, related_data, is_resolved
@@ -1521,8 +1664,8 @@ export class HivService {
         ON CONFLICT DO NOTHING
       `, [
         enrollmentId,
-        `Viral load is ${viralLoad.toLocaleString()} copies/mL - Requires immediate attention`,
-        JSON.stringify({ viralLoad, visitId, visitDate })
+        `Viral load is ${normalizedViralLoad.toLocaleString()} copies/mL - Requires immediate attention`,
+        JSON.stringify({ viralLoad: normalizedViralLoad, visitId, visitDate })
       ]);
     }
 

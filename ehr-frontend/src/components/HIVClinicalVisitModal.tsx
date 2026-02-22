@@ -6,6 +6,7 @@ import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import HIVQuickReferenceGuide from './HIVQuickReferenceGuide';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
+import { validateHivVisitAgainstGuidelines } from './HIV/hivVisitGuidelineValidation';
 
 interface HIVClinicalVisitModalProps {
   enrollment: any;
@@ -263,6 +264,39 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     if (!form.visitType) return true;
     return requiresFullClinical(form.visitType);
   };
+
+  const visitGuidelineValidation = useMemo(
+    () =>
+      validateHivVisitAgainstGuidelines(form, {
+        mode: 'clinical_form',
+        isFemale,
+        isFirstVisit,
+        hasStartedArv,
+        approvedArvChange: Boolean(approvedArvChange),
+        eacNeedsIntervention: Boolean(eacEligibility?.needsEac),
+        eacIsActive: Boolean(eacEligibility?.activeEac),
+        vlPathwayStatus: visitDecisionContext?.vlPathway?.status || null,
+        vlPathwayOverdue: Boolean(visitDecisionContext?.vlPathway?.overdue),
+        dsdEligible:
+          typeof visitDecisionContext?.dsdStatus?.eligibleForDsd === 'boolean'
+            ? visitDecisionContext?.dsdStatus?.eligibleForDsd
+            : undefined,
+        dsdRecommendedModel: visitDecisionContext?.dsdStatus?.recommendedModel || null,
+        enrollmentConfirmedPositiveDate: enrollment?.date_confirmed_positive || null,
+        thresholds: cdssConfig.thresholds,
+      }),
+    [
+      form,
+      isFemale,
+      isFirstVisit,
+      hasStartedArv,
+      approvedArvChange,
+      eacEligibility,
+      visitDecisionContext,
+      enrollment?.date_confirmed_positive,
+      cdssConfig.thresholds,
+    ],
+  );
 
   useEffect(() => {
     loadLookupData();
@@ -594,6 +628,14 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (visitGuidelineValidation.blockingIssues.length > 0) {
+      showError(
+        'Guideline validation failed',
+        visitGuidelineValidation.blockingIssues.map((issue) => `• ${issue.message}`).join('\n'),
+      );
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
@@ -603,6 +645,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
       }
 
       const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
+      const normalizedViralLoad = visitGuidelineValidation.normalizedViralLoad;
 
       const visitData = {
         enrollmentId: enrollment.id,
@@ -672,7 +715,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         cd4Count: form.cd4Count ? parseInt(form.cd4Count) : null,
         cd4Percentage: form.cd4Percentage ? parseFloat(form.cd4Percentage) : null,
         cd4TestDate: form.cd4TestDate || null,
-        viralLoad: form.viralLoad ? parseFloat(form.viralLoad) : null,
+        viralLoad: normalizedViralLoad,
         viralLoadUnit: form.viralLoadUnit,
         viralLoadSampleCollectedDate: form.viralLoadSampleCollectedDate || null,
         viralLoadResultReceivedDate: form.viralLoadResultReceivedDate || null,
@@ -710,7 +753,10 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
       await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
       
       // Check EAC eligibility after saving visit with viral load
-      if (form.viralLoad && parseFloat(form.viralLoad) > 1000) {
+      if (
+        normalizedViralLoad !== null &&
+        normalizedViralLoad >= cdssConfig.thresholds.highViralLoad
+      ) {
         await checkEacEligibility();
         const updatedEligibility = await ehrApi.checkEacEligibility(enrollment.id, token, tenantSlug);
         if (updatedEligibility.data?.needsEac) {
@@ -2548,13 +2594,15 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <h4 className="font-semibold text-slate-900 mb-3">Lab Results</h4>
                   
-                  {form.viralLoad && parseFloat(form.viralLoad) > cdssConfig.thresholds.highViralLoad && (
+                  {visitGuidelineValidation.hasHighViralLoad && (
                     <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm font-semibold text-red-900 mb-1">
-                            ⚠️ High Viral Load Detected: {form.viralLoad} copies/mL
+                            ⚠️ High Viral Load Detected:{' '}
+                            {visitGuidelineValidation.normalizedViralLoad?.toLocaleString() || form.viralLoad}{' '}
+                            copies/mL
                           </p>
                           <p className="text-xs text-red-800">
                             {cdssConfig.messages.highViralLoadVisit}
@@ -3030,6 +3078,48 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           )}
         </div>
 
+        {(visitGuidelineValidation.blockingIssues.length > 0 ||
+          visitGuidelineValidation.warningIssues.length > 0) && (
+          <div className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-700 mt-0.5" />
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Guideline validation flags</p>
+                  <p className="text-xs text-amber-800">
+                    WHO/Zim ART guardrails run before save. Fix blocking issues; warnings should be
+                    reviewed and documented.
+                  </p>
+                </div>
+                {visitGuidelineValidation.blockingIssues.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-rose-700 mb-1">
+                      Blocking issues ({visitGuidelineValidation.blockingIssues.length})
+                    </p>
+                    <ul className="list-disc pl-5 text-xs text-rose-800 space-y-1">
+                      {visitGuidelineValidation.blockingIssues.map((issue) => (
+                        <li key={issue.code}>{issue.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {visitGuidelineValidation.warningIssues.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-amber-700 mb-1">
+                      Warnings ({visitGuidelineValidation.warningIssues.length})
+                    </p>
+                    <ul className="list-disc pl-5 text-xs text-amber-900 space-y-1">
+                      {visitGuidelineValidation.warningIssues.map((issue) => (
+                        <li key={issue.code}>{issue.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-200 flex justify-between sticky bottom-0 bg-white">
           <button
@@ -3090,7 +3180,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={loading}
+                  disabled={loading || visitGuidelineValidation.blockingIssues.length > 0}
                   className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (

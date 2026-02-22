@@ -10,6 +10,8 @@ import { WHOSmartFormIntegration } from './WHOSmartFormIntegration';
 import HIVClinicalVisitModal from '../HIVClinicalVisitModal';
 import { useNotification } from '../GlobalNotification';
 import { ehrApi } from '../../services/api';
+import { getHivCdssConfig } from './hivCdssConfig';
+import { validateHivVisitAgainstGuidelines } from './hivVisitGuidelineValidation';
 
 interface HIVCareVisitWithSmartFormsProps {
   enrollment: any;
@@ -87,10 +89,12 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
   onSuccess,
 }) => {
   const { showSuccess, showError } = useNotification();
+  const cdssConfig = getHivCdssConfig(tenantSlug);
   const [useSmartForm, setUseSmartForm] = useState(false);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [latestGuidelineWarnings, setLatestGuidelineWarnings] = useState<string[]>([]);
 
   const handleSmartFormSuccess = async (formAnswers: Record<string, any>) => {
     // Accumulate form data
@@ -108,6 +112,24 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
       setSubmitting(true);
 
       const visitData: any = mapSmartFormToVisit(formData);
+      const guidelineValidation = validateHivVisitAgainstGuidelines(visitData, {
+        mode: 'smart_form',
+        isFemale: enrollment?.gender?.toLowerCase() === 'female',
+        enrollmentConfirmedPositiveDate: enrollment?.date_confirmed_positive || null,
+        thresholds: cdssConfig.thresholds,
+      });
+
+      if (guidelineValidation.blockingIssues.length > 0) {
+        showError(
+          'WHO/Zim guideline validation failed',
+          guidelineValidation.blockingIssues.map((issue) => `• ${issue.message}`).join('\n'),
+        );
+        return;
+      }
+
+      visitData.viralLoad = guidelineValidation.normalizedViralLoad;
+      setLatestGuidelineWarnings(guidelineValidation.warningIssues.map((issue) => issue.message));
+
       const storedUser = localStorage.getItem('ehr_user');
       const currentUser = storedUser ? JSON.parse(storedUser) : {};
       visitData.providerId = currentUser.id;
@@ -115,7 +137,14 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
       // Submit clinical visit
       await ehrApi.createHivClinicalVisit(visitData, token, tenantSlug);
 
-      showSuccess('Success', 'HIV clinical visit recorded using WHO Smart Forms');
+      if (guidelineValidation.warningIssues.length > 0) {
+        showSuccess(
+          'Visit saved with guideline flags',
+          `HIV clinical visit recorded using WHO Smart Forms (${guidelineValidation.warningIssues.length} warning${guidelineValidation.warningIssues.length === 1 ? '' : 's'}).`,
+        );
+      } else {
+        showSuccess('Success', 'HIV clinical visit recorded using WHO Smart Forms');
+      }
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -288,6 +317,19 @@ export const HIVCareVisitWithSmartForms: React.FC<HIVCareVisitWithSmartFormsProp
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {latestGuidelineWarnings.length > 0 && (
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-2">
+              Last smart-form submission flagged guideline warnings
+            </p>
+            <ul className="list-disc pl-5 text-xs text-amber-800 space-y-1">
+              {latestGuidelineWarnings.map((warning, idx) => (
+                <li key={`${idx}-${warning.slice(0, 24)}`}>{warning}</li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
