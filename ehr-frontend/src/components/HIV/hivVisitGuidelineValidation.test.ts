@@ -127,4 +127,56 @@ describe('hivVisitGuidelineValidation', () => {
 
     expect(result.warningIssues.some((issue) => issue.code === 'dsd-eligible-not-selected')).toBe(true);
   });
+
+  it('blocks invalid blood pressure format', () => {
+    const result = validateHivVisitAgainstGuidelines(
+      {
+        ...baseForm,
+        bloodPressure: '120-80',
+      },
+      baseContext,
+    );
+
+    expect(result.blockingIssues.some((issue) => issue.code === 'blood-pressure-invalid-format')).toBe(true);
+  });
+
+  it('warns for critically high blood pressure readings', () => {
+    const result = validateHivVisitAgainstGuidelines(
+      {
+        ...baseForm,
+        bloodPressure: '182/121',
+      },
+      baseContext,
+    );
+
+    expect(result.warningIssues.some((issue) => issue.code === 'blood-pressure-critical-high')).toBe(true);
+  });
+
+  it('warns when full clinical visit is missing core vitals', () => {
+    const result = validateHivVisitAgainstGuidelines(
+      {
+        ...baseForm,
+        visitType: 'A',
+        weightKg: '',
+        bloodPressure: '',
+      },
+      baseContext,
+    );
+
+    expect(result.warningIssues.some((issue) => issue.code === 'weight-missing-full-visit')).toBe(true);
+    expect(result.warningIssues.some((issue) => issue.code === 'blood-pressure-missing-full-visit')).toBe(true);
+  });
+
+  it('warns when next review date diverges from ARV quantity dispensed window', () => {
+    const result = validateHivVisitAgainstGuidelines(
+      {
+        ...baseForm,
+        arvQuantityDispensed: '30',
+        nextReviewDate: '2026-05-10',
+      },
+      baseContext,
+    );
+
+    expect(result.warningIssues.some((issue) => issue.code === 'next-review-arv-duration-mismatch')).toBe(true);
+  });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Save, Calendar, Activity, AlertCircle, AlertTriangle, CheckCircle, Book, Brain } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -43,6 +43,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [viralLoadAutoPopulated, setViralLoadAutoPopulated] = useState(false);
   const [visitVitalsAutoPopulatedDate, setVisitVitalsAutoPopulatedDate] = useState<string | null>(null);
   const [visitVitalsManualOverrideDate, setVisitVitalsManualOverrideDate] = useState<string | null>(null);
+  const [sameDayVitalsRefreshing, setSameDayVitalsRefreshing] = useState(false);
+  const [sameDayVitalsLastSyncedAt, setSameDayVitalsLastSyncedAt] = useState<string | null>(null);
   const [labOrderCreated, setLabOrderCreated] = useState(false);
   const [creatingLabOrder, setCreatingLabOrder] = useState(false);
   const [visitPreparationChecklist, setVisitPreparationChecklist] = useState<any>(null);
@@ -942,36 +944,36 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     loadMatchingLabResults();
   }, [form.visitDate, enrollment.patient_id]);
 
-  // Auto-populate visit vitals when nurse vitals exist on the same date
-  useEffect(() => {
-    let cancelled = false;
+  const loadSameDayVitals = useCallback(
+    async (options?: { force?: boolean; showLoading?: boolean }) => {
+      const force = options?.force === true;
+      const showLoading = options?.showLoading === true;
 
-    const loadSameDayVitals = async () => {
       if (!form.visitDate) {
         return;
       }
 
-      // Respect manual edits for the current visit date
+      // Respect manual edits for the current visit date.
       if (visitVitalsManualOverrideDate === form.visitDate) {
         return;
       }
 
-      // Avoid repeat fetch once current date has been hydrated
-      if (visitVitalsAutoPopulatedDate === form.visitDate) {
+      // Avoid repeat fetch once current date has been hydrated unless forced (manual refresh/polling).
+      if (!force && visitVitalsAutoPopulatedDate === form.visitDate) {
         return;
       }
 
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
 
+      if (showLoading) {
+        setSameDayVitalsRefreshing(true);
+      }
+
       try {
         const response = await ehrApi.getVitals(enrollment.patient_id, token, tenantSlug, {
           limit: 50,
         });
-
-        if (cancelled) {
-          return;
-        }
 
         const vitals = Array.isArray(response.data?.vitals)
           ? response.data.vitals
@@ -1041,11 +1043,8 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
             bloodPressure: resolvedBloodPressure ? String(resolvedBloodPressure) : prev.bloodPressure,
           }));
           setVisitVitalsAutoPopulatedDate(form.visitDate);
-          return;
-        }
-
-        // Clear stale auto-populated vitals when visit date changes to a date with no nurse vitals
-        if (visitVitalsAutoPopulatedDate && visitVitalsAutoPopulatedDate !== form.visitDate) {
+        } else if (visitVitalsAutoPopulatedDate) {
+          // Clear stale auto-populated vitals when no same-day nurse vitals are available.
           setForm((prev) => ({
             ...prev,
             weightKg: '',
@@ -1054,22 +1053,42 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           }));
           setVisitVitalsAutoPopulatedDate(null);
         }
+
+        setSameDayVitalsLastSyncedAt(new Date().toISOString());
       } catch (error) {
         console.error('Failed to load same-day vitals for visit form:', error);
+      } finally {
+        if (showLoading) {
+          setSameDayVitalsRefreshing(false);
+        }
       }
-    };
+    },
+    [
+      form.visitDate,
+      enrollment.patient_id,
+      tenantSlug,
+      visitVitalsManualOverrideDate,
+      visitVitalsAutoPopulatedDate,
+    ],
+  );
 
+  // Initial/date-change hydration for same-day nurse vitals
+  useEffect(() => {
     loadSameDayVitals();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    form.visitDate,
-    enrollment.patient_id,
-    tenantSlug,
-    visitVitalsManualOverrideDate,
-    visitVitalsAutoPopulatedDate,
-  ]);
+  }, [loadSameDayVitals]);
+
+  // Live refresh while vitals step is active
+  useEffect(() => {
+    if (activeStep !== 2 || !form.visitDate) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      loadSameDayVitals({ force: true });
+    }, 45000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeStep, form.visitDate, loadSameDayVitals]);
 
   // Handle manual override of viral load
   const handleViralLoadChange = (value: string) => {
@@ -1518,6 +1537,24 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           {activeStep === 2 && shouldShowClinicalFields() && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold text-slate-900">Step 2: Vital Signs & Measurements</h3>
+
+              {form.visitDate && (
+                <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-600">
+                    {sameDayVitalsLastSyncedAt
+                      ? `Same-day vitals sync: ${new Date(sameDayVitalsLastSyncedAt).toLocaleTimeString()}`
+                      : 'Same-day vitals sync pending'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => loadSameDayVitals({ force: true, showLoading: true })}
+                    disabled={sameDayVitalsRefreshing}
+                    className="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  >
+                    {sameDayVitalsRefreshing ? 'Refreshing...' : 'Refresh nurse vitals'}
+                  </button>
+                </div>
+              )}
 
               {visitVitalsAutoPopulatedDate === form.visitDate && (
                 <div

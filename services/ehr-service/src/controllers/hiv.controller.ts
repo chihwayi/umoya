@@ -91,9 +91,23 @@ export class HivController {
   @ApiOperation({ summary: 'Record HIV clinical visit' })
   @ApiResponse({ status: 201, description: 'Clinical visit recorded' })
   async createClinicalVisit(@Body() body: any, @Request() req: RequestWithTenant) {
-    const providerRole = (req as any).user?.role || body.providerRole;
-    const providerId = (req as any).user?.id || body.providerId;
-    const providerName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name || body.providerName || 'Unknown';
+    const user = (req as any).user || {};
+    const providerRole = user.role || body.providerRole;
+    const providerId = user.id || body.providerId;
+
+    const firstName = (user.first_name || user.firstName || '').toString().trim();
+    const lastName = (user.last_name || user.lastName || '').toString().trim();
+    const fullNameFromUser = `${firstName} ${lastName}`.trim();
+    const providerName =
+      fullNameFromUser ||
+      user.full_name ||
+      user.fullName ||
+      user.display_name ||
+      user.displayName ||
+      user.username ||
+      body.providerName ||
+      'Unknown';
+
     return this.hivService.createClinicalVisit({ ...body, providerId, providerName }, req.tenantDb, providerRole, req.tenantId);
   }
 

@@ -214,4 +214,68 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
       expect(screen.getByDisplayValue('Nurse One')).toBeTruthy();
     });
   });
+
+  it('refreshes same-day nurse vitals on demand from step 2', async () => {
+    const visitDate = new Date().toISOString().split('T')[0];
+    (ehrApi.getVitals as jest.Mock)
+      .mockResolvedValueOnce({
+        data: {
+          vitals: [
+            {
+              recordedAt: `${visitDate}T07:45:00.000Z`,
+              weight: 70.0,
+              height: 168,
+              bloodPressure: '118/76',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          vitals: [
+            {
+              recordedAt: `${visitDate}T08:30:00.000Z`,
+              weight: 71.2,
+              height: 168,
+              bloodPressure: '120/78',
+            },
+          ],
+        },
+      });
+
+    render(
+      <HIVClinicalVisitModal
+        enrollment={{
+          id: 'enroll-1',
+          patient_id: 'patient-1',
+          first_name: 'Tariro',
+          last_name: 'Dube',
+          enrollment_number: 'ENR-001',
+          gender: 'female',
+          date_of_birth: '1992-03-02',
+        }}
+        tenantSlug="bulawayo-general"
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Record Clinical Visit/i)).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('70')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /refresh nurse vitals/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /refresh nurse vitals/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('71.2')).toBeTruthy();
+      expect(screen.getByDisplayValue('120/78')).toBeTruthy();
+    });
+  });
 });

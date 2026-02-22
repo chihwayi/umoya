@@ -201,4 +201,27 @@ describe('HivService clinical visit validation', () => {
     expect(insertParams).toContain('CLIENT_DECLINED');
     expect(insertParams).toContain('Y');
   });
+
+  it('stamps clinician identity from authenticated provider name instead of trusting client field', async () => {
+    const service = makeService();
+    const tenantDb = makeTenantDb();
+
+    await service.createClinicalVisit(
+      {
+        ...baseBody,
+        clinicianInitials: 'Injected Name',
+      },
+      tenantDb,
+      'nurse',
+    );
+
+    const visitInsertCall = (tenantDb.query as jest.Mock).mock.calls.find((call) =>
+      String(call[0]).includes('INSERT INTO hiv_clinical_visits'),
+    );
+
+    expect(visitInsertCall).toBeDefined();
+    const insertParams = visitInsertCall?.[1] || [];
+    expect(insertParams).toContain('Nurse One');
+    expect(insertParams).not.toContain('Injected Name');
+  });
 });

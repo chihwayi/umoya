@@ -74,6 +74,27 @@ const parseNumber = (value: unknown): { value: number | null; invalid: boolean }
   return { value: parsed, invalid: false };
 };
 
+const parseBloodPressure = (
+  value: unknown,
+): { systolic: number | null; diastolic: number | null; invalid: boolean } => {
+  const text = toText(value);
+  if (!text) {
+    return { systolic: null, diastolic: null, invalid: false };
+  }
+
+  const normalized = text.replace(/\s+/g, '');
+  const match = normalized.match(/^(\d{2,3})\/(\d{2,3})$/);
+  if (!match) {
+    return { systolic: null, diastolic: null, invalid: true };
+  }
+
+  return {
+    systolic: Number(match[1]),
+    diastolic: Number(match[2]),
+    invalid: false,
+  };
+};
+
 export const normalizeViralLoadInput = (value: unknown): NormalizedViralLoadResult => {
   const text = toText(value);
   if (!text) {
@@ -261,6 +282,59 @@ export const validateHivVisitAgainstGuidelines = (
     }
   });
 
+  const weightKg = parseNumber(form.weightKg);
+  if (weightKg.invalid) {
+    addBlocking('weight-invalid', 'Weight must be numeric.');
+  }
+  if (weightKg.value !== null && weightKg.value <= 0) {
+    addBlocking('weight-non-positive', 'Weight must be greater than 0 kg.');
+  }
+
+  const heightCm = parseNumber(form.heightCm);
+  if (heightCm.invalid) {
+    addBlocking('height-invalid', 'Height must be numeric.');
+  }
+  if (heightCm.value !== null && heightCm.value <= 0) {
+    addBlocking('height-non-positive', 'Height must be greater than 0 cm.');
+  }
+
+  const bloodPressure = parseBloodPressure(form.bloodPressure);
+  if (bloodPressure.invalid) {
+    addBlocking('blood-pressure-invalid-format', 'Blood pressure must be captured as systolic/diastolic (e.g., 120/80).');
+  }
+
+  if (bloodPressure.systolic !== null && bloodPressure.diastolic !== null) {
+    if (bloodPressure.systolic <= bloodPressure.diastolic) {
+      addBlocking('blood-pressure-order-invalid', 'Blood pressure systolic value must be greater than diastolic.');
+    }
+
+    if (
+      bloodPressure.systolic < 50 ||
+      bloodPressure.systolic > 300 ||
+      bloodPressure.diastolic < 30 ||
+      bloodPressure.diastolic > 200
+    ) {
+      addBlocking('blood-pressure-out-of-range', 'Blood pressure appears out of physiologic range. Recheck the reading.');
+    } else {
+      if (bloodPressure.systolic >= 180 || bloodPressure.diastolic >= 120) {
+        addWarning('blood-pressure-critical-high', 'Severely elevated blood pressure detected. Recheck immediately and escalate clinical review.');
+      }
+
+      if (bloodPressure.systolic <= 80 || bloodPressure.diastolic <= 50) {
+        addWarning('blood-pressure-critical-low', 'Low blood pressure detected. Confirm reading and assess for instability.');
+      }
+    }
+  }
+
+  if (mode === 'clinical_form' && FULL_CLINICAL_VISIT_TYPES.has(visitType)) {
+    if (weightKg.value === null) {
+      addWarning('weight-missing-full-visit', 'Weight should be captured for full clinical visits.');
+    }
+    if (bloodPressure.systolic === null || bloodPressure.diastolic === null) {
+      addWarning('blood-pressure-missing-full-visit', 'Blood pressure should be captured for full clinical visits.');
+    }
+  }
+
   const whoClinicalStage = toText(form.whoClinicalStage);
   if (whoClinicalStage && !['1', '2', '3', '4'].includes(whoClinicalStage)) {
     addBlocking('who-stage-invalid', 'WHO clinical stage must be 1, 2, 3, or 4.');
@@ -366,6 +440,24 @@ export const validateHivVisitAgainstGuidelines = (
   }
   if (ON_ART_STATUSES.has(arvStatus) && !nextReviewDateText) {
     addWarning('next-review-missing', 'Next review date should be captured for patients on ART.');
+  }
+  if (
+    ON_ART_STATUSES.has(arvStatus) &&
+    visitDate &&
+    nextReviewDate &&
+    arvQuantityDispensed.value !== null &&
+    arvQuantityDispensed.value > 0
+  ) {
+    const daysUntilReview = Math.round(
+      (nextReviewDate.getTime() - visitDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    const expectedDays = Math.round(arvQuantityDispensed.value);
+    if (Math.abs(daysUntilReview - expectedDays) > 7) {
+      addWarning(
+        'next-review-arv-duration-mismatch',
+        `Next review date is ${daysUntilReview} days from visit while ARV dispensed suggests about ${expectedDays} days. Confirm dispensing quantity or review date.`,
+      );
+    }
   }
 
   const hasHighViralLoad =

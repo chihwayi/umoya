@@ -1065,6 +1065,18 @@ export class HivService {
       whoSmartFormData
     } = body;
 
+    const resolveRecorderIdentity = (...candidates: any[]): string | null => {
+      for (const candidate of candidates) {
+        if (candidate === undefined || candidate === null) continue;
+        const normalized = String(candidate).trim();
+        if (normalized) return normalized;
+      }
+      return null;
+    };
+
+    // Server-side authoritative recorder stamp to avoid client-side identity spoofing.
+    const resolvedClinicianIdentity = resolveRecorderIdentity(providerName, clinicianInitials, providerId);
+
     if (!visitDate) {
       throw new BadRequestException('visitDate is required');
     }
@@ -1406,7 +1418,7 @@ export class HivService {
       adverseEventsStatus || null,
       referredTo || null, referredToDetails || null, nextReviewDate || null,
       sanitizedVisitStatus, followUpStatus || null, followUpDetails || null,
-      visitNotes || null, clinicianInitials || null, pharmacyDispenserInitials || null,
+      visitNotes || null, resolvedClinicianIdentity, pharmacyDispenserInitials || null,
       resolvedVisitReasonConcept?.conceptId ?? null,
       resolvedVisitReasonConcept?.term ?? null,
       resolvedVisitReasonConcept?.moduleId ?? null,
