@@ -183,4 +183,35 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
       expect(screen.queryByTestId('same-day-vitals-autofill-note')).toBeNull();
     });
   });
+
+  it('auto-fills nurse name from logged-in user in clinician field', async () => {
+    render(
+      <HIVClinicalVisitModal
+        enrollment={{
+          id: 'enroll-1',
+          patient_id: 'patient-1',
+          first_name: 'Tariro',
+          last_name: 'Dube',
+          enrollment_number: 'ENR-001',
+          gender: 'female',
+          date_of_birth: '1992-03-02',
+        }}
+        tenantSlug="bulawayo-general"
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Record Clinical Visit/i)).toBeTruthy();
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    }
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Nurse One')).toBeTruthy();
+    });
+  });
 });

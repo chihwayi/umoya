@@ -109,6 +109,26 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
 
   const patientAge = calculateAge(enrollment?.date_of_birth);
   const isChild = patientAge !== null && patientAge <= 15;
+
+  const getCurrentUserDisplayName = (user: any): string => {
+    const firstName = (user?.first_name || user?.firstName || '').toString().trim();
+    const lastName = (user?.last_name || user?.lastName || '').toString().trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (fullName) return fullName;
+
+    return (
+      user?.full_name ||
+      user?.fullName ||
+      user?.display_name ||
+      user?.displayName ||
+      user?.name ||
+      user?.username ||
+      user?.email ||
+      ''
+    )
+      .toString()
+      .trim();
+  };
   
   const addConceptToCollection = (
     concept: SnomedConcept | null,
@@ -476,6 +496,17 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
       if (userStr) {
         const user = JSON.parse(userStr);
         setCurrentUserRole(user.role || '');
+        const displayName = getCurrentUserDisplayName(user);
+        if (displayName) {
+          setForm((prev) =>
+            prev.clinicianInitials
+              ? prev
+              : {
+                  ...prev,
+                  clinicianInitials: displayName,
+                },
+          );
+        }
       }
     } catch (error) {
       console.error('Failed to load current user:', error);
@@ -3204,14 +3235,18 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Clinician Initials
+                      Nurse/Clinician Name
                     </label>
                     <input
                       type="text"
                       value={form.clinicianInitials}
                       onChange={(e) => setForm(prev => ({ ...prev, clinicianInitials: e.target.value }))}
+                      placeholder="Auto-filled from logged-in user"
                       className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Auto-filled from your account. Edit only if needed.
+                    </p>
                   </div>
 
                   <div>
