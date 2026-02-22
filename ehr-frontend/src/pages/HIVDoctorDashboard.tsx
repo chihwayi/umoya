@@ -87,6 +87,8 @@ const HIVDoctorDashboard: React.FC = () => {
     clinicalJustification: '',
     selectedLine: '' // Filter by line (1st Line, 2nd Line, etc.)
   });
+  const [regimenDecisionContext, setRegimenDecisionContext] = useState<any | null>(null);
+  const [loadingRegimenDecisionContext, setLoadingRegimenDecisionContext] = useState(false);
   const [stats, setStats] = useState({
     totalPatients: 0,
     onArv: 0,
@@ -107,6 +109,17 @@ const HIVDoctorDashboard: React.FC = () => {
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
+
+  const resetRegimenChangeForm = () => {
+    setRegimenChangeForm({
+      requestedRegimenCode: '',
+      requestedRegimenName: '',
+      changeReasonCode: '',
+      changeReasonDetails: '',
+      clinicalJustification: '',
+      selectedLine: ''
+    });
+  };
 
   useEffect(() => {
     loadData();
@@ -359,6 +372,34 @@ const HIVDoctorDashboard: React.FC = () => {
     setFilteredEnrollments(filtered);
   };
 
+  const openRegimenChangeModalWithContext = async (enrollmentContext: any) => {
+    setSelectedEnrollmentForChange(enrollmentContext);
+    setShowRegimenChangeModal(true);
+    resetRegimenChangeForm();
+    setRegimenDecisionContext(null);
+
+    try {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !enrollmentContext?.id) return;
+
+      setLoadingRegimenDecisionContext(true);
+      const [vlPathwayRes, eacRes] = await Promise.all([
+        ehrApi.getVlPathway(enrollmentContext.id, token, tenantSlug!),
+        ehrApi.checkEacEligibility(enrollmentContext.id, token, tenantSlug!),
+      ]);
+
+      setRegimenDecisionContext({
+        vlPathway: vlPathwayRes.data,
+        eac: eacRes.data,
+      });
+    } catch (error) {
+      console.error('Failed to load regimen decision context:', error);
+      setRegimenDecisionContext(null);
+    } finally {
+      setLoadingRegimenDecisionContext(false);
+    }
+  };
+
   const handleApproveRegimenChange = async () => {
     if (!selectedChangeRequest) return;
 
@@ -453,6 +494,41 @@ const HIVDoctorDashboard: React.FC = () => {
     if (vl < 1000) return { color: 'text-emerald-600', label: 'Suppressed', icon: CheckCircle };
     return { color: 'text-red-600', label: 'High', icon: AlertTriangle };
   };
+
+  const regimenRationaleText = `${regimenChangeForm.changeReasonDetails} ${regimenChangeForm.clinicalJustification}`.toLowerCase();
+  const regimenHasNonFailureIndication =
+    /toxicity|toxic|intoler|allerg|pregnan|interaction|contraind|side effect|adverse|renal|hepatic/.test(
+      regimenRationaleText,
+    );
+
+  const regimenChangeCdssBlocker = (() => {
+    const vlStatus = regimenDecisionContext?.vlPathway?.status;
+    if (!vlStatus) return null;
+
+    if (vlStatus === 'not_on_art') {
+      return 'Patient is not currently on ART, so regimen switch workflow is not applicable.';
+    }
+
+    if ((vlStatus === 'suppressed' || vlStatus === 'post_eac_suppressed') && !regimenHasNonFailureIndication) {
+      return 'VL is suppressed. Provide a clear non-failure reason (e.g., toxicity/intolerance) before switching regimen.';
+    }
+
+    if ((vlStatus === 'high_vl' || vlStatus === 'high_vl_needs_eac') && !regimenHasNonFailureIndication) {
+      const sessionsCompleted =
+        regimenDecisionContext?.eac?.eacProgram?.sessions_completed ||
+        selectedEnrollmentForChange?.eacSessions?.length ||
+        0;
+      const eacCompleted =
+        Boolean(selectedEnrollmentForChange?.eacCompleted) ||
+        Boolean(regimenDecisionContext?.eac?.eacCompleted);
+
+      if (!eacCompleted && sessionsCompleted < 3) {
+        return 'Complete EAC sequence (or document a non-failure indication) before creating regimen switch request.';
+      }
+    }
+
+    return null;
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50 overflow-x-hidden">
@@ -830,7 +906,7 @@ const HIVDoctorDashboard: React.FC = () => {
                                         ...enrollment,
                                         ...(fullEnrollment || {}),
                                       };
-                                      setSelectedEnrollmentForChange({
+                                      await openRegimenChangeModalWithContext({
                                         ...mergedEnrollment,
                                         current_regimen:
                                           latestVisit?.arv_regimen_name ||
@@ -841,28 +917,10 @@ const HIVDoctorDashboard: React.FC = () => {
                                           fullEnrollment?.current_regimen_code ||
                                           enrollment.current_regimen_code,
                                       });
-                                      setShowRegimenChangeModal(true);
-                                      setRegimenChangeForm({
-                                        requestedRegimenCode: '',
-                                        requestedRegimenName: '',
-                                        changeReasonCode: '',
-                                        changeReasonDetails: '',
-                                        clinicalJustification: '',
-                                        selectedLine: ''
-                                      });
                                     } catch (error) {
                                       console.error('Failed to fetch enrollment/visit details:', error);
                                       // Fallback to using enrollment if API fails
-                                      setSelectedEnrollmentForChange(enrollment);
-                                      setShowRegimenChangeModal(true);
-                                      setRegimenChangeForm({
-                                        requestedRegimenCode: '',
-                                        requestedRegimenName: '',
-                                        changeReasonCode: '',
-                                        changeReasonDetails: '',
-                                        clinicalJustification: '',
-                                        selectedLine: ''
-                                      });
+                                      await openRegimenChangeModalWithContext(enrollment);
                                     }
                                   }}
                                   className="px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2 text-sm"
@@ -1127,7 +1185,7 @@ const HIVDoctorDashboard: React.FC = () => {
                                       console.log('Current regimen from visit:', latestVisit?.arv_regimen_name);
                                       console.log('Current regimen code from visit:', latestVisit?.arv_regimen_code);
                                       
-                                      setSelectedEnrollmentForChange({ 
+                                      await openRegimenChangeModalWithContext({ 
                                         ...item.enrollment, // Base enrollment data
                                         ...fullEnrollment, // Override with full details
                                         current_regimen: latestVisit?.arv_regimen_name || fullEnrollment.current_regimen || item.enrollment.current_regimen,
@@ -1136,17 +1194,15 @@ const HIVDoctorDashboard: React.FC = () => {
                                         eacCompleted: eacCompleted,
                                         latestVL: latestVL
                                       });
-                                      setShowRegimenChangeModal(true);
                                     } catch (error) {
                                       console.error('Failed to fetch enrollment/visit details:', error);
                                       // Fallback to using item.enrollment if API fails
-                                      setSelectedEnrollmentForChange({ 
+                                      await openRegimenChangeModalWithContext({ 
                                         ...item.enrollment, 
                                         eacSessions: item.sessions,
                                         eacCompleted: eacCompleted,
                                         latestVL: latestVL
                                       });
-                                      setShowRegimenChangeModal(true);
                                     }
                                   }}
                                   className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold ${
@@ -1853,14 +1909,8 @@ const HIVDoctorDashboard: React.FC = () => {
                   onClick={() => {
                     setShowRegimenChangeModal(false);
                     setSelectedEnrollmentForChange(null);
-                    setRegimenChangeForm({
-                      requestedRegimenCode: '',
-                      requestedRegimenName: '',
-                      changeReasonCode: '',
-                      changeReasonDetails: '',
-                      clinicalJustification: '',
-                      selectedLine: ''
-                    });
+                    resetRegimenChangeForm();
+                    setRegimenDecisionContext(null);
                   }}
                   className="p-2 hover:bg-white/10 rounded-lg"
                 >
@@ -1891,6 +1941,41 @@ const HIVDoctorDashboard: React.FC = () => {
                         </p>
                       )}
                     </div>
+                  )}
+                </div>
+
+                <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-2">
+                    CDSS Regimen Decision Context
+                  </p>
+                  {loadingRegimenDecisionContext ? (
+                    <p className="text-sm text-emerald-700">Loading VL pathway and EAC readiness...</p>
+                  ) : regimenDecisionContext?.vlPathway ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-emerald-900">
+                        VL pathway status:{' '}
+                        <span className="font-semibold">{regimenDecisionContext.vlPathway.status || 'unknown'}</span>
+                      </p>
+                      {Array.isArray(regimenDecisionContext.vlPathway.actions) &&
+                        regimenDecisionContext.vlPathway.actions.length > 0 && (
+                          <p className="text-sm text-emerald-800">
+                            Suggested actions: {regimenDecisionContext.vlPathway.actions.join(', ')}
+                          </p>
+                        )}
+                      {regimenChangeCdssBlocker ? (
+                        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                          {regimenChangeCdssBlocker}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-800">
+                          CDSS guardrails allow regimen-change request with current context.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-emerald-700">
+                      CDSS context unavailable. You can continue, but verify VL/EAC pathway manually.
+                    </p>
                   )}
                 </div>
 
@@ -2055,6 +2140,14 @@ const HIVDoctorDashboard: React.FC = () => {
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={async () => {
+                      if (loadingRegimenDecisionContext) {
+                        showError('Please wait', 'CDSS decision context is still loading.');
+                        return;
+                      }
+                      if (regimenChangeCdssBlocker) {
+                        showError('CDSS Guardrail', regimenChangeCdssBlocker);
+                        return;
+                      }
                       if (!regimenChangeForm.requestedRegimenCode || !regimenChangeForm.changeReasonDetails || !regimenChangeForm.clinicalJustification) {
                         showError('Error', 'Please fill in all required fields');
                         return;
@@ -2128,21 +2221,16 @@ const HIVDoctorDashboard: React.FC = () => {
                         showSuccess('Success', 'Regimen change initiated and approved. Nurse will record this change in the next clinical visit.');
                         setShowRegimenChangeModal(false);
                         setSelectedEnrollmentForChange(null);
-                        setRegimenChangeForm({
-                          requestedRegimenCode: '',
-                          requestedRegimenName: '',
-                          changeReasonCode: '',
-                          changeReasonDetails: '',
-                          clinicalJustification: '',
-                          selectedLine: ''
-                        });
+                        resetRegimenChangeForm();
+                        setRegimenDecisionContext(null);
                         loadData();
                       } catch (error: any) {
                         console.error('Failed to create regimen change request:', error);
                         showError('Error', error?.response?.data?.message || 'Failed to create regimen change request');
                       }
                     }}
-                    className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold"
+                    disabled={loadingRegimenDecisionContext || Boolean(regimenChangeCdssBlocker)}
+                    className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Create Regimen Change Request
                   </button>
@@ -2150,14 +2238,8 @@ const HIVDoctorDashboard: React.FC = () => {
                     onClick={() => {
                       setShowRegimenChangeModal(false);
                       setSelectedEnrollmentForChange(null);
-                      setRegimenChangeForm({
-                        requestedRegimenCode: '',
-                        requestedRegimenName: '',
-                        changeReasonCode: '',
-                        changeReasonDetails: '',
-                        clinicalJustification: '',
-                        selectedLine: ''
-                      });
+                      resetRegimenChangeForm();
+                      setRegimenDecisionContext(null);
                     }}
                     className="px-4 py-3 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 font-semibold"
                   >
@@ -2186,4 +2268,3 @@ const HIVDoctorDashboard: React.FC = () => {
 };
 
 export default HIVDoctorDashboard;
-

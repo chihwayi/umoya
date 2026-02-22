@@ -1639,6 +1639,7 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
           patientName={`${enrollment.first_name || ''} ${enrollment.last_name || ''}`.trim()}
           patientId={enrollment.patient_id}
           existingSessionsCount={eacSessions.length}
+          latestSessionDate={eacSessions[0]?.session_date || null}
           tenantSlug={tenantSlug}
         />
       )}

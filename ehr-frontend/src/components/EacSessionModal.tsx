@@ -14,6 +14,7 @@ interface EacSessionModalProps {
   patientName: string;
   patientId: string;
   existingSessionsCount: number;
+  latestSessionDate?: string | null;
   tenantSlug: string;
 }
 
@@ -26,6 +27,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
   patientName,
   patientId,
   existingSessionsCount,
+  latestSessionDate,
   tenantSlug
 }) => {
   const { showSuccess, showError } = useNotification();
@@ -122,10 +124,19 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
   useEffect(() => {
     if (open) {
       loadCurrentUser();
-      // Reset session number based on current count
-      setForm(prev => ({ ...prev, sessionNumber: existingSessionsCount + 1 }));
+      const todayIso = new Date().toISOString().split('T')[0];
+      const minDateIso = latestSessionDate || '';
+      const nextSessionDateDefault =
+        minDateIso && todayIso < minDateIso ? minDateIso : todayIso;
+
+      // Reset guarded fields based on current context
+      setForm(prev => ({
+        ...prev,
+        sessionNumber: existingSessionsCount + 1,
+        sessionDate: nextSessionDateDefault,
+      }));
     }
-  }, [open, existingSessionsCount]);
+  }, [open, existingSessionsCount, latestSessionDate]);
 
   // Auto-populate lab results when session date changes
   useEffect(() => {
@@ -185,15 +196,100 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
       setCurrentUser(user);
       
       if (user) {
+        const firstName = user.firstName || user.first_name || '';
+        const lastName = user.lastName || user.last_name || '';
+        const fullName = `${firstName} ${lastName}`.trim();
         setForm(prev => ({
           ...prev,
           counselorId: user.id,
-          counselorName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email
+          counselorName: fullName || user.name || user.email
         }));
       }
     } catch (error) {
       console.error('Failed to load current user:', error);
     }
+  };
+
+  const validateEacSessionForm = (): string | null => {
+    const expectedSessionNumber = existingSessionsCount + 1;
+    if (form.sessionNumber !== expectedSessionNumber) {
+      return `Session number must be ${expectedSessionNumber}.`;
+    }
+
+    if (!form.sessionDate) {
+      return 'Session date is required.';
+    }
+
+    const sessionDate = new Date(form.sessionDate);
+    if (Number.isNaN(sessionDate.getTime())) {
+      return 'Session date is invalid.';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate > today) {
+      return 'Session date cannot be in the future.';
+    }
+
+    if (latestSessionDate && form.sessionDate < latestSessionDate) {
+      return `Session date cannot be earlier than last recorded EAC session (${latestSessionDate}).`;
+    }
+
+    if (form.nextSessionDate) {
+      const nextDate = new Date(form.nextSessionDate);
+      if (Number.isNaN(nextDate.getTime())) {
+        return 'Next session date is invalid.';
+      }
+      nextDate.setHours(0, 0, 0, 0);
+      if (nextDate <= sessionDate) {
+        return 'Next session date must be after this session date.';
+      }
+    }
+
+    if (form.eacProgramStatus === 'Completed' && !form.eacCompletionDate) {
+      return 'EAC completion date is required when program status is Completed.';
+    }
+
+    if (form.eacCompletionDate) {
+      const completionDate = new Date(form.eacCompletionDate);
+      if (Number.isNaN(completionDate.getTime())) {
+        return 'EAC completion date is invalid.';
+      }
+      completionDate.setHours(0, 0, 0, 0);
+      if (completionDate < sessionDate) {
+        return 'EAC completion date cannot be before session date.';
+      }
+
+      if (form.returnToConventionalCareDate) {
+        const returnDate = new Date(form.returnToConventionalCareDate);
+        if (Number.isNaN(returnDate.getTime())) {
+          return 'Return to conventional care date is invalid.';
+        }
+        returnDate.setHours(0, 0, 0, 0);
+        if (returnDate < completionDate) {
+          return 'Return to conventional care date cannot be before EAC completion date.';
+        }
+      }
+    } else if (form.returnToConventionalCareDate) {
+      return 'Return to conventional care date requires EAC completion date.';
+    }
+
+    if (form.viralLoad) {
+      const viralLoad = Number(form.viralLoad);
+      if (!Number.isFinite(viralLoad) || viralLoad < 0) {
+        return 'Viral load must be a valid non-negative number.';
+      }
+      if (form.viralLoadSuppressed !== (viralLoad < 1000)) {
+        return 'Viral load suppression flag does not match VL threshold (<1000 copies/mL).';
+      }
+    }
+
+    if (!form.counselorId || !form.counselorName.trim()) {
+      return 'Counselor identity is required.';
+    }
+
+    return null;
   };
 
   const handleCheckboxChange = (field: string, value: string, checked: boolean) => {
@@ -209,6 +305,12 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const validationError = validateEacSessionForm();
+    if (validationError) {
+      showError('Validation Error', validationError);
+      return;
+    }
     
     try {
       const token = localStorage.getItem('ehr_token');
@@ -696,8 +798,8 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                   <input
                     type="number"
                     value={form.sessionNumber}
-                    onChange={(e) => setForm(prev => ({ ...prev, sessionNumber: parseInt(e.target.value) || 1 }))}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+                    readOnly
+                    className="w-full border border-slate-300 rounded-lg px-4 py-2 bg-slate-50 text-slate-600"
                     required
                   />
                 </div>
@@ -708,6 +810,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                     value={form.sessionDate}
                     onChange={(e) => setForm(prev => ({ ...prev, sessionDate: e.target.value }))}
                     className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+                    min={latestSessionDate || undefined}
                     required
                   />
                 </div>
@@ -716,10 +819,10 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                   <input
                     type="text"
                     value={form.counselorName}
-                    onChange={(e) => setForm(prev => ({ ...prev, counselorName: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500"
+                    readOnly
+                    className="w-full border border-slate-300 rounded-lg px-4 py-2 bg-slate-50 text-slate-600"
                     required
-                    placeholder="Enter counselor name"
+                    placeholder="Auto-filled from logged-in user"
                   />
                 </div>
               </div>
@@ -907,7 +1010,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                   >
                     <option value="">Select level</option>
                     <option value="High">High</option>
-                    <option value="Moderate">Moderate</option>
+                    <option value="Medium">Medium</option>
                     <option value="Low">Low</option>
                   </select>
                 </div>
@@ -1084,7 +1187,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                     <option value="Completed">Completed</option>
                     <option value="Partial">Partial</option>
                     <option value="Missed">Missed</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="Rescheduled">Rescheduled</option>
                   </select>
                 </div>
                 <div>
@@ -1194,4 +1297,3 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
 };
 
 export default EacSessionModal;
-

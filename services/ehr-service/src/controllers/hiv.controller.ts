@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UsePipes, ValidationPipe, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { HivService } from '../services/hiv.service';
@@ -130,7 +130,28 @@ export class HivController {
   @ApiOperation({ summary: 'Record EAC session' })
   @ApiResponse({ status: 201, description: 'EAC session recorded' })
   async createEacSession(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.hivService.createEacSession(body, req.tenantDb);
+    const user = (req as any).user || {};
+    const firstName = (user.first_name || user.firstName || '').toString().trim();
+    const lastName = (user.last_name || user.lastName || '').toString().trim();
+    const counselorName =
+      `${firstName} ${lastName}`.trim() ||
+      user.full_name ||
+      user.fullName ||
+      user.display_name ||
+      user.displayName ||
+      user.username ||
+      user.email ||
+      body.counselorName ||
+      'Unknown';
+
+    return this.hivService.createEacSession(
+      {
+        ...body,
+        counselorId: user.id || body.counselorId,
+        counselorName,
+      },
+      req.tenantDb,
+    );
   }
 
   @Get('eac/enrollment/:enrollmentId')
@@ -152,7 +173,28 @@ export class HivController {
   @ApiOperation({ summary: 'Create ARV change request' })
   @ApiResponse({ status: 201, description: 'Change request created' })
   async createArvChangeRequest(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.hivService.createArvChangeRequest(body, req.tenantDb);
+    const user = (req as any).user || {};
+    const firstName = (user.first_name || user.firstName || '').toString().trim();
+    const lastName = (user.last_name || user.lastName || '').toString().trim();
+    const requestedByName =
+      `${firstName} ${lastName}`.trim() ||
+      user.full_name ||
+      user.fullName ||
+      user.display_name ||
+      user.displayName ||
+      user.username ||
+      user.email ||
+      body.requestedByName ||
+      'Unknown';
+
+    return this.hivService.createArvChangeRequest(
+      {
+        ...body,
+        requestedBy: user.id || body.requestedBy,
+        requestedByName,
+      },
+      req.tenantDb,
+    );
   }
 
   @Get('arv-change-requests')
@@ -166,8 +208,23 @@ export class HivController {
   @ApiOperation({ summary: 'Approve ARV change request (doctor only)' })
   @ApiResponse({ status: 200, description: 'Change request approved' })
   async approveArvChangeRequest(@Param('requestId') requestId: string, @Body() body: any, @Request() req: RequestWithTenant) {
-    const doctorId = (req as any).user?.id;
-    const doctorName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name;
+    const user = (req as any).user || {};
+    if (String(user.role || '').toLowerCase() !== 'doctor') {
+      throw new ForbiddenException('Only doctors can approve ARV change requests');
+    }
+
+    const doctorId = user.id;
+    const firstName = (user.first_name || user.firstName || '').toString().trim();
+    const lastName = (user.last_name || user.lastName || '').toString().trim();
+    const doctorName =
+      `${firstName} ${lastName}`.trim() ||
+      user.full_name ||
+      user.fullName ||
+      user.display_name ||
+      user.displayName ||
+      user.username ||
+      user.email ||
+      'Unknown Doctor';
     return this.hivService.approveArvChangeRequest(requestId, { ...body, approvedBy: doctorId, approvedByName: doctorName }, req.tenantDb);
   }
 
@@ -175,8 +232,23 @@ export class HivController {
   @ApiOperation({ summary: 'Reject ARV change request (doctor only)' })
   @ApiResponse({ status: 200, description: 'Change request rejected' })
   async rejectArvChangeRequest(@Param('requestId') requestId: string, @Body() body: any, @Request() req: RequestWithTenant) {
-    const doctorId = (req as any).user?.id;
-    const doctorName = (req as any).user?.first_name + ' ' + (req as any).user?.last_name;
+    const user = (req as any).user || {};
+    if (String(user.role || '').toLowerCase() !== 'doctor') {
+      throw new ForbiddenException('Only doctors can reject ARV change requests');
+    }
+
+    const doctorId = user.id;
+    const firstName = (user.first_name || user.firstName || '').toString().trim();
+    const lastName = (user.last_name || user.lastName || '').toString().trim();
+    const doctorName =
+      `${firstName} ${lastName}`.trim() ||
+      user.full_name ||
+      user.fullName ||
+      user.display_name ||
+      user.displayName ||
+      user.username ||
+      user.email ||
+      'Unknown Doctor';
     return this.hivService.rejectArvChangeRequest(requestId, { ...body, approvedBy: doctorId, approvedByName: doctorName }, req.tenantDb);
   }
 

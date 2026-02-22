@@ -2193,6 +2193,170 @@ export class HivService {
       sessionOutcomeConcept
     } = body;
 
+    if (!enrollmentId) {
+      throw new BadRequestException('enrollmentId is required');
+    }
+    if (!counselorId) {
+      throw new BadRequestException('counselorId is required');
+    }
+
+    const parseRequiredDate = (value: any, fieldName: string): Date => {
+      const parsed = new Date(value);
+      if (!value || Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`${fieldName} is required and must be a valid date`);
+      }
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    const parseOptionalDate = (value: any, fieldName: string): Date | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`${fieldName} is invalid`);
+      }
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    const parseOptionalNumber = (value: any, fieldName: string): number | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {
+        throw new BadRequestException(`${fieldName} must be numeric`);
+      }
+      return parsed;
+    };
+
+    const sessionNumberNumeric = Number(sessionNumber);
+    if (!Number.isInteger(sessionNumberNumeric) || sessionNumberNumeric < 1) {
+      throw new BadRequestException('sessionNumber must be a positive integer');
+    }
+
+    const parsedSessionDate = parseRequiredDate(sessionDate, 'sessionDate');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parsedSessionDate > today) {
+      throw new BadRequestException('sessionDate cannot be in the future');
+    }
+
+    const parsedNextSessionDate = parseOptionalDate(nextSessionDate, 'nextSessionDate');
+    if (parsedNextSessionDate && parsedNextSessionDate <= parsedSessionDate) {
+      throw new BadRequestException('nextSessionDate must be after sessionDate');
+    }
+
+    const normalizedSessionOutcome = sessionOutcome || 'Completed';
+    const validSessionOutcomes = new Set(['Completed', 'Partial', 'Missed', 'Rescheduled']);
+    if (!validSessionOutcomes.has(normalizedSessionOutcome)) {
+      throw new BadRequestException(`Invalid sessionOutcome "${normalizedSessionOutcome}"`);
+    }
+
+    const normalizedProgramStatus = eacProgramStatus || 'Active';
+    const validProgramStatuses = new Set(['Active', 'Completed', 'Discontinued', 'Returned to Care']);
+    if (!validProgramStatuses.has(normalizedProgramStatus)) {
+      throw new BadRequestException(`Invalid eacProgramStatus "${normalizedProgramStatus}"`);
+    }
+
+    const parsedCompletionDate = parseOptionalDate(eacCompletionDate, 'eacCompletionDate');
+    const parsedReturnToConventionalCareDate = parseOptionalDate(
+      returnToConventionalCareDate,
+      'returnToConventionalCareDate',
+    );
+
+    if (normalizedProgramStatus === 'Completed' && !parsedCompletionDate) {
+      throw new BadRequestException('eacCompletionDate is required when eacProgramStatus is Completed');
+    }
+    if (parsedCompletionDate && parsedCompletionDate < parsedSessionDate) {
+      throw new BadRequestException('eacCompletionDate cannot be before sessionDate');
+    }
+    if (parsedReturnToConventionalCareDate && !parsedCompletionDate) {
+      throw new BadRequestException('returnToConventionalCareDate requires eacCompletionDate');
+    }
+    if (
+      parsedReturnToConventionalCareDate &&
+      parsedCompletionDate &&
+      parsedReturnToConventionalCareDate < parsedCompletionDate
+    ) {
+      throw new BadRequestException('returnToConventionalCareDate cannot be before eacCompletionDate');
+    }
+
+    const adherencePercentage = parseOptionalNumber(
+      adherencePercentageSelfReported,
+      'adherencePercentageSelfReported',
+    );
+    if (
+      adherencePercentage !== null &&
+      (!Number.isInteger(adherencePercentage) || adherencePercentage < 0 || adherencePercentage > 100)
+    ) {
+      throw new BadRequestException('adherencePercentageSelfReported must be an integer between 0 and 100');
+    }
+
+    const normalizedViralLoad = parseOptionalNumber(viralLoad, 'viralLoad');
+    if (normalizedViralLoad !== null && normalizedViralLoad < 0) {
+      throw new BadRequestException('viralLoad cannot be negative');
+    }
+
+    const parsedViralLoadTestDate = parseOptionalDate(viralLoadTestDate, 'viralLoadTestDate');
+    if (parsedViralLoadTestDate && parsedViralLoadTestDate > today) {
+      throw new BadRequestException('viralLoadTestDate cannot be in the future');
+    }
+
+    if (
+      normalizedViralLoad !== null &&
+      viralLoadSuppressed !== undefined &&
+      viralLoadSuppressed !== null
+    ) {
+      const expectedSuppressed = normalizedViralLoad < 1000;
+      if (Boolean(viralLoadSuppressed) !== expectedSuppressed) {
+        throw new BadRequestException(
+          'viralLoadSuppressed does not match viralLoad threshold (<1000 copies/mL)',
+        );
+      }
+    }
+
+    const enrollmentRows = await tenantDb.query(
+      `SELECT id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
+      [enrollmentId],
+    );
+    if (!enrollmentRows || enrollmentRows.length === 0) {
+      throw new NotFoundException('HIV care enrollment not found');
+    }
+
+    const latestSessionRows = await tenantDb.query(
+      `SELECT session_number, session_date
+       FROM hiv_eac_sessions
+       WHERE enrollment_id = $1
+       ORDER BY session_number DESC, session_date DESC
+       LIMIT 1`,
+      [enrollmentId],
+    );
+
+    const latestSession = latestSessionRows[0];
+    const expectedSessionNumber = latestSession
+      ? Number(latestSession.session_number || 0) + 1
+      : 1;
+
+    if (sessionNumberNumeric !== expectedSessionNumber) {
+      throw new BadRequestException(
+        `EAC sessions must be sequential. Expected sessionNumber ${expectedSessionNumber}.`,
+      );
+    }
+
+    if (latestSession?.session_date) {
+      const latestSessionDate = new Date(latestSession.session_date);
+      latestSessionDate.setHours(0, 0, 0, 0);
+      if (parsedSessionDate < latestSessionDate) {
+        throw new BadRequestException('sessionDate cannot be earlier than the most recent EAC session date');
+      }
+    }
+
+    const dateToIso = (value: Date | null): string | null =>
+      value ? value.toISOString().split('T')[0] : null;
+
     const barrierConcepts = await this.normalizeConceptArray(
       tenantDb,
       adherenceBarrierConcepts ?? body?.adherence_barrier_concepts,
@@ -2240,16 +2404,22 @@ export class HivService {
       )
       RETURNING *
     `, [
-      enrollmentId, sessionNumber, sessionDate, counselorId, counselorName || null,
-      adherenceBarriers || [], barriersOtherDetails || null, adherencePercentageSelfReported || null,
+      enrollmentId, sessionNumberNumeric, dateToIso(parsedSessionDate), counselorId, counselorName || null,
+      adherenceBarriers || [], barriersOtherDetails || null, adherencePercentage,
       adherenceAssessmentMethod || null, interventionsProvided || [], interventionsOtherDetails || null,
       medicationSimplification || false, adherenceToolsProvided || [], supportSystemsIdentified || [],
       patientFeedback || null, patientConcerns || null, patientCommitmentLevel || null,
-      nextSessionDate || null, followUpActions || [], followUpResponsiblePerson || null,
-      sessionOutcome || 'Completed', outcomeNotes || null, adherenceImprovementObserved || false,
-      eacProgramStatus || 'Active', eacCompletionDate || null, returnToConventionalCareDate || null,
-      viralLoad || null, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'), 
-      viralLoadTestDate || null, viralLoadSuppressed || null, viralLoadImproved || false,
+      dateToIso(parsedNextSessionDate), followUpActions || [], followUpResponsiblePerson || null,
+      normalizedSessionOutcome, outcomeNotes || null, adherenceImprovementObserved || false,
+      normalizedProgramStatus, dateToIso(parsedCompletionDate), dateToIso(parsedReturnToConventionalCareDate),
+      normalizedViralLoad, (viralLoadUnit && viralLoadUnit.trim() !== '' ? viralLoadUnit : 'copies/mL'),
+      dateToIso(parsedViralLoadTestDate),
+      normalizedViralLoad !== null
+        ? normalizedViralLoad < 1000
+        : (viralLoadSuppressed === undefined || viralLoadSuppressed === null
+          ? null
+          : Boolean(viralLoadSuppressed)),
+      viralLoadImproved || false,
       sessionNotes || null,
       JSON.stringify(barrierConcepts ?? []),
       JSON.stringify(interventionConceptsResolved ?? []),
@@ -2297,6 +2467,149 @@ export class HivService {
       changeReasonCode, changeReasonDetails, clinicalJustification
     } = body;
 
+    if (!enrollmentId) {
+      throw new BadRequestException('enrollmentId is required');
+    }
+    if (!requestedBy) {
+      throw new BadRequestException('requestedBy is required');
+    }
+    if (!requestedRegimenCode || !String(requestedRegimenCode).trim()) {
+      throw new BadRequestException('requestedRegimenCode is required');
+    }
+    if (!requestedRegimenName || !String(requestedRegimenName).trim()) {
+      throw new BadRequestException('requestedRegimenName is required');
+    }
+
+    const normalizedJustification = String(clinicalJustification || '').trim();
+    if (normalizedJustification.length < 15) {
+      throw new BadRequestException('clinicalJustification must contain enough clinical detail (minimum 15 characters)');
+    }
+
+    const parseOptionalDate = (value: any, fieldName: string): Date | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`${fieldName} is invalid`);
+      }
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    const parseOptionalNumber = (value: any, fieldName: string): number | null => {
+      if (value === undefined || value === null || value === '') {
+        return null;
+      }
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) {
+        throw new BadRequestException(`${fieldName} must be numeric`);
+      }
+      return parsed;
+    };
+
+    const currentViralLoadNumeric = parseOptionalNumber(currentViralLoad, 'currentViralLoad');
+    const previousViralLoadNumeric = parseOptionalNumber(previousViralLoad, 'previousViralLoad');
+    if (currentViralLoadNumeric !== null && currentViralLoadNumeric < 0) {
+      throw new BadRequestException('currentViralLoad cannot be negative');
+    }
+    if (previousViralLoadNumeric !== null && previousViralLoadNumeric < 0) {
+      throw new BadRequestException('previousViralLoad cannot be negative');
+    }
+
+    const currentViralLoadDateParsed = parseOptionalDate(currentViralLoadDate, 'currentViralLoadDate');
+    const previousViralLoadDateParsed = parseOptionalDate(previousViralLoadDate, 'previousViralLoadDate');
+    const eacCompletionDateParsed = parseOptionalDate(eacCompletionDate, 'eacCompletionDate');
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (currentViralLoadDateParsed && currentViralLoadDateParsed > today) {
+      throw new BadRequestException('currentViralLoadDate cannot be in the future');
+    }
+    if (previousViralLoadDateParsed && previousViralLoadDateParsed > today) {
+      throw new BadRequestException('previousViralLoadDate cannot be in the future');
+    }
+    if (eacCompletionDateParsed && eacCompletionDateParsed > today) {
+      throw new BadRequestException('eacCompletionDate cannot be in the future');
+    }
+
+    if (currentRegimenCode && requestedRegimenCode && currentRegimenCode === requestedRegimenCode) {
+      throw new BadRequestException('requestedRegimenCode must differ from the current regimen');
+    }
+
+    const providedEacSessionsCompleted = Number(eacSessionsCompleted || 0);
+    if (!Number.isInteger(providedEacSessionsCompleted) || providedEacSessionsCompleted < 0) {
+      throw new BadRequestException('eacSessionsCompleted must be a non-negative integer');
+    }
+
+    const enrollmentRows = await tenantDb.query(
+      `SELECT id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`,
+      [enrollmentId],
+    );
+    if (!enrollmentRows || enrollmentRows.length === 0) {
+      throw new NotFoundException('HIV care enrollment not found');
+    }
+
+    const openChangeRequest = await tenantDb.query(
+      `SELECT id, status
+       FROM hiv_arv_change_requests
+       WHERE enrollment_id = $1
+         AND visit_recorded = false
+         AND status IN ('pending', 'approved')
+       ORDER BY request_date DESC, created_at DESC
+       LIMIT 1`,
+      [enrollmentId],
+    );
+    if (openChangeRequest.length > 0) {
+      throw new BadRequestException(
+        `An ${openChangeRequest[0].status} regimen change request already exists for this enrollment and is still awaiting visit recording.`,
+      );
+    }
+
+    const eacInfo = await this.checkEacEligibility(enrollmentId, tenantDb);
+    const eacSessionCountRows = await tenantDb.query(
+      `SELECT COUNT(*) as count
+       FROM hiv_eac_sessions
+       WHERE enrollment_id = $1`,
+      [enrollmentId],
+    );
+    const authoritativeEacSessionsCompleted = parseInt(eacSessionCountRows[0]?.count || '0', 10);
+    const authoritativeEacCompleted = Boolean(eacInfo?.eacCompleted);
+
+    const vlPathway = await this.getVlPathway(enrollmentId, tenantDb);
+    const rationale = `${changeReasonDetails || ''} ${normalizedJustification}`.toLowerCase();
+    const hasNonFailureIndication =
+      /toxicity|toxic|intoler|allerg|pregnan|interaction|contraind|side effect|adverse|renal|hepatic/.test(
+        rationale,
+      );
+
+    if (vlPathway.status === 'not_on_art') {
+      throw new BadRequestException('Regimen change request cannot be created because patient is not currently on ART.');
+    }
+
+    if (
+      (vlPathway.status === 'suppressed' || vlPathway.status === 'post_eac_suppressed') &&
+      !hasNonFailureIndication
+    ) {
+      throw new BadRequestException(
+        'Current viral load pathway is suppressed. Provide a clear non-failure indication (e.g., toxicity/intolerance) before requesting regimen change.',
+      );
+    }
+
+    if (
+      (vlPathway.status === 'high_vl' || vlPathway.status === 'high_vl_needs_eac') &&
+      !authoritativeEacCompleted &&
+      authoritativeEacSessionsCompleted < 3 &&
+      !hasNonFailureIndication
+    ) {
+      throw new BadRequestException(
+        'Regimen change for unsuppressed viral load requires completed EAC sessions or documented non-failure indication.',
+      );
+    }
+
+    const dateToIso = (value: Date | null): string | null =>
+      value ? value.toISOString().split('T')[0] : null;
+
     const result = await tenantDb.query(`
       INSERT INTO hiv_arv_change_requests (
         enrollment_id, requested_by, requested_by_name,
@@ -2313,11 +2626,11 @@ export class HivService {
     `, [
       enrollmentId, requestedBy, requestedByName || null,
       currentRegimenCode || null, currentRegimenName || null,
-      currentViralLoad || null, currentViralLoadDate || null,
-      previousViralLoad || null, previousViralLoadDate || null,
-      eacCompleted || false, eacSessionsCompleted || 0, eacCompletionDate || null,
+      currentViralLoadNumeric, dateToIso(currentViralLoadDateParsed),
+      previousViralLoadNumeric, dateToIso(previousViralLoadDateParsed),
+      authoritativeEacCompleted, authoritativeEacSessionsCompleted, dateToIso(eacCompletionDateParsed),
       requestedRegimenCode, requestedRegimenName,
-      changeReasonCode || null, changeReasonDetails || null, clinicalJustification || null
+      changeReasonCode || null, changeReasonDetails || null, normalizedJustification
     ]);
 
     return result[0];
@@ -2340,6 +2653,10 @@ export class HivService {
   async approveArvChangeRequest(requestId: string, body: any, tenantDb: DataSource) {
     const { approvedBy, approvedByName, approvalNotes } = body;
 
+    if (!approvedBy) {
+      throw new BadRequestException('approvedBy is required');
+    }
+
     const result = await tenantDb.query(`
       UPDATE hiv_arv_change_requests
       SET status = 'approved',
@@ -2353,7 +2670,7 @@ export class HivService {
     `, [approvedBy, approvedByName || null, approvalNotes || null, requestId]);
 
     if (!result[0]) {
-      throw new Error('Change request not found or already processed');
+      throw new BadRequestException('Change request not found or already processed');
     }
 
     return result[0];
@@ -2361,6 +2678,13 @@ export class HivService {
 
   async rejectArvChangeRequest(requestId: string, body: any, tenantDb: DataSource) {
     const { approvedBy, approvedByName, rejectionReason } = body;
+
+    if (!approvedBy) {
+      throw new BadRequestException('approvedBy is required');
+    }
+    if (!rejectionReason || !String(rejectionReason).trim()) {
+      throw new BadRequestException('rejectionReason is required');
+    }
 
     const result = await tenantDb.query(`
       UPDATE hiv_arv_change_requests
@@ -2372,10 +2696,10 @@ export class HivService {
           updated_at = NOW()
       WHERE id = $4 AND status = 'pending'
       RETURNING *
-    `, [approvedBy, approvedByName || null, rejectionReason, requestId]);
+    `, [approvedBy, approvedByName || null, String(rejectionReason).trim(), requestId]);
 
     if (!result[0]) {
-      throw new Error('Change request not found or already processed');
+      throw new BadRequestException('Change request not found or already processed');
     }
 
     return result[0];
@@ -2394,27 +2718,33 @@ export class HivService {
     return request[0] || null;
   }
 
-  // Check if patient needs EAC based on viral load (WHO Guidelines: 2 consecutive VL >1000)
+  // Check if patient needs EAC based on viral load (WHO-aligned: last 2 consecutive VL results >1000 on ART)
   async checkEacEligibility(enrollmentId: string, tenantDb: DataSource) {
     const recentVisits = await tenantDb.query(
-      `SELECT viral_load, viral_load_test_date, visit_date
+      `SELECT viral_load, viral_load_test_date, visit_date, arv_status
        FROM hiv_clinical_visits
        WHERE enrollment_id = $1 
        AND viral_load IS NOT NULL
-       AND viral_load > 1000
-       ORDER BY visit_date DESC
+       ORDER BY COALESCE(viral_load_test_date, visit_date) DESC
        LIMIT 2`,
       [enrollmentId]
     );
 
-    const needsEac = recentVisits.length >= 2;
     const lastTwoVisits = recentVisits.slice(0, 2);
+    const onArtStates = new Set(['2a', '2b', '3', '4', '6']);
+    const bothHighVl =
+      lastTwoVisits.length === 2 &&
+      lastTwoVisits.every((visit: any) => Number(visit.viral_load) >= 1000);
+    const bothOnArt =
+      lastTwoVisits.length === 2 &&
+      lastTwoVisits.every((visit: any) => onArtStates.has(String(visit.arv_status || '').trim()));
+    const needsEac = bothHighVl && bothOnArt;
     
-    // Check if visits are 3-6 months apart (WHO guideline)
+    // Check if the two high VL results are 3-6 months apart
     let visitsValid = false;
     if (lastTwoVisits.length === 2) {
-      const date1 = new Date(lastTwoVisits[0].visit_date);
-      const date2 = new Date(lastTwoVisits[1].visit_date);
+      const date1 = new Date(lastTwoVisits[0].viral_load_test_date || lastTwoVisits[0].visit_date);
+      const date2 = new Date(lastTwoVisits[1].viral_load_test_date || lastTwoVisits[1].visit_date);
       const monthsDiff = (date1.getTime() - date2.getTime()) / (1000 * 60 * 60 * 24 * 30);
       visitsValid = monthsDiff >= 3 && monthsDiff <= 6;
     }
