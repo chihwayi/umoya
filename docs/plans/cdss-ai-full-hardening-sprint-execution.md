@@ -256,7 +256,7 @@ Status key:
 
 ## Immediate Next 10 Tasks
 
-1. Validate all frontend CDSS flows in QA (guideline search, risk, imaging) now that they route via EHR proxy.
+1. Completed: Validate frontend CDSS flow routing for guideline search, risk, diagnosis, and imaging via EHR proxy (`ehr-frontend/src/services/cdssApi.proxy.test.ts`).
 2. Completed: Add/expand EHR proxy tests for `/cdss/analyze-image` and `/cdss/guidelines*` behavior (`services/ehr-service/src/services/cdss.service.proxy.spec.ts`).
 3. Completed: Add/expand transcription integration tests for `/transcription/whisper` contract and forwarded headers (`services/ehr-service/src/controllers/transcription.controller.spec.ts`, `services/ehr-service/src/services/transcription.service.proxy.spec.ts`).
 4. Completed: Add explicit service JWT scopes from EHR and validate strict scope checks in CDSS (`services/ehr-service` unit tests passing, `services/cdss-service` tests passing).
@@ -273,3 +273,4 @@ Status key:
 15. Completed: Add CI CDSS safety gate subset (offline eval harness + AI governance + outbound egress tests) in `.github/workflows/ci.yml`.
 16. Completed: Add tenant-aware CDSS monitoring artifacts (new abstention metric, tenant-labeled dependency metrics, alert rules, and Grafana tenant safety dashboard).
 17. Completed: Expand EHR/CDSS regression tests and CI gates for proxy routing, transcription forwarding, and contract/safety drift checks.
+18. Completed: Add frontend CDSS proxy smoke tests validating route/header correctness for core clinical flows.
