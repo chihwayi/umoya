@@ -174,6 +174,12 @@ export class NurseWorklistService {
       return item;
     }
 
+    const workflowContext = workflowRow.context || null;
+    const recommendationBundle = this.applyRecommendationExecutionState(
+      item.metadata?.recommendation_bundle || null,
+      workflowContext,
+    );
+
     return {
       ...item,
       workflow_status: workflowRow.status || item.workflow_status || 'pending',
@@ -191,9 +197,242 @@ export class NurseWorklistService {
       destination_facility_name: workflowRow.destination_facility_name || item.destination_facility_name || null,
       metadata: {
         ...(item.metadata || {}),
+        recommendation_bundle: recommendationBundle,
+        guideline_citations: recommendationBundle?.citations || item.metadata?.guideline_citations || [],
         workflow_context: workflowRow.context || null,
       },
     };
+  }
+
+  private applyRecommendationExecutionState(bundle: any, workflowContext: any) {
+    if (!bundle || typeof bundle !== 'object') {
+      return bundle;
+    }
+
+    const actionExecutions =
+      workflowContext && typeof workflowContext === 'object' && workflowContext.action_executions
+        ? workflowContext.action_executions
+        : {};
+
+    const items = Array.isArray(bundle.items)
+      ? bundle.items.map((item: any) => {
+          const execution = item?.id ? actionExecutions?.[item.id] : null;
+          if (!execution) {
+            return item;
+          }
+          return {
+            ...item,
+            execution_status: execution.status || 'completed',
+            executed_at: execution.executed_at || null,
+            executed_by_name: execution.executed_by_name || null,
+            execution_result: execution.result || null,
+          };
+        })
+      : [];
+
+    const appliedCount = items.filter((item: any) => item?.execution_status === 'completed').length;
+
+    return {
+      ...bundle,
+      items,
+      actionable_count: items.length,
+      pending_count: Math.max(items.length - appliedCount, 0),
+      applied_count: appliedCount,
+    };
+  }
+
+  private buildRecommendationExecutionContext(existingContext: any, actionId: string, execution: any) {
+    const normalizedExisting =
+      existingContext && typeof existingContext === 'object' && !Array.isArray(existingContext)
+        ? existingContext
+        : {};
+
+    return {
+      ...normalizedExisting,
+      source: 'nurse_cross_module_queue',
+      action_executions: {
+        ...(normalizedExisting.action_executions || {}),
+        [actionId]: execution,
+      },
+    };
+  }
+
+  private async persistRecommendationExecutionState(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      module: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+      actionId: string;
+      note?: string | null;
+    },
+    executionResult: any,
+  ) {
+    const existingRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT status, context, acknowledged_by, acknowledged_at
+      FROM nurse_cross_module_workflow_state
+      WHERE workflow_key = $1
+      LIMIT 1
+      `,
+      [payload.itemId],
+    );
+
+    const existingRow = existingRows[0] || null;
+    const nextStatus =
+      String(existingRow?.status || '').toLowerCase() === 'completed' ? 'completed' : 'acknowledged';
+    const mergedContext = this.buildRecommendationExecutionContext(existingRow?.context, payload.actionId, {
+      status: 'completed',
+      executed_at: new Date().toISOString(),
+      executed_by: user.id,
+      executed_by_name: this.getUserDisplayName(user),
+      result: executionResult,
+    });
+
+    await tenantDb.query(
+      `
+      INSERT INTO nurse_cross_module_workflow_state (
+        workflow_key,
+        module,
+        item_type,
+        source_record_id,
+        enrollment_id,
+        patient_id,
+        status,
+        destination_role,
+        destination_service,
+        destination_specialty,
+        destination_user_id,
+        destination_facility_id,
+        destination_facility_name,
+        acknowledged_by,
+        acknowledged_at,
+        completed_by,
+        completed_at,
+        note,
+        context,
+        updated_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, CASE WHEN $7 IN ('acknowledged', 'completed') THEN NOW() ELSE NULL END,
+        CASE WHEN $7 = 'completed' THEN $14 ELSE NULL END,
+        CASE WHEN $7 = 'completed' THEN NOW() ELSE NULL END,
+        $15, $16::jsonb, NOW()
+      )
+      ON CONFLICT (workflow_key)
+      DO UPDATE SET
+        module = EXCLUDED.module,
+        item_type = EXCLUDED.item_type,
+        source_record_id = COALESCE(EXCLUDED.source_record_id, nurse_cross_module_workflow_state.source_record_id),
+        enrollment_id = COALESCE(EXCLUDED.enrollment_id, nurse_cross_module_workflow_state.enrollment_id),
+        patient_id = COALESCE(EXCLUDED.patient_id, nurse_cross_module_workflow_state.patient_id),
+        status = CASE
+          WHEN nurse_cross_module_workflow_state.status = 'completed' THEN nurse_cross_module_workflow_state.status
+          ELSE EXCLUDED.status
+        END,
+        destination_role = COALESCE(EXCLUDED.destination_role, nurse_cross_module_workflow_state.destination_role),
+        destination_service = COALESCE(EXCLUDED.destination_service, nurse_cross_module_workflow_state.destination_service),
+        destination_specialty = COALESCE(EXCLUDED.destination_specialty, nurse_cross_module_workflow_state.destination_specialty),
+        destination_user_id = COALESCE(EXCLUDED.destination_user_id, nurse_cross_module_workflow_state.destination_user_id),
+        destination_facility_id = COALESCE(EXCLUDED.destination_facility_id, nurse_cross_module_workflow_state.destination_facility_id),
+        destination_facility_name = COALESCE(EXCLUDED.destination_facility_name, nurse_cross_module_workflow_state.destination_facility_name),
+        acknowledged_by = COALESCE(nurse_cross_module_workflow_state.acknowledged_by, EXCLUDED.acknowledged_by),
+        acknowledged_at = COALESCE(nurse_cross_module_workflow_state.acknowledged_at, EXCLUDED.acknowledged_at),
+        note = COALESCE(EXCLUDED.note, nurse_cross_module_workflow_state.note),
+        context = EXCLUDED.context,
+        updated_at = NOW()
+      `,
+      [
+        payload.itemId,
+        payload.module,
+        payload.itemType,
+        payload.sourceRecordId || null,
+        payload.enrollmentId || null,
+        payload.patientId || null,
+        nextStatus,
+        payload.destinationRole || null,
+        payload.destinationService || null,
+        payload.destinationSpecialty || null,
+        payload.destinationUserId || null,
+        payload.destinationFacilityId || null,
+        payload.destinationFacilityName || null,
+        user.id,
+        payload.note || null,
+        JSON.stringify(mergedContext),
+      ],
+    );
+  }
+
+  private buildHivMonitoringNote(actionId: string, actionTitle?: string | null) {
+    if (actionId === 'repeat-vl-plan') {
+      return 'Repeat viral load follow-up scheduled from nurse cross-module queue.';
+    }
+    return `${actionTitle || 'HIV follow-up action'} completed from nurse cross-module queue.`;
+  }
+
+  private async upsertHivMonitoringSchedule(
+    tenantDb: DataSource,
+    enrollmentId: string,
+    testType: 'viral_load',
+    nextScheduledDate: string,
+    note: string,
+  ) {
+    const existingRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT id, last_test_date, last_test_result, monitoring_frequency_months
+      FROM hiv_monitoring_schedules
+      WHERE enrollment_id = $1 AND test_type = $2
+      LIMIT 1
+      `,
+      [enrollmentId, testType],
+    );
+
+    if (existingRows[0]?.id) {
+      const updated = await tenantDb.query(
+        `
+        UPDATE hiv_monitoring_schedules
+        SET
+          next_scheduled_date = $1,
+          is_overdue = false,
+          days_overdue = 0,
+          alert_sent = false,
+          alert_sent_date = NULL,
+          notes = $2,
+          updated_at = NOW()
+        WHERE id = $3
+        RETURNING *
+        `,
+        [nextScheduledDate, note, existingRows[0].id],
+      );
+      return updated[0];
+    }
+
+    const inserted = await tenantDb.query(
+      `
+      INSERT INTO hiv_monitoring_schedules (
+        enrollment_id, test_type, next_scheduled_date, monitoring_frequency_months,
+        is_overdue, days_overdue, notes
+      )
+      VALUES ($1, $2, $3, 3, false, 0, $4)
+      RETURNING *
+      `,
+      [enrollmentId, testType, nextScheduledDate, note],
+    );
+
+    return inserted[0];
   }
 
   private computeAgeFromDob(dateOfBirth?: string | Date | null) {
@@ -1146,6 +1385,218 @@ export class NurseWorklistService {
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
       },
+    };
+  }
+
+  async executeHivRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+    if (!this.normalizeText(payload?.enrollmentId)) {
+      throw new BadRequestException('enrollmentId is required for HIV recommendation actions');
+    }
+
+    const enrollmentId = String(payload.enrollmentId);
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayIso = today.toISOString().split('T')[0];
+
+    let result: any;
+
+    if (actionId === 'eac-followup') {
+      const existingSessions = await this.safeQuery(
+        tenantDb,
+        `
+        SELECT session_number
+        FROM hiv_eac_sessions
+        WHERE enrollment_id = $1
+        ORDER BY session_number DESC, session_date DESC
+        LIMIT 1
+        `,
+        [enrollmentId],
+      );
+      const latestSessionNumber = Number(existingSessions[0]?.session_number || 0);
+      const nextSessionNumber = latestSessionNumber + 1;
+      const nextSessionDate = new Date(today);
+      nextSessionDate.setDate(nextSessionDate.getDate() + 30);
+
+      const createdSession = await this.hivService.createEacSession(
+        {
+          enrollmentId,
+          sessionNumber: nextSessionNumber,
+          sessionDate: todayIso,
+          counselorId: user.id,
+          counselorName: this.getUserDisplayName(user),
+          adherenceBarriers: [],
+          interventionsProvided: ['Nurse queue initiated EAC'],
+          adherenceAssessmentMethod: 'nurse_queue',
+          followUpActions: ['Schedule repeat viral load after EAC'],
+          sessionOutcome: 'Completed',
+          eacProgramStatus: 'Active',
+          nextSessionDate: nextSessionDate.toISOString().split('T')[0],
+          sessionNotes: 'EAC started from nurse cross-module HIV recommendation bundle.',
+        },
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'eac_session_created',
+        sessionId: createdSession?.id || null,
+        sessionNumber: createdSession?.session_number || nextSessionNumber,
+        sessionDate: createdSession?.session_date || todayIso,
+      };
+    } else if (actionId === 'repeat-vl-plan') {
+      let nextVlDate = this.normalizeText(actionPayload?.next_vl_date);
+      if (!nextVlDate) {
+        const pathway = await this.hivService.getVlPathway(enrollmentId, tenantDb);
+        nextVlDate = pathway?.nextVlDate || null;
+      }
+      if (!nextVlDate) {
+        throw new BadRequestException('No next viral load date is available for this enrollment');
+      }
+
+      const schedule = await this.upsertHivMonitoringSchedule(
+        tenantDb,
+        enrollmentId,
+        'viral_load',
+        nextVlDate,
+        this.buildHivMonitoringNote(actionId, payload.actionTitle),
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'vl_monitoring_scheduled',
+        scheduleId: schedule?.id || null,
+        nextScheduledDate: schedule?.next_scheduled_date || nextVlDate,
+      };
+    } else if (actionId === 'pmtct-linkage' || payload?.actionType === 'pmtct_followup') {
+      const existingReferral = await this.safeQuery(
+        tenantDb,
+        `
+        SELECT id, referral_status
+        FROM hiv_referrals
+        WHERE enrollment_id = $1
+          AND referral_type = 'P'
+          AND referral_status IN ('pending', 'in_progress')
+        ORDER BY referral_date DESC, created_at DESC
+        LIMIT 1
+        `,
+        [enrollmentId],
+      );
+
+      if (existingReferral[0]?.id) {
+        result = {
+          status: 'completed',
+          operation: 'existing_pmtct_referral_reused',
+          referralId: existingReferral[0].id,
+          referralStatus: existingReferral[0].referral_status,
+        };
+      } else {
+        const referral = await this.hivService.createReferral(
+          {
+            enrollmentId,
+            referralDate: todayIso,
+            referralType: 'P',
+            referralTypeDetails: 'PMTCT / ANC linkage from nurse HIV queue',
+            referredToFacility: payload.destinationFacilityName || 'ANC / PMTCT clinic',
+            referredToProvider: payload.destinationUserName || null,
+            referralReason:
+              'Pregnancy-linked HIV follow-up requires PMTCT/ANC linkage confirmation from the nurse queue.',
+            referralPriority: 'urgent',
+            referredBy: user.id,
+            referredByName: this.getUserDisplayName(user),
+          },
+          tenantDb,
+        );
+
+        result = {
+          status: 'completed',
+          operation: 'pmtct_referral_created',
+          referralId: referral?.id || null,
+          referralStatus: referral?.referral_status || 'pending',
+        };
+      }
+    } else {
+      throw new BadRequestException(`Unsupported HIV recommendation action "${actionId}"`);
+    }
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'hiv',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || null,
+        patientId: payload.patientId || null,
+        enrollmentId,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: payload.patientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'hiv',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        enrollmentId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
     };
   }
 

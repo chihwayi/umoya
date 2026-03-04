@@ -9,6 +9,8 @@ const makeService = () => {
   const hivService = {
     getEnrollments: jest.fn().mockResolvedValue({ enrollments: [] }),
     getVlPathway: jest.fn(),
+    createEacSession: jest.fn(),
+    createReferral: jest.fn(),
   };
 
   return {
@@ -271,7 +273,17 @@ describe('NurseWorklistService', () => {
               acknowledged_at: '2026-03-04T09:00:00.000Z',
               completed_at: null,
               note: 'Queued for next clinic visit',
-              context: { source: 'jest' },
+              context: {
+                source: 'jest',
+                action_executions: {
+                  'pregnancy-safety-review': {
+                    status: 'completed',
+                    executed_at: '2026-03-04T10:00:00.000Z',
+                    executed_by_name: 'Nurse Joy',
+                    result: { operation: 'pmtct_referral_created' },
+                  },
+                },
+              },
               acknowledged_by_name: 'Nurse Joy',
               completed_by_name: null,
             },
@@ -479,10 +491,15 @@ describe('NurseWorklistService', () => {
     expect(hivRegimenItem.metadata?.recommendation_bundle?.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'regimen-counseling', type: 'counseling' }),
-        expect.objectContaining({ id: 'pregnancy-safety-review', type: 'pmtct_followup' }),
+        expect.objectContaining({
+          id: 'pregnancy-safety-review',
+          type: 'pmtct_followup',
+          execution_status: 'completed',
+        }),
         expect.objectContaining({ id: 'tb-interaction-review', type: 'interaction_review' }),
       ]),
     );
+    expect(hivRegimenItem.metadata?.recommendation_bundle?.applied_count).toBe(1);
     expect(hivRegimenItem.metadata?.guideline_citations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ rule_id: 'regimen.pmtct' }),
@@ -511,5 +528,159 @@ describe('NurseWorklistService', () => {
       ]),
     );
     expect(mocks.hivService.getVlPathway).toHaveBeenCalledWith('enroll-hiv-1', tenantDb);
+  });
+
+  it('executes a start EAC recommendation and persists bundle execution state', async () => {
+    const { service, mocks } = makeService();
+    mocks.hivService.createEacSession.mockResolvedValue({
+      id: 'eac-1',
+      session_number: 1,
+      session_date: '2026-03-04',
+    });
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM hiv_eac_sessions')) {
+          return [];
+        }
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
+        itemType: 'hiv_vl_followup',
+        sourceRecordId: 'enroll-hiv-1',
+        patientId: 'patient-hiv-1',
+        enrollmentId: 'enroll-hiv-1',
+        actionId: 'eac-followup',
+        actionType: 'follow_up',
+        actionTitle: 'Start or schedule EAC follow-up',
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        actionId: 'eac-followup',
+        result: expect.objectContaining({
+          operation: 'eac_session_created',
+          sessionId: 'eac-1',
+        }),
+      }),
+    );
+    expect(mocks.hivService.createEacSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrollmentId: 'enroll-hiv-1',
+        sessionNumber: 1,
+        counselorId: 'user-1',
+      }),
+      tenantDb,
+    );
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
+        'hiv',
+        'hiv_vl_followup',
+      ]),
+    );
+  });
+
+  it('executes repeat viral load scheduling and PMTCT linkage from the nurse queue', async () => {
+    const { service, mocks } = makeService();
+    mocks.hivService.createReferral.mockResolvedValue({
+      id: 'ref-1',
+      referral_status: 'pending',
+    });
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM hiv_monitoring_schedules')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO hiv_monitoring_schedules')) {
+          return [{ id: 'sched-1', next_scheduled_date: '2026-06-03' }];
+        }
+        if (sql.includes("FROM hiv_referrals") && sql.includes("referral_type = 'P'")) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const repeatVlResult = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
+        itemType: 'hiv_vl_followup',
+        sourceRecordId: 'enroll-hiv-1',
+        patientId: 'patient-hiv-1',
+        enrollmentId: 'enroll-hiv-1',
+        actionId: 'repeat-vl-plan',
+        actionType: 'lab_followup',
+        actionTitle: 'Prepare repeat viral load follow-up',
+        actionPayload: {
+          next_vl_date: '2026-06-03',
+        },
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(repeatVlResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'vl_monitoring_scheduled',
+        scheduleId: 'sched-1',
+      }),
+    );
+
+    const pmtctResult = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'pregnancy-safety-review',
+        actionType: 'pmtct_followup',
+        actionTitle: 'Confirm pregnancy or PMTCT regimen safety',
+        destinationFacilityName: 'ANC / PMTCT clinic',
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(pmtctResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'pmtct_referral_created',
+        referralId: 'ref-1',
+      }),
+    );
+    expect(mocks.hivService.createReferral).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrollmentId: 'enroll-hiv-2',
+        referralType: 'P',
+        referralPriority: 'urgent',
+      }),
+      tenantDb,
+    );
   });
 });

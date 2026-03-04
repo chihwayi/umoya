@@ -164,6 +164,7 @@ const NurseDashboard: React.FC = () => {
   const [crossModuleLoading, setCrossModuleLoading] = useState(false);
   const [acknowledgingCrossModuleTaskId, setAcknowledgingCrossModuleTaskId] = useState<string | null>(null);
   const [updatingCrossModuleWorkflowItemId, setUpdatingCrossModuleWorkflowItemId] = useState<string | null>(null);
+  const [executingHivRecommendationActionKey, setExecutingHivRecommendationActionKey] = useState<string | null>(null);
   const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
@@ -363,6 +364,61 @@ const NurseDashboard: React.FC = () => {
       showError('Unable to update workflow', 'Please retry the cross-module workflow update.');
     } finally {
       setUpdatingCrossModuleWorkflowItemId(null);
+    }
+  };
+
+  const handleExecuteHivRecommendationAction = async (
+    item: NurseCrossModuleFeedItem,
+    recommendationItem: Record<string, any>,
+  ) => {
+    const token = localStorage.getItem('ehr_token');
+    const activeTenant = resolveTenantSlug();
+
+    if (!token || !activeTenant || !item.enrollment_id) {
+      showError('Unable to apply HIV action', 'Missing session, tenant, or enrollment context.');
+      return;
+    }
+
+    const actionKey = `${item.id}:${String(recommendationItem?.id || recommendationItem?.title || 'action')}`;
+
+    try {
+      setExecutingHivRecommendationActionKey(actionKey);
+      await ehrApi.executeHivNurseRecommendationAction(
+        {
+          itemId: item.id,
+          itemType: item.item_type,
+          sourceRecordId: item.source_record_id || null,
+          patientId: item.patient_id || null,
+          enrollmentId: item.enrollment_id || null,
+          actionId: String(recommendationItem?.id || ''),
+          actionType: recommendationItem?.type || null,
+          actionTitle: recommendationItem?.title || null,
+          actionPayload: recommendationItem?.action_payload || null,
+          destinationRole: item.destination_role || null,
+          destinationService: item.destination_service || null,
+          destinationSpecialty: item.destination_specialty || null,
+          destinationUserId: item.destination_user_id || null,
+          destinationUserName: item.destination_user_name || null,
+          destinationFacilityId: item.destination_facility_id || null,
+          destinationFacilityName: item.destination_facility_name || null,
+        },
+        token,
+        activeTenant,
+      );
+      showSuccess(
+        'HIV recommendation applied',
+        recommendationItem?.title
+          ? `${recommendationItem.title} was applied from the nurse queue.`
+          : 'The HIV recommendation action was applied.',
+      );
+      await loadCrossModuleFeed();
+    } catch (error: any) {
+      showError(
+        'Unable to apply HIV action',
+        error?.response?.data?.message || 'Please retry the HIV recommendation action.',
+      );
+    } finally {
+      setExecutingHivRecommendationActionKey(null);
     }
   };
 
@@ -2320,10 +2376,12 @@ const NurseDashboard: React.FC = () => {
           compact
           acknowledgingTaskId={acknowledgingCrossModuleTaskId}
           workflowActionItemId={updatingCrossModuleWorkflowItemId}
+          recommendationActionKey={executingHivRecommendationActionKey}
           onRefresh={loadCrossModuleFeed}
           onOpenWorkflow={handleOpenCrossModuleWorkflow}
           onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
           onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
+          onExecuteHivRecommendationAction={handleExecuteHivRecommendationAction}
         />
 
       {/* Quick Actions - Prominent Clickable Cards */}
@@ -2731,10 +2789,12 @@ const NurseDashboard: React.FC = () => {
             loading={crossModuleLoading}
             acknowledgingTaskId={acknowledgingCrossModuleTaskId}
             workflowActionItemId={updatingCrossModuleWorkflowItemId}
+            recommendationActionKey={executingHivRecommendationActionKey}
             onRefresh={loadCrossModuleFeed}
             onOpenWorkflow={handleOpenCrossModuleWorkflow}
             onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
             onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
+            onExecuteHivRecommendationAction={handleExecuteHivRecommendationAction}
           />
         )}
 

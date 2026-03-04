@@ -69,6 +69,45 @@ export class NurseWorklistController {
     );
   }
 
+  @Post('cross-module/hiv-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute an HIV recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'HIV recommendation action executed' })
+  async executeHivRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executeHivRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
   @Post('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })

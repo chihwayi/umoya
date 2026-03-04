@@ -76,6 +76,11 @@ interface NurseCrossModuleEscalationsProps {
     item: NurseCrossModuleFeedItem,
     status: 'acknowledged' | 'completed',
   ) => void;
+  onExecuteHivRecommendationAction?: (
+    item: NurseCrossModuleFeedItem,
+    recommendationItem: Record<string, any>,
+  ) => void;
+  recommendationActionKey?: string | null;
 }
 
 const severityStyles: Record<string, string> = {
@@ -113,6 +118,12 @@ function getRecommendationBundle(item: NurseCrossModuleFeedItem) {
   return bundle;
 }
 
+function isExecutableHivRecommendationAction(item: Record<string, any>) {
+  const actionId = String(item?.id || '');
+  const actionType = String(item?.type || '');
+  return actionId === 'eac-followup' || actionId === 'repeat-vl-plan' || actionType === 'pmtct_followup';
+}
+
 export default function NurseCrossModuleEscalations({
   items,
   summary,
@@ -124,6 +135,8 @@ export default function NurseCrossModuleEscalations({
   onOpenWorkflow,
   onAcknowledgeMaternityTask,
   onUpdateWorkflowStatus,
+  onExecuteHivRecommendationAction,
+  recommendationActionKey,
 }: NurseCrossModuleEscalationsProps) {
   const visibleItems = compact ? items.slice(0, 3) : items;
 
@@ -275,26 +288,60 @@ export default function NurseCrossModuleEscalations({
                           )}
                           {bundleItems.length > 0 && (
                             <div className="mt-3 space-y-2">
-                              {bundleItems.map((bundleItem: any) => (
+                              {bundleItems.map((bundleItem: any) => {
+                                  const executionStatus = String(bundleItem?.execution_status || '');
+                                  const canExecute =
+                                    item.module === 'hiv' &&
+                                    isExecutableHivRecommendationAction(bundleItem) &&
+                                    executionStatus !== 'completed' &&
+                                    typeof onExecuteHivRecommendationAction === 'function';
+                                  const actionKey = `${item.id}:${String(bundleItem?.id || bundleItem?.title || 'action')}`;
+                                  const isExecuting = recommendationActionKey === actionKey;
+
+                                  return (
                                 <div
                                   key={String(bundleItem.id || bundleItem.title)}
                                   className="rounded-lg border border-emerald-100 bg-white/80 px-3 py-2"
                                 >
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-semibold text-slate-900">
-                                      {bundleItem.title || 'Recommended nurse action'}
-                                    </span>
-                                    {bundleItem.urgency && (
-                                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[11px] font-semibold text-emerald-700">
-                                        {String(bundleItem.urgency).replace(/_/g, ' ')}
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-semibold text-slate-900">
+                                        {bundleItem.title || 'Recommended nurse action'}
                                       </span>
+                                      {bundleItem.urgency && (
+                                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[11px] font-semibold text-emerald-700">
+                                          {String(bundleItem.urgency).replace(/_/g, ' ')}
+                                        </span>
+                                      )}
+                                      {executionStatus === 'completed' && (
+                                        <span className="px-2 py-0.5 rounded-full bg-sky-100 text-[11px] font-semibold text-sky-700">
+                                          Applied
+                                        </span>
+                                      )}
+                                    </div>
+                                    {canExecute && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onExecuteHivRecommendationAction?.(item, bundleItem)}
+                                        disabled={isExecuting}
+                                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                      >
+                                        {isExecuting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                                        Apply
+                                      </button>
                                     )}
                                   </div>
                                   {bundleItem.rationale && (
                                     <p className="text-xs text-slate-600 mt-1">{bundleItem.rationale}</p>
                                   )}
+                                  {bundleItem.execution_result?.operation && (
+                                    <p className="mt-1 text-[11px] text-sky-700">
+                                      Applied via {String(bundleItem.execution_result.operation).replace(/_/g, ' ')}.
+                                    </p>
+                                  )}
                                 </div>
-                              ))}
+                                  );
+                                })}
                             </div>
                           )}
                           {bundleCitations.length > 0 && (
