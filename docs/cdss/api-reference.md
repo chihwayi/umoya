@@ -133,6 +133,10 @@ Base URL: `http://cdss-service:8000` (Internal) or via EHR Proxy `/api/cdss/*`
     }
     ```
 
+### 15. Zimbabwe HIV Testing Algorithm
+*   **POST** `/hiv/testing/algorithm`
+*   **Description:** Evaluates sequential HIV rapid test kit results against the Zimbabwe testing algorithm and returns the interpretation path.
+
 ## Error Handling
 
 *   **400 Bad Request:** Invalid input data.
