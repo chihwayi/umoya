@@ -3730,6 +3730,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getMaternityCareTaskMetrics: async (tenantSlug: string, token: string) => {
+    const response = await ehrAxios.get('/maternity/care-tasks/metrics', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   updateMaternityCareTaskStatus: async (
     tenantSlug: string,
     token: string,

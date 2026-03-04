@@ -308,6 +308,13 @@ export class MaternityController {
     return this.maternityService.getMaternityCareTasks(req.tenantDb, { status, priority });
   }
 
+  @Get('care-tasks/metrics')
+  @ApiOperation({ summary: 'Get maternity escalation SLA and aging metrics' })
+  @ApiResponse({ status: 200, description: 'Maternity care task metrics' })
+  async getMaternityCareTaskMetrics(@Request() req: RequestWithTenant) {
+    return this.maternityService.getMaternityCareTaskMetrics(req.tenantDb);
+  }
+
   @Get('enrollments/:enrollmentId/care-tasks')
   @ApiOperation({ summary: 'Get maternity escalation care tasks for an enrollment' })
   @ApiResponse({ status: 200, description: 'Enrollment maternity care tasks list' })

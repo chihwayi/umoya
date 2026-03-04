@@ -16,10 +16,17 @@ export interface MaternityPrecheckIssue {
   guideline_reference?: string;
 }
 
+export interface MaternityGuidelineCitation {
+  rule_id: string;
+  source: string;
+  citation: string;
+}
+
 export interface MaternityPrecheckTrace {
   rule_id: string;
   severity: 'blocker' | 'warning';
   message: string;
+  guideline_reference?: string;
 }
 
 export interface MaternityPrecheckResponse {
@@ -29,6 +36,7 @@ export interface MaternityPrecheckResponse {
   suggested_orders: string[];
   doctor_escalation_required: boolean;
   trace: MaternityPrecheckTrace[];
+  guideline_citations: MaternityGuidelineCitation[];
 }
 
 type MaternityCareTaskStatus = 'open' | 'acknowledged' | 'actioned' | 'closed';
@@ -44,6 +52,17 @@ interface MaternityCareTaskFilters {
   status?: MaternityCareTaskStatus;
   priority?: MaternityCareTaskPriority;
   enrollmentId?: string;
+}
+
+export interface MaternityCareTaskMetrics {
+  active_tasks: number;
+  open_tasks: number;
+  acknowledged_tasks: number;
+  actioned_tasks: number;
+  critical_open_tasks: number;
+  overdue_tasks: number;
+  oldest_open_hours: number;
+  average_open_hours: number;
 }
 
 @Injectable()
@@ -84,6 +103,54 @@ export class MaternityService {
       return raw === 'true';
     }
     return Boolean(raw);
+  }
+
+  private getTaskSlaHours(priority: string | null | undefined): number {
+    switch (priority) {
+      case 'critical':
+        return 2;
+      case 'high':
+        return 8;
+      case 'medium':
+        return 24;
+      default:
+        return 48;
+    }
+  }
+
+  private getGuidelineSource(guidelineReference?: string | null): string {
+    const text = String(guidelineReference || '').toLowerCase();
+    if (text.includes('zimbabwe') || text.includes('moh')) {
+      return 'Zimbabwe MoHCC';
+    }
+    if (text.includes('who')) {
+      return 'WHO';
+    }
+    return 'Clinical protocol';
+  }
+
+  private appendGuidelineCitation(
+    citations: MaternityGuidelineCitation[],
+    ruleId: string,
+    guidelineReference?: string,
+  ): void {
+    const citation = this.normalizeString(guidelineReference);
+    if (!citation) {
+      return;
+    }
+
+    const exists = citations.find(
+      (item) => item.rule_id === ruleId && item.citation === citation,
+    );
+    if (exists) {
+      return;
+    }
+
+    citations.push({
+      rule_id: ruleId,
+      source: this.getGuidelineSource(citation),
+      citation,
+    });
   }
 
   private assertPrecheckAllowsPersistence(
@@ -269,6 +336,7 @@ export class MaternityService {
       ruleTrace: input.precheck.trace ?? [],
       taskContext: {
         doctorEscalationRequired: true,
+        guideline_citations: input.precheck.guideline_citations ?? [],
         ...(input.taskContext ?? {}),
       },
     });
@@ -362,6 +430,7 @@ export class MaternityService {
     requiredActions: Set<string>,
     suggestedOrders: Set<string>,
     trace: MaternityPrecheckTrace[],
+    guidelineCitations: MaternityGuidelineCitation[],
     doctorEscalationRequired: boolean,
   ): MaternityPrecheckResponse {
     return {
@@ -371,6 +440,7 @@ export class MaternityService {
       suggested_orders: Array.from(suggestedOrders),
       doctor_escalation_required: doctorEscalationRequired,
       trace,
+      guideline_citations: guidelineCitations,
     };
   }
 
@@ -776,6 +846,7 @@ export class MaternityService {
     const requiredActions = new Set<string>();
     const suggestedOrders = new Set<string>();
     const trace: MaternityPrecheckTrace[] = [];
+    const guidelineCitations: MaternityGuidelineCitation[] = [];
     let doctorEscalationRequired = false;
 
     const addIssue = (
@@ -800,7 +871,9 @@ export class MaternityService {
         rule_id: code,
         severity,
         message,
+        guideline_reference: guidelineReference,
       });
+      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1057,6 +1130,7 @@ export class MaternityService {
       requiredActions,
       suggestedOrders,
       trace,
+      guidelineCitations,
       doctorEscalationRequired,
     );
   }
@@ -1067,6 +1141,7 @@ export class MaternityService {
     const requiredActions = new Set<string>();
     const suggestedOrders = new Set<string>();
     const trace: MaternityPrecheckTrace[] = [];
+    const guidelineCitations: MaternityGuidelineCitation[] = [];
     let doctorEscalationRequired = false;
 
     const addIssue = (
@@ -1087,7 +1162,8 @@ export class MaternityService {
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message });
+      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
+      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1229,6 +1305,7 @@ export class MaternityService {
       requiredActions,
       suggestedOrders,
       trace,
+      guidelineCitations,
       doctorEscalationRequired,
     );
   }
@@ -1239,6 +1316,7 @@ export class MaternityService {
     const requiredActions = new Set<string>();
     const suggestedOrders = new Set<string>();
     const trace: MaternityPrecheckTrace[] = [];
+    const guidelineCitations: MaternityGuidelineCitation[] = [];
     let doctorEscalationRequired = false;
 
     const addIssue = (
@@ -1259,7 +1337,8 @@ export class MaternityService {
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message });
+      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
+      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1370,6 +1449,7 @@ export class MaternityService {
       requiredActions,
       suggestedOrders,
       trace,
+      guidelineCitations,
       doctorEscalationRequired,
     );
   }
@@ -1380,6 +1460,7 @@ export class MaternityService {
     const requiredActions = new Set<string>();
     const suggestedOrders = new Set<string>();
     const trace: MaternityPrecheckTrace[] = [];
+    const guidelineCitations: MaternityGuidelineCitation[] = [];
     let doctorEscalationRequired = false;
 
     const addIssue = (
@@ -1400,7 +1481,8 @@ export class MaternityService {
       } else {
         warnings.push(issue);
       }
-      trace.push({ rule_id: code, severity, message });
+      trace.push({ rule_id: code, severity, message, guideline_reference: guidelineReference });
+      this.appendGuidelineCitation(guidelineCitations, code, guidelineReference);
     };
 
     const toNumber = (value: any): number | null => {
@@ -1646,6 +1728,7 @@ export class MaternityService {
       requiredActions,
       suggestedOrders,
       trace,
+      guidelineCitations,
       doctorEscalationRequired,
     );
   }
@@ -2835,6 +2918,31 @@ export class MaternityService {
       `
       SELECT
         t.*,
+        ROUND(EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0, 1) as age_hours,
+        CASE t.priority
+          WHEN 'critical' THEN 2
+          WHEN 'high' THEN 8
+          WHEN 'medium' THEN 24
+          ELSE 48
+        END as sla_target_hours,
+        CASE
+          WHEN t.status = 'closed' THEN 'closed'
+          WHEN EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0 >
+            CASE t.priority
+              WHEN 'critical' THEN 2
+              WHEN 'high' THEN 8
+              WHEN 'medium' THEN 24
+              ELSE 48
+            END THEN 'breached'
+          WHEN EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0 >
+            CASE t.priority
+              WHEN 'critical' THEN 1.5
+              WHEN 'high' THEN 6
+              WHEN 'medium' THEN 18
+              ELSE 36
+            END THEN 'due_soon'
+          ELSE 'within_sla'
+        END as sla_status,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
         me.enrollment_number,
@@ -2864,6 +2972,40 @@ export class MaternityService {
     );
 
     return { tasks, total: tasks.length };
+  }
+
+  async getMaternityCareTaskMetrics(tenantDb: DataSource): Promise<MaternityCareTaskMetrics> {
+    const rows = await tenantDb.query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE status != 'closed')::int as active_tasks,
+        COUNT(*) FILTER (WHERE status = 'open')::int as open_tasks,
+        COUNT(*) FILTER (WHERE status = 'acknowledged')::int as acknowledged_tasks,
+        COUNT(*) FILTER (WHERE status = 'actioned')::int as actioned_tasks,
+        COUNT(*) FILTER (WHERE priority = 'critical' AND status != 'closed')::int as critical_open_tasks,
+        COUNT(*) FILTER (
+          WHERE status != 'closed'
+            AND EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 >
+              CASE priority
+                WHEN 'critical' THEN 2
+                WHEN 'high' THEN 8
+                WHEN 'medium' THEN 24
+                ELSE 48
+              END
+        )::int as overdue_tasks,
+        COALESCE(
+          ROUND(MAX(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0) FILTER (WHERE status != 'closed'), 1),
+          0
+        ) as oldest_open_hours,
+        COALESCE(
+          ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0) FILTER (WHERE status != 'closed'), 1),
+          0
+        ) as average_open_hours
+      FROM maternity_care_tasks
+      `,
+    );
+
+    return rows[0] as MaternityCareTaskMetrics;
   }
 
   async getEnrollmentMaternityCareTasks(tenantDb: DataSource, enrollmentId: string) {

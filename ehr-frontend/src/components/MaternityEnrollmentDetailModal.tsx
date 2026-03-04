@@ -127,6 +127,85 @@ const computeBMI = (weightKg?: NumberLike, heightCm?: NumberLike) => {
   return Number((weight / (heightMeters * heightMeters)).toFixed(1));
 };
 
+const differenceInDays = (later: Date, earlier: Date) =>
+  Math.floor((later.getTime() - earlier.getTime()) / (1000 * 60 * 60 * 24));
+
+const addDaysToIsoDate = (dateInput: string, days: number) => {
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+};
+
+const ancMilestoneWeeks = [20, 26, 30, 34, 36, 38, 40];
+const postnatalMilestoneDays = [2, 7, 14, 42];
+
+const deriveAncFollowUpSuggestion = (enrollment: any, visitDate: string) => {
+  if (!visitDate) return null;
+
+  const riskCategory = String(enrollment?.risk_category || 'low');
+  const visit = new Date(visitDate);
+  if (Number.isNaN(visit.getTime())) return null;
+
+  if (enrollment?.lmp_date) {
+    const lmp = new Date(enrollment.lmp_date);
+    if (!Number.isNaN(lmp.getTime())) {
+      const gestationDays = differenceInDays(visit, lmp);
+      const gestationWeeks = gestationDays / 7;
+      const nextMilestoneWeek = ancMilestoneWeeks.find((week) => week > gestationWeeks + 0.01);
+
+      if (nextMilestoneWeek) {
+        const targetDate = addDaysToIsoDate(enrollment.lmp_date, nextMilestoneWeek * 7);
+        if (targetDate) {
+          const highRiskReviewDate = riskCategory === 'high' ? addDaysToIsoDate(visitDate, 14) : null;
+          const suggestedDate =
+            highRiskReviewDate && new Date(highRiskReviewDate) < new Date(targetDate)
+              ? highRiskReviewDate
+              : targetDate;
+          return {
+            date: suggestedDate,
+            reason:
+              suggestedDate === targetDate
+                ? `WHO ANC timing suggests the next review around ${nextMilestoneWeek} weeks gestation.`
+                : 'High-risk pregnancy: review earlier than the routine WHO milestone.',
+          };
+        }
+      }
+    }
+  }
+
+  const fallbackDays = riskCategory === 'high' ? 14 : 28;
+  return {
+    date: addDaysToIsoDate(visitDate, fallbackDays),
+    reason:
+      riskCategory === 'high'
+        ? 'High-risk pregnancy without exact gestation timing: schedule closer follow-up in 2 weeks.'
+        : 'Routine follow-up interval suggested at 4 weeks.',
+  };
+};
+
+const derivePostnatalFollowUpSuggestion = (enrollment: any, visitDate: string) => {
+  if (!visitDate || !enrollment?.delivery?.delivery_date) return null;
+
+  const visit = new Date(visitDate);
+  const delivery = new Date(enrollment.delivery.delivery_date);
+  if (Number.isNaN(visit.getTime()) || Number.isNaN(delivery.getTime())) return null;
+
+  const postpartumDay = differenceInDays(visit, delivery);
+  const nextMilestoneDay = postnatalMilestoneDays.find((day) => day > postpartumDay);
+  if (!nextMilestoneDay) {
+    return {
+      date: null,
+      reason: 'Routine postnatal milestone schedule is complete after day 42 unless clinical review is needed.',
+    };
+  }
+
+  return {
+    date: addDaysToIsoDate(enrollment.delivery.delivery_date, nextMilestoneDay),
+    reason: `Suggested next postnatal review aligns with day ${nextMilestoneDay} postpartum.`,
+  };
+};
+
 const formatSourceTimestamp = (raw: string | null | undefined) => {
   if (!raw) return 'same-day vitals';
   const parsed = new Date(raw);
@@ -538,6 +617,14 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     () => careTasks.filter((task: any) => task.status !== 'closed'),
     [careTasks],
   );
+  const ancFollowUpSuggestion = useMemo(
+    () => deriveAncFollowUpSuggestion(enrollment, ancForm.visit_date),
+    [enrollment, ancForm.visit_date],
+  );
+  const postnatalFollowUpSuggestion = useMemo(
+    () => derivePostnatalFollowUpSuggestion(enrollment, postnatalForm.visit_date),
+    [enrollment, postnatalForm.visit_date],
+  );
 
   const nextVisitNumber = useMemo(() => {
     if (!enrollment) return 1;
@@ -766,12 +853,22 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
   }, [ancFormOpen]);
 
   useEffect(() => {
+    if (!ancFormOpen || ancForm.next_visit_date || !ancFollowUpSuggestion?.date) return;
+    setAncForm((prev) => ({ ...prev, next_visit_date: ancFollowUpSuggestion.date as string }));
+  }, [ancFollowUpSuggestion, ancForm.next_visit_date, ancFormOpen]);
+
+  useEffect(() => {
     if (postnatalFormOpen) return;
     setPostnatalVitalsSource(null);
     setPostnatalVitalsSnapshot(null);
     setPostnatalVitalsAutoPopulatedAt(null);
     setPostnatalVitalsOverrideReason('');
   }, [postnatalFormOpen]);
+
+  useEffect(() => {
+    if (!postnatalFormOpen || postnatalForm.next_visit_date || !postnatalFollowUpSuggestion?.date) return;
+    setPostnatalForm((prev) => ({ ...prev, next_visit_date: postnatalFollowUpSuggestion.date as string }));
+  }, [postnatalFollowUpSuggestion, postnatalForm.next_visit_date, postnatalFormOpen]);
 
   const runMaternityPrecheck = useCallback(
     async (runCheck: () => Promise<any>, contextLabel: string) => {
@@ -1330,6 +1427,22 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                         </div>
                       </div>
                     )}
+                    {((task.task_context?.guideline_citations?.length ?? 0) > 0 ||
+                      (task.guideline_citations?.length ?? 0) > 0) && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Guideline citations</p>
+                        <div className="mt-2 space-y-1">
+                          {(task.task_context?.guideline_citations || task.guideline_citations || [])
+                            .slice(0, 3)
+                            .map((citation: any, index: number) => (
+                              <p key={`${task.id}-citation-${index}`} className="text-xs text-slate-600">
+                                {citation?.source ? `${citation.source}: ` : ''}
+                                {citation?.citation || citation?.guideline_reference || 'Guideline citation'}
+                              </p>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1498,6 +1611,29 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   onChange={(val) => setAncForm((prev) => ({ ...prev, hemoglobin: val }))}
                 />
               </div>
+
+              {ancFollowUpSuggestion && (
+                <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Suggested next ANC review</p>
+                      <p className="text-sm font-semibold text-sky-900">
+                        {ancFollowUpSuggestion.date ? formatDateToDDMMYYYY(ancFollowUpSuggestion.date) : 'No routine date suggested'}
+                      </p>
+                      <p className="text-xs text-sky-700 mt-1">{ancFollowUpSuggestion.reason}</p>
+                    </div>
+                    {ancFollowUpSuggestion.date && (
+                      <button
+                        type="button"
+                        onClick={() => setAncForm((prev) => ({ ...prev, next_visit_date: ancFollowUpSuggestion.date || '' }))}
+                        className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-sky-700 border border-sky-200 hover:bg-sky-100"
+                      >
+                        Use suggestion
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {!ancVitalsSyncing && ancVitalsSource && ancVitalsOverridden && (
                 <div className="mt-4">
@@ -2340,6 +2476,31 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                   onChange={(val) => setPostnatalForm((prev) => ({ ...prev, newborn_complications: val }))}
                 />
               </div>
+
+              {postnatalFollowUpSuggestion && (
+                <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Suggested next postnatal review</p>
+                      <p className="text-sm font-semibold text-sky-900">
+                        {postnatalFollowUpSuggestion.date
+                          ? formatDateToDDMMYYYY(postnatalFollowUpSuggestion.date)
+                          : 'No routine postnatal milestone pending'}
+                      </p>
+                      <p className="text-xs text-sky-700 mt-1">{postnatalFollowUpSuggestion.reason}</p>
+                    </div>
+                    {postnatalFollowUpSuggestion.date && (
+                      <button
+                        type="button"
+                        onClick={() => setPostnatalForm((prev) => ({ ...prev, next_visit_date: postnatalFollowUpSuggestion.date || '' }))}
+                        className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-sky-700 border border-sky-200 hover:bg-sky-100"
+                      >
+                        Use suggestion
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {!postnatalVitalsSyncing && postnatalVitalsSource && postnatalVitalsOverridden && (
                 <div className="mt-4">

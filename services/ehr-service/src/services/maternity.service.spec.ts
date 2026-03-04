@@ -20,6 +20,7 @@ describe('MaternityService hardening', () => {
       suggested_orders: [],
       doctor_escalation_required: true,
       trace: [],
+      guideline_citations: [],
     });
 
     const tenantDb = {
@@ -51,6 +52,7 @@ describe('MaternityService hardening', () => {
       suggested_orders: [],
       doctor_escalation_required: false,
       trace: [],
+      guideline_citations: [],
     });
 
     const tenantDb = {
@@ -82,6 +84,13 @@ describe('MaternityService hardening', () => {
       suggested_orders: ['Urgent infection workup'],
       doctor_escalation_required: true,
       trace: [{ rule_id: 'anc.fever_warning', severity: 'warning', message: 'Maternal fever detected.' }],
+      guideline_citations: [
+        {
+          rule_id: 'anc.fever_warning',
+          source: 'WHO',
+          citation: 'WHO ANC danger-sign guidance',
+        },
+      ],
     });
 
     const tenantDb = {

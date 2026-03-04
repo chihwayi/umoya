@@ -29,6 +29,7 @@ interface MaternityDoctorViewProps {
 
 export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoctorViewProps) {
   const [careTasks, setCareTasks] = useState<any[]>([]);
+  const [careTaskMetrics, setCareTaskMetrics] = useState<any>(null);
   const [highRiskPregnancies, setHighRiskPregnancies] = useState<any[]>([]);
   const [upcomingDeliveries, setUpcomingDeliveries] = useState<any[]>([]);
   const [overdueANC, setOverdueANC] = useState<any[]>([]);
@@ -57,6 +58,9 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
         ? careTasksRes?.data
         : careTasksRes?.data?.tasks || [];
       setCareTasks(taskRows);
+
+      const careTaskMetricsRes = await ehrApi.getMaternityCareTaskMetrics(tenantSlug, token);
+      setCareTaskMetrics(careTaskMetricsRes?.data || null);
 
       const highRiskRes = await ehrApi.getHighRiskPregnancies(tenantSlug, token);
       const highRiskRows = Array.isArray(highRiskRes?.data)
@@ -225,6 +229,12 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
         icon: <ClipboardList className="w-5 h-5" />,
       },
       {
+        label: 'SLA Breaches',
+        value: careTaskMetrics?.overdue_tasks ?? 0,
+        tone: 'from-amber-600 to-orange-600',
+        icon: <Clock4 className="w-5 h-5" />,
+      },
+      {
         label: 'High-Risk Cases',
         value: highRiskTotal,
         tone: 'from-red-500 to-rose-500',
@@ -249,7 +259,7 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
         icon: <TrendingUp className="w-5 h-5" />,
       },
     ];
-  }, [careTasks.length, highRiskPregnancies.length, upcomingDeliveries.length, overdueANC.length, indicators]);
+  }, [careTaskMetrics?.overdue_tasks, careTasks.length, highRiskPregnancies.length, upcomingDeliveries.length, overdueANC.length, indicators]);
 
   const clinicalPrompts = useMemo(() => {
     const prompts: Array<{ title: string; description: string; icon: React.ReactNode; tone: string }> = [];
@@ -386,6 +396,26 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
           </div>
           <span className="text-xs text-slate-500">{careTasks.length} active</span>
         </div>
+        {careTaskMetrics && (
+          <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Overdue</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.overdue_tasks ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Critical open</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.critical_open_tasks ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Oldest open</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.oldest_open_hours ?? 0}h</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Average age</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.average_open_hours ?? 0}h</p>
+            </div>
+          </div>
+        )}
         {careTasks.length === 0 ? (
           <p className="text-sm text-slate-500">No open maternity escalation tasks.</p>
         ) : (
@@ -424,9 +454,17 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
                     <p className="text-xs text-slate-500">
                       {task.patient_name} • {task.patient_number} • {task.enrollment_number}
                     </p>
+                    <p className="text-xs text-slate-500">
+                      Age {task.age_hours ?? 0}h • SLA {task.sla_status?.replace('_', ' ') || 'within sla'}
+                    </p>
                     {(task.required_actions?.length ?? 0) > 0 && (
                       <p className="text-xs text-slate-600">
                         Required: {task.required_actions.slice(0, 2).join(' | ')}
+                      </p>
+                    )}
+                    {((task.task_context?.guideline_citations?.length ?? 0) > 0) && (
+                      <p className="text-xs text-slate-600">
+                        Citation: {task.task_context.guideline_citations[0]?.source}: {task.task_context.guideline_citations[0]?.citation}
                       </p>
                     )}
                   </div>

@@ -50,6 +50,7 @@ interface MaternityDashboardProps {
 export default function MaternityDashboard({ tenantSlug, token }: MaternityDashboardProps) {
   const [enrollments, setEnrollments] = useState<MaternityEnrollment[]>([]);
   const [careTasks, setCareTasks] = useState<any[]>([]);
+  const [careTaskMetrics, setCareTaskMetrics] = useState<any>(null);
   const [highRiskPregnancies, setHighRiskPregnancies] = useState<any[]>([]);
   const [upcomingDeliveries, setUpcomingDeliveries] = useState<any[]>([]);
   const [overdueAnc, setOverdueAnc] = useState<any[]>([]);
@@ -91,6 +92,9 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
 
       const careTasksRes = await ehrApi.getMaternityCareTasks(tenantSlug, token);
       setCareTasks(careTasksRes.data?.tasks || []);
+
+      const careTaskMetricsRes = await ehrApi.getMaternityCareTaskMetrics(tenantSlug, token);
+      setCareTaskMetrics(careTaskMetricsRes?.data || null);
 
       // Load high-risk pregnancies
       const highRiskRes = await ehrApi.getHighRiskPregnancies(tenantSlug, token);
@@ -670,6 +674,26 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
             {careTasks.length} active
           </span>
         </div>
+        {careTaskMetrics && (
+          <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Overdue</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.overdue_tasks ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Critical open</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.critical_open_tasks ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Oldest open</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.oldest_open_hours ?? 0}h</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Average age</p>
+              <p className="text-lg font-bold text-slate-900">{careTaskMetrics.average_open_hours ?? 0}h</p>
+            </div>
+          </div>
+        )}
         {careTasks.length === 0 ? (
           <p className="text-sm text-slate-500">No active maternity escalation tasks.</p>
         ) : (
@@ -703,6 +727,9 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
                     </div>
                     <p className="mt-1 text-sm text-slate-700">{task.patient_name} • {task.patient_number}</p>
                     <p className="mt-1 text-xs text-slate-500">{task.summary || 'Open maternity safety task.'}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Age {task.age_hours ?? 0}h • SLA {String(task.sla_status || 'within_sla').replace('_', ' ')}
+                    </p>
                   </div>
                   {(task.required_actions?.length ?? 0) > 0 && (
                     <p className="max-w-sm text-xs text-slate-600">
@@ -1042,6 +1069,9 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
                             <div>
                               <p className="text-sm font-medium text-slate-800">{task.title}</p>
                               <p className="text-xs text-slate-500">{task.summary || 'Escalation open for doctor review.'}</p>
+                              <p className="text-[11px] text-slate-500">
+                                Age {task.age_hours ?? 0}h • SLA {String(task.sla_status || 'within_sla').replace('_', ' ')}
+                              </p>
                             </div>
                             <span className="text-xs font-semibold uppercase text-slate-600">
                               {String(task.status || 'open').replace('_', ' ')} • {task.priority}
