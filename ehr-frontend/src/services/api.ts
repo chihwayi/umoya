@@ -3759,6 +3759,23 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  applyMaternityCareTaskRecommendations: async (
+    tenantSlug: string,
+    token: string,
+    taskId: string,
+    payload: {
+      recommendation_ids?: string[];
+    } = {},
+  ) => {
+    const response = await ehrAxios.post(`/maternity/care-tasks/${taskId}/apply-recommendations`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // Maternity Indicators
   getMaternityIndicators: async (tenantSlug: string, token: string, startDate?: string, endDate?: string) => {
     const response = await ehrAxios.get('/maternity/indicators', {

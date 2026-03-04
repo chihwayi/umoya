@@ -1,6 +1,11 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TerminologyService } from './terminology.service';
+import { CreateOrderDto, OrderService } from './order.service';
+import { LabOrderService } from './lab-order.service';
+import { ReferralService } from './referral.service';
+import { OrderPriority, OrderType } from '../entities/order.entity';
+import { Priority as LabPriority } from '../entities/lab-order.entity';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -65,11 +70,69 @@ export interface MaternityCareTaskMetrics {
   average_open_hours: number;
 }
 
+type MaternityRecommendationType = 'order' | 'lab_order' | 'referral' | 'follow_up';
+type MaternityRecommendationUrgency = 'routine' | 'urgent' | 'stat';
+
+interface MaternityRecommendationItem {
+  id: string;
+  type: MaternityRecommendationType;
+  title: string;
+  bundle_name: string;
+  urgency: MaternityRecommendationUrgency;
+  rationale: string;
+  rule_ids: string[];
+  citations: MaternityGuidelineCitation[];
+  auto_authorize?: boolean;
+  order_payload?: CreateOrderDto;
+  lab_order_payload?: {
+    patientId: string;
+    medicalRecordId?: string | null;
+    priority: LabPriority;
+    clinicalInfo: string;
+    specialInstructions?: string;
+    tests: Array<{
+      testCode: string;
+      testName: string;
+      category: string;
+      specimenType: string;
+    }>;
+  };
+  referral_payload?: {
+    referralType: string;
+    specialty?: string;
+    priority?: string;
+    urgency?: string;
+    reason: string;
+    clinicalSummary?: string;
+    requestedServices?: string;
+    status?: string;
+  };
+  follow_up_note?: string;
+  status?: 'pending' | 'applied';
+  applied_record?: Record<string, any> | null;
+}
+
+interface MaternityRecommendationBundle {
+  version: number;
+  generated_at: string;
+  bundle_label: string;
+  summary: string;
+  actionable_count: number;
+  pending_count: number;
+  applied_count: number;
+  items: MaternityRecommendationItem[];
+}
+
 @Injectable()
 export class MaternityService {
   private readonly logger = new Logger(MaternityService.name);
 
-  constructor(private readonly terminologyService: TerminologyService) {}
+  constructor(
+    private readonly terminologyService: TerminologyService,
+    private readonly orderService: OrderService,
+    private readonly labOrderService: LabOrderService,
+    private readonly referralService: ReferralService,
+  ) {}
 
   private parseDate(raw: any): Date | null {
     if (!raw) {
@@ -151,6 +214,415 @@ export class MaternityService {
       source: this.getGuidelineSource(citation),
       citation,
     });
+  }
+
+  private isActionableRecommendation(
+    item: Pick<MaternityRecommendationItem, 'type'>,
+  ): boolean {
+    return item.type === 'order' || item.type === 'lab_order' || item.type === 'referral';
+  }
+
+  private normalizeRecommendationBundle(
+    bundle: MaternityRecommendationBundle,
+    appliedRecords: any[] = [],
+  ): MaternityRecommendationBundle {
+    const appliedMap = new Map<string, any>();
+    for (const record of appliedRecords) {
+      const recommendationId = this.normalizeString(record?.recommendation_id);
+      if (recommendationId) {
+        appliedMap.set(recommendationId, record);
+      }
+    }
+
+    const items: MaternityRecommendationItem[] = (bundle.items ?? []).map((item) => {
+      const appliedRecord = appliedMap.get(item.id) || null;
+      return {
+        ...item,
+        status: (appliedRecord ? 'applied' : 'pending') as 'pending' | 'applied',
+        applied_record: appliedRecord,
+      };
+    });
+
+    const actionableItems = items.filter((item) => this.isActionableRecommendation(item));
+    const appliedCount = actionableItems.filter((item) => item.status === 'applied').length;
+
+    return {
+      ...bundle,
+      actionable_count: actionableItems.length,
+      pending_count: actionableItems.length - appliedCount,
+      applied_count: appliedCount,
+      items,
+    };
+  }
+
+  private getRecommendationCitations(
+    citations: MaternityGuidelineCitation[],
+    ruleIds: string[],
+  ): MaternityGuidelineCitation[] {
+    const matched = citations.filter((citation) => ruleIds.includes(citation.rule_id));
+    return matched.length > 0 ? matched : citations.slice(0, 2);
+  }
+
+  private buildRecommendationBundle(input: {
+    patientId: string;
+    sourceType: MaternityCareTaskSource;
+    precheck: MaternityPrecheckResponse;
+    taskContext?: Record<string, any>;
+  }): MaternityRecommendationBundle {
+    const trace = Array.isArray(input.precheck?.trace) ? input.precheck.trace : [];
+    const citations = Array.isArray(input.precheck?.guideline_citations)
+      ? input.precheck.guideline_citations
+      : [];
+    const requiredActions = Array.isArray(input.precheck?.required_actions)
+      ? input.precheck.required_actions
+      : [];
+    const items: MaternityRecommendationItem[] = [];
+    const activeRuleIds = new Set<string>(trace.map((item) => item.rule_id).filter(Boolean));
+    const patientId = input.patientId;
+
+    const addItem = (item: MaternityRecommendationItem) => {
+      if (!items.find((existing) => existing.id === item.id)) {
+        items.push(item);
+      }
+    };
+
+    const hasRule = (...ruleIds: string[]) => ruleIds.some((ruleId) => activeRuleIds.has(ruleId));
+    const contextualSummary =
+      requiredActions[0] ||
+      input.precheck?.suggested_orders?.[0] ||
+      'Structured maternity recommendation bundle ready for doctor action.';
+
+    if (
+      hasRule(
+        'anc.severe_hypertension',
+        'anc.hypertension_warning',
+        'postnatal.severe_hypertension',
+        'postnatal.hypertension_warning',
+      )
+    ) {
+      const ruleIds = Array.from(activeRuleIds).filter((ruleId) => ruleId.includes('hypertension'));
+      const urgent = hasRule('anc.severe_hypertension', 'postnatal.severe_hypertension');
+      addItem({
+        id: 'maternal-hypertension-monitoring-order',
+        type: 'order',
+        title: urgent ? 'Authorize urgent blood pressure monitoring order' : 'Authorize repeat blood pressure monitoring',
+        bundle_name: 'Maternal hypertensive disorder bundle',
+        urgency: urgent ? 'stat' : 'urgent',
+        rationale:
+          'Raised maternal blood pressure requires repeat observations and nurse-visible execution tasks.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        auto_authorize: true,
+        order_payload: {
+          patientId,
+          orderType: OrderType.PROCEDURE,
+          orderName: urgent ? 'Urgent blood pressure monitoring' : 'Repeat blood pressure monitoring',
+          description: 'Maternity CDSS hypertension follow-up bundle',
+          instructions: urgent
+            ? 'Repeat blood pressure now and continue close observation while senior review is underway.'
+            : 'Repeat blood pressure within 30-60 minutes and escalate if values remain elevated.',
+          priority: urgent ? OrderPriority.URGENT : OrderPriority.HIGH,
+        },
+      });
+      addItem({
+        id: 'maternal-hypertension-labs',
+        type: 'lab_order',
+        title: 'Place pre-eclampsia workup labs',
+        bundle_name: 'Maternal hypertensive disorder bundle',
+        urgency: urgent ? 'stat' : 'urgent',
+        rationale:
+          'A focused maternal lab bundle supports pre-eclampsia evaluation and escalation decisions.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        lab_order_payload: {
+          patientId,
+          priority: urgent ? LabPriority.STAT : LabPriority.URGENT,
+          clinicalInfo: 'Maternity CDSS hypertension/preeclampsia workup',
+          specialInstructions: 'Process urgently and route abnormal maternal results for clinician review.',
+          tests: [
+            { testCode: 'PLT', testName: 'Platelet Count', category: 'hematology', specimenType: 'Whole Blood' },
+            { testCode: 'CREAT', testName: 'Creatinine', category: 'chemistry', specimenType: 'Serum' },
+            { testCode: 'ALT', testName: 'ALT (Alanine Aminotransferase)', category: 'chemistry', specimenType: 'Serum' },
+            { testCode: 'AST', testName: 'AST (Aspartate Aminotransferase)', category: 'chemistry', specimenType: 'Serum' },
+          ],
+        },
+      });
+      if (urgent) {
+        addItem({
+          id: 'maternal-hypertension-referral',
+          type: 'referral',
+          title: 'Prepare urgent obstetric referral',
+          bundle_name: 'Maternal hypertensive disorder bundle',
+          urgency: 'stat',
+          rationale:
+            'Severe maternal hypertension may require higher-level obstetric care and immediate senior review.',
+          rule_ids: ruleIds,
+          citations: this.getRecommendationCitations(citations, ruleIds),
+          referral_payload: {
+            referralType: 'specialist_consultation',
+            specialty: 'Obstetrics',
+            priority: 'urgent',
+            urgency: 'urgent',
+            reason: 'Urgent review for severe maternal hypertension / possible pre-eclampsia',
+            clinicalSummary: contextualSummary,
+            requestedServices: 'Senior obstetric review and escalation planning',
+            status: 'pending',
+          },
+        });
+      }
+    }
+
+    if (hasRule('anc.fever_warning', 'postnatal.fever_warning')) {
+      const ruleIds = Array.from(activeRuleIds).filter((ruleId) => ruleId.includes('fever'));
+      addItem({
+        id: 'maternal-infection-monitoring-order',
+        type: 'order',
+        title: 'Authorize maternal infection observation bundle',
+        bundle_name: 'Maternal infection review bundle',
+        urgency: 'urgent',
+        rationale:
+          'Maternal fever needs close nursing observation and a documented sepsis screening response.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        auto_authorize: true,
+        order_payload: {
+          patientId,
+          orderType: OrderType.PROCEDURE,
+          orderName: 'Maternal infection observation',
+          description: 'Maternity CDSS fever/sepsis screening follow-up',
+          instructions:
+            'Repeat temperature and pulse, assess sepsis red flags, and notify doctor if deterioration occurs.',
+          priority: OrderPriority.HIGH,
+        },
+      });
+      addItem({
+        id: 'maternal-infection-screen-labs',
+        type: 'lab_order',
+        title: 'Place maternal infection screening labs',
+        bundle_name: 'Maternal infection review bundle',
+        urgency: 'urgent',
+        rationale:
+          'A CBC supports infection screening and escalation for febrile maternity patients.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        lab_order_payload: {
+          patientId,
+          priority: LabPriority.URGENT,
+          clinicalInfo: 'Maternity CDSS fever/infection screen',
+          specialInstructions: 'Flag abnormal results for same-shift doctor review.',
+          tests: [
+            { testCode: 'WBC', testName: 'White Blood Cell Count', category: 'hematology', specimenType: 'Whole Blood' },
+            { testCode: 'PLT', testName: 'Platelet Count', category: 'hematology', specimenType: 'Whole Blood' },
+          ],
+        },
+      });
+    }
+
+    if (hasRule('anc.fetal_movement_concern')) {
+      const ruleIds = ['anc.fetal_movement_concern'];
+      addItem({
+        id: 'fetal-assessment-order',
+        type: 'order',
+        title: 'Authorize urgent fetal assessment',
+        bundle_name: 'Fetal wellbeing bundle',
+        urgency: 'urgent',
+        rationale:
+          'Reduced or absent fetal movement should produce an explicit nurse-visible fetal assessment order.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        auto_authorize: true,
+        order_payload: {
+          patientId,
+          orderType: OrderType.PROCEDURE,
+          orderName: 'Urgent fetal wellbeing assessment',
+          description: 'Maternity CDSS fetal movement escalation',
+          instructions: 'Confirm fetal heart rate and arrange same-day fetal assessment/ultrasound review.',
+          priority: OrderPriority.HIGH,
+        },
+      });
+    }
+
+    if (hasRule('delivery.pph_risk', 'delivery.adverse_maternal_outcome')) {
+      const ruleIds = Array.from(activeRuleIds).filter((ruleId) => ruleId.startsWith('delivery.'));
+      addItem({
+        id: 'delivery-emergency-observation-order',
+        type: 'order',
+        title: 'Authorize postpartum emergency observation',
+        bundle_name: 'Delivery complication bundle',
+        urgency: 'stat',
+        rationale:
+          'Serious delivery complications require explicit postpartum monitoring and escalation tasks.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        auto_authorize: true,
+        order_payload: {
+          patientId,
+          orderType: OrderType.PROCEDURE,
+          orderName: 'Postpartum emergency observation',
+          description: 'Maternity CDSS delivery complication follow-up',
+          instructions:
+            'Initiate postpartum complication monitoring, document blood loss trend, and escalate deterioration immediately.',
+          priority: OrderPriority.URGENT,
+        },
+      });
+      addItem({
+        id: 'delivery-complication-labs',
+        type: 'lab_order',
+        title: 'Place post-delivery complication labs',
+        bundle_name: 'Delivery complication bundle',
+        urgency: 'stat',
+        rationale:
+          'CBC and renal/liver tests support maternal stabilization after hemorrhage or severe complications.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        lab_order_payload: {
+          patientId,
+          priority: LabPriority.STAT,
+          clinicalInfo: 'Maternity CDSS delivery complication workup',
+          specialInstructions: 'Process immediately for postpartum hemorrhage or severe maternal complication review.',
+          tests: [
+            { testCode: 'HGB', testName: 'Hemoglobin', category: 'hematology', specimenType: 'Whole Blood' },
+            { testCode: 'PLT', testName: 'Platelet Count', category: 'hematology', specimenType: 'Whole Blood' },
+            { testCode: 'CREAT', testName: 'Creatinine', category: 'chemistry', specimenType: 'Serum' },
+            { testCode: 'ALT', testName: 'ALT (Alanine Aminotransferase)', category: 'chemistry', specimenType: 'Serum' },
+          ],
+        },
+      });
+    }
+
+    if (hasRule('birth.low_birth_weight', 'birth.low_apgar_5min', 'birth.cause_of_death_missing')) {
+      const ruleIds = Array.from(activeRuleIds).filter((ruleId) => ruleId.startsWith('birth.'));
+      addItem({
+        id: 'neonatal-review-referral',
+        type: 'referral',
+        title: 'Prepare neonatal specialist referral',
+        bundle_name: 'Newborn risk bundle',
+        urgency: hasRule('birth.low_apgar_5min') ? 'stat' : 'urgent',
+        rationale:
+          'Compromised newborn outcomes should produce a draft pediatric/neonatal referral with the CDSS rationale attached.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        referral_payload: {
+          referralType: 'specialist_consultation',
+          specialty: 'Pediatrics/Neonatal',
+          priority: hasRule('birth.low_apgar_5min') ? 'urgent' : 'normal',
+          urgency: hasRule('birth.low_apgar_5min') ? 'urgent' : 'routine',
+          reason: 'Newborn review for low APGAR / low birth weight / adverse outcome follow-up',
+          clinicalSummary: contextualSummary,
+          requestedServices: 'Neonatal assessment and management plan',
+          status: 'pending',
+        },
+      });
+    }
+
+    if (hasRule('postnatal.danger_signs_recorded')) {
+      const ruleIds = ['postnatal.danger_signs_recorded'];
+      addItem({
+        id: 'postnatal-danger-sign-followup',
+        type: 'order',
+        title: 'Authorize postpartum danger-sign reassessment',
+        bundle_name: 'Postnatal danger-sign bundle',
+        urgency: 'urgent',
+        rationale:
+          'Documented postpartum danger signs should become an explicit observation and reassessment order.',
+        rule_ids: ruleIds,
+        citations: this.getRecommendationCitations(citations, ruleIds),
+        auto_authorize: true,
+        order_payload: {
+          patientId,
+          orderType: OrderType.PROCEDURE,
+          orderName: 'Postpartum danger-sign reassessment',
+          description: 'Maternity CDSS postnatal danger-sign follow-up',
+          instructions:
+            'Reassess maternal danger signs, reinforce return precautions, and notify doctor if symptoms persist or worsen.',
+          priority: OrderPriority.HIGH,
+        },
+      });
+    }
+
+    for (const action of requiredActions.slice(0, 2)) {
+      addItem({
+        id: `follow-up-${items.length + 1}`,
+        type: 'follow_up',
+        title: 'Document doctor follow-up',
+        bundle_name: 'Clinical follow-up bundle',
+        urgency: 'routine',
+        rationale: action,
+        rule_ids: [],
+        citations: citations.slice(0, 1),
+        follow_up_note: action,
+      });
+    }
+
+    const normalizedItems = this.normalizeRecommendationBundle({
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label:
+        input.sourceType === 'anc_visit'
+          ? 'ANC escalation bundle'
+          : input.sourceType === 'postnatal_visit'
+            ? 'Postnatal escalation bundle'
+            : input.sourceType === 'delivery'
+              ? 'Delivery escalation bundle'
+              : 'Maternity escalation bundle',
+      summary: contextualSummary,
+      actionable_count: 0,
+      pending_count: 0,
+      applied_count: 0,
+      items,
+    });
+
+    return normalizedItems;
+  }
+
+  private buildRecommendationBundleFromTask(task: any): MaternityRecommendationBundle {
+    const precheckLike: MaternityPrecheckResponse = {
+      blockers: [],
+      warnings: [],
+      required_actions: Array.isArray(task?.required_actions) ? task.required_actions : [],
+      suggested_orders: Array.isArray(task?.suggested_orders) ? task.suggested_orders : [],
+      doctor_escalation_required: true,
+      trace: Array.isArray(task?.rule_trace) ? task.rule_trace : [],
+      guideline_citations: Array.isArray(task?.task_context?.guideline_citations)
+        ? task.task_context.guideline_citations
+        : [],
+    };
+
+    return this.normalizeRecommendationBundle(
+      this.buildRecommendationBundle({
+        patientId: task.patient_id,
+        sourceType: task.source_type,
+        precheck: precheckLike,
+        taskContext: task.task_context,
+      }),
+      Array.isArray(task?.task_context?.applied_recommendations)
+        ? task.task_context.applied_recommendations
+        : [],
+    );
+  }
+
+  private attachRecommendationBundle(task: any): any {
+    const taskContext =
+      task?.task_context && typeof task.task_context === 'object' ? { ...task.task_context } : {};
+    const appliedRecommendations = Array.isArray(taskContext.applied_recommendations)
+      ? taskContext.applied_recommendations
+      : [];
+    const storedBundle =
+      taskContext.recommendation_bundle && typeof taskContext.recommendation_bundle === 'object'
+        ? taskContext.recommendation_bundle
+        : null;
+    const bundle = storedBundle
+      ? this.normalizeRecommendationBundle(storedBundle as MaternityRecommendationBundle, appliedRecommendations)
+      : this.buildRecommendationBundleFromTask(task);
+
+    return {
+      ...task,
+      task_context: {
+        ...taskContext,
+        recommendation_bundle: bundle,
+        applied_recommendations: appliedRecommendations,
+      },
+    };
   }
 
   private assertPrecheckAllowsPersistence(
@@ -320,6 +792,13 @@ export class MaternityService {
       return null;
     }
 
+    const recommendationBundle = this.buildRecommendationBundle({
+      patientId: input.patientId,
+      sourceType: input.sourceType,
+      precheck: input.precheck,
+      taskContext: input.taskContext,
+    });
+
     return this.upsertMaternityCareTask(tenantDb, {
       enrollmentId: input.enrollmentId,
       patientId: input.patientId,
@@ -337,6 +816,8 @@ export class MaternityService {
       taskContext: {
         doctorEscalationRequired: true,
         guideline_citations: input.precheck.guideline_citations ?? [],
+        recommendation_bundle: recommendationBundle,
+        applied_recommendations: [],
         ...(input.taskContext ?? {}),
       },
     });
@@ -2971,7 +3452,8 @@ export class MaternityService {
       params,
     );
 
-    return { tasks, total: tasks.length };
+    const normalizedTasks = tasks.map((task: any) => this.attachRecommendationBundle(task));
+    return { tasks: normalizedTasks, total: normalizedTasks.length };
   }
 
   async getMaternityCareTaskMetrics(tenantDb: DataSource): Promise<MaternityCareTaskMetrics> {
@@ -3010,6 +3492,148 @@ export class MaternityService {
 
   async getEnrollmentMaternityCareTasks(tenantDb: DataSource, enrollmentId: string) {
     return this.getMaternityCareTasks(tenantDb, { enrollmentId, status: undefined });
+  }
+
+  async applyMaternityCareTaskRecommendations(
+    tenantDb: DataSource,
+    tenantId: string,
+    taskId: string,
+    body: {
+      recommendation_ids?: string[];
+    } = {},
+    actorId?: string | null,
+  ) {
+    const rows = await tenantDb.query(
+      `SELECT * FROM maternity_care_tasks WHERE id = $1 LIMIT 1`,
+      [taskId],
+    );
+    if (rows.length === 0) {
+      throw new NotFoundException(`Maternity care task with ID ${taskId} not found`);
+    }
+
+    const task = this.attachRecommendationBundle(rows[0]);
+    const bundle = task?.task_context?.recommendation_bundle as MaternityRecommendationBundle;
+    const requestedIds = Array.isArray(body?.recommendation_ids)
+      ? body.recommendation_ids
+          .map((value) => this.normalizeString(value))
+          .filter((value): value is string => Boolean(value))
+      : [];
+    const actionableItems = (bundle?.items ?? []).filter((item) => this.isActionableRecommendation(item));
+    const pendingItems = actionableItems.filter((item) => item.status !== 'applied');
+    const selectedItems =
+      requestedIds.length > 0
+        ? pendingItems.filter((item) => requestedIds.includes(item.id))
+        : pendingItems;
+
+    if (selectedItems.length === 0) {
+      return {
+        task_id: taskId,
+        applied_count: 0,
+        skipped_count: actionableItems.length - pendingItems.length,
+        created_orders: [],
+        created_lab_orders: [],
+        created_referrals: [],
+        task,
+      };
+    }
+
+    const createdOrders: any[] = [];
+    const createdLabOrders: any[] = [];
+    const createdReferrals: any[] = [];
+    const appliedRecords = Array.isArray(task?.task_context?.applied_recommendations)
+      ? [...task.task_context.applied_recommendations]
+      : [];
+
+    for (const item of selectedItems) {
+      if (item.type === 'order' && item.order_payload) {
+        const createdOrder = await this.orderService.createOrder(item.order_payload, actorId || 'system', tenantId);
+        if (item.auto_authorize) {
+          await this.orderService.authorizeOrder(createdOrder.id, actorId || 'system', tenantId);
+        }
+        createdOrders.push(createdOrder);
+        appliedRecords.push({
+          recommendation_id: item.id,
+          type: item.type,
+          applied_at: new Date().toISOString(),
+          applied_by: actorId || null,
+          created_order_id: createdOrder.id,
+        });
+      }
+
+      if (item.type === 'lab_order' && item.lab_order_payload) {
+        const createdLabOrder = await this.labOrderService.create(
+          item.lab_order_payload,
+          tenantDb,
+          actorId || 'system',
+          tenantId,
+        );
+        createdLabOrders.push(createdLabOrder);
+        appliedRecords.push({
+          recommendation_id: item.id,
+          type: item.type,
+          applied_at: new Date().toISOString(),
+          applied_by: actorId || null,
+          created_lab_order_id: createdLabOrder.id,
+        });
+      }
+
+      if (item.type === 'referral' && item.referral_payload) {
+        const createdReferral = await this.referralService.createReferral(
+          task.patient_id,
+          item.referral_payload,
+          actorId || 'system',
+          tenantDb,
+        );
+        createdReferrals.push(createdReferral);
+        appliedRecords.push({
+          recommendation_id: item.id,
+          type: item.type,
+          applied_at: new Date().toISOString(),
+          applied_by: actorId || null,
+          created_referral_id: createdReferral.id,
+        });
+      }
+    }
+
+    const normalizedBundle = this.normalizeRecommendationBundle(bundle, appliedRecords);
+    const note = `Applied ${selectedItems.length} maternity recommendation bundle item${selectedItems.length === 1 ? '' : 's'}.`;
+    const nextStatus = task.status === 'closed' ? 'closed' : 'actioned';
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE maternity_care_tasks
+      SET status = $1,
+          actioned_by = CASE WHEN $1 = 'actioned' THEN COALESCE(actioned_by, $2) ELSE actioned_by END,
+          actioned_at = CASE WHEN $1 = 'actioned' AND actioned_at IS NULL THEN NOW() ELSE actioned_at END,
+          latest_note = $3,
+          task_context = $4::jsonb,
+          last_event_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $5
+      RETURNING *
+      `,
+      [
+        nextStatus,
+        actorId || null,
+        note,
+        JSON.stringify({
+          ...(task.task_context || {}),
+          recommendation_bundle: normalizedBundle,
+          applied_recommendations: appliedRecords,
+        }),
+        taskId,
+      ],
+    );
+
+    const updatedTask = this.attachRecommendationBundle(updatedRows[0]);
+    return {
+      task_id: taskId,
+      applied_count: selectedItems.length,
+      skipped_count: Math.max(actionableItems.length - selectedItems.length, 0),
+      created_orders: createdOrders,
+      created_lab_orders: createdLabOrders,
+      created_referrals: createdReferrals,
+      task: updatedTask,
+    };
   }
 
   async updateMaternityCareTaskStatus(

@@ -341,6 +341,24 @@ export class MaternityController {
     return this.maternityService.updateMaternityCareTaskStatus(req.tenantDb, id, body, userId);
   }
 
+  @Post('care-tasks/:id/apply-recommendations')
+  @ApiOperation({ summary: 'Apply actionable doctor recommendations for a maternity care task' })
+  @ApiResponse({ status: 200, description: 'Maternity recommendation bundle applied successfully' })
+  async applyMaternityCareTaskRecommendations(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: { recommendation_ids?: string[] },
+  ) {
+    const userId = req.user?.userId || (req.user as any)?.id || (req.user as any)?.sub;
+    return this.maternityService.applyMaternityCareTaskRecommendations(
+      req.tenantDb,
+      req.tenantId,
+      id,
+      body,
+      userId,
+    );
+  }
+
   // ===== INDICATORS & REPORTS =====
 
   @Get('indicators')

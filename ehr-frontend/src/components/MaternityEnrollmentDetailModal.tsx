@@ -1443,6 +1443,52 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                         </div>
                       </div>
                     )}
+                    {(task.task_context?.recommendation_bundle?.items?.length ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Doctor recommendation bundle</p>
+                        <div className="mt-2 rounded-xl border border-sky-100 bg-sky-50/60 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold uppercase text-sky-700">
+                              {task.task_context.recommendation_bundle.bundle_label || 'Maternity bundle'}
+                            </span>
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                              {task.task_context.recommendation_bundle.pending_count ?? 0} pending
+                            </span>
+                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                              {task.task_context.recommendation_bundle.applied_count ?? 0} applied
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-600">
+                            {task.task_context.recommendation_bundle.summary || 'Structured doctor actions were generated for this escalation.'}
+                          </p>
+                          <div className="mt-2 space-y-2">
+                            {task.task_context.recommendation_bundle.items.slice(0, 4).map((item: any) => (
+                              <div key={`${task.id}-bundle-${item.id}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase text-slate-700">
+                                    {String(item.type || 'action').replace('_', ' ')}
+                                  </span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase text-slate-600">
+                                    {item.urgency || 'routine'}
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
+                                      item.status === 'applied'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-amber-100 text-amber-700'
+                                    }`}
+                                  >
+                                    {item.status || 'pending'}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs font-medium text-slate-700">{item.title}</p>
+                                <p className="text-xs text-slate-500">{item.rationale}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
