@@ -979,17 +979,18 @@ const NurseDashboard: React.FC = () => {
         typeof patientContext.gender === 'string' && patientContext.gender.trim().length > 0
           ? patientContext.gender
           : undefined;
+      const patientContextId = patientContext.id;
 
       setTriageCopilotLoading(true);
       const vitals = sourceAppointment?.vitals || getSelectedPatientLatestVitals();
       const response = await ehrApi.analyzeTriageCopilot(
         {
-          patientId: patientContext.id,
+          patientId: patientContextId,
           age: derivedAge,
           gender: normalizedGender,
-          chiefComplaint: sourceAppointment?.reason || appointments.find(a => a.patient.id === patientContext.id)?.reason || '',
+          chiefComplaint: sourceAppointment?.reason || appointments.find(a => a.patient.id === patientContextId)?.reason || '',
           symptoms: appointments
-            .filter(a => a.patient.id === patientContext.id)
+            .filter(a => a.patient.id === patientContextId)
             .map(a => a.reason)
             .filter((r) => typeof r === 'string' && r.trim().length > 0),
           vitals,
