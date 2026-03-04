@@ -196,6 +196,337 @@ export class NurseWorklistService {
     };
   }
 
+  private computeAgeFromDob(dateOfBirth?: string | Date | null) {
+    if (!dateOfBirth) {
+      return null;
+    }
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) {
+      return null;
+    }
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age;
+  }
+
+  private normalizeCitationList(citations: Array<{ rule_id: string; source: string; citation: string } | null | undefined>) {
+    const deduped = new Map<string, { rule_id: string; source: string; citation: string }>();
+    for (const citation of citations) {
+      if (!citation?.citation) {
+        continue;
+      }
+      const key = `${citation.rule_id}:${citation.citation}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, citation);
+      }
+    }
+    return Array.from(deduped.values());
+  }
+
+  private createGuidelineCitation(ruleId: string, citation: string, source = 'WHO HIV guidance') {
+    return {
+      rule_id: ruleId,
+      source,
+      citation,
+    };
+  }
+
+  private parseJsonObject(value: any) {
+    if (!value) {
+      return null;
+    }
+    if (typeof value === 'object') {
+      return value;
+    }
+    try {
+      return JSON.parse(String(value));
+    } catch {
+      return null;
+    }
+  }
+
+  private buildHivPathwayRecommendationBundle(params: {
+    enrollment: any;
+    pathway: any;
+    latestVisit: any;
+  }) {
+    const { enrollment, pathway, latestVisit } = params;
+    const status = String(pathway?.status || '');
+    const age = this.computeAgeFromDob(enrollment?.date_of_birth);
+    const pregnancyStatus = String(latestVisit?.pregnancy_lactating_status || '').trim().toUpperCase();
+    const isPregnant = pregnancyStatus === 'P' || pregnancyStatus.includes('PREG');
+
+    const items: Array<Record<string, any>> = [];
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        `vl-pathway.${status}`,
+        status === 'failure_after_eac'
+          ? 'WHO HIV viral load algorithm: persistent high VL after EAC needs clinician switch review.'
+          : 'WHO HIV viral load algorithm: unsuppressed VL requires EAC, repeat viral load, and adherence follow-up.',
+      ),
+      pathway?.overdue
+        ? this.createGuidelineCitation(
+            'vl-pathway.overdue_vl',
+            'WHO HIV monitoring schedule: overdue viral load should be collected at the next available contact.',
+          )
+        : null,
+      isPregnant
+        ? this.createGuidelineCitation(
+            'vl-pathway.pmtct',
+            'WHO PMTCT guidance: pregnant or breastfeeding clients need intensified adherence support and maternal follow-up.',
+            'WHO PMTCT guidance',
+          )
+        : null,
+      age !== null && age < 15
+        ? this.createGuidelineCitation(
+            'vl-pathway.pediatric',
+            'WHO pediatric HIV guidance: children with unsuppressed VL need caregiver adherence review and pediatric regimen assessment.',
+            'WHO pediatric HIV guidance',
+          )
+        : null,
+    ]);
+
+    if (status === 'high_vl_needs_eac' || status === 'high_vl' || status === 'high_vl_on_eac') {
+      items.push({
+        id: 'eac-followup',
+        type: 'follow_up',
+        title: status === 'high_vl_on_eac' ? 'Continue EAC session tracking' : 'Start or schedule EAC follow-up',
+        urgency: 'urgent',
+        rationale: 'Nurse-led adherence counseling and documentation is the first-line response to unsuppressed viral load.',
+        citations: citations.filter((citation) => citation.rule_id.startsWith('vl-pathway')),
+        action_payload: {
+          status,
+          next_step: status === 'high_vl_on_eac' ? 'continue_eac' : 'start_eac',
+          suggested_note:
+            status === 'high_vl_on_eac'
+              ? 'Review completed EAC sessions, reinforce adherence barriers, and confirm repeat VL plan.'
+              : 'Enroll patient into EAC, document adherence barriers, and prepare repeat VL scheduling.',
+        },
+      });
+    }
+
+    items.push({
+      id: 'repeat-vl-plan',
+      type: 'lab_followup',
+      title: 'Prepare repeat viral load follow-up',
+      urgency: pathway?.overdue ? 'urgent' : 'routine',
+      rationale: 'The nurse queue should always carry the next viral-load collection plan alongside the current unsuppressed result.',
+      citations: citations.filter((citation) => citation.rule_id === 'vl-pathway.overdue_vl' || citation.rule_id === `vl-pathway.${status}`),
+      action_payload: {
+        next_vl_date: pathway?.nextVlDate || null,
+        overdue: Boolean(pathway?.overdue),
+        last_vl_value: pathway?.lastVlValue ?? null,
+      },
+    });
+
+    if (status === 'failure_after_eac') {
+      items.push({
+        id: 'doctor-switch-review',
+        type: 'escalation',
+        title: 'Escalate for regimen switch review',
+        urgency: 'urgent',
+        rationale: 'Persistent high viral load after EAC should move to clinician review without waiting for the nurse to reinterpret the algorithm.',
+        citations: citations.filter((citation) => citation.rule_id === `vl-pathway.${status}`),
+        action_payload: {
+          doctor_sync_status: 'doctor_review_recommended',
+        },
+      });
+    }
+
+    if (isPregnant) {
+      items.push({
+        id: 'pmtct-linkage',
+        type: 'pmtct_followup',
+        title: 'Confirm PMTCT or ANC linkage',
+        urgency: 'urgent',
+        rationale: 'Pregnancy raises transmission risk and requires linkage visibility inside the nurse queue.',
+        citations: citations.filter((citation) => citation.rule_id === 'vl-pathway.pmtct'),
+        action_payload: {
+          pregnancy_status: latestVisit?.pregnancy_lactating_status || null,
+          suggested_note: 'Confirm ANC/PMTCT linkage, adherence review, and maternal follow-up plan.',
+        },
+      });
+    }
+
+    if (age !== null && age < 15) {
+      items.push({
+        id: 'pediatric-adherence',
+        type: 'dose_review',
+        title: 'Review pediatric dose and caregiver adherence',
+        urgency: 'urgent',
+        rationale: 'Pediatric unsuppressed viral load often needs caregiver counseling and weight-band dose verification.',
+        citations: citations.filter((citation) => citation.rule_id === 'vl-pathway.pediatric'),
+        action_payload: {
+          age,
+          current_regimen_code: enrollment?.current_regimen_code || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'WHO HIV nurse follow-up bundle',
+      summary: `${items.length} HIV nurse action${items.length === 1 ? '' : 's'} prepared from the viral-load pathway.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildHivRegimenRecommendationBundle(params: {
+    request: any;
+    latestVisit: any;
+  }) {
+    const { request, latestVisit } = params;
+    const safetySummary = this.parseJsonObject(request?.regimen_safety_summary);
+    const age = this.computeAgeFromDob(request?.date_of_birth);
+    const pregnancyStatus = String(latestVisit?.pregnancy_lactating_status || '').trim().toUpperCase();
+    const isPregnant = pregnancyStatus === 'P' || pregnancyStatus.includes('PREG');
+    const tbMeds = Array.isArray(safetySummary?.context?.tbMedications) ? safetySummary.context.tbMedications : [];
+    const warnings = Array.isArray(safetySummary?.warnings) ? safetySummary.warnings : [];
+    const guidelineReferences = Array.isArray(safetySummary?.guidelineReferences)
+      ? safetySummary.guidelineReferences.map((reference: string, index: number) =>
+          this.createGuidelineCitation(`regimen.${index + 1}`, reference, 'WHO HIV ART safety guidance'),
+        )
+      : [];
+
+    const citations = this.normalizeCitationList([
+      ...guidelineReferences,
+      this.createGuidelineCitation(
+        'regimen.switch',
+        'WHO HIV treatment guidance: approved regimen switches still need nurse counseling, medication reconciliation, and follow-up documentation.',
+      ),
+      isPregnant
+        ? this.createGuidelineCitation(
+            'regimen.pmtct',
+            'WHO PMTCT guidance: pregnancy status should be confirmed before executing regimen changes.',
+            'WHO PMTCT guidance',
+          )
+        : null,
+      age !== null && age < 15
+        ? this.createGuidelineCitation(
+            'regimen.pediatric',
+            'WHO pediatric HIV dosing guidance: confirm weight-band dosing and caregiver instructions for regimen changes.',
+            'WHO pediatric HIV guidance',
+          )
+        : null,
+      tbMeds.length > 0
+        ? this.createGuidelineCitation(
+            'regimen.tb_interaction',
+            'WHO HIV/TB co-treatment guidance: regimen switches with rifampicin or related TB therapy require interaction review.',
+            'WHO HIV/TB co-treatment guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'regimen-counseling',
+        type: 'counseling',
+        title: 'Counsel patient on approved regimen switch',
+        urgency: 'urgent',
+        rationale: 'Doctor approval alone is not enough; the nurse workflow should still ensure counseling and readiness before recording the visit.',
+        citations: citations.filter((citation) => citation.rule_id === 'regimen.switch' || citation.rule_id.startsWith('regimen.')),
+        action_payload: {
+          current_regimen: request?.current_regimen_name || null,
+          requested_regimen: request?.requested_regimen_name || null,
+          change_reason: request?.change_reason_details || null,
+        },
+      },
+      {
+        id: 'visit-recording',
+        type: 'visit_preparation',
+        title: 'Prepare next HIV clinical visit recording',
+        urgency: 'urgent',
+        rationale: 'The nurse queue should make the next documentation step explicit so approved changes do not stall before visit capture.',
+        citations: citations.filter((citation) => citation.rule_id === 'regimen.switch'),
+        action_payload: {
+          enrollment_id: request?.enrollment_id || null,
+          requested_regimen_code: request?.requested_regimen_code || null,
+        },
+      },
+    ];
+
+    if (warnings.length > 0) {
+      items.push({
+        id: 'regimen-safety-warnings',
+        type: 'safety_review',
+        title: 'Review regimen safety warnings with clinician plan',
+        urgency: 'urgent',
+        rationale: 'Safety warnings should not be buried inside doctor approval metadata when the nurse is the one executing follow-through.',
+        citations: guidelineReferences,
+        action_payload: {
+          warnings: warnings.map((warning: any) => ({
+            message: warning?.message || null,
+            recommendedAction: warning?.recommendedAction || null,
+          })),
+        },
+      });
+    }
+
+    if (isPregnant) {
+      items.push({
+        id: 'pregnancy-safety-review',
+        type: 'pmtct_followup',
+        title: 'Confirm pregnancy or PMTCT regimen safety',
+        urgency: 'urgent',
+        rationale: 'Pregnancy should remain visible when the nurse is carrying the switch into the next contact.',
+        citations: citations.filter((citation) => citation.rule_id === 'regimen.pmtct'),
+        action_payload: {
+          pregnancy_status: latestVisit?.pregnancy_lactating_status || null,
+        },
+      });
+    }
+
+    if (age !== null && age < 15) {
+      items.push({
+        id: 'pediatric-dose-check',
+        type: 'dose_review',
+        title: 'Confirm pediatric weight-band dosing',
+        urgency: 'urgent',
+        rationale: 'Regimen switch execution for children should explicitly trigger dose verification.',
+        citations: citations.filter((citation) => citation.rule_id === 'regimen.pediatric'),
+        action_payload: {
+          age,
+          requested_regimen_code: request?.requested_regimen_code || null,
+        },
+      });
+    }
+
+    if (tbMeds.length > 0) {
+      items.push({
+        id: 'tb-interaction-review',
+        type: 'interaction_review',
+        title: 'Check TB co-treatment interaction plan',
+        urgency: 'urgent',
+        rationale: 'Concurrent TB therapy changes the safe execution steps for HIV regimen switches.',
+        citations: citations.filter((citation) => citation.rule_id === 'regimen.tb_interaction'),
+        action_payload: {
+          tb_medications: tbMeds,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'WHO HIV regimen follow-through bundle',
+      summary: `${items.length} nurse actions prepared for the approved regimen switch.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
     const [
       workflowRows,
@@ -328,13 +659,16 @@ export class NurseWorklistService {
           r.enrollment_id,
           r.request_date,
           r.approval_date,
+          r.requested_regimen_code,
           r.current_regimen_name,
           r.requested_regimen_name,
           r.change_reason_details,
           r.clinical_justification,
+          r.regimen_safety_summary,
           r.approved_by_name,
           e.patient_id,
           e.enrollment_number,
+          p.date_of_birth,
           p.first_name || ' ' || p.last_name as patient_name,
           p.patient_number
         FROM hiv_arv_change_requests r
@@ -458,6 +792,40 @@ export class NurseWorklistService {
       return Number.isFinite(latestVl) && latestVl >= 1000;
     });
 
+    const hivRecommendationEnrollmentIds = Array.from(
+      new Set<string>(
+        [
+          ...hivPathwayCandidates.map((enrollment: any) => String(enrollment.id)),
+          ...(approvedRegimenChanges || []).map((request: any) => String(request.enrollment_id || '')),
+        ].filter((value) => value.length > 0),
+      ),
+    );
+
+    const latestHivVisits = hivRecommendationEnrollmentIds.length > 0
+      ? await this.safeQuery(
+          tenantDb,
+          `
+          SELECT DISTINCT ON (v.enrollment_id)
+            v.enrollment_id,
+            v.visit_date,
+            v.pregnancy_lactating_status,
+            v.tb_treatment_started,
+            v.creatinine_result,
+            v.alt_result,
+            v.weight,
+            v.arv_regimen_code
+          FROM hiv_clinical_visits v
+          WHERE v.enrollment_id = ANY($1)
+          ORDER BY v.enrollment_id, v.visit_date DESC, v.created_at DESC
+          `,
+          [hivRecommendationEnrollmentIds],
+        )
+      : [];
+
+    const latestHivVisitsByEnrollment = new Map<string, any>(
+      (latestHivVisits || []).map((visit: any) => [String(visit.enrollment_id), visit] as [string, any]),
+    );
+
     const hivPathways = await Promise.all(
       hivPathwayCandidates.map(async (enrollment: any) => {
         try {
@@ -509,6 +877,12 @@ export class NurseWorklistService {
                 : `${enrollment.first_name} ${enrollment.last_name} has a high viral load that requires follow-up.`;
 
         const itemId = `hiv-pathway:${enrollment.id}:${status}:${pathway.lastVlDate || enrollment.last_viral_load_date || 'na'}`;
+        const latestVisit = latestHivVisitsByEnrollment.get(String(enrollment.id)) || null;
+        const recommendationBundle = this.buildHivPathwayRecommendationBundle({
+          enrollment,
+          pathway,
+          latestVisit,
+        });
 
         return [
           this.mergeCrossModuleWorkflowState(
@@ -555,6 +929,9 @@ export class NurseWorklistService {
                 last_vl_date: pathway.lastVlDate ?? enrollment.last_viral_load_date ?? null,
                 next_vl_date: pathway.nextVlDate ?? null,
                 actions: pathway.actions || [],
+                recommendation_bundle: recommendationBundle,
+                guideline_citations: recommendationBundle.citations,
+                latest_visit_context: latestVisit,
               },
             },
             workflowRowsByKey,
@@ -562,8 +939,14 @@ export class NurseWorklistService {
         ];
       });
 
-    const hivRegimenItems = (approvedRegimenChanges || []).map((request: any) =>
-      this.mergeCrossModuleWorkflowState(
+    const hivRegimenItems = (approvedRegimenChanges || []).map((request: any) => {
+      const latestVisit = latestHivVisitsByEnrollment.get(String(request.enrollment_id)) || null;
+      const recommendationBundle = this.buildHivRegimenRecommendationBundle({
+        request,
+        latestVisit,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
         {
           id: `hiv-regimen:${request.id}`,
           module: 'hiv',
@@ -603,11 +986,14 @@ export class NurseWorklistService {
             requested_regimen_name: request.requested_regimen_name || null,
             change_reason_details: request.change_reason_details || null,
             clinical_justification: request.clinical_justification || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+            latest_visit_context: latestVisit,
           },
         },
         workflowRowsByKey,
-      ),
-    );
+      );
+    });
 
     const handoffItems = (handoffRows || []).map((row: any) => {
       const referenceTime = row.updated_at || row.reviewed_at || row.finalized_at || row.shared_at || null;

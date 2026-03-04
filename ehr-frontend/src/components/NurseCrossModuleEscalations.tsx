@@ -105,6 +105,14 @@ function formatAgeHours(ageHours?: number | null) {
   return `${ageHours}h`;
 }
 
+function getRecommendationBundle(item: NurseCrossModuleFeedItem) {
+  const bundle = item.metadata?.recommendation_bundle;
+  if (!bundle || typeof bundle !== 'object') {
+    return null;
+  }
+  return bundle;
+}
+
 export default function NurseCrossModuleEscalations({
   items,
   summary,
@@ -182,6 +190,13 @@ export default function NurseCrossModuleEscalations({
           <div className="space-y-4">
             {visibleItems.map((item) => {
               const isMaternity = item.module === 'maternity';
+              const recommendationBundle = getRecommendationBundle(item);
+              const bundleItems = Array.isArray(recommendationBundle?.items)
+                ? recommendationBundle.items.slice(0, compact ? 2 : 3)
+                : [];
+              const bundleCitations = Array.isArray(recommendationBundle?.citations)
+                ? recommendationBundle.citations.slice(0, compact ? 2 : 3)
+                : [];
               const canAcknowledgeMaternity =
                 isMaternity &&
                 item.workflow_status === 'open' &&
@@ -242,6 +257,66 @@ export default function NurseCrossModuleEscalations({
                         <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Recommended Next Step</p>
                           <p className="text-sm text-indigo-900 mt-1">{item.recommended_action}</p>
+                        </div>
+                      )}
+
+                      {recommendationBundle && (
+                        <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                              HIV CDSS Bundle
+                            </p>
+                            <span className="px-2 py-0.5 rounded-full bg-white text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                              {recommendationBundle.actionable_count ?? bundleItems.length} actions
+                            </span>
+                          </div>
+                          {recommendationBundle.summary && (
+                            <p className="text-sm text-emerald-900 mt-1">{recommendationBundle.summary}</p>
+                          )}
+                          {bundleItems.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                              {bundleItems.map((bundleItem: any) => (
+                                <div
+                                  key={String(bundleItem.id || bundleItem.title)}
+                                  className="rounded-lg border border-emerald-100 bg-white/80 px-3 py-2"
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-semibold text-slate-900">
+                                      {bundleItem.title || 'Recommended nurse action'}
+                                    </span>
+                                    {bundleItem.urgency && (
+                                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[11px] font-semibold text-emerald-700">
+                                        {String(bundleItem.urgency).replace(/_/g, ' ')}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {bundleItem.rationale && (
+                                    <p className="text-xs text-slate-600 mt-1">{bundleItem.rationale}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {bundleCitations.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                Guideline Support
+                              </p>
+                              <div className="mt-2 flex flex-col gap-2">
+                                {bundleCitations.map((citation: any, index: number) => (
+                                  <div
+                                    key={String(citation.rule_id || index)}
+                                    className="rounded-lg border border-slate-200 bg-white/80 px-3 py-2"
+                                  >
+                                    <p className="text-[11px] font-semibold text-slate-500">
+                                      {citation.source || 'Guideline'}
+                                    </p>
+                                    <p className="text-xs text-slate-700 mt-0.5">{citation.citation}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 

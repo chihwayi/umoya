@@ -240,8 +240,10 @@ describe('NurseWorklistService', () => {
           first_name: 'Tariro',
           last_name: 'Moyo',
           patient_number: 'P-100',
+          date_of_birth: '2018-03-01',
           last_viral_load: 4500,
           last_viral_load_date: '2026-03-03',
+          current_regimen_code: 'ABC/3TC/DTG',
         },
       ],
     });
@@ -325,15 +327,56 @@ describe('NurseWorklistService', () => {
               enrollment_id: 'enroll-hiv-2',
               request_date: '2026-03-02',
               approval_date: '2026-03-04',
+              requested_regimen_code: 'AZT/3TC/ATV/r',
               current_regimen_name: 'TDF/3TC/DTG',
               requested_regimen_name: 'AZT/3TC/ATV/r',
               change_reason_details: 'Virologic failure',
               clinical_justification: 'Confirmed failure after repeat VL',
+              regimen_safety_summary: {
+                warnings: [
+                  {
+                    message: 'Review pregnancy safety before switch.',
+                    recommendedAction: 'Confirm PMTCT plan and regimen appropriateness.',
+                  },
+                ],
+                guidelineReferences: [
+                  'WHO regimen switch safety guidance',
+                ],
+                context: {
+                  tbMedications: ['Rifampicin'],
+                },
+              },
               approved_by_name: 'Dr. Dube',
               patient_id: 'patient-hiv-2',
               enrollment_number: 'HIV-002',
+              date_of_birth: '1997-04-02',
               patient_name: 'Linda Moyo',
               patient_number: 'P-300',
+            },
+          ];
+        }
+
+        if (sql.includes('FROM hiv_clinical_visits v')) {
+          return [
+            {
+              enrollment_id: 'enroll-hiv-1',
+              visit_date: '2026-03-03',
+              pregnancy_lactating_status: 'NP',
+              tb_treatment_started: false,
+              creatinine_result: null,
+              alt_result: null,
+              weight: 24,
+              arv_regimen_code: 'ABC/3TC/DTG',
+            },
+            {
+              enrollment_id: 'enroll-hiv-2',
+              visit_date: '2026-03-04',
+              pregnancy_lactating_status: 'P',
+              tb_treatment_started: true,
+              creatinine_result: 0.8,
+              alt_result: 32,
+              weight: 63,
+              arv_regimen_code: 'TDF/3TC/DTG',
             },
           ];
         }
@@ -424,6 +467,47 @@ describe('NurseWorklistService', () => {
           item_type: 'medication_administration_followup',
           title: 'Held medication requires follow-up',
         }),
+      ]),
+    );
+    const hivRegimenItem = result.items.find((item: any) => item.id === 'hiv-regimen:req-1');
+    expect(hivRegimenItem.metadata?.recommendation_bundle).toEqual(
+      expect.objectContaining({
+        bundle_label: 'WHO HIV regimen follow-through bundle',
+        actionable_count: 5,
+      }),
+    );
+    expect(hivRegimenItem.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'regimen-counseling', type: 'counseling' }),
+        expect.objectContaining({ id: 'pregnancy-safety-review', type: 'pmtct_followup' }),
+        expect.objectContaining({ id: 'tb-interaction-review', type: 'interaction_review' }),
+      ]),
+    );
+    expect(hivRegimenItem.metadata?.guideline_citations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ rule_id: 'regimen.pmtct' }),
+        expect.objectContaining({ rule_id: 'regimen.tb_interaction' }),
+      ]),
+    );
+
+    const hivPathwayItem = result.items.find(
+      (item: any) => item.id === 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
+    );
+    expect(hivPathwayItem.metadata?.recommendation_bundle).toEqual(
+      expect.objectContaining({
+        bundle_label: 'WHO HIV nurse follow-up bundle',
+        actionable_count: 3,
+      }),
+    );
+    expect(hivPathwayItem.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'eac-followup', type: 'follow_up' }),
+        expect.objectContaining({ id: 'pediatric-adherence', type: 'dose_review' }),
+      ]),
+    );
+    expect(hivPathwayItem.metadata?.guideline_citations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ rule_id: 'vl-pathway.pediatric' }),
       ]),
     );
     expect(mocks.hivService.getVlPathway).toHaveBeenCalledWith('enroll-hiv-1', tenantDb);
