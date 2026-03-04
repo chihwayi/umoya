@@ -1220,6 +1220,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getNurseCrossModuleFeed: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/nurse-worklist/cross-module-feed', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   completeNurseTask: async (
     taskId: string,
     payload: { reason?: string; patientId?: string; context?: any },

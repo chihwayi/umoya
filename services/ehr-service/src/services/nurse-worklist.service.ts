@@ -1,10 +1,321 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { HipaaAuditAction, HipaaAuditService } from './hipaa-audit.service';
+import { HivService } from './hiv.service';
 
 @Injectable()
 export class NurseWorklistService {
-  constructor(private readonly hipaaAuditService: HipaaAuditService) {}
+  constructor(
+    private readonly hipaaAuditService: HipaaAuditService,
+    private readonly hivService: HivService,
+  ) {}
+
+  private getSeverityRank(severity?: string | null) {
+    switch (String(severity || '').toLowerCase()) {
+      case 'critical':
+        return 4;
+      case 'high':
+        return 3;
+      case 'medium':
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  private getHoursSince(dateValue?: string | Date | null) {
+    if (!dateValue) return null;
+    const parsed = new Date(dateValue);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return Math.round(((Date.now() - parsed.getTime()) / (1000 * 60 * 60)) * 10) / 10;
+  }
+
+  async getCrossModuleEscalationFeed(tenantDb: DataSource) {
+    const [maternityTasks, hivEnrollments, approvedRegimenChanges] = await Promise.all([
+      tenantDb.query(
+        `
+        SELECT
+          t.id,
+          t.maternity_enrollment_id,
+          t.patient_id,
+          t.source_type,
+          t.source_record_id,
+          t.status,
+          t.priority,
+          t.title,
+          t.summary,
+          t.required_actions,
+          t.task_context,
+          t.note,
+          t.last_event_at,
+          t.created_at,
+          ROUND(EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0, 1) as age_hours,
+          CASE
+            WHEN t.status = 'closed' THEN 'closed'
+            WHEN EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0 >
+              CASE t.priority
+                WHEN 'critical' THEN 2
+                WHEN 'high' THEN 8
+                WHEN 'medium' THEN 24
+                ELSE 48
+              END THEN 'breached'
+            WHEN EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0 >
+              CASE t.priority
+                WHEN 'critical' THEN 1.5
+                WHEN 'high' THEN 6
+                WHEN 'medium' THEN 18
+                ELSE 36
+              END THEN 'due_soon'
+            ELSE 'within_sla'
+          END as sla_status,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          me.enrollment_number
+        FROM maternity_care_tasks t
+        INNER JOIN patients p ON p.id = t.patient_id
+        INNER JOIN maternity_enrollments me ON me.id = t.maternity_enrollment_id
+        WHERE t.status != 'closed'
+        ORDER BY
+          CASE t.priority
+            WHEN 'critical' THEN 4
+            WHEN 'high' THEN 3
+            WHEN 'medium' THEN 2
+            ELSE 1
+          END DESC,
+          t.last_event_at DESC,
+          t.created_at DESC
+        LIMIT 50
+        `,
+      ),
+      this.hivService.getEnrollments({ status: 'active' }, tenantDb),
+      tenantDb.query(
+        `
+        SELECT
+          r.id,
+          r.enrollment_id,
+          r.request_date,
+          r.approval_date,
+          r.current_regimen_name,
+          r.requested_regimen_name,
+          r.change_reason_details,
+          r.clinical_justification,
+          r.approved_by_name,
+          e.patient_id,
+          e.enrollment_number,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number
+        FROM hiv_arv_change_requests r
+        INNER JOIN hiv_care_enrollments e ON e.id = r.enrollment_id
+        INNER JOIN patients p ON p.id = e.patient_id
+        WHERE r.status = 'approved'
+          AND COALESCE(r.visit_recorded, false) = false
+        ORDER BY r.approval_date DESC NULLS LAST, r.request_date DESC, r.created_at DESC
+        LIMIT 50
+        `,
+      ).catch(() => []),
+    ]);
+
+    const maternityItems = (maternityTasks || []).map((task: any) => ({
+      id: `maternity:${task.id}`,
+      module: 'maternity',
+      item_type: 'maternity_care_task',
+      severity: task.priority || 'medium',
+      workflow_status: task.status,
+      doctor_sync_status:
+        task.status === 'open'
+          ? 'awaiting_doctor_review'
+          : task.status === 'acknowledged'
+            ? 'doctor_reviewing'
+            : task.status === 'actioned'
+              ? 'doctor_actioned'
+              : 'closed',
+      title: task.title || 'Maternity escalation task',
+      summary: task.summary || 'Maternity escalation requires follow-up.',
+      recommended_action:
+        Array.isArray(task.required_actions) && task.required_actions.length > 0
+          ? String(task.required_actions[0])
+          : 'Review the maternity workflow and confirm doctor follow-through.',
+      patient_id: task.patient_id,
+      patient_name: task.patient_name,
+      patient_number: task.patient_number,
+      enrollment_id: task.maternity_enrollment_id,
+      enrollment_number: task.enrollment_number,
+      source_record_id: task.source_record_id,
+      source_type: task.source_type,
+      created_at: task.created_at,
+      updated_at: task.last_event_at || task.created_at,
+      age_hours: task.age_hours != null ? Number(task.age_hours) : this.getHoursSince(task.created_at),
+      sla_status: task.sla_status || null,
+      next_route: {
+        section: 'maternity',
+        tab: 'maternity',
+        taskId: task.id,
+        enrollmentId: task.maternity_enrollment_id,
+        patientId: task.patient_id,
+      },
+      metadata: {
+        task_context: task.task_context || null,
+        note: task.note || null,
+      },
+    }));
+
+    const hivEnrollmentRows = Array.isArray((hivEnrollments as any)?.enrollments)
+      ? (hivEnrollments as any).enrollments
+      : [];
+
+    const hivPathwayCandidates = hivEnrollmentRows.filter((enrollment: any) => {
+      const latestVl = Number(enrollment?.last_viral_load || 0);
+      return Number.isFinite(latestVl) && latestVl >= 1000;
+    });
+
+    const hivPathways = await Promise.all(
+      hivPathwayCandidates.map(async (enrollment: any) => {
+        try {
+          const pathway = await this.hivService.getVlPathway(enrollment.id, tenantDb);
+          return { enrollment, pathway };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const hivPathwayItems = hivPathways
+      .filter((entry): entry is { enrollment: any; pathway: any } => Boolean(entry?.pathway))
+      .flatMap(({ enrollment, pathway }) => {
+        const status = String(pathway.status || '');
+        const actionable =
+          status === 'high_vl_needs_eac' ||
+          status === 'failure_after_eac' ||
+          status === 'high_vl_on_eac' ||
+          status === 'high_vl';
+
+        if (!actionable) {
+          return [];
+        }
+
+        const severity =
+          status === 'failure_after_eac'
+            ? 'critical'
+            : status === 'high_vl_needs_eac' || status === 'high_vl'
+              ? 'high'
+              : 'medium';
+
+        const title =
+          status === 'failure_after_eac'
+            ? 'Possible HIV treatment failure after EAC'
+            : status === 'high_vl_needs_eac'
+              ? 'High viral load requires EAC enrollment'
+              : status === 'high_vl_on_eac'
+                ? 'High viral load patient is active on EAC'
+                : 'High viral load follow-up required';
+
+        const summary =
+          status === 'failure_after_eac'
+            ? `Latest viral load remains elevated after EAC for ${enrollment.first_name} ${enrollment.last_name}.`
+            : status === 'high_vl_needs_eac'
+              ? `${enrollment.first_name} ${enrollment.last_name} has consecutive high viral loads and needs EAC follow-up.`
+              : status === 'high_vl_on_eac'
+                ? `${enrollment.first_name} ${enrollment.last_name} is already in EAC and needs continued nurse follow-up.`
+                : `${enrollment.first_name} ${enrollment.last_name} has a high viral load that requires follow-up.`;
+
+        return [
+          {
+            id: `hiv-pathway:${enrollment.id}:${status}`,
+            module: 'hiv',
+            item_type: 'hiv_vl_followup',
+            severity,
+            workflow_status: status,
+            doctor_sync_status:
+              status === 'failure_after_eac' ? 'doctor_review_recommended' : 'nurse_followup_required',
+            title,
+            summary,
+            recommended_action:
+              Array.isArray(pathway.actions) && pathway.actions.length > 0
+                ? pathway.actions.join(', ').replace(/_/g, ' ')
+                : 'Open the HIV workflow and continue WHO-aligned follow-up.',
+            patient_id: enrollment.patient_id,
+            patient_name: `${enrollment.first_name} ${enrollment.last_name}`,
+            patient_number: enrollment.patient_number,
+            enrollment_id: enrollment.id,
+            enrollment_number: enrollment.enrollment_number,
+            created_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+            updated_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+            age_hours: this.getHoursSince(
+              pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+            ),
+            sla_status: pathway.overdue ? 'due_soon' : 'within_sla',
+            next_route: {
+              section: 'hiv',
+              tab: 'hiv-patients',
+              enrollmentId: enrollment.id,
+              patientId: enrollment.patient_id,
+            },
+            metadata: {
+              last_vl_value: pathway.lastVlValue ?? enrollment.last_viral_load ?? null,
+              last_vl_date: pathway.lastVlDate ?? enrollment.last_viral_load_date ?? null,
+              next_vl_date: pathway.nextVlDate ?? null,
+              actions: pathway.actions || [],
+            },
+          },
+        ];
+      });
+
+    const hivRegimenItems = (approvedRegimenChanges || []).map((request: any) => ({
+      id: `hiv-regimen:${request.id}`,
+      module: 'hiv',
+      item_type: 'hiv_regimen_change',
+      severity: 'high',
+      workflow_status: 'doctor_approved_pending_nurse_record',
+      doctor_sync_status: 'doctor_approved',
+      title: 'Doctor-approved HIV regimen change awaiting nurse follow-through',
+      summary: `${request.patient_name} has an approved regimen change from ${request.current_regimen_name || 'current regimen'} to ${request.requested_regimen_name || 'new regimen'}.`,
+      recommended_action: 'Record the approved regimen change during the next HIV clinical visit and confirm the patient counseling steps.',
+      patient_id: request.patient_id,
+      patient_name: request.patient_name,
+      patient_number: request.patient_number,
+      enrollment_id: request.enrollment_id,
+      enrollment_number: request.enrollment_number,
+      created_at: request.approval_date || request.request_date || null,
+      updated_at: request.approval_date || request.request_date || null,
+      age_hours: this.getHoursSince(request.approval_date || request.request_date || null),
+      sla_status: null,
+      next_route: {
+        section: 'hiv',
+        tab: 'hiv-patients',
+        enrollmentId: request.enrollment_id,
+        patientId: request.patient_id,
+      },
+      metadata: {
+        approved_by_name: request.approved_by_name || null,
+        current_regimen_name: request.current_regimen_name || null,
+        requested_regimen_name: request.requested_regimen_name || null,
+        change_reason_details: request.change_reason_details || null,
+        clinical_justification: request.clinical_justification || null,
+      },
+    }));
+
+    const items = [...maternityItems, ...hivRegimenItems, ...hivPathwayItems].sort((a, b) => {
+      const severityDiff = this.getSeverityRank(b.severity) - this.getSeverityRank(a.severity);
+      if (severityDiff !== 0) {
+        return severityDiff;
+      }
+
+      const firstDate = new Date(b.updated_at || b.created_at || 0).getTime();
+      const secondDate = new Date(a.updated_at || a.created_at || 0).getTime();
+      return firstDate - secondDate;
+    });
+
+    return {
+      items,
+      summary: {
+        total: items.length,
+        critical: items.filter((item) => item.severity === 'critical').length,
+        high: items.filter((item) => item.severity === 'high').length,
+        maternity: items.filter((item) => item.module === 'maternity').length,
+        hiv: items.filter((item) => item.module === 'hiv').length,
+      },
+    };
+  }
 
   private isMissingTableError(error: any): boolean {
     return error?.code === '42P01' || String(error?.message || '').toLowerCase().includes('does not exist');

@@ -23,6 +23,14 @@ export class NurseWorklistController {
     return this.nurseWorklistService.getState(req.tenantDb, user.id);
   }
 
+  @Get('cross-module-feed')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get cross-module specialist escalation feed for nurse workflow' })
+  @ApiResponse({ status: 200, description: 'Cross-module escalation feed fetched' })
+  async getCrossModuleFeed(@Request() req: RequestWithTenant) {
+    return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
+  }
+
   @Post('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })

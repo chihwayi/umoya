@@ -36,6 +36,7 @@ import MaternityDashboard from '../components/MaternityDashboard';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
+import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 import { GuidelineResult } from '../types/guidelines';
 
 interface Patient {
@@ -126,7 +127,7 @@ const NurseDashboard: React.FC = () => {
 
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'monthly-return' | 'who-workflow' | 'maternity' | 'triage' | 'vitals'>('dashboard');
   const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity'>('main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -149,6 +150,16 @@ const NurseDashboard: React.FC = () => {
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
   const [taskCounts, setTaskCounts] = useState({ pending: 0, inProgress: 0, overdue: 0 });
   const [alertCounts, setAlertCounts] = useState({ active: 0, critical: 0, high: 0 });
+  const [crossModuleItems, setCrossModuleItems] = useState<NurseCrossModuleFeedItem[]>([]);
+  const [crossModuleSummary, setCrossModuleSummary] = useState({
+    total: 0,
+    critical: 0,
+    high: 0,
+    maternity: 0,
+    hiv: 0,
+  });
+  const [crossModuleLoading, setCrossModuleLoading] = useState(false);
+  const [acknowledgingCrossModuleTaskId, setAcknowledgingCrossModuleTaskId] = useState<string | null>(null);
   const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
@@ -199,12 +210,88 @@ const NurseDashboard: React.FC = () => {
     loadWorklistState();
   }, [tenantSlug, currentUser?.id]);
 
+  useEffect(() => {
+    loadCrossModuleFeed();
+  }, [tenantSlug, currentUser?.id]);
+
   const handleAlertAcknowledge = (alertId: string) => {
     setAcknowledgedAlertIds(prev => {
       const newSet = new Set(prev);
       newSet.add(alertId);
       return newSet;
     });
+  };
+
+  const loadCrossModuleFeed = async () => {
+    try {
+      setCrossModuleLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        setCrossModuleItems([]);
+        setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 });
+        return;
+      }
+
+      const response = await ehrApi.getNurseCrossModuleFeed(token, activeTenant);
+      setCrossModuleItems(response.data?.items || []);
+      setCrossModuleSummary(
+        response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 },
+      );
+    } catch {
+      setCrossModuleItems([]);
+      setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 });
+    } finally {
+      setCrossModuleLoading(false);
+    }
+  };
+
+  const handleOpenCrossModuleWorkflow = (item: NurseCrossModuleFeedItem) => {
+    if (item.module === 'maternity') {
+      setActiveSection('maternity');
+      setActiveTab('maternity');
+      showSuccess(
+        'Opened maternity workflow',
+        item.enrollment_number
+          ? `Review enrollment ${item.enrollment_number} in the maternity workspace.`
+          : 'Review the maternity workspace for the selected escalation.',
+      );
+      return;
+    }
+
+    setActiveSection('hiv');
+    setActiveTab('hiv-patients');
+    showSuccess(
+      'Opened HIV workflow',
+      item.enrollment_number
+        ? `Review HIV enrollment ${item.enrollment_number} in the HIV workspace.`
+        : 'Review the HIV workspace for the selected escalation.',
+    );
+  };
+
+  const handleAcknowledgeCrossModuleMaternityTask = async (item: NurseCrossModuleFeedItem) => {
+    const taskId = item.next_route?.taskId;
+    const token = localStorage.getItem('ehr_token');
+    const activeTenant = resolveTenantSlug();
+
+    if (!taskId || !token || !activeTenant) {
+      showError('Unable to acknowledge task', 'Missing task, session, or tenant context.');
+      return;
+    }
+
+    try {
+      setAcknowledgingCrossModuleTaskId(item.id);
+      await ehrApi.updateMaternityCareTaskStatus(activeTenant, token, taskId, {
+        status: 'acknowledged',
+        note: 'Acknowledged from nurse cross-module escalation queue.',
+      });
+      showSuccess('Escalation acknowledged', 'The shared maternity task is now marked as acknowledged.');
+      await loadCrossModuleFeed();
+    } catch {
+      showError('Unable to acknowledge task', 'Please retry the maternity escalation acknowledgement.');
+    } finally {
+      setAcknowledgingCrossModuleTaskId(null);
+    }
   };
 
   // Sidebar Navigation Helper
@@ -220,6 +307,7 @@ const NurseDashboard: React.FC = () => {
         children: [
           { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
           { label: 'My Tasks', tab: 'tasks', icon: Activity },
+          { label: 'Cross-Module', tab: 'cross-module', icon: Sparkles },
           { label: 'Safety Alerts', tab: 'alerts', icon: Bell },
           { label: 'Copilot KPIs', tab: 'copilot-metrics', icon: BarChart3 },
           { label: 'Today\'s Schedule', tab: 'calendar', icon: Calendar },
@@ -788,6 +876,14 @@ const NurseDashboard: React.FC = () => {
   const getDashboardGridActions = () => {
     return [
       { icon: Activity, label: 'My Tasks', desc: 'Epic-style task management', color: 'from-indigo-500 to-purple-600', action: () => setActiveTab('tasks') },
+      {
+        icon: Sparkles,
+        label: 'Cross-Module Escalations',
+        desc: 'Shared maternity and HIV follow-up queue',
+        color: 'from-violet-500 to-indigo-600',
+        action: () => setActiveTab('cross-module'),
+        badge: crossModuleSummary.total > 0 ? crossModuleSummary.total : undefined,
+      },
       { icon: Calendar, label: 'Today\'s Schedule', desc: 'View today\'s appointments', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('calendar') },
       { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board & triage', color: 'from-red-500 to-orange-600', action: () => navigate(`/ehr/${tenantSlug}/emergency`) },
       { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', action: () => navigate(`/ehr/${tenantSlug}/bed-management`) },
@@ -829,6 +925,7 @@ const NurseDashboard: React.FC = () => {
     { label: 'Urgent Cases', value: queueStats.urgent.toString(), icon: AlertTriangle, color: 'text-red-600' },
     { label: 'Completed Today', value: queueStats.completed.toString(), icon: CheckCircle, color: 'text-green-600' },
     { label: 'Awaiting Payment', value: queueStats.awaitingPayment.toString(), icon: CreditCard, color: 'text-amber-600' },
+    { label: 'Cross-Module', value: crossModuleSummary.total.toString(), icon: Sparkles, color: 'text-indigo-600' },
   ];
 
   const handleExecuteOrder = (orderId: string) => {
@@ -2096,6 +2193,7 @@ const NurseDashboard: React.FC = () => {
         case 'Urgent Cases': return 'from-red-500 to-rose-600';
         case 'Completed Today': return 'from-green-500 to-emerald-600';
         case 'Awaiting Payment': return 'from-amber-500 to-orange-600';
+        case 'Cross-Module': return 'from-violet-500 to-indigo-600';
         default: return 'from-slate-500 to-slate-600';
       }
     };
@@ -2142,6 +2240,17 @@ const NurseDashboard: React.FC = () => {
             ))}
           </div>
         </div>
+
+        <NurseCrossModuleEscalations
+          items={crossModuleItems}
+          summary={crossModuleSummary}
+          loading={crossModuleLoading}
+          compact
+          acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+          onRefresh={loadCrossModuleFeed}
+          onOpenWorkflow={handleOpenCrossModuleWorkflow}
+          onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
+        />
 
       {/* Quick Actions - Prominent Clickable Cards */}
       <div>
@@ -2251,7 +2360,7 @@ const NurseDashboard: React.FC = () => {
                  <button
                    onClick={() => {
                      setActiveSection(item.section);
-                     setActiveTab(item.tab);
+                     setActiveTab(item.tab as any);
                      // Keep sidebar open to show children
                    }}
                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
@@ -2277,7 +2386,7 @@ const NurseDashboard: React.FC = () => {
                          <button
                            key={childIndex}
                            onClick={() => {
-                             setActiveTab(child.tab);
+                             setActiveTab(child.tab as any);
                              setSidebarOpen(false); // Close sidebar on mobile after selection
                            }}
                            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm ${
@@ -2336,7 +2445,10 @@ const NurseDashboard: React.FC = () => {
             <div className="flex items-center space-x-3">
               {/* Refresh Button */}
               <button
-                onClick={fetchTodayAppointments}
+                onClick={() => {
+                  fetchTodayAppointments();
+                  loadCrossModuleFeed();
+                }}
                 disabled={loading}
                 className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 disabled:opacity-50"
                 title="Refresh Data"
@@ -2365,15 +2477,15 @@ const NurseDashboard: React.FC = () => {
                   className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200 relative"
                 >
                   <Bell className="h-5 w-5" />
-                  {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active) > 0 && (
+                  {(taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active + crossModuleSummary.total) > 0 && (
                     <span className={`absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg transform scale-110 animate-pulse ${
-                      alertCounts.critical > 0 
+                      alertCounts.critical > 0 || crossModuleSummary.critical > 0
                         ? 'bg-gradient-to-r from-red-600 to-red-700' 
-                        : alertCounts.high > 0 
+                        : alertCounts.high > 0 || crossModuleSummary.high > 0
                         ? 'bg-gradient-to-r from-orange-500 to-red-500'
                         : 'bg-gradient-to-r from-green-500 to-emerald-600'
                     }`}>
-                      {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active}
+                      {taskCounts.pending + taskCounts.inProgress + taskCounts.overdue + alertCounts.active + crossModuleSummary.total}
                     </span>
                   )}
                 </button>
@@ -2426,7 +2538,28 @@ const NurseDashboard: React.FC = () => {
                          </button>
                       )}
 
-                      {taskCounts.pending === 0 && alertCounts.active === 0 && (
+                      {crossModuleSummary.total > 0 && (
+                         <button 
+                           onClick={() => {
+                             setActiveSection('main');
+                             setActiveTab('cross-module');
+                             setShowNotifications(false);
+                           }}
+                           className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-50 transition-colors group"
+                         >
+                           <div className="flex items-start gap-3">
+                             <div className="p-2 bg-violet-100 text-violet-600 rounded-lg group-hover:bg-violet-200 transition-colors">
+                               <Sparkles className="w-4 h-4" />
+                             </div>
+                             <div>
+                               <p className="text-sm font-medium text-slate-900">Cross-Module Escalations</p>
+                               <p className="text-xs text-slate-500">{crossModuleSummary.total} shared items ({crossModuleSummary.critical} critical)</p>
+                             </div>
+                           </div>
+                         </button>
+                      )}
+
+                      {taskCounts.pending === 0 && alertCounts.active === 0 && crossModuleSummary.total === 0 && (
                         <div className="px-4 py-8 text-center text-slate-500">
                           <CheckCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                           <p className="text-sm">No new notifications</p>
@@ -2514,6 +2647,18 @@ const NurseDashboard: React.FC = () => {
             onTaskCountsChange={(counts) => {
               calculateTaskCounts([counts.pending, counts.inProgress, counts.overdue]);
             }}
+          />
+        )}
+
+        {activeTab === 'cross-module' && (
+          <NurseCrossModuleEscalations
+            items={crossModuleItems}
+            summary={crossModuleSummary}
+            loading={crossModuleLoading}
+            acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+            onRefresh={loadCrossModuleFeed}
+            onOpenWorkflow={handleOpenCrossModuleWorkflow}
+            onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
           />
         )}
 

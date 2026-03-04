@@ -6,10 +6,14 @@ const makeService = () => {
   const hipaaAuditService = {
     logAuditEvent: jest.fn().mockResolvedValue(undefined),
   };
+  const hivService = {
+    getEnrollments: jest.fn().mockResolvedValue({ enrollments: [] }),
+    getVlPathway: jest.fn(),
+  };
 
   return {
-    service: new NurseWorklistService(hipaaAuditService as any),
-    mocks: { hipaaAuditService },
+    service: new NurseWorklistService(hipaaAuditService as any, hivService as any),
+    mocks: { hipaaAuditService, hivService },
   };
 };
 
@@ -171,5 +175,120 @@ describe('NurseWorklistService', () => {
         }),
       }),
     );
+  });
+
+  it('builds a cross-module escalation feed from maternity tasks and HIV follow-up items', async () => {
+    const { service, mocks } = makeService();
+    mocks.hivService.getEnrollments.mockResolvedValue({
+      enrollments: [
+        {
+          id: 'enroll-hiv-1',
+          patient_id: 'patient-hiv-1',
+          enrollment_number: 'HIV-001',
+          first_name: 'Tariro',
+          last_name: 'Moyo',
+          patient_number: 'P-100',
+          last_viral_load: 4500,
+          last_viral_load_date: '2026-03-03',
+        },
+      ],
+    });
+    mocks.hivService.getVlPathway.mockResolvedValue({
+      status: 'high_vl_needs_eac',
+      actions: ['start_eac', 'repeat_vl_after_eac'],
+      lastVlValue: 4500,
+      lastVlDate: '2026-03-03',
+      nextVlDate: '2026-06-03',
+      overdue: false,
+    });
+
+    let queryCount = 0;
+    const tenantDb = {
+      query: jest.fn(async () => {
+        queryCount += 1;
+        if (queryCount === 1) {
+          return [
+            {
+              id: 'mat-task-1',
+              maternity_enrollment_id: 'mat-enroll-1',
+              patient_id: 'patient-mat-1',
+              source_type: 'anc_visit',
+              source_record_id: 'anc-1',
+              status: 'open',
+              priority: 'critical',
+              title: 'Critical ANC escalation',
+              summary: 'Doctor review required for severe hypertension.',
+              required_actions: ['Escalate to obstetric doctor immediately.'],
+              task_context: { recommendation_bundle: { bundle_label: 'ANC escalation bundle' } },
+              note: null,
+              last_event_at: '2026-03-04T08:00:00.000Z',
+              created_at: '2026-03-04T07:00:00.000Z',
+              age_hours: 2.5,
+              sla_status: 'due_soon',
+              patient_name: 'Rutendo Ncube',
+              patient_number: 'P-200',
+              enrollment_number: 'MAT-001',
+            },
+          ];
+        }
+
+        if (queryCount === 2) {
+          return [
+            {
+              id: 'req-1',
+              enrollment_id: 'enroll-hiv-2',
+              request_date: '2026-03-02',
+              approval_date: '2026-03-04',
+              current_regimen_name: 'TDF/3TC/DTG',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+              change_reason_details: 'Virologic failure',
+              clinical_justification: 'Confirmed failure after repeat VL',
+              approved_by_name: 'Dr. Dube',
+              patient_id: 'patient-hiv-2',
+              enrollment_number: 'HIV-002',
+              patient_name: 'Linda Moyo',
+              patient_number: 'P-300',
+            },
+          ];
+        }
+
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getCrossModuleEscalationFeed(tenantDb);
+
+    expect(result.summary).toEqual({
+      total: 3,
+      critical: 1,
+      high: 2,
+      maternity: 1,
+      hiv: 2,
+    });
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'maternity:mat-task-1',
+        module: 'maternity',
+        severity: 'critical',
+        doctor_sync_status: 'awaiting_doctor_review',
+      }),
+    );
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'hiv-regimen:req-1',
+          module: 'hiv',
+          workflow_status: 'doctor_approved_pending_nurse_record',
+          doctor_sync_status: 'doctor_approved',
+        }),
+        expect.objectContaining({
+          id: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac',
+          module: 'hiv',
+          workflow_status: 'high_vl_needs_eac',
+          recommended_action: expect.stringContaining('start eac'),
+        }),
+      ]),
+    );
+    expect(mocks.hivService.getVlPathway).toHaveBeenCalledWith('enroll-hiv-1', tenantDb);
   });
 });
