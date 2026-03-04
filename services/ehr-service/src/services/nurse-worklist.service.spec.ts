@@ -177,6 +177,58 @@ describe('NurseWorklistService', () => {
     );
   });
 
+  it('updates shared cross-module workflow state and records the audit event', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = { query: jest.fn().mockResolvedValue([]) } as any;
+
+    const result = await service.updateCrossModuleWorkflowState(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        module: 'hiv',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        patientId: 'patient-1',
+        enrollmentId: 'enroll-1',
+        status: 'acknowledged',
+        note: 'Patient counselled and queued for next visit',
+        context: { source: 'jest' },
+        destinationRole: 'nurse',
+        destinationService: 'hiv_clinic',
+        destinationSpecialty: 'HIV',
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(result).toEqual({ ok: true, itemId: 'hiv-regimen:req-1', status: 'acknowledged' });
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'hiv-regimen:req-1',
+        'hiv',
+        'hiv_regimen_change',
+        'req-1',
+        'enroll-1',
+        'patient-1',
+        'acknowledged',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'hiv-regimen:req-1',
+        patientId: 'patient-1',
+        metadata: expect.objectContaining({
+          module: 'hiv',
+          itemType: 'hiv_regimen_change',
+          status: 'acknowledged',
+        }),
+      }),
+    );
+  });
+
   it('builds a cross-module escalation feed from maternity tasks and HIV follow-up items', async () => {
     const { service, mocks } = makeService();
     mocks.hivService.getEnrollments.mockResolvedValue({
@@ -202,11 +254,43 @@ describe('NurseWorklistService', () => {
       overdue: false,
     });
 
-    let queryCount = 0;
     const tenantDb = {
-      query: jest.fn(async () => {
-        queryCount += 1;
-        if (queryCount === 1) {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [
+            {
+              workflow_key: 'hiv-regimen:req-1',
+              status: 'acknowledged',
+              destination_role: 'nurse',
+              destination_service: 'hiv_clinic',
+              destination_specialty: 'HIV',
+              destination_user_id: 'user-hiv-nurse',
+              destination_user_name: 'Nurse HIV',
+              acknowledged_at: '2026-03-04T09:00:00.000Z',
+              completed_at: null,
+              note: 'Queued for next clinic visit',
+              context: { source: 'jest' },
+              acknowledged_by_name: 'Nurse Joy',
+              completed_by_name: null,
+            },
+          ];
+        }
+
+        if (sql.includes("FROM users") && sql.includes("WHERE is_active = true")) {
+          return [
+            { id: 'doctor-ob', role: 'doctor', specialization: 'Obstetrics', name: 'Dr. Moyo' },
+            { id: 'user-hiv-nurse', role: 'nurse', specialization: 'HIV', name: 'Nurse HIV' },
+            { id: 'doctor-hiv', role: 'doctor', specialization: 'HIV', name: 'Dr. HIV' },
+          ];
+        }
+
+        if (sql.includes('FROM referral_facilities')) {
+          return [
+            { id: 'facility-ob', facility_name: 'Central Women Hospital', specialties: ['Obstetrics', 'HIV'] },
+          ];
+        }
+
+        if (sql.includes('FROM maternity_care_tasks')) {
           return [
             {
               id: 'mat-task-1',
@@ -228,11 +312,13 @@ describe('NurseWorklistService', () => {
               patient_name: 'Rutendo Ncube',
               patient_number: 'P-200',
               enrollment_number: 'MAT-001',
+              assigned_to: 'doctor-ob',
+              assigned_to_name: 'Dr. Moyo',
             },
           ];
         }
 
-        if (queryCount === 2) {
+        if (sql.includes('FROM hiv_arv_change_requests')) {
           return [
             {
               id: 'req-1',
@@ -252,6 +338,42 @@ describe('NurseWorklistService', () => {
           ];
         }
 
+        if (sql.includes('FROM nurse_handoff_workflow_state')) {
+          return [
+            {
+              patient_id: 'patient-handoff-1',
+              status: 'draft',
+              finalized_at: null,
+              reviewed_at: null,
+              shared_at: null,
+              updated_at: '2026-03-04T04:00:00.000Z',
+              patient_name: 'Shift Patient',
+              patient_number: 'P-400',
+            },
+          ];
+        }
+
+        if (sql.includes('FROM medication_administration_records')) {
+          return [
+            {
+              id: 'mar-1',
+              patient_id: 'patient-med-1',
+              medication_name: 'Co-trimoxazole',
+              dose: '960',
+              unit: 'mg',
+              route: 'PO',
+              scheduled_time: '2026-03-04T02:00:00.000Z',
+              actual_administration_time: null,
+              administration_status: 'held',
+              refusal_reason: null,
+              omission_reason: 'Awaiting clinician review',
+              notes: null,
+              patient_name: 'Medication Patient',
+              patient_number: 'P-500',
+            },
+          ];
+        }
+
         return [];
       }),
     } as any;
@@ -259,11 +381,14 @@ describe('NurseWorklistService', () => {
     const result = await service.getCrossModuleEscalationFeed(tenantDb);
 
     expect(result.summary).toEqual({
-      total: 3,
+      total: 5,
       critical: 1,
-      high: 2,
+      high: 4,
       maternity: 1,
       hiv: 2,
+      nursing: 2,
+      handoff: 1,
+      medication: 1,
     });
     expect(result.items[0]).toEqual(
       expect.objectContaining({
@@ -278,14 +403,26 @@ describe('NurseWorklistService', () => {
         expect.objectContaining({
           id: 'hiv-regimen:req-1',
           module: 'hiv',
-          workflow_status: 'doctor_approved_pending_nurse_record',
+          workflow_status: 'acknowledged',
+          module_status: 'doctor_approved_pending_nurse_record',
           doctor_sync_status: 'doctor_approved',
+          destination_user_name: 'Nurse HIV',
         }),
         expect.objectContaining({
-          id: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac',
+          id: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
           module: 'hiv',
-          workflow_status: 'high_vl_needs_eac',
+          module_status: 'high_vl_needs_eac',
           recommended_action: expect.stringContaining('start eac'),
+        }),
+        expect.objectContaining({
+          module: 'nursing',
+          item_type: 'nurse_handoff_risk',
+          title: 'Shift handoff follow-through required',
+        }),
+        expect.objectContaining({
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          title: 'Held medication requires follow-up',
         }),
       ]),
     );

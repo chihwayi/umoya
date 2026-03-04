@@ -1463,6 +1463,23 @@ export class HivService {
             visit_id = $1
         WHERE id = $2
       `, [result[0].id, approvedChangeRequestId]);
+
+      await tenantDb.query(
+        `
+        UPDATE nurse_cross_module_workflow_state
+        SET status = 'completed',
+            completed_at = NOW(),
+            completed_by = COALESCE($3, completed_by),
+            note = COALESCE(note, 'Completed automatically when HIV regimen change was recorded in a clinical visit.'),
+            context = COALESCE(context, '{}'::jsonb) || jsonb_build_object(
+              'auto_completed_from', 'hiv_clinical_visit',
+              'visitId', $1
+            ),
+            updated_at = NOW()
+        WHERE workflow_key = $2
+        `,
+        [result[0].id, `hiv-regimen:${approvedChangeRequestId}`, providerId || null],
+      ).catch(() => undefined);
       
       // Log audit trail for regimen change
       await this.logAuditAction(

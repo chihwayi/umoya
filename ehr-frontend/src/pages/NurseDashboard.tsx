@@ -157,9 +157,13 @@ const NurseDashboard: React.FC = () => {
     high: 0,
     maternity: 0,
     hiv: 0,
+    nursing: 0,
+    handoff: 0,
+    medication: 0,
   });
   const [crossModuleLoading, setCrossModuleLoading] = useState(false);
   const [acknowledgingCrossModuleTaskId, setAcknowledgingCrossModuleTaskId] = useState<string | null>(null);
+  const [updatingCrossModuleWorkflowItemId, setUpdatingCrossModuleWorkflowItemId] = useState<string | null>(null);
   const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
@@ -229,18 +233,18 @@ const NurseDashboard: React.FC = () => {
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
         setCrossModuleItems([]);
-        setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 });
+        setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 });
         return;
       }
 
       const response = await ehrApi.getNurseCrossModuleFeed(token, activeTenant);
       setCrossModuleItems(response.data?.items || []);
       setCrossModuleSummary(
-        response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 },
+        response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 },
       );
     } catch {
       setCrossModuleItems([]);
-      setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0 });
+      setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 });
     } finally {
       setCrossModuleLoading(false);
     }
@@ -256,6 +260,19 @@ const NurseDashboard: React.FC = () => {
           ? `Review enrollment ${item.enrollment_number} in the maternity workspace.`
           : 'Review the maternity workspace for the selected escalation.',
       );
+      return;
+    }
+
+    if (item.module === 'nursing') {
+      setActiveSection('main');
+      if (item.item_type === 'medication_administration_followup') {
+        navigate(`/ehr/${tenantSlug}/mar`);
+        showSuccess('Opened medication workflow', 'Review the MAR workspace and resolve the medication follow-up item.');
+        return;
+      }
+
+      setActiveTab('notes');
+      showSuccess('Opened handoff workflow', 'Review the nursing handoff workflow and close the remaining follow-through steps.');
       return;
     }
 
@@ -291,6 +308,61 @@ const NurseDashboard: React.FC = () => {
       showError('Unable to acknowledge task', 'Please retry the maternity escalation acknowledgement.');
     } finally {
       setAcknowledgingCrossModuleTaskId(null);
+    }
+  };
+
+  const handleUpdateCrossModuleWorkflowStatus = async (
+    item: NurseCrossModuleFeedItem,
+    status: 'acknowledged' | 'completed',
+  ) => {
+    const token = localStorage.getItem('ehr_token');
+    const activeTenant = resolveTenantSlug();
+
+    if (!token || !activeTenant) {
+      showError('Unable to update workflow', 'Missing session or tenant context.');
+      return;
+    }
+
+    try {
+      setUpdatingCrossModuleWorkflowItemId(item.id);
+      await ehrApi.updateNurseCrossModuleWorkflow(
+        {
+          itemId: item.id,
+          module: item.module,
+          itemType: item.item_type,
+          sourceRecordId: item.source_record_id || null,
+          patientId: item.patient_id || null,
+          enrollmentId: item.enrollment_id || null,
+          status,
+          note:
+            status === 'completed'
+              ? 'Completed from nurse cross-module escalation queue.'
+              : 'Acknowledged from nurse cross-module escalation queue.',
+          context: {
+            moduleStatus: item.module_status || item.workflow_status,
+            doctorSyncStatus: item.doctor_sync_status || null,
+          },
+          destinationRole: item.destination_role || null,
+          destinationService: item.destination_service || null,
+          destinationSpecialty: item.destination_specialty || null,
+          destinationUserId: item.destination_user_id || null,
+          destinationFacilityId: item.destination_facility_id || null,
+          destinationFacilityName: item.destination_facility_name || null,
+        },
+        token,
+        activeTenant,
+      );
+      showSuccess(
+        status === 'completed' ? 'Workflow completed' : 'Workflow acknowledged',
+        item.patient_name
+          ? `${item.patient_name}'s ${item.title.toLowerCase()} is now ${status}.`
+          : `Cross-module workflow item is now ${status}.`,
+      );
+      await loadCrossModuleFeed();
+    } catch {
+      showError('Unable to update workflow', 'Please retry the cross-module workflow update.');
+    } finally {
+      setUpdatingCrossModuleWorkflowItemId(null);
     }
   };
 
@@ -2247,9 +2319,11 @@ const NurseDashboard: React.FC = () => {
           loading={crossModuleLoading}
           compact
           acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+          workflowActionItemId={updatingCrossModuleWorkflowItemId}
           onRefresh={loadCrossModuleFeed}
           onOpenWorkflow={handleOpenCrossModuleWorkflow}
           onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
+          onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
         />
 
       {/* Quick Actions - Prominent Clickable Cards */}
@@ -2656,9 +2730,11 @@ const NurseDashboard: React.FC = () => {
             summary={crossModuleSummary}
             loading={crossModuleLoading}
             acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+            workflowActionItemId={updatingCrossModuleWorkflowItemId}
             onRefresh={loadCrossModuleFeed}
             onOpenWorkflow={handleOpenCrossModuleWorkflow}
             onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
+            onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
           />
         )}
 

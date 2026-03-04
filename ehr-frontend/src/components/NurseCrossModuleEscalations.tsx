@@ -11,10 +11,11 @@ import {
 
 export interface NurseCrossModuleFeedItem {
   id: string;
-  module: 'maternity' | 'hiv';
+  module: 'maternity' | 'hiv' | 'nursing';
   item_type: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
   workflow_status: string;
+  module_status?: string | null;
   doctor_sync_status?: string | null;
   title: string;
   summary: string;
@@ -24,10 +25,24 @@ export interface NurseCrossModuleFeedItem {
   patient_number?: string | null;
   enrollment_id?: string | null;
   enrollment_number?: string | null;
+  source_record_id?: string | null;
+  source_type?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   age_hours?: number | null;
   sla_status?: string | null;
+  destination_role?: string | null;
+  destination_service?: string | null;
+  destination_specialty?: string | null;
+  destination_user_id?: string | null;
+  destination_user_name?: string | null;
+  destination_facility_id?: string | null;
+  destination_facility_name?: string | null;
+  acknowledged_at?: string | null;
+  acknowledged_by_name?: string | null;
+  completed_at?: string | null;
+  completed_by_name?: string | null;
+  note?: string | null;
   metadata?: Record<string, any> | null;
   next_route?: {
     section?: 'main' | 'hiv' | 'maternity';
@@ -46,13 +61,21 @@ interface NurseCrossModuleEscalationsProps {
     high?: number;
     maternity?: number;
     hiv?: number;
+    nursing?: number;
+    handoff?: number;
+    medication?: number;
   } | null;
   loading?: boolean;
   compact?: boolean;
   acknowledgingTaskId?: string | null;
+  workflowActionItemId?: string | null;
   onRefresh?: () => void;
   onOpenWorkflow?: (item: NurseCrossModuleFeedItem) => void;
   onAcknowledgeMaternityTask?: (item: NurseCrossModuleFeedItem) => void;
+  onUpdateWorkflowStatus?: (
+    item: NurseCrossModuleFeedItem,
+    status: 'acknowledged' | 'completed',
+  ) => void;
 }
 
 const severityStyles: Record<string, string> = {
@@ -65,6 +88,7 @@ const severityStyles: Record<string, string> = {
 const moduleStyles: Record<string, string> = {
   maternity: 'bg-pink-100 text-pink-700',
   hiv: 'bg-emerald-100 text-emerald-700',
+  nursing: 'bg-sky-100 text-sky-700',
 };
 
 const slaStyles: Record<string, string> = {
@@ -87,9 +111,11 @@ export default function NurseCrossModuleEscalations({
   loading = false,
   compact = false,
   acknowledgingTaskId,
+  workflowActionItemId,
   onRefresh,
   onOpenWorkflow,
   onAcknowledgeMaternityTask,
+  onUpdateWorkflowStatus,
 }: NurseCrossModuleEscalationsProps) {
   const visibleItems = compact ? items.slice(0, 3) : items;
 
@@ -103,7 +129,7 @@ export default function NurseCrossModuleEscalations({
               <h3 className="text-lg font-bold text-slate-900">Cross-Module Escalations</h3>
             </div>
             <p className="text-sm text-slate-600 mt-1">
-              Shared nurse visibility into maternity escalation tasks and HIV specialist follow-up.
+              Shared nurse visibility into maternity escalation tasks, HIV specialist follow-up, handoff risk, and medication exceptions.
             </p>
           </div>
           {onRefresh && (
@@ -134,6 +160,9 @@ export default function NurseCrossModuleEscalations({
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
             {summary?.hiv ?? items.filter((item) => item.module === 'hiv').length} HIV
           </span>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700">
+            {summary?.nursing ?? items.filter((item) => item.module === 'nursing').length} nursing
+          </span>
         </div>
       </div>
 
@@ -147,7 +176,7 @@ export default function NurseCrossModuleEscalations({
           <div className="py-12 text-center text-slate-500">
             <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-slate-300" />
             <p className="font-medium text-slate-700">No active cross-module escalations</p>
-            <p className="text-sm mt-1">Maternity and HIV follow-up items will appear here when action is needed.</p>
+            <p className="text-sm mt-1">Maternity, HIV, handoff, and medication follow-up items will appear here when action is needed.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -157,6 +186,11 @@ export default function NurseCrossModuleEscalations({
                 isMaternity &&
                 item.workflow_status === 'open' &&
                 typeof onAcknowledgeMaternityTask === 'function';
+              const canUpdateWorkflow =
+                !isMaternity &&
+                typeof onUpdateWorkflowStatus === 'function' &&
+                item.workflow_status !== 'completed';
+              const isWorkflowBusy = workflowActionItemId === item.id;
 
               return (
                 <div
@@ -195,13 +229,31 @@ export default function NurseCrossModuleEscalations({
                         {item.patient_number && <span>File: {item.patient_number}</span>}
                         {item.enrollment_number && <span>Enrollment: {item.enrollment_number}</span>}
                         {formatAgeHours(item.age_hours) && <span>Age: {formatAgeHours(item.age_hours)}</span>}
-                        <span>Status: {String(item.workflow_status || 'open').replace(/_/g, ' ')}</span>
+                        <span>Workflow: {String(item.workflow_status || 'open').replace(/_/g, ' ')}</span>
+                        {item.module_status && (
+                          <span>Signal: {String(item.module_status).replace(/_/g, ' ')}</span>
+                        )}
+                        {item.destination_user_name && <span>Clinician: {item.destination_user_name}</span>}
+                        {item.destination_role && <span>Role: {String(item.destination_role).replace(/_/g, ' ')}</span>}
+                        {item.destination_facility_name && <span>Facility: {item.destination_facility_name}</span>}
                       </div>
 
                       {item.recommended_action && (
                         <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2">
                           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Recommended Next Step</p>
                           <p className="text-sm text-indigo-900 mt-1">{item.recommended_action}</p>
+                        </div>
+                      )}
+
+                      {(item.note || item.acknowledged_by_name || item.completed_by_name) && (
+                        <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                          {item.acknowledged_by_name && (
+                            <p>Acknowledged by {item.acknowledged_by_name}</p>
+                          )}
+                          {item.completed_by_name && (
+                            <p>Completed by {item.completed_by_name}</p>
+                          )}
+                          {item.note && <p>Note: {item.note}</p>}
                         </div>
                       )}
                     </div>
@@ -220,6 +272,28 @@ export default function NurseCrossModuleEscalations({
                             <AlertTriangle className="w-4 h-4" />
                           )}
                           Acknowledge
+                        </button>
+                      )}
+                      {canUpdateWorkflow && item.workflow_status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateWorkflowStatus?.(item, 'acknowledged')}
+                          disabled={isWorkflowBusy}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-60"
+                        >
+                          {isWorkflowBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                          Acknowledge
+                        </button>
+                      )}
+                      {canUpdateWorkflow && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateWorkflowStatus?.(item, 'completed')}
+                          disabled={isWorkflowBusy}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          {isWorkflowBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                          Complete
                         </button>
                       )}
                       <button

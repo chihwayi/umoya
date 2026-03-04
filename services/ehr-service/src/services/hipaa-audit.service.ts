@@ -72,6 +72,8 @@ export enum HipaaAuditAction {
   NURSE_HANDOFF_FINALIZE = 'nurse_handoff_finalize',
   NURSE_HANDOFF_REVIEW_CONFIRM = 'nurse_handoff_review_confirm',
   NURSE_HANDOFF_SHARE = 'nurse_handoff_share',
+  NURSE_CROSS_MODULE_ACKNOWLEDGE = 'nurse_cross_module_acknowledge',
+  NURSE_CROSS_MODULE_COMPLETE = 'nurse_cross_module_complete',
 
   // Breach Events
   BREACH_DETECTED = 'breach_detected',
@@ -712,7 +714,9 @@ export class HipaaAuditService {
       action === HipaaAuditAction.NURSE_ALERT_ACKNOWLEDGE ||
       action === HipaaAuditAction.NURSE_HANDOFF_FINALIZE ||
       action === HipaaAuditAction.NURSE_HANDOFF_REVIEW_CONFIRM ||
-      action === HipaaAuditAction.NURSE_HANDOFF_SHARE
+      action === HipaaAuditAction.NURSE_HANDOFF_SHARE ||
+      action === HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE ||
+      action === HipaaAuditAction.NURSE_CROSS_MODULE_COMPLETE
     ) {
       return 'medium';
     }

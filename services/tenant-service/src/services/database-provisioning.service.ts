@@ -462,6 +462,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint46NurseCopilotSchemaStatements(),
       },
       {
+        id: 'sprint47_nurse_cross_module_workflow',
+        label: 'Sprint 47 - Nurse Cross-Module Workflow',
+        version: '2026.03.04',
+        description: 'Shared workflow state for HIV, handoff, and medication escalations in the nurse cross-module queue',
+        statements: () => this.getSprint47NurseCrossModuleWorkflowSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -712,6 +719,53 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_nurse_handoff_workflow_state_updated_at ON nurse_handoff_workflow_state`,
       `CREATE TRIGGER update_nurse_handoff_workflow_state_updated_at
         BEFORE UPDATE ON nurse_handoff_workflow_state
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint47NurseCrossModuleWorkflowSchemaStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS nurse_cross_module_workflow_state (
+        workflow_key VARCHAR(160) PRIMARY KEY,
+        module VARCHAR(40) NOT NULL,
+        item_type VARCHAR(80) NOT NULL,
+        source_record_id VARCHAR(160),
+        enrollment_id UUID,
+        patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'acknowledged', 'completed')),
+        destination_role VARCHAR(80),
+        destination_service VARCHAR(120),
+        destination_specialty VARCHAR(160),
+        destination_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        destination_facility_id UUID,
+        destination_facility_name VARCHAR(255),
+        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        note TEXT,
+        context JSONB,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_module_status ON nurse_cross_module_workflow_state(module, status)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_item_type ON nurse_cross_module_workflow_state(item_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_patient ON nurse_cross_module_workflow_state(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_enrollment ON nurse_cross_module_workflow_state(enrollment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_destination_role ON nurse_cross_module_workflow_state(destination_role)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_destination_user ON nurse_cross_module_workflow_state(destination_user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_completed_at ON nurse_cross_module_workflow_state(completed_at DESC)`,
+      `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+      `DROP TRIGGER IF EXISTS update_nurse_cross_module_workflow_state_updated_at ON nurse_cross_module_workflow_state`,
+      `CREATE TRIGGER update_nurse_cross_module_workflow_state_updated_at
+        BEFORE UPDATE ON nurse_cross_module_workflow_state
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

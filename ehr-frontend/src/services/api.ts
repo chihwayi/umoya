@@ -1230,6 +1230,36 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  updateNurseCrossModuleWorkflow: async (
+    payload: {
+      itemId: string;
+      module: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      status: 'acknowledged' | 'completed';
+      note?: string;
+      context?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/workflow', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   completeNurseTask: async (
     taskId: string,
     payload: { reason?: string; patientId?: string; context?: any },

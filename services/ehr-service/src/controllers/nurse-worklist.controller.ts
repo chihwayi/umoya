@@ -31,6 +31,44 @@ export class NurseWorklistController {
     return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
   }
 
+  @Post('cross-module/workflow')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Update shared workflow status for a cross-module nurse queue item' })
+  @ApiResponse({ status: 200, description: 'Cross-module workflow status recorded' })
+  async updateCrossModuleWorkflow(
+    @Body()
+    body: {
+      itemId: string;
+      module: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      status: 'acknowledged' | 'completed';
+      note?: string;
+      context?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.updateCrossModuleWorkflowState(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
   @Post('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })

@@ -30,8 +30,238 @@ export class NurseWorklistService {
     return Math.round(((Date.now() - parsed.getTime()) / (1000 * 60 * 60)) * 10) / 10;
   }
 
+  private async safeQuery(tenantDb: DataSource, sql: string, params: any[] = []) {
+    try {
+      return await tenantDb.query(sql, params);
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return [];
+    }
+  }
+
+  private getWorkflowRank(status?: string | null) {
+    switch (String(status || '').toLowerCase()) {
+      case 'completed':
+      case 'closed':
+        return 3;
+      case 'acknowledged':
+      case 'actioned':
+      case 'reviewed':
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  private normalizeCrossModuleWorkflowStatus(status?: string | null): 'pending' | 'acknowledged' | 'completed' {
+    if (String(status || '').toLowerCase() === 'acknowledged') {
+      return 'acknowledged';
+    }
+    if (String(status || '').toLowerCase() === 'completed') {
+      return 'completed';
+    }
+    return 'pending';
+  }
+
+  private normalizeText(value?: string | null) {
+    const normalized = String(value || '').trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private extractTaskSpecialty(taskContext: any, fallback: string) {
+    const recommendationItems = Array.isArray(taskContext?.recommendation_bundle?.items)
+      ? taskContext.recommendation_bundle.items
+      : [];
+
+    for (const item of recommendationItems) {
+      const specialty =
+        item?.referral_payload?.specialty ||
+        item?.specialty ||
+        item?.destination_specialty;
+      if (this.normalizeText(specialty)) {
+        return String(specialty);
+      }
+    }
+
+    return fallback;
+  }
+
+  private selectDestinationUser(
+    users: any[],
+    role: string,
+    specialtyHint?: string | null,
+    preferredUserId?: string | null,
+  ) {
+    if (preferredUserId) {
+      const explicitUser = users.find((user) => user.id === preferredUserId);
+      if (explicitUser) {
+        return explicitUser;
+      }
+    }
+
+    const normalizedRole = String(role || '').toLowerCase();
+    const normalizedHint = String(specialtyHint || '').toLowerCase();
+
+    return (
+      users.find((user) => {
+        if (String(user.role || '').toLowerCase() !== normalizedRole) {
+          return false;
+        }
+        if (!normalizedHint) {
+          return true;
+        }
+        return String(user.specialization || '').toLowerCase().includes(normalizedHint);
+      }) ||
+      users.find((user) => String(user.role || '').toLowerCase() === normalizedRole) ||
+      null
+    );
+  }
+
+  private selectDestinationFacility(facilities: any[], specialtyHint?: string | null) {
+    const normalizedHint = String(specialtyHint || '').toLowerCase();
+    if (!normalizedHint) {
+      return null;
+    }
+
+    return (
+      facilities.find((facility) =>
+        (Array.isArray(facility.specialties) ? facility.specialties : []).some((specialty: string) =>
+          String(specialty || '').toLowerCase().includes(normalizedHint),
+        ),
+      ) || null
+    );
+  }
+
+  private buildDestination(
+    users: any[],
+    facilities: any[],
+    route: {
+      role: string;
+      service: string;
+      specialty?: string | null;
+      preferredUserId?: string | null;
+      preferredUserName?: string | null;
+      preferredFacilityId?: string | null;
+      preferredFacilityName?: string | null;
+    },
+  ) {
+    const destinationUser = this.selectDestinationUser(
+      users,
+      route.role,
+      route.specialty,
+      route.preferredUserId,
+    );
+    const destinationFacility = route.preferredFacilityId
+      ? facilities.find((facility) => facility.id === route.preferredFacilityId) || null
+      : this.selectDestinationFacility(facilities, route.specialty);
+
+    return {
+      destination_role: route.role,
+      destination_service: route.service,
+      destination_specialty: route.specialty || null,
+      destination_user_id: destinationUser?.id || route.preferredUserId || null,
+      destination_user_name: destinationUser?.name || route.preferredUserName || null,
+      destination_facility_id: destinationFacility?.id || route.preferredFacilityId || null,
+      destination_facility_name: destinationFacility?.facility_name || route.preferredFacilityName || null,
+    };
+  }
+
+  private mergeCrossModuleWorkflowState(item: Record<string, any>, workflowRowsByKey: Map<string, any>) {
+    const workflowRow = workflowRowsByKey.get(item.id);
+    if (!workflowRow) {
+      return item;
+    }
+
+    return {
+      ...item,
+      workflow_status: workflowRow.status || item.workflow_status || 'pending',
+      acknowledged_at: workflowRow.acknowledged_at || null,
+      acknowledged_by_name: workflowRow.acknowledged_by_name || null,
+      completed_at: workflowRow.completed_at || null,
+      completed_by_name: workflowRow.completed_by_name || null,
+      note: workflowRow.note || item.note || null,
+      destination_role: workflowRow.destination_role || item.destination_role || null,
+      destination_service: workflowRow.destination_service || item.destination_service || null,
+      destination_specialty: workflowRow.destination_specialty || item.destination_specialty || null,
+      destination_user_id: workflowRow.destination_user_id || item.destination_user_id || null,
+      destination_user_name: workflowRow.destination_user_name || item.destination_user_name || null,
+      destination_facility_id: workflowRow.destination_facility_id || item.destination_facility_id || null,
+      destination_facility_name: workflowRow.destination_facility_name || item.destination_facility_name || null,
+      metadata: {
+        ...(item.metadata || {}),
+        workflow_context: workflowRow.context || null,
+      },
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
-    const [maternityTasks, hivEnrollments, approvedRegimenChanges] = await Promise.all([
+    const [
+      workflowRows,
+      destinationUsers,
+      referralFacilities,
+      maternityTasks,
+      hivEnrollments,
+      approvedRegimenChanges,
+      handoffRows,
+      medicationRows,
+    ] = await Promise.all([
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          w.workflow_key,
+          w.status,
+          w.destination_role,
+          w.destination_service,
+          w.destination_specialty,
+          w.destination_user_id,
+          w.destination_facility_id,
+          w.destination_facility_name,
+          w.acknowledged_at,
+          w.completed_at,
+          w.note,
+          w.context,
+          au.first_name || ' ' || au.last_name as acknowledged_by_name,
+          cu.first_name || ' ' || cu.last_name as completed_by_name,
+          du.first_name || ' ' || du.last_name as destination_user_name
+        FROM nurse_cross_module_workflow_state w
+        LEFT JOIN users au ON au.id = w.acknowledged_by
+        LEFT JOIN users cu ON cu.id = w.completed_by
+        LEFT JOIN users du ON du.id = w.destination_user_id
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          role,
+          specialization,
+          first_name || ' ' || last_name as name
+        FROM users
+        WHERE is_active = true
+          AND role IN ('doctor', 'nurse', 'pharmacist', 'admin')
+        ORDER BY
+          CASE role
+            WHEN 'doctor' THEN 1
+            WHEN 'nurse' THEN 2
+            WHEN 'pharmacist' THEN 3
+            ELSE 4
+          END,
+          created_at ASC
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT id, facility_name, facility_type, specialties
+        FROM referral_facilities
+        WHERE is_active = true
+        ORDER BY facility_name ASC
+        `,
+      ),
       tenantDb.query(
         `
         SELECT
@@ -49,6 +279,7 @@ export class NurseWorklistService {
           t.note,
           t.last_event_at,
           t.created_at,
+          t.assigned_to,
           ROUND(EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600.0, 1) as age_hours,
           CASE
             WHEN t.status = 'closed' THEN 'closed'
@@ -70,10 +301,12 @@ export class NurseWorklistService {
           END as sla_status,
           p.first_name || ' ' || p.last_name as patient_name,
           p.patient_number,
-          me.enrollment_number
+          me.enrollment_number,
+          au.first_name || ' ' || au.last_name as assigned_to_name
         FROM maternity_care_tasks t
         INNER JOIN patients p ON p.id = t.patient_id
         INNER JOIN maternity_enrollments me ON me.id = t.maternity_enrollment_id
+        LEFT JOIN users au ON au.id = t.assigned_to
         WHERE t.status != 'closed'
         ORDER BY
           CASE t.priority
@@ -113,7 +346,56 @@ export class NurseWorklistService {
         LIMIT 50
         `,
       ).catch(() => []),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          h.patient_id,
+          h.status,
+          h.finalized_at,
+          h.reviewed_at,
+          h.shared_at,
+          h.updated_at,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number
+        FROM nurse_handoff_workflow_state h
+        INNER JOIN patients p ON p.id = h.patient_id
+        WHERE h.status != 'shared'
+        ORDER BY COALESCE(h.updated_at, h.finalized_at, h.reviewed_at, h.created_at) DESC
+        LIMIT 25
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          mar.id,
+          mar.patient_id,
+          mar.medication_name,
+          mar.dose,
+          mar.unit,
+          mar.route,
+          mar.scheduled_time,
+          mar.actual_administration_time,
+          mar.administration_status,
+          mar.refusal_reason,
+          mar.omission_reason,
+          mar.notes,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number
+        FROM medication_administration_records mar
+        INNER JOIN patients p ON p.id = mar.patient_id
+        WHERE mar.administration_status IN ('pending', 'held', 'refused')
+          AND mar.scheduled_time <= (NOW() - INTERVAL '30 minutes')
+        ORDER BY mar.scheduled_time ASC
+        LIMIT 50
+        `,
+      ),
     ]);
+
+    const workflowRowsByKey = new Map<string, any>(
+      (workflowRows || []).map((row: any) => [String(row.workflow_key), row] as [string, any]),
+    );
 
     const maternityItems = (maternityTasks || []).map((task: any) => ({
       id: `maternity:${task.id}`,
@@ -121,6 +403,7 @@ export class NurseWorklistService {
       item_type: 'maternity_care_task',
       severity: task.priority || 'medium',
       workflow_status: task.status,
+      module_status: task.status,
       doctor_sync_status:
         task.status === 'open'
           ? 'awaiting_doctor_review'
@@ -153,6 +436,13 @@ export class NurseWorklistService {
         enrollmentId: task.maternity_enrollment_id,
         patientId: task.patient_id,
       },
+      ...this.buildDestination(destinationUsers, referralFacilities, {
+        role: 'doctor',
+        service: 'maternity',
+        specialty: this.extractTaskSpecialty(task.task_context, 'Obstetrics'),
+        preferredUserId: task.assigned_to || null,
+        preferredUserName: task.assigned_to_name || null,
+      }),
       metadata: {
         task_context: task.task_context || null,
         note: task.note || null,
@@ -218,92 +508,245 @@ export class NurseWorklistService {
                 ? `${enrollment.first_name} ${enrollment.last_name} is already in EAC and needs continued nurse follow-up.`
                 : `${enrollment.first_name} ${enrollment.last_name} has a high viral load that requires follow-up.`;
 
+        const itemId = `hiv-pathway:${enrollment.id}:${status}:${pathway.lastVlDate || enrollment.last_viral_load_date || 'na'}`;
+
         return [
-          {
-            id: `hiv-pathway:${enrollment.id}:${status}`,
-            module: 'hiv',
-            item_type: 'hiv_vl_followup',
-            severity,
-            workflow_status: status,
-            doctor_sync_status:
-              status === 'failure_after_eac' ? 'doctor_review_recommended' : 'nurse_followup_required',
-            title,
-            summary,
-            recommended_action:
-              Array.isArray(pathway.actions) && pathway.actions.length > 0
-                ? pathway.actions.join(', ').replace(/_/g, ' ')
-                : 'Open the HIV workflow and continue WHO-aligned follow-up.',
-            patient_id: enrollment.patient_id,
-            patient_name: `${enrollment.first_name} ${enrollment.last_name}`,
-            patient_number: enrollment.patient_number,
-            enrollment_id: enrollment.id,
-            enrollment_number: enrollment.enrollment_number,
-            created_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
-            updated_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
-            age_hours: this.getHoursSince(
-              pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
-            ),
-            sla_status: pathway.overdue ? 'due_soon' : 'within_sla',
-            next_route: {
-              section: 'hiv',
-              tab: 'hiv-patients',
-              enrollmentId: enrollment.id,
-              patientId: enrollment.patient_id,
+          this.mergeCrossModuleWorkflowState(
+            {
+              id: itemId,
+              module: 'hiv',
+              item_type: 'hiv_vl_followup',
+              source_record_id: enrollment.id,
+              severity,
+              workflow_status: 'pending',
+              module_status: status,
+              doctor_sync_status:
+                status === 'failure_after_eac' ? 'doctor_review_recommended' : 'nurse_followup_required',
+              title,
+              summary,
+              recommended_action:
+                Array.isArray(pathway.actions) && pathway.actions.length > 0
+                  ? pathway.actions.join(', ').replace(/_/g, ' ')
+                  : 'Open the HIV workflow and continue WHO-aligned follow-up.',
+              patient_id: enrollment.patient_id,
+              patient_name: `${enrollment.first_name} ${enrollment.last_name}`,
+              patient_number: enrollment.patient_number,
+              enrollment_id: enrollment.id,
+              enrollment_number: enrollment.enrollment_number,
+              created_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+              updated_at: pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+              age_hours: this.getHoursSince(
+                pathway.lastVlDate || enrollment.last_viral_load_date || enrollment.last_visit_date || null,
+              ),
+              sla_status: pathway.overdue ? 'due_soon' : 'within_sla',
+              next_route: {
+                section: 'hiv',
+                tab: 'hiv-patients',
+                enrollmentId: enrollment.id,
+                patientId: enrollment.patient_id,
+              },
+              ...this.buildDestination(destinationUsers, referralFacilities, {
+                role: status === 'failure_after_eac' ? 'doctor' : 'nurse',
+                service: 'hiv_clinic',
+                specialty: 'HIV',
+              }),
+              metadata: {
+                last_vl_value: pathway.lastVlValue ?? enrollment.last_viral_load ?? null,
+                last_vl_date: pathway.lastVlDate ?? enrollment.last_viral_load_date ?? null,
+                next_vl_date: pathway.nextVlDate ?? null,
+                actions: pathway.actions || [],
+              },
             },
-            metadata: {
-              last_vl_value: pathway.lastVlValue ?? enrollment.last_viral_load ?? null,
-              last_vl_date: pathway.lastVlDate ?? enrollment.last_viral_load_date ?? null,
-              next_vl_date: pathway.nextVlDate ?? null,
-              actions: pathway.actions || [],
-            },
-          },
+            workflowRowsByKey,
+          ),
         ];
       });
 
-    const hivRegimenItems = (approvedRegimenChanges || []).map((request: any) => ({
-      id: `hiv-regimen:${request.id}`,
-      module: 'hiv',
-      item_type: 'hiv_regimen_change',
-      severity: 'high',
-      workflow_status: 'doctor_approved_pending_nurse_record',
-      doctor_sync_status: 'doctor_approved',
-      title: 'Doctor-approved HIV regimen change awaiting nurse follow-through',
-      summary: `${request.patient_name} has an approved regimen change from ${request.current_regimen_name || 'current regimen'} to ${request.requested_regimen_name || 'new regimen'}.`,
-      recommended_action: 'Record the approved regimen change during the next HIV clinical visit and confirm the patient counseling steps.',
-      patient_id: request.patient_id,
-      patient_name: request.patient_name,
-      patient_number: request.patient_number,
-      enrollment_id: request.enrollment_id,
-      enrollment_number: request.enrollment_number,
-      created_at: request.approval_date || request.request_date || null,
-      updated_at: request.approval_date || request.request_date || null,
-      age_hours: this.getHoursSince(request.approval_date || request.request_date || null),
-      sla_status: null,
-      next_route: {
-        section: 'hiv',
-        tab: 'hiv-patients',
-        enrollmentId: request.enrollment_id,
-        patientId: request.patient_id,
-      },
-      metadata: {
-        approved_by_name: request.approved_by_name || null,
-        current_regimen_name: request.current_regimen_name || null,
-        requested_regimen_name: request.requested_regimen_name || null,
-        change_reason_details: request.change_reason_details || null,
-        clinical_justification: request.clinical_justification || null,
-      },
-    }));
+    const hivRegimenItems = (approvedRegimenChanges || []).map((request: any) =>
+      this.mergeCrossModuleWorkflowState(
+        {
+          id: `hiv-regimen:${request.id}`,
+          module: 'hiv',
+          item_type: 'hiv_regimen_change',
+          source_record_id: request.id,
+          severity: 'high',
+          workflow_status: 'pending',
+          module_status: 'doctor_approved_pending_nurse_record',
+          doctor_sync_status: 'doctor_approved',
+          title: 'Doctor-approved HIV regimen change awaiting nurse follow-through',
+          summary: `${request.patient_name} has an approved regimen change from ${request.current_regimen_name || 'current regimen'} to ${request.requested_regimen_name || 'new regimen'}.`,
+          recommended_action:
+            'Acknowledge the approved regimen change, counsel the patient, and record it during the next HIV clinical visit.',
+          patient_id: request.patient_id,
+          patient_name: request.patient_name,
+          patient_number: request.patient_number,
+          enrollment_id: request.enrollment_id,
+          enrollment_number: request.enrollment_number,
+          created_at: request.approval_date || request.request_date || null,
+          updated_at: request.approval_date || request.request_date || null,
+          age_hours: this.getHoursSince(request.approval_date || request.request_date || null),
+          sla_status: null,
+          next_route: {
+            section: 'hiv',
+            tab: 'hiv-patients',
+            enrollmentId: request.enrollment_id,
+            patientId: request.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: 'nurse',
+            service: 'hiv_clinic',
+            specialty: 'HIV',
+          }),
+          metadata: {
+            approved_by_name: request.approved_by_name || null,
+            current_regimen_name: request.current_regimen_name || null,
+            requested_regimen_name: request.requested_regimen_name || null,
+            change_reason_details: request.change_reason_details || null,
+            clinical_justification: request.clinical_justification || null,
+          },
+        },
+        workflowRowsByKey,
+      ),
+    );
 
-    const items = [...maternityItems, ...hivRegimenItems, ...hivPathwayItems].sort((a, b) => {
-      const severityDiff = this.getSeverityRank(b.severity) - this.getSeverityRank(a.severity);
-      if (severityDiff !== 0) {
-        return severityDiff;
-      }
+    const handoffItems = (handoffRows || []).map((row: any) => {
+      const referenceTime = row.updated_at || row.reviewed_at || row.finalized_at || row.shared_at || null;
+      const ageHours = this.getHoursSince(referenceTime);
+      const severity =
+        row.status === 'draft' && ageHours !== null && ageHours >= 6
+          ? 'high'
+          : row.status === 'reviewed'
+            ? 'medium'
+            : 'high';
 
-      const firstDate = new Date(b.updated_at || b.created_at || 0).getTime();
-      const secondDate = new Date(a.updated_at || a.created_at || 0).getTime();
-      return firstDate - secondDate;
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `handoff:${row.patient_id}:${referenceTime || row.status}`,
+          module: 'nursing',
+          item_type: 'nurse_handoff_risk',
+          source_record_id: row.patient_id,
+          severity,
+          workflow_status: 'pending',
+          module_status: row.status || 'draft',
+          doctor_sync_status: 'nurse_handoff_pending',
+          title: 'Shift handoff follow-through required',
+          summary:
+            row.status === 'draft'
+              ? `${row.patient_name} has a draft handoff that has not been finalized for the next shift.`
+              : row.status === 'finalized'
+                ? `${row.patient_name} has a finalized handoff that is still awaiting reviewer confirmation or sharing.`
+                : `${row.patient_name} has a reviewed handoff that still has not been shared to the next shift.`,
+          recommended_action:
+            row.status === 'draft'
+              ? 'Finalize the handoff summary, confirm reviewer acknowledgement, and share it with the next shift.'
+              : 'Complete the remaining handoff workflow steps so the next shift receives a closed-loop summary.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: referenceTime,
+          updated_at: referenceTime,
+          age_hours: ageHours,
+          sla_status: ageHours !== null && ageHours >= 6 ? 'due_soon' : 'within_sla',
+          next_route: {
+            section: 'main',
+            tab: 'notes',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: 'nurse',
+            service: 'shift_handoff',
+            specialty: 'Nursing',
+          }),
+          metadata: {
+            handoff_status: row.status || 'draft',
+          },
+        },
+        workflowRowsByKey,
+      );
     });
+
+    const medicationItems = (medicationRows || []).map((row: any) => {
+      const ageHours = this.getHoursSince(row.scheduled_time);
+      const isCriticalDelay = ageHours !== null && ageHours >= 4;
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `medication:${row.id}`,
+          module: 'nursing',
+          item_type: 'medication_administration_followup',
+          source_record_id: row.id,
+          severity:
+            row.administration_status === 'refused' || row.administration_status === 'held' || isCriticalDelay
+              ? 'high'
+              : 'medium',
+          workflow_status: 'pending',
+          module_status: row.administration_status || 'pending',
+          doctor_sync_status:
+            row.administration_status === 'refused' || row.administration_status === 'held'
+              ? 'doctor_review_recommended'
+              : 'nurse_followup_required',
+          title:
+            row.administration_status === 'refused'
+              ? 'Medication refusal follow-up required'
+              : row.administration_status === 'held'
+                ? 'Held medication requires follow-up'
+                : 'Overdue medication administration follow-up required',
+          summary: `${row.patient_name} has ${row.medication_name} ${row.dose} ${row.unit} requiring action.`,
+          recommended_action:
+            row.administration_status === 'refused'
+              ? 'Document counseling, reassess safety concerns, and notify the prescriber about the refused dose.'
+              : row.administration_status === 'held'
+                ? 'Review the hold reason, confirm the next safe administration step, and notify the doctor if the hold persists.'
+                : 'Administer the dose if still appropriate or document the omission with the correct reason.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.scheduled_time,
+          updated_at: row.actual_administration_time || row.scheduled_time,
+          age_hours: ageHours,
+          sla_status: isCriticalDelay ? 'breached' : 'due_soon',
+          next_route: {
+            section: 'main',
+            tab: 'orders',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: row.administration_status === 'pending' ? 'nurse' : 'doctor',
+            service: 'medication_safety',
+            specialty: row.administration_status === 'pending' ? 'Nursing' : 'Internal Medicine',
+          }),
+          metadata: {
+            medication_name: row.medication_name,
+            dose: row.dose,
+            unit: row.unit,
+            route: row.route,
+            administration_status: row.administration_status,
+            refusal_reason: row.refusal_reason || null,
+            omission_reason: row.omission_reason || null,
+            notes: row.notes || null,
+            scheduled_time: row.scheduled_time,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const items = [...maternityItems, ...hivRegimenItems, ...hivPathwayItems, ...handoffItems, ...medicationItems]
+      .filter((item) => item.module === 'maternity' || item.workflow_status !== 'completed')
+      .sort((a, b) => {
+        const severityDiff = this.getSeverityRank(b.severity) - this.getSeverityRank(a.severity);
+        if (severityDiff !== 0) {
+          return severityDiff;
+        }
+
+        const workflowDiff = this.getWorkflowRank(a.workflow_status) - this.getWorkflowRank(b.workflow_status);
+        if (workflowDiff !== 0) {
+          return workflowDiff;
+        }
+
+        const firstDate = new Date(b.updated_at || b.created_at || 0).getTime();
+        const secondDate = new Date(a.updated_at || a.created_at || 0).getTime();
+        return firstDate - secondDate;
+      });
 
     return {
       items,
@@ -313,7 +756,175 @@ export class NurseWorklistService {
         high: items.filter((item) => item.severity === 'high').length,
         maternity: items.filter((item) => item.module === 'maternity').length,
         hiv: items.filter((item) => item.module === 'hiv').length,
+        nursing: items.filter((item) => item.module === 'nursing').length,
+        handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
+        medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
       },
+    };
+  }
+
+  async updateCrossModuleWorkflowState(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      module: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      enrollmentId?: string | null;
+      status: 'acknowledged' | 'completed';
+      note?: string;
+      context?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    const status = this.normalizeCrossModuleWorkflowStatus(payload?.status);
+    if (status === 'pending') {
+      throw new BadRequestException('status must be acknowledged or completed');
+    }
+    if (payload?.module === 'maternity') {
+      throw new BadRequestException('Maternity tasks use the maternity task workflow endpoint');
+    }
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.module) || !this.normalizeText(payload?.itemType)) {
+      throw new BadRequestException('itemId, module, and itemType are required');
+    }
+
+    const mergedContext = {
+      ...(payload?.context || {}),
+      source: 'nurse_cross_module_queue',
+      status,
+    };
+
+    try {
+      await tenantDb.query(
+        `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          module,
+          item_type,
+          source_record_id,
+          enrollment_id,
+          patient_id,
+          status,
+          destination_role,
+          destination_service,
+          destination_specialty,
+          destination_user_id,
+          destination_facility_id,
+          destination_facility_name,
+          acknowledged_by,
+          acknowledged_at,
+          completed_by,
+          completed_at,
+          note,
+          context,
+          updated_at
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+          $14, CASE WHEN $7 = 'acknowledged' THEN NOW() ELSE NULL END,
+          $15, CASE WHEN $7 = 'completed' THEN NOW() ELSE NULL END,
+          $16, $17::jsonb, NOW()
+        )
+        ON CONFLICT (workflow_key)
+        DO UPDATE SET
+          module = EXCLUDED.module,
+          item_type = EXCLUDED.item_type,
+          source_record_id = COALESCE(EXCLUDED.source_record_id, nurse_cross_module_workflow_state.source_record_id),
+          enrollment_id = COALESCE(EXCLUDED.enrollment_id, nurse_cross_module_workflow_state.enrollment_id),
+          patient_id = COALESCE(EXCLUDED.patient_id, nurse_cross_module_workflow_state.patient_id),
+          status = EXCLUDED.status,
+          destination_role = COALESCE(EXCLUDED.destination_role, nurse_cross_module_workflow_state.destination_role),
+          destination_service = COALESCE(EXCLUDED.destination_service, nurse_cross_module_workflow_state.destination_service),
+          destination_specialty = COALESCE(EXCLUDED.destination_specialty, nurse_cross_module_workflow_state.destination_specialty),
+          destination_user_id = COALESCE(EXCLUDED.destination_user_id, nurse_cross_module_workflow_state.destination_user_id),
+          destination_facility_id = COALESCE(EXCLUDED.destination_facility_id, nurse_cross_module_workflow_state.destination_facility_id),
+          destination_facility_name = COALESCE(EXCLUDED.destination_facility_name, nurse_cross_module_workflow_state.destination_facility_name),
+          acknowledged_by = CASE
+            WHEN EXCLUDED.status = 'acknowledged' THEN EXCLUDED.acknowledged_by
+            ELSE nurse_cross_module_workflow_state.acknowledged_by
+          END,
+          acknowledged_at = CASE
+            WHEN EXCLUDED.status = 'acknowledged' THEN NOW()
+            ELSE nurse_cross_module_workflow_state.acknowledged_at
+          END,
+          completed_by = CASE
+            WHEN EXCLUDED.status = 'completed' THEN EXCLUDED.completed_by
+            ELSE nurse_cross_module_workflow_state.completed_by
+          END,
+          completed_at = CASE
+            WHEN EXCLUDED.status = 'completed' THEN NOW()
+            ELSE nurse_cross_module_workflow_state.completed_at
+          END,
+          note = EXCLUDED.note,
+          context = EXCLUDED.context,
+          updated_at = NOW()
+        `,
+        [
+          payload.itemId,
+          payload.module,
+          payload.itemType,
+          payload.sourceRecordId || null,
+          payload.enrollmentId || null,
+          payload.patientId || null,
+          status,
+          payload.destinationRole || null,
+          payload.destinationService || null,
+          payload.destinationSpecialty || null,
+          payload.destinationUserId || null,
+          payload.destinationFacilityId || null,
+          payload.destinationFacilityName || null,
+          status === 'acknowledged' ? user.id : null,
+          status === 'completed' ? user.id : null,
+          payload.note || null,
+          JSON.stringify(mergedContext),
+        ],
+      );
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+    }
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action:
+        status === 'completed'
+          ? HipaaAuditAction.NURSE_CROSS_MODULE_COMPLETE
+          : HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_workflow',
+      resourceId: payload.itemId,
+      patientId: payload.patientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: payload.module,
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || null,
+        enrollmentId: payload.enrollmentId || null,
+        status,
+        note: payload.note || null,
+        context: mergedContext,
+      },
+      riskLevel: status === 'completed' ? 'medium' : 'low',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      status,
     };
   }
 

@@ -102,6 +102,7 @@ import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
 import { NurseCopilotTaskEvent } from '../entities/nurse-copilot-task-event.entity';
 import { NurseCopilotAlertEvent } from '../entities/nurse-copilot-alert-event.entity';
 import { NurseHandoffWorkflowState } from '../entities/nurse-handoff-workflow-state.entity';
+import { NurseCrossModuleWorkflowState } from '../entities/nurse-cross-module-workflow-state.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
@@ -295,6 +296,7 @@ export class TenantService {
         NurseCopilotTaskEvent,
         NurseCopilotAlertEvent,
         NurseHandoffWorkflowState,
+        NurseCrossModuleWorkflowState,
         SmsGatewayConfig,
         PaymentGatewayConfig,
       ],
