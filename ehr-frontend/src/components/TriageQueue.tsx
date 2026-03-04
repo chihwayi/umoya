@@ -305,8 +305,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
       await ehrApi.updateAppointmentStatus(appointment.id, newStatus, token, tenantSlug);
       showSuccess('Status updated', `Appointment marked as ${newStatus}`);
       window.location.reload();
-    } catch (error) {
-      console.error('Error updating appointment status:', error);
+    } catch {
       showError('Error', 'Failed to update appointment status');
     }
   };

@@ -99,6 +99,9 @@ import { PharmacyStockMovement } from '../entities/pharmacy-stock-movement.entit
 import { PharmacyPricingRule } from '../entities/pharmacy-pricing-rule.entity';
 import { PharmacyFormulary } from '../entities/pharmacy-formulary.entity';
 import { PharmacyAlert } from '../entities/pharmacy-alert.entity';
+import { NurseCopilotTaskEvent } from '../entities/nurse-copilot-task-event.entity';
+import { NurseCopilotAlertEvent } from '../entities/nurse-copilot-alert-event.entity';
+import { NurseHandoffWorkflowState } from '../entities/nurse-handoff-workflow-state.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
@@ -289,6 +292,9 @@ export class TenantService {
         PharmacyPricingRule,
         PharmacyFormulary,
         PharmacyAlert,
+        NurseCopilotTaskEvent,
+        NurseCopilotAlertEvent,
+        NurseHandoffWorkflowState,
         SmsGatewayConfig,
         PaymentGatewayConfig,
       ],

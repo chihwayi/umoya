@@ -173,8 +173,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
           setAnalysisResult(null);
         }
       }
-    } catch (error) {
-      console.error('Guideline search failed', error);
+    } catch {
       showError('Error', 'Failed to search guidelines');
     } finally {
       setLoadingGuidelines(false);
@@ -252,8 +251,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       if (!token || !tenantSlug) return;
       const response = await ehrApi.getVitals(patientId, token, tenantSlug, { trend: true, limit: 60 });
       setTrendOverview(response.data);
-    } catch (error) {
-      console.error('Failed to load vitals trend', error);
+    } catch {
     } finally {
       setTrendLoading(false);
     }
@@ -302,8 +300,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       showSuccess('Success', 'Vitals recorded successfully');
       fetchVitalsTrend(selectedPatient.id);
       onSave?.(insights);
-    } catch (error) {
-      console.error('Error saving vitals:', error);
+    } catch {
       showError('Error', 'Failed to save vitals');
     } finally {
       setLoading(false);
@@ -347,8 +344,7 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
       if (decision === 'accept') {
         setCopilotDecisionNote('');
       }
-    } catch (error) {
-      console.error('Failed to record vitals copilot decision', error);
+    } catch {
       showError('Error', 'Failed to capture vitals copilot decision');
     } finally {
       setCopilotDecisionSaving(false);

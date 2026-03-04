@@ -85,8 +85,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
       } else {
         setGuidelineResults([]);
       }
-    } catch (e) {
-      console.error('Guideline search failed:', e);
+    } catch {
       showError('Error', 'Failed to search guidelines');
     } finally {
       setLoadingGuidelineSearch(false);
@@ -212,8 +211,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
         try {
           const response = await ehrApi.getNursingNotes(apt.patient.id, token, tenantSlug);
           return response.data.nursingNotes || [];
-        } catch (error) {
-          console.log(`No notes found for patient ${apt.patient.id}:`, error);
+        } catch {
           return [];
         }
       });
@@ -227,8 +225,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
       );
       
       setAllNotes(sortedNotes);
-    } catch (error) {
-      console.error('Error fetching all notes:', error);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -246,8 +243,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
 
       const response = await ehrApi.getNursingNotes(selectedPatient.id, token, tenantSlug);
       setNotes(response.data.notes || []);
-    } catch (error) {
-      console.error('Error fetching nursing notes:', error);
+    } catch {
       showError('Error', 'Failed to fetch nursing notes');
     } finally {
       setLoading(false);
@@ -317,8 +313,7 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
         fetchAllNotes();
       }
       onSave?.();
-    } catch (error) {
-      console.error('Error saving nursing note:', error);
+    } catch {
       showError('Error', 'Failed to save nursing note');
     } finally {
       setLoading(false);
@@ -1170,7 +1165,6 @@ const NursingNotes: React.FC<NursingNotesProps> = ({
               setShowTemplateLibrary(false);
               showSuccess('Success', 'Template applied successfully');
             } catch (error: any) {
-              console.error('Failed to apply template:', error);
               showError('Error', error?.response?.data?.message || 'Failed to apply template');
             }
           }}

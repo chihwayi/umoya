@@ -193,8 +193,7 @@ const NurseDashboard: React.FC = () => {
         if (!token || !activeTenant) return;
         const response = await ehrApi.getNurseWorklistState(token, activeTenant);
         setAcknowledgedAlertIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
-      } catch (error) {
-        console.error('Failed to load nurse worklist state', error);
+      } catch {
       }
     };
     loadWorklistState();
@@ -365,7 +364,6 @@ const NurseDashboard: React.FC = () => {
       setPaymentAppointment(null);
       await fetchTodayAppointments();
     } catch (error: any) {
-      console.error('Failed to record payment from nurse dashboard', error);
       showError(
         'Payment Error',
         error.response?.data?.message || 'Failed to record payment. Please try again or contact Accounts.',
@@ -474,7 +472,6 @@ const NurseDashboard: React.FC = () => {
   // Calculate task counts (for component callbacks)
   const calculateTaskCounts = useCallback((tasks: any[]) => {
     if (!Array.isArray(tasks)) {
-      console.warn('calculateTaskCounts received non-array:', tasks);
       setTaskCounts({ pending: 0, inProgress: 0, overdue: 0 });
       return;
     }
@@ -488,7 +485,6 @@ const NurseDashboard: React.FC = () => {
   // Calculate alert counts (for component callbacks)
   const calculateAlertCounts = useCallback((alerts: any[]) => {
     if (!Array.isArray(alerts)) {
-      console.warn('calculateAlertCounts received non-array:', alerts);
       setAlertCounts({ active: 0, critical: 0, high: 0 });
       return;
     }
@@ -549,8 +545,7 @@ const NurseDashboard: React.FC = () => {
       try {
         const response = await ehrApi.getSharedDocuments(token, tenantSlug);
         setSharedDocumentsCount(response.data?.length || 0);
-      } catch (error) {
-        console.error('Error loading shared documents count:', error);
+      } catch {
       }
     };
 
@@ -570,8 +565,7 @@ const NurseDashboard: React.FC = () => {
           if (response.data) {
             setTenantInfo(response.data);
           }
-        } catch (error) {
-          console.error('Error fetching tenant info:', error);
+        } catch {
         }
       };
 
@@ -623,8 +617,7 @@ const NurseDashboard: React.FC = () => {
             const ltfuRes = await ehrApi.getLTFUPatients(ltfuDays, token, tenantSlug);
             setLtfuPatients(ltfuRes.data.patients || []);
           }
-        } catch (error) {
-          console.error('Failed to load metrics:', error);
+        } catch {
         }
       };
 
@@ -646,8 +639,7 @@ const NurseDashboard: React.FC = () => {
         setNurseCopilotKpisLoading(true);
         const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
         setNurseCopilotKpis(res.data || null);
-      } catch (error) {
-        console.error('Failed to load nurse copilot KPIs', error);
+      } catch {
       } finally {
         setNurseCopilotKpisLoading(false);
       }
@@ -660,7 +652,6 @@ const NurseDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
-        console.warn('fetchAuthorizedOrders skipped - missing token or tenant slug');
         return;
       }
 
@@ -671,7 +662,6 @@ const NurseDashboard: React.FC = () => {
       if (error?.response?.status === 500) {
         setAuthorizedOrders([]);
       } else {
-        console.error('Error fetching authorized orders:', error);
         setAuthorizedOrders([]);
       }
     }
@@ -682,7 +672,6 @@ const NurseDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
-        console.warn('fetchVitalsForAppointments skipped - missing token or tenant slug');
         return appointments;
       }
 
@@ -709,8 +698,7 @@ const NurseDashboard: React.FC = () => {
       );
 
       return appointmentsWithVitals;
-    } catch (error) {
-      console.error('Error fetching vitals for appointments:', error);
+    } catch {
       return appointments;
     }
   };
@@ -721,7 +709,6 @@ const NurseDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
-        console.warn('fetchTodayAppointments skipped - missing token or tenant slug');
         return;
       }
 
@@ -769,8 +756,7 @@ const NurseDashboard: React.FC = () => {
           // Fetch vitals for recent appointments
           const appointmentsWithVitals = await fetchVitalsForAppointments(recentAppointments);
           setAppointments(appointmentsWithVitals);
-        } catch (error) {
-          console.error('Error fetching recent appointments:', error);
+        } catch {
           // Fetch vitals for today's appointments as fallback
           const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
           setAppointments(appointmentsWithVitals);
@@ -780,8 +766,7 @@ const NurseDashboard: React.FC = () => {
         const appointmentsWithVitals = await fetchVitalsForAppointments(allAppointments);
         setAppointments(appointmentsWithVitals);
       }
-    } catch (error) {
-      console.error('Error fetching appointments:', error);
+    } catch {
       showError('Error', 'Failed to fetch appointments');
     } finally {
       setLoading(false);
@@ -863,8 +848,7 @@ const NurseDashboard: React.FC = () => {
       setExecutionNotes('');
       showSuccess('Success', 'Order executed successfully');
       fetchAuthorizedOrders();
-    } catch (error) {
-      console.error('Error executing order:', error);
+    } catch {
       showError('Error', 'Failed to execute order');
     }
   };
@@ -935,8 +919,7 @@ const NurseDashboard: React.FC = () => {
       } else {
         setGuidelineResults([]);
       }
-    } catch (error) {
-      console.error('Error searching guidelines:', error);
+    } catch {
       showError('Error', 'Failed to search guidelines');
     } finally {
       setLoadingGuidelines(false);
@@ -1032,8 +1015,7 @@ const NurseDashboard: React.FC = () => {
         setTriageSuggestedPriority(mapped);
       }
       showSuccess('Triage Copilot Ready', 'Review and confirm suggestions before applying clinically.');
-    } catch (error) {
-      console.error('Triage copilot failed', error);
+    } catch {
       showError('Triage Copilot Error', 'Unable to analyze triage context right now.');
     } finally {
       setTriageCopilotLoading(false);
@@ -1075,8 +1057,7 @@ const NurseDashboard: React.FC = () => {
       );
       setVitalsCopilotResult(response.data || null);
       showSuccess('Vitals Copilot Ready', 'Interpretation generated. Confirm clinically before action.');
-    } catch (error) {
-      console.error('Vitals copilot failed', error);
+    } catch {
       showError('Vitals Copilot Error', 'Unable to interpret vitals right now.');
     } finally {
       setVitalsCopilotLoading(false);
@@ -1119,8 +1100,7 @@ const NurseDashboard: React.FC = () => {
       } else {
         showError('No Draft', 'No draft could be generated with the available context.');
       }
-    } catch (error) {
-      console.error('Nursing draft generation failed', error);
+    } catch {
       showError('Draft Error', 'Unable to generate nursing draft right now.');
     } finally {
       setNotesCopilotLoading(false);
@@ -1159,8 +1139,7 @@ const NurseDashboard: React.FC = () => {
       } else {
         showError('No Summary', 'No handoff summary was generated.');
       }
-    } catch (error) {
-      console.error('Handoff summary generation failed', error);
+    } catch {
       showError('Handoff Error', 'Unable to generate handoff summary right now.');
     } finally {
       setHandoffCopilotLoading(false);
@@ -1188,8 +1167,7 @@ const NurseDashboard: React.FC = () => {
         sharedAt: data.sharedAt || null,
         sharedBy: data.sharedBy || null,
       });
-    } catch (error) {
-      console.error('Failed to load handoff workflow state', error);
+    } catch {
     } finally {
       setHandoffWorkflowLoading(false);
     }
@@ -1222,8 +1200,7 @@ const NurseDashboard: React.FC = () => {
 
       showSuccess('Handoff Finalized', 'Summary is now finalized for shift handover.');
       await loadHandoffWorkflowState(selectedPatient.id);
-    } catch (error) {
-      console.error('Failed to finalize handoff', error);
+    } catch {
       showError('Finalize Failed', 'Could not finalize handoff summary.');
     } finally {
       setHandoffActionLoading(false);
@@ -1255,8 +1232,7 @@ const NurseDashboard: React.FC = () => {
 
       showSuccess('Reviewer Confirmed', 'Reviewer confirmation has been recorded.');
       await loadHandoffWorkflowState(selectedPatient.id);
-    } catch (error) {
-      console.error('Failed to confirm handoff review', error);
+    } catch {
       showError('Review Failed', 'Could not record reviewer confirmation.');
     } finally {
       setHandoffActionLoading(false);
@@ -1291,8 +1267,7 @@ const NurseDashboard: React.FC = () => {
 
       showSuccess('Handoff Shared', `Handoff marked as shared to ${handoffRecipient || 'next shift'}.`);
       await loadHandoffWorkflowState(selectedPatient.id);
-    } catch (error) {
-      console.error('Failed to share handoff', error);
+    } catch {
       showError('Share Failed', 'Could not share handoff summary.');
     } finally {
       setHandoffActionLoading(false);
@@ -1348,8 +1323,7 @@ const NurseDashboard: React.FC = () => {
       if (decision === 'accept') {
         setCopilotDecisionNote('');
       }
-    } catch (error) {
-      console.error('Failed to record copilot decision', error);
+    } catch {
       showError('Audit Error', 'Could not record copilot decision.');
     }
   };
@@ -1374,8 +1348,7 @@ const NurseDashboard: React.FC = () => {
           navigate('/ehr');
         }
       }, 1000);
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch {
       showError('Logout Error', 'There was an issue logging out. Please try again.');
     }
   };
@@ -1422,8 +1395,7 @@ const NurseDashboard: React.FC = () => {
           new Date(a.recordedAt || a.recorded_at).getTime(),
       );
       setVitalsHistory(vitals);
-    } catch (error) {
-      console.error('Failed to load vitals history', error);
+    } catch {
       showError('Error', 'Failed to load vitals history.');
       setVitalsHistory([]);
     } finally {
@@ -1436,13 +1408,11 @@ const NurseDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
-        console.warn('fetchPatients skipped - missing token or tenant slug');
         return;
       }
       const resp = await ehrApi.getPatients(token, activeTenant);
       setPatients(resp.data.patients || []);
-    } catch (e) {
-      console.error('Error fetching patients:', e);
+    } catch {
     }
   };
 
@@ -1606,8 +1576,7 @@ const NurseDashboard: React.FC = () => {
       setCalendarAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, appointmentDate: newDate.toISOString() } : a));
       
       showSuccess('Rescheduled', 'Appointment moved successfully');
-    } catch (e) {
-      console.error('Reschedule error', e);
+    } catch {
       showError('Error', 'Failed to reschedule');
     } finally {
       setDraggingAppointmentId(null);
@@ -1982,8 +1951,7 @@ const NurseDashboard: React.FC = () => {
       // Fetch vitals for appointments
       const appointmentsWithVitals = await fetchVitalsForAppointments(fetchedAppointments);
       setCalendarAppointments(appointmentsWithVitals);
-    } catch (error) {
-      console.error('Error fetching calendar appointments:', error);
+    } catch {
       // Fallback to today's appointments
       setCalendarAppointments(appointments);
     } finally {
@@ -2575,8 +2543,7 @@ const NurseDashboard: React.FC = () => {
                       setNurseCopilotKpisLoading(true);
                       const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
                       setNurseCopilotKpis(res.data || null);
-                    } catch (error) {
-                      console.error('Failed to refresh nurse copilot KPIs', error);
+                    } catch {
                     } finally {
                       setNurseCopilotKpisLoading(false);
                     }

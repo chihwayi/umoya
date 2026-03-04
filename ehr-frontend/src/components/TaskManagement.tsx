@@ -68,8 +68,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
         const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
         const completed = new Set<string>(response.data?.completedTaskIds || []);
         setServerCompletedTaskIds(completed);
-      } catch (e) {
-        console.error('Failed to load server task state', e);
+      } catch {
       }
     };
     loadState();
@@ -367,8 +366,7 @@ const TaskManagement: React.FC<TaskManagementProps> = ({
           : taskItem
       ));
       onTaskComplete?.(taskId);
-    } catch (e) {
-      console.error('Failed to persist completed task', e);
+    } catch {
     }
   };
 

@@ -60,8 +60,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
         if (!token || !tenantSlug) return;
         const response = await ehrApi.getNurseWorklistState(token, tenantSlug);
         setServerAcknowledgedIds(new Set<string>(response.data?.acknowledgedAlertIds || []));
-      } catch (e) {
-        console.error('Failed to load server alert state', e);
+      } catch {
       }
     };
     loadState();
@@ -335,8 +334,7 @@ const PatientSafetyAlerts: React.FC<PatientSafetyAlertsProps> = ({
           : alertItem
       ));
       onAlertAcknowledge?.(alertId);
-    } catch (e) {
-      console.error('Failed to persist alert acknowledgement', e);
+    } catch {
     }
   };
 

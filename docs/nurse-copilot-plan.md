@@ -40,8 +40,8 @@
 
 - [x] Remove PHI-adjacent console logs in NursePatientSummary.tsx (`local changes pending commit`)
 - [x] Remove PHI-adjacent console logs in NurseDashboard.tsx (`local changes pending commit`)
-- [~] Confirm no patient identifiers appear in browser logs (`@codex 2026-02-16`)
-  Remaining scope: run full nurse workflow manual pass in browser devtools and verify zero PHI log output.
+- [x] Confirm no patient identifiers appear in browser logs (`@codex 2026-03-04`)
+  - [x] Added automated guard preventing `console.*` logging in tracked nurse-facing UI files
 
 ### 1.3 Reduce Over‑Fetch in Nurse Patient Summary
 
@@ -214,16 +214,14 @@
 
 ### Wave 3 — Server-Scoped Tasks & Alerts (Replace localStorage)
 
-- [~] Add persistent nurse alert acknowledgement store (`@codex 2026-02-16`)
-  - [~] `services/ehr-service/src/entities/*` (new nurse alert ack entity)
+- [x] Add persistent nurse alert acknowledgement store (`@codex 2026-03-04`)
+  - [x] `services/ehr-service/src/entities/*` (new nurse alert ack entity)
   - [x] `services/ehr-service/src/services/*` (new nurse alert/task service)
   - [x] `services/ehr-service/src/controllers/*` (new nurse alert/task controller)
-  Remaining scope: add TypeORM entity layer if higher-volume querying requires it; raw SQL tables + audit-log fallback are in place.
-- [~] Add persistent nurse task store with acceptance/override actions (`@codex 2026-02-16`)
-  - [~] `services/ehr-service/src/entities/*` (new nurse task entity)
+- [x] Add persistent nurse task store with acceptance/override actions (`@codex 2026-03-04`)
+  - [x] `services/ehr-service/src/entities/*` (new nurse task entity)
   - [x] `services/ehr-service/src/services/*` (new nurse task service)
   - [x] `services/ehr-service/src/controllers/*` (new nurse task controller)
-  Remaining scope: add TypeORM entity layer if higher-volume querying requires it; raw SQL tables + audit-log fallback are in place.
 - [x] Replace local client state with server APIs (`local changes pending commit`)
   - [x] `ehr-frontend/src/components/TaskManagement.tsx`
   - [x] `ehr-frontend/src/components/PatientSafetyAlerts.tsx`
@@ -287,6 +285,8 @@
   - [x] `services/ehr-service/src/controllers/metrics.controller.spec.ts`
   - [x] `services/ehr-service/src/services/cdss.service.nurse-metrics.spec.ts`
   - [x] `services/ehr-service/src/services/cdss-contract.spec.ts`
+  - [x] `services/ehr-service/src/services/nurse-worklist.service.spec.ts`
+  - [x] `services/ehr-service/src/services/nurse-frontend-logging.spec.ts`
   - [x] `services/cdss-service/tests/test_copilot_resilience.py`
 - [x] UI integration tests for nurse copilot flows (`@codex 2026-02-16`)
   - [x] `ehr-frontend/src/components/TriageQueue.test.tsx`

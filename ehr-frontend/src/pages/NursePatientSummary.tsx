@@ -153,8 +153,7 @@ const NursePatientSummary: React.FC = () => {
       }
       
       setPatient({ ...patientData, age });
-    } catch (error) {
-      console.error('Error fetching patient details');
+    } catch {
       showError('Error', 'Failed to fetch patient details');
     }
   };
@@ -263,8 +262,7 @@ const NursePatientSummary: React.FC = () => {
       );
 
       setVisitSummaries(sortedVisits);
-    } catch (error) {
-      console.error('Error fetching patient history');
+    } catch {
       showError('Error', 'Failed to fetch patient history');
     } finally {
       setLoading(false);
@@ -461,8 +459,7 @@ const NursePatientSummary: React.FC = () => {
         tenantSlug
       );
       setVitalsCopilotResult(response.data || null);
-    } catch (error) {
-      console.error('Failed to interpret vitals');
+    } catch {
       showError('Vitals Copilot Error', 'Unable to interpret vitals right now.');
     } finally {
       setVitalsCopilotLoading(false);
@@ -488,8 +485,7 @@ const NursePatientSummary: React.FC = () => {
         token,
         tenantSlug
       );
-    } catch (error) {
-      console.error('Failed to record vitals copilot decision');
+    } catch {
     }
   };
 
