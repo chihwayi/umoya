@@ -40,7 +40,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "DISABLE_ESLINT_PLUGIN=false craco build",
+    "build": "DISABLE_ESLINT_PLUGIN=true craco build",
     "test": "craco test --passWithNoTests",
     "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
     "check:proxy-only": "node scripts/check-cdss-proxy-only.js"
