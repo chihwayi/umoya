@@ -462,6 +462,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint46NurseCopilotSchemaStatements(),
       },
       {
+        id: 'maternity_care_tasks',
+        label: 'Maternity Care Task Workflow',
+        version: '2026.03.04',
+        description: 'Adds maternity escalation task persistence for nurse-doctor workflow state transitions',
+        statements: () => this.getMaternityCareTaskSchemaStatements(),
+      },
+      {
         id: 'medication_reminders',
         label: 'Medication Reminders',
         version: '2026.02.12',
@@ -578,6 +585,48 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_medication_reminders_patient_id ON medication_reminders(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_medication_reminders_active ON medication_reminders(is_active)`,
       `CREATE INDEX IF NOT EXISTS idx_medication_reminders_prescription ON medication_reminders(prescription_id)`,
+    ];
+  }
+
+  private getMaternityCareTaskSchemaStatements(): string[] {
+    return [
+      `CREATE TABLE IF NOT EXISTS maternity_care_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        source_type VARCHAR(30) NOT NULL CHECK (source_type IN ('anc_visit','delivery','postnatal_visit','risk_factor','manual')),
+        source_record_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','actioned','closed')),
+        priority VARCHAR(20) NOT NULL DEFAULT 'high' CHECK (priority IN ('low','medium','high','critical')),
+        title VARCHAR(255) NOT NULL,
+        summary TEXT,
+        blocker_count INTEGER NOT NULL DEFAULT 0,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        required_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+        suggested_orders JSONB NOT NULL DEFAULT '[]'::jsonb,
+        rule_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
+        task_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+        assigned_to UUID REFERENCES users(id),
+        created_by UUID REFERENCES users(id),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        actioned_by UUID REFERENCES users(id),
+        actioned_at TIMESTAMP WITH TIME ZONE,
+        closed_by UUID REFERENCES users(id),
+        closed_at TIMESTAMP WITH TIME ZONE,
+        closed_reason TEXT,
+        latest_note TEXT,
+        last_event_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_enrollment_id ON maternity_care_tasks(maternity_enrollment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_patient_id ON maternity_care_tasks(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_status ON maternity_care_tasks(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_priority ON maternity_care_tasks(priority)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_assigned_to ON maternity_care_tasks(assigned_to)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_source ON maternity_care_tasks(source_type, source_record_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_last_event_at ON maternity_care_tasks(last_event_at DESC)`,
     ];
   }
 
@@ -2177,7 +2226,8 @@ export class DatabaseProvisioningService {
     statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_risk_category ON maternity_risk_factors(risk_category)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_severity ON maternity_risk_factors(severity)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_snomed ON maternity_risk_factors(risk_factor_snomed_code)`);
-    
+    statements.push(...this.getMaternityCareTaskSchemaStatements());
+
     // HIV/AIDS/TB/Cervical Cancer Tables
     // HIV Test Results Table
     statements.push(`

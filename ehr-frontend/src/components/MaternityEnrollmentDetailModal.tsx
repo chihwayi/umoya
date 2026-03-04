@@ -148,6 +148,20 @@ const riskBadge = (risk: string) => (
   </span>
 );
 
+const careTaskPriorityStyles: Record<string, string> = {
+  critical: 'bg-red-100 text-red-700 border-red-300',
+  high: 'bg-amber-100 text-amber-700 border-amber-300',
+  medium: 'bg-sky-100 text-sky-700 border-sky-300',
+  low: 'bg-slate-100 text-slate-700 border-slate-300',
+};
+
+const careTaskStatusStyles: Record<string, string> = {
+  open: 'bg-rose-100 text-rose-700 border-rose-300',
+  acknowledged: 'bg-sky-100 text-sky-700 border-sky-300',
+  actioned: 'bg-amber-100 text-amber-700 border-amber-300',
+  closed: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+};
+
 type SectionCardProps = React.PropsWithChildren<{
   title: string;
   icon?: React.ReactNode;
@@ -519,6 +533,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     };
   }, [enrollment]);
 
+  const careTasks = useMemo(() => enrollment?.care_tasks || [], [enrollment]);
+  const activeCareTasks = useMemo(
+    () => careTasks.filter((task: any) => task.status !== 'closed'),
+    [careTasks],
+  );
+
   const nextVisitNumber = useMemo(() => {
     if (!enrollment) return 1;
     return (enrollment.anc_visits?.length || 0) + 1;
@@ -866,7 +886,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         return;
       }
 
-      await ehrApi.createANCVisit(tenantSlug, token, payload);
+      await ehrApi.createANCVisit(tenantSlug, token, {
+        ...payload,
+        safety_warnings_acknowledged: true,
+      });
       showSuccess(`ANC visit #${nextVisitNumber} recorded`, 'ANC follow-up saved successfully.');
       setAncForm({
         ...ancForm,
@@ -945,7 +968,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         return;
       }
 
-      await ehrApi.createDelivery(tenantSlug, token, payload);
+      await ehrApi.createDelivery(tenantSlug, token, {
+        ...payload,
+        safety_warnings_acknowledged: true,
+      });
       showSuccess('Delivery record saved', 'Maternal delivery details stored successfully.');
       setDeliveryFormOpen(false);
       await refreshData();
@@ -1009,7 +1035,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         return;
       }
 
-      await ehrApi.createBirthOutcome(tenantSlug, token, enrollment.delivery.id, payload);
+      await ehrApi.createBirthOutcome(tenantSlug, token, enrollment.delivery.id, {
+        ...payload,
+        safety_warnings_acknowledged: true,
+      });
       showSuccess('Birth outcome recorded', 'Newborn outcome details saved successfully.');
       setBirthOutcomeFormOpen(false);
       setBirthOutcomeForm({
@@ -1102,7 +1131,10 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         return;
       }
 
-      await ehrApi.createPostnatalVisit(tenantSlug, token, payload);
+      await ehrApi.createPostnatalVisit(tenantSlug, token, {
+        ...payload,
+        safety_warnings_acknowledged: true,
+      });
       showSuccess('Postnatal visit saved', 'Postnatal visit details stored successfully.');
       setPostnatalFormOpen(false);
       await refreshData();
@@ -1236,7 +1268,72 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                 <p className="text-xl font-bold text-amber-700">{riskSummary?.outstandingRiskFactors || 0}</p>
                 <p className="text-xs text-amber-700 mt-1">Active</p>
               </div>
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-100">
+                <p className="text-xs text-rose-700 uppercase">Escalations</p>
+                <p className="text-xl font-bold text-rose-700">{activeCareTasks.length}</p>
+                <p className="text-xs text-rose-700 mt-1">Open workflow tasks</p>
+              </div>
             </div>
+          </SectionCard>
+
+          <SectionCard title="CDSS Escalation Timeline" icon={<Sparkles className="w-5 h-5" />}>
+            {careTasks.length === 0 ? (
+              <p className="text-sm text-slate-500">No CDSS escalation tasks recorded for this maternity episode.</p>
+            ) : (
+              <div className="space-y-3">
+                {careTasks.map((task: any) => (
+                  <div key={task.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                          <span className={`px-2 py-1 rounded-full text-[11px] font-semibold uppercase border ${careTaskPriorityStyles[task.priority] || careTaskPriorityStyles.low}`}>
+                            {task.priority}
+                          </span>
+                          <span className={`px-2 py-1 rounded-full text-[11px] font-semibold uppercase border ${careTaskStatusStyles[task.status] || careTaskStatusStyles.open}`}>
+                            {String(task.status || 'open').replace('_', ' ')}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-700">{task.summary || 'Maternity escalation task created from safety checks.'}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Source: {String(task.source_type || 'manual').replace(/_/g, ' ')}
+                          {task.last_event_at ? ` • Updated ${new Date(task.last_event_at).toLocaleString()}` : ''}
+                        </p>
+                      </div>
+                      {task.latest_note && (
+                        <div className="max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          {task.latest_note}
+                        </div>
+                      )}
+                    </div>
+                    {(task.required_actions?.length ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Required actions</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {task.required_actions.map((action: string, index: number) => (
+                            <span key={`${task.id}-action-${index}`} className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs text-slate-700">
+                              {action}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(task.rule_trace?.length ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rule trace</p>
+                        <div className="mt-2 space-y-1">
+                          {task.rule_trace.slice(0, 3).map((trace: any, index: number) => (
+                            <p key={`${task.id}-trace-${index}`} className="text-xs text-slate-600">
+                              {String(trace?.severity || 'warning').toUpperCase()}: {trace?.message || trace?.rule_id}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title="Care Plan" icon={<ClipboardList className="w-5 h-5" />}>
@@ -1247,7 +1344,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
               <Divider />
               <p>
                 <strong>Recommended follow-up:</strong>{' '}
-                {enrollment.days_to_edd != null && enrollment.days_to_edd <= 30
+                {activeCareTasks.length > 0
+                  ? `Resolve ${activeCareTasks.length} open escalation task${activeCareTasks.length > 1 ? 's' : ''} and document doctor action back to the nurse workflow.`
+                  : enrollment.days_to_edd != null && enrollment.days_to_edd <= 30
                   ? 'Schedule delivery planning review within the next week.'
                   : 'Continue routine ANC schedule and monitor risk indicators.'}
               </p>

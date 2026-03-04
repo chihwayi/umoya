@@ -3712,6 +3712,43 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getMaternityCareTasks: async (
+    tenantSlug: string,
+    token: string,
+    filters?: {
+      status?: 'open' | 'acknowledged' | 'actioned' | 'closed';
+      priority?: 'low' | 'medium' | 'high' | 'critical';
+    },
+  ) => {
+    const response = await ehrAxios.get('/maternity/care-tasks', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      },
+      params: filters,
+    });
+    return { data: response.data };
+  },
+
+  updateMaternityCareTaskStatus: async (
+    tenantSlug: string,
+    token: string,
+    taskId: string,
+    payload: {
+      status: 'open' | 'acknowledged' | 'actioned' | 'closed';
+      note?: string;
+      assigned_to?: string;
+    },
+  ) => {
+    const response = await ehrAxios.patch(`/maternity/care-tasks/${taskId}/status`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // Maternity Indicators
   getMaternityIndicators: async (tenantSlug: string, token: string, startDate?: string, endDate?: string) => {
     const response = await ehrAxios.get('/maternity/indicators', {

@@ -16,6 +16,7 @@ import {
   Brain,
   Activity,
   CheckCircle,
+  ClipboardList,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -48,6 +49,7 @@ interface MaternityDashboardProps {
 
 export default function MaternityDashboard({ tenantSlug, token }: MaternityDashboardProps) {
   const [enrollments, setEnrollments] = useState<MaternityEnrollment[]>([]);
+  const [careTasks, setCareTasks] = useState<any[]>([]);
   const [highRiskPregnancies, setHighRiskPregnancies] = useState<any[]>([]);
   const [upcomingDeliveries, setUpcomingDeliveries] = useState<any[]>([]);
   const [overdueAnc, setOverdueAnc] = useState<any[]>([]);
@@ -86,6 +88,9 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
 
       const enrollmentsRes = await ehrApi.getMaternityEnrollments(tenantSlug, token, enrollmentFilters);
       setEnrollments(enrollmentsRes.data.enrollments || []);
+
+      const careTasksRes = await ehrApi.getMaternityCareTasks(tenantSlug, token);
+      setCareTasks(careTasksRes.data?.tasks || []);
 
       // Load high-risk pregnancies
       const highRiskRes = await ehrApi.getHighRiskPregnancies(tenantSlug, token);
@@ -228,6 +233,12 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
   const queueSummary = useMemo(
     () => [
       {
+        title: 'Active Escalations',
+        value: careTasks.length,
+        tone: 'from-red-600 to-rose-600',
+        icon: <ClipboardList className="w-4 h-4" />,
+      },
+      {
         title: 'EDD in 14 days',
         value: dueSoonList.length,
         tone: 'from-orange-500 to-amber-500',
@@ -246,7 +257,24 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
         icon: <BellRing className="w-4 h-4" />,
       },
     ],
-    [dueSoonList.length, overdueEDDList.length, overdueAnc.length],
+    [careTasks.length, dueSoonList.length, overdueEDDList.length, overdueAnc.length],
+  );
+
+  const careTasksByEnrollment = useMemo(() => {
+    return careTasks.reduce<Record<string, any[]>>((acc, task) => {
+      const key = String(task?.maternity_enrollment_id || '');
+      if (!key) return acc;
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(task);
+      return acc;
+    }, {});
+  }, [careTasks]);
+
+  const criticalEscalations = useMemo(
+    () => careTasks.filter((task) => task.priority === 'critical'),
+    [careTasks],
   );
 
   const displayedEnrollments = filteredEnrollments;
@@ -311,6 +339,16 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
       });
     }
 
+    if (criticalEscalations.length > 0) {
+      prompts.push({
+        title: 'Doctor action outstanding',
+        description: `${criticalEscalations.length} maternity escalations are critical and still open in the shared workflow.`,
+        tone: 'from-red-600 to-rose-600',
+        icon: <ClipboardList className="w-5 h-5" />,
+        action: 'Review escalation timeline',
+      });
+    }
+
     const ancBelowFour = displayedEnrollments.filter((row) => (row.anc_visit_count ?? 0) < 4 && row.enrollment_status === 'active');
     if (ancBelowFour.length > 0) {
       prompts.push({
@@ -351,7 +389,7 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
     }
 
     return prompts.slice(0, 4);
-  }, [overdueAnc.length, displayedEnrollments, dueSoonList]);
+  }, [criticalEscalations.length, overdueAnc.length, displayedEnrollments, dueSoonList]);
 
   const insightBadges = useMemo(() => {
     if (!indicators) return [] as Array<{ label: string; value: string | number; icon: React.ReactNode; tone: string; helper?: string }>;
@@ -617,6 +655,67 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
         ))}
       </div>
 
+      <div className="bg-white rounded-lg border border-red-100 shadow p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-xl text-red-600">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Shared Escalation Queue</h3>
+              <p className="text-sm text-slate-500">Doctor and nurse workflow sync for CDSS-triggered maternity reviews.</p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-red-500">
+            {careTasks.length} active
+          </span>
+        </div>
+        {careTasks.length === 0 ? (
+          <p className="text-sm text-slate-500">No active maternity escalation tasks.</p>
+        ) : (
+          <div className="space-y-3">
+            {careTasks.slice(0, 5).map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => {
+                  setSelectedEnrollmentId(task.maternity_enrollment_id);
+                  setShowEnrollmentDetail(true);
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left hover:border-pink-200 hover:bg-pink-50 transition-colors"
+              >
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                      <span className={`px-2 py-1 rounded-full text-[11px] font-semibold uppercase ${
+                        task.priority === 'critical'
+                          ? 'bg-red-100 text-red-700'
+                          : task.priority === 'high'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {task.priority}
+                      </span>
+                      <span className="px-2 py-1 rounded-full text-[11px] font-semibold uppercase bg-white border border-slate-200 text-slate-600">
+                        {String(task.status || 'open').replace('_', ' ')}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-700">{task.patient_name} • {task.patient_number}</p>
+                    <p className="mt-1 text-xs text-slate-500">{task.summary || 'Open maternity safety task.'}</p>
+                  </div>
+                  {(task.required_actions?.length ?? 0) > 0 && (
+                    <p className="max-w-sm text-xs text-slate-600">
+                      Required: {task.required_actions.slice(0, 2).join(' | ')}
+                    </p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {insightBadges.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {insightBadges.map((badge) => (
@@ -782,6 +881,8 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
             {displayedEnrollments.map((enrollment) => {
               const isSelected = selectedIds.includes(enrollment.id);
               const evaluation = evaluateRisk(enrollment);
+              const enrollmentCareTasks = careTasksByEnrollment[enrollment.id] || [];
+              const criticalEnrollmentTasks = enrollmentCareTasks.filter((task) => task.priority === 'critical');
               const riskHighlight =
                 evaluation.level === 'critical' ? 'ring-2 ring-red-400 border-red-400' :
                 evaluation.level === 'high' ? 'ring-2 ring-orange-400 border-orange-300' :
@@ -824,6 +925,17 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
                       >
                         {evaluation.level.toUpperCase()} • Score {evaluation.score}
                       </span>
+                      {enrollmentCareTasks.length > 0 && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${
+                          criticalEnrollmentTasks.length > 0
+                            ? 'bg-red-100 text-red-700 border-red-300'
+                            : 'bg-sky-100 text-sky-700 border-sky-300'
+                        }`}>
+                          {criticalEnrollmentTasks.length > 0
+                            ? `${criticalEnrollmentTasks.length} critical escalation${criticalEnrollmentTasks.length > 1 ? 's' : ''}`
+                            : `${enrollmentCareTasks.length} active escalation${enrollmentCareTasks.length > 1 ? 's' : ''}`}
+                        </span>
+                      )}
                       {getStatusBadge(enrollment.enrollment_status)}
                     </div>
 
@@ -918,6 +1030,25 @@ export default function MaternityDashboard({ tenantSlug, token }: MaternityDashb
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {enrollmentCareTasks.length > 0 && (
+                    <div className="mt-3 bg-white/70 border border-pink-100 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-pink-600 uppercase tracking-wide mb-2">CDSS Escalation Sync</p>
+                      <div className="space-y-2">
+                        {enrollmentCareTasks.slice(0, 2).map((task) => (
+                          <div key={task.id} className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{task.title}</p>
+                              <p className="text-xs text-slate-500">{task.summary || 'Escalation open for doctor review.'}</p>
+                            </div>
+                            <span className="text-xs font-semibold uppercase text-slate-600">
+                              {String(task.status || 'open').replace('_', ' ')} • {task.priority}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
               </div>

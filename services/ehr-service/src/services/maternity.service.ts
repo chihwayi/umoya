@@ -9,26 +9,41 @@ interface StoredConceptSummary {
   definitionStatus?: string;
 }
 
-interface MaternityPrecheckIssue {
+export interface MaternityPrecheckIssue {
   code: string;
   field?: string;
   message: string;
   guideline_reference?: string;
 }
 
-interface MaternityPrecheckTrace {
+export interface MaternityPrecheckTrace {
   rule_id: string;
   severity: 'blocker' | 'warning';
   message: string;
 }
 
-interface MaternityPrecheckResponse {
+export interface MaternityPrecheckResponse {
   blockers: MaternityPrecheckIssue[];
   warnings: MaternityPrecheckIssue[];
   required_actions: string[];
   suggested_orders: string[];
   doctor_escalation_required: boolean;
   trace: MaternityPrecheckTrace[];
+}
+
+type MaternityCareTaskStatus = 'open' | 'acknowledged' | 'actioned' | 'closed';
+type MaternityCareTaskPriority = 'low' | 'medium' | 'high' | 'critical';
+type MaternityCareTaskSource =
+  | 'anc_visit'
+  | 'delivery'
+  | 'postnatal_visit'
+  | 'risk_factor'
+  | 'manual';
+
+interface MaternityCareTaskFilters {
+  status?: MaternityCareTaskStatus;
+  priority?: MaternityCareTaskPriority;
+  enrollmentId?: string;
 }
 
 @Injectable()
@@ -69,6 +84,194 @@ export class MaternityService {
       return raw === 'true';
     }
     return Boolean(raw);
+  }
+
+  private assertPrecheckAllowsPersistence(
+    precheck: MaternityPrecheckResponse,
+    warningsAcknowledged: any,
+    contextLabel: string,
+  ): void {
+    const blockers = Array.isArray(precheck?.blockers) ? precheck.blockers : [];
+    const warnings = Array.isArray(precheck?.warnings) ? precheck.warnings : [];
+
+    if (blockers.length > 0) {
+      throw new BadRequestException(
+        `${contextLabel} blocked: ${blockers[0]?.message || 'Safety validation failed.'}`,
+      );
+    }
+
+    if (warnings.length > 0 && !this.normalizeBoolean(warningsAcknowledged)) {
+      throw new BadRequestException(
+        `${contextLabel} has safety warnings that must be acknowledged before saving.`,
+      );
+    }
+  }
+
+  private deriveCareTaskPriority(precheck: MaternityPrecheckResponse): MaternityCareTaskPriority {
+    if ((precheck.blockers?.length ?? 0) > 0) {
+      return 'critical';
+    }
+
+    const highSignal = [...(precheck.trace ?? []), ...(precheck.warnings ?? [])].some((item: any) => {
+      const text = `${item?.rule_id || ''} ${item?.code || ''} ${item?.message || ''}`.toLowerCase();
+      return (
+        text.includes('severe') ||
+        text.includes('death') ||
+        text.includes('hemorrhage') ||
+        text.includes('eclamps') ||
+        text.includes('urgent')
+      );
+    });
+
+    return highSignal ? 'critical' : 'high';
+  }
+
+  private async upsertMaternityCareTask(
+    tenantDb: DataSource,
+    input: {
+      enrollmentId: string;
+      patientId: string;
+      sourceType: MaternityCareTaskSource;
+      sourceRecordId?: string | null;
+      createdBy?: string | null;
+      title: string;
+      summary?: string | null;
+      priority: MaternityCareTaskPriority;
+      blockerCount?: number;
+      warningCount?: number;
+      requiredActions?: string[];
+      suggestedOrders?: string[];
+      ruleTrace?: MaternityPrecheckTrace[];
+      taskContext?: Record<string, any>;
+    },
+  ) {
+    const sourceRecordId = this.normalizeString(input.sourceRecordId);
+    const existingTask =
+      sourceRecordId
+        ? await tenantDb.query(
+            `
+            SELECT id
+            FROM maternity_care_tasks
+            WHERE source_type = $1
+              AND source_record_id = $2
+              AND status IN ('open', 'acknowledged', 'actioned')
+            ORDER BY created_at DESC
+            LIMIT 1
+            `,
+            [input.sourceType, sourceRecordId],
+          )
+        : [];
+
+    const payload = [
+      input.priority,
+      input.title,
+      input.summary || null,
+      input.blockerCount || 0,
+      input.warningCount || 0,
+      JSON.stringify(input.requiredActions ?? []),
+      JSON.stringify(input.suggestedOrders ?? []),
+      JSON.stringify(input.ruleTrace ?? []),
+      JSON.stringify(input.taskContext ?? {}),
+    ];
+
+    if (existingTask.length > 0) {
+      const updated = await tenantDb.query(
+        `
+        UPDATE maternity_care_tasks
+        SET priority = $1,
+            title = $2,
+            summary = $3,
+            blocker_count = $4,
+            warning_count = $5,
+            required_actions = $6::jsonb,
+            suggested_orders = $7::jsonb,
+            rule_trace = $8::jsonb,
+            task_context = $9::jsonb,
+            last_event_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $10
+        RETURNING *
+        `,
+        [...payload, existingTask[0].id],
+      );
+      return updated[0];
+    }
+
+    const inserted = await tenantDb.query(
+      `
+      INSERT INTO maternity_care_tasks (
+        maternity_enrollment_id,
+        patient_id,
+        source_type,
+        source_record_id,
+        status,
+        priority,
+        title,
+        summary,
+        blocker_count,
+        warning_count,
+        required_actions,
+        suggested_orders,
+        rule_trace,
+        task_context,
+        created_by,
+        last_event_at
+      )
+      VALUES (
+        $1, $2, $3, $4, 'open', $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14, NOW()
+      )
+      RETURNING *
+      `,
+      [
+        input.enrollmentId,
+        input.patientId,
+        input.sourceType,
+        sourceRecordId,
+        ...payload,
+        input.createdBy || null,
+      ],
+    );
+
+    return inserted[0];
+  }
+
+  private async createEscalationTaskFromPrecheck(
+    tenantDb: DataSource,
+    input: {
+      enrollmentId: string;
+      patientId: string;
+      sourceType: MaternityCareTaskSource;
+      sourceRecordId: string;
+      createdBy?: string | null;
+      title: string;
+      summary: string;
+      precheck: MaternityPrecheckResponse;
+      taskContext?: Record<string, any>;
+    },
+  ) {
+    if (!input.precheck?.doctor_escalation_required) {
+      return null;
+    }
+
+    return this.upsertMaternityCareTask(tenantDb, {
+      enrollmentId: input.enrollmentId,
+      patientId: input.patientId,
+      sourceType: input.sourceType,
+      sourceRecordId: input.sourceRecordId,
+      createdBy: input.createdBy,
+      title: input.title,
+      summary: input.summary,
+      priority: this.deriveCareTaskPriority(input.precheck),
+      blockerCount: input.precheck.blockers?.length ?? 0,
+      warningCount: input.precheck.warnings?.length ?? 0,
+      requiredActions: input.precheck.required_actions ?? [],
+      suggestedOrders: input.precheck.suggested_orders ?? [],
+      ruleTrace: input.precheck.trace ?? [],
+      taskContext: {
+        doctorEscalationRequired: true,
+        ...(input.taskContext ?? {}),
+      },
+    });
   }
 
   private async validateVitalsProvenanceForPersistence(
@@ -472,6 +675,9 @@ export class MaternityService {
     // Get risk factors
     const riskFactors = await this.getEnrollmentRiskFactors(tenantDb, enrollmentId);
 
+    // Get maternity care tasks
+    const careTasks = await this.getEnrollmentMaternityCareTasks(tenantDb, enrollmentId);
+
     return {
       ...enrollment[0],
       anc_visits: ancVisits.visits || [],
@@ -479,6 +685,7 @@ export class MaternityService {
       delivery: delivery || null,
       postnatal_visits: postnatalVisits.visits || [],
       risk_factors: riskFactors.riskFactors || [],
+      care_tasks: careTasks.tasks || [],
     };
   }
 
@@ -1446,6 +1653,13 @@ export class MaternityService {
   // ===== ANC VISITS =====
 
   async createANCVisit(tenantDb: DataSource, visitData: any, userId?: string) {
+    const precheck = await this.precheckANCVisit(tenantDb, visitData);
+    this.assertPrecheckAllowsPersistence(
+      precheck,
+      visitData?.safety_warnings_acknowledged,
+      'ANC visit',
+    );
+
     const {
       maternity_enrollment_id,
       patient_id,
@@ -1578,8 +1792,25 @@ export class MaternityService {
       ],
     );
 
+    const createdVisit = result[0];
+
+    await this.createEscalationTaskFromPrecheck(tenantDb, {
+      enrollmentId: maternity_enrollment_id,
+      patientId: patient_id,
+      sourceType: 'anc_visit',
+      sourceRecordId: createdVisit.id,
+      createdBy: userId,
+      title: 'ANC visit requires doctor review',
+      summary: `ANC visit #${visit_number} recorded on ${visit_date} triggered maternity safety escalation.`,
+      precheck,
+      taskContext: {
+        visitNumber: visit_number,
+        visitDate: visit_date,
+      },
+    });
+
     this.logger.log(`Created ANC visit #${visit_number} for enrollment ${maternity_enrollment_id}`);
-    return result[0];
+    return createdVisit;
   }
 
   async getEnrollmentANCVisits(tenantDb: DataSource, enrollmentId: string) {
@@ -1869,6 +2100,13 @@ export class MaternityService {
   // ===== DELIVERIES =====
 
   async createDelivery(tenantDb: DataSource, deliveryData: any, userId?: string) {
+    const precheck = await this.precheckDelivery(tenantDb, deliveryData);
+    this.assertPrecheckAllowsPersistence(
+      precheck,
+      deliveryData?.safety_warnings_acknowledged,
+      'Delivery',
+    );
+
     const {
       maternity_enrollment_id,
       patient_id,
@@ -1974,8 +2212,24 @@ export class MaternityService {
       [maternity_enrollment_id],
     );
 
+    const createdDelivery = result[0];
+    await this.createEscalationTaskFromPrecheck(tenantDb, {
+      enrollmentId: maternity_enrollment_id,
+      patientId: patient_id,
+      sourceType: 'delivery',
+      sourceRecordId: createdDelivery.id,
+      createdBy: userId,
+      title: 'Delivery event requires senior review',
+      summary: `Delivery recorded on ${delivery_date} triggered maternity safety escalation.`,
+      precheck,
+      taskContext: {
+        deliveryDate: delivery_date,
+        deliveryType: deliveryFields.delivery_type,
+      },
+    });
+
     this.logger.log(`Created delivery record for enrollment ${maternity_enrollment_id}`);
-    return result[0];
+    return createdDelivery;
   }
 
   async getDeliveryById(tenantDb: DataSource, deliveryId: string) {
@@ -2101,6 +2355,22 @@ export class MaternityService {
   }
 
   async createBirthOutcome(tenantDb: DataSource, deliveryId: string, birthData: any) {
+    const precheck = await this.precheckBirthOutcome(tenantDb, {
+      delivery_id: deliveryId,
+      ...birthData,
+    });
+    this.assertPrecheckAllowsPersistence(
+      precheck,
+      birthData?.safety_warnings_acknowledged,
+      'Birth outcome',
+    );
+
+    const deliveryRows = await tenantDb.query(
+      `SELECT maternity_enrollment_id, patient_id FROM deliveries WHERE id = $1 LIMIT 1`,
+      [deliveryId],
+    );
+    const delivery = deliveryRows[0] || null;
+
     const {
       birth_order,
       birth_outcome,
@@ -2187,13 +2457,38 @@ export class MaternityService {
       ],
     );
 
+    const createdBirthOutcome = result[0];
+    if (delivery) {
+      await this.createEscalationTaskFromPrecheck(tenantDb, {
+        enrollmentId: delivery.maternity_enrollment_id,
+        patientId: delivery.patient_id,
+        sourceType: 'delivery',
+        sourceRecordId: deliveryId,
+        title: 'Birth outcome requires doctor review',
+        summary: `Birth outcome #${birth_order || 1} triggered neonatal or maternal follow-up workflow.`,
+        precheck,
+        taskContext: {
+          birthOutcomeId: createdBirthOutcome.id,
+          birthOrder: birth_order || 1,
+          birthOutcome: birth_outcome || 'live_birth',
+        },
+      });
+    }
+
     this.logger.log(`Created birth outcome for delivery ${deliveryId}, birth order ${birth_order || 1}`);
-    return result[0];
+    return createdBirthOutcome;
   }
 
   // ===== POSTNATAL VISITS =====
 
   async createPostnatalVisit(tenantDb: DataSource, visitData: any, userId?: string) {
+    const precheck = await this.precheckPostnatalVisit(tenantDb, visitData);
+    this.assertPrecheckAllowsPersistence(
+      precheck,
+      visitData?.safety_warnings_acknowledged,
+      'Postnatal visit',
+    );
+
     const {
       maternity_enrollment_id,
       delivery_id,
@@ -2302,8 +2597,25 @@ export class MaternityService {
       ],
     );
 
+    const createdVisit = result[0];
+
+    await this.createEscalationTaskFromPrecheck(tenantDb, {
+      enrollmentId: maternity_enrollment_id,
+      patientId: patient_id,
+      sourceType: 'postnatal_visit',
+      sourceRecordId: createdVisit.id,
+      createdBy: userId,
+      title: 'Postnatal visit requires doctor review',
+      summary: `Postnatal visit recorded on ${visit_date} triggered maternity safety escalation.`,
+      precheck,
+      taskContext: {
+        visitDate: visit_date,
+        daysPostpartum,
+      },
+    });
+
     this.logger.log(`Created postnatal visit for enrollment ${maternity_enrollment_id}, day ${daysPostpartum}`);
-    return result[0];
+    return createdVisit;
   }
 
   async getEnrollmentPostnatalVisits(tenantDb: DataSource, enrollmentId: string) {
@@ -2405,6 +2717,14 @@ export class MaternityService {
   async addRiskFactor(tenantDb: DataSource, enrollmentId: string, riskData: any, userId?: string) {
     const { risk_factor, risk_category, severity, identified_date, notes, risk_factor_snomed } = riskData;
 
+    const enrollmentRows = await tenantDb.query(
+      `SELECT patient_id FROM maternity_enrollments WHERE id = $1 LIMIT 1`,
+      [enrollmentId],
+    );
+    if (enrollmentRows.length === 0) {
+      throw new NotFoundException(`Enrollment with ID ${enrollmentId} not found`);
+    }
+
     const riskConcept = await this.resolveConcept(tenantDb, risk_factor_snomed);
 
     const result = await tenantDb.query(
@@ -2445,6 +2765,26 @@ export class MaternityService {
       );
     }
 
+    if (severity === 'high') {
+      await this.upsertMaternityCareTask(tenantDb, {
+        enrollmentId,
+        patientId: enrollmentRows[0].patient_id,
+        sourceType: 'risk_factor',
+        sourceRecordId: result[0].id,
+        createdBy: userId,
+        title: 'High-severity maternity risk factor requires review',
+        summary: `${risk_factor || riskConcept?.term || 'High-severity risk factor'} was added to the maternity record.`,
+        priority: 'high',
+        warningCount: 1,
+        requiredActions: ['Doctor review and documented management plan required.'],
+        taskContext: {
+          riskCategory: risk_category,
+          severity,
+          identifiedDate: identified_date,
+        },
+      });
+    }
+
     this.logger.log(`Added risk factor to enrollment ${enrollmentId}: ${risk_factor}`);
     return result[0];
   }
@@ -2465,6 +2805,133 @@ export class MaternityService {
     );
 
     return { riskFactors, total: riskFactors.length };
+  }
+
+  async getMaternityCareTasks(
+    tenantDb: DataSource,
+    filters: MaternityCareTaskFilters = {},
+  ) {
+    const params: any[] = [];
+    const whereClauses: string[] = ['1=1'];
+
+    if (filters.enrollmentId) {
+      params.push(filters.enrollmentId);
+      whereClauses.push(`t.maternity_enrollment_id = $${params.length}`);
+    }
+
+    if (filters.status) {
+      params.push(filters.status);
+      whereClauses.push(`t.status = $${params.length}`);
+    } else {
+      whereClauses.push(`t.status != 'closed'`);
+    }
+
+    if (filters.priority) {
+      params.push(filters.priority);
+      whereClauses.push(`t.priority = $${params.length}`);
+    }
+
+    const tasks = await tenantDb.query(
+      `
+      SELECT
+        t.*,
+        p.first_name || ' ' || p.last_name as patient_name,
+        p.patient_number,
+        me.enrollment_number,
+        creator.first_name || ' ' || creator.last_name as created_by_name,
+        ack_u.first_name || ' ' || ack_u.last_name as acknowledged_by_name,
+        action_u.first_name || ' ' || action_u.last_name as actioned_by_name,
+        close_u.first_name || ' ' || close_u.last_name as closed_by_name
+      FROM maternity_care_tasks t
+      INNER JOIN patients p ON p.id = t.patient_id
+      INNER JOIN maternity_enrollments me ON me.id = t.maternity_enrollment_id
+      LEFT JOIN users creator ON creator.id = t.created_by
+      LEFT JOIN users ack_u ON ack_u.id = t.acknowledged_by
+      LEFT JOIN users action_u ON action_u.id = t.actioned_by
+      LEFT JOIN users close_u ON close_u.id = t.closed_by
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY
+        CASE t.priority
+          WHEN 'critical' THEN 4
+          WHEN 'high' THEN 3
+          WHEN 'medium' THEN 2
+          ELSE 1
+        END DESC,
+        t.last_event_at DESC,
+        t.created_at DESC
+      `,
+      params,
+    );
+
+    return { tasks, total: tasks.length };
+  }
+
+  async getEnrollmentMaternityCareTasks(tenantDb: DataSource, enrollmentId: string) {
+    return this.getMaternityCareTasks(tenantDb, { enrollmentId, status: undefined });
+  }
+
+  async updateMaternityCareTaskStatus(
+    tenantDb: DataSource,
+    taskId: string,
+    body: {
+      status?: MaternityCareTaskStatus;
+      note?: string;
+      assigned_to?: string;
+    },
+    actorId?: string | null,
+  ) {
+    const nextStatus = this.normalizeString(body?.status) as MaternityCareTaskStatus | null;
+    if (!nextStatus || !['open', 'acknowledged', 'actioned', 'closed'].includes(nextStatus)) {
+      throw new BadRequestException('Valid maternity care task status is required.');
+    }
+
+    const existingRows = await tenantDb.query(
+      `SELECT id, status FROM maternity_care_tasks WHERE id = $1 LIMIT 1`,
+      [taskId],
+    );
+    if (existingRows.length === 0) {
+      throw new NotFoundException(`Maternity care task with ID ${taskId} not found`);
+    }
+
+    const currentStatus = existingRows[0].status as MaternityCareTaskStatus;
+    const allowedTransitions: Record<MaternityCareTaskStatus, MaternityCareTaskStatus[]> = {
+      open: ['acknowledged', 'actioned', 'closed'],
+      acknowledged: ['actioned', 'closed'],
+      actioned: ['closed'],
+      closed: [],
+    };
+
+    if (currentStatus !== nextStatus && !allowedTransitions[currentStatus].includes(nextStatus)) {
+      throw new BadRequestException(
+        `Cannot move maternity care task from ${currentStatus} to ${nextStatus}.`,
+      );
+    }
+
+    const note = this.normalizeString(body?.note);
+    const assignedTo = this.normalizeString(body?.assigned_to);
+
+    const result = await tenantDb.query(
+      `
+      UPDATE maternity_care_tasks
+      SET status = $1,
+          assigned_to = COALESCE($2, assigned_to),
+          latest_note = COALESCE($3, latest_note),
+          acknowledged_by = CASE WHEN $1 = 'acknowledged' THEN $4 ELSE acknowledged_by END,
+          acknowledged_at = CASE WHEN $1 = 'acknowledged' AND acknowledged_at IS NULL THEN NOW() ELSE acknowledged_at END,
+          actioned_by = CASE WHEN $1 = 'actioned' THEN $4 ELSE actioned_by END,
+          actioned_at = CASE WHEN $1 = 'actioned' AND actioned_at IS NULL THEN NOW() ELSE actioned_at END,
+          closed_by = CASE WHEN $1 = 'closed' THEN $4 ELSE closed_by END,
+          closed_at = CASE WHEN $1 = 'closed' AND closed_at IS NULL THEN NOW() ELSE closed_at END,
+          closed_reason = CASE WHEN $1 = 'closed' THEN COALESCE($3, closed_reason) ELSE closed_reason END,
+          last_event_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $5
+      RETURNING *
+      `,
+      [nextStatus, assignedTo, note, actorId || null, taskId],
+    );
+
+    return result[0];
   }
 
   // ===== INDICATORS & REPORTS =====

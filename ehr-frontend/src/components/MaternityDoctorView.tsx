@@ -28,6 +28,7 @@ interface MaternityDoctorViewProps {
 }
 
 export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoctorViewProps) {
+  const [careTasks, setCareTasks] = useState<any[]>([]);
   const [highRiskPregnancies, setHighRiskPregnancies] = useState<any[]>([]);
   const [upcomingDeliveries, setUpcomingDeliveries] = useState<any[]>([]);
   const [overdueANC, setOverdueANC] = useState<any[]>([]);
@@ -35,6 +36,7 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
   const [neonatalOutcomes, setNeonatalOutcomes] = useState<any[]>([]);
   const [postnatalVisits, setPostnatalVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'high-risk' | 'deliveries' | 'overdue'>('high-risk');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
@@ -44,15 +46,17 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
+
+      const careTasksRes = await ehrApi.getMaternityCareTasks(tenantSlug, token);
+      const taskRows = Array.isArray(careTasksRes?.data)
+        ? careTasksRes?.data
+        : careTasksRes?.data?.tasks || [];
+      setCareTasks(taskRows);
 
       const highRiskRes = await ehrApi.getHighRiskPregnancies(tenantSlug, token);
       const highRiskRows = Array.isArray(highRiskRes?.data)
@@ -92,7 +96,11 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError, tenantSlug, token]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const getRiskBadge = (riskCategory: string) => {
     const styles = {
@@ -211,6 +219,12 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
 
     return [
       {
+        label: 'Active Escalations',
+        value: careTasks.length,
+        tone: 'from-red-600 to-rose-600',
+        icon: <ClipboardList className="w-5 h-5" />,
+      },
+      {
         label: 'High-Risk Cases',
         value: highRiskTotal,
         tone: 'from-red-500 to-rose-500',
@@ -235,10 +249,20 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
         icon: <TrendingUp className="w-5 h-5" />,
       },
     ];
-  }, [highRiskPregnancies.length, upcomingDeliveries.length, overdueANC.length, indicators, laborQueue.length]);
+  }, [careTasks.length, highRiskPregnancies.length, upcomingDeliveries.length, overdueANC.length, indicators]);
 
   const clinicalPrompts = useMemo(() => {
     const prompts: Array<{ title: string; description: string; icon: React.ReactNode; tone: string }> = [];
+
+    const criticalEscalations = careTasks.filter((task) => task.priority === 'critical');
+    if (criticalEscalations.length > 0) {
+      prompts.push({
+        title: 'Critical escalations',
+        description: `${criticalEscalations.length} maternity escalations are marked critical and need senior doctor action.`,
+        icon: <AlertTriangle className="w-5 h-5" />,
+        tone: 'from-red-600 to-rose-600',
+      });
+    }
 
     if (laborQueue.length > 0) {
       prompts.push({
@@ -260,12 +284,29 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
     }
 
     return prompts;
-  }, [laborQueue, overdueANC]);
+  }, [careTasks, laborQueue, overdueANC]);
 
   const openEnrollmentDetail = useCallback((id: string) => {
     setSelectedEnrollmentId(id);
     setShowDetailModal(true);
   }, []);
+
+  const handleTaskTransition = useCallback(
+    async (taskId: string, status: 'acknowledged' | 'actioned' | 'closed') => {
+      try {
+        setUpdatingTaskId(taskId);
+        await ehrApi.updateMaternityCareTaskStatus(tenantSlug, token, taskId, { status });
+        showSuccess('Care task updated', `Task moved to ${status}.`);
+        await loadData();
+      } catch (error) {
+        console.error('Failed to update maternity care task', error);
+        showError('Unable to update maternity care task', 'Please retry.');
+      } finally {
+        setUpdatingTaskId(null);
+      }
+    },
+    [loadData, showError, showSuccess, tenantSlug, token],
+  );
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -336,6 +377,100 @@ export default function MaternityDoctorView({ tenantSlug, token }: MaternityDoct
           </div>
         </div>
       )}
+
+      <div className="bg-white rounded-lg border border-slate-200 shadow p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-slate-700">
+            <ClipboardList className="w-5 h-5" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide">Active Escalations</h3>
+          </div>
+          <span className="text-xs text-slate-500">{careTasks.length} active</span>
+        </div>
+        {careTasks.length === 0 ? (
+          <p className="text-sm text-slate-500">No open maternity escalation tasks.</p>
+        ) : (
+          <div className="space-y-3">
+            {careTasks.map((task: any) => (
+              <div
+                key={task.id}
+                className={`rounded-xl border p-4 ${
+                  task.priority === 'critical'
+                    ? 'border-red-200 bg-red-50/70'
+                    : task.priority === 'high'
+                      ? 'border-amber-200 bg-amber-50/70'
+                      : 'border-slate-200 bg-slate-50'
+                }`}
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-900">{task.title}</h3>
+                      <span
+                        className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${
+                          task.priority === 'critical'
+                            ? 'bg-red-100 text-red-700'
+                            : task.priority === 'high'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {task.priority}
+                      </span>
+                      <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold uppercase text-slate-600">
+                        {String(task.status || 'open').replace('_', ' ')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-700">{task.summary || 'Escalation pending review.'}</p>
+                    <p className="text-xs text-slate-500">
+                      {task.patient_name} • {task.patient_number} • {task.enrollment_number}
+                    </p>
+                    {(task.required_actions?.length ?? 0) > 0 && (
+                      <p className="text-xs text-slate-600">
+                        Required: {task.required_actions.slice(0, 2).join(' | ')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {task.status === 'open' && (
+                      <button
+                        onClick={() => handleTaskTransition(task.id, 'acknowledged')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                      >
+                        Acknowledge
+                      </button>
+                    )}
+                    {(task.status === 'open' || task.status === 'acknowledged') && (
+                      <button
+                        onClick={() => handleTaskTransition(task.id, 'actioned')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        Mark Actioned
+                      </button>
+                    )}
+                    {task.status !== 'closed' && (
+                      <button
+                        onClick={() => handleTaskTransition(task.id, 'closed')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        Close
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEnrollmentDetail(task.maternity_enrollment_id)}
+                      className="rounded-lg border border-pink-200 bg-white px-3 py-2 text-xs font-semibold text-pink-600 hover:bg-pink-50"
+                    >
+                      Open Chart
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* AI Guideline Search Panel */}
       <div className="bg-white rounded-lg border border-indigo-100 shadow p-5">

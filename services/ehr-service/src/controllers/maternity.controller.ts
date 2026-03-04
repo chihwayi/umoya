@@ -297,6 +297,43 @@ export class MaternityController {
     return this.maternityService.getEnrollmentRiskFactors(req.tenantDb, enrollmentId);
   }
 
+  @Get('care-tasks')
+  @ApiOperation({ summary: 'Get maternity escalation care tasks' })
+  @ApiResponse({ status: 200, description: 'Maternity care tasks list' })
+  async getMaternityCareTasks(
+    @Request() req: RequestWithTenant,
+    @Query('status') status?: 'open' | 'acknowledged' | 'actioned' | 'closed',
+    @Query('priority') priority?: 'low' | 'medium' | 'high' | 'critical',
+  ) {
+    return this.maternityService.getMaternityCareTasks(req.tenantDb, { status, priority });
+  }
+
+  @Get('enrollments/:enrollmentId/care-tasks')
+  @ApiOperation({ summary: 'Get maternity escalation care tasks for an enrollment' })
+  @ApiResponse({ status: 200, description: 'Enrollment maternity care tasks list' })
+  async getEnrollmentCareTasks(
+    @Request() req: RequestWithTenant,
+    @Param('enrollmentId') enrollmentId: string,
+  ) {
+    return this.maternityService.getEnrollmentMaternityCareTasks(req.tenantDb, enrollmentId);
+  }
+
+  @Patch('care-tasks/:id/status')
+  @ApiOperation({ summary: 'Update maternity care task workflow status' })
+  @ApiResponse({ status: 200, description: 'Maternity care task updated successfully' })
+  async updateMaternityCareTaskStatus(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: {
+      status?: 'open' | 'acknowledged' | 'actioned' | 'closed';
+      note?: string;
+      assigned_to?: string;
+    },
+  ) {
+    const userId = req.user?.userId || (req.user as any)?.id;
+    return this.maternityService.updateMaternityCareTaskStatus(req.tenantDb, id, body, userId);
+  }
+
   // ===== INDICATORS & REPORTS =====
 
   @Get('indicators')
