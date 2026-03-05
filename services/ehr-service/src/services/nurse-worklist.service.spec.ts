@@ -431,6 +431,55 @@ describe('NurseWorklistService', () => {
           ];
         }
 
+        if (sql.includes('FROM oncology_infusion_sessions ois')) {
+          return [
+            {
+              infusion_session_id: 'inf-1',
+              regimen_id: 'reg-1',
+              session_date: '2026-03-05T09:00:00.000Z',
+              session_status: 'scheduled',
+              payment_status: 'payment_confirmed',
+              cycle_number: 2,
+              session_notes: null,
+              regimen_record_id: 'reg-1',
+              regimen_name: 'Paclitaxel + Carboplatin',
+              regimen_status: 'active',
+              oncology_case_id: 'onco-case-1',
+              case_status: 'active',
+              primary_diagnosis: 'Breast carcinoma',
+              overall_stage: 'IIIB',
+              patient_id: 'patient-onc-1',
+              patient_name: 'Nyasha Maseko',
+              patient_number: 'P-600',
+              oncologist_name: 'Dr. Onco',
+              active_grade3_plus: 1,
+            },
+          ];
+        }
+
+        if (sql.includes('FROM oncology_adverse_events oae')) {
+          return [
+            {
+              adverse_event_id: 'ae-1',
+              oncology_case_id: 'onco-case-2',
+              regimen_id: 'reg-2',
+              event_date: '2026-03-04T11:00:00.000Z',
+              event_type: 'Neutropenia',
+              grade: '3',
+              notes: null,
+              action_taken: null,
+              outcome: null,
+              case_status: 'active',
+              primary_diagnosis: 'Lung adenocarcinoma',
+              overall_stage: 'IV',
+              regimen_name: 'Cisplatin + Pemetrexed',
+              patient_id: 'patient-onc-2',
+              patient_name: 'Sipho Dube',
+              patient_number: 'P-700',
+            },
+          ];
+        }
+
         return [];
       }),
     } as any;
@@ -438,22 +487,36 @@ describe('NurseWorklistService', () => {
     const result = await service.getCrossModuleEscalationFeed(tenantDb);
 
     expect(result.summary).toEqual({
-      total: 5,
-      critical: 1,
-      high: 4,
+      total: 7,
+      critical: 2,
+      high: 5,
       maternity: 1,
       hiv: 2,
+      oncology: 2,
       nursing: 2,
       handoff: 1,
       medication: 1,
     });
-    expect(result.items[0]).toEqual(
-      expect.objectContaining({
-        id: 'maternity:mat-task-1',
-        module: 'maternity',
-        severity: 'critical',
-        doctor_sync_status: 'awaiting_doctor_review',
-      }),
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'maternity:mat-task-1',
+          module: 'maternity',
+          severity: 'critical',
+          doctor_sync_status: 'awaiting_doctor_review',
+        }),
+      ]),
+    );
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'oncology-infusion:inf-1',
+          module: 'oncology',
+          item_type: 'oncology_infusion_followup',
+          severity: 'critical',
+          doctor_sync_status: 'oncologist_review_recommended',
+        }),
+      ]),
     );
     expect(result.items).toEqual(
       expect.arrayContaining([
@@ -470,6 +533,12 @@ describe('NurseWorklistService', () => {
           module: 'hiv',
           module_status: 'high_vl_needs_eac',
           recommended_action: expect.stringContaining('start eac'),
+        }),
+        expect.objectContaining({
+          id: 'oncology-toxicity:ae-1',
+          module: 'oncology',
+          item_type: 'oncology_toxicity_followup',
+          severity: 'high',
         }),
         expect.objectContaining({
           module: 'nursing',
@@ -1208,6 +1277,181 @@ describe('NurseWorklistService', () => {
       'user-1',
       'Nurse Joy',
       tenantDb,
+    );
+  });
+
+  it('executes oncology recommendation bundle actions and persists queue execution state', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[]) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM oncology_infusion_sessions ois') && params?.[0] === 'inf-1') {
+          return [
+            {
+              id: 'inf-1',
+              notes: null,
+              status: 'scheduled',
+              payment_status: 'payment_confirmed',
+              session_date: '2026-03-05T09:00:00.000Z',
+              cycle_number: 2,
+              regimen_id: 'reg-1',
+              regimen_name: 'Paclitaxel + Carboplatin',
+              case_id: 'onco-case-1',
+              patient_id: 'patient-onc-1',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE oncology_infusion_sessions')) {
+          return [
+            {
+              id: 'inf-1',
+              status: 'scheduled',
+              payment_status: 'payment_confirmed',
+              session_date: '2026-03-05T09:00:00.000Z',
+              regimen_id: 'reg-1',
+            },
+          ];
+        }
+        if (sql.includes('FROM oncology_adverse_events oae') && params?.[0] === 'ae-1') {
+          return [
+            {
+              id: 'ae-1',
+              case_id: 'onco-case-1',
+              regimen_id: 'reg-1',
+              event_type: 'Neutropenia',
+              grade: '3',
+              notes: null,
+              action_taken: null,
+              outcome: null,
+              patient_id: 'patient-onc-1',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE oncology_adverse_events')) {
+          return [
+            {
+              id: 'ae-1',
+              case_id: 'onco-case-1',
+              regimen_id: 'reg-1',
+              event_type: 'Neutropenia',
+              grade: '3',
+              outcome: 'pending_oncologist_review',
+            },
+          ];
+        }
+        if (sql.includes('SELECT id, patient_id, care_plan') && sql.includes('FROM oncology_cases')) {
+          return [{ id: 'onco-case-1', patient_id: 'patient-onc-1', care_plan: null }];
+        }
+        if (sql.includes('UPDATE oncology_cases')) {
+          return [
+            {
+              id: 'onco-case-1',
+              patient_id: 'patient-onc-1',
+              care_plan: 'Updated from queue',
+              status: 'active',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const infusionResult = await service.executeOncologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'oncology-infusion:inf-1',
+        itemType: 'oncology_infusion_followup',
+        sourceRecordId: 'inf-1',
+        patientId: 'patient-onc-1',
+        caseId: 'onco-case-1',
+        actionId: 'prepare-infusion-checklist',
+        actionType: 'visit_preparation',
+        actionTitle: 'Prepare infusion checklist',
+      },
+      { sessionId: 'session-onc-1' },
+    );
+
+    expect(infusionResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'infusion_checklist_documented',
+        sessionId: 'inf-1',
+        caseId: 'onco-case-1',
+      }),
+    );
+
+    const toxicityResult = await service.executeOncologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'oncology-toxicity:ae-1',
+        itemType: 'oncology_toxicity_followup',
+        sourceRecordId: 'ae-1',
+        patientId: 'patient-onc-1',
+        caseId: 'onco-case-1',
+        actionId: 'acknowledge-toxicity-followup',
+        actionType: 'safety_review',
+        actionTitle: 'Document toxicity follow-up action',
+        actionPayload: {
+          adverse_event_id: 'ae-1',
+        },
+      },
+      { sessionId: 'session-onc-2' },
+    );
+
+    expect(toxicityResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'toxicity_followup_documented',
+        adverseEventId: 'ae-1',
+        caseId: 'onco-case-1',
+      }),
+    );
+
+    const escalateResult = await service.executeOncologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'oncology-toxicity:ae-1',
+        itemType: 'oncology_toxicity_followup',
+        sourceRecordId: 'ae-1',
+        patientId: 'patient-onc-1',
+        caseId: 'onco-case-1',
+        actionId: 'escalate-oncology-doctor-review',
+        actionType: 'escalation',
+        actionTitle: 'Sync toxicity escalation with oncologist',
+      },
+      { sessionId: 'session-onc-3' },
+    );
+
+    expect(escalateResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'oncology_doctor_sync_documented',
+        caseId: 'onco-case-1',
+      }),
+    );
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'oncology-infusion:inf-1',
+        'oncology',
+        'oncology_infusion_followup',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'oncology-toxicity:ae-1',
+        metadata: expect.objectContaining({
+          module: 'oncology',
+          actionId: 'escalate-oncology-doctor-review',
+        }),
+      }),
     );
   });
 

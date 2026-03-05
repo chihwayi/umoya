@@ -123,6 +123,12 @@ interface NurseOutcomeAnalyticsSnapshot {
     actionsPerQueueItem?: number;
     executedByAction?: Record<string, number>;
   };
+  oncologyRecommendationExecution?: {
+    executedActionsTotal?: number;
+    reusedOrIdempotentTotal?: number;
+    actionsPerQueueItem?: number;
+    executedByAction?: Record<string, number>;
+  };
   maternityEscalationSla?: {
     unresolvedTasks?: number;
     criticalUnresolved?: number;
@@ -190,6 +196,7 @@ const NurseDashboard: React.FC = () => {
     high: 0,
     maternity: 0,
     hiv: 0,
+    oncology: 0,
     nursing: 0,
     handoff: 0,
     medication: 0,
@@ -197,7 +204,7 @@ const NurseDashboard: React.FC = () => {
   const [crossModuleLoading, setCrossModuleLoading] = useState(false);
   const [acknowledgingCrossModuleTaskId, setAcknowledgingCrossModuleTaskId] = useState<string | null>(null);
   const [updatingCrossModuleWorkflowItemId, setUpdatingCrossModuleWorkflowItemId] = useState<string | null>(null);
-  const [executingHivRecommendationActionKey, setExecutingHivRecommendationActionKey] = useState<string | null>(null);
+  const [executingRecommendationActionKey, setExecutingRecommendationActionKey] = useState<string | null>(null);
   const [showExecuteOrderModal, setShowExecuteOrderModal] = useState(false);
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
@@ -288,19 +295,19 @@ const NurseDashboard: React.FC = () => {
       const activeTenant = resolveTenantSlug();
       if (!token || !activeTenant) {
         setCrossModuleItems([]);
-        setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 });
+        setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, oncology: 0, nursing: 0, handoff: 0, medication: 0 });
         return;
       }
 
       const response = await ehrApi.getNurseCrossModuleFeed(token, activeTenant);
       setCrossModuleItems(response.data?.items || []);
       setCrossModuleSummary(
-        response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 },
+        response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, oncology: 0, nursing: 0, handoff: 0, medication: 0 },
       );
       await loadNurseOutcomeAnalytics(30);
     } catch {
       setCrossModuleItems([]);
-      setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 });
+      setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, oncology: 0, nursing: 0, handoff: 0, medication: 0 });
     } finally {
       setCrossModuleLoading(false);
     }
@@ -315,6 +322,17 @@ const NurseDashboard: React.FC = () => {
         item.enrollment_number
           ? `Review enrollment ${item.enrollment_number} in the maternity workspace.`
           : 'Review the maternity workspace for the selected escalation.',
+      );
+      return;
+    }
+
+    if (item.module === 'oncology') {
+      navigate(`/ehr/${tenantSlug}/oncology`);
+      showSuccess(
+        'Opened oncology workflow',
+        item.patient_name
+          ? `Review oncology workflow context for ${item.patient_name}.`
+          : 'Review oncology workflow context for the selected escalation.',
       );
       return;
     }
@@ -422,58 +440,93 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
-  const handleExecuteHivRecommendationAction = async (
+  const handleExecuteRecommendationAction = async (
     item: NurseCrossModuleFeedItem,
     recommendationItem: Record<string, any>,
   ) => {
     const token = localStorage.getItem('ehr_token');
     const activeTenant = resolveTenantSlug();
 
-    if (!token || !activeTenant || !item.enrollment_id) {
-      showError('Unable to apply HIV action', 'Missing session, tenant, or enrollment context.');
+    if (!token || !activeTenant) {
+      showError('Unable to apply action', 'Missing session or tenant context.');
+      return;
+    }
+
+    if (item.module === 'hiv' && !item.enrollment_id) {
+      showError('Unable to apply HIV action', 'Missing enrollment context.');
       return;
     }
 
     const actionKey = `${item.id}:${String(recommendationItem?.id || recommendationItem?.title || 'action')}`;
 
     try {
-      setExecutingHivRecommendationActionKey(actionKey);
-      await ehrApi.executeHivNurseRecommendationAction(
-        {
-          itemId: item.id,
-          itemType: item.item_type,
-          sourceRecordId: item.source_record_id || null,
-          patientId: item.patient_id || null,
-          enrollmentId: item.enrollment_id || null,
-          actionId: String(recommendationItem?.id || ''),
-          actionType: recommendationItem?.type || null,
-          actionTitle: recommendationItem?.title || null,
-          actionPayload: recommendationItem?.action_payload || null,
-          destinationRole: item.destination_role || null,
-          destinationService: item.destination_service || null,
-          destinationSpecialty: item.destination_specialty || null,
-          destinationUserId: item.destination_user_id || null,
-          destinationUserName: item.destination_user_name || null,
-          destinationFacilityId: item.destination_facility_id || null,
-          destinationFacilityName: item.destination_facility_name || null,
-        },
-        token,
-        activeTenant,
-      );
+      setExecutingRecommendationActionKey(actionKey);
+
+      if (item.module === 'hiv') {
+        await ehrApi.executeHivNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            enrollmentId: item.enrollment_id || null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else if (item.module === 'oncology') {
+        await ehrApi.executeOncologyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            caseId: item.metadata?.oncology_case_id || recommendationItem?.action_payload?.case_id || null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else {
+        showError('Unable to apply action', 'This queue action is not executable for the selected module.');
+        return;
+      }
+
       showSuccess(
-        'HIV recommendation applied',
+        item.module === 'oncology' ? 'Oncology recommendation applied' : 'HIV recommendation applied',
         recommendationItem?.title
           ? `${recommendationItem.title} was applied from the nurse queue.`
-          : 'The HIV recommendation action was applied.',
+          : 'The recommendation action was applied.',
       );
       await loadCrossModuleFeed();
     } catch (error: any) {
       showError(
-        'Unable to apply HIV action',
-        error?.response?.data?.message || 'Please retry the HIV recommendation action.',
+        item.module === 'oncology' ? 'Unable to apply oncology action' : 'Unable to apply HIV action',
+        error?.response?.data?.message || 'Please retry the recommendation action.',
       );
     } finally {
-      setExecutingHivRecommendationActionKey(null);
+      setExecutingRecommendationActionKey(null);
     }
   };
 
@@ -2514,12 +2567,12 @@ const NurseDashboard: React.FC = () => {
           compact
           acknowledgingTaskId={acknowledgingCrossModuleTaskId}
           workflowActionItemId={updatingCrossModuleWorkflowItemId}
-          recommendationActionKey={executingHivRecommendationActionKey}
+          recommendationActionKey={executingRecommendationActionKey}
           onRefresh={loadCrossModuleFeed}
           onOpenWorkflow={handleOpenCrossModuleWorkflow}
           onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
           onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
-          onExecuteHivRecommendationAction={handleExecuteHivRecommendationAction}
+          onExecuteRecommendationAction={handleExecuteRecommendationAction}
         />
 
       {/* Quick Actions - Prominent Clickable Cards */}
@@ -2927,12 +2980,12 @@ const NurseDashboard: React.FC = () => {
             loading={crossModuleLoading}
             acknowledgingTaskId={acknowledgingCrossModuleTaskId}
             workflowActionItemId={updatingCrossModuleWorkflowItemId}
-            recommendationActionKey={executingHivRecommendationActionKey}
+            recommendationActionKey={executingRecommendationActionKey}
             onRefresh={loadCrossModuleFeed}
             onOpenWorkflow={handleOpenCrossModuleWorkflow}
             onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
             onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
-            onExecuteHivRecommendationAction={handleExecuteHivRecommendationAction}
+            onExecuteRecommendationAction={handleExecuteRecommendationAction}
           />
         )}
 

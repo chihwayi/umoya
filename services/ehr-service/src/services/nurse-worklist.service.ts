@@ -512,6 +512,228 @@ export class NurseWorklistService {
     return rows[0]?.patient_id || null;
   }
 
+  private extractOncologyCaseId(payload: {
+    caseId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.caseId)) {
+      return String(payload.caseId);
+    }
+    if (this.normalizeText(payload.actionPayload?.case_id)) {
+      return String(payload.actionPayload.case_id);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('oncology-case:')) {
+      return normalizedItemId.replace('oncology-case:', '').trim();
+    }
+    return null;
+  }
+
+  private async getOncologyCasePatientId(tenantDb: DataSource, caseId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT patient_id
+      FROM oncology_cases
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [caseId],
+    );
+    return rows[0]?.patient_id || null;
+  }
+
+  private async getOncologyInfusionContext(tenantDb: DataSource, sessionId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        ois.id,
+        ois.notes,
+        ois.status,
+        ois.payment_status,
+        ois.session_date,
+        ois.cycle_number,
+        ois.regimen_id,
+        orr.regimen_name,
+        orr.oncology_case_id as case_id,
+        oc.patient_id
+      FROM oncology_infusion_sessions ois
+      INNER JOIN oncology_regimens orr ON orr.id = ois.regimen_id
+      INNER JOIN oncology_cases oc ON oc.id = orr.oncology_case_id
+      WHERE ois.id = $1
+      LIMIT 1
+      `,
+      [sessionId],
+    );
+    return rows[0] || null;
+  }
+
+  private async getOncologyAdverseEventContext(tenantDb: DataSource, adverseEventId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        oae.id,
+        oae.oncology_case_id as case_id,
+        oae.regimen_id,
+        oae.event_type,
+        oae.grade,
+        oae.notes,
+        oae.action_taken,
+        oae.outcome,
+        oc.patient_id
+      FROM oncology_adverse_events oae
+      INNER JOIN oncology_cases oc ON oc.id = oae.oncology_case_id
+      WHERE oae.id = $1
+      LIMIT 1
+      `,
+      [adverseEventId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendOncologyInfusionSessionNote(
+    tenantDb: DataSource,
+    sessionId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const session = await this.getOncologyInfusionContext(tenantDb, sessionId);
+    if (!session) {
+      throw new BadRequestException('Oncology infusion session not found for recommendation action');
+    }
+
+    const existingNotes = String(session.notes || '');
+    if (existingNotes.includes(marker)) {
+      return {
+        reused: true,
+        session,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE oncology_infusion_sessions
+      SET notes = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, status, payment_status, session_date, regimen_id
+      `,
+      [nextNotes, sessionId],
+    );
+
+    return {
+      reused: false,
+      session: {
+        ...session,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
+      },
+    };
+  }
+
+  private async appendOncologyAdverseEventFollowup(
+    tenantDb: DataSource,
+    adverseEventId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const event = await this.getOncologyAdverseEventContext(tenantDb, adverseEventId);
+    if (!event) {
+      throw new BadRequestException('Oncology adverse event not found for recommendation action');
+    }
+
+    const existingNotes = String(event.notes || '');
+    const existingActionTaken = String(event.action_taken || '');
+    if (existingNotes.includes(marker) || existingActionTaken.includes(marker)) {
+      return {
+        reused: true,
+        event,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const nextActionTaken = existingActionTaken.length > 0
+      ? `${existingActionTaken}\n${marker} Nurse queue toxicity follow-up documented.`
+      : `${marker} Nurse queue toxicity follow-up documented.`;
+
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE oncology_adverse_events
+      SET
+        notes = $1,
+        action_taken = $2,
+        outcome = COALESCE(outcome, 'pending_oncologist_review'),
+        updated_at = NOW()
+      WHERE id = $3
+      RETURNING id, oncology_case_id as case_id, regimen_id, event_type, grade, outcome
+      `,
+      [nextNotes, nextActionTaken, adverseEventId],
+    );
+
+    return {
+      reused: false,
+      event: {
+        ...event,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
+        action_taken: nextActionTaken,
+      },
+    };
+  }
+
+  private async appendOncologyCaseCarePlanNote(
+    tenantDb: DataSource,
+    caseId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT id, patient_id, care_plan
+      FROM oncology_cases
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [caseId],
+    );
+    const caseRow = rows[0] || null;
+    if (!caseRow) {
+      throw new BadRequestException('Oncology case not found for recommendation action');
+    }
+
+    const existingPlan = String(caseRow.care_plan || '');
+    if (existingPlan.includes(marker)) {
+      return {
+        reused: true,
+        case: caseRow,
+      };
+    }
+
+    const nextPlan = existingPlan.length > 0 ? `${existingPlan}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE oncology_cases
+      SET care_plan = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, patient_id, care_plan, status
+      `,
+      [nextPlan, caseId],
+    );
+
+    return {
+      reused: false,
+      case: updatedRows[0] || {
+        ...caseRow,
+        care_plan: nextPlan,
+      },
+    };
+  }
+
   private async createOrReuseHivReferral(
     tenantDb: DataSource,
     payload: {
@@ -1046,6 +1268,167 @@ export class NurseWorklistService {
     };
   }
 
+  private buildOncologyInfusionRecommendationBundle(params: {
+    caseRow: any;
+    regimen: any;
+    session: any;
+  }) {
+    const { caseRow, regimen, session } = params;
+    const hasActiveToxicitySignal = Number(caseRow?.active_grade3_plus || 0) > 0;
+    const paymentPending = String(session?.payment_status || '').toLowerCase() === 'awaiting_payment';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'oncology.infusion_readiness',
+        'WHO cancer treatment safety guidance: infusion sessions need a documented readiness review before administration.',
+        'WHO oncology safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'oncology.prechemo_labs',
+        'WHO oncology follow-up guidance: pre-chemo toxicity and laboratory gate checks should be documented before treatment.',
+        'WHO oncology safety guidance',
+      ),
+      hasActiveToxicitySignal
+        ? this.createGuidelineCitation(
+            'oncology.toxicity_escalation',
+            'WHO adverse-event guidance: unresolved Grade 3+ toxicity requires clinician escalation before continuing treatment.',
+            'WHO oncology safety guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'prepare-infusion-checklist',
+        type: 'visit_preparation',
+        title: 'Prepare infusion checklist',
+        urgency: paymentPending ? 'high' : 'routine',
+        rationale:
+          'Queue-driven infusion readiness keeps nurse pre-treatment checks visible and traceable.',
+        citations: citations.filter((citation) => citation.rule_id === 'oncology.infusion_readiness'),
+        action_payload: {
+          case_id: caseRow?.oncology_case_id || null,
+          regimen_id: regimen?.id || null,
+          session_id: session?.id || null,
+          session_date: session?.session_date || null,
+          cycle_number: session?.cycle_number ?? null,
+        },
+      },
+      {
+        id: 'confirm-prechemo-lab-gate',
+        type: 'lab_followup',
+        title: 'Confirm pre-chemo lab and toxicity gate',
+        urgency: 'high',
+        rationale:
+          'Pre-chemo checks should be explicitly confirmed in the workflow before treatment proceeds.',
+        citations: citations.filter((citation) => citation.rule_id === 'oncology.prechemo_labs'),
+        action_payload: {
+          case_id: caseRow?.oncology_case_id || null,
+          regimen_id: regimen?.id || null,
+          session_id: session?.id || null,
+          payment_status: session?.payment_status || null,
+        },
+      },
+    ];
+
+    if (hasActiveToxicitySignal) {
+      items.push({
+        id: 'escalate-toxicity-risk-review',
+        type: 'escalation',
+        title: 'Escalate unresolved toxicity risk to oncologist',
+        urgency: 'urgent',
+        rationale:
+          'Active Grade 3+ toxicity should trigger immediate clinician synchronization before infusion follow-through.',
+        citations: citations.filter((citation) => citation.rule_id === 'oncology.toxicity_escalation'),
+        action_payload: {
+          case_id: caseRow?.oncology_case_id || null,
+          regimen_id: regimen?.id || null,
+          active_grade3_plus: Number(caseRow?.active_grade3_plus || 0),
+          session_id: session?.id || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Oncology infusion readiness bundle',
+      summary: `${items.length} oncology action${items.length === 1 ? '' : 's'} prepared for infusion follow-through.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildOncologyToxicityRecommendationBundle(params: {
+    caseRow: any;
+    adverseEvent: any;
+  }) {
+    const { caseRow, adverseEvent } = params;
+    const gradeLabel = this.normalizeText(adverseEvent?.grade) || 'unknown';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'oncology.toxicity_followup',
+        'WHO oncology adverse-event guidance: clinically significant toxicities require nurse follow-up documentation and clinician handoff.',
+        'WHO oncology safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'oncology.doctor_sync',
+        'WHO multidisciplinary oncology care guidance: significant toxicity findings should be synchronized with the treating oncologist.',
+        'WHO oncology safety guidance',
+      ),
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'acknowledge-toxicity-followup',
+        type: 'safety_review',
+        title: 'Document toxicity follow-up action',
+        urgency: 'urgent',
+        rationale:
+          'Toxicity follow-up should be captured as a structured queue execution event, not just a narrative note.',
+        citations: citations.filter((citation) => citation.rule_id === 'oncology.toxicity_followup'),
+        action_payload: {
+          case_id: caseRow?.oncology_case_id || null,
+          adverse_event_id: adverseEvent?.id || null,
+          regimen_id: adverseEvent?.regimen_id || null,
+          grade: gradeLabel,
+          event_type: adverseEvent?.event_type || null,
+        },
+      },
+      {
+        id: 'escalate-oncology-doctor-review',
+        type: 'escalation',
+        title: 'Sync toxicity escalation with oncologist',
+        urgency: 'urgent',
+        rationale:
+          'Severe toxicity should be escalated with explicit doctor-sync metadata from the nurse queue.',
+        citations: citations.filter((citation) => citation.rule_id === 'oncology.doctor_sync'),
+        action_payload: {
+          case_id: caseRow?.oncology_case_id || null,
+          adverse_event_id: adverseEvent?.id || null,
+          grade: gradeLabel,
+          event_type: adverseEvent?.event_type || null,
+        },
+      },
+    ];
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Oncology toxicity escalation bundle',
+      summary: `${items.length} oncology toxicity action${items.length === 1 ? '' : 's'} queued for safety follow-through.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
     const [
       workflowRows,
@@ -1056,6 +1439,8 @@ export class NurseWorklistService {
       approvedRegimenChanges,
       handoffRows,
       medicationRows,
+      oncologyInfusionRows,
+      oncologyAdverseEventRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
@@ -1241,6 +1626,84 @@ export class NurseWorklistService {
         WHERE mar.administration_status IN ('pending', 'held', 'refused')
           AND mar.scheduled_time <= (NOW() - INTERVAL '30 minutes')
         ORDER BY mar.scheduled_time ASC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          ois.id as infusion_session_id,
+          ois.regimen_id,
+          ois.session_date,
+          ois.status as session_status,
+          ois.payment_status,
+          ois.cycle_number,
+          ois.notes as session_notes,
+          orr.id as regimen_record_id,
+          orr.regimen_name,
+          orr.status as regimen_status,
+          oc.id as oncology_case_id,
+          oc.status as case_status,
+          oc.primary_diagnosis,
+          oc.overall_stage,
+          p.id as patient_id,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          u.first_name || ' ' || u.last_name as oncologist_name,
+          COALESCE(event_stats.active_grade3_plus, 0) as active_grade3_plus
+        FROM oncology_infusion_sessions ois
+        INNER JOIN oncology_regimens orr ON orr.id = ois.regimen_id
+        INNER JOIN oncology_cases oc ON oc.id = orr.oncology_case_id
+        INNER JOIN patients p ON p.id = oc.patient_id
+        LEFT JOIN users u ON u.id = oc.oncologist_id
+        LEFT JOIN (
+          SELECT
+            oncology_case_id,
+            SUM(
+              CASE
+                WHEN resolved_date IS NULL
+                  AND COALESCE(NULLIF(regexp_replace(COALESCE(grade, ''), '[^0-9]', '', 'g'), ''), '0')::int >= 3
+                THEN 1
+                ELSE 0
+              END
+            ) as active_grade3_plus
+          FROM oncology_adverse_events
+          GROUP BY oncology_case_id
+        ) event_stats ON event_stats.oncology_case_id = oc.id
+        WHERE ois.status IN ('awaiting_payment', 'scheduled', 'in_progress')
+          AND ois.session_date <= (NOW() + INTERVAL '48 hours')
+        ORDER BY ois.session_date ASC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          oae.id as adverse_event_id,
+          oae.oncology_case_id,
+          oae.regimen_id,
+          oae.event_date,
+          oae.event_type,
+          oae.grade,
+          oae.notes,
+          oae.action_taken,
+          oae.outcome,
+          oc.status as case_status,
+          oc.primary_diagnosis,
+          oc.overall_stage,
+          orr.regimen_name,
+          p.id as patient_id,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number
+        FROM oncology_adverse_events oae
+        INNER JOIN oncology_cases oc ON oc.id = oae.oncology_case_id
+        INNER JOIN patients p ON p.id = oc.patient_id
+        LEFT JOIN oncology_regimens orr ON orr.id = oae.regimen_id
+        WHERE oae.resolved_date IS NULL
+          AND COALESCE(NULLIF(regexp_replace(COALESCE(oae.grade, ''), '[^0-9]', '', 'g'), ''), '0')::int >= 3
+        ORDER BY oae.event_date DESC
         LIMIT 50
         `,
       ),
@@ -1514,6 +1977,158 @@ export class NurseWorklistService {
       );
     });
 
+    const oncologyInfusionItems = (oncologyInfusionRows || []).map((row: any) => {
+      const activeGrade3Plus = Number(row?.active_grade3_plus || 0);
+      const ageHours = this.getHoursSince(row?.session_date);
+      const paymentPending = String(row?.payment_status || '').toLowerCase() === 'awaiting_payment';
+      const recommendationBundle = this.buildOncologyInfusionRecommendationBundle({
+        caseRow: row,
+        regimen: {
+          id: row?.regimen_id,
+          regimen_name: row?.regimen_name,
+          status: row?.regimen_status,
+        },
+        session: {
+          id: row?.infusion_session_id,
+          session_date: row?.session_date,
+          cycle_number: row?.cycle_number,
+          status: row?.session_status,
+          payment_status: row?.payment_status,
+        },
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `oncology-infusion:${row.infusion_session_id}`,
+          module: 'oncology',
+          item_type: 'oncology_infusion_followup',
+          source_record_id: row.infusion_session_id,
+          severity:
+            activeGrade3Plus > 0
+              ? 'critical'
+              : paymentPending
+                ? 'high'
+                : 'medium',
+          workflow_status: 'pending',
+          module_status: row.session_status || 'scheduled',
+          doctor_sync_status:
+            activeGrade3Plus > 0
+              ? 'oncologist_review_recommended'
+              : 'nurse_readiness_required',
+          title:
+            paymentPending
+              ? 'Oncology infusion session awaiting payment clearance'
+              : 'Oncology infusion readiness follow-up',
+          summary:
+            `${row.patient_name} has ${row.regimen_name || 'an oncology regimen'} ` +
+            `scheduled for ${new Date(row.session_date).toISOString().split('T')[0]}.`,
+          recommended_action:
+            paymentPending
+              ? 'Resolve payment clearance, confirm readiness checks, and synchronize with oncology team before infusion.'
+              : 'Confirm infusion checklist, pre-chemo lab gate, and complete oncology doctor synchronization where needed.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.session_date,
+          updated_at: row.session_date,
+          age_hours: ageHours,
+          sla_status:
+            ageHours !== null && ageHours > 6
+              ? 'breached'
+              : ageHours !== null && ageHours > 0
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'oncology',
+            tab: 'oncology',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: activeGrade3Plus > 0 ? 'doctor' : 'nurse',
+            service: 'oncology_infusion',
+            specialty: 'Oncology',
+          }),
+          metadata: {
+            oncology_case_id: row.oncology_case_id,
+            regimen_id: row.regimen_id,
+            regimen_name: row.regimen_name,
+            session_id: row.infusion_session_id,
+            cycle_number: row.cycle_number,
+            session_status: row.session_status,
+            payment_status: row.payment_status,
+            active_grade3_plus: activeGrade3Plus,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const oncologyToxicityItems = (oncologyAdverseEventRows || []).map((row: any) => {
+      const gradeNumber = Number(
+        String(row?.grade || '')
+          .replace(/[^0-9]/g, '')
+          .trim() || '0',
+      );
+      const recommendationBundle = this.buildOncologyToxicityRecommendationBundle({
+        caseRow: row,
+        adverseEvent: {
+          id: row?.adverse_event_id,
+          regimen_id: row?.regimen_id,
+          event_type: row?.event_type,
+          grade: row?.grade,
+        },
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `oncology-toxicity:${row.adverse_event_id}`,
+          module: 'oncology',
+          item_type: 'oncology_toxicity_followup',
+          source_record_id: row.adverse_event_id,
+          severity: gradeNumber >= 4 ? 'critical' : 'high',
+          workflow_status: 'pending',
+          module_status: row.grade || 'grade_3_plus',
+          doctor_sync_status: 'oncologist_review_recommended',
+          title: `Oncology toxicity follow-up required (${row.grade || 'Grade 3+'})`,
+          summary:
+            `${row.patient_name} has unresolved ${row.event_type || 'treatment toxicity'} ` +
+            `${row.regimen_name ? `during ${row.regimen_name}` : ''}.`,
+          recommended_action:
+            'Document nurse toxicity follow-up and synchronize escalation with the treating oncologist.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.event_date,
+          updated_at: row.event_date,
+          age_hours: this.getHoursSince(row.event_date),
+          sla_status: gradeNumber >= 4 ? 'breached' : 'due_soon',
+          next_route: {
+            section: 'oncology',
+            tab: 'oncology',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: 'doctor',
+            service: 'oncology_toxicity',
+            specialty: 'Oncology',
+          }),
+          metadata: {
+            oncology_case_id: row.oncology_case_id,
+            adverse_event_id: row.adverse_event_id,
+            regimen_id: row.regimen_id,
+            regimen_name: row.regimen_name || null,
+            event_type: row.event_type || null,
+            grade: row.grade || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
     const handoffItems = (handoffRows || []).map((row: any) => {
       const referenceTime = row.updated_at || row.reviewed_at || row.finalized_at || row.shared_at || null;
       const ageHours = this.getHoursSince(referenceTime);
@@ -1635,7 +2250,15 @@ export class NurseWorklistService {
       );
     });
 
-    const items = [...maternityItems, ...hivRegimenItems, ...hivPathwayItems, ...handoffItems, ...medicationItems]
+    const items = [
+      ...maternityItems,
+      ...hivRegimenItems,
+      ...hivPathwayItems,
+      ...oncologyInfusionItems,
+      ...oncologyToxicityItems,
+      ...handoffItems,
+      ...medicationItems,
+    ]
       .filter((item) => item.module === 'maternity' || item.workflow_status !== 'completed')
       .sort((a, b) => {
         const severityDiff = this.getSeverityRank(b.severity) - this.getSeverityRank(a.severity);
@@ -1661,6 +2284,7 @@ export class NurseWorklistService {
         high: items.filter((item) => item.severity === 'high').length,
         maternity: items.filter((item) => item.module === 'maternity').length,
         hiv: items.filter((item) => item.module === 'hiv').length,
+        oncology: items.filter((item) => item.module === 'oncology').length,
         nursing: items.filter((item) => item.module === 'nursing').length,
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
@@ -2451,6 +3075,241 @@ export class NurseWorklistService {
         actionId,
         actionTitle: payload.actionTitle || null,
         enrollmentId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeOncologyRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      caseId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    let resolvedCaseId = this.extractOncologyCaseId({
+      caseId: payload.caseId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    let resolvedPatientId = this.normalizeText(payload.patientId);
+    const existingExecution = await this.getExistingRecommendationExecution(
+      tenantDb,
+      payload.itemId,
+      actionId,
+    );
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    let result: any;
+
+    if (actionId === 'prepare-infusion-checklist' || actionId === 'confirm-prechemo-lab-gate') {
+      const sessionId =
+        this.normalizeText(actionPayload?.session_id) ||
+        (payload.itemType === 'oncology_infusion_followup' ? this.normalizeText(payload.sourceRecordId) : null);
+      if (!sessionId) {
+        throw new BadRequestException('session_id context is required for oncology infusion actions');
+      }
+
+      const noteLine = `${resultMarker} ${payload.actionTitle || actionId} completed by ${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const sessionUpdate = await this.appendOncologyInfusionSessionNote(
+        tenantDb,
+        sessionId,
+        resultMarker,
+        noteLine,
+      );
+
+      resolvedCaseId = resolvedCaseId || this.normalizeText(sessionUpdate.session?.case_id);
+      resolvedPatientId = resolvedPatientId || this.normalizeText(sessionUpdate.session?.patient_id);
+      if (!resolvedPatientId && resolvedCaseId) {
+        resolvedPatientId = await this.getOncologyCasePatientId(tenantDb, resolvedCaseId);
+      }
+
+      const paymentStatus = String(sessionUpdate.session?.payment_status || '').toLowerCase();
+      const operation = actionId === 'prepare-infusion-checklist'
+        ? sessionUpdate.reused
+          ? 'infusion_checklist_note_reused'
+          : 'infusion_checklist_documented'
+        : sessionUpdate.reused
+          ? 'prechemo_lab_gate_note_reused'
+          : paymentStatus === 'awaiting_payment'
+            ? 'prechemo_lab_gate_documented_payment_pending'
+            : 'prechemo_lab_gate_documented';
+
+      result = {
+        status: 'completed',
+        operation,
+        sessionId: sessionId,
+        regimenId: sessionUpdate.session?.regimen_id || null,
+        caseId: resolvedCaseId || null,
+        paymentStatus: sessionUpdate.session?.payment_status || null,
+        noteReused: sessionUpdate.reused,
+      };
+    } else if (actionId === 'acknowledge-toxicity-followup') {
+      const adverseEventId =
+        this.normalizeText(actionPayload?.adverse_event_id) ||
+        (payload.itemType === 'oncology_toxicity_followup' ? this.normalizeText(payload.sourceRecordId) : null);
+      if (!adverseEventId) {
+        throw new BadRequestException('adverse_event_id context is required for oncology toxicity actions');
+      }
+
+      const noteLine = `${resultMarker} ${payload.actionTitle || actionId} completed by ${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const eventUpdate = await this.appendOncologyAdverseEventFollowup(
+        tenantDb,
+        adverseEventId,
+        resultMarker,
+        noteLine,
+      );
+
+      resolvedCaseId = resolvedCaseId || this.normalizeText(eventUpdate.event?.case_id);
+      resolvedPatientId = resolvedPatientId || this.normalizeText(eventUpdate.event?.patient_id);
+      if (!resolvedPatientId && resolvedCaseId) {
+        resolvedPatientId = await this.getOncologyCasePatientId(tenantDb, resolvedCaseId);
+      }
+
+      result = {
+        status: 'completed',
+        operation: eventUpdate.reused
+          ? 'toxicity_followup_reused'
+          : 'toxicity_followup_documented',
+        adverseEventId,
+        caseId: resolvedCaseId || null,
+        regimenId: eventUpdate.event?.regimen_id || null,
+        noteReused: eventUpdate.reused,
+      };
+    } else if (
+      actionId === 'escalate-oncology-doctor-review' ||
+      actionId === 'escalate-toxicity-risk-review'
+    ) {
+      if (!resolvedCaseId) {
+        const adverseEventId = this.normalizeText(actionPayload?.adverse_event_id);
+        if (adverseEventId) {
+          const adverseContext = await this.getOncologyAdverseEventContext(tenantDb, adverseEventId);
+          resolvedCaseId = this.normalizeText(adverseContext?.case_id);
+          resolvedPatientId = resolvedPatientId || this.normalizeText(adverseContext?.patient_id);
+        }
+      }
+      if (!resolvedCaseId) {
+        const sessionId = this.normalizeText(actionPayload?.session_id);
+        if (sessionId) {
+          const infusionContext = await this.getOncologyInfusionContext(tenantDb, sessionId);
+          resolvedCaseId = this.normalizeText(infusionContext?.case_id);
+          resolvedPatientId = resolvedPatientId || this.normalizeText(infusionContext?.patient_id);
+        }
+      }
+      if (!resolvedCaseId) {
+        throw new BadRequestException('caseId context is required for oncology escalation actions');
+      }
+
+      const caseNote = `${resultMarker} Oncology doctor synchronization requested by ${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const caseUpdate = await this.appendOncologyCaseCarePlanNote(
+        tenantDb,
+        resolvedCaseId,
+        resultMarker,
+        caseNote,
+      );
+      resolvedPatientId = resolvedPatientId || this.normalizeText(caseUpdate.case?.patient_id);
+      if (!resolvedPatientId) {
+        resolvedPatientId = await this.getOncologyCasePatientId(tenantDb, resolvedCaseId);
+      }
+
+      result = {
+        status: 'completed',
+        operation: caseUpdate.reused
+          ? 'oncology_doctor_sync_note_reused'
+          : 'oncology_doctor_sync_documented',
+        caseId: resolvedCaseId,
+        noteReused: caseUpdate.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported oncology recommendation action "${actionId}"`);
+    }
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'oncology',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'oncology',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        caseId: resolvedCaseId || null,
         result,
       },
       riskLevel: 'medium',

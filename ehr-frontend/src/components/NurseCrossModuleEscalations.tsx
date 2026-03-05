@@ -11,7 +11,7 @@ import {
 
 export interface NurseCrossModuleFeedItem {
   id: string;
-  module: 'maternity' | 'hiv' | 'nursing';
+  module: 'maternity' | 'hiv' | 'nursing' | 'oncology';
   item_type: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
   workflow_status: string;
@@ -45,7 +45,7 @@ export interface NurseCrossModuleFeedItem {
   note?: string | null;
   metadata?: Record<string, any> | null;
   next_route?: {
-    section?: 'main' | 'hiv' | 'maternity';
+    section?: 'main' | 'hiv' | 'maternity' | 'oncology';
     tab?: string;
     taskId?: string;
     enrollmentId?: string;
@@ -61,6 +61,7 @@ interface NurseCrossModuleEscalationsProps {
     high?: number;
     maternity?: number;
     hiv?: number;
+    oncology?: number;
     nursing?: number;
     handoff?: number;
     medication?: number;
@@ -76,7 +77,7 @@ interface NurseCrossModuleEscalationsProps {
     item: NurseCrossModuleFeedItem,
     status: 'acknowledged' | 'completed',
   ) => void;
-  onExecuteHivRecommendationAction?: (
+  onExecuteRecommendationAction?: (
     item: NurseCrossModuleFeedItem,
     recommendationItem: Record<string, any>,
   ) => void;
@@ -93,6 +94,7 @@ const severityStyles: Record<string, string> = {
 const moduleStyles: Record<string, string> = {
   maternity: 'bg-pink-100 text-pink-700',
   hiv: 'bg-emerald-100 text-emerald-700',
+  oncology: 'bg-violet-100 text-violet-700',
   nursing: 'bg-sky-100 text-sky-700',
 };
 
@@ -118,21 +120,35 @@ function getRecommendationBundle(item: NurseCrossModuleFeedItem) {
   return bundle;
 }
 
-function isExecutableHivRecommendationAction(item: Record<string, any>) {
+function isExecutableRecommendationAction(module: string, item: Record<string, any>) {
   const actionId = String(item?.id || '');
   const actionType = String(item?.type || '');
-  return (
-    actionId === 'eac-followup' ||
-    actionId === 'repeat-vl-plan' ||
-    actionId === 'regimen-counseling' ||
-    actionId === 'visit-recording' ||
-    actionId === 'regimen-safety-warnings' ||
-    actionId === 'tb-interaction-review' ||
-    actionId === 'doctor-switch-review' ||
-    actionId === 'pediatric-dose-check' ||
-    actionId === 'pediatric-adherence' ||
-    actionType === 'pmtct_followup'
-  );
+  if (module === 'hiv') {
+    return (
+      actionId === 'eac-followup' ||
+      actionId === 'repeat-vl-plan' ||
+      actionId === 'regimen-counseling' ||
+      actionId === 'visit-recording' ||
+      actionId === 'regimen-safety-warnings' ||
+      actionId === 'tb-interaction-review' ||
+      actionId === 'doctor-switch-review' ||
+      actionId === 'pediatric-dose-check' ||
+      actionId === 'pediatric-adherence' ||
+      actionType === 'pmtct_followup'
+    );
+  }
+
+  if (module === 'oncology') {
+    return (
+      actionId === 'prepare-infusion-checklist' ||
+      actionId === 'confirm-prechemo-lab-gate' ||
+      actionId === 'acknowledge-toxicity-followup' ||
+      actionId === 'escalate-oncology-doctor-review' ||
+      actionId === 'escalate-toxicity-risk-review'
+    );
+  }
+
+  return false;
 }
 
 export default function NurseCrossModuleEscalations({
@@ -146,7 +162,7 @@ export default function NurseCrossModuleEscalations({
   onOpenWorkflow,
   onAcknowledgeMaternityTask,
   onUpdateWorkflowStatus,
-  onExecuteHivRecommendationAction,
+  onExecuteRecommendationAction,
   recommendationActionKey,
 }: NurseCrossModuleEscalationsProps) {
   const visibleItems = compact ? items.slice(0, 3) : items;
@@ -161,7 +177,7 @@ export default function NurseCrossModuleEscalations({
               <h3 className="text-lg font-bold text-slate-900">Cross-Module Escalations</h3>
             </div>
             <p className="text-sm text-slate-600 mt-1">
-              Shared nurse visibility into maternity escalation tasks, HIV specialist follow-up, handoff risk, and medication exceptions.
+              Shared nurse visibility into maternity, HIV, oncology, handoff risk, and medication exception workflows.
             </p>
           </div>
           {onRefresh && (
@@ -192,6 +208,9 @@ export default function NurseCrossModuleEscalations({
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
             {summary?.hiv ?? items.filter((item) => item.module === 'hiv').length} HIV
           </span>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
+            {summary?.oncology ?? items.filter((item) => item.module === 'oncology').length} oncology
+          </span>
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700">
             {summary?.nursing ?? items.filter((item) => item.module === 'nursing').length} nursing
           </span>
@@ -208,7 +227,7 @@ export default function NurseCrossModuleEscalations({
           <div className="py-12 text-center text-slate-500">
             <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-slate-300" />
             <p className="font-medium text-slate-700">No active cross-module escalations</p>
-            <p className="text-sm mt-1">Maternity, HIV, handoff, and medication follow-up items will appear here when action is needed.</p>
+            <p className="text-sm mt-1">Maternity, HIV, oncology, handoff, and medication follow-up items will appear here when action is needed.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -288,7 +307,7 @@ export default function NurseCrossModuleEscalations({
                         <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                              HIV CDSS Bundle
+                              {item.module.toUpperCase()} CDSS Bundle
                             </p>
                             <span className="px-2 py-0.5 rounded-full bg-white text-[11px] font-semibold text-emerald-700 border border-emerald-200">
                               {recommendationBundle.actionable_count ?? bundleItems.length} actions
@@ -302,10 +321,9 @@ export default function NurseCrossModuleEscalations({
                               {bundleItems.map((bundleItem: any) => {
                                   const executionStatus = String(bundleItem?.execution_status || '');
                                   const canExecute =
-                                    item.module === 'hiv' &&
-                                    isExecutableHivRecommendationAction(bundleItem) &&
+                                    isExecutableRecommendationAction(item.module, bundleItem) &&
                                     executionStatus !== 'completed' &&
-                                    typeof onExecuteHivRecommendationAction === 'function';
+                                    typeof onExecuteRecommendationAction === 'function';
                                   const actionKey = `${item.id}:${String(bundleItem?.id || bundleItem?.title || 'action')}`;
                                   const isExecuting = recommendationActionKey === actionKey;
 
@@ -333,7 +351,7 @@ export default function NurseCrossModuleEscalations({
                                     {canExecute && (
                                       <button
                                         type="button"
-                                        onClick={() => onExecuteHivRecommendationAction?.(item, bundleItem)}
+                                        onClick={() => onExecuteRecommendationAction?.(item, bundleItem)}
                                         disabled={isExecuting}
                                         className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                                       >
