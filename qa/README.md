@@ -64,3 +64,7 @@ What it validates:
 ### Contact
 - QA lead: qa@medicore.health
 - Automation channel: `#qa-automation`
+
+### Release Signoff References
+- `docs/release/nurse-ai-cdss-release-checkpoint-2026-03-05.md`
+- `docs/release/nurse-ai-cdss-cross-functional-signoff-2026-03-05.md`

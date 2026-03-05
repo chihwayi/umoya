@@ -59,6 +59,11 @@ jobs:
       working-directory: ${{ matrix.path }}
       run: npm run check:proxy-only
 
+    - name: Report Frontend Changed-Files Lint Debt (Non-Blocking)
+      if: matrix.service == 'ehr-frontend'
+      working-directory: ${{ matrix.path }}
+      run: npm run lint:changed
+
     - name: Build
       working-directory: ${{ matrix.path }}
       run: npm run build

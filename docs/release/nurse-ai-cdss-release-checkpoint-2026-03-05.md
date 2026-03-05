@@ -21,6 +21,11 @@
 - `4904d9e` Complete HIV nurse queue executable bundle actions
 - `53fe6b0` Harden ehr-service jest env bootstrap for CI
 
+## Release Governance
+
+- Cross-functional signoff sheet:
+  - `docs/release/nurse-ai-cdss-cross-functional-signoff-2026-03-05.md`
+
 ## Verification Summary
 
 - `npm test -w @medicore/ehr-service` passed under CI-like env
@@ -32,4 +37,5 @@
 ## Known Follow-Up (Post-Checkpoint)
 
 - Frontend global lint debt remains outside this checkpoint scope.
+- CI now reports changed-file frontend lint debt in non-blocking mode (`npm run lint:changed`).
 - Continue with nurse outcome analytics/UAT hardening and release evidence consolidation.
