@@ -44,6 +44,12 @@ What it validates:
 - Response shape for `crossModuleQueue`, `hivRecommendationExecution`, and `maternityEscalationSla`
 - Numeric metric fields required for UAT outcome tracking
 
+### Oncology doctor protocol automation checks
+Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analytics:
+- `GET /oncology/cases/:id/protocol-bundle` → returns executable oncology doctor protocol bundle
+- `POST /oncology/cases/:id/protocol-bundle/actions/:actionId/execute` → executes one protocol action and persists workflow context
+- `GET /nurse-worklist/analytics/doctor-outcomes` → shared doctor outcome analytics across oncology/HIV/maternity workflows
+
 ### Seeding data
 1. Provision a fresh tenant with all bundles:
    ```

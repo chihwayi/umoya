@@ -16,9 +16,12 @@ const badgeColors: Record<string, string> = {
 };
 
 const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ tenantSlug, token, caseId }) => {
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<any>(null);
+  const [protocolBundle, setProtocolBundle] = useState<any>(null);
+  const [executingActionId, setExecutingActionId] = useState<string | null>(null);
+  const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<any>(null);
   
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -32,12 +35,18 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
     if (!hasCase) return;
     setLoading(true);
     try {
-      const response = await ehrApi.checkOncologyCaseAlerts(tenantSlug!, token!, caseId!, {
-        includeRecommendations: true,
-        includeSurveillance: true,
-        includeToxicity: true,
-      });
-      setIntelligence(response.data);
+      const [alertResponse, bundleResponse, doctorAnalyticsResponse] = await Promise.all([
+        ehrApi.checkOncologyCaseAlerts(tenantSlug!, token!, caseId!, {
+          includeRecommendations: true,
+          includeSurveillance: true,
+          includeToxicity: true,
+        }),
+        ehrApi.getOncologyProtocolBundle(tenantSlug!, token!, caseId!),
+        ehrApi.getDoctorOutcomeAnalytics(30, token!, tenantSlug!),
+      ]);
+      setIntelligence(alertResponse.data);
+      setProtocolBundle(bundleResponse.data?.protocolBundle || null);
+      setDoctorOutcomeAnalytics(doctorAnalyticsResponse.data || null);
     } catch (error) {
       console.error('Failed to load oncology intelligence', error);
       showError('Unable to load care guidance', 'Please retry shortly.');
@@ -78,6 +87,40 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   const toxicityAlerts = intelligence?.toxicityAlerts ?? [];
   const upcomingFollowUps = intelligence?.surveillance?.upcoming ?? [];
   const overdueFollowUps = intelligence?.surveillance?.overdue ?? [];
+  const protocolItems = Array.isArray(protocolBundle?.items) ? protocolBundle.items : [];
+
+  const handleExecuteProtocolAction = async (actionItem: any) => {
+    if (!caseId || !actionItem?.id) {
+      return;
+    }
+    try {
+      setExecutingActionId(String(actionItem.id));
+      await ehrApi.executeOncologyProtocolBundleAction(
+        tenantSlug,
+        token,
+        caseId,
+        String(actionItem.id),
+        {
+          actionPayload: actionItem?.action_payload || {},
+        },
+      );
+      showSuccess(
+        'Protocol action executed',
+        actionItem?.title
+          ? `${actionItem.title} has been recorded in the oncology workflow.`
+          : 'Protocol action execution completed.',
+      );
+      await loadIntelligence();
+    } catch (error: any) {
+      console.error('Failed to execute oncology protocol action', error);
+      showError(
+        'Unable to execute protocol action',
+        error?.response?.data?.message || 'Please retry.',
+      );
+    } finally {
+      setExecutingActionId(null);
+    }
+  };
 
   return (
     <div className="rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-950 to-slate-900/80 text-slate-100 shadow-lg shadow-purple-900/20">
@@ -113,6 +156,27 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
               Refresh
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border-b border-slate-800/70 bg-slate-950/40">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Protocol Pending</p>
+          <p className="text-xl font-bold text-slate-100">{protocolBundle?.pending_count ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Protocol Applied</p>
+          <p className="text-xl font-bold text-slate-100">{protocolBundle?.applied_count ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Queue 30d</p>
+          <p className="text-xl font-bold text-slate-100">{doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? 0}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Actions 30d</p>
+          <p className="text-xl font-bold text-slate-100">
+            {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
+          </p>
         </div>
       </div>
       
@@ -224,6 +288,46 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
         </div>
 
         <div className="rounded-2xl border border-slate-800/70 p-4 bg-slate-900/60 space-y-2">
+          <p className="text-sm text-slate-400 uppercase tracking-wide">Protocol Automation Bundle</p>
+          {protocolBundle?.summary && (
+            <p className="text-xs text-slate-500">{protocolBundle.summary}</p>
+          )}
+          {protocolItems.length ? (
+            protocolItems.slice(0, 5).map((item: any, index: number) => {
+              const isDone = String(item?.execution_status || '').toLowerCase() === 'completed';
+              const isExecuting = executingActionId === String(item?.id || '');
+              return (
+                <div
+                  key={`${item.id || item.title}-${index}`}
+                  className="rounded-2xl border border-slate-800 px-3 py-2 text-sm bg-slate-950/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-100">{item.title}</p>
+                      <p className="text-slate-400 text-xs mt-1">{item.rationale || item.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isDone || isExecuting}
+                      onClick={() => handleExecuteProtocolAction(item)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${
+                        isDone
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60'
+                      }`}
+                    >
+                      {isDone ? 'Applied' : isExecuting ? 'Applying...' : 'Apply'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-sm text-slate-500">No protocol automation actions are pending.</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-800/70 p-4 bg-slate-900/60 space-y-2">
           <p className="text-sm text-slate-400 uppercase tracking-wide">Treatment Recommendations</p>
           {recommendations.length ? (
             recommendations.map((rec: any, index: number) => (
@@ -245,5 +349,4 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
 };
 
 export default OncologyIntelligencePanel;
-
 

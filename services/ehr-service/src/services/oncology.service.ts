@@ -1927,6 +1927,227 @@ export class OncologyService {
     return value && value.length ? value : null;
   }
 
+  private parseJsonObject(value: any) {
+    if (!value) {
+      return null;
+    }
+    if (typeof value === 'object') {
+      return value;
+    }
+    try {
+      return JSON.parse(String(value));
+    } catch {
+      return null;
+    }
+  }
+
+  private isMissingTableError(error: any): boolean {
+    return ['42P01', '42703'].includes(error?.code);
+  }
+
+  private getUserDisplayName(user: {
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    id?: string;
+  }) {
+    const fullName = String(user.fullName || '').trim();
+    if (fullName) {
+      return fullName;
+    }
+    const composed = `${String(user.firstName || '').trim()} ${String(user.lastName || '').trim()}`.trim();
+    if (composed) {
+      return composed;
+    }
+    return String(user.email || user.id || 'Clinician');
+  }
+
+  private buildProtocolCitation(ruleId: string, citation: string, source = 'ASCO/NCCN oncology protocol') {
+    return {
+      rule_id: ruleId,
+      source,
+      citation,
+    };
+  }
+
+  private normalizeProtocolCitations(citations: Array<{ rule_id: string; source: string; citation: string } | null | undefined>) {
+    const deduped = new Map<string, { rule_id: string; source: string; citation: string }>();
+    for (const citation of citations) {
+      if (!citation?.citation) {
+        continue;
+      }
+      const key = `${citation.rule_id}:${citation.citation}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, citation);
+      }
+    }
+    return Array.from(deduped.values());
+  }
+
+  private async safeQuery(tenantDb: DataSource, sql: string, params: any[] = []) {
+    try {
+      return await tenantDb.query(sql, params);
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return [];
+    }
+  }
+
+  private async getOncologyProtocolWorkflowContext(tenantDb: DataSource, caseId: string) {
+    const workflowKey = `oncology-protocol:${caseId}`;
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT status, context
+      FROM nurse_cross_module_workflow_state
+      WHERE workflow_key = $1
+      LIMIT 1
+      `,
+      [workflowKey],
+    );
+    const row = rows[0] || null;
+    return {
+      workflowKey,
+      status: String(row?.status || 'pending').toLowerCase(),
+      context: this.parseJsonObject(row?.context) || {},
+    };
+  }
+
+  private applyOncologyProtocolExecutionState(bundle: any, workflowContext: any) {
+    if (!bundle || typeof bundle !== 'object') {
+      return bundle;
+    }
+
+    const actionExecutions =
+      workflowContext && typeof workflowContext === 'object' && workflowContext.action_executions
+        ? workflowContext.action_executions
+        : {};
+
+    const items = Array.isArray(bundle.items)
+      ? bundle.items.map((item: any) => {
+          const execution = item?.id ? actionExecutions?.[item.id] : null;
+          if (!execution) {
+            return item;
+          }
+          return {
+            ...item,
+            execution_status: execution.status || 'completed',
+            executed_at: execution.executed_at || null,
+            executed_by_name: execution.executed_by_name || null,
+            execution_result: execution.result || null,
+          };
+        })
+      : [];
+
+    const appliedCount = items.filter((item: any) => item?.execution_status === 'completed').length;
+
+    return {
+      ...bundle,
+      items,
+      actionable_count: items.length,
+      pending_count: Math.max(items.length - appliedCount, 0),
+      applied_count: appliedCount,
+    };
+  }
+
+  private async persistOncologyProtocolExecution(
+    tenantDb: DataSource,
+    caseId: string,
+    user: {
+      id: string;
+      fullName?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    },
+    actionId: string,
+    executionResult: any,
+  ) {
+    const { workflowKey, context } = await this.getOncologyProtocolWorkflowContext(tenantDb, caseId);
+    const mergedContext = {
+      ...(context && typeof context === 'object' ? context : {}),
+      source: 'oncology_protocol_bundle',
+      action_executions: {
+        ...((context && typeof context === 'object' ? context.action_executions : {}) || {}),
+        [actionId]: {
+          status: 'completed',
+          executed_at: new Date().toISOString(),
+          executed_by: user.id,
+          executed_by_name: this.getUserDisplayName(user),
+          result: executionResult,
+        },
+      },
+    };
+
+    try {
+      await tenantDb.query(
+        `
+        INSERT INTO nurse_cross_module_workflow_state (
+          workflow_key,
+          module,
+          item_type,
+          source_record_id,
+          status,
+          destination_role,
+          destination_service,
+          destination_specialty,
+          destination_user_id,
+          acknowledged_by,
+          acknowledged_at,
+          note,
+          context,
+          updated_at
+        )
+        VALUES (
+          $1, 'oncology', 'oncology_protocol_bundle', $2, 'acknowledged',
+          'doctor', 'oncology', 'Oncology', $3, $3, NOW(), $4, $5::jsonb, NOW()
+        )
+        ON CONFLICT (workflow_key)
+        DO UPDATE SET
+          module = 'oncology',
+          item_type = 'oncology_protocol_bundle',
+          source_record_id = EXCLUDED.source_record_id,
+          status = CASE
+            WHEN nurse_cross_module_workflow_state.status = 'completed' THEN nurse_cross_module_workflow_state.status
+            ELSE 'acknowledged'
+          END,
+          destination_role = COALESCE(nurse_cross_module_workflow_state.destination_role, 'doctor'),
+          destination_service = COALESCE(nurse_cross_module_workflow_state.destination_service, 'oncology'),
+          destination_specialty = COALESCE(nurse_cross_module_workflow_state.destination_specialty, 'Oncology'),
+          destination_user_id = COALESCE(EXCLUDED.destination_user_id, nurse_cross_module_workflow_state.destination_user_id),
+          acknowledged_by = COALESCE(nurse_cross_module_workflow_state.acknowledged_by, EXCLUDED.acknowledged_by),
+          acknowledged_at = COALESCE(nurse_cross_module_workflow_state.acknowledged_at, EXCLUDED.acknowledged_at),
+          note = EXCLUDED.note,
+          context = EXCLUDED.context,
+          updated_at = NOW()
+        `,
+        [
+          workflowKey,
+          caseId,
+          user.id,
+          `Executed oncology protocol action: ${actionId}`,
+          JSON.stringify(mergedContext),
+        ],
+      );
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  private appendCasePlanNote(existingPlan: string | null | undefined, marker: string, noteLine: string) {
+    const normalizedExisting = String(existingPlan || '');
+    if (normalizedExisting.includes(marker)) {
+      return { reused: true, nextPlan: normalizedExisting };
+    }
+    const nextPlan = normalizedExisting.length > 0 ? `${normalizedExisting}\n${noteLine}` : noteLine;
+    return { reused: false, nextPlan };
+  }
+
   async createSurvivorshipPlan(
     tenantDb: DataSource,
     caseId: string,
@@ -2988,6 +3209,576 @@ export class OncologyService {
       severity: event.grade && Number(event.grade) >= 4 ? 'critical' : 'warning',
       message: `${event.event_type ?? 'Adverse event'} reported on ${event.event_date ?? 'recently'}`,
     }));
+  }
+
+  async getProtocolAutomationBundle(tenantDb: DataSource, caseId: string) {
+    const [caseRow] = await tenantDb.query(
+      `
+      SELECT id, status, primary_diagnosis, care_plan
+      FROM oncology_cases
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [caseId],
+    );
+    if (!caseRow) {
+      throw new NotFoundException(`Oncology case ${caseId} not found`);
+    }
+
+    const [latestResponse, upcomingInfusion, latestGrade3Event] = await Promise.all([
+      tenantDb.query(
+        `
+        SELECT id, recist_response, new_lesions, assessment_date
+        FROM oncology_response_assessments
+        WHERE oncology_case_id = $1
+        ORDER BY assessment_date DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        `,
+        [caseId],
+      ).then((rows) => rows[0] || null),
+      tenantDb.query(
+        `
+        SELECT ois.id, ois.session_date, ois.status, ois.regimen_id, ois.notes, orr.regimen_name
+        FROM oncology_infusion_sessions ois
+        INNER JOIN oncology_regimens orr ON orr.id = ois.regimen_id
+        WHERE orr.oncology_case_id = $1
+          AND ois.status IN ('scheduled', 'in_progress')
+        ORDER BY ois.session_date ASC NULLS LAST, ois.created_at ASC
+        LIMIT 1
+        `,
+        [caseId],
+      ).then((rows) => rows[0] || null),
+      tenantDb.query(
+        `
+        SELECT id, event_type, grade, event_date, notes, action_taken
+        FROM oncology_adverse_events
+        WHERE oncology_case_id = $1
+          AND resolved_date IS NULL
+          AND grade IS NOT NULL
+          AND grade::int >= 3
+        ORDER BY event_date DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        `,
+        [caseId],
+      ).then((rows) => rows[0] || null),
+    ]);
+
+    const [surveillance, financialSummary] = await Promise.all([
+      this.generateSurveillanceReminders(tenantDb, caseId),
+      this.getFinancialSummary(tenantDb, caseId).catch(() => null),
+    ]);
+    const overdueFollowUps = Array.isArray(surveillance?.overdue) ? surveillance.overdue : [];
+
+    const items: Array<Record<string, any>> = [];
+    const citations: Array<{ rule_id: string; source: string; citation: string }> = [];
+
+    if (upcomingInfusion?.id) {
+      items.push({
+        id: 'queue-prechemo-labs',
+        type: 'order_set',
+        title: 'Queue pre-chemo CBC/CMP order set',
+        priority: String(upcomingInfusion.status || '').toLowerCase() === 'in_progress' ? 'high' : 'medium',
+        rationale: `Infusion session ${upcomingInfusion.id} (${upcomingInfusion.regimen_name || 'regimen'}) is pending. Protocol requires pre-chemo lab gate confirmation.`,
+        action_payload: {
+          case_id: caseId,
+          infusion_session_id: upcomingInfusion.id,
+          regimen_id: upcomingInfusion.regimen_id || null,
+          order_set: ['CBC', 'CMP', 'LFT', 'Creatinine'],
+        },
+        guideline_citations: this.normalizeProtocolCitations([
+          this.buildProtocolCitation(
+            'oncology.infusion.prechemo_lab_gate',
+            'Systemic therapy safety protocols require baseline CBC/CMP and organ-function review before infusion.',
+          ),
+        ]),
+      });
+      citations.push(
+        this.buildProtocolCitation(
+          'oncology.infusion.prechemo_lab_gate',
+          'Systemic therapy safety protocols require baseline CBC/CMP and organ-function review before infusion.',
+        ),
+      );
+    }
+
+    if (latestGrade3Event?.id) {
+      const grade = Number(latestGrade3Event.grade || 3);
+      items.push({
+        id: 'document-dose-adjustment-review',
+        type: 'protocol_checkpoint',
+        title: 'Document dose-adjustment toxicity review',
+        priority: grade >= 4 ? 'critical' : 'high',
+        rationale: `Unresolved grade ${grade} toxicity (${latestGrade3Event.event_type || 'adverse event'}) requires documented dose/rechallenge decision.`,
+        action_payload: {
+          case_id: caseId,
+          adverse_event_id: latestGrade3Event.id,
+          grade,
+        },
+        guideline_citations: this.normalizeProtocolCitations([
+          this.buildProtocolCitation(
+            'oncology.toxicity.grade3plus',
+            'Grade 3+ treatment-related toxicity requires physician dose-adjustment or hold decision before next cycle.',
+          ),
+        ]),
+      });
+      citations.push(
+        this.buildProtocolCitation(
+          'oncology.toxicity.grade3plus',
+          'Grade 3+ treatment-related toxicity requires physician dose-adjustment or hold decision before next cycle.',
+        ),
+      );
+    }
+
+    if (latestResponse && (latestResponse.recist_response === 'PD' || latestResponse.new_lesions)) {
+      items.push({
+        id: 'route-tumor-board-review',
+        type: 'escalation',
+        title: 'Route case for tumor-board review',
+        priority: 'critical',
+        rationale:
+          latestResponse.recist_response === 'PD'
+            ? 'Latest RECIST indicates progression; multidisciplinary review is recommended.'
+            : 'New lesions were flagged; multidisciplinary review is recommended.',
+        action_payload: {
+          case_id: caseId,
+          response_assessment_id: latestResponse.id,
+          recist_response: latestResponse.recist_response,
+          new_lesions: Boolean(latestResponse.new_lesions),
+        },
+        guideline_citations: this.normalizeProtocolCitations([
+          this.buildProtocolCitation(
+            'oncology.response.progression',
+            'Progressive disease or new lesions should trigger multidisciplinary reassessment and treatment-plan adjustment.',
+          ),
+        ]),
+      });
+      citations.push(
+        this.buildProtocolCitation(
+          'oncology.response.progression',
+          'Progressive disease or new lesions should trigger multidisciplinary reassessment and treatment-plan adjustment.',
+        ),
+      );
+    }
+
+    if (overdueFollowUps.length > 0) {
+      items.push({
+        id: 'schedule-overdue-surveillance',
+        type: 'follow_up',
+        title: 'Schedule overdue surveillance follow-up',
+        priority: 'high',
+        rationale: `${overdueFollowUps.length} surveillance visit(s) are overdue and should be scheduled before next cycle.`,
+        action_payload: {
+          case_id: caseId,
+          overdue_count: overdueFollowUps.length,
+          earliest_due_date: overdueFollowUps[0]?.dueDate || null,
+          suggested_tests: Array.isArray(overdueFollowUps[0]?.tests) ? overdueFollowUps[0].tests : [],
+        },
+        guideline_citations: this.normalizeProtocolCitations([
+          this.buildProtocolCitation(
+            'oncology.surveillance.overdue',
+            'Overdue post-treatment surveillance should be booked promptly to reduce delayed progression detection.',
+          ),
+        ]),
+      });
+      citations.push(
+        this.buildProtocolCitation(
+          'oncology.surveillance.overdue',
+          'Overdue post-treatment surveillance should be booked promptly to reduce delayed progression detection.',
+        ),
+      );
+    }
+
+    if (financialSummary?.stressFlag) {
+      items.push({
+        id: 'initiate-financial-navigation',
+        type: 'supportive_care',
+        title: 'Initiate financial navigation referral',
+        priority: 'medium',
+        rationale: 'Financial toxicity screening indicates elevated stress; prompt navigation support is recommended.',
+        action_payload: {
+          case_id: caseId,
+          stress_flag: true,
+        },
+        guideline_citations: this.normalizeProtocolCitations([
+          this.buildProtocolCitation(
+            'oncology.financial.toxicity',
+            'High financial-toxicity burden warrants documented referral to navigation or assistance pathways.',
+          ),
+        ]),
+      });
+      citations.push(
+        this.buildProtocolCitation(
+          'oncology.financial.toxicity',
+          'High financial-toxicity burden warrants documented referral to navigation or assistance pathways.',
+        ),
+      );
+    }
+
+    const { context: workflowContext } = await this.getOncologyProtocolWorkflowContext(tenantDb, caseId);
+    const bundle = this.applyOncologyProtocolExecutionState(
+      {
+        bundle_key: `oncology-protocol:${caseId}`,
+        bundle_label: 'Oncology Protocol Automation Bundle',
+        summary:
+          items.length > 0
+            ? 'Actionable protocol tasks generated from infusion, toxicity, response, surveillance, and financial-toxicity signals.'
+            : 'No actionable protocol automation tasks are currently pending.',
+        items,
+        citations: this.normalizeProtocolCitations(citations),
+      },
+      workflowContext,
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      case: {
+        id: caseRow.id,
+        status: caseRow.status,
+        primaryDiagnosis: caseRow.primary_diagnosis,
+      },
+      protocolBundle: bundle,
+    };
+  }
+
+  async executeProtocolBundleAction(
+    tenantDb: DataSource,
+    caseId: string,
+    actionId: string,
+    user: {
+      id: string;
+      fullName?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    },
+    payload?: {
+      actionPayload?: any;
+      note?: string | null;
+    },
+  ) {
+    if (!caseId || !actionId) {
+      throw new BadRequestException('caseId and actionId are required');
+    }
+
+    const [caseRow] = await tenantDb.query(
+      `
+      SELECT id, care_plan
+      FROM oncology_cases
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [caseId],
+    );
+    if (!caseRow) {
+      throw new NotFoundException(`Oncology case ${caseId} not found`);
+    }
+
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+
+    const { context } = await this.getOncologyProtocolWorkflowContext(tenantDb, caseId);
+    const existingExecution = context?.action_executions?.[actionId] || null;
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        caseId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { operation: 'already_applied', status: 'completed' },
+      };
+    }
+
+    const timestampIso = new Date().toISOString();
+    const userName = this.getUserDisplayName(user);
+    const additionalNote = String(payload?.note || '').trim();
+    const suffixNote = additionalNote ? ` Note: ${additionalNote}` : '';
+    let result: any;
+
+    if (actionId === 'queue-prechemo-labs') {
+      const infusionSessionId =
+        actionPayload.infusion_session_id ||
+        (
+          await tenantDb.query(
+            `
+            SELECT ois.id
+            FROM oncology_infusion_sessions ois
+            INNER JOIN oncology_regimens orr ON orr.id = ois.regimen_id
+            WHERE orr.oncology_case_id = $1
+              AND ois.status IN ('scheduled', 'in_progress')
+            ORDER BY ois.session_date ASC NULLS LAST, ois.created_at ASC
+            LIMIT 1
+            `,
+            [caseId],
+          )
+        )[0]?.id;
+
+      if (!infusionSessionId) {
+        throw new BadRequestException('No active infusion session available for pre-chemo lab queueing');
+      }
+
+      const marker = '[protocol:queue-prechemo-labs]';
+      const noteLine = `${marker} Pre-chemo lab order set queued by ${userName} at ${timestampIso}. CBC/CMP/LFT/Creatinine gate required.${suffixNote}`;
+      const [sessionRow] = await tenantDb.query(
+        `
+        SELECT id, notes
+        FROM oncology_infusion_sessions
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [infusionSessionId],
+      );
+      if (!sessionRow) {
+        throw new NotFoundException(`Infusion session ${infusionSessionId} not found`);
+      }
+      const existingNotes = String(sessionRow.notes || '');
+      if (existingNotes.includes(marker)) {
+        result = {
+          operation: 'already_applied',
+          status: 'completed',
+          infusionSessionId,
+        };
+      } else {
+        const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+        await tenantDb.query(
+          `
+          UPDATE oncology_infusion_sessions
+          SET notes = $1, updated_at = NOW()
+          WHERE id = $2
+          `,
+          [nextNotes, infusionSessionId],
+        );
+        result = {
+          operation: 'prechemo_order_set_documented',
+          status: 'completed',
+          infusionSessionId,
+        };
+      }
+    } else if (actionId === 'document-dose-adjustment-review') {
+      const adverseEventId =
+        actionPayload.adverse_event_id ||
+        (
+          await tenantDb.query(
+            `
+            SELECT id
+            FROM oncology_adverse_events
+            WHERE oncology_case_id = $1
+              AND resolved_date IS NULL
+              AND grade IS NOT NULL
+              AND grade::int >= 3
+            ORDER BY event_date DESC NULLS LAST, created_at DESC
+            LIMIT 1
+            `,
+            [caseId],
+          )
+        )[0]?.id;
+
+      if (!adverseEventId) {
+        throw new BadRequestException('No unresolved grade 3+ adverse event found for dose-adjustment review');
+      }
+
+      const marker = '[protocol:document-dose-adjustment-review]';
+      const [eventRow] = await tenantDb.query(
+        `
+        SELECT id, notes, action_taken
+        FROM oncology_adverse_events
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [adverseEventId],
+      );
+      if (!eventRow) {
+        throw new NotFoundException(`Adverse event ${adverseEventId} not found`);
+      }
+      const existingActionTaken = String(eventRow.action_taken || '');
+      if (existingActionTaken.includes(marker)) {
+        result = {
+          operation: 'already_applied',
+          status: 'completed',
+          adverseEventId,
+        };
+      } else {
+        const noteLine = `${marker} Dose-adjustment/rechallenge decision documented by ${userName} at ${timestampIso}.${suffixNote}`;
+        const nextNotes = String(eventRow.notes || '').length > 0 ? `${String(eventRow.notes || '')}\n${noteLine}` : noteLine;
+        const nextActionTaken =
+          existingActionTaken.length > 0
+            ? `${existingActionTaken}\n${marker} Physician review completed.`
+            : `${marker} Physician review completed.`;
+        await tenantDb.query(
+          `
+          UPDATE oncology_adverse_events
+          SET notes = $1, action_taken = $2, outcome = COALESCE(outcome, 'dose_adjustment_reviewed'), updated_at = NOW()
+          WHERE id = $3
+          `,
+          [nextNotes, nextActionTaken, adverseEventId],
+        );
+        result = {
+          operation: 'toxicity_dose_adjustment_documented',
+          status: 'completed',
+          adverseEventId,
+        };
+      }
+    } else if (actionId === 'route-tumor-board-review') {
+      const marker = '[protocol:route-tumor-board-review]';
+      const noteLine = `${marker} Tumor-board review routed by ${userName} at ${timestampIso}.${suffixNote}`;
+      const { reused, nextPlan } = this.appendCasePlanNote(caseRow.care_plan, marker, noteLine);
+      if (!reused) {
+        await tenantDb.query(
+          `
+          UPDATE oncology_cases
+          SET care_plan = $1, updated_at = NOW()
+          WHERE id = $2
+          `,
+          [nextPlan, caseId],
+        );
+      }
+      result = {
+        operation: reused ? 'already_applied' : 'tumor_board_review_routed',
+        status: 'completed',
+      };
+    } else if (actionId === 'schedule-overdue-surveillance') {
+      const [planRow] = await tenantDb.query(
+        `
+        SELECT id, follow_up_schedule
+        FROM oncology_survivorship_plans
+        WHERE oncology_case_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [caseId],
+      );
+      if (planRow?.id) {
+        const existingSchedule = this.parseJsonObject(planRow.follow_up_schedule) || {};
+        const manualFollowups = Array.isArray(existingSchedule.manual_followups)
+          ? existingSchedule.manual_followups
+          : [];
+        const marker = '[protocol:schedule-overdue-surveillance]';
+        const alreadyExists = manualFollowups.some((entry: any) => String(entry?.marker || '') === marker);
+        if (alreadyExists) {
+          result = {
+            operation: 'already_applied',
+            status: 'completed',
+            planId: planRow.id,
+          };
+        } else {
+          const nextSchedule = {
+            ...existingSchedule,
+            manual_followups: [
+              ...manualFollowups,
+              {
+                marker,
+                due_date: new Date().toISOString().split('T')[0],
+                created_at: timestampIso,
+                created_by_name: userName,
+                source: 'oncology_protocol_bundle',
+                tests: Array.isArray(actionPayload.suggested_tests) ? actionPayload.suggested_tests : [],
+                note: additionalNote || null,
+              },
+            ],
+          };
+          await tenantDb.query(
+            `
+            UPDATE oncology_survivorship_plans
+            SET follow_up_schedule = $1::jsonb, updated_at = NOW()
+            WHERE id = $2
+            `,
+            [JSON.stringify(nextSchedule), planRow.id],
+          );
+          result = {
+            operation: 'surveillance_followup_scheduled',
+            status: 'completed',
+            planId: planRow.id,
+          };
+        }
+      } else {
+        const marker = '[protocol:schedule-overdue-surveillance]';
+        const noteLine = `${marker} Overdue surveillance follow-up scheduled by ${userName} at ${timestampIso}.${suffixNote}`;
+        const { reused, nextPlan } = this.appendCasePlanNote(caseRow.care_plan, marker, noteLine);
+        if (!reused) {
+          await tenantDb.query(
+            `
+            UPDATE oncology_cases
+            SET care_plan = $1, updated_at = NOW()
+            WHERE id = $2
+            `,
+            [nextPlan, caseId],
+          );
+        }
+        result = {
+          operation: reused ? 'already_applied' : 'surveillance_followup_documented',
+          status: 'completed',
+        };
+      }
+    } else if (actionId === 'initiate-financial-navigation') {
+      const marker = '[protocol:initiate-financial-navigation]';
+      const [sessionRow] = await tenantDb.query(
+        `
+        SELECT ois.id, ois.notes, ois.financial_assistance_program
+        FROM oncology_infusion_sessions ois
+        INNER JOIN oncology_regimens orr ON orr.id = ois.regimen_id
+        WHERE orr.oncology_case_id = $1
+        ORDER BY ois.session_date DESC NULLS LAST, ois.created_at DESC
+        LIMIT 1
+        `,
+        [caseId],
+      );
+
+      if (sessionRow?.id) {
+        const existingNotes = String(sessionRow.notes || '');
+        if (existingNotes.includes(marker)) {
+          result = {
+            operation: 'already_applied',
+            status: 'completed',
+            infusionSessionId: sessionRow.id,
+          };
+        } else {
+          const noteLine = `${marker} Financial navigation referral initiated by ${userName} at ${timestampIso}.${suffixNote}`;
+          const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+          await tenantDb.query(
+            `
+            UPDATE oncology_infusion_sessions
+            SET
+              notes = $1,
+              financial_assistance_program = COALESCE(financial_assistance_program, 'Pending financial navigation referral'),
+              updated_at = NOW()
+            WHERE id = $2
+            `,
+            [nextNotes, sessionRow.id],
+          );
+          result = {
+            operation: 'financial_navigation_initiated',
+            status: 'completed',
+            infusionSessionId: sessionRow.id,
+          };
+        }
+      } else {
+        const noteLine = `${marker} Financial navigation referral initiated by ${userName} at ${timestampIso}.${suffixNote}`;
+        const { reused, nextPlan } = this.appendCasePlanNote(caseRow.care_plan, marker, noteLine);
+        if (!reused) {
+          await tenantDb.query(
+            `
+            UPDATE oncology_cases
+            SET care_plan = $1, updated_at = NOW()
+            WHERE id = $2
+            `,
+            [nextPlan, caseId],
+          );
+        }
+        result = {
+          operation: reused ? 'already_applied' : 'financial_navigation_documented',
+          status: 'completed',
+        };
+      }
+    } else {
+      throw new BadRequestException(`Unsupported oncology protocol action: ${actionId}`);
+    }
+
+    await this.persistOncologyProtocolExecution(tenantDb, caseId, user, actionId, result);
+
+    return {
+      ok: true,
+      caseId,
+      actionId,
+      result,
+    };
   }
 
   async checkCaseAlerts(

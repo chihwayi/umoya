@@ -445,6 +445,37 @@ export class OncologyController {
     return this.oncologyService.generateTreatmentRecommendations(req.tenantDb, caseId);
   }
 
+  @Get('cases/:id/protocol-bundle')
+  @ApiOperation({ summary: 'Generate executable oncology doctor protocol bundle for a case' })
+  async getProtocolBundle(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
+    return this.oncologyService.getProtocolAutomationBundle(req.tenantDb, caseId);
+  }
+
+  @Post('cases/:id/protocol-bundle/actions/:actionId/execute')
+  @ApiOperation({ summary: 'Execute an oncology doctor protocol bundle action' })
+  async executeProtocolBundleAction(
+    @Request() req: RequestWithTenant,
+    @Param('id') caseId: string,
+    @Param('actionId') actionId: string,
+    @Body() body: { note?: string; actionPayload?: any },
+  ) {
+    const requestUser = (req.user as any) || {};
+    const user = {
+      id: requestUser.id || requestUser.userId,
+      fullName: requestUser.fullName || requestUser.name,
+      firstName: requestUser.firstName,
+      lastName: requestUser.lastName,
+      email: requestUser.email,
+    };
+    return this.oncologyService.executeProtocolBundleAction(
+      req.tenantDb,
+      caseId,
+      actionId,
+      user,
+      body || {},
+    );
+  }
+
   @Get('cases/:id/surveillance-reminders')
   @ApiOperation({ summary: 'Generate surveillance reminders' })
   async getSurveillanceReminders(@Request() req: RequestWithTenant, @Param('id') caseId: string) {
@@ -504,4 +535,3 @@ export class OncologyController {
     return this.oncologyService.getDashboardSummary(req.tenantDb);
   }
 }
-

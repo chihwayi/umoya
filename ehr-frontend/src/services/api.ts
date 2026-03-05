@@ -3500,6 +3500,36 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getOncologyProtocolBundle: async (tenantSlug: string, token: string, caseId: string) => {
+    const response = await ehrAxios.get(`/oncology/cases/${caseId}/protocol-bundle`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  executeOncologyProtocolBundleAction: async (
+    tenantSlug: string,
+    token: string,
+    caseId: string,
+    actionId: string,
+    payload: { note?: string; actionPayload?: any } = {},
+  ) => {
+    const response = await ehrAxios.post(
+      `/oncology/cases/${caseId}/protocol-bundle/actions/${actionId}/execute`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
   getOncologySurveillanceReminders: async (tenantSlug: string, token: string, caseId: string) => {
     const response = await ehrAxios.get(`/oncology/cases/${caseId}/surveillance-reminders`, {
       headers: {
