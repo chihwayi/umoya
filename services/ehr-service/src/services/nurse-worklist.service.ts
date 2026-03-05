@@ -2500,6 +2500,10 @@ export class NurseWorklistService {
       completed: 0,
     };
     const queueByModule: Record<string, number> = {};
+    const moduleStatusCounts: Record<
+      string,
+      { total: number; pending: number; acknowledged: number; completed: number }
+    > = {};
     let pendingOver24h = 0;
 
     const executedByAction: Record<string, number> = {};
@@ -2513,6 +2517,14 @@ export class NurseWorklistService {
 
       const normalizedModule = String(row?.module || 'unknown').toLowerCase();
       queueByModule[normalizedModule] = (queueByModule[normalizedModule] || 0) + 1;
+      moduleStatusCounts[normalizedModule] = moduleStatusCounts[normalizedModule] || {
+        total: 0,
+        pending: 0,
+        acknowledged: 0,
+        completed: 0,
+      };
+      moduleStatusCounts[normalizedModule].total += 1;
+      moduleStatusCounts[normalizedModule][normalizedStatus] += 1;
 
       if (normalizedStatus !== 'completed') {
         const pendingAge = this.getHoursSince(row?.updated_at || row?.created_at);
@@ -2549,6 +2561,26 @@ export class NurseWorklistService {
     const completedItems = queueByStatus.completed || 0;
     const acknowledgedItems = queueByStatus.acknowledged || 0;
     const pendingItems = queueByStatus.pending || 0;
+    const moduleDrilldown = Object.entries(moduleStatusCounts)
+      .map(([module, counts]) => ({
+        module,
+        totalItems: counts.total,
+        pendingItems: counts.pending,
+        acknowledgedItems: counts.acknowledged,
+        completedItems: counts.completed,
+        completionRatePercent: this.toPercent(counts.completed, counts.total),
+        executedActionsTotal: executedByModule[module] || 0,
+      }))
+      .sort((a, b) => {
+        if (b.totalItems !== a.totalItems) {
+          return b.totalItems - a.totalItems;
+        }
+        return b.executedActionsTotal - a.executedActionsTotal;
+      });
+    const topActions = Object.entries(executedByAction)
+      .map(([actionId, count]) => ({ actionId, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -2564,6 +2596,7 @@ export class NurseWorklistService {
         completedItems,
         byStatus: queueByStatus,
         byModule: queueByModule,
+        moduleDrilldown,
         completionRatePercent: this.toPercent(completedItems, totalItems),
         pendingOlderThan24h: pendingOver24h,
       },
@@ -2572,6 +2605,7 @@ export class NurseWorklistService {
         reusedOrIdempotentTotal,
         executedByAction,
         executedByModule,
+        topActions,
       },
     };
   }

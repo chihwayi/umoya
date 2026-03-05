@@ -83,7 +83,7 @@ describe('OncologyService protocol automation', () => {
     const tenantDb = {
       query: jest.fn(async (sql: string) => {
         if (sql.includes('FROM oncology_cases') && sql.includes('LIMIT 1')) {
-          return [{ id: 'case-1', care_plan: '' }];
+          return [{ id: 'case-1', patient_id: 'patient-1', care_plan: '' }];
         }
         if (sql.includes('FROM nurse_cross_module_workflow_state')) {
           return [
@@ -122,10 +122,16 @@ describe('OncologyService protocol automation', () => {
     const tenantDb = {
       query: jest.fn(async (sql: string, params: any[]) => {
         if (sql.includes('FROM oncology_cases') && sql.includes('LIMIT 1')) {
-          return [{ id: 'case-1', care_plan: '' }];
+          return [{ id: 'case-1', patient_id: 'patient-1', care_plan: '' }];
         }
         if (sql.includes('FROM nurse_cross_module_workflow_state')) {
           return [];
+        }
+        if (sql.includes('SELECT id, order_number, status') && sql.includes('FROM lab_orders')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO lab_orders')) {
+          return [{ id: `lab-${Math.random()}`, order_number: 'ONCLAB-1', status: 'ordered' }];
         }
         if (sql.includes('FROM oncology_infusion_sessions') && sql.includes('WHERE id = $1')) {
           return [{ id: 'sess-1', notes: '' }];
@@ -149,7 +155,9 @@ describe('OncologyService protocol automation', () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.result.operation).toBe('prechemo_order_set_documented');
+    expect(result.result.operation).toBe('prechemo_lab_orders_created');
+    expect(result.result.createdLabOrderCount).toBe(4);
+    expect(result.result.createdLabOrderIds).toHaveLength(4);
     expect(tenantDb.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE oncology_infusion_sessions'),
       expect.arrayContaining([expect.stringContaining('[protocol:queue-prechemo-labs]'), 'sess-1']),

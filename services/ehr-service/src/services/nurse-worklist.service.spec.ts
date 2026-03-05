@@ -1669,6 +1669,11 @@ describe('NurseWorklistService', () => {
           oncology: 1,
           maternity: 1,
         }),
+        moduleDrilldown: expect.arrayContaining([
+          expect.objectContaining({ module: 'hiv', totalItems: 1, pendingItems: 1, executedActionsTotal: 1 }),
+          expect.objectContaining({ module: 'oncology', totalItems: 1, acknowledgedItems: 1, executedActionsTotal: 1 }),
+          expect.objectContaining({ module: 'maternity', totalItems: 1, completedItems: 1, executedActionsTotal: 1 }),
+        ]),
       }),
     );
     expect(analytics.recommendationExecution).toEqual(
@@ -1685,6 +1690,9 @@ describe('NurseWorklistService', () => {
           oncology: 1,
           maternity: 1,
         }),
+        topActions: expect.arrayContaining([
+          expect.objectContaining({ actionId: 'repeat-vl-plan', count: 1 }),
+        ]),
       }),
     );
   });

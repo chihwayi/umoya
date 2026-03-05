@@ -136,12 +136,22 @@ interface DoctorOutcomeAnalyticsSnapshot {
     completionRatePercent?: number;
     pendingOlderThan24h?: number;
     byModule?: Record<string, number>;
+    moduleDrilldown?: Array<{
+      module: string;
+      totalItems: number;
+      pendingItems: number;
+      acknowledgedItems: number;
+      completedItems: number;
+      completionRatePercent: number;
+      executedActionsTotal: number;
+    }>;
   };
   recommendationExecution?: {
     executedActionsTotal?: number;
     reusedOrIdempotentTotal?: number;
     executedByAction?: Record<string, number>;
     executedByModule?: Record<string, number>;
+    topActions?: Array<{ actionId: string; count: number }>;
   };
 }
 
@@ -2219,6 +2229,51 @@ const DoctorDashboard: React.FC = () => {
                     <p className="text-2xl font-bold text-slate-900">
                       {doctorOutcomeAnalytics?.recommendationExecution?.reusedOrIdempotentTotal ?? 0}
                     </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">Specialty Queue Drilldown</p>
+                    <div className="space-y-2">
+                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).slice(0, 5).map((moduleRow) => (
+                        <div
+                          key={`doctor-module-${moduleRow.module}`}
+                          className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800 capitalize">{moduleRow.module}</p>
+                            <p className="text-xs text-slate-500">
+                              {moduleRow.pendingItems} pending • {moduleRow.acknowledgedItems} acknowledged • {moduleRow.completedItems} completed
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-slate-900">{moduleRow.totalItems}</p>
+                            <p className="text-xs text-slate-500">{moduleRow.executedActionsTotal} actions</p>
+                          </div>
+                        </div>
+                      ))}
+                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).length === 0 && (
+                        <p className="text-xs text-slate-500">No specialty drilldown data available for this window.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">Top Executed Doctor Actions</p>
+                    <div className="space-y-2">
+                      {(doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).slice(0, 6).map((row) => (
+                        <div
+                          key={`doctor-action-${row.actionId}`}
+                          className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                        >
+                          <p className="text-sm text-slate-700">{row.actionId.replace(/-/g, ' ')}</p>
+                          <span className="text-sm font-bold text-slate-900">{row.count}</span>
+                        </div>
+                      ))}
+                      {(doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).length === 0 && (
+                        <p className="text-xs text-slate-500">No executed doctor actions yet in this analytics window.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

@@ -3461,7 +3461,7 @@ export class OncologyService {
 
     const [caseRow] = await tenantDb.query(
       `
-      SELECT id, care_plan
+      SELECT id, patient_id, care_plan
       FROM oncology_cases
       WHERE id = $1
       LIMIT 1
@@ -3531,12 +3531,122 @@ export class OncologyService {
       }
       const existingNotes = String(sessionRow.notes || '');
       if (existingNotes.includes(marker)) {
+        const existingAutomationRows = await this.safeQuery(
+          tenantDb,
+          `
+          SELECT id, order_number, status
+          FROM lab_orders
+          WHERE patient_id = $1
+            AND COALESCE(processing_context->>'oncology_protocol_action', '') = 'queue-prechemo-labs'
+            AND COALESCE(processing_context->>'case_id', '') = $2
+            AND COALESCE(processing_context->>'infusion_session_id', '') = $3
+            AND status <> 'cancelled'
+          ORDER BY created_at DESC
+          `,
+          [caseRow.patient_id, caseId, infusionSessionId],
+        );
         result = {
           operation: 'already_applied',
           status: 'completed',
           infusionSessionId,
+          existingLabOrderIds: existingAutomationRows.map((row: any) => row.id),
         };
       } else {
+        const automationTests = [
+          { code: 'CBC', name: 'Complete Blood Count', category: 'hematology' },
+          { code: 'CMP', name: 'Comprehensive Metabolic Panel', category: 'chemistry' },
+          { code: 'LFT', name: 'Liver Function Panel', category: 'chemistry' },
+          { code: 'CREAT', name: 'Serum Creatinine', category: 'chemistry' },
+        ];
+        let createdLabOrders: Array<{ id: string; order_number: string; status: string }> = [];
+        let reusedLabOrders: Array<{ id: string; order_number: string; status: string }> = [];
+
+        if (caseRow.patient_id) {
+          reusedLabOrders = await this.safeQuery(
+            tenantDb,
+            `
+            SELECT id, order_number, status
+            FROM lab_orders
+            WHERE patient_id = $1
+              AND COALESCE(processing_context->>'oncology_protocol_action', '') = 'queue-prechemo-labs'
+              AND COALESCE(processing_context->>'case_id', '') = $2
+              AND COALESCE(processing_context->>'infusion_session_id', '') = $3
+              AND status <> 'cancelled'
+            ORDER BY created_at DESC
+            `,
+            [caseRow.patient_id, caseId, infusionSessionId],
+          );
+
+          if (reusedLabOrders.length === 0) {
+            for (let index = 0; index < automationTests.length; index += 1) {
+              const test = automationTests[index];
+              const orderNumber = `ONCLAB-${Date.now()}-${String(index + 1).padStart(2, '0')}`;
+              const insertRows = await this.safeQuery(
+                tenantDb,
+                `
+                INSERT INTO lab_orders (
+                  order_number,
+                  patient_id,
+                  ordering_provider_id,
+                  ordering_provider,
+                  tests,
+                  priority,
+                  status,
+                  clinical_info,
+                  special_instructions,
+                  processing_context,
+                  payment_status,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  $1,
+                  $2,
+                  $3,
+                  $3,
+                  $4::jsonb,
+                  'urgent',
+                  'ordered',
+                  $5,
+                  $6,
+                  $7::jsonb,
+                  'payment_confirmed',
+                  NOW(),
+                  NOW()
+                )
+                RETURNING id, order_number, status
+                `,
+                [
+                  orderNumber,
+                  caseRow.patient_id,
+                  user.id,
+                  JSON.stringify([
+                    {
+                      testCode: test.code,
+                      testName: test.name,
+                      category: test.category,
+                    },
+                  ]),
+                  'Pre-chemo safety gate from oncology protocol bundle',
+                  `Infusion session ${infusionSessionId} safety check`,
+                  JSON.stringify({
+                    source: 'oncology_protocol_bundle',
+                    oncology_protocol_action: 'queue-prechemo-labs',
+                    case_id: caseId,
+                    infusion_session_id: infusionSessionId,
+                    test_code: test.code,
+                    created_by: user.id,
+                    created_by_name: userName,
+                  }),
+                ],
+              );
+              if (insertRows[0]) {
+                createdLabOrders.push(insertRows[0]);
+              }
+            }
+          }
+        }
+
         const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
         await tenantDb.query(
           `
@@ -3546,10 +3656,22 @@ export class OncologyService {
           `,
           [nextNotes, infusionSessionId],
         );
+        const createdCount = createdLabOrders.length;
+        const reusedCount = reusedLabOrders.length;
+        const operation =
+          createdCount > 0
+            ? 'prechemo_lab_orders_created'
+            : reusedCount > 0
+              ? 'prechemo_lab_orders_reused'
+              : 'prechemo_order_set_documented';
         result = {
-          operation: 'prechemo_order_set_documented',
+          operation,
           status: 'completed',
           infusionSessionId,
+          createdLabOrderIds: createdLabOrders.map((order) => order.id),
+          reusedLabOrderIds: reusedLabOrders.map((order) => order.id),
+          createdLabOrderCount: createdCount,
+          reusedLabOrderCount: reusedCount,
         };
       }
     } else if (actionId === 'document-dose-adjustment-review') {

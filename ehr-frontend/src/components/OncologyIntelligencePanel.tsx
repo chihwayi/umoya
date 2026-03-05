@@ -88,6 +88,16 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   const upcomingFollowUps = intelligence?.surveillance?.upcoming ?? [];
   const overdueFollowUps = intelligence?.surveillance?.overdue ?? [];
   const protocolItems = Array.isArray(protocolBundle?.items) ? protocolBundle.items : [];
+  const oncologyQueueDrilldown = (doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).find(
+    (row: any) => String(row?.module || '').toLowerCase() === 'oncology',
+  );
+  const oncologyTopActions = (doctorOutcomeAnalytics?.recommendationExecution?.topActions || []).filter(
+    (row: any) =>
+      String(row?.actionId || '').includes('oncology') ||
+      String(row?.actionId || '').includes('prechemo') ||
+      String(row?.actionId || '').includes('dose-adjustment') ||
+      String(row?.actionId || '').includes('tumor-board'),
+  );
 
   const handleExecuteProtocolAction = async (actionItem: any) => {
     if (!caseId || !actionItem?.id) {
@@ -177,6 +187,29 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
           <p className="text-xl font-bold text-slate-100">
             {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
           </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pb-4 border-b border-slate-800/70 bg-slate-950/20">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Oncology Queue Drilldown</p>
+          {oncologyQueueDrilldown ? (
+            <p className="text-sm text-slate-200 mt-1">
+              {oncologyQueueDrilldown.pendingItems} pending, {oncologyQueueDrilldown.acknowledgedItems} acknowledged,{' '}
+              {oncologyQueueDrilldown.completedItems} completed ({oncologyQueueDrilldown.executedActionsTotal} actions)
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-1">No oncology-specific queue drilldown in the current window.</p>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Top Oncology Actions (30d)</p>
+          {oncologyTopActions.length ? (
+            <p className="text-sm text-slate-200 mt-1">
+              {oncologyTopActions.slice(0, 3).map((row: any) => `${String(row.actionId).replace(/-/g, ' ')} (${row.count})`).join(' • ')}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-1">No oncology-specific action frequency yet.</p>
+          )}
         </div>
       </div>
       
@@ -349,4 +382,3 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
 };
 
 export default OncologyIntelligencePanel;
-
