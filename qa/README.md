@@ -84,12 +84,25 @@ Shared patient context endpoint for cross-module prefill and no-repeat entry wor
   - `modules.hiv.latestEnrollment` and `modules.hiv.latestClinicalVisit`
   - `modules.maternity.latestEnrollment/latestAncVisit/latestPostnatalVisit/latestDelivery`
   - `modules.oncology.latestCase` and `modules.oncology.activeCaseCount`
+  - `modules.cardiology.latestEncounter`
+  - `modules.ophthalmology.latestEncounter`
+  - `modules.ed.latestVisit`
+  - `modules.sepsis.latestScreening/latestBundle`
+  - `modules.bloodBank.latestTransfusion/activeTransfusionCount`
 
 Frontend reuse points now wired:
 - HIV clinical visit modal auto-prefill (only empty fields are hydrated; nurse edits are not overwritten).
 - Oncology create-case modal patient context lookup on patient ID blur (auto-seeds diagnosis/care-plan hints and provider ID).
 - Maternity enrollment modal reuses latest maternity history (parity/risk context + prior LMP hints).
 - Ophthalmology create-encounter modal reuses cross-module context (provider/patient summary and smart note seeding).
+- Blood bank dashboard reuses patient context on active transfusions (blood type/vitals/linked episodes) to reduce duplicate entry.
+
+### CI lint policy (frontend)
+- CI now enforces **blocking strict lint** for changed frontend files via:
+  - `npm run lint:changed:strict`
+- This keeps delivery stable while legacy repo-wide lint debt is reduced incrementally.
+- Full strict lint build can be run locally with:
+  - `npm --workspace medicore-ehr-frontend run build:strict-lint`
 
 ### Seeding data
 1. Provision a fresh tenant with all bundles:
