@@ -1715,6 +1715,28 @@ describe('NurseWorklistService', () => {
     expect(analytics.recommendationExecution.executedActionsTotal).toBe(0);
   });
 
+  it('applies module/status/case/date filters in doctor outcome analytics', async () => {
+    const { service } = makeService();
+    const tenantDb = {
+      query: jest.fn(async () => []),
+    } as any;
+
+    await service.getDoctorOutcomeAnalytics(tenantDb, {
+      days: 30,
+      module: 'oncology',
+      status: 'pending',
+      caseId: 'case-xyz',
+      dateFrom: '2026-02-01',
+      dateTo: '2026-02-28',
+    });
+
+    const [sql, params] = tenantDb.query.mock.calls[0];
+    expect(String(sql)).toContain('LOWER(COALESCE(module, \'\')) =');
+    expect(String(sql)).toContain('LOWER(COALESCE(status, \'\')) =');
+    expect(String(sql)).toContain('source_record_id =');
+    expect(params).toEqual(expect.arrayContaining(['2026-02-01', '2026-02-28', 'oncology', 'pending', 'case-xyz']));
+  });
+
   it('returns zero-safe nurse outcome analytics when workflow tables are unavailable', async () => {
     const { service } = makeService();
     const missingTableError: any = new Error('relation does not exist');

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, BellRing, Brain, Loader2, Search, BookOpen, CheckCircle, Sparkles } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -22,6 +22,20 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   const [protocolBundle, setProtocolBundle] = useState<any>(null);
   const [executingActionId, setExecutingActionId] = useState<string | null>(null);
   const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<any>(null);
+  const [drilldownFilters, setDrilldownFilters] = useState({
+    caseId: caseId || '',
+    status: 'all',
+    days: 30,
+    dateFrom: '',
+    dateTo: '',
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    caseId: caseId || '',
+    status: 'all',
+    days: 30,
+    dateFrom: '',
+    dateTo: '',
+  });
   
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -29,20 +43,52 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
 
-  const hasCase = Boolean(caseId && tenantSlug && token);
+  const effectiveCaseId = String(appliedFilters.caseId || caseId || '').trim();
+  const hasCase = Boolean(effectiveCaseId && tenantSlug && token);
 
-  const loadIntelligence = useCallback(async () => {
-    if (!hasCase) return;
+  useEffect(() => {
+    setDrilldownFilters((prev) => ({
+      ...prev,
+      caseId: caseId || '',
+    }));
+    setAppliedFilters((prev) => ({
+      ...prev,
+      caseId: caseId || '',
+    }));
+  }, [caseId]);
+
+  const loadIntelligence = async (
+    filters: {
+      caseId: string;
+      status: string;
+      days: number;
+      dateFrom: string;
+      dateTo: string;
+    } = appliedFilters,
+  ) => {
+    const targetCaseId = String(filters.caseId || caseId || '').trim();
+    if (!targetCaseId || !tenantSlug || !token) {
+      setIntelligence(null);
+      setProtocolBundle(null);
+      setDoctorOutcomeAnalytics(null);
+      return;
+    }
     setLoading(true);
     try {
       const [alertResponse, bundleResponse, doctorAnalyticsResponse] = await Promise.all([
-        ehrApi.checkOncologyCaseAlerts(tenantSlug!, token!, caseId!, {
+        ehrApi.checkOncologyCaseAlerts(tenantSlug!, token!, targetCaseId, {
           includeRecommendations: true,
           includeSurveillance: true,
           includeToxicity: true,
         }),
-        ehrApi.getOncologyProtocolBundle(tenantSlug!, token!, caseId!),
-        ehrApi.getDoctorOutcomeAnalytics(30, token!, tenantSlug!),
+        ehrApi.getOncologyProtocolBundle(tenantSlug!, token!, targetCaseId),
+        ehrApi.getDoctorOutcomeAnalytics(filters.days, token!, tenantSlug!, {
+          module: 'oncology',
+          status: filters.status !== 'all' ? filters.status : undefined,
+          caseId: targetCaseId || undefined,
+          dateFrom: filters.dateFrom || undefined,
+          dateTo: filters.dateTo || undefined,
+        }),
       ]);
       setIntelligence(alertResponse.data);
       setProtocolBundle(bundleResponse.data?.protocolBundle || null);
@@ -53,11 +99,11 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
     } finally {
       setLoading(false);
     }
-  }, [caseId, hasCase, showError, tenantSlug, token]);
+  };
 
   useEffect(() => {
-    loadIntelligence();
-  }, [loadIntelligence]);
+    loadIntelligence(appliedFilters);
+  }, [appliedFilters, caseId, tenantSlug, token]);
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -88,6 +134,19 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
   const upcomingFollowUps = intelligence?.surveillance?.upcoming ?? [];
   const overdueFollowUps = intelligence?.surveillance?.overdue ?? [];
   const protocolItems = Array.isArray(protocolBundle?.items) ? protocolBundle.items : [];
+  const filteredProtocolItems = protocolItems.filter((item: any) => {
+    const executionStatus = String(item?.execution_status || '').toLowerCase();
+    if (appliedFilters.status === 'completed') {
+      return executionStatus === 'completed';
+    }
+    if (appliedFilters.status === 'pending') {
+      return executionStatus !== 'completed';
+    }
+    if (appliedFilters.status === 'acknowledged') {
+      return executionStatus !== 'completed';
+    }
+    return true;
+  });
   const oncologyQueueDrilldown = (doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).find(
     (row: any) => String(row?.module || '').toLowerCase() === 'oncology',
   );
@@ -160,7 +219,7 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
           ) : (
             <button
               disabled={!hasCase}
-              onClick={loadIntelligence}
+              onClick={() => loadIntelligence(appliedFilters)}
               className="text-xs uppercase tracking-wide text-purple-200 hover:text-purple-100"
             >
               Refresh
@@ -179,14 +238,89 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
           <p className="text-xl font-bold text-slate-100">{protocolBundle?.applied_count ?? 0}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Queue 30d</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Queue ({appliedFilters.days}d)</p>
           <p className="text-xl font-bold text-slate-100">{doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? 0}</p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Actions 30d</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Doctor Actions ({appliedFilters.days}d)</p>
           <p className="text-xl font-bold text-slate-100">
             {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
           </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 px-4 pb-4 border-b border-slate-800/70 bg-slate-950/20">
+        <div className="md:col-span-2">
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Case ID</p>
+          <input
+            type="text"
+            value={drilldownFilters.caseId}
+            onChange={(e) => setDrilldownFilters((prev) => ({ ...prev, caseId: e.target.value }))}
+            placeholder="oncology case id"
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Status</p>
+          <select
+            value={drilldownFilters.status}
+            onChange={(e) => setDrilldownFilters((prev) => ({ ...prev, status: e.target.value }))}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Window (days)</p>
+          <select
+            value={drilldownFilters.days}
+            onChange={(e) => setDrilldownFilters((prev) => ({ ...prev, days: Number(e.target.value) || 30 }))}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value={7}>7</option>
+            <option value={14}>14</option>
+            <option value={30}>30</option>
+            <option value={90}>90</option>
+          </select>
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={() => {
+              const nextFilters = { ...drilldownFilters };
+              const hasChanged = JSON.stringify(nextFilters) !== JSON.stringify(appliedFilters);
+              setAppliedFilters(nextFilters);
+              if (!hasChanged) {
+                loadIntelligence(nextFilters);
+              }
+            }}
+            disabled={loading || !String(drilldownFilters.caseId || caseId || '').trim()}
+            className="w-full rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+          >
+            Apply Filters
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pb-4 border-b border-slate-800/70 bg-slate-950/10">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Date From</p>
+          <input
+            type="date"
+            value={drilldownFilters.dateFrom}
+            onChange={(e) => setDrilldownFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Date To</p>
+          <input
+            type="date"
+            value={drilldownFilters.dateTo}
+            onChange={(e) => setDrilldownFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pb-4 border-b border-slate-800/70 bg-slate-950/20">
@@ -325,8 +459,8 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
           {protocolBundle?.summary && (
             <p className="text-xs text-slate-500">{protocolBundle.summary}</p>
           )}
-          {protocolItems.length ? (
-            protocolItems.slice(0, 5).map((item: any, index: number) => {
+          {filteredProtocolItems.length ? (
+            filteredProtocolItems.slice(0, 5).map((item: any, index: number) => {
               const isDone = String(item?.execution_status || '').toLowerCase() === 'completed';
               const isExecuting = executingActionId === String(item?.id || '');
               return (
@@ -356,7 +490,7 @@ const OncologyIntelligencePanel: React.FC<OncologyIntelligencePanelProps> = ({ t
               );
             })
           ) : (
-            <p className="text-sm text-slate-500">No protocol automation actions are pending.</p>
+            <p className="text-sm text-slate-500">No protocol automation actions match the current filters.</p>
           )}
         </div>
 

@@ -50,6 +50,7 @@ Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analyt
 - `POST /oncology/cases/:id/protocol-bundle/actions/:actionId/execute` → executes one protocol action and persists workflow context
 - `GET /nurse-worklist/analytics/doctor-outcomes` → shared doctor outcome analytics across oncology/HIV/maternity workflows
   - Includes specialty drilldowns via `doctorQueue.moduleDrilldown` and action-frequency drilldowns via `recommendationExecution.topActions`
+  - Supports drilldown query params: `module`, `status`, `caseId`, `dateFrom`, `dateTo`, `days`
 
 ### Seeding data
 1. Provision a fresh tenant with all bundles:

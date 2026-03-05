@@ -51,11 +51,21 @@ export class NurseWorklistController {
   @ApiResponse({ status: 200, description: 'Doctor outcome analytics fetched' })
   async getDoctorOutcomeAnalytics(
     @Query('days') daysRaw: string,
+    @Query('module') moduleRaw: string,
+    @Query('status') statusRaw: string,
+    @Query('caseId') caseIdRaw: string,
+    @Query('dateFrom') dateFromRaw: string,
+    @Query('dateTo') dateToRaw: string,
     @Request() req: RequestWithTenant,
   ) {
     const parsedDays = Number(daysRaw);
     return this.nurseWorklistService.getDoctorOutcomeAnalytics(req.tenantDb, {
       days: Number.isFinite(parsedDays) ? parsedDays : undefined,
+      module: moduleRaw,
+      status: statusRaw,
+      caseId: caseIdRaw,
+      dateFrom: dateFromRaw,
+      dateTo: dateToRaw,
     });
   }
 

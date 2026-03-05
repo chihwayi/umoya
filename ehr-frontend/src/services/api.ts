@@ -1243,7 +1243,18 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  getDoctorOutcomeAnalytics: async (days: number, token: string, tenantSlug: string) => {
+  getDoctorOutcomeAnalytics: async (
+    days: number,
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      module?: string;
+      status?: string;
+      caseId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) => {
     const response = await ehrAxios.get('/nurse-worklist/analytics/doctor-outcomes', {
       headers: {
         'X-Tenant-ID': tenantSlug,
@@ -1251,6 +1262,11 @@ export const ehrApi = {
       },
       params: {
         days,
+        module: filters?.module,
+        status: filters?.status,
+        caseId: filters?.caseId,
+        dateFrom: filters?.dateFrom,
+        dateTo: filters?.dateTo,
       },
     });
     return { data: response.data };

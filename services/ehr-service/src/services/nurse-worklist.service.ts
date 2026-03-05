@@ -2466,32 +2466,107 @@ export class NurseWorklistService {
     };
   }
 
-  async getDoctorOutcomeAnalytics(tenantDb: DataSource, options?: { days?: number }) {
+  async getDoctorOutcomeAnalytics(
+    tenantDb: DataSource,
+    options?: {
+      days?: number;
+      module?: string;
+      status?: string;
+      caseId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    const normalizeDateOnly = (value: string | null | undefined, fallback: Date, endOfDay = false) => {
+      const normalizedValue = this.normalizeText(value);
+      if (!normalizedValue) {
+        return new Date(fallback.getTime());
+      }
+
+      const dateOnlyMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateOnlyMatch) {
+        const year = Number(dateOnlyMatch[1]);
+        const month = Number(dateOnlyMatch[2]) - 1;
+        const day = Number(dateOnlyMatch[3]);
+        return new Date(
+          Date.UTC(year, month, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0),
+        );
+      }
+
+      const parsed = new Date(normalizedValue);
+      if (Number.isNaN(parsed.getTime())) {
+        return new Date(fallback.getTime());
+      }
+      if (endOfDay) {
+        parsed.setUTCHours(23, 59, 59, 999);
+      } else {
+        parsed.setUTCHours(0, 0, 0, 0);
+      }
+      return parsed;
+    };
+
     const requestedDays = Number(options?.days);
     const days = Number.isFinite(requestedDays)
       ? Math.min(Math.max(Math.round(requestedDays), 1), 365)
       : 30;
-    const sinceDate = new Date();
-    sinceDate.setHours(0, 0, 0, 0);
-    sinceDate.setDate(sinceDate.getDate() - Math.max(days - 1, 0));
+    const fallbackSinceDate = new Date();
+    fallbackSinceDate.setUTCHours(0, 0, 0, 0);
+    fallbackSinceDate.setDate(fallbackSinceDate.getDate() - Math.max(days - 1, 0));
+    const fallbackUntilDate = new Date();
+    fallbackUntilDate.setUTCHours(23, 59, 59, 999);
+
+    const sinceDate = normalizeDateOnly(options?.dateFrom, fallbackSinceDate, false);
+    const untilDate = normalizeDateOnly(options?.dateTo, fallbackUntilDate, true);
+
     const sinceIso = sinceDate.toISOString().split('T')[0];
-    const untilIso = new Date().toISOString().split('T')[0];
+    const untilIso = untilDate.toISOString().split('T')[0];
+
+    const whereClauses: string[] = [
+      'created_at >= $1::date',
+      'created_at <= $2::date + INTERVAL \'1 day\' - INTERVAL \'1 second\'',
+      `(
+        LOWER(COALESCE(destination_role, '')) = 'doctor'
+        OR LOWER(COALESCE(module, '')) IN ('maternity', 'oncology')
+        OR LOWER(COALESCE(context->>'doctor_sync_status', '')) LIKE '%doctor%'
+        OR LOWER(COALESCE(context->>'doctorSyncStatus', '')) LIKE '%doctor%'
+      )`,
+    ];
+    const queryParams: any[] = [sinceIso, untilIso];
+
+    const normalizedModuleFilter = this.normalizeText(options?.module)?.toLowerCase() || null;
+    if (normalizedModuleFilter) {
+      whereClauses.push(`LOWER(COALESCE(module, '')) = $${queryParams.length + 1}`);
+      queryParams.push(normalizedModuleFilter);
+    }
+
+    const normalizedStatusFilter = this.normalizeText(options?.status)?.toLowerCase() || null;
+    if (normalizedStatusFilter && normalizedStatusFilter !== 'all') {
+      whereClauses.push(`LOWER(COALESCE(status, '')) = $${queryParams.length + 1}`);
+      queryParams.push(normalizedStatusFilter);
+    }
+
+    const normalizedCaseIdFilter = this.normalizeText(options?.caseId) || null;
+    if (normalizedCaseIdFilter) {
+      whereClauses.push(
+        `(
+          source_record_id = $${queryParams.length + 1}
+          OR COALESCE(context->>'case_id', '') = $${queryParams.length + 1}
+          OR COALESCE(context->>'oncology_case_id', '') = $${queryParams.length + 1}
+          OR workflow_key = $${queryParams.length + 2}
+        )`,
+      );
+      queryParams.push(normalizedCaseIdFilter, `oncology-protocol:${normalizedCaseIdFilter}`);
+    }
 
     const workflowRows = await this.safeQuery(
       tenantDb,
       `
-      SELECT workflow_key, module, status, context, destination_role, created_at, updated_at, completed_at
+      SELECT workflow_key, module, status, context, destination_role, source_record_id, created_at, updated_at, completed_at
       FROM nurse_cross_module_workflow_state
-      WHERE created_at >= $1::date
-        AND (
-          LOWER(COALESCE(destination_role, '')) = 'doctor'
-          OR LOWER(COALESCE(module, '')) IN ('maternity', 'oncology')
-          OR LOWER(COALESCE(context->>'doctor_sync_status', '')) LIKE '%doctor%'
-          OR LOWER(COALESCE(context->>'doctorSyncStatus', '')) LIKE '%doctor%'
-        )
+      WHERE ${whereClauses.join('\n        AND ')}
       ORDER BY created_at DESC
       `,
-      [sinceIso],
+      queryParams,
     );
 
     const queueByStatus: Record<string, number> = {
@@ -2588,6 +2663,13 @@ export class NurseWorklistService {
         days,
         since: sinceIso,
         until: untilIso,
+      },
+      filters: {
+        module: normalizedModuleFilter,
+        status: normalizedStatusFilter && normalizedStatusFilter !== 'all' ? normalizedStatusFilter : null,
+        caseId: normalizedCaseIdFilter,
+        dateFrom: sinceIso,
+        dateTo: untilIso,
       },
       doctorQueue: {
         totalItems,
