@@ -142,6 +142,14 @@ export class PatientService {
           enrollment_date,
           lmp_date,
           expected_delivery_date,
+          gravida,
+          para,
+          parity_term,
+          parity_preterm,
+          parity_abortions,
+          parity_living,
+          previous_cesarean,
+          previous_complications,
           risk_category,
           current_pregnancy_complications
         FROM maternity_enrollments

@@ -58,9 +58,8 @@ describe('TriageQueue', () => {
 
     await waitFor(() => {
       expect(onTriageCopilotAnalyze).toHaveBeenCalledTimes(1);
-      expect(onTriageCopilotAnalyze).toHaveBeenCalledWith(expect.objectContaining({ id: 'apt-1' }));
     });
+    expect(onTriageCopilotAnalyze).toHaveBeenCalledWith(expect.objectContaining({ id: 'apt-1' }));
     expect(onTriageAssessment).not.toHaveBeenCalled();
   });
 });
-

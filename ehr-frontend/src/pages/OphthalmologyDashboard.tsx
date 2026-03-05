@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Calendar,
@@ -121,6 +121,13 @@ const OphthalmologyDashboard: React.FC = () => {
   const [slitObservationConcept, setSlitObservationConcept] = useState<SnomedConcept | null>(null);
   const [followUpReasonConcept, setFollowUpReasonConcept] = useState<SnomedConcept | null>(null);
   const [procedureConcept, setProcedureConcept] = useState<SnomedConcept | null>(null);
+  const [createEncounterPatientContext, setCreateEncounterPatientContext] = useState<any | null>(null);
+  const [loadingCreateEncounterContext, setLoadingCreateEncounterContext] = useState(false);
+  const encounterDateInputRef = useRef<HTMLInputElement | null>(null);
+  const ophthalmologistIdInputRef = useRef<HTMLInputElement | null>(null);
+  const chiefComplaintInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const assessmentInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const planInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const token = useMemo(() => localStorage.getItem('ehr_token'), []);
 
@@ -136,8 +143,87 @@ const OphthalmologyDashboard: React.FC = () => {
   useEffect(() => {
     if (!modalState) {
       resetSnomedSelections();
+      setCreateEncounterPatientContext(null);
+      setLoadingCreateEncounterContext(false);
+    }
+    if (modalState && modalState.type !== 'createEncounter') {
+      setCreateEncounterPatientContext(null);
+      setLoadingCreateEncounterContext(false);
     }
   }, [modalState]);
+
+  const loadCreateEncounterPatientContext = useCallback(
+    async (rawPatientId: string) => {
+      if (!token || !tenantSlug) {
+        showError('Session expired', 'Please sign in again.');
+        return;
+      }
+      const patientId = String(rawPatientId || '').trim();
+      if (!patientId) {
+        setCreateEncounterPatientContext(null);
+        return;
+      }
+
+      try {
+        setLoadingCreateEncounterContext(true);
+        const response = await ehrApi.getPatientContext(patientId, token!, tenantSlug!);
+        const context = response.data || null;
+        setCreateEncounterPatientContext(context);
+
+        if (encounterDateInputRef.current && !encounterDateInputRef.current.value) {
+          const now = new Date();
+          const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+          encounterDateInputRef.current.value = local.toISOString().slice(0, 16);
+        }
+
+        if (ophthalmologistIdInputRef.current && !ophthalmologistIdInputRef.current.value && currentUser?.id) {
+          ophthalmologistIdInputRef.current.value = currentUser.id;
+        }
+
+        if (chiefComplaintInputRef.current && !chiefComplaintInputRef.current.value) {
+          const snippets: string[] = [];
+          const latestVitals = context?.latestVitals;
+          if (latestVitals?.bloodPressure) {
+            snippets.push(`Latest BP: ${latestVitals.bloodPressure}`);
+          }
+          if (snippets.length) {
+            chiefComplaintInputRef.current.value = snippets.join(' | ');
+          }
+        }
+
+        if (assessmentInputRef.current && !assessmentInputRef.current.value) {
+          const oncologyCase = context?.modules?.oncology?.latestCase;
+          const hivEnrollment = context?.modules?.hiv?.latestEnrollment;
+          const lines: string[] = [];
+          if (oncologyCase?.primary_diagnosis) {
+            lines.push(`Oncology diagnosis: ${oncologyCase.primary_diagnosis}`);
+          }
+          if (hivEnrollment?.enrollment_number) {
+            lines.push(`HIV enrollment: ${hivEnrollment.enrollment_number}`);
+          }
+          if (lines.length) {
+            assessmentInputRef.current.value = lines.join('\n');
+          }
+        }
+
+        if (planInputRef.current && !planInputRef.current.value) {
+          const followUpHint = context?.modules?.maternity?.latestEnrollment?.enrollment_status === 'active'
+            ? 'Coordinate review schedule with active maternity care plan.'
+            : '';
+          if (followUpHint) {
+            planInputRef.current.value = followUpHint;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load patient context for ophthalmology encounter', error);
+        setCreateEncounterPatientContext(null);
+        showError('Unable to load patient context', 'Confirm patient ID or retry.');
+      } finally {
+        setLoadingCreateEncounterContext(false);
+      }
+    },
+    [currentUser?.id, showError, tenantSlug, token],
+  );
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -460,11 +546,29 @@ const OphthalmologyDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Patient ID</label>
-                      <input name="patient_id" required className="w-full border rounded-lg px-3 py-2" placeholder="UUID" />
+                      <input
+                        name="patient_id"
+                        required
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="UUID"
+                        onBlur={(event) => loadCreateEncounterPatientContext(event.target.value)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Enter patient ID once to reuse profile and cross-module context.
+                      </p>
+                      {loadingCreateEncounterContext && (
+                        <p className="text-xs text-indigo-600 mt-1">Loading shared context...</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Encounter Date & Time</label>
-                      <input type="datetime-local" name="encounter_date" required className="w-full border rounded-lg px-3 py-2" />
+                      <input
+                        type="datetime-local"
+                        name="encounter_date"
+                        ref={encounterDateInputRef}
+                        required
+                        className="w-full border rounded-lg px-3 py-2"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Encounter Type</label>
@@ -479,7 +583,13 @@ const OphthalmologyDashboard: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Ophthalmologist ID</label>
-                      <input name="ophthalmologist_id" className="w-full border rounded-lg px-3 py-2" placeholder="UUID" />
+                      <input
+                        name="ophthalmologist_id"
+                        ref={ophthalmologistIdInputRef}
+                        defaultValue={currentUser?.id || ''}
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="UUID"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -509,6 +619,7 @@ const OphthalmologyDashboard: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Chief Complaint</label>
                     <textarea
                       name="chief_complaint"
+                      ref={chiefComplaintInputRef}
                       rows={3}
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Patient-reported symptoms, duration, associated features"
@@ -531,6 +642,7 @@ const OphthalmologyDashboard: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Assessment & Plan</label>
                     <textarea
                       name="assessment"
+                      ref={assessmentInputRef}
                       rows={3}
                       className="w-full border rounded-lg px-3 py-2 mb-3"
                       placeholder="Assessment summary"
@@ -550,11 +662,30 @@ const OphthalmologyDashboard: React.FC = () => {
                 )}
                     <textarea
                       name="plan"
+                      ref={planInputRef}
                       rows={3}
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Management plan, medications, investigations"
                     />
                   </div>
+                  {createEncounterPatientContext && (
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+                      Context loaded for
+                      {' '}
+                      <span className="font-semibold">
+                        {createEncounterPatientContext?.patient?.fullName || 'patient'}
+                      </span>
+                      {createEncounterPatientContext?.modules?.hiv?.latestEnrollment?.enrollment_number
+                        ? ` • HIV ${createEncounterPatientContext.modules.hiv.latestEnrollment.enrollment_number}`
+                        : ''}
+                      {createEncounterPatientContext?.modules?.oncology?.latestCase?.id
+                        ? ` • Oncology case ${createEncounterPatientContext.modules.oncology.latestCase.id}`
+                        : ''}
+                      {createEncounterPatientContext?.latestVitals?.recordedAt
+                        ? ` • Vitals ${String(createEncounterPatientContext.latestVitals.recordedAt).slice(0, 10)}`
+                        : ''}.
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1765,4 +1896,3 @@ const OphthalmologyDashboard: React.FC = () => {
 };
 
 export default OphthalmologyDashboard;
-

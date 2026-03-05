@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, Heart, Baby, Calendar, AlertTriangle, Search } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
@@ -59,6 +59,8 @@ export default function MaternityEnrollmentModal({
   const [previousCesarean, setPreviousCesarean] = useState(false);
   const [previousComplications, setPreviousComplications] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sharedPatientContext, setSharedPatientContext] = useState<any | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
   const { showSuccess, showError } = useNotification();
 
   const computedPatientName = useMemo(() => {
@@ -68,7 +70,7 @@ export default function MaternityEnrollmentModal({
     return patientName || '';
   }, [patientName, selectedPatient]);
 
-  const calculateEDD = (lmp: string) => {
+  const calculateEDD = useCallback((lmp: string) => {
     if (!lmp) return;
     
     const lmpDate = new Date(lmp);
@@ -76,7 +78,7 @@ export default function MaternityEnrollmentModal({
     eddDate.setDate(eddDate.getDate() + 280); // Add 280 days (40 weeks)
     
     setEdd(eddDate.toISOString().split('T')[0]);
-  };
+  }, []);
 
   const handleLMPChange = (value: string) => {
     setLmpDate(value);
@@ -172,6 +174,64 @@ export default function MaternityEnrollmentModal({
     };
   }, [patientSearchTerm, tenantSlug, token]);
 
+  useEffect(() => {
+    const loadSharedPatientContext = async () => {
+      if (!selectedPatient?.id) {
+        setSharedPatientContext(null);
+        return;
+      }
+
+      try {
+        setContextLoading(true);
+        const response = await ehrApi.getPatientContext(selectedPatient.id, token, tenantSlug);
+        const context = response.data || null;
+        setSharedPatientContext(context);
+
+        const latestMaternity = context?.modules?.maternity?.latestEnrollment;
+        if (!latestMaternity) {
+          return;
+        }
+
+        if (latestMaternity.lmp_date && !lmpDate) {
+          const nextLmpDate = String(latestMaternity.lmp_date).slice(0, 10);
+          setLmpDate(nextLmpDate);
+          calculateEDD(nextLmpDate);
+        }
+
+        if (latestMaternity.gravida != null) {
+          setGravida(Math.max(1, Number(latestMaternity.gravida) || 1));
+        }
+        if (latestMaternity.para != null) {
+          setPara(Math.max(0, Number(latestMaternity.para) || 0));
+        }
+        if (latestMaternity.parity_term != null) {
+          setParityTerm(Math.max(0, Number(latestMaternity.parity_term) || 0));
+        }
+        if (latestMaternity.parity_preterm != null) {
+          setParityPreterm(Math.max(0, Number(latestMaternity.parity_preterm) || 0));
+        }
+        if (latestMaternity.parity_abortions != null) {
+          setParityAbortions(Math.max(0, Number(latestMaternity.parity_abortions) || 0));
+        }
+        if (latestMaternity.parity_living != null) {
+          setParityLiving(Math.max(0, Number(latestMaternity.parity_living) || 0));
+        }
+        if (typeof latestMaternity.previous_cesarean === 'boolean') {
+          setPreviousCesarean(latestMaternity.previous_cesarean);
+        }
+        if (latestMaternity.previous_complications && !previousComplications) {
+          setPreviousComplications(String(latestMaternity.previous_complications));
+        }
+      } catch (error) {
+        console.error('Failed to load shared patient context for maternity enrollment', error);
+      } finally {
+        setContextLoading(false);
+      }
+    };
+
+    loadSharedPatientContext();
+  }, [calculateEDD, lmpDate, previousComplications, selectedPatient?.id, tenantSlug, token]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
@@ -257,12 +317,30 @@ export default function MaternityEnrollmentModal({
                   )}
                   {selectedPatient.phone && <span>{selectedPatient.phone}</span>}
                 </div>
+                {contextLoading && (
+                  <p className="text-xs text-pink-700 mt-2">Loading shared context...</p>
+                )}
+                {sharedPatientContext?.modules?.maternity?.latestEnrollment?.id && (
+                  <div className="mt-2 text-xs text-pink-900">
+                    Reused prior maternity context
+                    {' '}
+                    ({sharedPatientContext.modules.maternity.latestEnrollment.enrollment_number || 'previous enrollment'})
+                    {' '}
+                    to prefill parity and risk history.
+                  </div>
+                )}
+                {sharedPatientContext?.modules?.maternity?.latestEnrollment?.enrollment_status === 'active' && (
+                  <div className="mt-2 text-xs font-semibold text-amber-700">
+                    Active maternity enrollment already exists. Confirm this new enrollment is intentional.
+                  </div>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedPatient(null);
                   setPatientSearchTerm('');
+                  setSharedPatientContext(null);
                 }}
                 className="text-xs px-3 py-1 bg-white text-pink-600 border border-pink-300 rounded-lg hover:bg-pink-100"
               >
@@ -501,4 +579,3 @@ export default function MaternityEnrollmentModal({
     </div>
   );
 }
-

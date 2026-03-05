@@ -17,6 +17,7 @@ jest.mock('../services/api', () => ({
     getApprovedArvChange: jest.fn(),
     getHivLookupData: jest.fn(),
     getVitals: jest.fn(),
+    getPatientContext: jest.fn(),
     getMatchingLabResults: jest.fn(),
     createHivClinicalVisit: jest.fn(),
   },
@@ -65,6 +66,7 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
     });
     (ehrApi.getApprovedArvChange as jest.Mock).mockResolvedValue({ data: null });
     (ehrApi.getVitals as jest.Mock).mockResolvedValue({ data: { vitals: [] } });
+    (ehrApi.getPatientContext as jest.Mock).mockResolvedValue({ data: null });
     (ehrApi.getMatchingLabResults as jest.Mock).mockResolvedValue({ data: { matched: false, viralLoad: null } });
     (ehrApi.createHivClinicalVisit as jest.Mock).mockResolvedValue({ data: { id: 'visit-1' } });
 
@@ -170,18 +172,18 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('same-day-vitals-autofill-note')).toBeTruthy();
-      expect(screen.getByDisplayValue('72.5')).toBeTruthy();
-      expect(screen.getByDisplayValue('168')).toBeTruthy();
-      expect(screen.getByDisplayValue('118/76')).toBeTruthy();
     });
+    expect(screen.getByDisplayValue('72.5')).toBeTruthy();
+    expect(screen.getByDisplayValue('168')).toBeTruthy();
+    expect(screen.getByDisplayValue('118/76')).toBeTruthy();
 
     const weightInput = screen.getByDisplayValue('72.5') as HTMLInputElement;
     fireEvent.change(weightInput, { target: { value: '73.1' } });
 
     await waitFor(() => {
       expect(weightInput.value).toBe('73.1');
-      expect(screen.queryByTestId('same-day-vitals-autofill-note')).toBeNull();
     });
+    expect(screen.queryByTestId('same-day-vitals-autofill-note')).toBeNull();
   });
 
   it('auto-fills nurse name from logged-in user in clinician field', async () => {
@@ -268,14 +270,14 @@ describe('HIVClinicalVisitModal guideline blocking panel', () => {
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('70')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /refresh nurse vitals/i })).toBeTruthy();
     });
+    expect(screen.getByRole('button', { name: /refresh nurse vitals/i })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /refresh nurse vitals/i }));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('71.2')).toBeTruthy();
-      expect(screen.getByDisplayValue('120/78')).toBeTruthy();
     });
+    expect(screen.getByDisplayValue('120/78')).toBeTruthy();
   });
 });

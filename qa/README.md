@@ -64,6 +64,8 @@ Shared patient context endpoint for cross-module prefill and no-repeat entry wor
 Frontend reuse points now wired:
 - HIV clinical visit modal auto-prefill (only empty fields are hydrated; nurse edits are not overwritten).
 - Oncology create-case modal patient context lookup on patient ID blur (auto-seeds diagnosis/care-plan hints and provider ID).
+- Maternity enrollment modal reuses latest maternity history (parity/risk context + prior LMP hints).
+- Ophthalmology create-encounter modal reuses cross-module context (provider/patient summary and smart note seeding).
 
 ### Seeding data
 1. Provision a fresh tenant with all bundles:
