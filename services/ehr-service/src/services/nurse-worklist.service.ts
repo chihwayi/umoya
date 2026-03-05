@@ -460,6 +460,188 @@ export class NurseWorklistService {
     }
   }
 
+  private async getExistingRecommendationExecution(
+    tenantDb: DataSource,
+    itemId: string,
+    actionId: string,
+  ) {
+    const workflowRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT context
+      FROM nurse_cross_module_workflow_state
+      WHERE workflow_key = $1
+      LIMIT 1
+      `,
+      [itemId],
+    );
+    const workflowContext = this.parseJsonObject(workflowRows[0]?.context) || {};
+    return workflowContext?.action_executions?.[actionId] || null;
+  }
+
+  private async getEnrollmentPatientId(tenantDb: DataSource, enrollmentId: string) {
+    const rows = await tenantDb.query(
+      `
+      SELECT patient_id
+      FROM hiv_care_enrollments
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [enrollmentId],
+    );
+    return rows[0]?.patient_id || null;
+  }
+
+  private async createOrReuseHivReferral(
+    tenantDb: DataSource,
+    payload: {
+      enrollmentId: string;
+      referralType: 'P' | 'T' | 'H';
+      referredBy: string;
+      referredByName: string;
+      referredToFacility?: string | null;
+      referredToProvider?: string | null;
+      referralReason: string;
+      referralTypeDetails?: string | null;
+      referralPriority?: 'urgent' | 'high' | 'normal' | 'low';
+      referralDate?: string;
+    },
+  ) {
+    const existingRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT id, referral_status, referral_type
+      FROM hiv_referrals
+      WHERE enrollment_id = $1
+        AND referral_type = $2
+        AND referral_status IN ('pending', 'in_progress')
+      ORDER BY referral_date DESC, created_at DESC
+      LIMIT 1
+      `,
+      [payload.enrollmentId, payload.referralType],
+    );
+
+    if (existingRows[0]?.id) {
+      return {
+        id: existingRows[0].id,
+        referral_status: existingRows[0].referral_status,
+        reused: true,
+      };
+    }
+
+    const referral = await this.hivService.createReferral(
+      {
+        enrollmentId: payload.enrollmentId,
+        referralDate: payload.referralDate || new Date().toISOString().split('T')[0],
+        referralType: payload.referralType,
+        referralTypeDetails: payload.referralTypeDetails || null,
+        referredToFacility: payload.referredToFacility || null,
+        referredToProvider: payload.referredToProvider || null,
+        referralReason: payload.referralReason,
+        referralPriority: payload.referralPriority || 'normal',
+        referredBy: payload.referredBy,
+        referredByName: payload.referredByName,
+      },
+      tenantDb,
+    );
+
+    return {
+      ...referral,
+      reused: false,
+    };
+  }
+
+  private async upsertHivClinicalAlert(
+    tenantDb: DataSource,
+    payload: {
+      enrollmentId: string;
+      alertType:
+        | 'treatment_failure'
+        | 'high_vl'
+        | 'declining_cd4'
+        | 'eac_required'
+        | 'ltfu_risk'
+        | 'overdue_test'
+        | 'adherence_concern'
+        | 'side_effects'
+        | 'regimen_change_needed'
+        | 'pregnancy_risk';
+      severity: 'low' | 'medium' | 'high' | 'critical';
+      title: string;
+      message: string;
+      relatedData?: Record<string, any>;
+    },
+  ) {
+    try {
+      const existingRows = await tenantDb.query(
+        `
+        SELECT id
+        FROM hiv_clinical_alerts
+        WHERE enrollment_id = $1
+          AND alert_type = $2
+          AND is_resolved = false
+        LIMIT 1
+        `,
+        [payload.enrollmentId, payload.alertType],
+      );
+
+      if (existingRows[0]?.id) {
+        const updatedRows = await tenantDb.query(
+          `
+          UPDATE hiv_clinical_alerts
+          SET
+            severity = $1,
+            title = $2,
+            message = $3,
+            related_data = $4::jsonb,
+            updated_at = NOW()
+          WHERE id = $5
+          RETURNING id, alert_type, severity, is_resolved
+          `,
+          [
+            payload.severity,
+            payload.title,
+            payload.message,
+            JSON.stringify(payload.relatedData || {}),
+            existingRows[0].id,
+          ],
+        );
+        return {
+          ...updatedRows[0],
+          reused: true,
+        };
+      }
+
+      const insertedRows = await tenantDb.query(
+        `
+        INSERT INTO hiv_clinical_alerts (
+          enrollment_id, alert_type, severity, title, message, related_data, is_resolved
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, false)
+        RETURNING id, alert_type, severity, is_resolved
+        `,
+        [
+          payload.enrollmentId,
+          payload.alertType,
+          payload.severity,
+          payload.title,
+          payload.message,
+          JSON.stringify(payload.relatedData || {}),
+        ],
+      );
+
+      return {
+        ...insertedRows[0],
+        reused: false,
+      };
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return null;
+    }
+  }
+
   private async upsertHivMonitoringSchedule(
     tenantDb: DataSource,
     enrollmentId: string,
@@ -1500,6 +1682,25 @@ export class NurseWorklistService {
     const actionId = String(payload.actionId);
     const actionPayload =
       payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedPatientId =
+      this.normalizeText(payload.patientId) || (await this.getEnrollmentPatientId(tenantDb, enrollmentId));
+    const existingExecution = await this.getExistingRecommendationExecution(
+      tenantDb,
+      payload.itemId,
+      actionId,
+    );
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayIso = today.toISOString().split('T')[0];
@@ -1510,45 +1711,69 @@ export class NurseWorklistService {
       const existingSessions = await this.safeQuery(
         tenantDb,
         `
-        SELECT session_number
+        SELECT id, session_number, session_date
         FROM hiv_eac_sessions
         WHERE enrollment_id = $1
+          AND session_date = $2
+          AND counselor_id = $3
+          AND session_notes ILIKE '%nurse cross-module HIV recommendation bundle%'
         ORDER BY session_number DESC, session_date DESC
         LIMIT 1
         `,
-        [enrollmentId],
+        [enrollmentId, todayIso, user.id],
       );
-      const latestSessionNumber = Number(existingSessions[0]?.session_number || 0);
-      const nextSessionNumber = latestSessionNumber + 1;
-      const nextSessionDate = new Date(today);
-      nextSessionDate.setDate(nextSessionDate.getDate() + 30);
+      if (existingSessions[0]?.id) {
+        result = {
+          status: 'completed',
+          operation: 'eac_session_reused',
+          sessionId: existingSessions[0].id,
+          sessionNumber: existingSessions[0].session_number,
+          sessionDate: existingSessions[0].session_date,
+        };
+      } else {
+        const latestSessions = await this.safeQuery(
+          tenantDb,
+          `
+          SELECT session_number
+          FROM hiv_eac_sessions
+          WHERE enrollment_id = $1
+          ORDER BY session_number DESC, session_date DESC
+          LIMIT 1
+          `,
+          [enrollmentId],
+        );
+        const latestSessionNumber = Number(latestSessions[0]?.session_number || 0);
+        const nextSessionNumber = latestSessionNumber + 1;
+        const nextSessionDate = new Date(today);
+        nextSessionDate.setDate(nextSessionDate.getDate() + 30);
 
-      const createdSession = await this.hivService.createEacSession(
-        {
-          enrollmentId,
-          sessionNumber: nextSessionNumber,
-          sessionDate: todayIso,
-          counselorId: user.id,
-          counselorName: this.getUserDisplayName(user),
-          adherenceBarriers: [],
-          interventionsProvided: ['Nurse queue initiated EAC'],
-          adherenceAssessmentMethod: 'nurse_queue',
-          followUpActions: ['Schedule repeat viral load after EAC'],
-          sessionOutcome: 'Completed',
-          eacProgramStatus: 'Active',
-          nextSessionDate: nextSessionDate.toISOString().split('T')[0],
-          sessionNotes: 'EAC started from nurse cross-module HIV recommendation bundle.',
-        },
-        tenantDb,
-      );
+        const createdSession = await this.hivService.createEacSession(
+          {
+            enrollmentId,
+            sessionNumber: nextSessionNumber,
+            sessionDate: todayIso,
+            counselorId: user.id,
+            counselorName: this.getUserDisplayName(user),
+            adherenceBarriers: [],
+            interventionsProvided: ['Nurse queue initiated EAC'],
+            adherenceAssessmentMethod: 'nurse_queue',
+            followUpActions: ['Schedule repeat viral load after EAC'],
+            sessionOutcome: 'Completed',
+            eacProgramStatus: 'Active',
+            nextSessionDate: nextSessionDate.toISOString().split('T')[0],
+            sessionNotes: 'EAC started from nurse cross-module HIV recommendation bundle.',
+          },
+          tenantDb,
+        );
 
-      result = {
-        status: 'completed',
-        operation: 'eac_session_created',
-        sessionId: createdSession?.id || null,
-        sessionNumber: createdSession?.session_number || nextSessionNumber,
-        sessionDate: createdSession?.session_date || todayIso,
-      };
+        result = {
+          status: 'completed',
+          operation: 'eac_session_created',
+          sessionId: createdSession?.id || null,
+          sessionNumber: createdSession?.session_number || nextSessionNumber,
+          sessionDate: createdSession?.session_date || todayIso,
+        };
+      }
     } else if (actionId === 'repeat-vl-plan') {
       let nextVlDate = this.normalizeText(actionPayload?.next_vl_date);
       if (!nextVlDate) {
@@ -1669,10 +1894,34 @@ export class NurseWorklistService {
           requestId: regimenRequestId,
         };
       } else {
+        if (!resolvedPatientId) {
+          throw new BadRequestException('Patient context is required to prepare HIV visit recording');
+        }
         const prepNote =
           `Nurse confirmed visit-prep completion from cross-module queue on ${todayIso} for requested regimen ${request.requested_regimen_name || request.requested_regimen_code || 'N/A'}.`;
 
         await this.appendArvChangeApprovalNote(tenantDb, regimenRequestId, prepNote);
+        const intakeDraft = await this.hivService.saveNurseIntake(
+          {
+            patientId: resolvedPatientId,
+            intakeDate: todayIso,
+            regimen: request.requested_regimen_name || request.requested_regimen_code || null,
+            form: {
+              source: 'nurse_cross_module_queue',
+              bundleActionId: actionId,
+              enrollmentId,
+              regimenRequestId,
+              requestedRegimenCode: request.requested_regimen_code || null,
+              requestedRegimenName: request.requested_regimen_name || null,
+              prepStatus: 'ready_for_clinical_visit_recording',
+              preparedBy: this.getUserDisplayName(user),
+              preparedAt: new Date().toISOString(),
+            },
+            vitals: {},
+          },
+          tenantDb,
+          user.id,
+        );
         await this.hivService.logAuditAction(
           'regimen_visit_preparation_completed',
           'Nurse marked regimen change visit preparation as complete from HIV recommendation bundle',
@@ -1681,6 +1930,7 @@ export class NurseWorklistService {
           {
             requestId: regimenRequestId,
             requestedRegimenCode: request.requested_regimen_code || null,
+            intakeDraftId: intakeDraft?.id || null,
           },
           user.id,
           this.getUserDisplayName(user),
@@ -1692,8 +1942,214 @@ export class NurseWorklistService {
           operation: 'visit_preparation_completed',
           requestId: regimenRequestId,
           requestedRegimenCode: request.requested_regimen_code || null,
+          intakeDraftId: intakeDraft?.id || null,
         };
       }
+    } else if (actionId === 'regimen-safety-warnings') {
+      let regimenRequestId = this.extractRegimenRequestId({
+        sourceRecordId: payload.sourceRecordId,
+        itemId: payload.itemId,
+      });
+
+      if (!regimenRequestId) {
+        const pendingRows = await tenantDb.query(
+          `
+          SELECT id
+          FROM hiv_arv_change_requests
+          WHERE enrollment_id = $1
+            AND status = 'approved'
+          ORDER BY approval_date DESC NULLS LAST, request_date DESC, created_at DESC
+          LIMIT 1
+          `,
+          [enrollmentId],
+        );
+        regimenRequestId = pendingRows[0]?.id || null;
+      }
+
+      if (!regimenRequestId) {
+        throw new BadRequestException('No approved regimen change request found for safety review');
+      }
+
+      const warningItems = Array.isArray(actionPayload?.warnings)
+        ? actionPayload.warnings
+            .map((warning: any) => ({
+              message: this.normalizeText(warning?.message),
+              recommendedAction: this.normalizeText(warning?.recommendedAction),
+            }))
+            .filter((warning: any) => warning.message || warning.recommendedAction)
+        : [];
+      const warningSummary =
+        warningItems.length > 0
+          ? warningItems
+              .map((warning: any, index: number) =>
+                `${index + 1}. ${warning.message || 'Safety warning'}${warning.recommendedAction ? ` (recommended: ${warning.recommendedAction})` : ''}`,
+              )
+              .join(' | ')
+          : 'No structured warning payload supplied by bundle.';
+      const reviewNote = `Nurse safety warning review completed from cross-module queue on ${todayIso}. ${warningSummary}`;
+
+      const updatedRequest = await this.appendArvChangeApprovalNote(tenantDb, regimenRequestId, reviewNote);
+      if (!updatedRequest) {
+        throw new BadRequestException('Regimen change request not found for safety warning review');
+      }
+
+      const alert = await this.upsertHivClinicalAlert(tenantDb, {
+        enrollmentId,
+        alertType: 'regimen_change_needed',
+        severity: 'high',
+        title: 'Regimen safety warning requires clinician confirmation',
+        message:
+          warningItems[0]?.message ||
+          'Nurse queue identified regimen safety warnings that require clinician confirmation.',
+        relatedData: {
+          source: 'nurse_cross_module_queue',
+          actionId,
+          regimenRequestId,
+          warningCount: warningItems.length,
+          warnings: warningItems,
+        },
+      });
+
+      await this.hivService.logAuditAction(
+        'regimen_safety_warning_reviewed',
+        'Nurse reviewed regimen safety warnings from HIV recommendation bundle',
+        enrollmentId,
+        null,
+        {
+          requestId: regimenRequestId,
+          warningCount: warningItems.length,
+          alertId: alert?.id || null,
+          alertReused: alert?.reused ?? null,
+        },
+        user.id,
+        this.getUserDisplayName(user),
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'regimen_safety_warning_reviewed',
+        requestId: regimenRequestId,
+        warningCount: warningItems.length,
+        alertId: alert?.id || null,
+        alertReused: alert?.reused ?? null,
+      };
+    } else if (actionId === 'tb-interaction-review') {
+      const tbMedications = Array.isArray(actionPayload?.tb_medications)
+        ? actionPayload.tb_medications.filter((value: any) => this.normalizeText(value))
+        : [];
+      const referral = await this.createOrReuseHivReferral(tenantDb, {
+        enrollmentId,
+        referralType: 'T',
+        referredBy: user.id,
+        referredByName: this.getUserDisplayName(user),
+        referredToFacility: payload.destinationFacilityName || 'TB/HIV clinic',
+        referredToProvider: payload.destinationUserName || null,
+        referralReason:
+          'Nurse queue flagged HIV/TB regimen interaction review before regimen switch execution.',
+        referralTypeDetails:
+          tbMedications.length > 0
+            ? `TB medications requiring review: ${tbMedications.join(', ')}`
+            : 'TB interaction review from HIV recommendation bundle',
+        referralPriority: 'high',
+      });
+
+      const alert = await this.upsertHivClinicalAlert(tenantDb, {
+        enrollmentId,
+        alertType: 'regimen_change_needed',
+        severity: 'high',
+        title: 'TB co-treatment interaction review pending',
+        message:
+          tbMedications.length > 0
+            ? `TB co-treatment medications (${tbMedications.join(', ')}) require interaction review.`
+            : 'TB co-treatment interaction review is required before final regimen execution.',
+        relatedData: {
+          source: 'nurse_cross_module_queue',
+          actionId,
+          referralId: referral?.id || null,
+          tbMedications,
+        },
+      });
+
+      await this.hivService.logAuditAction(
+        'tb_interaction_review_escalated',
+        'Nurse escalated HIV/TB interaction review from HIV recommendation bundle',
+        enrollmentId,
+        null,
+        {
+          referralId: referral?.id || null,
+          referralReused: referral?.reused ?? false,
+          alertId: alert?.id || null,
+          alertReused: alert?.reused ?? null,
+          tbMedications,
+        },
+        user.id,
+        this.getUserDisplayName(user),
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: referral?.reused ? 'tb_interaction_referral_reused' : 'tb_interaction_referral_created',
+        referralId: referral?.id || null,
+        referralStatus: referral?.referral_status || 'pending',
+        referralReused: referral?.reused ?? false,
+        alertId: alert?.id || null,
+        alertReused: alert?.reused ?? null,
+      };
+    } else if (actionId === 'doctor-switch-review') {
+      const referral = await this.createOrReuseHivReferral(tenantDb, {
+        enrollmentId,
+        referralType: 'H',
+        referredBy: user.id,
+        referredByName: this.getUserDisplayName(user),
+        referredToFacility: payload.destinationFacilityName || 'HIV specialist clinic',
+        referredToProvider: payload.destinationUserName || null,
+        referralReason:
+          'Nurse queue escalated persistent high viral load for clinician regimen-switch decision review.',
+        referralTypeDetails: 'Post-EAC treatment-failure clinician review from HIV recommendation bundle',
+        referralPriority: 'urgent',
+      });
+
+      const alert = await this.upsertHivClinicalAlert(tenantDb, {
+        enrollmentId,
+        alertType: 'treatment_failure',
+        severity: 'critical',
+        title: 'Treatment failure escalation awaiting doctor switch review',
+        message:
+          'Persistent high viral load after EAC has been escalated for urgent clinician regimen-switch review.',
+        relatedData: {
+          source: 'nurse_cross_module_queue',
+          actionId,
+          referralId: referral?.id || null,
+        },
+      });
+
+      await this.hivService.logAuditAction(
+        'doctor_switch_review_escalated',
+        'Nurse escalated post-EAC regimen switch review from HIV recommendation bundle',
+        enrollmentId,
+        null,
+        {
+          referralId: referral?.id || null,
+          referralReused: referral?.reused ?? false,
+          alertId: alert?.id || null,
+          alertReused: alert?.reused ?? null,
+        },
+        user.id,
+        this.getUserDisplayName(user),
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: referral?.reused ? 'doctor_switch_referral_reused' : 'doctor_switch_referral_created',
+        referralId: referral?.id || null,
+        referralStatus: referral?.referral_status || 'pending',
+        referralReused: referral?.reused ?? false,
+        alertId: alert?.id || null,
+        alertReused: alert?.reused ?? null,
+      };
     } else if (actionId === 'pediatric-dose-check' || actionId === 'pediatric-adherence') {
       const age = actionPayload?.age ?? null;
       const regimenCode =
@@ -1737,52 +2193,26 @@ export class NurseWorklistService {
         regimenCode,
       };
     } else if (actionId === 'pmtct-linkage' || payload?.actionType === 'pmtct_followup') {
-      const existingReferral = await this.safeQuery(
-        tenantDb,
-        `
-        SELECT id, referral_status
-        FROM hiv_referrals
-        WHERE enrollment_id = $1
-          AND referral_type = 'P'
-          AND referral_status IN ('pending', 'in_progress')
-        ORDER BY referral_date DESC, created_at DESC
-        LIMIT 1
-        `,
-        [enrollmentId],
-      );
+      const referral = await this.createOrReuseHivReferral(tenantDb, {
+        enrollmentId,
+        referralType: 'P',
+        referredBy: user.id,
+        referredByName: this.getUserDisplayName(user),
+        referredToFacility: payload.destinationFacilityName || 'ANC / PMTCT clinic',
+        referredToProvider: payload.destinationUserName || null,
+        referralReason:
+          'Pregnancy-linked HIV follow-up requires PMTCT/ANC linkage confirmation from the nurse queue.',
+        referralTypeDetails: 'PMTCT / ANC linkage from nurse HIV queue',
+        referralPriority: 'urgent',
+      });
 
-      if (existingReferral[0]?.id) {
-        result = {
-          status: 'completed',
-          operation: 'existing_pmtct_referral_reused',
-          referralId: existingReferral[0].id,
-          referralStatus: existingReferral[0].referral_status,
-        };
-      } else {
-        const referral = await this.hivService.createReferral(
-          {
-            enrollmentId,
-            referralDate: todayIso,
-            referralType: 'P',
-            referralTypeDetails: 'PMTCT / ANC linkage from nurse HIV queue',
-            referredToFacility: payload.destinationFacilityName || 'ANC / PMTCT clinic',
-            referredToProvider: payload.destinationUserName || null,
-            referralReason:
-              'Pregnancy-linked HIV follow-up requires PMTCT/ANC linkage confirmation from the nurse queue.',
-            referralPriority: 'urgent',
-            referredBy: user.id,
-            referredByName: this.getUserDisplayName(user),
-          },
-          tenantDb,
-        );
-
-        result = {
-          status: 'completed',
-          operation: 'pmtct_referral_created',
-          referralId: referral?.id || null,
-          referralStatus: referral?.referral_status || 'pending',
-        };
-      }
+      result = {
+        status: 'completed',
+        operation: referral?.reused ? 'existing_pmtct_referral_reused' : 'pmtct_referral_created',
+        referralId: referral?.id || null,
+        referralStatus: referral?.referral_status || 'pending',
+        referralReused: referral?.reused ?? false,
+      };
     } else {
       throw new BadRequestException(`Unsupported HIV recommendation action "${actionId}"`);
     }
@@ -1795,7 +2225,7 @@ export class NurseWorklistService {
         module: 'hiv',
         itemType: payload.itemType,
         sourceRecordId: payload.sourceRecordId || null,
-        patientId: payload.patientId || null,
+        patientId: resolvedPatientId || null,
         enrollmentId,
         destinationRole: payload.destinationRole || null,
         destinationService: payload.destinationService || null,
@@ -1816,7 +2246,7 @@ export class NurseWorklistService {
       action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
       resourceType: 'nurse_cross_module_recommendation_action',
       resourceId: payload.itemId,
-      patientId: payload.patientId || undefined,
+      patientId: resolvedPatientId || undefined,
       ipAddress: requestMeta?.ipAddress,
       userAgent: requestMeta?.userAgent,
       sessionId: requestMeta?.sessionId,

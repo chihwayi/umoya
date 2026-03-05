@@ -126,6 +126,9 @@ function isExecutableHivRecommendationAction(item: Record<string, any>) {
     actionId === 'repeat-vl-plan' ||
     actionId === 'regimen-counseling' ||
     actionId === 'visit-recording' ||
+    actionId === 'regimen-safety-warnings' ||
+    actionId === 'tb-interaction-review' ||
+    actionId === 'doctor-switch-review' ||
     actionId === 'pediatric-dose-check' ||
     actionId === 'pediatric-adherence' ||
     actionType === 'pmtct_followup'

@@ -11,6 +11,7 @@ const makeService = () => {
     getVlPathway: jest.fn(),
     createEacSession: jest.fn(),
     createReferral: jest.fn(),
+    saveNurseIntake: jest.fn(),
     logAuditAction: jest.fn().mockResolvedValue(undefined),
   };
 
@@ -854,6 +855,355 @@ describe('NurseWorklistService', () => {
       expect.objectContaining({
         actionId: 'pediatric-dose-check',
         age: 12,
+      }),
+      'user-1',
+      'Nurse Joy',
+      tenantDb,
+    );
+  });
+
+  it('returns idempotent success when a recommendation action is already completed', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [
+            {
+              context: {
+                action_executions: {
+                  'eac-followup': {
+                    status: 'completed',
+                    result: {
+                      status: 'completed',
+                      operation: 'eac_session_created',
+                      sessionId: 'eac-existing',
+                    },
+                  },
+                },
+              },
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-pathway:enroll-hiv-1:high_vl_needs_eac:2026-03-03',
+        itemType: 'hiv_vl_followup',
+        sourceRecordId: 'enroll-hiv-1',
+        patientId: 'patient-hiv-1',
+        enrollmentId: 'enroll-hiv-1',
+        actionId: 'eac-followup',
+      },
+      { sessionId: 'session-idem-1' },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        idempotent: true,
+        actionId: 'eac-followup',
+        result: expect.objectContaining({
+          operation: 'eac_session_created',
+          sessionId: 'eac-existing',
+        }),
+      }),
+    );
+    expect(mocks.hivService.createEacSession).not.toHaveBeenCalled();
+    expect(mocks.hipaaAuditService.logAuditEvent).not.toHaveBeenCalled();
+    expect(tenantDb.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('prepares visit recording with a nurse intake draft payload', async () => {
+    const { service, mocks } = makeService();
+    mocks.hivService.saveNurseIntake.mockResolvedValue({
+      id: 'intake-1',
+      patient_id: 'patient-hiv-2',
+    });
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM hiv_care_enrollments')) {
+          return [{ patient_id: 'patient-hiv-2' }];
+        }
+        if (sql.includes('FROM hiv_arv_change_requests') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: 'req-1',
+              visit_recorded: false,
+              requested_regimen_code: 'AZT/3TC/ATV/r',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE hiv_arv_change_requests')) {
+          return [
+            {
+              id: 'req-1',
+              enrollment_id: 'enroll-hiv-2',
+              status: 'approved',
+              visit_recorded: false,
+              requested_regimen_code: 'AZT/3TC/ATV/r',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'visit-recording',
+        actionType: 'visit_preparation',
+        actionTitle: 'Prepare next HIV clinical visit recording',
+      },
+      { sessionId: 'session-visit-1' },
+    );
+
+    expect(mocks.hivService.saveNurseIntake).toHaveBeenCalledWith(
+      expect.objectContaining({
+        patientId: 'patient-hiv-2',
+        regimen: 'AZT/3TC/ATV/r',
+        form: expect.objectContaining({
+          source: 'nurse_cross_module_queue',
+          prepStatus: 'ready_for_clinical_visit_recording',
+          regimenRequestId: 'req-1',
+        }),
+      }),
+      tenantDb,
+      'user-1',
+    );
+    expect(result.result).toEqual(
+      expect.objectContaining({
+        operation: 'visit_preparation_completed',
+        intakeDraftId: 'intake-1',
+      }),
+    );
+  });
+
+  it('executes regimen safety warning review and writes regimen-change alert context', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[]) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('UPDATE hiv_arv_change_requests')) {
+          return [
+            {
+              id: 'req-1',
+              enrollment_id: 'enroll-hiv-2',
+              status: 'approved',
+              visit_recorded: false,
+              requested_regimen_code: 'AZT/3TC/ATV/r',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+            },
+          ];
+        }
+        if (sql.includes('FROM hiv_clinical_alerts')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO hiv_clinical_alerts')) {
+          return [{ id: 'alert-1', alert_type: 'regimen_change_needed', severity: 'high', is_resolved: false }];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO hiv_audit_log')) {
+          return [];
+        }
+        if (sql.includes('FROM hiv_care_enrollments') && params?.[0] === 'enroll-hiv-2') {
+          return [{ patient_id: 'patient-hiv-2' }];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'regimen-safety-warnings',
+        actionType: 'safety_review',
+        actionTitle: 'Review regimen safety warnings with clinician plan',
+        actionPayload: {
+          warnings: [
+            {
+              message: 'Review pregnancy safety before switch.',
+              recommendedAction: 'Confirm PMTCT plan and regimen appropriateness.',
+            },
+          ],
+        },
+      },
+      { sessionId: 'session-safety-1' },
+    );
+
+    expect(result.result).toEqual(
+      expect.objectContaining({
+        operation: 'regimen_safety_warning_reviewed',
+        requestId: 'req-1',
+        warningCount: 1,
+        alertId: 'alert-1',
+      }),
+    );
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'regimen_safety_warning_reviewed',
+      expect.any(String),
+      'enroll-hiv-2',
+      null,
+      expect.objectContaining({
+        requestId: 'req-1',
+        warningCount: 1,
+      }),
+      'user-1',
+      'Nurse Joy',
+      tenantDb,
+    );
+  });
+
+  it('executes TB interaction and doctor switch review actions as direct queue operations', async () => {
+    const { service, mocks } = makeService();
+    mocks.hivService.createReferral.mockResolvedValue({
+      id: 'ref-t-1',
+      referral_status: 'pending',
+    });
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[]) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM hiv_referrals')) {
+          const referralType = params?.[1];
+          if (referralType === 'H') {
+            return [{ id: 'ref-h-existing', referral_status: 'in_progress', referral_type: 'H' }];
+          }
+          return [];
+        }
+        if (sql.includes('FROM hiv_clinical_alerts')) {
+          const alertType = params?.[1];
+          if (alertType === 'treatment_failure') {
+            return [{ id: 'alert-existing' }];
+          }
+          return [];
+        }
+        if (sql.includes('INSERT INTO hiv_clinical_alerts')) {
+          return [{ id: 'alert-new', alert_type: 'regimen_change_needed', severity: 'high', is_resolved: false }];
+        }
+        if (sql.includes('UPDATE hiv_clinical_alerts')) {
+          return [{ id: 'alert-existing', alert_type: 'treatment_failure', severity: 'critical', is_resolved: false }];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO hiv_audit_log')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const tbResult = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-2',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-2',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'tb-interaction-review',
+        actionType: 'interaction_review',
+        actionTitle: 'Check TB co-treatment interaction plan',
+        actionPayload: {
+          tb_medications: ['Rifampicin'],
+        },
+      },
+      { sessionId: 'session-tb-1' },
+    );
+
+    expect(tbResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'tb_interaction_referral_created',
+        referralId: 'ref-t-1',
+        alertId: 'alert-new',
+      }),
+    );
+    expect(mocks.hivService.createReferral).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrollmentId: 'enroll-hiv-2',
+        referralType: 'T',
+        referralPriority: 'high',
+      }),
+      tenantDb,
+    );
+
+    const doctorResult = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-pathway:enroll-hiv-2:failure_after_eac:2026-03-03',
+        itemType: 'hiv_vl_followup',
+        sourceRecordId: 'enroll-hiv-2',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'doctor-switch-review',
+        actionType: 'escalation',
+        actionTitle: 'Escalate for regimen switch review',
+      },
+      { sessionId: 'session-doc-1' },
+    );
+
+    expect(doctorResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'doctor_switch_referral_reused',
+        referralId: 'ref-h-existing',
+        alertId: 'alert-existing',
+        alertReused: true,
+      }),
+    );
+    expect(mocks.hivService.createReferral).toHaveBeenCalledTimes(1);
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'tb_interaction_review_escalated',
+      expect.any(String),
+      'enroll-hiv-2',
+      null,
+      expect.objectContaining({
+        referralId: 'ref-t-1',
+      }),
+      'user-1',
+      'Nurse Joy',
+      tenantDb,
+    );
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'doctor_switch_review_escalated',
+      expect.any(String),
+      'enroll-hiv-2',
+      null,
+      expect.objectContaining({
+        referralId: 'ref-h-existing',
       }),
       'user-1',
       'Nurse Joy',
