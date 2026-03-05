@@ -60,6 +60,7 @@ import ImagingStudyViewerModal from '../components/ImagingStudyViewerModal';
 import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
+import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
 
 interface Appointment {
   id: string;
@@ -118,6 +119,30 @@ interface VitalsAlert {
   message: string;
   icon: React.ReactNode;
   color: string;
+}
+
+interface DoctorOutcomeAnalyticsSnapshot {
+  generatedAt?: string;
+  window?: {
+    days?: number;
+    since?: string;
+    until?: string;
+  };
+  doctorQueue?: {
+    totalItems?: number;
+    pendingItems?: number;
+    acknowledgedItems?: number;
+    completedItems?: number;
+    completionRatePercent?: number;
+    pendingOlderThan24h?: number;
+    byModule?: Record<string, number>;
+  };
+  recommendationExecution?: {
+    executedActionsTotal?: number;
+    reusedOrIdempotentTotal?: number;
+    executedByAction?: Record<string, number>;
+    executedByModule?: Record<string, number>;
+  };
 }
 
 type PatientVitalsWithUser = PatientVitals & {
@@ -631,6 +656,23 @@ const DoctorDashboard: React.FC = () => {
   const [imagingStudyDetails, setImagingStudyDetails] = useState<any | null>(null);
   const [loadingImagingStudy, setLoadingImagingStudy] = useState(false);
   const [imagingStudyLoadError, setImagingStudyLoadError] = useState(false);
+  const [doctorSyncItems, setDoctorSyncItems] = useState<NurseCrossModuleFeedItem[]>([]);
+  const [doctorSyncSummary, setDoctorSyncSummary] = useState({
+    total: 0,
+    critical: 0,
+    high: 0,
+    maternity: 0,
+    hiv: 0,
+    oncology: 0,
+    nursing: 0,
+    handoff: 0,
+    medication: 0,
+  });
+  const [doctorSyncLoading, setDoctorSyncLoading] = useState(false);
+  const [doctorSyncMaternityAcknowledgeId, setDoctorSyncMaternityAcknowledgeId] = useState<string | null>(null);
+  const [doctorSyncWorkflowItemId, setDoctorSyncWorkflowItemId] = useState<string | null>(null);
+  const [doctorSyncRecommendationKey, setDoctorSyncRecommendationKey] = useState<string | null>(null);
+  const [doctorOutcomeAnalytics, setDoctorOutcomeAnalytics] = useState<DoctorOutcomeAnalyticsSnapshot | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -701,8 +743,9 @@ const DoctorDashboard: React.FC = () => {
     if (currentUser) {
       fetchTodayAppointments();
       fetchAuthorizedOrders();
+      loadDoctorSyncPanel();
     }
-  }, [selectedDate, currentUser]);
+  }, [selectedDate, currentUser, tenantSlug]);
 
   // Load unread message count
   useEffect(() => {
@@ -985,6 +1028,233 @@ const DoctorDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error fetching authorized orders:', error);
       setAuthorizedOrders([]);
+    }
+  };
+
+  const buildDoctorSyncSummary = (items: NurseCrossModuleFeedItem[]) => ({
+    total: items.length,
+    critical: items.filter((item) => item.severity === 'critical').length,
+    high: items.filter((item) => item.severity === 'high').length,
+    maternity: items.filter((item) => item.module === 'maternity').length,
+    hiv: items.filter((item) => item.module === 'hiv').length,
+    oncology: items.filter((item) => item.module === 'oncology').length,
+    nursing: items.filter((item) => item.module === 'nursing').length,
+    handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
+    medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
+  });
+
+  const loadDoctorSyncPanel = async () => {
+    try {
+      setDoctorSyncLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+        setDoctorSyncItems([]);
+        setDoctorSyncSummary(buildDoctorSyncSummary([]));
+        setDoctorOutcomeAnalytics(null);
+        return;
+      }
+
+      const [feedResponse, analyticsResponse] = await Promise.all([
+        ehrApi.getNurseCrossModuleFeed(token, tenantSlug),
+        ehrApi.getDoctorOutcomeAnalytics(30, token, tenantSlug),
+      ]);
+      const feedItems: NurseCrossModuleFeedItem[] = Array.isArray(feedResponse.data?.items)
+        ? feedResponse.data.items
+        : [];
+      const filteredItems = feedItems.filter((item) => {
+        const destinationRole = String(item.destination_role || '').toLowerCase();
+        const doctorSyncStatus = String(item.doctor_sync_status || '').toLowerCase();
+        return (
+          destinationRole === 'doctor' ||
+          item.module === 'maternity' ||
+          item.module === 'oncology' ||
+          doctorSyncStatus.includes('doctor')
+        );
+      });
+
+      setDoctorSyncItems(filteredItems);
+      setDoctorSyncSummary(buildDoctorSyncSummary(filteredItems));
+      setDoctorOutcomeAnalytics(analyticsResponse.data || null);
+    } catch (error) {
+      console.error('Failed to load doctor sync panel:', error);
+      setDoctorSyncItems([]);
+      setDoctorSyncSummary(buildDoctorSyncSummary([]));
+      setDoctorOutcomeAnalytics(null);
+    } finally {
+      setDoctorSyncLoading(false);
+    }
+  };
+
+  const handleDoctorOpenCrossModuleWorkflow = (item: NurseCrossModuleFeedItem) => {
+    if (!tenantSlug) {
+      return;
+    }
+
+    if (item.module === 'maternity') {
+      navigate(`/ehr/${tenantSlug}/doctor/maternity`);
+      showSuccess('Opened maternity doctor workspace', 'Review the escalation and complete doctor follow-through.');
+      return;
+    }
+
+    if (item.module === 'hiv') {
+      navigate(`/ehr/${tenantSlug}/doctor/hiv`);
+      showSuccess('Opened HIV doctor workspace', 'Review HIV recommendation synchronization for this patient.');
+      return;
+    }
+
+    if (item.module === 'oncology') {
+      navigate(`/ehr/${tenantSlug}/doctor/oncology`);
+      showSuccess('Opened oncology doctor workspace', 'Review oncology recommendations and update treatment actions.');
+      return;
+    }
+
+    setActiveTab('current-appointment');
+    showSuccess('Opened doctor workflow', 'Review the selected cross-module escalation in the active doctor workspace.');
+  };
+
+  const handleDoctorUpdateWorkflowStatus = async (
+    item: NurseCrossModuleFeedItem,
+    status: 'acknowledged' | 'completed',
+  ) => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) {
+      showError('Unable to update doctor sync', 'Missing session or tenant context.');
+      return;
+    }
+
+    try {
+      setDoctorSyncWorkflowItemId(item.id);
+      await ehrApi.updateNurseCrossModuleWorkflow(
+        {
+          itemId: item.id,
+          module: item.module,
+          itemType: item.item_type,
+          sourceRecordId: item.source_record_id || null,
+          patientId: item.patient_id || null,
+          enrollmentId: item.enrollment_id || null,
+          status,
+          note:
+            status === 'completed'
+              ? 'Completed from doctor synchronization panel.'
+              : 'Acknowledged from doctor synchronization panel.',
+          context: {
+            source: 'doctor_sync_panel',
+            moduleStatus: item.module_status || null,
+            doctorSyncStatus: item.doctor_sync_status || null,
+          },
+          destinationRole: item.destination_role || null,
+          destinationService: item.destination_service || null,
+          destinationSpecialty: item.destination_specialty || null,
+          destinationUserId: item.destination_user_id || null,
+          destinationFacilityId: item.destination_facility_id || null,
+          destinationFacilityName: item.destination_facility_name || null,
+        },
+        token,
+        tenantSlug,
+      );
+      await loadDoctorSyncPanel();
+    } catch (error) {
+      console.error('Failed to update doctor sync workflow:', error);
+      showError('Unable to update doctor sync', 'Please retry the workflow status update.');
+    } finally {
+      setDoctorSyncWorkflowItemId(null);
+    }
+  };
+
+  const handleDoctorAcknowledgeMaternityTask = async (item: NurseCrossModuleFeedItem) => {
+    try {
+      setDoctorSyncMaternityAcknowledgeId(item.id);
+      await handleDoctorUpdateWorkflowStatus(item, 'acknowledged');
+    } finally {
+      setDoctorSyncMaternityAcknowledgeId(null);
+    }
+  };
+
+  const handleDoctorExecuteRecommendationAction = async (
+    item: NurseCrossModuleFeedItem,
+    recommendationItem: Record<string, any>,
+  ) => {
+    const token = localStorage.getItem('ehr_token');
+    if (!token || !tenantSlug) {
+      showError('Unable to execute recommendation', 'Missing session or tenant context.');
+      return;
+    }
+
+    if (item.module === 'hiv' && !item.enrollment_id) {
+      showError('Unable to execute HIV recommendation', 'Missing HIV enrollment context.');
+      return;
+    }
+
+    const actionKey = `${item.id}:${String(recommendationItem?.id || recommendationItem?.title || 'action')}`;
+    try {
+      setDoctorSyncRecommendationKey(actionKey);
+
+      if (item.module === 'hiv') {
+        await ehrApi.executeHivNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            enrollmentId: item.enrollment_id || null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'oncology') {
+        await ehrApi.executeOncologyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            caseId: item.metadata?.oncology_case_id || recommendationItem?.action_payload?.case_id || null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else {
+        showError('Unable to execute recommendation', 'This module does not support executable recommendation actions.');
+        return;
+      }
+
+      showSuccess(
+        'Recommendation executed',
+        recommendationItem?.title
+          ? `${recommendationItem.title} executed from the doctor synchronization panel.`
+          : 'Recommendation executed from the doctor synchronization panel.',
+      );
+      await loadDoctorSyncPanel();
+    } catch (error: any) {
+      console.error('Failed to execute doctor sync recommendation:', error);
+      showError(
+        'Unable to execute recommendation',
+        error?.response?.data?.message || 'Please retry the recommendation action.',
+      );
+    } finally {
+      setDoctorSyncRecommendationKey(null);
     }
   };
 
@@ -1653,7 +1923,11 @@ const DoctorDashboard: React.FC = () => {
                   onChange={setSelectedDate}
                 />
                 <button
-                  onClick={fetchTodayAppointments}
+                  onClick={() => {
+                    fetchTodayAppointments();
+                    fetchAuthorizedOrders();
+                    loadDoctorSyncPanel();
+                  }}
                   className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-5 h-5 text-slate-600" />
@@ -1901,6 +2175,67 @@ const DoctorDashboard: React.FC = () => {
                   <div className="text-sm opacity-90">Pending Orders</div>
                   <div className="mt-2 text-xs opacity-80">Awaiting nursing execution</div>
                 </div>
+              </div>
+
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Doctor Synchronization Panel</h3>
+                    <p className="text-sm text-slate-600">
+                      One-click execution for doctor-routed HIV and oncology recommendations.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadDoctorSyncPanel}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${doctorSyncLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Doctor Queue Total</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.doctorQueue?.totalItems ?? doctorSyncSummary.total}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.doctorQueue?.pendingOlderThan24h ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Executed Recommendations</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.recommendationExecution?.executedActionsTotal ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Reuse/Idempotent</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.recommendationExecution?.reusedOrIdempotentTotal ?? 0}
+                    </p>
+                  </div>
+                </div>
+
+                <NurseCrossModuleEscalations
+                  items={doctorSyncItems}
+                  summary={doctorSyncSummary}
+                  loading={doctorSyncLoading}
+                  compact
+                  acknowledgingTaskId={doctorSyncMaternityAcknowledgeId}
+                  workflowActionItemId={doctorSyncWorkflowItemId}
+                  recommendationActionKey={doctorSyncRecommendationKey}
+                  onRefresh={loadDoctorSyncPanel}
+                  onOpenWorkflow={handleDoctorOpenCrossModuleWorkflow}
+                  onAcknowledgeMaternityTask={handleDoctorAcknowledgeMaternityTask}
+                  onUpdateWorkflowStatus={handleDoctorUpdateWorkflowStatus}
+                  onExecuteRecommendationAction={handleDoctorExecuteRecommendationAction}
+                />
               </div>
 
               {/* Quick Actions */}

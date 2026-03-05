@@ -1243,6 +1243,19 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getDoctorOutcomeAnalytics: async (days: number, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/nurse-worklist/analytics/doctor-outcomes', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: {
+        days,
+      },
+    });
+    return { data: response.data };
+  },
+
   updateNurseCrossModuleWorkflow: async (
     payload: {
       itemId: string;

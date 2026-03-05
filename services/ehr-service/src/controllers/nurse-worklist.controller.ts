@@ -45,6 +45,20 @@ export class NurseWorklistController {
     });
   }
 
+  @Get('analytics/doctor-outcomes')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get doctor outcome analytics for doctor-routed cross-module workflow execution' })
+  @ApiResponse({ status: 200, description: 'Doctor outcome analytics fetched' })
+  async getDoctorOutcomeAnalytics(
+    @Query('days') daysRaw: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    const parsedDays = Number(daysRaw);
+    return this.nurseWorklistService.getDoctorOutcomeAnalytics(req.tenantDb, {
+      days: Number.isFinite(parsedDays) ? parsedDays : undefined,
+    });
+  }
+
   @Post('cross-module/workflow')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Update shared workflow status for a cross-module nurse queue item' })

@@ -2466,6 +2466,116 @@ export class NurseWorklistService {
     };
   }
 
+  async getDoctorOutcomeAnalytics(tenantDb: DataSource, options?: { days?: number }) {
+    const requestedDays = Number(options?.days);
+    const days = Number.isFinite(requestedDays)
+      ? Math.min(Math.max(Math.round(requestedDays), 1), 365)
+      : 30;
+    const sinceDate = new Date();
+    sinceDate.setHours(0, 0, 0, 0);
+    sinceDate.setDate(sinceDate.getDate() - Math.max(days - 1, 0));
+    const sinceIso = sinceDate.toISOString().split('T')[0];
+    const untilIso = new Date().toISOString().split('T')[0];
+
+    const workflowRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT workflow_key, module, status, context, destination_role, created_at, updated_at, completed_at
+      FROM nurse_cross_module_workflow_state
+      WHERE created_at >= $1::date
+        AND (
+          LOWER(COALESCE(destination_role, '')) = 'doctor'
+          OR LOWER(COALESCE(module, '')) IN ('maternity', 'oncology')
+          OR LOWER(COALESCE(context->>'doctor_sync_status', '')) LIKE '%doctor%'
+          OR LOWER(COALESCE(context->>'doctorSyncStatus', '')) LIKE '%doctor%'
+        )
+      ORDER BY created_at DESC
+      `,
+      [sinceIso],
+    );
+
+    const queueByStatus: Record<string, number> = {
+      pending: 0,
+      acknowledged: 0,
+      completed: 0,
+    };
+    const queueByModule: Record<string, number> = {};
+    let pendingOver24h = 0;
+
+    const executedByAction: Record<string, number> = {};
+    const executedByModule: Record<string, number> = {};
+    let executedActionsTotal = 0;
+    let reusedOrIdempotentTotal = 0;
+
+    for (const row of workflowRows) {
+      const normalizedStatus = this.normalizeCrossModuleWorkflowStatus(row?.status);
+      queueByStatus[normalizedStatus] = (queueByStatus[normalizedStatus] || 0) + 1;
+
+      const normalizedModule = String(row?.module || 'unknown').toLowerCase();
+      queueByModule[normalizedModule] = (queueByModule[normalizedModule] || 0) + 1;
+
+      if (normalizedStatus !== 'completed') {
+        const pendingAge = this.getHoursSince(row?.updated_at || row?.created_at);
+        if (pendingAge !== null && pendingAge >= 24) {
+          pendingOver24h += 1;
+        }
+      }
+
+      const context = this.parseJsonObject(row?.context) || {};
+      const actionExecutions =
+        context && typeof context === 'object' && context.action_executions
+          ? context.action_executions
+          : {};
+      const executionEntries = Object.entries(actionExecutions);
+
+      for (const [actionId, execution] of executionEntries) {
+        const executionStatus = String((execution as any)?.status || '').toLowerCase();
+        if (executionStatus !== 'completed') {
+          continue;
+        }
+
+        executedActionsTotal += 1;
+        executedByAction[actionId] = (executedByAction[actionId] || 0) + 1;
+        executedByModule[normalizedModule] = (executedByModule[normalizedModule] || 0) + 1;
+
+        const operation = String((execution as any)?.result?.operation || '').toLowerCase();
+        if (operation === 'already_applied' || operation.includes('reused')) {
+          reusedOrIdempotentTotal += 1;
+        }
+      }
+    }
+
+    const totalItems = workflowRows.length;
+    const completedItems = queueByStatus.completed || 0;
+    const acknowledgedItems = queueByStatus.acknowledged || 0;
+    const pendingItems = queueByStatus.pending || 0;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      window: {
+        days,
+        since: sinceIso,
+        until: untilIso,
+      },
+      doctorQueue: {
+        totalItems,
+        pendingItems,
+        acknowledgedItems,
+        completedItems,
+        byStatus: queueByStatus,
+        byModule: queueByModule,
+        completionRatePercent: this.toPercent(completedItems, totalItems),
+        pendingOlderThan24h: pendingOver24h,
+      },
+      recommendationExecution: {
+        executedActionsTotal,
+        reusedOrIdempotentTotal,
+        executedByAction,
+        executedByModule,
+      },
+    };
+  }
+
   async executeHivRecommendationAction(
     tenantDb: DataSource,
     user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },

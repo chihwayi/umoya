@@ -1587,6 +1587,126 @@ describe('NurseWorklistService', () => {
     );
   });
 
+  it('computes doctor outcome analytics for doctor-routed queue execution', async () => {
+    const { service } = makeService();
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state') && sql.includes('destination_role')) {
+          return [
+            {
+              workflow_key: 'hiv-pathway:dr-1',
+              module: 'hiv',
+              status: 'pending',
+              destination_role: 'doctor',
+              created_at: hoursAgo(32),
+              updated_at: hoursAgo(29),
+              context: {
+                action_executions: {
+                  'repeat-vl-plan': {
+                    status: 'completed',
+                    result: { operation: 'hiv_referral_created' },
+                  },
+                },
+              },
+            },
+            {
+              workflow_key: 'oncology-toxicity:dr-1',
+              module: 'oncology',
+              status: 'acknowledged',
+              destination_role: 'doctor',
+              created_at: hoursAgo(10),
+              updated_at: hoursAgo(8),
+              context: {
+                action_executions: {
+                  'escalate-oncology-doctor-review': {
+                    status: 'completed',
+                    result: { operation: 'oncology_doctor_sync_documented' },
+                  },
+                },
+              },
+            },
+            {
+              workflow_key: 'maternity:dr-1',
+              module: 'maternity',
+              status: 'completed',
+              destination_role: 'nurse',
+              created_at: hoursAgo(5),
+              updated_at: hoursAgo(4),
+              context: {
+                action_executions: {
+                  'prepare-visit-checklist': {
+                    status: 'completed',
+                    result: { operation: 'already_applied' },
+                  },
+                },
+              },
+            },
+          ];
+        }
+
+        return [];
+      }),
+    } as any;
+
+    const analytics = await service.getDoctorOutcomeAnalytics(tenantDb, { days: 21 });
+
+    expect(analytics.window).toEqual(
+      expect.objectContaining({
+        days: 21,
+      }),
+    );
+    expect(analytics.doctorQueue).toEqual(
+      expect.objectContaining({
+        totalItems: 3,
+        pendingItems: 1,
+        acknowledgedItems: 1,
+        completedItems: 1,
+        pendingOlderThan24h: 1,
+        byModule: expect.objectContaining({
+          hiv: 1,
+          oncology: 1,
+          maternity: 1,
+        }),
+      }),
+    );
+    expect(analytics.recommendationExecution).toEqual(
+      expect.objectContaining({
+        executedActionsTotal: 3,
+        reusedOrIdempotentTotal: 1,
+        executedByAction: expect.objectContaining({
+          'repeat-vl-plan': 1,
+          'escalate-oncology-doctor-review': 1,
+          'prepare-visit-checklist': 1,
+        }),
+        executedByModule: expect.objectContaining({
+          hiv: 1,
+          oncology: 1,
+          maternity: 1,
+        }),
+      }),
+    );
+  });
+
+  it('returns zero-safe doctor outcome analytics when workflow table is unavailable', async () => {
+    const { service } = makeService();
+    const missingTableError: any = new Error('relation does not exist');
+    missingTableError.code = '42P01';
+
+    const tenantDb = {
+      query: jest.fn(async () => {
+        throw missingTableError;
+      }),
+    } as any;
+
+    const analytics = await service.getDoctorOutcomeAnalytics(tenantDb, { days: 999 });
+
+    expect(analytics.window.days).toBe(365);
+    expect(analytics.doctorQueue.totalItems).toBe(0);
+    expect(analytics.recommendationExecution.executedActionsTotal).toBe(0);
+  });
+
   it('returns zero-safe nurse outcome analytics when workflow tables are unavailable', async () => {
     const { service } = makeService();
     const missingTableError: any = new Error('relation does not exist');
