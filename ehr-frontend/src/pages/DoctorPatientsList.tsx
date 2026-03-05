@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Users, Search, Filter, Plus, Eye, Phone, Mail, Calendar,
-  User, Heart, Activity, AlertCircle, RefreshCw, ChevronLeft, ChevronRight
+  ArrowLeft, Users, Search, Filter, Eye, Phone, Mail, Calendar,
+  User, Heart, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -54,30 +54,7 @@ const DoctorPatientsList: React.FC = () => {
   const [patientsPerPage] = useState(10);
   const [patientAppointments, setPatientAppointments] = useState<{ [key: string]: Appointment[] }>({});
 
-  useEffect(() => {
-    fetchPatients();
-  }, []);
-
-  const fetchPatients = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('ehr_token');
-      if (!token) return;
-
-      const response = await ehrApi.getPatients(token, tenantSlug!);
-      setPatients(response.data.patients || []);
-      
-      // Fetch appointments for each patient to show recent activity
-      await fetchPatientAppointments(response.data.patients || []);
-    } catch (error) {
-      console.error('Error fetching patients:', error);
-      showError('Error', 'Failed to fetch patients');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPatientAppointments = async (patients: Patient[]) => {
+  const fetchPatientAppointments = useCallback(async (allPatients: Patient[]) => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -91,7 +68,7 @@ const DoctorPatientsList: React.FC = () => {
       const appointmentsMap: { [key: string]: Appointment[] } = {};
 
       // Fetch appointments for each patient
-      for (const patient of patients) {
+      for (const patient of allPatients) {
         try {
           const response = await ehrApi.getAppointments(token, tenantSlug!, {
             date: new Date().toISOString().split('T')[0]
@@ -115,7 +92,31 @@ const DoctorPatientsList: React.FC = () => {
     } catch (error) {
       console.error('Error fetching patient appointments:', error);
     }
-  };
+  }, [tenantSlug]);
+
+  const fetchPatients = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token) return;
+
+      const response = await ehrApi.getPatients(token, tenantSlug!);
+      const fetchedPatients = response.data.patients || [];
+      setPatients(fetchedPatients);
+
+      // Fetch appointments for each patient to show recent activity
+      await fetchPatientAppointments(fetchedPatients);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      showError('Error', 'Failed to fetch patients');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchPatientAppointments, showError, tenantSlug]);
+
+  useEffect(() => {
+    fetchPatients();
+  }, [fetchPatients]);
 
   const calculateAge = (dateOfBirth: string) => {
     const today = new Date();
@@ -128,30 +129,6 @@ const DoctorPatientsList: React.FC = () => {
     }
     
     return age;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'in-progress': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-gray-100 text-gray-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'no-show': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'scheduled': return <Calendar className="w-3 h-3" />;
-      case 'confirmed': return <Calendar className="w-3 h-3" />;
-      case 'in-progress': return <Activity className="w-3 h-3" />;
-      case 'completed': return <Calendar className="w-3 h-3" />;
-      case 'cancelled': return <AlertCircle className="w-3 h-3" />;
-      case 'no-show': return <AlertCircle className="w-3 h-3" />;
-      default: return <Calendar className="w-3 h-3" />;
-    }
   };
 
   const filteredPatients = patients.filter(patient => {

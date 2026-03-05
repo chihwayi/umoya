@@ -24,6 +24,7 @@ import {
 import { format } from 'date-fns';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
 import ModalPortal from '../components/ModalPortal';
 import OncologyResponseAssessment from '../components/OncologyResponseAssessment';
 import OncologySurvivorshipPlan from '../components/OncologySurvivorshipPlan';
@@ -40,6 +41,11 @@ import OncologySurvivorshipDashboard from '../components/OncologySurvivorshipDas
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineResult } from '../types/guidelines';
+import {
+  buildSharedContextTags,
+  getOncologyCreateCaseDuplicateGuard,
+  getOncologyCreateCasePrefill,
+} from '../services/doctorContextAdapter';
 
 type OncologyCase = {
   id: string;
@@ -117,9 +123,9 @@ const OncologyDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [casesLoading, setCasesLoading] = useState(false);
   const [cases, setCases] = useState<OncologyCase[]>([]);
   const [filters, setFilters] = useState<{ status: string | null }>({ status: 'active' });
@@ -310,46 +316,22 @@ const OncologyDashboard: React.FC = () => {
         const response = await ehrApi.getPatientContext(patientId, token!, tenantSlug!);
         const context = response.data || null;
         setCreateCasePatientContext(context);
+        const prefill = getOncologyCreateCasePrefill(context, currentUser?.id);
 
-        const suggestedDiagnosisDate =
-          context?.modules?.oncology?.latestCase?.diagnosis_date ||
-          context?.modules?.hiv?.latestEnrollment?.date_confirmed_positive ||
-          '';
-        if (diagnosisDateInputRef.current && !diagnosisDateInputRef.current.value && suggestedDiagnosisDate) {
-          diagnosisDateInputRef.current.value = String(suggestedDiagnosisDate).slice(0, 10);
+        if (primaryDiagnosisInputRef.current && !primaryDiagnosisInputRef.current.value && prefill.primaryDiagnosis) {
+          primaryDiagnosisInputRef.current.value = prefill.primaryDiagnosis;
         }
 
-        if (oncologistIdInputRef.current && !oncologistIdInputRef.current.value && currentUser?.id) {
-          oncologistIdInputRef.current.value = currentUser.id;
+        if (diagnosisDateInputRef.current && !diagnosisDateInputRef.current.value && prefill.diagnosisDate) {
+          diagnosisDateInputRef.current.value = prefill.diagnosisDate;
         }
 
-        if (carePlanInputRef.current && !carePlanInputRef.current.value) {
-          const lines: string[] = [];
-          const hivEnrollment = context?.modules?.hiv?.latestEnrollment;
-          const maternityEnrollment = context?.modules?.maternity?.latestEnrollment;
-          const oncologyCase = context?.modules?.oncology?.latestCase;
-          const latestVitals = context?.latestVitals;
+        if (oncologistIdInputRef.current && !oncologistIdInputRef.current.value && prefill.oncologistId) {
+          oncologistIdInputRef.current.value = prefill.oncologistId;
+        }
 
-          if (hivEnrollment?.enrollment_number) {
-            lines.push(
-              `HIV: ${hivEnrollment.enrollment_status || 'unknown'} enrollment ${hivEnrollment.enrollment_number}`,
-            );
-          }
-          if (maternityEnrollment?.enrollment_number) {
-            lines.push(
-              `Maternity: ${maternityEnrollment.enrollment_status || 'unknown'} enrollment ${maternityEnrollment.enrollment_number}`,
-            );
-          }
-          if (oncologyCase?.id) {
-            lines.push(`Previous oncology case: ${oncologyCase.id} (${oncologyCase.status || 'unknown'})`);
-          }
-          if (latestVitals?.recordedAt) {
-            lines.push(`Latest vitals captured: ${String(latestVitals.recordedAt).slice(0, 10)}`);
-          }
-
-          if (lines.length) {
-            carePlanInputRef.current.value = `Auto context summary:\n- ${lines.join('\n- ')}`;
-          }
+        if (carePlanInputRef.current && !carePlanInputRef.current.value && prefill.carePlan) {
+          carePlanInputRef.current.value = prefill.carePlan;
         }
       } catch (error) {
         console.error('Failed to load patient context for oncology case creation', error);
@@ -364,12 +346,15 @@ const OncologyDashboard: React.FC = () => {
 
   useEffect(() => {
     const initialize = async () => {
-      setLoading(true);
       await Promise.all([loadSummary(), loadCases(filters.status), loadTumorBoardMeetings()]);
-      setLoading(false);
     };
     initialize();
   }, [filters.status, loadCases, loadSummary, loadTumorBoardMeetings]);
+
+  const createCaseContextTags = useMemo(
+    () => buildSharedContextTags(createCasePatientContext),
+    [createCasePatientContext],
+  );
 
   const handleCaseSelect = (caseId: string) => {
     setSelectedCaseId(caseId);
@@ -392,6 +377,23 @@ const OncologyDashboard: React.FC = () => {
     try {
       switch (modalState.type) {
         case 'createCase': {
+          const duplicatePrompt = getOncologyCreateCaseDuplicateGuard(createCasePatientContext, {
+            primaryDiagnosis: formData.get('primary_diagnosis') as string | null,
+            diagnosisDate: formData.get('diagnosis_date') as string | null,
+          });
+          if (duplicatePrompt) {
+            const shouldProceed = await confirm({
+              title: duplicatePrompt.title,
+              message: duplicatePrompt.message,
+              type: 'warning',
+              confirmText: duplicatePrompt.confirmText,
+              cancelText: duplicatePrompt.cancelText,
+            });
+            if (!shouldProceed) {
+              return;
+            }
+          }
+
           const payload: any = {
             patient_id: formData.get('patient_id'),
             primary_diagnosis: formData.get('primary_diagnosis'),
@@ -759,15 +761,7 @@ const OncologyDashboard: React.FC = () => {
                       <span className="font-semibold">
                         {createCasePatientContext?.patient?.fullName || 'patient'}
                       </span>
-                      {createCasePatientContext?.modules?.hiv?.latestEnrollment?.enrollment_number
-                        ? ` • HIV ${createCasePatientContext.modules.hiv.latestEnrollment.enrollment_number}`
-                        : ''}
-                      {createCasePatientContext?.modules?.maternity?.latestEnrollment?.enrollment_number
-                        ? ` • Maternity ${createCasePatientContext.modules.maternity.latestEnrollment.enrollment_number}`
-                        : ''}
-                      {createCasePatientContext?.latestVitals?.recordedAt
-                        ? ` • Vitals ${String(createCasePatientContext.latestVitals.recordedAt).slice(0, 10)}`
-                        : ''}.
+                      {createCaseContextTags.length ? ` • ${createCaseContextTags.join(' • ')}` : ''}.
                     </div>
                   )}
                 </>
@@ -2101,6 +2095,7 @@ const OncologyDashboard: React.FC = () => {
         </section>
       </main>
 
+      {Dialog}
       {renderModal()}
 
       {/* WHO Smart Forms Floating Button */}

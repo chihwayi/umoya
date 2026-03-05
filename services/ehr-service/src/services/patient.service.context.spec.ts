@@ -36,7 +36,7 @@ describe('PatientService.getPatientContext', () => {
     } as any;
   };
 
-  it('aggregates latest reusable context across HIV, maternity, oncology, and vitals', async () => {
+  it('aggregates latest reusable context across HIV, maternity, oncology, specialty modules, and vitals', async () => {
     const service = new PatientService();
     const tenantDb = buildTenantDb(async (sql: string) => {
       if (sql.includes('FROM vitals')) {
@@ -92,6 +92,61 @@ describe('PatientService.getPatientContext', () => {
           },
         ];
       }
+      if (sql.includes('FROM cardiology_encounters')) {
+        return [
+          {
+            id: 'card-enc-1',
+            encounter_date: '2026-03-02T09:00:00.000Z',
+            visit_reason: 'Chest pain',
+            risk_score: 'high',
+            care_status: 'in_progress',
+          },
+        ];
+      }
+      if (sql.includes('FROM ophthalmology_encounters')) {
+        return [
+          {
+            id: 'oph-enc-1',
+            encounter_date: '2026-03-01T10:00:00.000Z',
+            chief_complaint: 'Blurred vision',
+            payment_status: 'awaiting_payment',
+          },
+        ];
+      }
+      if (sql.includes('FROM ed_visits')) {
+        return [
+          {
+            id: 'ed-visit-1',
+            ed_visit_number: 'ED-2026-000001',
+            arrival_date: '2026-02-28T20:00:00.000Z',
+            presenting_symptoms: 'Chest pain and dizziness',
+            allergies: 'Penicillin',
+            current_medications: 'Aspirin',
+            ed_status: 'discharged',
+            triage_level: 3,
+          },
+        ];
+      }
+      if (sql.includes('FROM sepsis_screenings')) {
+        return [
+          {
+            id: 'sepsis-screen-1',
+            screening_location: 'ED',
+            screening_datetime: '2026-02-28T20:30:00.000Z',
+            sepsis_suspected: true,
+            qsofa_score: 2,
+          },
+        ];
+      }
+      if (sql.includes('FROM sepsis_bundles')) {
+        return [
+          {
+            id: 'sepsis-bundle-1',
+            bundle_start_time: '2026-02-28T20:45:00.000Z',
+            overall_compliance: false,
+          },
+        ];
+      }
       if (sql.includes('FROM hiv_clinical_visits')) {
         return [
           {
@@ -125,6 +180,11 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.maternity.latestEnrollment.id).toBe('mat-enroll-1');
     expect(result.modules.oncology.latestCase.id).toBe('onc-case-1');
     expect(result.modules.oncology.activeCaseCount).toBe(1);
+    expect(result.modules.cardiology.latestEncounter.id).toBe('card-enc-1');
+    expect(result.modules.ophthalmology.latestEncounter.id).toBe('oph-enc-1');
+    expect(result.modules.ed.latestVisit.id).toBe('ed-visit-1');
+    expect(result.modules.sepsis.latestScreening.id).toBe('sepsis-screen-1');
+    expect(result.modules.sepsis.latestBundle.id).toBe('sepsis-bundle-1');
   });
 
   it('returns base patient context even when module tables are missing', async () => {
@@ -144,6 +204,10 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.maternity.latestEnrollment).toBeNull();
     expect(result.modules.oncology.latestCase).toBeNull();
     expect(result.modules.oncology.activeCaseCount).toBe(0);
+    expect(result.modules.cardiology.latestEncounter).toBeNull();
+    expect(result.modules.ophthalmology.latestEncounter).toBeNull();
+    expect(result.modules.ed.latestVisit).toBeNull();
+    expect(result.modules.sepsis.latestScreening).toBeNull();
+    expect(result.modules.sepsis.latestBundle).toBeNull();
   });
 });
-

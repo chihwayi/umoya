@@ -1,20 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
-  Play, Pause, Square, FileText, Pill, TestTube, Bell, 
-  Search, Filter, RefreshCw, Eye, Edit, Phone, Video,
-  Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, Zap, ArrowLeft, XCircle, Settings,
-  LogOut, Menu, X, BarChart3, CreditCard, Users, Bell as BellIcon, ChevronDown, ChevronUp,
+  Play, FileText, Pill, TestTube,
+  Search, RefreshCw, Eye,
+  Activity, Heart, HeartPulse, Thermometer, Droplets, Weight, XCircle,
+  LogOut, Menu, X, BarChart3, Users, ChevronDown, ChevronUp,
   Camera, TrendingUp, Baby, FlaskConical, Target, Send, Mail, Shield, Syringe, Route,
-  Bed, Hospital, Home, Droplet, DollarSign, Brain, BookOpen,
+  Bed, Home, Droplet, DollarSign, Brain, BookOpen,
   Mic
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi, cdssApi, tenantApi } from '../services/api';
 import { formatDateForAPI, getTodayFormatted } from '../utils/dateUtils';
 import DatePicker from '../components/DatePicker';
-import AppointmentActions from '../components/AppointmentActions';
 import PatientQueue from '../components/PatientQueue';
 import DoctorScheduleView from '../components/DoctorScheduleView';
 import RealtimeStatusIndicator from '../components/RealtimeStatusIndicator';
@@ -30,7 +29,7 @@ import LabOrdersModal from '../components/LabOrdersModal';
 import LabResultsViewer from '../components/LabResultsViewer';
 import { chartApi } from '../services/api';
 import ClinicalAlerts from '../components/ClinicalAlerts';
-import { checkVitalsAlerts, VitalsData } from '../utils/vitalsAlerts';
+import { VitalsData } from '../utils/vitalsAlerts';
 import { UniversalSmartFormsPanel } from '../components/WHOSmartForms';
 // Tier 1 Components
 import ConsentLibrary from '../components/ConsentLibrary';
@@ -114,13 +113,6 @@ interface PatientVitals {
   recorded_by_name?: string;
 }
 
-interface VitalsAlert {
-  type: 'critical' | 'warning' | 'normal' | 'missing';
-  message: string;
-  icon: React.ReactNode;
-  color: string;
-}
-
 interface DoctorOutcomeAnalyticsSnapshot {
   generatedAt?: string;
   window?: {
@@ -146,6 +138,12 @@ interface DoctorOutcomeAnalyticsSnapshot {
       executedActionsTotal: number;
     }>;
   };
+  accountsSync?: {
+    totalItems?: number;
+    pendingItems?: number;
+    byStatus?: Record<string, number>;
+    byModule?: Record<string, number>;
+  };
   recommendationExecution?: {
     executedActionsTotal?: number;
     reusedOrIdempotentTotal?: number;
@@ -153,7 +151,43 @@ interface DoctorOutcomeAnalyticsSnapshot {
     executedByModule?: Record<string, number>;
     topActions?: Array<{ actionId: string; count: number }>;
   };
+  cdssAdoption?: {
+    queueItemsWithExecutions?: number;
+    executionCoveragePercent?: number;
+    actionsPerQueueItemPercent?: number;
+    overrideActionsTotal?: number;
+    averageTimeToExecutionHours?: number;
+  };
 }
+
+const DOCTOR_SYNC_SCOPE_MODULES = new Set([
+  'maternity',
+  'hiv',
+  'oncology',
+  'nursing',
+  'cardiology',
+  'ophthalmology',
+  'ed',
+  'sepsis',
+  'telemedicine',
+  'lab',
+  'pharmacy',
+  'accounts',
+  'billing',
+  'claims',
+  'revenue_cycle',
+]);
+
+const ACCOUNTS_SYNC_MODULES = new Set(['accounts', 'billing', 'claims', 'revenue_cycle']);
+const SPECIALTY_SYNC_MODULES = new Set([
+  'cardiology',
+  'ophthalmology',
+  'ed',
+  'sepsis',
+  'telemedicine',
+  'lab',
+  'pharmacy',
+]);
 
 type PatientVitalsWithUser = PatientVitals & {
   recordedByUser?: {
@@ -171,9 +205,9 @@ const DoctorDashboard: React.FC = () => {
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayFormatted());
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
-  const [patientVitals, setPatientVitals] = useState<PatientVitals | null>(null);
+  const [patientVitals] = useState<PatientVitals | null>(null);
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [showComprehensiveNotes, setShowComprehensiveNotes] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
@@ -189,8 +223,6 @@ const DoctorDashboard: React.FC = () => {
     height: '',
     oxygenSaturation: ''
   });
-  const [vitalsAlerts, setVitalsAlerts] = useState<VitalsAlert[]>([]);
-  const [showVitalsAlert, setShowVitalsAlert] = useState(false);
   const [vitalsData, setVitalsData] = useState<Record<string, PatientVitals[]>>({});
   const [authorizedOrders, setAuthorizedOrders] = useState<any[]>([]);
   const [problems, setProblems] = useState<any[]>([]);
@@ -207,7 +239,6 @@ const DoctorDashboard: React.FC = () => {
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [patientRiskAssessment, setPatientRiskAssessment] = useState<any>(null);
   const [loadingRiskAssessment, setLoadingRiskAssessment] = useState(false);
-  const [clinicalGuidelines, setClinicalGuidelines] = useState<any>(null);
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
@@ -225,8 +256,6 @@ const DoctorDashboard: React.FC = () => {
   const [showPrescriptionsModal, setShowPrescriptionsModal] = useState(false);
   const [showLabOrdersModal, setShowLabOrdersModal] = useState(false);
   const [showLabResultsModal, setShowLabResultsModal] = useState(false);
-  const [showAllOrders, setShowAllOrders] = useState(false);
-  const [showAllMedications, setShowAllMedications] = useState(false);
   const [showEnhancedLabOrderModal, setShowEnhancedLabOrderModal] = useState(false);
   const [showImagingOrderModal, setShowImagingOrderModal] = useState(false);
   const [showResultComparisonModal, setShowResultComparisonModal] = useState(false);
@@ -675,6 +704,15 @@ const DoctorDashboard: React.FC = () => {
     hiv: 0,
     oncology: 0,
     nursing: 0,
+    cardiology: 0,
+    ophthalmology: 0,
+    ed: 0,
+    sepsis: 0,
+    telemedicine: 0,
+    lab: 0,
+    pharmacy: 0,
+    accounts: 0,
+    specialty: 0,
     handoff: 0,
     medication: 0,
   });
@@ -692,7 +730,7 @@ const DoctorDashboard: React.FC = () => {
   }, []);
 
   // Function to fetch admitted patients
-  const fetchAdmittedPatients = async () => {
+  const fetchAdmittedPatients = useCallback(async () => {
     if (!currentUser?.id || !tenantSlug) return;
     
     setLoadingAdmitted(true);
@@ -709,14 +747,14 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setLoadingAdmitted(false);
     }
-  };
+  }, [currentUser?.id, showError, tenantSlug]);
 
   // Load admitted patients when My Patients tab is active
   useEffect(() => {
     if (activeTab === 'my-patients') {
       fetchAdmittedPatients();
     }
-  }, [activeTab, currentUser, tenantSlug]);
+  }, [activeTab, fetchAdmittedPatients]);
 
   // Load critical alert count on mount and refresh every 2 minutes
   useEffect(() => {
@@ -748,14 +786,6 @@ const DoctorDashboard: React.FC = () => {
     const interval = setInterval(loadAlertCount, 120000); // Every 2 minutes
     return () => clearInterval(interval);
   }, [tenantSlug]);
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchTodayAppointments();
-      fetchAuthorizedOrders();
-      loadDoctorSyncPanel();
-    }
-  }, [selectedDate, currentUser, tenantSlug]);
 
   // Load unread message count
   useEffect(() => {
@@ -861,15 +891,8 @@ const DoctorDashboard: React.FC = () => {
     setImagingStudyLoadError(false);
   };
 
-  // Auto-calculate risk assessment when patient and data are ready
-  useEffect(() => {
-    if (currentAppointment && Object.keys(vitalsData).length > 0 && authorizedOrders.length >= 0) {
-      calculatePatientRisk();
-    }
-  }, [currentAppointment, vitalsData, authorizedOrders, problems]);
-
   // Calculate patient risk assessment
-  const calculatePatientRisk = async () => {
+  const calculatePatientRisk = useCallback(async () => {
     if (!currentAppointment) return;
     
     try {
@@ -908,7 +931,14 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setLoadingRiskAssessment(false);
     }
-  };
+  }, [authorizedOrders, currentAppointment, problems, tenantSlug, vitalsData]);
+
+  // Auto-calculate risk assessment when patient and data are ready
+  useEffect(() => {
+    if (currentAppointment && Object.keys(vitalsData).length > 0 && authorizedOrders.length >= 0) {
+      calculatePatientRisk();
+    }
+  }, [authorizedOrders, calculatePatientRisk, currentAppointment, vitalsData]);
 
   // Real-time updates
   const handleRealtimeUpdate = async () => {
@@ -931,7 +961,7 @@ const DoctorDashboard: React.FC = () => {
     enabled: false // Disabled to prevent modal closing
   });
 
-  const fetchVitalsForAppointments = async (appointments: Appointment[]) => {
+  const fetchVitalsForAppointments = useCallback(async (appointments: Appointment[]) => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -960,9 +990,9 @@ const DoctorDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error fetching vitals data:', error);
     }
-  };
+  }, [tenantSlug]);
 
-  const fetchTodayAppointments = async () => {
+  const fetchTodayAppointments = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
@@ -1027,9 +1057,9 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, fetchVitalsForAppointments, selectedDate, showError, tenantSlug]);
 
-  const fetchAuthorizedOrders = async () => {
+  const fetchAuthorizedOrders = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token) return;
@@ -1039,9 +1069,9 @@ const DoctorDashboard: React.FC = () => {
       console.error('Error fetching authorized orders:', error);
       setAuthorizedOrders([]);
     }
-  };
+  }, [tenantSlug]);
 
-  const buildDoctorSyncSummary = (items: NurseCrossModuleFeedItem[]) => ({
+  const buildDoctorSyncSummary = useCallback((items: NurseCrossModuleFeedItem[]) => ({
     total: items.length,
     critical: items.filter((item) => item.severity === 'critical').length,
     high: items.filter((item) => item.severity === 'high').length,
@@ -1049,11 +1079,20 @@ const DoctorDashboard: React.FC = () => {
     hiv: items.filter((item) => item.module === 'hiv').length,
     oncology: items.filter((item) => item.module === 'oncology').length,
     nursing: items.filter((item) => item.module === 'nursing').length,
+    cardiology: items.filter((item) => item.module === 'cardiology').length,
+    ophthalmology: items.filter((item) => item.module === 'ophthalmology').length,
+    ed: items.filter((item) => item.module === 'ed').length,
+    sepsis: items.filter((item) => item.module === 'sepsis').length,
+    telemedicine: items.filter((item) => item.module === 'telemedicine').length,
+    lab: items.filter((item) => item.module === 'lab').length,
+    pharmacy: items.filter((item) => item.module === 'pharmacy').length,
+    accounts: items.filter((item) => ACCOUNTS_SYNC_MODULES.has(String(item.module || '').toLowerCase())).length,
+    specialty: items.filter((item) => SPECIALTY_SYNC_MODULES.has(String(item.module || '').toLowerCase())).length,
     handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
     medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
-  });
+  }), []);
 
-  const loadDoctorSyncPanel = async () => {
+  const loadDoctorSyncPanel = useCallback(async () => {
     try {
       setDoctorSyncLoading(true);
       const token = localStorage.getItem('ehr_token');
@@ -1072,13 +1111,29 @@ const DoctorDashboard: React.FC = () => {
         ? feedResponse.data.items
         : [];
       const filteredItems = feedItems.filter((item) => {
+        const moduleKey = String(item.module || '').toLowerCase();
         const destinationRole = String(item.destination_role || '').toLowerCase();
+        const destinationService = String(item.destination_service || '').toLowerCase();
         const doctorSyncStatus = String(item.doctor_sync_status || '').toLowerCase();
+        const accountsSyncStatus =
+          String(
+            item.metadata?.accounts_sync_status ||
+              item.metadata?.workflow_context?.accounts_sync_status ||
+              item.metadata?.workflow_context?.payment_status ||
+              item.metadata?.workflow_context?.claim_status ||
+              item.metadata?.workflow_context?.billing_status ||
+              '',
+          ).toLowerCase();
         return (
           destinationRole === 'doctor' ||
-          item.module === 'maternity' ||
-          item.module === 'oncology' ||
-          doctorSyncStatus.includes('doctor')
+          DOCTOR_SYNC_SCOPE_MODULES.has(moduleKey) ||
+          destinationService === 'accounts' ||
+          destinationService === 'billing' ||
+          destinationService === 'claims' ||
+          destinationService === 'revenue_cycle' ||
+          destinationService === 'payment_clearance' ||
+          doctorSyncStatus.includes('doctor') ||
+          accountsSyncStatus.length > 0
         );
       });
 
@@ -1093,28 +1148,88 @@ const DoctorDashboard: React.FC = () => {
     } finally {
       setDoctorSyncLoading(false);
     }
-  };
+  }, [buildDoctorSyncSummary, tenantSlug]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchTodayAppointments();
+      fetchAuthorizedOrders();
+      loadDoctorSyncPanel();
+    }
+  }, [currentUser, fetchAuthorizedOrders, fetchTodayAppointments, loadDoctorSyncPanel]);
 
   const handleDoctorOpenCrossModuleWorkflow = (item: NurseCrossModuleFeedItem) => {
     if (!tenantSlug) {
       return;
     }
 
-    if (item.module === 'maternity') {
-      navigate(`/ehr/${tenantSlug}/doctor/maternity`);
-      showSuccess('Opened maternity doctor workspace', 'Review the escalation and complete doctor follow-through.');
-      return;
-    }
+    const moduleRouteMap: Record<string, { path: string; title: string; message: string }> = {
+      maternity: {
+        path: `/ehr/${tenantSlug}/doctor/maternity`,
+        title: 'Opened maternity doctor workspace',
+        message: 'Review the escalation and complete doctor follow-through.',
+      },
+      hiv: {
+        path: `/ehr/${tenantSlug}/doctor/hiv`,
+        title: 'Opened HIV doctor workspace',
+        message: 'Review HIV recommendation synchronization for this patient.',
+      },
+      oncology: {
+        path: `/ehr/${tenantSlug}/doctor/oncology`,
+        title: 'Opened oncology doctor workspace',
+        message: 'Review oncology recommendations and update treatment actions.',
+      },
+      cardiology: {
+        path: `/ehr/${tenantSlug}/doctor/cardiology`,
+        title: 'Opened cardiology workspace',
+        message: 'Review cardiology follow-through and close protocol checkpoints.',
+      },
+      ophthalmology: {
+        path: `/ehr/${tenantSlug}/doctor/ophthalmology`,
+        title: 'Opened ophthalmology workspace',
+        message: 'Review ophthalmology tasks and complete remaining doctor follow-through.',
+      },
+      ed: {
+        path: `/ehr/${tenantSlug}/emergency`,
+        title: 'Opened emergency workspace',
+        message: 'Review ED escalation details and update emergency care actions.',
+      },
+      sepsis: {
+        path: `/ehr/${tenantSlug}/sepsis`,
+        title: 'Opened sepsis workspace',
+        message: 'Review sepsis bundle follow-through and unresolved checklist items.',
+      },
+      telemedicine: {
+        path: `/ehr/${tenantSlug}/telemedicine`,
+        title: 'Opened telemedicine workspace',
+        message: 'Review telemedicine follow-through and complete pending workflow actions.',
+      },
+      pharmacy: {
+        path: `/ehr/${tenantSlug}/pharmacy`,
+        title: 'Opened pharmacy workspace',
+        message: 'Review medication synchronization and close doctor-pending items.',
+      },
+      billing: {
+        path: `/ehr/${tenantSlug}/billing`,
+        title: 'Opened billing workspace',
+        message: 'Review billing handoff and close doctor-dependent claims tasks.',
+      },
+      claims: {
+        path: `/ehr/${tenantSlug}/claims`,
+        title: 'Opened claims workspace',
+        message: 'Review claims synchronization and complete pending doctor items.',
+      },
+      revenue_cycle: {
+        path: `/ehr/${tenantSlug}/revenue-cycle`,
+        title: 'Opened revenue-cycle workspace',
+        message: 'Review outstanding financial workflow checkpoints tied to doctor actions.',
+      },
+    };
 
-    if (item.module === 'hiv') {
-      navigate(`/ehr/${tenantSlug}/doctor/hiv`);
-      showSuccess('Opened HIV doctor workspace', 'Review HIV recommendation synchronization for this patient.');
-      return;
-    }
-
-    if (item.module === 'oncology') {
-      navigate(`/ehr/${tenantSlug}/doctor/oncology`);
-      showSuccess('Opened oncology doctor workspace', 'Review oncology recommendations and update treatment actions.');
+    const routeEntry = moduleRouteMap[String(item.module || '').toLowerCase()];
+    if (routeEntry) {
+      navigate(routeEntry.path);
+      showSuccess(routeEntry.title, routeEntry.message);
       return;
     }
 
@@ -1245,6 +1360,87 @@ const DoctorDashboard: React.FC = () => {
           token,
           tenantSlug,
         );
+      } else if (item.module === 'cardiology') {
+        await ehrApi.executeCardiologyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            encounterId:
+              item.metadata?.encounter_id ||
+              recommendationItem?.action_payload?.encounter_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'ed') {
+        await ehrApi.executeEdNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            visitId:
+              item.metadata?.ed_visit_id ||
+              recommendationItem?.action_payload?.visit_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'sepsis') {
+        await ehrApi.executeSepsisNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            bundleId:
+              item.metadata?.sepsis_bundle_id ||
+              recommendationItem?.action_payload?.bundle_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
       } else {
         showError('Unable to execute recommendation', 'This module does not support executable recommendation actions.');
         return;
@@ -1268,35 +1464,11 @@ const DoctorDashboard: React.FC = () => {
     }
   };
 
-  const getAppointmentStatusColor = (status: string) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'in-progress': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-gray-100 text-gray-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'no-show': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const normalizeStatus = (status: string) => {
     if (!status) return '';
     const s = status.toLowerCase().replace('_', '-');
     if (s === 'in-progress' || s === 'inprogress') return 'in-progress';
     return s;
-  };
-
-  const getAppointmentStatusIcon = (status: string) => {
-    switch (status) {
-      case 'scheduled': return <Clock className="w-4 h-4" />;
-      case 'confirmed': return <CheckCircle className="w-4 h-4" />;
-      case 'in-progress': return <Play className="w-4 h-4" />;
-      case 'completed': return <Square className="w-4 h-4" />;
-      case 'cancelled': return <XCircle className="w-4 h-4" />;
-      case 'no-show': return <AlertCircle className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
   };
 
   const handleAppointmentAction = async (appointmentId: string, action: string) => {
@@ -1359,222 +1531,6 @@ const DoctorDashboard: React.FC = () => {
     }
   };
 
-  // Vitals validation functions
-  const validateVitals = (vitals: PatientVitals): VitalsAlert[] => {
-    const alerts: VitalsAlert[] = [];
-    
-    // Blood Pressure validation
-    if (vitals.bloodPressure) {
-      const [systolic, diastolic] = vitals.bloodPressure.split('/').map(Number);
-      if (systolic > 180 || diastolic > 110) {
-        alerts.push({
-          type: 'critical',
-          message: `Critical Blood Pressure: ${vitals.bloodPressure} mmHg`,
-          icon: <AlertCircle className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (systolic > 160 || diastolic > 100) {
-        alerts.push({
-          type: 'warning',
-          message: `Elevated Blood Pressure: ${vitals.bloodPressure} mmHg`,
-          icon: <AlertCircle className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    // Heart Rate validation
-    if (vitals.heartRate > 0) {
-      if (vitals.heartRate > 120 || vitals.heartRate < 50) {
-        alerts.push({
-          type: 'critical',
-          message: `Abnormal Heart Rate: ${vitals.heartRate} bpm`,
-          icon: <Heart className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (vitals.heartRate > 110 || vitals.heartRate < 55) {
-        alerts.push({
-          type: 'warning',
-          message: `Elevated Heart Rate: ${vitals.heartRate} bpm`,
-          icon: <Heart className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    // Temperature validation
-    if (vitals.temperature > 0) {
-      if (vitals.temperature > 39.5 || vitals.temperature < 35.0) {
-        alerts.push({
-          type: 'critical',
-          message: `Critical Temperature: ${vitals.temperature}°C`,
-          icon: <Thermometer className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (vitals.temperature > 38.5 || vitals.temperature < 35.5) {
-        alerts.push({
-          type: 'warning',
-          message: `Elevated Temperature: ${vitals.temperature}°C`,
-          icon: <Thermometer className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    // Oxygen Saturation validation
-    if (vitals.oxygenSaturation > 0) {
-      if (vitals.oxygenSaturation < 90) {
-        alerts.push({
-          type: 'critical',
-          message: `Low Oxygen Saturation: ${vitals.oxygenSaturation}%`,
-          icon: <Droplets className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (vitals.oxygenSaturation < 95) {
-        alerts.push({
-          type: 'warning',
-          message: `Reduced Oxygen Saturation: ${vitals.oxygenSaturation}%`,
-          icon: <Droplets className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    // Respiratory Rate validation
-    if (vitals.respiratoryRate && vitals.respiratoryRate > 0) {
-      if (vitals.respiratoryRate > 25 || vitals.respiratoryRate < 8) {
-        alerts.push({
-          type: 'critical',
-          message: `Abnormal Respiratory Rate: ${vitals.respiratoryRate} breaths/min`,
-          icon: <Activity className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      }
-    }
-
-    // Pain Level validation
-    if (vitals.painLevel && vitals.painLevel > 0) {
-      if (vitals.painLevel >= 8) {
-        alerts.push({
-          type: 'critical',
-          message: `Severe Pain Level: ${vitals.painLevel}/10`,
-          icon: <AlertCircle className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (vitals.painLevel >= 6) {
-        alerts.push({
-          type: 'warning',
-          message: `Moderate Pain Level: ${vitals.painLevel}/10`,
-          icon: <AlertCircle className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    // Blood Glucose validation
-    if (vitals.bloodGlucose && vitals.bloodGlucose > 0) {
-      if (vitals.bloodGlucose > 300 || vitals.bloodGlucose < 70) {
-        alerts.push({
-          type: 'critical',
-          message: `Critical Blood Glucose: ${vitals.bloodGlucose} mg/dL`,
-          icon: <TestTube className="w-4 h-4" />,
-          color: 'text-red-600'
-        });
-      } else if (vitals.bloodGlucose > 200 || vitals.bloodGlucose < 100) {
-        alerts.push({
-          type: 'warning',
-          message: `Elevated Blood Glucose: ${vitals.bloodGlucose} mg/dL`,
-          icon: <TestTube className="w-4 h-4" />,
-          color: 'text-orange-600'
-        });
-      }
-    }
-
-    return alerts;
-  };
-
-  const checkVitalsStatus = (appointment: Appointment) => {
-    // Check if we have vitals data for this patient
-    const patientVitals = vitalsData[appointment.patient.id];
-    
-    if (!patientVitals || patientVitals.length === 0) {
-      return {
-        hasVitals: false,
-        isRecent: false,
-        alerts: [] as VitalsAlert[]
-      };
-    }
-
-    // Get the most recent vitals
-    const latestVitals = patientVitals[0];
-    const vitalsAge = Date.now() - new Date(latestVitals.recordedAt).getTime();
-    const isRecent = vitalsAge < 4 * 60 * 60 * 1000; // 4 hours
-
-    // Validate vitals and generate alerts
-    const alerts = validateVitals(latestVitals);
-
-    return {
-      hasVitals: true,
-      isRecent,
-      alerts
-    };
-  };
-
-
-  const getVitalsStatusBadge = (appointment: Appointment) => {
-    const vitalsStatus = checkVitalsStatus(appointment);
-    
-    if (!vitalsStatus.hasVitals) {
-      return {
-        text: 'No Vitals',
-        color: 'bg-red-100 text-red-800 border-red-200',
-        icon: <AlertCircle className="w-3 h-3" />
-      };
-    } else if (vitalsStatus.alerts.some(alert => alert.type === 'critical')) {
-      return {
-        text: 'Critical Vitals',
-        color: 'bg-red-100 text-red-800 border-red-200',
-        icon: <AlertCircle className="w-3 h-3" />
-      };
-    } else if (vitalsStatus.alerts.some(alert => alert.type === 'warning')) {
-      return {
-        text: 'Vitals Warning',
-        color: 'bg-orange-100 text-orange-800 border-orange-200',
-        icon: <AlertTriangle className="w-3 h-3" />
-      };
-    } else if (!vitalsStatus.isRecent) {
-      return {
-        text: 'Vitals History',
-        color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        icon: <Clock className="w-3 h-3" />
-      };
-    } else {
-      return {
-        text: 'Vitals OK',
-        color: 'bg-green-100 text-green-800 border-green-200',
-        icon: <CheckCircle className="w-3 h-3" />
-      };
-    }
-  };
-
-  const handleNotesSubmit = async () => {
-    try {
-      const token = localStorage.getItem('ehr_token');
-      if (!token || !currentAppointment) return;
-
-      // Update appointment notes
-      await ehrApi.updateAppointment(currentAppointment.id, {
-        notes: currentAppointment.notes || ''
-      }, token, tenantSlug!);
-      
-      showSuccess('Success', 'Appointment notes saved');
-      fetchTodayAppointments();
-      fetchTodayAppointments();
-    } catch (error) {
-      console.error('Error saving notes:', error);
-      showError('Error', 'Failed to save notes');
-    }
-  };
 
   const handleReferralSubmit = async () => {
     try {
@@ -1622,29 +1578,6 @@ const DoctorDashboard: React.FC = () => {
     }
   };
 
-  const getOrderTypeFromReason = (reason: string): string => {
-    switch (reason) {
-      case 'Injection': return 'procedure';
-      case 'IV Drip': return 'procedure';
-      case 'Wound Dressing': return 'procedure';
-      case 'Vital Signs': return 'procedure';
-      case 'Medication Administration': return 'medication';
-      case 'Blood Draw': return 'lab_test';
-      default: return 'procedure';
-    }
-  };
-
-  const getOrderNameFromReason = (reason: string): string => {
-    switch (reason) {
-      case 'Injection': return 'Administer Injection';
-      case 'IV Drip': return 'Set up IV Drip';
-      case 'Wound Dressing': return 'Apply Wound Dressing';
-      case 'Vital Signs': return 'Monitor Vital Signs';
-      case 'Medication Administration': return 'Administer Medication';
-      case 'Blood Draw': return 'Collect Blood Sample';
-      default: return reason;
-    }
-  };
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
@@ -1652,14 +1585,6 @@ const DoctorDashboard: React.FC = () => {
       minute: '2-digit',
       hour12: true
     });
-  };
-
-  const getUpcomingAppointments = () => {
-    const now = new Date();
-    return appointments.filter(apt => {
-      const aptTime = new Date(apt.appointmentDate);
-      return aptTime > now && apt.status !== 'completed' && apt.status !== 'cancelled';
-    }).slice(0, 3);
   };
 
   const getCurrentAppointments = () => {
@@ -1690,7 +1615,6 @@ const DoctorDashboard: React.FC = () => {
 
   const inProgressCount = getCurrentAppointments().length;
   const waitingCount = appointments.filter(a => normalizeStatus(a.status) === 'confirmed').length;
-  const authorizedCount = authorizedOrders.length;
 
   const quickStats = [
     { label: 'Today\'s Appointments', value: appointments.length.toString(), icon: Calendar, color: 'text-blue-600' },
@@ -2192,7 +2116,7 @@ const DoctorDashboard: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Doctor Synchronization Panel</h3>
                     <p className="text-sm text-slate-600">
-                      One-click execution for doctor-routed HIV and oncology recommendations.
+                      Unified doctor sync for HIV, oncology, specialty workflows, and accounts handoff status.
                     </p>
                   </div>
                   <button
@@ -2205,7 +2129,7 @@ const DoctorDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3 mb-5">
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500">Doctor Queue Total</p>
                     <p className="text-2xl font-bold text-slate-900">
@@ -2230,13 +2154,37 @@ const DoctorDashboard: React.FC = () => {
                       {doctorOutcomeAnalytics?.recommendationExecution?.reusedOrIdempotentTotal ?? 0}
                     </p>
                   </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Accounts Sync Pending</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.accountsSync?.pendingItems ?? doctorSyncSummary.accounts}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">CDSS Coverage</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.cdssAdoption?.executionCoveragePercent ?? 0}%
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Avg Time To Action</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.cdssAdoption?.averageTimeToExecutionHours ?? 0}h
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-500">Overrides Logged</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {doctorOutcomeAnalytics?.cdssAdoption?.overrideActionsTotal ?? 0}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <p className="text-xs font-semibold text-slate-500 mb-2">Specialty Queue Drilldown</p>
                     <div className="space-y-2">
-                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).slice(0, 5).map((moduleRow) => (
+                      {(doctorOutcomeAnalytics?.doctorQueue?.moduleDrilldown || []).slice(0, 8).map((moduleRow) => (
                         <div
                           key={`doctor-module-${moduleRow.module}`}
                           className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"

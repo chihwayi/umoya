@@ -166,19 +166,6 @@ const moduleLabels: Record<string, string> = {
   cardiology_encounters: 'Cardiology',
 };
 
-const renderPayerTag = (payer: string) => {
-  const map: Record<string, string> = {
-    self: 'bg-blue-100 text-blue-700',
-    medical_aid: 'bg-purple-100 text-purple-700',
-    corporate: 'bg-emerald-100 text-emerald-700',
-  };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${map[payer] || 'bg-slate-100 text-slate-600'}`}>
-      {payer.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-    </span>
-  );
-};
-
 const AccountsDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -1464,4 +1451,3 @@ const AccountsDashboard: React.FC = () => {
 };
 
 export default AccountsDashboard;
-

@@ -9,7 +9,6 @@ import {
   NotebookPen,
   Plus,
   RefreshCw,
-  Scan,
   Search,
   Stethoscope,
   TestTube,
@@ -23,10 +22,16 @@ import {
 import { format } from 'date-fns';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { useConfirmation } from '../hooks/useConfirmation';
 import ModalPortal from '../components/ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineResult } from '../types/guidelines';
+import {
+  buildSharedContextTags,
+  getOphthalmologyCreateEncounterPrefill,
+  getOphthalmologyEncounterDuplicateGuard,
+} from '../services/doctorContextAdapter';
 
 type OphthalmologyEncounter = {
   id: string;
@@ -96,9 +101,9 @@ const OphthalmologyDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess, showInfo } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [encountersLoading, setEncountersLoading] = useState(false);
   const [encounters, setEncounters] = useState<OphthalmologyEncounter[]>([]);
   const [filters, setFilters] = useState<{ search: string; type: string | null }>({ search: '', type: null });
@@ -169,50 +174,26 @@ const OphthalmologyDashboard: React.FC = () => {
         const response = await ehrApi.getPatientContext(patientId, token!, tenantSlug!);
         const context = response.data || null;
         setCreateEncounterPatientContext(context);
+        const prefill = getOphthalmologyCreateEncounterPrefill(context, currentUser?.id);
 
         if (encounterDateInputRef.current && !encounterDateInputRef.current.value) {
-          const now = new Date();
-          const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-          encounterDateInputRef.current.value = local.toISOString().slice(0, 16);
+          encounterDateInputRef.current.value = prefill.encounterDateTime;
         }
 
-        if (ophthalmologistIdInputRef.current && !ophthalmologistIdInputRef.current.value && currentUser?.id) {
-          ophthalmologistIdInputRef.current.value = currentUser.id;
+        if (ophthalmologistIdInputRef.current && !ophthalmologistIdInputRef.current.value && prefill.ophthalmologistId) {
+          ophthalmologistIdInputRef.current.value = prefill.ophthalmologistId;
         }
 
-        if (chiefComplaintInputRef.current && !chiefComplaintInputRef.current.value) {
-          const snippets: string[] = [];
-          const latestVitals = context?.latestVitals;
-          if (latestVitals?.bloodPressure) {
-            snippets.push(`Latest BP: ${latestVitals.bloodPressure}`);
-          }
-          if (snippets.length) {
-            chiefComplaintInputRef.current.value = snippets.join(' | ');
-          }
+        if (chiefComplaintInputRef.current && !chiefComplaintInputRef.current.value && prefill.chiefComplaint) {
+          chiefComplaintInputRef.current.value = prefill.chiefComplaint;
         }
 
-        if (assessmentInputRef.current && !assessmentInputRef.current.value) {
-          const oncologyCase = context?.modules?.oncology?.latestCase;
-          const hivEnrollment = context?.modules?.hiv?.latestEnrollment;
-          const lines: string[] = [];
-          if (oncologyCase?.primary_diagnosis) {
-            lines.push(`Oncology diagnosis: ${oncologyCase.primary_diagnosis}`);
-          }
-          if (hivEnrollment?.enrollment_number) {
-            lines.push(`HIV enrollment: ${hivEnrollment.enrollment_number}`);
-          }
-          if (lines.length) {
-            assessmentInputRef.current.value = lines.join('\n');
-          }
+        if (assessmentInputRef.current && !assessmentInputRef.current.value && prefill.assessment) {
+          assessmentInputRef.current.value = prefill.assessment;
         }
 
-        if (planInputRef.current && !planInputRef.current.value) {
-          const followUpHint = context?.modules?.maternity?.latestEnrollment?.enrollment_status === 'active'
-            ? 'Coordinate review schedule with active maternity care plan.'
-            : '';
-          if (followUpHint) {
-            planInputRef.current.value = followUpHint;
-          }
+        if (planInputRef.current && !planInputRef.current.value && prefill.plan) {
+          planInputRef.current.value = prefill.plan;
         }
       } catch (error) {
         console.error('Failed to load patient context for ophthalmology encounter', error);
@@ -316,12 +297,15 @@ const OphthalmologyDashboard: React.FC = () => {
 
   useEffect(() => {
     const initialize = async () => {
-      setLoading(true);
       await Promise.all([loadSummary(), loadEncounters(filters.search, filters.type)]);
-      setLoading(false);
     };
     initialize();
   }, [filters.search, filters.type, loadEncounters, loadSummary]);
+
+  const createEncounterContextTags = useMemo(
+    () => buildSharedContextTags(createEncounterPatientContext),
+    [createEncounterPatientContext],
+  );
 
   const handleEncounterSelect = (encounterId: string) => {
     setSelectedEncounterId(encounterId);
@@ -344,6 +328,23 @@ const OphthalmologyDashboard: React.FC = () => {
     try {
       switch (modalState.type) {
         case 'createEncounter': {
+          const duplicatePrompt = getOphthalmologyEncounterDuplicateGuard(createEncounterPatientContext, {
+            encounterType: formData.get('encounter_type') as string | null,
+            chiefComplaint: formData.get('chief_complaint') as string | null,
+          });
+          if (duplicatePrompt) {
+            const shouldProceed = await confirm({
+              title: duplicatePrompt.title,
+              message: duplicatePrompt.message,
+              type: 'warning',
+              confirmText: duplicatePrompt.confirmText,
+              cancelText: duplicatePrompt.cancelText,
+            });
+            if (!shouldProceed) {
+              return;
+            }
+          }
+
           const payload = {
             patient_id: formData.get('patient_id'),
             encounter_date: formData.get('encounter_date'),
@@ -675,15 +676,7 @@ const OphthalmologyDashboard: React.FC = () => {
                       <span className="font-semibold">
                         {createEncounterPatientContext?.patient?.fullName || 'patient'}
                       </span>
-                      {createEncounterPatientContext?.modules?.hiv?.latestEnrollment?.enrollment_number
-                        ? ` • HIV ${createEncounterPatientContext.modules.hiv.latestEnrollment.enrollment_number}`
-                        : ''}
-                      {createEncounterPatientContext?.modules?.oncology?.latestCase?.id
-                        ? ` • Oncology case ${createEncounterPatientContext.modules.oncology.latestCase.id}`
-                        : ''}
-                      {createEncounterPatientContext?.latestVitals?.recordedAt
-                        ? ` • Vitals ${String(createEncounterPatientContext.latestVitals.recordedAt).slice(0, 10)}`
-                        : ''}.
+                      {createEncounterContextTags.length ? ` • ${createEncounterContextTags.join(' • ')}` : ''}.
                     </div>
                   )}
                 </>
@@ -1880,6 +1873,7 @@ const OphthalmologyDashboard: React.FC = () => {
         </section>
       </main>
 
+      {Dialog}
       {renderModal()}
 
       {/* WHO Smart Forms Floating Button */}

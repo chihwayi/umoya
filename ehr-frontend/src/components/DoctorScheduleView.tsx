@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
-  Calendar, Clock, User, ChevronLeft, ChevronRight, 
-  Plus, Search, Filter, RefreshCw, Eye, Edit, Trash2,
+  Calendar, Clock, ChevronLeft, ChevronRight,
+  Search, RefreshCw,
   CheckCircle, AlertCircle, Play, Square, XCircle
 } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateForAPI, formatDateForInput } from '../utils/dateUtils';
-import DatePicker from './DatePicker';
 import AppointmentActions from './AppointmentActions';
 
 interface Appointment {
@@ -43,7 +42,6 @@ interface DoctorScheduleViewProps {
 const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
   tenantSlug,
   token,
-  onAppointmentUpdate,
   appointments: propAppointments = []
 }) => {
   const { showError } = useNotification();
@@ -57,13 +55,7 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
   // Use appointments from props if available, otherwise use local state
   const displayAppointments = propAppointments.length > 0 ? propAppointments : appointments;
 
-  useEffect(() => {
-    if (propAppointments.length === 0) {
-      fetchAppointments();
-    }
-  }, [currentDate, viewMode, propAppointments.length]);
-
-  const fetchAppointments = async () => {
+  const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔍 DoctorScheduleView - Fetching appointments independently');
@@ -94,7 +86,13 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate, showError, tenantSlug, token]);
+
+  useEffect(() => {
+    if (propAppointments.length === 0) {
+      fetchAppointments();
+    }
+  }, [fetchAppointments, propAppointments.length, viewMode]);
 
   const getStartOfPeriod = (date: Date, mode: string) => {
     const d = new Date(date);
@@ -160,14 +158,6 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
     });
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
   const navigatePeriod = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     switch (viewMode) {
@@ -212,7 +202,7 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
   };
 
   const getAppointmentsForDate = (date: Date) => {
-    return displayAppointments.filter(apt => {
+    return filteredAppointments.filter(apt => {
       const aptDate = new Date(apt.appointmentDate);
       return aptDate.toDateString() === date.toDateString();
     });
@@ -329,7 +319,6 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
 
   const renderMonthView = () => {
     const monthStart = getStartOfPeriod(currentDate, 'month');
-    const monthEnd = getEndOfPeriod(currentDate, 'month');
     const startDate = new Date(monthStart);
     startDate.setDate(startDate.getDate() - startDate.getDay());
     

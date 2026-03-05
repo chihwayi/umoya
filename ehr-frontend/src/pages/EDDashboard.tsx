@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  AlertCircle, AlertTriangle, Activity, Clock, User, Users,
-  Heart, ArrowLeft, RefreshCw, TrendingUp, BarChart3, Ambulance, X,
+  AlertCircle, AlertTriangle, Clock, User, Users,
+  ArrowLeft, RefreshCw, TrendingUp, Ambulance, X,
   Brain, Search, BookOpen, Sparkles, Loader2
 } from 'lucide-react';
 import { ehrApi, cdssApi } from '../services/api';
@@ -11,6 +11,12 @@ import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineResult } from '../types/guidelines';
+import { useConfirmation } from '../hooks/useConfirmation';
+import {
+  buildSharedContextTags,
+  getEdRegistrationDuplicateGuard,
+  getEdRegistrationPrefill,
+} from '../services/doctorContextAdapter';
 
 interface EDMetrics {
   current_census: number;
@@ -26,6 +32,7 @@ const EDDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   
   const [user, setUser] = useState<any>(null);
   const [metrics, setMetrics] = useState<EDMetrics | null>(null);
@@ -35,6 +42,8 @@ const EDDashboard: React.FC = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [selectedPatientContext, setSelectedPatientContext] = useState<any | null>(null);
+  const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const [registrationData, setRegistrationData] = useState({
     arrivalMode: 'walk_in',
     chiefComplaint: '',
@@ -83,13 +92,7 @@ const EDDashboard: React.FC = () => {
     }
   }, [navigate, tenantSlug]);
 
-  useEffect(() => {
-    if (user) {
-      fetchMetrics();
-    }
-  }, [user, refreshKey]);
-
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug) return;
@@ -99,13 +102,19 @@ const EDDashboard: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch ED metrics:', error);
     }
-  };
+  }, [tenantSlug]);
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
     fetchMetrics();
     showSuccess('Refreshed', 'ED data updated');
   };
+
+  useEffect(() => {
+    if (user) {
+      fetchMetrics();
+    }
+  }, [fetchMetrics, refreshKey, user]);
 
   const searchPatients = async (term: string) => {
     if (term.length < 2) {
@@ -122,6 +131,52 @@ const EDDashboard: React.FC = () => {
     }
   };
 
+  const applyPatientContextPrefill = useCallback((context: any) => {
+    const prefill = getEdRegistrationPrefill(context);
+    setRegistrationData((prev) => ({
+      ...prev,
+      chiefComplaint: prev.chiefComplaint || prefill.chiefComplaint || '',
+      presentingSymptoms: prev.presentingSymptoms || prefill.presentingSymptoms || '',
+      allergies: prev.allergies || prefill.allergies || '',
+      currentMedications: prev.currentMedications || prefill.currentMedications || '',
+    }));
+  }, []);
+
+  const loadSelectedPatientContext = useCallback(
+    async (patientId: string) => {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) return;
+
+      try {
+        setLoadingPatientContext(true);
+        const response = await ehrApi.getPatientContext(patientId, token, tenantSlug);
+        const context = response.data || null;
+        setSelectedPatientContext(context);
+        applyPatientContextPrefill(context);
+      } catch (error) {
+        console.error('Failed to load ED registration patient context:', error);
+        setSelectedPatientContext(null);
+      } finally {
+        setLoadingPatientContext(false);
+      }
+    },
+    [applyPatientContextPrefill, tenantSlug],
+  );
+
+  useEffect(() => {
+    if (!showRegisterModal || !selectedPatient?.id) {
+      setSelectedPatientContext(null);
+      setLoadingPatientContext(false);
+      return;
+    }
+    loadSelectedPatientContext(selectedPatient.id);
+  }, [loadSelectedPatientContext, selectedPatient?.id, showRegisterModal]);
+
+  const selectedPatientContextTags = useMemo(
+    () => buildSharedContextTags(selectedPatientContext),
+    [selectedPatientContext],
+  );
+
   const handleRegisterEDPatient = async () => {
     if (!selectedPatient) {
       showError('Error', 'Please select a patient');
@@ -130,6 +185,22 @@ const EDDashboard: React.FC = () => {
     if (!registrationData.chiefComplaint) {
       showError('Error', 'Chief complaint is required');
       return;
+    }
+
+    const duplicatePrompt = getEdRegistrationDuplicateGuard(selectedPatientContext, {
+      chiefComplaint: registrationData.chiefComplaint,
+    });
+    if (duplicatePrompt) {
+      const shouldProceed = await confirm({
+        title: duplicatePrompt.title,
+        message: duplicatePrompt.message,
+        type: 'warning',
+        confirmText: duplicatePrompt.confirmText,
+        cancelText: duplicatePrompt.cancelText,
+      });
+      if (!shouldProceed) {
+        return;
+      }
     }
 
     try {
@@ -150,6 +221,7 @@ const EDDashboard: React.FC = () => {
       showSuccess('Success', 'ED patient registered successfully');
       setShowRegisterModal(false);
       setSelectedPatient(null);
+      setSelectedPatientContext(null);
       setSearchTerm('');
       setRegistrationData({
         arrivalMode: 'walk_in',
@@ -399,6 +471,14 @@ const EDDashboard: React.FC = () => {
                   <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="font-medium text-green-900">✓ {selectedPatient.firstName} {selectedPatient.lastName}</div>
                     <div className="text-xs text-green-700">{selectedPatient.patientNumber}</div>
+                    {loadingPatientContext && (
+                      <div className="mt-2 text-xs text-emerald-700">Loading shared patient context...</div>
+                    )}
+                    {selectedPatientContextTags.length > 0 && (
+                      <div className="mt-2 text-xs text-emerald-700">
+                        Context: {selectedPatientContextTags.join(' • ')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -513,6 +593,7 @@ const EDDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {Dialog}
       {/* AI Guideline Search Modal */}
       {showGuidelineSearch && (
         <ModalPortal>

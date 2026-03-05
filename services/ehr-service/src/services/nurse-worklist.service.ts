@@ -90,6 +90,88 @@ export class NurseWorklistService {
     return normalized.length > 0 ? normalized : null;
   }
 
+  private normalizeModuleKey(value?: string | null) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+  }
+
+  private isCoreGeneratedCrossModule(moduleKey: string) {
+    return moduleKey === 'maternity' || moduleKey === 'hiv' || moduleKey === 'oncology' || moduleKey === 'nursing';
+  }
+
+  private isAccountsModule(moduleKey: string) {
+    return (
+      moduleKey === 'accounts' ||
+      moduleKey === 'billing' ||
+      moduleKey === 'claims' ||
+      moduleKey === 'revenue_cycle'
+    );
+  }
+
+  private normalizeWorkflowContextStatus(value?: string | null) {
+    const normalized = this.normalizeText(value);
+    if (!normalized) {
+      return null;
+    }
+    return normalized.toLowerCase().replace(/[\s-]+/g, '_');
+  }
+
+  private readContextValue(context: Record<string, any>, keys: string[]) {
+    for (const key of keys) {
+      const value = this.normalizeText(context?.[key]);
+      if (value) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private extractAccountsSyncStatus(context: Record<string, any>) {
+    return this.normalizeWorkflowContextStatus(
+      this.readContextValue(context, [
+        'accounts_sync_status',
+        'accountsSyncStatus',
+        'payment_status',
+        'paymentStatus',
+        'claim_status',
+        'claimStatus',
+        'preauth_status',
+        'preauthStatus',
+        'authorization_status',
+        'authorizationStatus',
+        'invoice_status',
+        'invoiceStatus',
+        'billing_status',
+        'billingStatus',
+        'financial_clearance_status',
+        'financialClearanceStatus',
+        'clearance_status',
+        'clearanceStatus',
+      ]),
+    );
+  }
+
+  private isAccountsWorkflow(row: any, context: Record<string, any>, moduleKey: string) {
+    if (this.isAccountsModule(moduleKey)) {
+      return true;
+    }
+
+    const destinationService = this.normalizeModuleKey(row?.destination_service);
+    if (
+      destinationService === 'accounts' ||
+      destinationService === 'billing' ||
+      destinationService === 'claims' ||
+      destinationService === 'revenue_cycle' ||
+      destinationService === 'payment_clearance'
+    ) {
+      return true;
+    }
+
+    return Boolean(this.extractAccountsSyncStatus(context));
+  }
+
   private extractTaskSpecialty(taskContext: any, fallback: string) {
     const recommendationItems = Array.isArray(taskContext?.recommendation_bundle?.items)
       ? taskContext.recommendation_bundle.items
@@ -261,7 +343,12 @@ export class NurseWorklistService {
     };
   }
 
-  private buildRecommendationExecutionContext(existingContext: any, actionId: string, execution: any) {
+  private buildRecommendationExecutionContext(
+    existingContext: any,
+    actionId: string,
+    execution: any,
+    contextPatch?: Record<string, any>,
+  ) {
     const normalizedExisting =
       existingContext && typeof existingContext === 'object' && !Array.isArray(existingContext)
         ? existingContext
@@ -269,6 +356,7 @@ export class NurseWorklistService {
 
     return {
       ...normalizedExisting,
+      ...(contextPatch || {}),
       source: 'nurse_cross_module_queue',
       action_executions: {
         ...(normalizedExisting.action_executions || {}),
@@ -312,12 +400,34 @@ export class NurseWorklistService {
     const existingRow = existingRows[0] || null;
     const nextStatus =
       String(existingRow?.status || '').toLowerCase() === 'completed' ? 'completed' : 'acknowledged';
-    const mergedContext = this.buildRecommendationExecutionContext(existingRow?.context, payload.actionId, {
+    const existingContext = this.parseJsonObject(existingRow?.context) || {};
+    const actorRole = this.normalizeText(user.role)?.toLowerCase() || 'nurse';
+    const moduleKey = this.normalizeModuleKey(payload.module);
+    const destinationServiceKey = this.normalizeModuleKey(payload.destinationService);
+    const existingAccountsStatus = this.extractAccountsSyncStatus(existingContext);
+    const accountsWorkflow =
+      this.isAccountsModule(moduleKey) ||
+      this.isAccountsModule(destinationServiceKey) ||
+      Boolean(existingAccountsStatus);
+    const mergedContext = this.buildRecommendationExecutionContext(existingContext, payload.actionId, {
       status: 'completed',
       executed_at: new Date().toISOString(),
       executed_by: user.id,
       executed_by_name: this.getUserDisplayName(user),
       result: executionResult,
+      executed_by_role: actorRole,
+    }, {
+      doctor_sync_status: actorRole === 'doctor' ? 'doctor_actioned' : 'nurse_actioned',
+      last_actor_role: actorRole,
+      last_action_id: payload.actionId,
+      last_action_at: new Date().toISOString(),
+      accounts_sync_status: accountsWorkflow
+        ? nextStatus === 'completed'
+          ? 'completed'
+          : actorRole === 'doctor'
+            ? 'doctor_actioned'
+            : 'nurse_actioned'
+        : existingAccountsStatus,
     });
 
     await tenantDb.query(
@@ -730,6 +840,491 @@ export class NurseWorklistService {
       case: updatedRows[0] || {
         ...caseRow,
         care_plan: nextPlan,
+      },
+    };
+  }
+
+  private extractCardiologyEncounterId(payload: {
+    encounterId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.encounterId)) {
+      return String(payload.encounterId);
+    }
+    if (this.normalizeText(payload.actionPayload?.encounter_id)) {
+      return String(payload.actionPayload.encounter_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('cardiology-encounter:')) {
+      return normalizedItemId.replace('cardiology-encounter:', '').trim();
+    }
+    return null;
+  }
+
+  private extractEdVisitId(payload: {
+    visitId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.visitId)) {
+      return String(payload.visitId);
+    }
+    if (this.normalizeText(payload.actionPayload?.visit_id)) {
+      return String(payload.actionPayload.visit_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('ed-visit:')) {
+      return normalizedItemId.replace('ed-visit:', '').trim();
+    }
+    return null;
+  }
+
+  private extractSepsisBundleId(payload: {
+    bundleId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.bundleId)) {
+      return String(payload.bundleId);
+    }
+    if (this.normalizeText(payload.actionPayload?.bundle_id)) {
+      return String(payload.actionPayload.bundle_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('sepsis-bundle:')) {
+      return normalizedItemId.replace('sepsis-bundle:', '').trim();
+    }
+    return null;
+  }
+
+  private parseJsonArray(value: any) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    const parsed = this.parseJsonObject(value);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    return [];
+  }
+
+  private async getCardiologyEncounterContext(tenantDb: DataSource, encounterId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        id,
+        patient_id,
+        encounter_date,
+        encounter_type,
+        visit_reason,
+        risk_score,
+        care_status,
+        payment_status,
+        diagnostic_tests,
+        care_plan,
+        follow_up_plan
+      FROM cardiology_encounters
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [encounterId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendCardiologyEncounterTextNote(
+    tenantDb: DataSource,
+    encounterId: string,
+    field: 'care_plan' | 'follow_up_plan',
+    marker: string,
+    noteLine: string,
+  ) {
+    const encounter = await this.getCardiologyEncounterContext(tenantDb, encounterId);
+    if (!encounter) {
+      throw new BadRequestException('Cardiology encounter not found for recommendation action');
+    }
+
+    const existingValue = String(encounter[field] || '');
+    if (existingValue.includes(marker)) {
+      return {
+        reused: true,
+        encounter,
+      };
+    }
+
+    const nextValue = existingValue.length > 0 ? `${existingValue}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE cardiology_encounters
+      SET ${field} = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        encounter_date,
+        encounter_type,
+        visit_reason,
+        risk_score,
+        care_status,
+        payment_status,
+        diagnostic_tests,
+        care_plan,
+        follow_up_plan
+      `,
+      [nextValue, encounterId],
+    );
+
+    return {
+      reused: false,
+      encounter: {
+        ...encounter,
+        ...(updatedRows[0] || {}),
+        [field]: nextValue,
+      },
+    };
+  }
+
+  private async appendCardiologyDiagnosticOrderSet(
+    tenantDb: DataSource,
+    encounterId: string,
+    marker: string,
+    actionId: string,
+    suggestedTests: string[],
+  ) {
+    const encounter = await this.getCardiologyEncounterContext(tenantDb, encounterId);
+    if (!encounter) {
+      throw new BadRequestException('Cardiology encounter not found for recommendation action');
+    }
+
+    const existingTests = this.parseJsonArray(encounter.diagnostic_tests);
+    const existingNames = new Set(
+      existingTests
+        .map((entry: any) =>
+          String(entry?.name || entry?.test || entry?.title || '')
+            .trim()
+            .toLowerCase(),
+        )
+        .filter((value: string) => value.length > 0),
+    );
+
+    const uniqueSuggestedTests = Array.from(
+      new Set(
+        suggestedTests
+          .map((value) => String(value || '').trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+    const testsToInsert = uniqueSuggestedTests.filter((testName) => !existingNames.has(testName.toLowerCase()));
+
+    if (testsToInsert.length === 0) {
+      return {
+        reused: true,
+        encounter: {
+          ...encounter,
+          diagnostic_tests: existingTests,
+        },
+        addedTests: [],
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const addedEntries = testsToInsert.map((testName) => ({
+      name: testName,
+      status: 'recommended',
+      source: 'nurse_cross_module_queue',
+      bundle_action_id: actionId,
+      marker,
+      recommended_at: nowIso,
+    }));
+    const nextTests = [...existingTests, ...addedEntries];
+
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE cardiology_encounters
+      SET diagnostic_tests = $1::jsonb, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        encounter_date,
+        encounter_type,
+        visit_reason,
+        risk_score,
+        care_status,
+        payment_status,
+        diagnostic_tests,
+        care_plan,
+        follow_up_plan
+      `,
+      [JSON.stringify(nextTests), encounterId],
+    );
+
+    return {
+      reused: false,
+      encounter: {
+        ...encounter,
+        ...(updatedRows[0] || {}),
+        diagnostic_tests: nextTests,
+      },
+      addedTests: testsToInsert,
+    };
+  }
+
+  private async getEdVisitContext(tenantDb: DataSource, visitId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        id,
+        patient_id,
+        ed_visit_number,
+        arrival_date,
+        chief_complaint,
+        triage_level,
+        triage_acuity,
+        ed_status,
+        disposition,
+        notes,
+        follow_up_instructions,
+        quality_flags
+      FROM ed_visits
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [visitId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendEdVisitTextNote(
+    tenantDb: DataSource,
+    visitId: string,
+    field: 'notes' | 'follow_up_instructions',
+    marker: string,
+    noteLine: string,
+  ) {
+    const visit = await this.getEdVisitContext(tenantDb, visitId);
+    if (!visit) {
+      throw new BadRequestException('ED visit not found for recommendation action');
+    }
+
+    const existingValue = String(visit[field] || '');
+    if (existingValue.includes(marker)) {
+      return {
+        reused: true,
+        visit,
+      };
+    }
+
+    const nextValue = existingValue.length > 0 ? `${existingValue}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE ed_visits
+      SET ${field} = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        ed_visit_number,
+        arrival_date,
+        chief_complaint,
+        triage_level,
+        triage_acuity,
+        ed_status,
+        disposition,
+        notes,
+        follow_up_instructions,
+        quality_flags
+      `,
+      [nextValue, visitId],
+    );
+
+    return {
+      reused: false,
+      visit: {
+        ...visit,
+        ...(updatedRows[0] || {}),
+        [field]: nextValue,
+      },
+    };
+  }
+
+  private async appendEdVisitOrderSetMarker(
+    tenantDb: DataSource,
+    visitId: string,
+    marker: string,
+    actionId: string,
+    noteLine: string,
+    suggestedOrders: string[],
+  ) {
+    const visit = await this.getEdVisitContext(tenantDb, visitId);
+    if (!visit) {
+      throw new BadRequestException('ED visit not found for recommendation action');
+    }
+
+    const existingNotes = String(visit.notes || '');
+    const existingFlags = this.parseJsonArray(visit.quality_flags);
+    const markerExistsInFlags = existingFlags.some((entry: any) => String(entry?.marker || '') === marker);
+    if (existingNotes.includes(marker) || markerExistsInFlags) {
+      return {
+        reused: true,
+        visit: {
+          ...visit,
+          quality_flags: existingFlags,
+        },
+        addedOrders: [],
+      };
+    }
+
+    const normalizedOrders = Array.from(
+      new Set(
+        (Array.isArray(suggestedOrders) ? suggestedOrders : [])
+          .map((value) => String(value || '').trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+    const nowIso = new Date().toISOString();
+    const orderFlag = {
+      marker,
+      action_id: actionId,
+      source: 'nurse_cross_module_queue',
+      recorded_at: nowIso,
+      suggested_orders: normalizedOrders,
+    };
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const nextFlags = [...existingFlags, orderFlag];
+
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE ed_visits
+      SET
+        notes = $1,
+        quality_flags = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $3
+      RETURNING
+        id,
+        patient_id,
+        ed_visit_number,
+        arrival_date,
+        chief_complaint,
+        triage_level,
+        triage_acuity,
+        ed_status,
+        disposition,
+        notes,
+        follow_up_instructions,
+        quality_flags
+      `,
+      [nextNotes, JSON.stringify(nextFlags), visitId],
+    );
+
+    return {
+      reused: false,
+      visit: {
+        ...visit,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
+        quality_flags: nextFlags,
+      },
+      addedOrders: normalizedOrders,
+    };
+  }
+
+  private async getSepsisBundleContext(tenantDb: DataSource, bundleId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        sb.id,
+        sb.patient_id,
+        sb.admission_id,
+        sb.sepsis_screening_id,
+        sb.bundle_start_time,
+        sb.three_hour_bundle_complete,
+        sb.six_hour_bundle_complete,
+        sb.overall_compliance,
+        sb.repeat_lactate_measured,
+        sb.lactate_value,
+        sb.repeat_lactate_value,
+        sb.notes,
+        ss.qsofa_score,
+        ss.sirs_score,
+        ss.sepsis_suspected,
+        ss.severe_sepsis,
+        ss.septic_shock
+      FROM sepsis_bundles sb
+      LEFT JOIN sepsis_screenings ss ON ss.id = sb.sepsis_screening_id
+      WHERE sb.id = $1
+      LIMIT 1
+      `,
+      [bundleId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendSepsisBundleNote(
+    tenantDb: DataSource,
+    bundleId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const bundle = await this.getSepsisBundleContext(tenantDb, bundleId);
+    if (!bundle) {
+      throw new BadRequestException('Sepsis bundle not found for recommendation action');
+    }
+
+    const existingNotes = String(bundle.notes || '');
+    if (existingNotes.includes(marker)) {
+      return {
+        reused: true,
+        bundle,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE sepsis_bundles
+      SET notes = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        admission_id,
+        sepsis_screening_id,
+        bundle_start_time,
+        three_hour_bundle_complete,
+        six_hour_bundle_complete,
+        overall_compliance,
+        repeat_lactate_measured,
+        lactate_value,
+        repeat_lactate_value,
+        notes
+      `,
+      [nextNotes, bundleId],
+    );
+
+    return {
+      reused: false,
+      bundle: {
+        ...bundle,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
       },
     };
   }
@@ -1429,6 +2024,316 @@ export class NurseWorklistService {
     };
   }
 
+  private normalizeCardiologyRiskBand(riskScore?: string | null) {
+    const normalized = String(riskScore || '').trim().toLowerCase();
+    if (['critical', 'very_high', 'very-high', 'high_risk'].includes(normalized)) {
+      return 'critical';
+    }
+    if (['high', 'elevated'].includes(normalized)) {
+      return 'high';
+    }
+    if (['medium', 'moderate'].includes(normalized)) {
+      return 'medium';
+    }
+    if (['low', 'stable'].includes(normalized)) {
+      return 'low';
+    }
+    return 'medium';
+  }
+
+  private buildCardiologyProtocolRecommendationBundle(params: {
+    encounter: any;
+  }) {
+    const { encounter } = params;
+    const riskBand = this.normalizeCardiologyRiskBand(encounter?.risk_score);
+    const paymentPending = String(encounter?.payment_status || '').toLowerCase() === 'awaiting_payment';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'cardiology.order_set',
+        'WHO NCD cardiovascular care package: symptomatic or high-risk patients should have structured diagnostic work-up with ECG and indicated cardiac investigations.',
+        'WHO NCD cardiovascular guidance',
+      ),
+      this.createGuidelineCitation(
+        'cardiology.visit_prep',
+        'WHO cardiovascular continuity-of-care guidance: encounter follow-up steps should be documented with explicit nurse and doctor handoff checkpoints.',
+        'WHO NCD cardiovascular guidance',
+      ),
+      riskBand === 'critical' || riskBand === 'high'
+        ? this.createGuidelineCitation(
+            'cardiology.doctor_sync',
+            'WHO cardiovascular risk management guidance: higher-risk findings need rapid clinician synchronization and escalation.',
+            'WHO NCD cardiovascular guidance',
+          )
+        : null,
+    ]);
+
+    const defaultTests =
+      riskBand === 'critical' || riskBand === 'high'
+        ? ['ECG', 'Troponin', 'Echocardiogram']
+        : ['ECG'];
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'prepare-cardiology-order-set',
+        type: 'order_set',
+        title: 'Prepare cardiology diagnostic order set',
+        urgency: riskBand === 'critical' || riskBand === 'high' ? 'urgent' : 'high',
+        rationale:
+          'Queue-driven protocol bundles should generate structured diagnostic follow-through, not only passive visibility.',
+        citations: citations.filter((citation) => citation.rule_id === 'cardiology.order_set'),
+        action_payload: {
+          encounter_id: encounter?.cardiology_encounter_id || encounter?.id || null,
+          suggested_tests: defaultTests,
+          risk_score: encounter?.risk_score || null,
+        },
+      },
+      {
+        id: 'complete-cardiology-visit-prep',
+        type: 'visit_preparation',
+        title: 'Complete cardiology visit-prep checkpoint',
+        urgency: paymentPending ? 'high' : 'routine',
+        rationale:
+          'Visit-prep completion should be documented as an executable workflow event before consultation closure.',
+        citations: citations.filter((citation) => citation.rule_id === 'cardiology.visit_prep'),
+        action_payload: {
+          encounter_id: encounter?.cardiology_encounter_id || encounter?.id || null,
+          payment_status: encounter?.payment_status || null,
+          care_status: encounter?.care_status || null,
+        },
+      },
+    ];
+
+    if (riskBand === 'critical' || riskBand === 'high') {
+      items.push({
+        id: 'escalate-cardiology-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate cardiology findings to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Higher-risk cardiology states need explicit doctor synchronization to keep treatment decisions aligned.',
+        citations: citations.filter((citation) => citation.rule_id === 'cardiology.doctor_sync'),
+        action_payload: {
+          encounter_id: encounter?.cardiology_encounter_id || encounter?.id || null,
+          risk_score: encounter?.risk_score || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Cardiology protocol execution bundle',
+      summary: `${items.length} cardiology protocol action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildEdProtocolRecommendationBundle(params: {
+    visit: any;
+  }) {
+    const { visit } = params;
+    const triageLevel = Number(visit?.triage_level || 0);
+    const triageAcuity = String(visit?.triage_acuity || '').trim().toLowerCase();
+    const highAcuityFlags = Boolean(visit?.code_sepsis) || Boolean(visit?.code_stroke) || Boolean(visit?.code_stemi);
+    const highAcuity =
+      highAcuityFlags || triageLevel === 1 || triageLevel === 2 || triageAcuity === 'immediate' || triageAcuity === 'emergent';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'ed.order_set',
+        'WHO emergency care guidance: high-acuity presentations should trigger structured diagnostic and treatment orders early in the encounter.',
+        'WHO emergency care guidance',
+      ),
+      this.createGuidelineCitation(
+        'ed.disposition_prep',
+        'WHO emergency workflow guidance: disposition and follow-up instructions should be documented before ED closure.',
+        'WHO emergency care guidance',
+      ),
+      highAcuity
+        ? this.createGuidelineCitation(
+            'ed.doctor_sync',
+            'WHO emergency triage guidance: high-acuity findings should be synchronized rapidly with the responsible clinician.',
+            'WHO emergency care guidance',
+          )
+        : null,
+    ]);
+
+    const suggestedOrders =
+      triageLevel <= 2 || highAcuityFlags
+        ? ['STAT clinician reassessment', 'ECG', 'CBC', 'CMP', 'Point-of-care lactate']
+        : triageLevel === 3
+          ? ['Focused diagnostic panel', 'Targeted imaging per chief complaint']
+          : ['Focused reassessment plan'];
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'prepare-ed-order-set',
+        type: 'order_set',
+        title: 'Prepare ED protocol order set',
+        urgency: highAcuity ? 'urgent' : 'high',
+        rationale:
+          'ED queue execution should generate structured order recommendations instead of only signaling visibility.',
+        citations: citations.filter((citation) => citation.rule_id === 'ed.order_set'),
+        action_payload: {
+          visit_id: visit?.ed_visit_id || visit?.id || null,
+          triage_level: triageLevel || null,
+          triage_acuity: visit?.triage_acuity || null,
+          suggested_orders: suggestedOrders,
+        },
+      },
+      {
+        id: 'complete-ed-disposition-prep',
+        type: 'visit_preparation',
+        title: 'Complete ED disposition prep checkpoint',
+        urgency: visit?.ed_status === 'ready_for_discharge' ? 'high' : 'routine',
+        rationale:
+          'Disposition readiness should be tracked as an executable checkpoint from the queue.',
+        citations: citations.filter((citation) => citation.rule_id === 'ed.disposition_prep'),
+        action_payload: {
+          visit_id: visit?.ed_visit_id || visit?.id || null,
+          ed_status: visit?.ed_status || null,
+          disposition: visit?.disposition || null,
+        },
+      },
+    ];
+
+    if (highAcuity) {
+      items.push({
+        id: 'escalate-ed-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate ED case to doctor synchronization',
+        urgency: 'urgent',
+        rationale:
+          'High-acuity ED states require explicit doctor synchronization and acknowledgement.',
+        citations: citations.filter((citation) => citation.rule_id === 'ed.doctor_sync'),
+        action_payload: {
+          visit_id: visit?.ed_visit_id || visit?.id || null,
+          triage_level: triageLevel || null,
+          triage_acuity: visit?.triage_acuity || null,
+          code_sepsis: Boolean(visit?.code_sepsis),
+          code_stroke: Boolean(visit?.code_stroke),
+          code_stemi: Boolean(visit?.code_stemi),
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'ED protocol execution bundle',
+      summary: `${items.length} ED action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildSepsisProtocolRecommendationBundle(params: {
+    bundle: any;
+  }) {
+    const { bundle } = params;
+    const severeSignal = Boolean(bundle?.severe_sepsis) || Boolean(bundle?.septic_shock);
+    const threeHourComplete = Boolean(bundle?.three_hour_bundle_complete);
+    const sixHourComplete = Boolean(bundle?.six_hour_bundle_complete);
+    const overallCompliance = Boolean(bundle?.overall_compliance);
+    const lactateValue = Number(bundle?.lactate_value || 0);
+    const repeatLactateNeeded = !Boolean(bundle?.repeat_lactate_measured) || lactateValue >= 4;
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'sepsis.three_hour_bundle',
+        'WHO sepsis care guidance: early recognition should trigger rapid three-hour bundle workflow execution.',
+        'WHO sepsis guidance',
+      ),
+      this.createGuidelineCitation(
+        'sepsis.repeat_lactate',
+        'WHO sepsis follow-up guidance: elevated lactate requires repeat measurement planning and documented follow-through.',
+        'WHO sepsis guidance',
+      ),
+      severeSignal || !overallCompliance
+        ? this.createGuidelineCitation(
+            'sepsis.doctor_sync',
+            'WHO sepsis escalation guidance: severe sepsis states and bundle non-compliance should be synchronized with physician leadership.',
+            'WHO sepsis guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'queue-sepsis-three-hour-bundle',
+        type: 'order_set',
+        title: 'Queue sepsis three-hour bundle actions',
+        urgency: severeSignal || !threeHourComplete ? 'urgent' : 'high',
+        rationale:
+          'Sepsis queue bundles should produce concrete execution tasks for time-critical interventions.',
+        citations: citations.filter((citation) => citation.rule_id === 'sepsis.three_hour_bundle'),
+        action_payload: {
+          bundle_id: bundle?.sepsis_bundle_id || bundle?.id || null,
+          screening_id: bundle?.sepsis_screening_id || null,
+          three_hour_bundle_complete: threeHourComplete,
+          six_hour_bundle_complete: sixHourComplete,
+          overall_compliance: overallCompliance,
+        },
+      },
+      {
+        id: 'confirm-repeat-lactate-plan',
+        type: 'lab_followup',
+        title: 'Confirm repeat lactate monitoring plan',
+        urgency: repeatLactateNeeded ? 'urgent' : 'routine',
+        rationale:
+          'Repeat lactate planning should be documented as an explicit queue action for sepsis safety.',
+        citations: citations.filter((citation) => citation.rule_id === 'sepsis.repeat_lactate'),
+        action_payload: {
+          bundle_id: bundle?.sepsis_bundle_id || bundle?.id || null,
+          repeat_lactate_measured: Boolean(bundle?.repeat_lactate_measured),
+          lactate_value: Number.isFinite(lactateValue) && lactateValue > 0 ? lactateValue : null,
+          repeat_lactate_value:
+            Number.isFinite(Number(bundle?.repeat_lactate_value || 0)) && Number(bundle?.repeat_lactate_value || 0) > 0
+              ? Number(bundle?.repeat_lactate_value || 0)
+              : null,
+        },
+      },
+    ];
+
+    if (severeSignal || !overallCompliance) {
+      items.push({
+        id: 'escalate-sepsis-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate sepsis bundle to doctor synchronization',
+        urgency: 'urgent',
+        rationale:
+          'High-risk sepsis states and non-compliant bundles need rapid physician synchronization.',
+        citations: citations.filter((citation) => citation.rule_id === 'sepsis.doctor_sync'),
+        action_payload: {
+          bundle_id: bundle?.sepsis_bundle_id || bundle?.id || null,
+          severe_sepsis: Boolean(bundle?.severe_sepsis),
+          septic_shock: Boolean(bundle?.septic_shock),
+          overall_compliance: overallCompliance,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Sepsis protocol execution bundle',
+      summary: `${items.length} sepsis action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
     const [
       workflowRows,
@@ -1441,12 +2346,20 @@ export class NurseWorklistService {
       medicationRows,
       oncologyInfusionRows,
       oncologyAdverseEventRows,
+      cardiologyEncounterRows,
+      edVisitRows,
+      sepsisBundleRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
         `
         SELECT
           w.workflow_key,
+          w.module,
+          w.item_type,
+          w.source_record_id,
+          w.patient_id,
+          w.enrollment_id,
           w.status,
           w.destination_role,
           w.destination_service,
@@ -1456,6 +2369,8 @@ export class NurseWorklistService {
           w.destination_facility_name,
           w.acknowledged_at,
           w.completed_at,
+          w.created_at,
+          w.updated_at,
           w.note,
           w.context,
           au.first_name || ' ' || au.last_name as acknowledged_by_name,
@@ -1704,6 +2619,115 @@ export class NurseWorklistService {
         WHERE oae.resolved_date IS NULL
           AND COALESCE(NULLIF(regexp_replace(COALESCE(oae.grade, ''), '[^0-9]', '', 'g'), ''), '0')::int >= 3
         ORDER BY oae.event_date DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          ce.id as cardiology_encounter_id,
+          ce.patient_id,
+          ce.encounter_date,
+          ce.encounter_type,
+          ce.visit_reason,
+          ce.risk_score,
+          ce.care_status,
+          ce.payment_status,
+          ce.follow_up_plan,
+          ce.care_plan,
+          ce.diagnostic_tests,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          doc.first_name || ' ' || doc.last_name as cardiologist_name
+        FROM cardiology_encounters ce
+        INNER JOIN patients p ON p.id = ce.patient_id
+        LEFT JOIN users doc ON doc.id = ce.cardiologist_id
+        WHERE COALESCE(ce.care_status, 'scheduled') NOT IN ('completed', 'cancelled')
+          AND ce.encounter_date >= (NOW() - INTERVAL '60 days')
+        ORDER BY ce.encounter_date DESC, ce.updated_at DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          ev.id as ed_visit_id,
+          ev.patient_id,
+          ev.ed_visit_number,
+          ev.arrival_date,
+          ev.chief_complaint,
+          ev.triage_level,
+          ev.triage_acuity,
+          ev.ed_status,
+          ev.disposition,
+          ev.follow_up_instructions,
+          ev.notes,
+          ev.quality_flags,
+          ev.code_sepsis,
+          ev.code_stroke,
+          ev.code_stemi,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          doc.first_name || ' ' || doc.last_name as attending_provider_name
+        FROM ed_visits ev
+        INNER JOIN patients p ON p.id = ev.patient_id
+        LEFT JOIN users doc ON doc.id = ev.attending_provider
+        WHERE COALESCE(ev.ed_status, 'waiting') NOT IN (
+            'discharged',
+            'admitted',
+            'transferred',
+            'deceased',
+            'left_without_being_seen'
+          )
+          AND ev.arrival_date >= (NOW() - INTERVAL '14 days')
+        ORDER BY ev.arrival_date DESC, ev.updated_at DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          sb.id as sepsis_bundle_id,
+          sb.patient_id,
+          sb.admission_id,
+          sb.sepsis_screening_id,
+          sb.bundle_start_time,
+          sb.three_hour_bundle_complete,
+          sb.six_hour_bundle_complete,
+          sb.overall_compliance,
+          sb.repeat_lactate_measured,
+          sb.repeat_lactate_time,
+          sb.lactate_value,
+          sb.repeat_lactate_value,
+          sb.notes,
+          sb.updated_at,
+          ss.qsofa_score,
+          ss.sirs_score,
+          ss.sepsis_suspected,
+          ss.severe_sepsis,
+          ss.septic_shock,
+          ss.sepsis_alert_triggered,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number
+        FROM sepsis_bundles sb
+        INNER JOIN patients p ON p.id = sb.patient_id
+        LEFT JOIN sepsis_screenings ss ON ss.id = sb.sepsis_screening_id
+        WHERE sb.bundle_start_time >= (NOW() - INTERVAL '14 days')
+          AND (
+            COALESCE(sb.overall_compliance, false) = false
+            OR COALESCE(sb.three_hour_bundle_complete, false) = false
+            OR (
+              (
+                COALESCE(ss.severe_sepsis, false) = true
+                OR COALESCE(ss.septic_shock, false) = true
+              )
+              AND COALESCE(sb.six_hour_bundle_complete, false) = false
+            )
+          )
+        ORDER BY sb.bundle_start_time DESC, sb.updated_at DESC
         LIMIT 50
         `,
       ),
@@ -2129,6 +3153,206 @@ export class NurseWorklistService {
       );
     });
 
+    const cardiologyProtocolItems = (cardiologyEncounterRows || []).map((row: any) => {
+      const riskBand = this.normalizeCardiologyRiskBand(row?.risk_score);
+      const paymentPending = String(row?.payment_status || '').toLowerCase() === 'awaiting_payment';
+      const ageHours = this.getHoursSince(row.encounter_date);
+      const recommendationBundle = this.buildCardiologyProtocolRecommendationBundle({
+        encounter: row,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `cardiology-encounter:${row.cardiology_encounter_id}`,
+          module: 'cardiology',
+          item_type: 'cardiology_protocol_followup',
+          source_record_id: row.cardiology_encounter_id,
+          severity:
+            riskBand === 'critical'
+              ? 'critical'
+              : riskBand === 'high' || paymentPending
+                ? 'high'
+                : 'medium',
+          workflow_status: 'pending',
+          module_status: row.care_status || 'scheduled',
+          doctor_sync_status:
+            riskBand === 'critical' || riskBand === 'high'
+              ? 'doctor_review_recommended'
+              : 'nurse_followup_required',
+          title:
+            riskBand === 'critical' || riskBand === 'high'
+              ? 'High-risk cardiology protocol follow-up'
+              : 'Cardiology protocol follow-up pending',
+          summary:
+            `${row.patient_name} has a cardiology encounter on ` +
+            `${new Date(row.encounter_date).toISOString().split('T')[0]} with ${row.risk_score || 'unclassified'} risk.`,
+          recommended_action:
+            riskBand === 'critical' || riskBand === 'high'
+              ? 'Execute order-set and visit-prep actions, then escalate doctor sync for high-risk findings.'
+              : 'Execute cardiology order-set and visit-prep checkpoints from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.encounter_date,
+          updated_at: row.encounter_date,
+          age_hours: ageHours,
+          sla_status:
+            ageHours !== null && ageHours >= 48
+              ? 'due_soon'
+              : 'within_sla',
+          next_route: {
+            section: 'cardiology',
+            tab: 'cardiology',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: riskBand === 'critical' || riskBand === 'high' ? 'doctor' : 'nurse',
+            service: 'cardiology_protocol',
+            specialty: 'Cardiology',
+          }),
+          metadata: {
+            encounter_id: row.cardiology_encounter_id,
+            encounter_type: row.encounter_type || null,
+            visit_reason: row.visit_reason || null,
+            risk_score: row.risk_score || null,
+            care_status: row.care_status || null,
+            payment_status: row.payment_status || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const edProtocolItems = (edVisitRows || []).map((row: any) => {
+      const triageLevel = Number(row?.triage_level || 0);
+      const triageAcuity = String(row?.triage_acuity || '').trim().toLowerCase();
+      const criticalSignal =
+        triageLevel === 1 || Boolean(row?.code_sepsis) || Boolean(row?.code_stroke) || Boolean(row?.code_stemi);
+      const highSignal =
+        criticalSignal || triageLevel === 2 || triageAcuity === 'immediate' || triageAcuity === 'emergent';
+      const recommendationBundle = this.buildEdProtocolRecommendationBundle({
+        visit: row,
+      });
+      const ageHours = this.getHoursSince(row?.arrival_date);
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `ed-visit:${row.ed_visit_id}`,
+          module: 'ed',
+          item_type: 'ed_protocol_followup',
+          source_record_id: row.ed_visit_id,
+          severity: criticalSignal ? 'critical' : highSignal ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: row.ed_status || 'waiting',
+          doctor_sync_status: highSignal ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: highSignal ? 'ED high-acuity protocol follow-up' : 'ED protocol follow-up pending',
+          summary:
+            `${row.patient_name} has an ED visit (${row.ed_visit_number || row.ed_visit_id}) ` +
+            `for ${row.chief_complaint || 'acute complaint'}.`,
+          recommended_action: highSignal
+            ? 'Execute ED order-set/disposition bundle actions and escalate doctor synchronization for acuity signals.'
+            : 'Execute ED order-set and disposition prep actions from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.arrival_date,
+          updated_at: row.arrival_date,
+          age_hours: ageHours,
+          sla_status:
+            ageHours !== null && ageHours >= 12 ? 'breached' : ageHours !== null && ageHours >= 6 ? 'due_soon' : 'within_sla',
+          next_route: {
+            section: 'ed',
+            tab: 'ed',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: highSignal ? 'doctor' : 'nurse',
+            service: 'ed_protocol',
+            specialty: 'Emergency Medicine',
+          }),
+          metadata: {
+            ed_visit_id: row.ed_visit_id,
+            ed_visit_number: row.ed_visit_number || null,
+            triage_level: triageLevel || null,
+            triage_acuity: row.triage_acuity || null,
+            ed_status: row.ed_status || null,
+            disposition: row.disposition || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const sepsisProtocolItems = (sepsisBundleRows || []).map((row: any) => {
+      const severeSignal = Boolean(row?.severe_sepsis) || Boolean(row?.septic_shock);
+      const threeHourComplete = Boolean(row?.three_hour_bundle_complete);
+      const overallCompliance = Boolean(row?.overall_compliance);
+      const recommendationBundle = this.buildSepsisProtocolRecommendationBundle({
+        bundle: row,
+      });
+      const ageHours = this.getHoursSince(row?.bundle_start_time);
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `sepsis-bundle:${row.sepsis_bundle_id}`,
+          module: 'sepsis',
+          item_type: 'sepsis_bundle_followup',
+          source_record_id: row.sepsis_bundle_id,
+          severity: severeSignal ? 'critical' : !threeHourComplete || !overallCompliance ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: overallCompliance ? 'compliant' : 'non_compliant',
+          doctor_sync_status: severeSignal || !overallCompliance ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title:
+            severeSignal || !overallCompliance
+              ? 'Sepsis protocol escalation follow-up'
+              : 'Sepsis protocol follow-up pending',
+          summary:
+            `${row.patient_name} has an active sepsis bundle started on ` +
+            `${new Date(row.bundle_start_time).toISOString().split('T')[0]}.`,
+          recommended_action:
+            severeSignal || !overallCompliance
+              ? 'Execute three-hour/repeat-lactate actions and escalate doctor synchronization for unresolved sepsis risk.'
+              : 'Execute sepsis bundle follow-up actions from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.bundle_start_time,
+          updated_at: row.updated_at || row.bundle_start_time,
+          age_hours: ageHours,
+          sla_status:
+            ageHours !== null && ageHours >= 6 ? 'breached' : ageHours !== null && ageHours >= 3 ? 'due_soon' : 'within_sla',
+          next_route: {
+            section: 'sepsis',
+            tab: 'sepsis',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: severeSignal || !overallCompliance ? 'doctor' : 'nurse',
+            service: 'sepsis_protocol',
+            specialty: 'Critical Care',
+          }),
+          metadata: {
+            sepsis_bundle_id: row.sepsis_bundle_id,
+            sepsis_screening_id: row.sepsis_screening_id || null,
+            qsofa_score: row.qsofa_score ?? null,
+            sirs_score: row.sirs_score ?? null,
+            severe_sepsis: Boolean(row?.severe_sepsis),
+            septic_shock: Boolean(row?.septic_shock),
+            three_hour_bundle_complete: threeHourComplete,
+            six_hour_bundle_complete: Boolean(row?.six_hour_bundle_complete),
+            overall_compliance: overallCompliance,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
     const handoffItems = (handoffRows || []).map((row: any) => {
       const referenceTime = row.updated_at || row.reviewed_at || row.finalized_at || row.shared_at || null;
       const ageHours = this.getHoursSince(referenceTime);
@@ -2250,14 +3474,129 @@ export class NurseWorklistService {
       );
     });
 
-    const items = [
+    const generatedItems = [
       ...maternityItems,
       ...hivRegimenItems,
       ...hivPathwayItems,
       ...oncologyInfusionItems,
       ...oncologyToxicityItems,
+      ...cardiologyProtocolItems,
+      ...edProtocolItems,
+      ...sepsisProtocolItems,
       ...handoffItems,
       ...medicationItems,
+    ];
+    const generatedItemIds = new Set<string>(generatedItems.map((item) => String(item.id)));
+    const workflowOnlyItems = (workflowRows || [])
+      .filter((row: any) => {
+        const workflowKey = this.normalizeText(row?.workflow_key);
+        if (!workflowKey || generatedItemIds.has(workflowKey)) {
+          return false;
+        }
+
+        const moduleKey = this.normalizeModuleKey(row?.module);
+        if (!moduleKey || this.isCoreGeneratedCrossModule(moduleKey)) {
+          return false;
+        }
+
+        const normalizedStatus = this.normalizeCrossModuleWorkflowStatus(row?.status);
+        return normalizedStatus !== 'completed';
+      })
+      .map((row: any) => {
+        const workflowKey = String(row.workflow_key);
+        const moduleKey = this.normalizeModuleKey(row?.module) || 'unknown';
+        const context = this.parseJsonObject(row?.context) || {};
+        const normalizedStatus = this.normalizeCrossModuleWorkflowStatus(row?.status);
+        const severityCandidate = this.normalizeWorkflowContextStatus(
+          this.readContextValue(context, ['severity', 'priority', 'urgency']),
+        );
+        const severity =
+          severityCandidate === 'critical' ||
+          severityCandidate === 'high' ||
+          severityCandidate === 'medium' ||
+          severityCandidate === 'low'
+            ? severityCandidate
+            : normalizedStatus === 'pending'
+              ? 'high'
+              : 'medium';
+        const doctorSyncStatus =
+          this.normalizeWorkflowContextStatus(
+            this.readContextValue(context, ['doctor_sync_status', 'doctorSyncStatus']),
+          ) ||
+          (String(row?.destination_role || '').toLowerCase() === 'doctor'
+            ? 'doctor_review_recommended'
+            : normalizedStatus === 'acknowledged'
+              ? 'sync_in_progress'
+              : 'sync_pending');
+        const moduleStatus =
+          this.readContextValue(context, ['module_status', 'moduleStatus']) || row?.status || null;
+        const title =
+          this.readContextValue(context, ['title', 'workflow_title', 'workflowTitle']) ||
+          `${moduleKey.replace(/_/g, ' ')} synchronization follow-up`;
+        const summary =
+          this.readContextValue(context, ['summary', 'description']) ||
+          `Cross-module workflow synchronization is pending for ${moduleKey.replace(/_/g, ' ')}.`;
+        const recommendedAction =
+          this.readContextValue(context, ['recommended_action', 'recommendedAction', 'next_step', 'nextStep']) ||
+          'Open the linked module workflow and close the synchronization loop.';
+        const itemType = this.normalizeText(row?.item_type) || `${moduleKey}_workflow_item`;
+        const createdAt = row?.created_at || row?.updated_at || null;
+        const updatedAt = row?.updated_at || row?.created_at || null;
+        const ageHours = this.getHoursSince(updatedAt || createdAt);
+        const accountsSyncStatus = this.isAccountsWorkflow(row, context, moduleKey)
+          ? this.extractAccountsSyncStatus(context)
+          : null;
+
+        return this.mergeCrossModuleWorkflowState(
+          {
+            id: workflowKey,
+            module: moduleKey,
+            item_type: itemType,
+            source_record_id: row?.source_record_id || null,
+            severity,
+            workflow_status: normalizedStatus,
+            module_status: moduleStatus,
+            doctor_sync_status: doctorSyncStatus,
+            title,
+            summary,
+            recommended_action: recommendedAction,
+            patient_id: row?.patient_id || this.readContextValue(context, ['patient_id', 'patientId']) || null,
+            patient_name: this.readContextValue(context, ['patient_name', 'patientName']) || null,
+            patient_number: this.readContextValue(context, ['patient_number', 'patientNumber']) || null,
+            enrollment_id:
+              row?.enrollment_id || this.readContextValue(context, ['enrollment_id', 'enrollmentId']) || null,
+            enrollment_number: this.readContextValue(context, ['enrollment_number', 'enrollmentNumber']) || null,
+            created_at: createdAt,
+            updated_at: updatedAt,
+            age_hours: ageHours,
+            sla_status:
+              ageHours !== null && ageHours >= 24 ? 'breached' : ageHours !== null && ageHours >= 12 ? 'due_soon' : null,
+            next_route: {
+              section: moduleKey === 'ed' || moduleKey === 'sepsis' ? 'main' : moduleKey,
+              tab: moduleKey,
+              patientId: row?.patient_id || this.readContextValue(context, ['patient_id', 'patientId']) || undefined,
+              enrollmentId:
+                row?.enrollment_id || this.readContextValue(context, ['enrollment_id', 'enrollmentId']) || undefined,
+            },
+            destination_role: row?.destination_role || null,
+            destination_service: row?.destination_service || null,
+            destination_specialty: row?.destination_specialty || null,
+            destination_user_id: row?.destination_user_id || null,
+            destination_user_name: row?.destination_user_name || null,
+            destination_facility_id: row?.destination_facility_id || null,
+            destination_facility_name: row?.destination_facility_name || null,
+            metadata: {
+              workflow_context: context,
+              accounts_sync_status: accountsSyncStatus,
+            },
+          },
+          workflowRowsByKey,
+        );
+      });
+
+    const items = [
+      ...generatedItems,
+      ...workflowOnlyItems,
     ]
       .filter((item) => item.module === 'maternity' || item.workflow_status !== 'completed')
       .sort((a, b) => {
@@ -2276,16 +3615,36 @@ export class NurseWorklistService {
         return firstDate - secondDate;
       });
 
+    const moduleCount = (module: string) =>
+      items.filter((item) => this.normalizeModuleKey(item.module) === module).length;
+    const accountsCount = items.filter((item) =>
+      this.isAccountsModule(this.normalizeModuleKey(item.module)),
+    ).length;
+    const specialtyCount = items.filter((item) =>
+      ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'telemedicine', 'lab', 'pharmacy'].includes(
+        this.normalizeModuleKey(item.module),
+      ),
+    ).length;
+
     return {
       items,
       summary: {
         total: items.length,
         critical: items.filter((item) => item.severity === 'critical').length,
         high: items.filter((item) => item.severity === 'high').length,
-        maternity: items.filter((item) => item.module === 'maternity').length,
-        hiv: items.filter((item) => item.module === 'hiv').length,
-        oncology: items.filter((item) => item.module === 'oncology').length,
-        nursing: items.filter((item) => item.module === 'nursing').length,
+        maternity: moduleCount('maternity'),
+        hiv: moduleCount('hiv'),
+        oncology: moduleCount('oncology'),
+        nursing: moduleCount('nursing'),
+        cardiology: moduleCount('cardiology'),
+        ophthalmology: moduleCount('ophthalmology'),
+        ed: moduleCount('ed'),
+        sepsis: moduleCount('sepsis'),
+        telemedicine: moduleCount('telemedicine'),
+        lab: moduleCount('lab'),
+        pharmacy: moduleCount('pharmacy'),
+        accounts: accountsCount,
+        specialty: specialtyCount,
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
       },
@@ -2526,7 +3885,24 @@ export class NurseWorklistService {
       'created_at <= $2::date + INTERVAL \'1 day\' - INTERVAL \'1 second\'',
       `(
         LOWER(COALESCE(destination_role, '')) = 'doctor'
-        OR LOWER(COALESCE(module, '')) IN ('maternity', 'oncology')
+        OR LOWER(COALESCE(module, '')) IN (
+          'maternity',
+          'hiv',
+          'oncology',
+          'nursing',
+          'cardiology',
+          'ophthalmology',
+          'ed',
+          'sepsis',
+          'telemedicine',
+          'lab',
+          'pharmacy',
+          'accounts',
+          'billing',
+          'claims',
+          'revenue_cycle'
+        )
+        OR LOWER(COALESCE(destination_service, '')) IN ('accounts', 'billing', 'claims', 'revenue_cycle', 'payment_clearance')
         OR LOWER(COALESCE(context->>'doctor_sync_status', '')) LIKE '%doctor%'
         OR LOWER(COALESCE(context->>'doctorSyncStatus', '')) LIKE '%doctor%'
       )`,
@@ -2579,12 +3955,20 @@ export class NurseWorklistService {
       string,
       { total: number; pending: number; acknowledged: number; completed: number }
     > = {};
+    const accountsSyncByStatus: Record<string, number> = {};
+    const accountsSyncByModule: Record<string, number> = {};
+    let accountsSyncTotal = 0;
+    let accountsPending = 0;
     let pendingOver24h = 0;
 
     const executedByAction: Record<string, number> = {};
     const executedByModule: Record<string, number> = {};
     let executedActionsTotal = 0;
     let reusedOrIdempotentTotal = 0;
+    let overrideActionsTotal = 0;
+    let executionLatencyTotalHours = 0;
+    let executionLatencySamples = 0;
+    const queueItemsWithExecutions = new Set<string>();
 
     for (const row of workflowRows) {
       const normalizedStatus = this.normalizeCrossModuleWorkflowStatus(row?.status);
@@ -2609,6 +3993,17 @@ export class NurseWorklistService {
       }
 
       const context = this.parseJsonObject(row?.context) || {};
+      const isAccountsWorkflow = this.isAccountsWorkflow(row, context, normalizedModule);
+      if (isAccountsWorkflow) {
+        const accountsStatus = this.extractAccountsSyncStatus(context) || normalizedStatus || 'pending';
+        accountsSyncTotal += 1;
+        accountsSyncByStatus[accountsStatus] = (accountsSyncByStatus[accountsStatus] || 0) + 1;
+        accountsSyncByModule[normalizedModule] = (accountsSyncByModule[normalizedModule] || 0) + 1;
+        if (normalizedStatus !== 'completed') {
+          accountsPending += 1;
+        }
+      }
+
       const actionExecutions =
         context && typeof context === 'object' && context.action_executions
           ? context.action_executions
@@ -2624,10 +4019,30 @@ export class NurseWorklistService {
         executedActionsTotal += 1;
         executedByAction[actionId] = (executedByAction[actionId] || 0) + 1;
         executedByModule[normalizedModule] = (executedByModule[normalizedModule] || 0) + 1;
+        queueItemsWithExecutions.add(String(row?.workflow_key || ''));
 
         const operation = String((execution as any)?.result?.operation || '').toLowerCase();
         if (operation === 'already_applied' || operation.includes('reused')) {
           reusedOrIdempotentTotal += 1;
+        }
+
+        const hasOverrideSignal =
+          actionId.toLowerCase().includes('override') ||
+          operation.includes('override') ||
+          this.normalizeText((execution as any)?.result?.overrideReason) !== null ||
+          this.normalizeText((execution as any)?.result?.override_reason) !== null;
+        if (hasOverrideSignal) {
+          overrideActionsTotal += 1;
+        }
+
+        const executedAt = new Date(String((execution as any)?.executed_at || ''));
+        const createdAt = new Date(String(row?.created_at || ''));
+        if (!Number.isNaN(executedAt.getTime()) && !Number.isNaN(createdAt.getTime())) {
+          const diffMs = executedAt.getTime() - createdAt.getTime();
+          if (diffMs >= 0) {
+            executionLatencyTotalHours += diffMs / (1000 * 60 * 60);
+            executionLatencySamples += 1;
+          }
         }
       }
     }
@@ -2682,12 +4097,26 @@ export class NurseWorklistService {
         completionRatePercent: this.toPercent(completedItems, totalItems),
         pendingOlderThan24h: pendingOver24h,
       },
+      accountsSync: {
+        totalItems: accountsSyncTotal,
+        pendingItems: accountsPending,
+        byStatus: accountsSyncByStatus,
+        byModule: accountsSyncByModule,
+      },
       recommendationExecution: {
         executedActionsTotal,
         reusedOrIdempotentTotal,
         executedByAction,
         executedByModule,
         topActions,
+      },
+      cdssAdoption: {
+        queueItemsWithExecutions: queueItemsWithExecutions.size,
+        executionCoveragePercent: this.toPercent(queueItemsWithExecutions.size, totalItems),
+        actionsPerQueueItemPercent: this.toPercent(executedActionsTotal, totalItems),
+        overrideActionsTotal,
+        averageTimeToExecutionHours:
+          executionLatencySamples > 0 ? Math.round((executionLatencyTotalHours / executionLatencySamples) * 10) / 10 : 0,
       },
     };
   }
@@ -3536,6 +4965,540 @@ export class NurseWorklistService {
         actionId,
         actionTitle: payload.actionTitle || null,
         caseId: resolvedCaseId || null,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeCardiologyRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      encounterId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedEncounterId = this.extractCardiologyEncounterId({
+      encounterId: payload.encounterId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedEncounterId) {
+      throw new BadRequestException('encounterId context is required for cardiology recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(
+      tenantDb,
+      payload.itemId,
+      actionId,
+    );
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    let result: any;
+
+    if (actionId === 'prepare-cardiology-order-set') {
+      const suggestedTests = Array.isArray(actionPayload?.suggested_tests)
+        ? actionPayload.suggested_tests
+            .map((value: any) => this.normalizeText(value))
+            .filter((value: string | null): value is string => Boolean(value))
+        : ['ECG', 'Troponin', 'Echocardiogram'];
+      const update = await this.appendCardiologyDiagnosticOrderSet(
+        tenantDb,
+        resolvedEncounterId,
+        resultMarker,
+        actionId,
+        suggestedTests,
+      );
+      const encounterPatientId = this.normalizeText(update.encounter?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'cardiology_order_set_reused' : 'cardiology_order_set_prepared',
+        encounterId: resolvedEncounterId,
+        patientId: encounterPatientId,
+        addedTests: update.addedTests,
+        totalSuggestedTests: suggestedTests.length,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-cardiology-visit-prep') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendCardiologyEncounterTextNote(
+        tenantDb,
+        resolvedEncounterId,
+        'follow_up_plan',
+        resultMarker,
+        noteLine,
+      );
+      const encounterPatientId = this.normalizeText(update.encounter?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'cardiology_visit_prep_reused' : 'cardiology_visit_prep_completed',
+        encounterId: resolvedEncounterId,
+        patientId: encounterPatientId,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-cardiology-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Cardiology doctor synchronization requested by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendCardiologyEncounterTextNote(
+        tenantDb,
+        resolvedEncounterId,
+        'care_plan',
+        resultMarker,
+        noteLine,
+      );
+      const encounterPatientId = this.normalizeText(update.encounter?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused
+          ? 'cardiology_doctor_sync_reused'
+          : 'cardiology_doctor_sync_documented',
+        encounterId: resolvedEncounterId,
+        patientId: encounterPatientId,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported cardiology recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'cardiology',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedEncounterId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'cardiology',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        encounterId: resolvedEncounterId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeEdRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      visitId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedVisitId = this.extractEdVisitId({
+      visitId: payload.visitId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedVisitId) {
+      throw new BadRequestException('visitId context is required for ED recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    let result: any;
+
+    if (actionId === 'prepare-ed-order-set') {
+      const suggestedOrders = Array.isArray(actionPayload?.suggested_orders)
+        ? actionPayload.suggested_orders
+            .map((value: any) => this.normalizeText(value))
+            .filter((value: string | null): value is string => Boolean(value))
+        : ['STAT clinician reassessment', 'ECG', 'CBC', 'CMP', 'Point-of-care lactate'];
+
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} executed by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendEdVisitOrderSetMarker(
+        tenantDb,
+        resolvedVisitId,
+        resultMarker,
+        actionId,
+        noteLine,
+        suggestedOrders,
+      );
+      const visitPatientId = this.normalizeText(update.visit?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ed_order_set_reused' : 'ed_order_set_prepared',
+        visitId: resolvedVisitId,
+        patientId: visitPatientId,
+        addedOrders: update.addedOrders || [],
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-ed-disposition-prep') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendEdVisitTextNote(
+        tenantDb,
+        resolvedVisitId,
+        'follow_up_instructions',
+        resultMarker,
+        noteLine,
+      );
+      const visitPatientId = this.normalizeText(update.visit?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ed_disposition_prep_reused' : 'ed_disposition_prep_completed',
+        visitId: resolvedVisitId,
+        patientId: visitPatientId,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-ed-doctor-sync') {
+      const noteLine =
+        `${resultMarker} ED doctor synchronization requested by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendEdVisitTextNote(
+        tenantDb,
+        resolvedVisitId,
+        'notes',
+        resultMarker,
+        noteLine,
+      );
+      const visitPatientId = this.normalizeText(update.visit?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ed_doctor_sync_reused' : 'ed_doctor_sync_documented',
+        visitId: resolvedVisitId,
+        patientId: visitPatientId,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported ED recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'ed',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedVisitId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'ed',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        visitId: resolvedVisitId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeSepsisRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      bundleId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedBundleId = this.extractSepsisBundleId({
+      bundleId: payload.bundleId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedBundleId) {
+      throw new BadRequestException('bundleId context is required for sepsis recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    let result: any;
+
+    if (actionId === 'queue-sepsis-three-hour-bundle') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} queued by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendSepsisBundleNote(tenantDb, resolvedBundleId, resultMarker, noteLine);
+      const bundlePatientId = this.normalizeText(update.bundle?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'sepsis_three_hour_bundle_reused' : 'sepsis_three_hour_bundle_queued',
+        bundleId: resolvedBundleId,
+        patientId: bundlePatientId,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'confirm-repeat-lactate-plan') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} confirmed by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendSepsisBundleNote(tenantDb, resolvedBundleId, resultMarker, noteLine);
+      const bundlePatientId = this.normalizeText(update.bundle?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'sepsis_repeat_lactate_plan_reused' : 'sepsis_repeat_lactate_plan_confirmed',
+        bundleId: resolvedBundleId,
+        patientId: bundlePatientId,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-sepsis-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Sepsis doctor synchronization requested by ` +
+        `${this.getUserDisplayName(user)} at ${timestampIso}.`;
+      const update = await this.appendSepsisBundleNote(tenantDb, resolvedBundleId, resultMarker, noteLine);
+      const bundlePatientId = this.normalizeText(update.bundle?.patient_id);
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'sepsis_doctor_sync_reused' : 'sepsis_doctor_sync_documented',
+        bundleId: resolvedBundleId,
+        patientId: bundlePatientId,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported sepsis recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'sepsis',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedBundleId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'sepsis',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        bundleId: resolvedBundleId,
         result,
       },
       riskLevel: 'medium',

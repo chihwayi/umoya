@@ -11,7 +11,7 @@ import {
 
 export interface NurseCrossModuleFeedItem {
   id: string;
-  module: 'maternity' | 'hiv' | 'nursing' | 'oncology';
+  module: string;
   item_type: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
   workflow_status: string;
@@ -45,7 +45,7 @@ export interface NurseCrossModuleFeedItem {
   note?: string | null;
   metadata?: Record<string, any> | null;
   next_route?: {
-    section?: 'main' | 'hiv' | 'maternity' | 'oncology';
+    section?: string;
     tab?: string;
     taskId?: string;
     enrollmentId?: string;
@@ -63,6 +63,15 @@ interface NurseCrossModuleEscalationsProps {
     hiv?: number;
     oncology?: number;
     nursing?: number;
+    cardiology?: number;
+    ophthalmology?: number;
+    ed?: number;
+    sepsis?: number;
+    telemedicine?: number;
+    lab?: number;
+    pharmacy?: number;
+    accounts?: number;
+    specialty?: number;
     handoff?: number;
     medication?: number;
   } | null;
@@ -96,6 +105,17 @@ const moduleStyles: Record<string, string> = {
   hiv: 'bg-emerald-100 text-emerald-700',
   oncology: 'bg-violet-100 text-violet-700',
   nursing: 'bg-sky-100 text-sky-700',
+  cardiology: 'bg-rose-100 text-rose-700',
+  ophthalmology: 'bg-cyan-100 text-cyan-700',
+  ed: 'bg-red-100 text-red-700',
+  sepsis: 'bg-amber-100 text-amber-700',
+  telemedicine: 'bg-blue-100 text-blue-700',
+  lab: 'bg-indigo-100 text-indigo-700',
+  pharmacy: 'bg-lime-100 text-lime-700',
+  accounts: 'bg-yellow-100 text-yellow-700',
+  billing: 'bg-yellow-100 text-yellow-700',
+  claims: 'bg-yellow-100 text-yellow-700',
+  revenue_cycle: 'bg-yellow-100 text-yellow-700',
 };
 
 const slaStyles: Record<string, string> = {
@@ -148,6 +168,30 @@ function isExecutableRecommendationAction(module: string, item: Record<string, a
     );
   }
 
+  if (module === 'cardiology') {
+    return (
+      actionId === 'prepare-cardiology-order-set' ||
+      actionId === 'complete-cardiology-visit-prep' ||
+      actionId === 'escalate-cardiology-doctor-sync'
+    );
+  }
+
+  if (module === 'ed') {
+    return (
+      actionId === 'prepare-ed-order-set' ||
+      actionId === 'complete-ed-disposition-prep' ||
+      actionId === 'escalate-ed-doctor-sync'
+    );
+  }
+
+  if (module === 'sepsis') {
+    return (
+      actionId === 'queue-sepsis-three-hour-bundle' ||
+      actionId === 'confirm-repeat-lactate-plan' ||
+      actionId === 'escalate-sepsis-doctor-sync'
+    );
+  }
+
   return false;
 }
 
@@ -177,7 +221,7 @@ export default function NurseCrossModuleEscalations({
               <h3 className="text-lg font-bold text-slate-900">Cross-Module Escalations</h3>
             </div>
             <p className="text-sm text-slate-600 mt-1">
-              Shared nurse visibility into maternity, HIV, oncology, handoff risk, and medication exception workflows.
+              Shared nurse visibility into maternity, HIV, oncology, specialty, accounts, handoff risk, and medication exception workflows.
             </p>
           </div>
           {onRefresh && (
@@ -214,6 +258,22 @@ export default function NurseCrossModuleEscalations({
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700">
             {summary?.nursing ?? items.filter((item) => item.module === 'nursing').length} nursing
           </span>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+            {summary?.accounts ??
+              items.filter((item) =>
+                ['accounts', 'billing', 'claims', 'revenue_cycle'].includes(String(item.module || '').toLowerCase()),
+              ).length}{' '}
+            accounts
+          </span>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+            {summary?.specialty ??
+              items.filter((item) =>
+                ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'telemedicine', 'lab', 'pharmacy'].includes(
+                  String(item.module || '').toLowerCase(),
+                ),
+              ).length}{' '}
+            specialty
+          </span>
         </div>
       </div>
 
@@ -227,7 +287,7 @@ export default function NurseCrossModuleEscalations({
           <div className="py-12 text-center text-slate-500">
             <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-slate-300" />
             <p className="font-medium text-slate-700">No active cross-module escalations</p>
-            <p className="text-sm mt-1">Maternity, HIV, oncology, handoff, and medication follow-up items will appear here when action is needed.</p>
+            <p className="text-sm mt-1">Maternity, HIV, oncology, specialty, accounts, handoff, and medication follow-up items will appear here when action is needed.</p>
           </div>
         ) : (
           <div className="space-y-4">

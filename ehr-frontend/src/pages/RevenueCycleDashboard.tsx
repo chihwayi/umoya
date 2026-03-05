@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DollarSign, TrendingUp, AlertCircle, CheckCircle, Loader2, Calendar, ArrowLeft, Plus, FileText, Clock, User } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertCircle, CheckCircle, Loader2, ArrowLeft, Plus, FileText, Clock } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 import AddChargeModal from '../components/AddChargeModal';
@@ -28,14 +28,7 @@ const RevenueCycleDashboard: React.FC = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'master' | 'pending'>('pending');
 
-  useEffect(() => {
-    loadChargeMaster();
-    if (user?.role === 'doctor') {
-      loadPendingCharges();
-    }
-  }, [selectedDepartment, user]);
-
-  const loadPendingCharges = async () => {
+  const loadPendingCharges = useCallback(async () => {
     try {
       const response = await ehrAxios.get('/revenue-cycle/charges/pending-review', {
         params: { doctorId: user?.id },
@@ -46,9 +39,9 @@ const RevenueCycleDashboard: React.FC = () => {
     } catch (error) {
       // Silent fail
     }
-  };
+  }, [tenantSlug, token, user?.id]);
 
-  const loadChargeMaster = async () => {
+  const loadChargeMaster = useCallback(async () => {
     try {
       setLoading(true);
       const params: any = {};
@@ -66,7 +59,14 @@ const RevenueCycleDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDepartment, showError, tenantSlug, token]);
+
+  useEffect(() => {
+    loadChargeMaster();
+    if (user?.role === 'doctor') {
+      loadPendingCharges();
+    }
+  }, [loadChargeMaster, loadPendingCharges, user?.role]);
 
   const departments = [
     { value: 'all', label: 'All Departments' },
@@ -347,4 +347,3 @@ const RevenueCycleDashboard: React.FC = () => {
 };
 
 export default RevenueCycleDashboard;
-

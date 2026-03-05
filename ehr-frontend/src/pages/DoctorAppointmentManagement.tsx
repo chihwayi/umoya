@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Calendar, Clock, User, Search, Filter,
-  Plus, Eye, Edit, Trash2, CheckCircle, XCircle,
+  ArrowLeft, Calendar, Clock, Search,
+  Eye, CheckCircle, XCircle,
   AlertCircle, Play, Square, RefreshCw
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
@@ -54,13 +54,7 @@ const DoctorAppointmentManagement: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchAppointments();
-    }
-  }, [selectedDate, currentUser]);
-
-  const fetchAppointments = async () => {
+  const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
@@ -82,7 +76,13 @@ const DoctorAppointmentManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, selectedDate, showError, tenantSlug]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchAppointments();
+    }
+  }, [currentUser, fetchAppointments]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

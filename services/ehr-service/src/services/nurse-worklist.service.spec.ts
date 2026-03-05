@@ -494,6 +494,15 @@ describe('NurseWorklistService', () => {
       hiv: 2,
       oncology: 2,
       nursing: 2,
+      cardiology: 0,
+      ophthalmology: 0,
+      ed: 0,
+      sepsis: 0,
+      telemedicine: 0,
+      lab: 0,
+      pharmacy: 0,
+      accounts: 0,
+      specialty: 0,
       handoff: 1,
       medication: 1,
     });
@@ -599,6 +608,75 @@ describe('NurseWorklistService', () => {
       ]),
     );
     expect(mocks.hivService.getVlPathway).toHaveBeenCalledWith('enroll-hiv-1', tenantDb);
+  });
+
+  it('surfaces workflow-only specialty modules from shared workflow state', async () => {
+    const { service } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [
+            {
+              workflow_key: 'cardiology-sync:case-1',
+              module: 'cardiology',
+              item_type: 'cardiology_protocol_followup',
+              source_record_id: 'card-case-1',
+              patient_id: 'patient-card-1',
+              enrollment_id: null,
+              status: 'pending',
+              destination_role: 'doctor',
+              destination_service: 'cardiology',
+              destination_specialty: 'Cardiology',
+              destination_user_id: 'doctor-card-1',
+              destination_user_name: 'Dr. Heart',
+              destination_facility_id: null,
+              destination_facility_name: null,
+              acknowledged_at: null,
+              completed_at: null,
+              created_at: '2026-03-03T08:00:00.000Z',
+              updated_at: '2026-03-04T08:00:00.000Z',
+              note: 'Pending echo protocol review',
+              context: {
+                title: 'Cardiology protocol checkpoint pending',
+                summary: 'Pre-procedure cardiac review has not been completed.',
+                recommended_action: 'Complete cardiology doctor checkpoint and update workflow.',
+                module_status: 'checkpoint_pending',
+                doctor_sync_status: 'doctor_review_recommended',
+                patient_name: 'Cardio Patient',
+                patient_number: 'P-901',
+              },
+              acknowledged_by_name: null,
+              completed_by_name: null,
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getCrossModuleEscalationFeed(tenantDb);
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        total: 1,
+        cardiology: 1,
+        specialty: 1,
+      }),
+    );
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'cardiology-sync:case-1',
+          module: 'cardiology',
+          item_type: 'cardiology_protocol_followup',
+          doctor_sync_status: 'doctor_review_recommended',
+          destination_service: 'cardiology',
+          workflow_status: 'pending',
+          title: 'Cardiology protocol checkpoint pending',
+        }),
+      ]),
+    );
   });
 
   it('executes a start EAC recommendation and persists bundle execution state', async () => {
@@ -1455,6 +1533,621 @@ describe('NurseWorklistService', () => {
     );
   });
 
+  it('builds cardiology protocol items with executable recommendation bundles', async () => {
+    const { service } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes("FROM users") && sql.includes("WHERE is_active = true")) {
+          return [
+            { id: 'doctor-card-1', role: 'doctor', specialization: 'Cardiology', name: 'Dr. Heart' },
+            { id: 'nurse-card-1', role: 'nurse', specialization: 'Cardiology', name: 'Nurse Pulse' },
+          ];
+        }
+        if (sql.includes('FROM referral_facilities')) {
+          return [];
+        }
+        if (sql.includes('FROM cardiology_encounters ce')) {
+          return [
+            {
+              cardiology_encounter_id: 'card-enc-1',
+              patient_id: 'patient-card-1',
+              encounter_date: '2026-03-04T08:00:00.000Z',
+              encounter_type: 'follow_up',
+              visit_reason: 'Chest pain',
+              risk_score: 'high',
+              care_status: 'in_progress',
+              payment_status: 'payment_confirmed',
+              follow_up_plan: null,
+              care_plan: null,
+              diagnostic_tests: [],
+              patient_name: 'Cardio Patient',
+              patient_number: 'P-901',
+              cardiologist_name: 'Dr. Heart',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getCrossModuleEscalationFeed(tenantDb);
+    const cardiologyItem = result.items.find((item: any) => item.module === 'cardiology');
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        cardiology: 1,
+        specialty: 1,
+      }),
+    );
+    expect(cardiologyItem).toEqual(
+      expect.objectContaining({
+        id: 'cardiology-encounter:card-enc-1',
+        item_type: 'cardiology_protocol_followup',
+        severity: 'high',
+      }),
+    );
+    expect(cardiologyItem?.metadata?.recommendation_bundle).toEqual(
+      expect.objectContaining({
+        bundle_label: 'Cardiology protocol execution bundle',
+        actionable_count: 3,
+      }),
+    );
+    expect(cardiologyItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prepare-cardiology-order-set', type: 'order_set' }),
+        expect.objectContaining({ id: 'complete-cardiology-visit-prep', type: 'visit_preparation' }),
+        expect.objectContaining({ id: 'escalate-cardiology-doctor-sync', type: 'escalation' }),
+      ]),
+    );
+  });
+
+  it('executes cardiology recommendation actions and persists queue execution state', async () => {
+    const { service, mocks } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM cardiology_encounters') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: 'card-enc-1',
+              patient_id: 'patient-card-1',
+              encounter_date: '2026-03-04T08:00:00.000Z',
+              encounter_type: 'follow_up',
+              visit_reason: 'Chest pain',
+              risk_score: 'high',
+              care_status: 'in_progress',
+              payment_status: 'payment_confirmed',
+              diagnostic_tests: [],
+              care_plan: null,
+              follow_up_plan: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE cardiology_encounters') && sql.includes('diagnostic_tests')) {
+          return [
+            {
+              id: 'card-enc-1',
+              patient_id: 'patient-card-1',
+              diagnostic_tests: [
+                { name: 'ECG', source: 'nurse_cross_module_queue' },
+                { name: 'Troponin', source: 'nurse_cross_module_queue' },
+              ],
+            },
+          ];
+        }
+        if (sql.includes('UPDATE cardiology_encounters') && sql.includes('follow_up_plan')) {
+          return [
+            {
+              id: 'card-enc-1',
+              patient_id: 'patient-card-1',
+              follow_up_plan: 'Cardiology visit prep completed',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE cardiology_encounters') && sql.includes('care_plan')) {
+          return [
+            {
+              id: 'card-enc-1',
+              patient_id: 'patient-card-1',
+              care_plan: 'Cardiology doctor sync documented',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const orderSetResult = await service.executeCardiologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'cardiology-encounter:card-enc-1',
+        itemType: 'cardiology_protocol_followup',
+        sourceRecordId: 'card-enc-1',
+        patientId: 'patient-card-1',
+        encounterId: 'card-enc-1',
+        actionId: 'prepare-cardiology-order-set',
+        actionType: 'order_set',
+        actionTitle: 'Prepare cardiology diagnostic order set',
+        actionPayload: {
+          suggested_tests: ['ECG', 'Troponin'],
+        },
+      },
+      { sessionId: 'session-card-1' },
+    );
+    expect(orderSetResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'cardiology_order_set_prepared',
+        encounterId: 'card-enc-1',
+      }),
+    );
+
+    const prepResult = await service.executeCardiologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'cardiology-encounter:card-enc-1',
+        itemType: 'cardiology_protocol_followup',
+        sourceRecordId: 'card-enc-1',
+        patientId: 'patient-card-1',
+        encounterId: 'card-enc-1',
+        actionId: 'complete-cardiology-visit-prep',
+        actionType: 'visit_preparation',
+        actionTitle: 'Complete cardiology visit-prep checkpoint',
+      },
+      { sessionId: 'session-card-2' },
+    );
+    expect(prepResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'cardiology_visit_prep_completed',
+        encounterId: 'card-enc-1',
+      }),
+    );
+
+    const escalateResult = await service.executeCardiologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'cardiology-encounter:card-enc-1',
+        itemType: 'cardiology_protocol_followup',
+        sourceRecordId: 'card-enc-1',
+        patientId: 'patient-card-1',
+        encounterId: 'card-enc-1',
+        actionId: 'escalate-cardiology-doctor-sync',
+        actionType: 'escalation',
+        actionTitle: 'Escalate cardiology findings to doctor sync',
+      },
+      { sessionId: 'session-card-3' },
+    );
+    expect(escalateResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'cardiology_doctor_sync_documented',
+        encounterId: 'card-enc-1',
+      }),
+    );
+
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'cardiology-encounter:card-enc-1',
+        'cardiology',
+        'cardiology_protocol_followup',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'cardiology-encounter:card-enc-1',
+        metadata: expect.objectContaining({
+          module: 'cardiology',
+          actionId: 'escalate-cardiology-doctor-sync',
+        }),
+      }),
+    );
+  });
+
+  it('builds ED and sepsis protocol items with executable recommendation bundles', async () => {
+    const { service } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes("FROM users") && sql.includes("WHERE is_active = true")) {
+          return [
+            { id: 'doctor-ed-1', role: 'doctor', specialization: 'Emergency Medicine', name: 'Dr. Rapid' },
+            { id: 'nurse-ed-1', role: 'nurse', specialization: 'Emergency', name: 'Nurse Swift' },
+          ];
+        }
+        if (sql.includes('FROM referral_facilities')) {
+          return [];
+        }
+        if (sql.includes('FROM ed_visits ev')) {
+          return [
+            {
+              ed_visit_id: 'ed-visit-1',
+              patient_id: 'patient-ed-1',
+              ed_visit_number: 'ED-0001',
+              arrival_date: '2026-03-04T08:00:00.000Z',
+              chief_complaint: 'Chest pain',
+              triage_level: 2,
+              triage_acuity: 'emergent',
+              ed_status: 'in_treatment',
+              disposition: null,
+              code_sepsis: false,
+              code_stroke: false,
+              code_stemi: true,
+              patient_name: 'ED Patient',
+              patient_number: 'P-ED-1',
+            },
+          ];
+        }
+        if (sql.includes('FROM sepsis_bundles sb')) {
+          return [
+            {
+              sepsis_bundle_id: 'sepsis-bundle-1',
+              patient_id: 'patient-sepsis-1',
+              sepsis_screening_id: 'sepsis-screen-1',
+              bundle_start_time: '2026-03-04T06:00:00.000Z',
+              three_hour_bundle_complete: false,
+              six_hour_bundle_complete: false,
+              overall_compliance: false,
+              repeat_lactate_measured: false,
+              lactate_value: 4.2,
+              severe_sepsis: true,
+              septic_shock: false,
+              patient_name: 'Sepsis Patient',
+              patient_number: 'P-SEP-1',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getCrossModuleEscalationFeed(tenantDb);
+    const edItem = result.items.find((item: any) => item.module === 'ed');
+    const sepsisItem = result.items.find((item: any) => item.module === 'sepsis');
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        ed: 1,
+        sepsis: 1,
+        specialty: 2,
+      }),
+    );
+    expect(edItem).toEqual(
+      expect.objectContaining({
+        id: 'ed-visit:ed-visit-1',
+        item_type: 'ed_protocol_followup',
+      }),
+    );
+    expect(edItem?.metadata?.recommendation_bundle).toEqual(
+      expect.objectContaining({
+        bundle_label: 'ED protocol execution bundle',
+      }),
+    );
+    expect(edItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prepare-ed-order-set', type: 'order_set' }),
+        expect.objectContaining({ id: 'complete-ed-disposition-prep', type: 'visit_preparation' }),
+        expect.objectContaining({ id: 'escalate-ed-doctor-sync', type: 'escalation' }),
+      ]),
+    );
+
+    expect(sepsisItem).toEqual(
+      expect.objectContaining({
+        id: 'sepsis-bundle:sepsis-bundle-1',
+        item_type: 'sepsis_bundle_followup',
+      }),
+    );
+    expect(sepsisItem?.metadata?.recommendation_bundle).toEqual(
+      expect.objectContaining({
+        bundle_label: 'Sepsis protocol execution bundle',
+      }),
+    );
+    expect(sepsisItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'queue-sepsis-three-hour-bundle', type: 'order_set' }),
+        expect.objectContaining({ id: 'confirm-repeat-lactate-plan', type: 'lab_followup' }),
+        expect.objectContaining({ id: 'escalate-sepsis-doctor-sync', type: 'escalation' }),
+      ]),
+    );
+  });
+
+  it('executes ED recommendation actions and persists queue execution state', async () => {
+    const { service, mocks } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM ed_visits') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: 'ed-visit-1',
+              patient_id: 'patient-ed-1',
+              ed_visit_number: 'ED-0001',
+              arrival_date: '2026-03-04T08:00:00.000Z',
+              chief_complaint: 'Chest pain',
+              triage_level: 2,
+              triage_acuity: 'emergent',
+              ed_status: 'in_treatment',
+              disposition: null,
+              notes: null,
+              follow_up_instructions: null,
+              quality_flags: [],
+            },
+          ];
+        }
+        if (sql.includes('UPDATE ed_visits') && sql.includes('quality_flags = $2::jsonb')) {
+          return [
+            {
+              id: 'ed-visit-1',
+              patient_id: 'patient-ed-1',
+              notes: 'ED order set prepared',
+              quality_flags: [{ marker: '[nurse_queue_action:prepare-ed-order-set]' }],
+            },
+          ];
+        }
+        if (sql.includes('UPDATE ed_visits') && sql.includes('follow_up_instructions')) {
+          return [
+            {
+              id: 'ed-visit-1',
+              patient_id: 'patient-ed-1',
+              follow_up_instructions: 'Disposition prep completed',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE ed_visits') && sql.includes('SET notes = $1, updated_at = NOW()')) {
+          return [
+            {
+              id: 'ed-visit-1',
+              patient_id: 'patient-ed-1',
+              notes: 'Doctor sync documented',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const orderSetResult = await service.executeEdRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'ed-visit:ed-visit-1',
+        itemType: 'ed_protocol_followup',
+        sourceRecordId: 'ed-visit-1',
+        patientId: 'patient-ed-1',
+        visitId: 'ed-visit-1',
+        actionId: 'prepare-ed-order-set',
+        actionType: 'order_set',
+        actionTitle: 'Prepare ED protocol order set',
+        actionPayload: {
+          suggested_orders: ['ECG', 'CBC'],
+        },
+      },
+      { sessionId: 'session-ed-1' },
+    );
+    expect(orderSetResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'ed_order_set_prepared',
+        visitId: 'ed-visit-1',
+      }),
+    );
+
+    const dispositionResult = await service.executeEdRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'ed-visit:ed-visit-1',
+        itemType: 'ed_protocol_followup',
+        sourceRecordId: 'ed-visit-1',
+        patientId: 'patient-ed-1',
+        visitId: 'ed-visit-1',
+        actionId: 'complete-ed-disposition-prep',
+        actionType: 'visit_preparation',
+        actionTitle: 'Complete ED disposition prep checkpoint',
+      },
+      { sessionId: 'session-ed-2' },
+    );
+    expect(dispositionResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'ed_disposition_prep_completed',
+        visitId: 'ed-visit-1',
+      }),
+    );
+
+    const escalateResult = await service.executeEdRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'ed-visit:ed-visit-1',
+        itemType: 'ed_protocol_followup',
+        sourceRecordId: 'ed-visit-1',
+        patientId: 'patient-ed-1',
+        visitId: 'ed-visit-1',
+        actionId: 'escalate-ed-doctor-sync',
+        actionType: 'escalation',
+        actionTitle: 'Escalate ED case to doctor synchronization',
+      },
+      { sessionId: 'session-ed-3' },
+    );
+    expect(escalateResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'ed_doctor_sync_documented',
+        visitId: 'ed-visit-1',
+      }),
+    );
+
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'ed-visit:ed-visit-1',
+        'ed',
+        'ed_protocol_followup',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'ed-visit:ed-visit-1',
+        metadata: expect.objectContaining({
+          module: 'ed',
+          actionId: 'escalate-ed-doctor-sync',
+        }),
+      }),
+    );
+  });
+
+  it('executes sepsis recommendation actions and persists queue execution state', async () => {
+    const { service, mocks } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM sepsis_bundles sb') && sql.includes('WHERE sb.id = $1')) {
+          return [
+            {
+              id: 'sepsis-bundle-1',
+              patient_id: 'patient-sepsis-1',
+              sepsis_screening_id: 'sepsis-screen-1',
+              bundle_start_time: '2026-03-04T06:00:00.000Z',
+              three_hour_bundle_complete: false,
+              six_hour_bundle_complete: false,
+              overall_compliance: false,
+              repeat_lactate_measured: false,
+              lactate_value: 4.2,
+              repeat_lactate_value: null,
+              notes: null,
+              severe_sepsis: true,
+              septic_shock: false,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE sepsis_bundles') && sql.includes('SET notes = $1, updated_at = NOW()')) {
+          return [
+            {
+              id: 'sepsis-bundle-1',
+              patient_id: 'patient-sepsis-1',
+              notes: 'Sepsis workflow note',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const queueResult = await service.executeSepsisRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'sepsis-bundle:sepsis-bundle-1',
+        itemType: 'sepsis_bundle_followup',
+        sourceRecordId: 'sepsis-bundle-1',
+        patientId: 'patient-sepsis-1',
+        bundleId: 'sepsis-bundle-1',
+        actionId: 'queue-sepsis-three-hour-bundle',
+        actionType: 'order_set',
+        actionTitle: 'Queue sepsis three-hour bundle actions',
+      },
+      { sessionId: 'session-sepsis-1' },
+    );
+    expect(queueResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'sepsis_three_hour_bundle_queued',
+        bundleId: 'sepsis-bundle-1',
+      }),
+    );
+
+    const repeatResult = await service.executeSepsisRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'sepsis-bundle:sepsis-bundle-1',
+        itemType: 'sepsis_bundle_followup',
+        sourceRecordId: 'sepsis-bundle-1',
+        patientId: 'patient-sepsis-1',
+        bundleId: 'sepsis-bundle-1',
+        actionId: 'confirm-repeat-lactate-plan',
+        actionType: 'lab_followup',
+        actionTitle: 'Confirm repeat lactate monitoring plan',
+      },
+      { sessionId: 'session-sepsis-2' },
+    );
+    expect(repeatResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'sepsis_repeat_lactate_plan_confirmed',
+        bundleId: 'sepsis-bundle-1',
+      }),
+    );
+
+    const escalateResult = await service.executeSepsisRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'sepsis-bundle:sepsis-bundle-1',
+        itemType: 'sepsis_bundle_followup',
+        sourceRecordId: 'sepsis-bundle-1',
+        patientId: 'patient-sepsis-1',
+        bundleId: 'sepsis-bundle-1',
+        actionId: 'escalate-sepsis-doctor-sync',
+        actionType: 'escalation',
+        actionTitle: 'Escalate sepsis bundle to doctor synchronization',
+      },
+      { sessionId: 'session-sepsis-3' },
+    );
+    expect(escalateResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'sepsis_doctor_sync_documented',
+        bundleId: 'sepsis-bundle-1',
+      }),
+    );
+
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'sepsis-bundle:sepsis-bundle-1',
+        'sepsis',
+        'sepsis_bundle_followup',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'sepsis-bundle:sepsis-bundle-1',
+        metadata: expect.objectContaining({
+          module: 'sepsis',
+          actionId: 'escalate-sepsis-doctor-sync',
+        }),
+      }),
+    );
+  });
+
   it('computes nurse outcome analytics for queue execution and maternity SLA aging', async () => {
     const { service } = makeService();
     const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
@@ -1606,6 +2299,7 @@ describe('NurseWorklistService', () => {
                 action_executions: {
                   'repeat-vl-plan': {
                     status: 'completed',
+                    executed_at: hoursAgo(28),
                     result: { operation: 'hiv_referral_created' },
                   },
                 },
@@ -1622,7 +2316,8 @@ describe('NurseWorklistService', () => {
                 action_executions: {
                   'escalate-oncology-doctor-review': {
                     status: 'completed',
-                    result: { operation: 'oncology_doctor_sync_documented' },
+                    executed_at: hoursAgo(7),
+                    result: { operation: 'oncology_doctor_override_documented' },
                   },
                 },
               },
@@ -1638,6 +2333,7 @@ describe('NurseWorklistService', () => {
                 action_executions: {
                   'prepare-visit-checklist': {
                     status: 'completed',
+                    executed_at: hoursAgo(3),
                     result: { operation: 'already_applied' },
                   },
                 },
@@ -1695,6 +2391,86 @@ describe('NurseWorklistService', () => {
         ]),
       }),
     );
+    expect(analytics.cdssAdoption).toEqual(
+      expect.objectContaining({
+        queueItemsWithExecutions: 3,
+        executionCoveragePercent: 100,
+        actionsPerQueueItemPercent: 100,
+        overrideActionsTotal: 1,
+        averageTimeToExecutionHours: 3,
+      }),
+    );
+  });
+
+  it('aggregates accounts synchronization outcomes in doctor analytics', async () => {
+    const { service } = makeService();
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state') && sql.includes('destination_role')) {
+          return [
+            {
+              workflow_key: 'accounts-sync:claim-1',
+              module: 'claims',
+              status: 'pending',
+              destination_role: 'admin',
+              destination_service: 'claims',
+              created_at: hoursAgo(18),
+              updated_at: hoursAgo(16),
+              context: {
+                claim_status: 'pending_submission',
+              },
+            },
+            {
+              workflow_key: 'billing-sync:invoice-1',
+              module: 'billing',
+              status: 'acknowledged',
+              destination_role: 'admin',
+              destination_service: 'billing',
+              created_at: hoursAgo(8),
+              updated_at: hoursAgo(6),
+              context: {
+                payment_status: 'awaiting_payment',
+              },
+            },
+            {
+              workflow_key: 'accounts-sync:claim-2',
+              module: 'accounts',
+              status: 'completed',
+              destination_role: 'admin',
+              destination_service: 'accounts',
+              created_at: hoursAgo(4),
+              updated_at: hoursAgo(2),
+              completed_at: hoursAgo(1),
+              context: {
+                accounts_sync_status: 'closed',
+              },
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const analytics = await service.getDoctorOutcomeAnalytics(tenantDb, { days: 30 });
+
+    expect(analytics.accountsSync).toEqual(
+      expect.objectContaining({
+        totalItems: 3,
+        pendingItems: 2,
+        byStatus: expect.objectContaining({
+          pending_submission: 1,
+          awaiting_payment: 1,
+          closed: 1,
+        }),
+        byModule: expect.objectContaining({
+          claims: 1,
+          billing: 1,
+          accounts: 1,
+        }),
+      }),
+    );
   });
 
   it('returns zero-safe doctor outcome analytics when workflow table is unavailable', async () => {
@@ -1713,6 +2489,7 @@ describe('NurseWorklistService', () => {
     expect(analytics.window.days).toBe(365);
     expect(analytics.doctorQueue.totalItems).toBe(0);
     expect(analytics.recommendationExecution.executedActionsTotal).toBe(0);
+    expect(analytics.cdssAdoption.executionCoveragePercent).toBe(0);
   });
 
   it('applies module/status/case/date filters in doctor outcome analytics', async () => {

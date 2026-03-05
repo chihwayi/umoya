@@ -85,7 +85,18 @@ export class PatientService {
     const patient = await this.getPatientById(id, tenantDb);
     const patientId = patient.id;
 
-    const [latestVitalsRows, hivEnrollmentRows, maternityEnrollmentRows, oncologyCaseRows, oncologyActiveCountRows] = await Promise.all([
+    const [
+      latestVitalsRows,
+      hivEnrollmentRows,
+      maternityEnrollmentRows,
+      oncologyCaseRows,
+      oncologyActiveCountRows,
+      cardiologyEncounterRows,
+      ophthalmologyEncounterRows,
+      edVisitRows,
+      sepsisScreeningRows,
+      sepsisBundleRows,
+    ] = await Promise.all([
       this.safeQuery(
         tenantDb,
         `
@@ -187,6 +198,105 @@ export class PatientService {
         `,
         [patientId],
       ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          encounter_date,
+          encounter_type,
+          visit_reason,
+          risk_score,
+          care_status,
+          payment_status,
+          follow_up_plan
+        FROM cardiology_encounters
+        WHERE patient_id = $1
+        ORDER BY encounter_date DESC, updated_at DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          encounter_date,
+          encounter_type,
+          chief_complaint,
+          assessment,
+          plan,
+          payment_status
+        FROM ophthalmology_encounters
+        WHERE patient_id = $1
+        ORDER BY encounter_date DESC, updated_at DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          ed_visit_number,
+          arrival_date,
+          chief_complaint,
+          presenting_symptoms,
+          allergies,
+          current_medications,
+          triage_level,
+          triage_acuity,
+          ed_status,
+          disposition,
+          follow_up_instructions
+        FROM ed_visits
+        WHERE patient_id = $1
+        ORDER BY arrival_date DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          admission_id,
+          screening_location,
+          screening_datetime,
+          qsofa_score,
+          sirs_score,
+          lactate,
+          sepsis_suspected,
+          sepsis_alert_triggered
+        FROM sepsis_screenings
+        WHERE patient_id = $1
+        ORDER BY screening_datetime DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          admission_id,
+          sepsis_screening_id,
+          bundle_start_time,
+          three_hour_bundle_complete,
+          six_hour_bundle_complete,
+          overall_compliance,
+          managed_by
+        FROM sepsis_bundles
+        WHERE patient_id = $1
+        ORDER BY bundle_start_time DESC, created_at DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
     ]);
 
     const latestVitals = latestVitalsRows[0] || null;
@@ -194,6 +304,11 @@ export class PatientService {
     const latestMaternityEnrollment = maternityEnrollmentRows[0] || null;
     const latestOncologyCase = oncologyCaseRows[0] || null;
     const oncologyActiveCaseCount = Number(oncologyActiveCountRows[0]?.active_count || 0);
+    const latestCardiologyEncounter = cardiologyEncounterRows[0] || null;
+    const latestOphthalmologyEncounter = ophthalmologyEncounterRows[0] || null;
+    const latestEdVisit = edVisitRows[0] || null;
+    const latestSepsisScreening = sepsisScreeningRows[0] || null;
+    const latestSepsisBundle = sepsisBundleRows[0] || null;
 
     const [latestHivVisitRows, latestAncVisitRows, latestPostnatalVisitRows, latestDeliveryRows] = await Promise.all([
       latestHivEnrollment?.id
@@ -359,6 +474,19 @@ export class PatientService {
         oncology: {
           latestCase: latestOncologyCase,
           activeCaseCount: oncologyActiveCaseCount,
+        },
+        cardiology: {
+          latestEncounter: latestCardiologyEncounter,
+        },
+        ophthalmology: {
+          latestEncounter: latestOphthalmologyEncounter,
+        },
+        ed: {
+          latestVisit: latestEdVisit,
+        },
+        sepsis: {
+          latestScreening: latestSepsisScreening,
+          latestBundle: latestSepsisBundle,
         },
       },
       generatedAt: new Date().toISOString(),

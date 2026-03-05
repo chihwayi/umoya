@@ -1374,6 +1374,99 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  executeCardiologyNurseRecommendationAction: async (
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      encounterId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/cardiology-recommendation-action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  executeEdNurseRecommendationAction: async (
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      visitId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/ed-recommendation-action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  executeSepsisNurseRecommendationAction: async (
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      bundleId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/sepsis-recommendation-action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   completeNurseTask: async (
     taskId: string,
     payload: { reason?: string; patientId?: string; context?: any },

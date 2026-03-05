@@ -1,10 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { X, HeartPulse, Calendar, Search, CreditCard, BookOpen, CheckCircle, Loader2 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { useConfirmation } from '../hooks/useConfirmation';
+import {
+  buildSharedContextTags,
+  getCardiologyCreateEncounterPrefill,
+  getCardiologyEncounterDuplicateGuard,
+} from '../services/doctorContextAdapter';
 
 type CardiologyEncounterModalProps = {
   isOpen: boolean;
@@ -30,6 +36,7 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
   currentUserId,
 }) => {
   const { showError, showSuccess } = useNotification();
+  const { confirm, Dialog } = useConfirmation();
   const token = useMemo(() => localStorage.getItem('ehr_token'), []);
 
   const [patients, setPatients] = useState<PatientSummary[]>([]);
@@ -60,6 +67,8 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
   const [guidelineQuery, setGuidelineQuery] = useState('');
   const [guidelineResults, setGuidelineResults] = useState<any[]>([]);
   const [loadingGuidelines, setLoadingGuidelines] = useState(false);
+  const [selectedPatientContext, setSelectedPatientContext] = useState<any | null>(null);
+  const [loadingSelectedPatientContext, setLoadingSelectedPatientContext] = useState(false);
 
   const handleGuidelineSearch = async () => {
     if (!guidelineQuery.trim()) return;
@@ -165,6 +174,8 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
       setDiagnosticConcepts([]);
       setPendingSymptomConcept(null);
       setPendingDiagnosticConcept(null);
+      setSelectedPatientContext(null);
+      setLoadingSelectedPatientContext(false);
     }
   }, [isOpen]);
 
@@ -180,6 +191,59 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
       )
       .slice(0, 25);
   }, [patients, searchTerm]);
+
+  const applyContextPrefill = useCallback((context: any) => {
+    const prefill = getCardiologyCreateEncounterPrefill(context);
+
+    setEncounterType((prev) => {
+      if (prev !== 'clinic_visit') return prev;
+      return prefill.encounterType || prev;
+    });
+    setRiskScore((prev) => {
+      if (prev !== 'moderate') return prev;
+      return prefill.riskScore || prev;
+    });
+    setVisitReason((prev) => prev || prefill.visitReason || '');
+    setSymptoms((prev) => prev || prefill.symptoms || '');
+    setCarePlan((prev) => prev || prefill.carePlan || '');
+    setFollowUpPlan((prev) => prev || prefill.followUpPlan || '');
+    setBloodPressure((prev) => prev || prefill.bloodPressure || '');
+  }, []);
+
+  const loadSelectedPatientContext = useCallback(
+    async (patientId: string) => {
+      if (!token || !tenantSlug) return;
+      try {
+        setLoadingSelectedPatientContext(true);
+        const response = await ehrApi.getPatientContext(patientId, token, tenantSlug);
+        const context = response.data || null;
+        setSelectedPatientContext(context);
+        applyContextPrefill(context);
+      } catch (error) {
+        console.error('Failed to load patient context for cardiology encounter', error);
+        setSelectedPatientContext(null);
+        showError('Unable to load patient context', 'The encounter can still be recorded manually.');
+      } finally {
+        setLoadingSelectedPatientContext(false);
+      }
+    },
+    [applyContextPrefill, showError, tenantSlug, token],
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!selectedPatientId) {
+      setSelectedPatientContext(null);
+      setLoadingSelectedPatientContext(false);
+      return;
+    }
+    loadSelectedPatientContext(selectedPatientId);
+  }, [isOpen, loadSelectedPatientContext, selectedPatientId]);
+
+  const selectedPatientContextTags = useMemo(
+    () => buildSharedContextTags(selectedPatientContext),
+    [selectedPatientContext],
+  );
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -212,6 +276,24 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
 
     const derivedVisitReason =
       visitReason || reasonConcept?.preferredTerm || reasonConcept?.term || null;
+
+    const duplicatePrompt = getCardiologyEncounterDuplicateGuard(selectedPatientContext, {
+      encounterType,
+      visitReason: derivedVisitReason,
+      riskScore,
+    });
+    if (duplicatePrompt) {
+      const shouldProceed = await confirm({
+        title: duplicatePrompt.title,
+        message: duplicatePrompt.message,
+        type: 'warning',
+        confirmText: duplicatePrompt.confirmText,
+        cancelText: duplicatePrompt.cancelText,
+      });
+      if (!shouldProceed) {
+        return;
+      }
+    }
 
     const payload: Record<string, any> = {
       patient_id: selectedPatientId,
@@ -264,9 +346,11 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className="w-full max-w-4xl rounded-3xl bg-gradient-to-br from-white to-slate-50 shadow-2xl border border-slate-200/60">
+    <>
+      {Dialog}
+      <ModalPortal>
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-4xl rounded-3xl bg-gradient-to-br from-white to-slate-50 shadow-2xl border border-slate-200/60">
           <div className="flex items-center justify-between border-b border-slate-200/60 bg-gradient-to-r from-red-50 via-rose-50 to-amber-50 px-6 py-5">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-gradient-to-r from-red-500 to-rose-600 p-2 shadow text-white">
@@ -328,6 +412,15 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                   );
                 })}
               </div>
+              {loadingSelectedPatientContext && (
+                <p className="mt-3 text-xs text-indigo-600">Loading shared patient context...</p>
+              )}
+              {selectedPatientContext && (
+                <p className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                  Context loaded for {selectedPatientContext?.patient?.fullName || 'patient'}
+                  {selectedPatientContextTags.length ? ` • ${selectedPatientContextTags.join(' • ')}` : ''}.
+                </p>
+              )}
             </section>
 
             {/* AI Guideline Search Section */}
@@ -739,9 +832,10 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
               </button>
             </div>
           </form>
+          </div>
         </div>
-      </div>
-    </ModalPortal>
+      </ModalPortal>
+    </>
   );
 };
 
