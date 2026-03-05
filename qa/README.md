@@ -7,9 +7,12 @@ This folder holds the artifacts that power Sprint 4 QA sign-off.
 qa/
 ├── README.md                 ← you are here
 ├── fixtures/
-│   └── scenarios.json        ← canonical data for the 10 workflows
+│   └── scenarios.json        ← canonical workflow scenario data
 └── tests/
-    └── run-scenarios.ts      ← script that enumerates scenarios & prerequisites
+    ├── run-scenarios.ts                 ← script that enumerates scenarios & prerequisites
+    └── nurse-outcome-analytics-smoke.ts ← smoke validator for nurse AI/CDSS outcome endpoint
+└── uat/
+    └── nurse-ai-cdss-uat-checklist.md   ← nurse AI/CDSS UAT execution checklist
 ```
 
 ### Prerequisites
@@ -27,6 +30,19 @@ What it does today:
 - Validates required env/config values
 - Prints a checklist for each scenario, including endpoints and data dependencies
 - (Future) will exercise real API flows and assert DB state
+
+### Running nurse outcome analytics smoke check
+```
+npx ts-node qa/tests/nurse-outcome-analytics-smoke.ts \
+  --url "http://localhost:3013/nurse-worklist/analytics/outcomes" \
+  --token "$EHR_QA_TOKEN" \
+  --days 30
+```
+
+What it validates:
+- Endpoint availability and auth wiring
+- Response shape for `crossModuleQueue`, `hivRecommendationExecution`, and `maternityEscalationSla`
+- Numeric metric fields required for UAT outcome tracking
 
 ### Seeding data
 1. Provision a fresh tenant with all bundles:
@@ -48,5 +64,3 @@ What it does today:
 ### Contact
 - QA lead: qa@medicore.health
 - Automation channel: `#qa-automation`
-
-

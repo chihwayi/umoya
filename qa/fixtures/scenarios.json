@@ -278,6 +278,34 @@
       "status": "in-progress",
       "owner": "QA automation squad"
     }
+  },
+  {
+    "id": "S11",
+    "title": "Nurse AI/CDSS Queue Outcomes & UAT Analytics",
+    "modules": ["nursing", "hiv", "maternity", "cdss", "analytics"],
+    "prerequisites": {
+      "nurseUser": "qa.nurse@medi-core.local",
+      "doctorUser": "qa.hivdoctor@medi-core.local",
+      "tenant": "qa-shared",
+      "endpoint": "/nurse-worklist/analytics/outcomes",
+      "uatChecklist": "qa/uat/nurse-ai-cdss-uat-checklist.md"
+    },
+    "steps": [
+      "GET /nurse-worklist/cross-module-feed and identify at least one HIV bundle item",
+      "Execute two queue actions from HIV recommendation bundle (example: eac-followup + visit-recording)",
+      "GET /nurse-worklist/analytics/outcomes?days=30 and capture payload",
+      "Run npx ts-node qa/tests/nurse-outcome-analytics-smoke.ts --url <full-url> --token $EHR_QA_TOKEN --days 30"
+    ],
+    "expected": [
+      "Bundle actions transition to completed execution state without duplicate side effects on replay",
+      "Outcome endpoint returns crossModuleQueue, hivRecommendationExecution, and maternityEscalationSla blocks",
+      "hivRecommendationExecution.executedActionsTotal increases after action execution",
+      "Smoke script exits with status code 0 and prints validated summary payload"
+    ],
+    "automation": {
+      "type": "hybrid",
+      "status": "in-progress",
+      "owner": "Nurse QA + CDSS QA"
+    }
   }
 ]
-

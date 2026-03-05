@@ -30,6 +30,26 @@ export class NurseWorklistService {
     return Math.round(((Date.now() - parsed.getTime()) / (1000 * 60 * 60)) * 10) / 10;
   }
 
+  private getMaternityTaskSlaHours(priority?: string | null) {
+    switch (String(priority || '').toLowerCase()) {
+      case 'critical':
+        return 2;
+      case 'high':
+        return 8;
+      case 'medium':
+        return 24;
+      default:
+        return 48;
+    }
+  }
+
+  private toPercent(numerator: number, denominator: number) {
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+      return 0;
+    }
+    return Math.round((numerator / denominator) * 1000) / 10;
+  }
+
   private async safeQuery(tenantDb: DataSource, sql: string, params: any[] = []) {
     try {
       return await tenantDb.query(sql, params);
@@ -1644,6 +1664,180 @@ export class NurseWorklistService {
         nursing: items.filter((item) => item.module === 'nursing').length,
         handoff: items.filter((item) => item.item_type === 'nurse_handoff_risk').length,
         medication: items.filter((item) => item.item_type === 'medication_administration_followup').length,
+      },
+    };
+  }
+
+  async getOutcomeAnalytics(tenantDb: DataSource, options?: { days?: number }) {
+    const requestedDays = Number(options?.days);
+    const days = Number.isFinite(requestedDays)
+      ? Math.min(Math.max(Math.round(requestedDays), 1), 365)
+      : 30;
+    const sinceDate = new Date();
+    sinceDate.setHours(0, 0, 0, 0);
+    sinceDate.setDate(sinceDate.getDate() - Math.max(days - 1, 0));
+    const sinceIso = sinceDate.toISOString().split('T')[0];
+    const untilIso = new Date().toISOString().split('T')[0];
+
+    const [workflowRows, maternityRows] = await Promise.all([
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT workflow_key, module, status, context, created_at, updated_at, completed_at
+        FROM nurse_cross_module_workflow_state
+        WHERE created_at >= $1::date
+        ORDER BY created_at DESC
+        `,
+        [sinceIso],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT id, status, priority, last_event_at, created_at
+        FROM maternity_care_tasks
+        WHERE created_at >= $1::date
+          AND status <> 'closed'
+        ORDER BY created_at DESC
+        `,
+        [sinceIso],
+      ),
+    ]);
+
+    const queueByStatus: Record<string, number> = {
+      pending: 0,
+      acknowledged: 0,
+      completed: 0,
+    };
+    const queueByModule: Record<string, number> = {};
+    let pendingAgeTotal = 0;
+    let pendingAgeSamples = 0;
+    let pendingOver24h = 0;
+
+    const executedByAction: Record<string, number> = {};
+    let executedActionsTotal = 0;
+    let reusedOrIdempotentTotal = 0;
+    let visitPrepDraftsCreated = 0;
+
+    for (const row of workflowRows) {
+      const normalizedStatus = String(row?.status || 'pending').toLowerCase();
+      queueByStatus[normalizedStatus] = (queueByStatus[normalizedStatus] || 0) + 1;
+
+      const normalizedModule = String(row?.module || 'unknown').toLowerCase();
+      queueByModule[normalizedModule] = (queueByModule[normalizedModule] || 0) + 1;
+
+      if (normalizedStatus !== 'completed') {
+        const pendingAge = this.getHoursSince(row?.updated_at || row?.created_at);
+        if (pendingAge !== null) {
+          pendingAgeTotal += pendingAge;
+          pendingAgeSamples += 1;
+          if (pendingAge >= 24) {
+            pendingOver24h += 1;
+          }
+        }
+      }
+
+      const context = this.parseJsonObject(row?.context) || {};
+      const actionExecutions =
+        context && typeof context === 'object' && context.action_executions
+          ? context.action_executions
+          : {};
+      const executionEntries = Object.entries(actionExecutions);
+
+      for (const [actionId, execution] of executionEntries) {
+        const executionStatus = String((execution as any)?.status || '').toLowerCase();
+        if (executionStatus !== 'completed') {
+          continue;
+        }
+
+        executedActionsTotal += 1;
+        executedByAction[actionId] = (executedByAction[actionId] || 0) + 1;
+
+        const operation = String((execution as any)?.result?.operation || '').toLowerCase();
+        if (operation === 'already_applied' || operation.includes('reused')) {
+          reusedOrIdempotentTotal += 1;
+        }
+        if ((execution as any)?.result?.intakeDraftId) {
+          visitPrepDraftsCreated += 1;
+        }
+      }
+    }
+
+    const maternityByPriority: Record<string, number> = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+    let maternityDueSoon = 0;
+    let maternityBreached = 0;
+    let maternityAgeTotal = 0;
+    let maternityAgeSamples = 0;
+    let maternityOldestAgeHours = 0;
+
+    for (const row of maternityRows) {
+      const priority = String(row?.priority || 'high').toLowerCase();
+      maternityByPriority[priority] = (maternityByPriority[priority] || 0) + 1;
+
+      const ageHours = this.getHoursSince(row?.last_event_at || row?.created_at);
+      if (ageHours === null) {
+        continue;
+      }
+
+      maternityAgeTotal += ageHours;
+      maternityAgeSamples += 1;
+      maternityOldestAgeHours = Math.max(maternityOldestAgeHours, ageHours);
+
+      const slaHours = this.getMaternityTaskSlaHours(priority);
+      if (ageHours >= slaHours) {
+        maternityBreached += 1;
+      } else if (ageHours >= slaHours * 0.8) {
+        maternityDueSoon += 1;
+      }
+    }
+
+    const totalQueueItems = workflowRows.length;
+    const completedQueueItems = queueByStatus.completed || 0;
+    const acknowledgedQueueItems = queueByStatus.acknowledged || 0;
+    const activeQueueItems = (queueByStatus.pending || 0) + acknowledgedQueueItems;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      window: {
+        days,
+        since: sinceIso,
+        until: untilIso,
+      },
+      crossModuleQueue: {
+        totalItems: totalQueueItems,
+        activeItems: activeQueueItems,
+        completedItems: completedQueueItems,
+        byStatus: queueByStatus,
+        byModule: queueByModule,
+        completionRatePercent: this.toPercent(completedQueueItems, totalQueueItems),
+        acknowledgementOrCompletionRatePercent: this.toPercent(
+          acknowledgedQueueItems + completedQueueItems,
+          totalQueueItems,
+        ),
+        pendingOlderThan24h: pendingOver24h,
+        averageActiveAgeHours:
+          pendingAgeSamples > 0 ? Math.round((pendingAgeTotal / pendingAgeSamples) * 10) / 10 : 0,
+      },
+      hivRecommendationExecution: {
+        executedActionsTotal,
+        executedByAction,
+        reusedOrIdempotentTotal,
+        visitPrepDraftsCreated,
+        actionsPerQueueItem: this.toPercent(executedActionsTotal, totalQueueItems),
+      },
+      maternityEscalationSla: {
+        unresolvedTasks: maternityRows.length,
+        criticalUnresolved: maternityByPriority.critical || 0,
+        byPriority: maternityByPriority,
+        dueSoon: maternityDueSoon,
+        breached: maternityBreached,
+        averageOpenAgeHours:
+          maternityAgeSamples > 0 ? Math.round((maternityAgeTotal / maternityAgeSamples) * 10) / 10 : 0,
+        oldestOpenAgeHours: Math.round(maternityOldestAgeHours * 10) / 10,
       },
     };
   }

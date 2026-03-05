@@ -1210,4 +1210,155 @@ describe('NurseWorklistService', () => {
       tenantDb,
     );
   });
+
+  it('computes nurse outcome analytics for queue execution and maternity SLA aging', async () => {
+    const { service } = makeService();
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state') && sql.includes('created_at >= $1::date')) {
+          return [
+            {
+              workflow_key: 'hiv-pathway:1',
+              module: 'hiv',
+              status: 'pending',
+              created_at: hoursAgo(30),
+              updated_at: hoursAgo(26),
+              context: {
+                action_executions: {
+                  'eac-followup': {
+                    status: 'completed',
+                    result: { operation: 'eac_session_reused' },
+                  },
+                },
+              },
+            },
+            {
+              workflow_key: 'hiv-regimen:1',
+              module: 'hiv',
+              status: 'acknowledged',
+              created_at: hoursAgo(8),
+              updated_at: hoursAgo(5),
+              context: {
+                action_executions: {
+                  'visit-recording': {
+                    status: 'completed',
+                    result: { operation: 'visit_preparation_completed', intakeDraftId: 'intake-1' },
+                  },
+                },
+              },
+            },
+            {
+              workflow_key: 'maternity:1',
+              module: 'maternity',
+              status: 'completed',
+              created_at: hoursAgo(3),
+              updated_at: hoursAgo(2),
+              context: {
+                action_executions: {
+                  'tb-interaction-review': {
+                    status: 'completed',
+                    result: { operation: 'tb_interaction_referral_created' },
+                  },
+                },
+              },
+            },
+          ];
+        }
+
+        if (sql.includes('FROM maternity_care_tasks') && sql.includes("status <> 'closed'")) {
+          return [
+            {
+              id: 'mat-1',
+              status: 'open',
+              priority: 'critical',
+              created_at: hoursAgo(3),
+              last_event_at: hoursAgo(3),
+            },
+            {
+              id: 'mat-2',
+              status: 'acknowledged',
+              priority: 'high',
+              created_at: hoursAgo(7),
+              last_event_at: hoursAgo(7),
+            },
+            {
+              id: 'mat-3',
+              status: 'actioned',
+              priority: 'medium',
+              created_at: hoursAgo(2),
+              last_event_at: hoursAgo(2),
+            },
+          ];
+        }
+
+        return [];
+      }),
+    } as any;
+
+    const analytics = await service.getOutcomeAnalytics(tenantDb, { days: 14 });
+
+    expect(analytics.window).toEqual(
+      expect.objectContaining({
+        days: 14,
+      }),
+    );
+    expect(analytics.crossModuleQueue).toEqual(
+      expect.objectContaining({
+        totalItems: 3,
+        activeItems: 2,
+        completedItems: 1,
+        pendingOlderThan24h: 1,
+        byStatus: expect.objectContaining({
+          pending: 1,
+          acknowledged: 1,
+          completed: 1,
+        }),
+        byModule: expect.objectContaining({
+          hiv: 2,
+          maternity: 1,
+        }),
+      }),
+    );
+    expect(analytics.hivRecommendationExecution).toEqual(
+      expect.objectContaining({
+        executedActionsTotal: 3,
+        reusedOrIdempotentTotal: 1,
+        visitPrepDraftsCreated: 1,
+        executedByAction: expect.objectContaining({
+          'eac-followup': 1,
+          'visit-recording': 1,
+          'tb-interaction-review': 1,
+        }),
+      }),
+    );
+    expect(analytics.maternityEscalationSla).toEqual(
+      expect.objectContaining({
+        unresolvedTasks: 3,
+        criticalUnresolved: 1,
+        dueSoon: 1,
+        breached: 1,
+      }),
+    );
+  });
+
+  it('returns zero-safe nurse outcome analytics when workflow tables are unavailable', async () => {
+    const { service } = makeService();
+    const missingTableError: any = new Error('relation does not exist');
+    missingTableError.code = '42P01';
+
+    const tenantDb = {
+      query: jest.fn(async () => {
+        throw missingTableError;
+      }),
+    } as any;
+
+    const analytics = await service.getOutcomeAnalytics(tenantDb, { days: 400 });
+
+    expect(analytics.window.days).toBe(365);
+    expect(analytics.crossModuleQueue.totalItems).toBe(0);
+    expect(analytics.hivRecommendationExecution.executedActionsTotal).toBe(0);
+    expect(analytics.maternityEscalationSla.unresolvedTasks).toBe(0);
+  });
 });

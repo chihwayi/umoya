@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -29,6 +29,20 @@ export class NurseWorklistController {
   @ApiResponse({ status: 200, description: 'Cross-module escalation feed fetched' })
   async getCrossModuleFeed(@Request() req: RequestWithTenant) {
     return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
+  }
+
+  @Get('analytics/outcomes')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Get nurse outcome analytics for cross-module AI/CDSS workflow execution' })
+  @ApiResponse({ status: 200, description: 'Nurse outcome analytics fetched' })
+  async getOutcomeAnalytics(
+    @Query('days') daysRaw: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    const parsedDays = Number(daysRaw);
+    return this.nurseWorklistService.getOutcomeAnalytics(req.tenantDb, {
+      days: Number.isFinite(parsedDays) ? parsedDays : undefined,
+    });
   }
 
   @Post('cross-module/workflow')
