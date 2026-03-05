@@ -508,13 +508,121 @@ const NurseDashboard: React.FC = () => {
           token,
           activeTenant,
         );
+      } else if (item.module === 'cardiology') {
+        await ehrApi.executeCardiologyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            encounterId:
+              item.metadata?.encounter_id ||
+              recommendationItem?.action_payload?.encounter_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else if (item.module === 'ed') {
+        await ehrApi.executeEdNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            visitId:
+              item.metadata?.ed_visit_id ||
+              recommendationItem?.action_payload?.visit_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else if (item.module === 'sepsis') {
+        await ehrApi.executeSepsisNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            bundleId:
+              item.metadata?.sepsis_bundle_id ||
+              recommendationItem?.action_payload?.bundle_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else if (item.module === 'blood_bank') {
+        await ehrApi.executeBloodBankNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            transfusionId:
+              item.metadata?.transfusion_id ||
+              recommendationItem?.action_payload?.transfusion_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
       } else {
         showError('Unable to apply action', 'This queue action is not executable for the selected module.');
         return;
       }
 
       showSuccess(
-        item.module === 'oncology' ? 'Oncology recommendation applied' : 'HIV recommendation applied',
+        `${String(item.module || 'workflow').replace(/_/g, ' ')} recommendation applied`,
         recommendationItem?.title
           ? `${recommendationItem.title} was applied from the nurse queue.`
           : 'The recommendation action was applied.',
@@ -522,7 +630,7 @@ const NurseDashboard: React.FC = () => {
       await loadCrossModuleFeed();
     } catch (error: any) {
       showError(
-        item.module === 'oncology' ? 'Unable to apply oncology action' : 'Unable to apply HIV action',
+        `Unable to apply ${String(item.module || 'workflow').replace(/_/g, ' ')} action`,
         error?.response?.data?.message || 'Please retry the recommendation action.',
       );
     } finally {

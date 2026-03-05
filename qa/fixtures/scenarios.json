@@ -307,5 +307,36 @@
       "status": "in-progress",
       "owner": "Nurse QA + CDSS QA"
     }
+  },
+  {
+    "id": "S12",
+    "title": "Doctor Cross-Module AI/CDSS Execution Loop",
+    "modules": ["nursing", "doctor", "hiv", "oncology", "cardiology", "ed", "sepsis", "blood_bank", "accounts", "analytics"],
+    "prerequisites": {
+      "tenant": "qa-shared",
+      "tenantRepairEndpoint": "/admin/tenants/:id/repair",
+      "feedEndpoint": "/nurse-worklist/cross-module-feed",
+      "analyticsEndpoint": "/nurse-worklist/analytics/doctor-outcomes",
+      "uatChecklist": "qa/uat/doctor-cross-module-ai-cdss-uat-checklist.md"
+    },
+    "steps": [
+      "Repair/provision tenant if needed via POST /admin/tenants/:id/repair",
+      "Seed at least one active workflow item for HIV, oncology, cardiology, ED, sepsis, and blood_bank modules",
+      "Run npx ts-node qa/tests/doctor-cross-module-sync-smoke.ts --baseUrl <url> --tenant <slug> --token $EHR_QA_TOKEN --modules hiv,oncology,cardiology,ed,sepsis,blood_bank --days 30 --execute --evidence <path>",
+      "Replay at least one previously completed action to verify idempotent execution",
+      "Capture before/after screenshots for module action execution and attach evidence JSON to run report"
+    ],
+    "expected": [
+      "Cross-module feed returns items for all target modules (including blood_bank) and each includes recommendation_bundle.items",
+      "At least one actionable recommendation executes successfully per module in execute mode",
+      "Doctor outcomes endpoint returns doctorQueue, accountsSync, recommendationExecution, and cdssAdoption blocks",
+      "No duplicate side effects when replaying already completed actions",
+      "Evidence JSON is written under qa/tests/test-results with module-level pass/fail summary"
+    ],
+    "automation": {
+      "type": "hybrid",
+      "status": "in-progress",
+      "owner": "Doctor QA + CDSS QA + Accounts QA"
+    }
   }
 ]

@@ -1467,6 +1467,37 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  executeBloodBankNurseRecommendationAction: async (
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      transfusionId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/blood-bank-recommendation-action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   completeNurseTask: async (
     taskId: string,
     payload: { reason?: string; patientId?: string; context?: any },

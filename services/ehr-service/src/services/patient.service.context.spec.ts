@@ -147,6 +147,19 @@ describe('PatientService.getPatientContext', () => {
           },
         ];
       }
+      if (sql.includes('FROM blood_transfusions bt') && sql.includes('LIMIT 1')) {
+        return [
+          {
+            id: 'tx-1',
+            transfusion_status: 'in_progress',
+            order_date: '2026-03-03T08:00:00.000Z',
+            unit_number: 'UNIT-001',
+          },
+        ];
+      }
+      if (sql.includes('FROM blood_transfusions') && sql.includes('COUNT(*)')) {
+        return [{ active_count: 1 }];
+      }
       if (sql.includes('FROM hiv_clinical_visits')) {
         return [
           {
@@ -185,6 +198,8 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.ed.latestVisit.id).toBe('ed-visit-1');
     expect(result.modules.sepsis.latestScreening.id).toBe('sepsis-screen-1');
     expect(result.modules.sepsis.latestBundle.id).toBe('sepsis-bundle-1');
+    expect(result.modules.bloodBank.latestTransfusion.id).toBe('tx-1');
+    expect(result.modules.bloodBank.activeTransfusionCount).toBe(1);
   });
 
   it('returns base patient context even when module tables are missing', async () => {
@@ -209,5 +224,7 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.ed.latestVisit).toBeNull();
     expect(result.modules.sepsis.latestScreening).toBeNull();
     expect(result.modules.sepsis.latestBundle).toBeNull();
+    expect(result.modules.bloodBank.latestTransfusion).toBeNull();
+    expect(result.modules.bloodBank.activeTransfusionCount).toBe(0);
   });
 });

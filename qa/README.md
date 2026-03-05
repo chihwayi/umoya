@@ -8,11 +8,16 @@ qa/
 ├── README.md                 ← you are here
 ├── fixtures/
 │   └── scenarios.json        ← canonical workflow scenario data
-└── tests/
-    ├── run-scenarios.ts                 ← script that enumerates scenarios & prerequisites
-    └── nurse-outcome-analytics-smoke.ts ← smoke validator for nurse AI/CDSS outcome endpoint
+├── templates/
+│   └── run-report.md         ← standardized QA run reporting template
+├── tests/
+    ├── run-scenarios.ts                      ← script that enumerates scenarios & prerequisites
+    ├── nurse-outcome-analytics-smoke.ts      ← smoke validator for nurse AI/CDSS outcomes endpoint
+    └── doctor-cross-module-sync-smoke.ts     ← smoke validator/executor for nurse→doctor bundle loop
 └── uat/
-    └── nurse-ai-cdss-uat-checklist.md   ← nurse AI/CDSS UAT execution checklist
+    ├── nurse-ai-cdss-uat-checklist.md             ← nurse AI/CDSS UAT execution checklist
+    ├── doctor-cross-module-ai-cdss-uat-checklist.md ← doctor AI/CDSS UAT execution checklist
+    └── doctor-cross-module-automation-matrix.md   ← module/action evidence matrix
 ```
 
 ### Prerequisites
@@ -44,6 +49,25 @@ What it validates:
 - Response shape for `crossModuleQueue`, `hivRecommendationExecution`, and `maternityEscalationSla`
 - Numeric metric fields required for UAT outcome tracking
 
+### Running doctor cross-module queue smoke check
+```
+npx ts-node qa/tests/doctor-cross-module-sync-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --token "$EHR_QA_TOKEN" \
+  --modules "hiv,oncology,cardiology,ed,sepsis,blood_bank" \
+  --days 30 \
+  --execute \
+  --evidence "qa/tests/test-results/doctor-cross-module-sync-latest.json"
+```
+
+What it validates:
+- Cross-module feed presence for requested modules
+- Recommendation bundle action discoverability
+- Optional one-click action execution against module endpoints
+- Doctor outcomes analytics shape: `doctorQueue`, `accountsSync`, `recommendationExecution`, `cdssAdoption`
+- Evidence export for UAT traceability
+
 ### Oncology doctor protocol automation checks
 Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analytics:
 - `GET /oncology/cases/:id/protocol-bundle` → returns executable oncology doctor protocol bundle
@@ -72,8 +96,19 @@ Frontend reuse points now wired:
    ```
    npx ts-node scripts/provisioning-smoke-test.ts --bundles core snomed hiv_testing --keepDb
    ```
-2. Load fixture patients/users using the admin API or SQL snippets embedded in the scenario file.
-3. Log into the QA UI with the seeded accounts (see scenario fixture `actors` array).
+2. If tenant existed before latest sprint updates, run tenant repair/provision:
+   ```
+   POST /admin/tenants/:id/repair
+   ```
+3. Confirm required module tables exist before running smoke/UAT:
+   - `nurse_cross_module_workflow_state`
+   - `hiv_care_enrollments`
+   - `oncology_cases`
+   - `cardiology_encounters`
+   - `ed_visits`
+   - `sepsis_bundles`
+4. Load fixture patients/users using the admin API or SQL snippets embedded in the scenario file.
+5. Log into the QA UI with the seeded accounts (see scenario fixture `actors` array).
 
 ### Adding new scenarios
 1. Duplicate an entry inside `fixtures/scenarios.json`.

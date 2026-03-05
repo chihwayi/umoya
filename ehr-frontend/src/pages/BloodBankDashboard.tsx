@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Droplet, Activity, AlertTriangle, TrendingUp, Loader2, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
-import { ehrAxios } from '../services/api';
+import { ehrApi, ehrAxios } from '../services/api';
 
 const BloodBankDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -21,6 +21,7 @@ const BloodBankDashboard: React.FC = () => {
   const [inventory, setInventory] = useState<any[]>([]);
   const [stats, setStats] = useState<any[]>([]);
   const [activeTransfusions, setActiveTransfusions] = useState<any[]>([]);
+  const [patientContextMap, setPatientContextMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedComponent, setSelectedComponent] = useState('all');
 
@@ -55,7 +56,32 @@ const BloodBankDashboard: React.FC = () => {
       const transfusionsResponse = await ehrAxios.get('/blood-bank/transfusions/active', {
         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
       });
-      setActiveTransfusions(transfusionsResponse.data || []);
+      const transfusions = transfusionsResponse.data || [];
+      setActiveTransfusions(transfusions);
+
+      const patientIds: string[] = Array.from(
+        new Set<string>(
+          (transfusions || [])
+            .map((transfusion: any) => transfusion?.patient?.id || transfusion?.patientId || null)
+            .filter((value: string | null): value is string => Boolean(value)),
+        ),
+      );
+      if (patientIds.length > 0 && tenantSlug && token) {
+        const contextEntries = await Promise.all(
+          patientIds.map(async (patientId: string) => {
+            try {
+              const response = await ehrApi.getPatientContext(patientId, token, tenantSlug);
+              return [patientId, response.data || null] as const;
+            } catch {
+              return [patientId, null] as const;
+            }
+          }),
+        );
+        setPatientContextMap((prev) => ({
+          ...prev,
+          ...Object.fromEntries(contextEntries),
+        }));
+      }
     } catch (error) {
       showError('Error', 'Failed to load blood bank data');
     } finally {
@@ -146,6 +172,18 @@ const BloodBankDashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeTransfusions.map((transfusion) => (
               <div key={transfusion.id} className="bg-white/80 backdrop-blur-sm rounded-xl border-2 border-red-300 shadow-lg p-4">
+                {(() => {
+                  const patientId = transfusion?.patient?.id || transfusion?.patientId || null;
+                  const context = patientId ? patientContextMap[patientId] : null;
+                  const latestVitals = context?.latestVitals || null;
+                  const bloodType = context?.patient?.bloodType || transfusion?.patient?.bloodType || 'N/A';
+                  const latestEncounterHint =
+                    context?.modules?.ed?.latestVisit?.ed_visit_number ||
+                    context?.modules?.sepsis?.latestBundle?.id ||
+                    context?.modules?.cardiology?.latestEncounter?.id ||
+                    null;
+                  return (
+                    <>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-slate-900">
                     {transfusion.patient?.firstName} {transfusion.patient?.lastName}
@@ -163,6 +201,22 @@ const BloodBankDashboard: React.FC = () => {
                 <p className="text-sm text-slate-600">
                   By: {transfusion.administeredBy?.firstName} {transfusion.administeredBy?.lastName}
                 </p>
+                <div className="mt-3 rounded-lg bg-red-50 border border-red-100 p-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Shared patient context</p>
+                  <p className="text-xs text-red-900 mt-1">
+                    Blood type: {bloodType}
+                    {latestVitals?.bloodPressure ? ` • Latest BP ${latestVitals.bloodPressure}` : ''}
+                    {latestVitals?.heartRate ? ` • HR ${latestVitals.heartRate}` : ''}
+                  </p>
+                  {latestEncounterHint && (
+                    <p className="text-xs text-red-900 mt-1">
+                      Linked cross-module episode: {latestEncounterHint}
+                    </p>
+                  )}
+                </div>
+                    </>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -221,4 +275,3 @@ const BloodBankDashboard: React.FC = () => {
 };
 
 export default BloodBankDashboard;
-

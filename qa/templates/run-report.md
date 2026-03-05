@@ -4,9 +4,10 @@
 |-------|-------|
 | Tenant | e.g. `qa-shared` |
 | Build / Commit | `main@<sha>` |
-| Run Date | 2025‑MM‑DD |
+| Run Date | 2026‑MM‑DD |
 | Operator | Name / Team |
 | Bundles Verified | e.g. `core, snomed, hiv_testing` |
+| Tenant Repair Run | Yes / No (`POST /admin/tenants/:id/repair`) |
 
 ## Summary
 - **Status**: ✅ / ⚠️ / ❌
@@ -26,6 +27,16 @@
 | S8 – Tenant provisioning | ... | ... | ... |
 | S9 – HIV reporting | ... | ... | ... |
 | S10 – Automation harness | ... | ... | ... |
+| S11 – Nurse AI/CDSS outcomes | ... | ... | ... |
+| S12 – Doctor cross-module sync | ... | ... | ... |
+
+## Doctor Outcomes Evidence
+| Metric Block | Status | Evidence |
+|--------------|--------|----------|
+| `doctorQueue` | ☐/☑ | `qa/tests/test-results/...json` |
+| `accountsSync` | ☐/☑ | `qa/tests/test-results/...json` |
+| `recommendationExecution` | ☐/☑ | `qa/tests/test-results/...json` |
+| `cdssAdoption` | ☐/☑ | `qa/tests/test-results/...json` |
 
 ## Defects / Risks
 | ID | Severity | Description | Linked Issue | Owner |
@@ -36,5 +47,4 @@
 - QA Lead: ____________________
 - Clinical Lead: _______________
 - Date: _______________________
-
 

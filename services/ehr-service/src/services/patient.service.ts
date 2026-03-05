@@ -96,6 +96,8 @@ export class PatientService {
       edVisitRows,
       sepsisScreeningRows,
       sepsisBundleRows,
+      bloodTransfusionRows,
+      bloodTransfusionActiveCountRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
@@ -297,6 +299,52 @@ export class PatientService {
         `,
         [patientId],
       ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          bt.id,
+          bt.inventory_id,
+          bt.cross_match_id,
+          bt.order_date,
+          bt.start_time,
+          bt.end_time,
+          bt.indication,
+          bt.transfusion_status,
+          bt.consent_obtained,
+          bt.transfusion_reaction,
+          bt.reaction_type,
+          bt.reaction_severity,
+          bt.reaction_time,
+          bt.reaction_management,
+          bi.unit_number,
+          bi.component_type,
+          bi.blood_group,
+          bi.rh_factor
+        FROM blood_transfusions bt
+        LEFT JOIN blood_inventory bi ON bi.id = bt.inventory_id
+        WHERE bt.patient_id = $1
+        ORDER BY
+          CASE
+            WHEN bt.transfusion_status = 'in_progress' THEN 1
+            WHEN bt.transfusion_status = 'ordered' THEN 2
+            ELSE 3
+          END,
+          COALESCE(bt.start_time, bt.order_date, bt.created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM blood_transfusions
+        WHERE patient_id = $1
+          AND transfusion_status IN ('ordered', 'in_progress')
+        `,
+        [patientId],
+      ),
     ]);
 
     const latestVitals = latestVitalsRows[0] || null;
@@ -309,6 +357,8 @@ export class PatientService {
     const latestEdVisit = edVisitRows[0] || null;
     const latestSepsisScreening = sepsisScreeningRows[0] || null;
     const latestSepsisBundle = sepsisBundleRows[0] || null;
+    const latestBloodTransfusion = bloodTransfusionRows[0] || null;
+    const bloodTransfusionActiveCount = Number(bloodTransfusionActiveCountRows[0]?.active_count || 0);
 
     const [latestHivVisitRows, latestAncVisitRows, latestPostnatalVisitRows, latestDeliveryRows] = await Promise.all([
       latestHivEnrollment?.id
@@ -487,6 +537,10 @@ export class PatientService {
         sepsis: {
           latestScreening: latestSepsisScreening,
           latestBundle: latestSepsisBundle,
+        },
+        bloodBank: {
+          latestTransfusion: latestBloodTransfusion,
+          activeTransfusionCount: bloodTransfusionActiveCount,
         },
       },
       generatedAt: new Date().toISOString(),

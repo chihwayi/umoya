@@ -169,6 +169,7 @@ const DOCTOR_SYNC_SCOPE_MODULES = new Set([
   'ophthalmology',
   'ed',
   'sepsis',
+  'blood_bank',
   'telemedicine',
   'lab',
   'pharmacy',
@@ -184,6 +185,7 @@ const SPECIALTY_SYNC_MODULES = new Set([
   'ophthalmology',
   'ed',
   'sepsis',
+  'blood_bank',
   'telemedicine',
   'lab',
   'pharmacy',
@@ -708,6 +710,7 @@ const DoctorDashboard: React.FC = () => {
     ophthalmology: 0,
     ed: 0,
     sepsis: 0,
+    blood_bank: 0,
     telemedicine: 0,
     lab: 0,
     pharmacy: 0,
@@ -1083,6 +1086,7 @@ const DoctorDashboard: React.FC = () => {
     ophthalmology: items.filter((item) => item.module === 'ophthalmology').length,
     ed: items.filter((item) => item.module === 'ed').length,
     sepsis: items.filter((item) => item.module === 'sepsis').length,
+    blood_bank: items.filter((item) => item.module === 'blood_bank').length,
     telemedicine: items.filter((item) => item.module === 'telemedicine').length,
     lab: items.filter((item) => item.module === 'lab').length,
     pharmacy: items.filter((item) => item.module === 'pharmacy').length,
@@ -1198,6 +1202,11 @@ const DoctorDashboard: React.FC = () => {
         path: `/ehr/${tenantSlug}/sepsis`,
         title: 'Opened sepsis workspace',
         message: 'Review sepsis bundle follow-through and unresolved checklist items.',
+      },
+      blood_bank: {
+        path: `/ehr/${tenantSlug}/blood-bank`,
+        title: 'Opened blood-bank workspace',
+        message: 'Review transfusion safety bundle actions and close pending blood-bank checkpoints.',
       },
       telemedicine: {
         path: `/ehr/${tenantSlug}/telemedicine`,
@@ -1424,6 +1433,33 @@ const DoctorDashboard: React.FC = () => {
             bundleId:
               item.metadata?.sepsis_bundle_id ||
               recommendationItem?.action_payload?.bundle_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'blood_bank') {
+        await ehrApi.executeBloodBankNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            transfusionId:
+              item.metadata?.transfusion_id ||
+              recommendationItem?.action_payload?.transfusion_id ||
               item.source_record_id ||
               null,
             actionId: String(recommendationItem?.id || ''),

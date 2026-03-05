@@ -2,7 +2,7 @@
 
 ## Playwright Test Suite
 
-This directory contains the Playwright test suite for MediCore EHR system, covering the top 5 priority scenarios.
+This directory contains Playwright and API smoke coverage for MediCore EHR.
 
 ## Prerequisites
 
@@ -23,6 +23,10 @@ This directory contains the Playwright test suite for MediCore EHR system, cover
 3. **EHR Service Running**:
    Ensure the EHR service is running on port 3001 (or update `EHR_API_URL`)
 
+4. **Tenant Provisioned/Repaired**:
+   Ensure the QA tenant has current schema bundles applied. If needed, run tenant repair:
+   - `POST /admin/tenants/:id/repair`
+
 ## Running Tests
 
 ### Run All Tests
@@ -38,6 +42,14 @@ npm run test:s4  # Cardiology Encounter + SLA
 npm run test:s5  # Lab Order + Critical Alert
 npm run test:s7  # CDSS Hook Validation
 ```
+
+### Run Nurse/Doctor API Smoke Checks
+```bash
+npm run smoke:nurse:outcomes
+npm run smoke:doctor:cross-module
+```
+
+Override runtime params using env or direct `npx ts-node` flags.
 
 ### Run with UI Mode
 ```bash
@@ -82,6 +94,16 @@ npm run test:headed
 - Verifies CDSS insights for anxiety
 - Checks drug interaction warnings
 
+### API smoke: Nurse outcomes
+- Validates `/nurse-worklist/analytics/outcomes` response contract
+- Guards key numeric metrics used in nurse UAT cards
+
+### API smoke: Doctor cross-module sync
+- Validates module presence in `/nurse-worklist/cross-module-feed`
+- Optionally executes bundle actions for HIV/oncology/cardiology/ED/sepsis/blood_bank
+- Validates `/nurse-worklist/analytics/doctor-outcomes` response contract
+- Writes evidence JSON under `qa/tests/test-results/`
+
 ## Test Reports
 
 After running tests, view the HTML report:
@@ -114,4 +136,3 @@ npx playwright test --reporter=json --output=test-results/
 3. **Patient not found**:
    - Tests create patients automatically
    - If issues persist, check database connectivity
-

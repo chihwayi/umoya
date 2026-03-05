@@ -38,7 +38,15 @@ const argv = yargs(hideBin(process.argv))
   scenario?: string;
 };
 
-const fixturesPath = path.resolve(__dirname, '../fixtures/scenarios.json');
+function resolveFixturesPath() {
+  const fromRepoRoot = path.resolve(process.cwd(), 'qa/fixtures/scenarios.json');
+  if (fs.existsSync(fromRepoRoot)) {
+    return fromRepoRoot;
+  }
+  return path.resolve(process.cwd(), '../fixtures/scenarios.json');
+}
+
+const fixturesPath = resolveFixturesPath();
 const scenarios: Scenario[] = JSON.parse(fs.readFileSync(fixturesPath, 'utf-8'));
 
 async function main() {
@@ -91,5 +99,3 @@ main().catch((error) => {
   console.error('Failed to process scenarios:', error);
   process.exit(1);
 });
-
-

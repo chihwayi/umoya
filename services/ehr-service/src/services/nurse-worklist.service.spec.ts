@@ -498,6 +498,7 @@ describe('NurseWorklistService', () => {
       ophthalmology: 0,
       ed: 0,
       sepsis: 0,
+      blood_bank: 0,
       telemedicine: 0,
       lab: 0,
       pharmacy: 0,
@@ -2490,6 +2491,104 @@ describe('NurseWorklistService', () => {
     expect(analytics.doctorQueue.totalItems).toBe(0);
     expect(analytics.recommendationExecution.executedActionsTotal).toBe(0);
     expect(analytics.cdssAdoption.executionCoveragePercent).toBe(0);
+  });
+
+  it('executes blood-bank recommendation actions and persists queue execution state', async () => {
+    const { service, mocks } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[]) => {
+        if (sql.includes('SELECT context') && sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM blood_transfusions bt')) {
+          return [
+            {
+              id: 'tx-1',
+              patient_id: 'patient-1',
+              transfusion_status: 'ordered',
+              consent_obtained: false,
+              notes: '',
+              unit_number: 'UNIT-001',
+              component_type: 'packed_rbc',
+              blood_group: 'O',
+              rh_factor: 'positive',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE blood_transfusions') && sql.includes('SET notes = $1')) {
+          return [
+            {
+              id: 'tx-1',
+              patient_id: 'patient-1',
+              transfusion_status: 'ordered',
+              consent_obtained: false,
+              notes: params?.[0] || '',
+            },
+          ];
+        }
+        if (sql.includes('consent_obtained = true')) {
+          return [];
+        }
+        if (sql.includes('SELECT status, context, acknowledged_by')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeBloodBankRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'blood-bank-transfusion:tx-1',
+        itemType: 'blood_bank_transfusion_followup',
+        sourceRecordId: 'tx-1',
+        patientId: 'patient-1',
+        transfusionId: 'tx-1',
+        actionId: 'confirm-crossmatch-consent',
+        actionTitle: 'Confirm compatibility checks and transfusion consent',
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.actionId).toBe('confirm-crossmatch-consent');
+    expect(result.result).toEqual(
+      expect.objectContaining({
+        operation: 'transfusion_consent_confirmed',
+        transfusionId: 'tx-1',
+        patientId: 'patient-1',
+      }),
+    );
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'blood-bank-transfusion:tx-1',
+        'blood_bank',
+        'blood_bank_transfusion_followup',
+        'tx-1',
+        null,
+        'patient-1',
+        'acknowledged',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'blood-bank-transfusion:tx-1',
+        patientId: 'patient-1',
+        metadata: expect.objectContaining({
+          module: 'blood_bank',
+          actionId: 'confirm-crossmatch-consent',
+          transfusionId: 'tx-1',
+        }),
+      }),
+    );
   });
 
   it('applies module/status/case/date filters in doctor outcome analytics', async () => {

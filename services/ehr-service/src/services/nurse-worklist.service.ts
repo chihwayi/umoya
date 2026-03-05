@@ -910,6 +910,28 @@ export class NurseWorklistService {
     return null;
   }
 
+  private extractBloodBankTransfusionId(payload: {
+    transfusionId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.transfusionId)) {
+      return String(payload.transfusionId);
+    }
+    if (this.normalizeText(payload.actionPayload?.transfusion_id)) {
+      return String(payload.actionPayload.transfusion_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('blood-bank-transfusion:')) {
+      return normalizedItemId.replace('blood-bank-transfusion:', '').trim();
+    }
+    return null;
+  }
+
   private parseJsonArray(value: any) {
     if (Array.isArray(value)) {
       return value;
@@ -1323,6 +1345,107 @@ export class NurseWorklistService {
       reused: false,
       bundle: {
         ...bundle,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
+      },
+    };
+  }
+
+  private async getBloodBankTransfusionContext(tenantDb: DataSource, transfusionId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        bt.id,
+        bt.patient_id,
+        bt.admission_id,
+        bt.inventory_id,
+        bt.cross_match_id,
+        bt.indication,
+        bt.order_date,
+        bt.start_time,
+        bt.end_time,
+        bt.transfusion_status,
+        bt.transfusion_reaction,
+        bt.reaction_type,
+        bt.reaction_severity,
+        bt.reaction_time,
+        bt.reaction_management,
+        bt.consent_obtained,
+        bt.consent_obtained_by,
+        bt.completion_notes,
+        bt.notes,
+        bt.administered_by,
+        bt.monitored_by,
+        bi.unit_number,
+        bi.component_type,
+        bi.blood_group,
+        bi.rh_factor
+      FROM blood_transfusions bt
+      LEFT JOIN blood_inventory bi ON bi.id = bt.inventory_id
+      WHERE bt.id = $1
+      LIMIT 1
+      `,
+      [transfusionId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendBloodBankTransfusionNote(
+    tenantDb: DataSource,
+    transfusionId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const transfusion = await this.getBloodBankTransfusionContext(tenantDb, transfusionId);
+    if (!transfusion) {
+      throw new BadRequestException('Blood transfusion record not found for recommendation action');
+    }
+
+    const existingNotes = String(transfusion.notes || '');
+    if (existingNotes.includes(marker)) {
+      return {
+        reused: true,
+        transfusion,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE blood_transfusions
+      SET notes = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        admission_id,
+        inventory_id,
+        cross_match_id,
+        indication,
+        order_date,
+        start_time,
+        end_time,
+        transfusion_status,
+        transfusion_reaction,
+        reaction_type,
+        reaction_severity,
+        reaction_time,
+        reaction_management,
+        consent_obtained,
+        consent_obtained_by,
+        completion_notes,
+        notes,
+        administered_by,
+        monitored_by
+      `,
+      [nextNotes, transfusionId],
+    );
+
+    return {
+      reused: false,
+      transfusion: {
+        ...transfusion,
         ...(updatedRows[0] || {}),
         notes: nextNotes,
       },
@@ -2334,6 +2457,122 @@ export class NurseWorklistService {
     };
   }
 
+  private buildBloodBankTransfusionRecommendationBundle(params: {
+    transfusion: any;
+  }) {
+    const { transfusion } = params;
+    const status = String(transfusion?.transfusion_status || '').toLowerCase();
+    const reaction = Boolean(transfusion?.transfusion_reaction);
+    const consentObtained = Boolean(transfusion?.consent_obtained);
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'blood_bank.consent_crossmatch',
+        'WHO blood transfusion safety guidance: transfusion should proceed only after compatibility checks and documented informed consent.',
+        'WHO blood transfusion safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'blood_bank.monitoring',
+        'WHO transfusion standards: initiation and ongoing monitoring should be documented to detect early reactions.',
+        'WHO blood transfusion safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'blood_bank.completion',
+        'WHO transfusion quality guidance: completion checklist and post-transfusion documentation reduce preventable adverse events.',
+        'WHO blood transfusion safety guidance',
+      ),
+      reaction
+        ? this.createGuidelineCitation(
+            'blood_bank.reaction_escalation',
+            'WHO hemovigilance guidance: suspected transfusion reactions require immediate escalation and documented management.',
+            'WHO hemovigilance guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [];
+
+    if (!consentObtained || status === 'ordered') {
+      items.push({
+        id: 'confirm-crossmatch-consent',
+        type: 'safety_review',
+        title: 'Confirm compatibility checks and transfusion consent',
+        urgency: reaction ? 'urgent' : 'high',
+        rationale:
+          'Compatibility and consent checkpoints must be captured as executable workflow events before or during transfusion.',
+        citations: citations.filter((citation) => citation.rule_id === 'blood_bank.consent_crossmatch'),
+        action_payload: {
+          transfusion_id: transfusion?.transfusion_id || transfusion?.id || null,
+          unit_number: transfusion?.unit_number || null,
+          component_type: transfusion?.component_type || null,
+        },
+      });
+    }
+
+    if (status === 'ordered') {
+      items.push({
+        id: 'start-transfusion-monitoring',
+        type: 'visit_preparation',
+        title: 'Start transfusion monitoring workflow',
+        urgency: 'urgent',
+        rationale:
+          'Ordered transfusions should be transitioned into monitored care through a one-click execution checkpoint.',
+        citations: citations.filter((citation) => citation.rule_id === 'blood_bank.monitoring'),
+        action_payload: {
+          transfusion_id: transfusion?.transfusion_id || transfusion?.id || null,
+          ordered_at: transfusion?.order_date || null,
+          patient_blood_group: transfusion?.patient_blood_type || null,
+        },
+      });
+    }
+
+    if (status === 'in_progress') {
+      items.push({
+        id: 'complete-transfusion-checklist',
+        type: 'workflow_completion',
+        title: 'Complete transfusion safety checklist',
+        urgency: reaction ? 'urgent' : 'high',
+        rationale:
+          'In-progress transfusions need explicit completion closure with safety documentation and handoff traceability.',
+        citations: citations.filter((citation) => citation.rule_id === 'blood_bank.completion'),
+        action_payload: {
+          transfusion_id: transfusion?.transfusion_id || transfusion?.id || null,
+          started_at: transfusion?.start_time || null,
+        },
+      });
+    }
+
+    if (reaction || status === 'in_progress') {
+      items.push({
+        id: 'document-transfusion-reaction-escalation',
+        type: 'escalation',
+        title: reaction ? 'Escalate active transfusion reaction' : 'Record reaction surveillance escalation',
+        urgency: reaction ? 'urgent' : 'high',
+        rationale:
+          'Reaction surveillance and escalation should be operationalized directly from the queue for rapid clinician response.',
+        citations: citations.filter((citation) => citation.rule_id === 'blood_bank.reaction_escalation'),
+        action_payload: {
+          transfusion_id: transfusion?.transfusion_id || transfusion?.id || null,
+          reaction_type: transfusion?.reaction_type || null,
+          reaction_severity: transfusion?.reaction_severity || null,
+          reaction_detected: reaction,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Blood transfusion safety execution bundle',
+      summary: `${items.length} blood-bank action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
     const [
       workflowRows,
@@ -2349,6 +2588,7 @@ export class NurseWorklistService {
       cardiologyEncounterRows,
       edVisitRows,
       sepsisBundleRows,
+      bloodTransfusionRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
@@ -2728,6 +2968,50 @@ export class NurseWorklistService {
             )
           )
         ORDER BY sb.bundle_start_time DESC, sb.updated_at DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          bt.id as transfusion_id,
+          bt.patient_id,
+          bt.admission_id,
+          bt.inventory_id,
+          bt.cross_match_id,
+          bt.indication,
+          bt.order_date,
+          bt.start_time,
+          bt.end_time,
+          bt.transfusion_status,
+          bt.transfusion_reaction,
+          bt.reaction_type,
+          bt.reaction_severity,
+          bt.reaction_time,
+          bt.reaction_management,
+          bt.consent_obtained,
+          bt.notes,
+          bt.completion_notes,
+          bt.updated_at,
+          bi.unit_number,
+          bi.component_type,
+          bi.blood_group,
+          bi.rh_factor,
+          bi.expiry_date,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          p.blood_type as patient_blood_type,
+          ord.first_name || ' ' || ord.last_name as ordered_by_name,
+          adm.first_name || ' ' || adm.last_name as administered_by_name
+        FROM blood_transfusions bt
+        INNER JOIN patients p ON p.id = bt.patient_id
+        LEFT JOIN blood_inventory bi ON bi.id = bt.inventory_id
+        LEFT JOIN users ord ON ord.id = bt.ordered_by
+        LEFT JOIN users adm ON adm.id = bt.administered_by
+        WHERE bt.transfusion_status IN ('ordered', 'in_progress')
+          OR COALESCE(bt.transfusion_reaction, false) = true
+        ORDER BY COALESCE(bt.start_time, bt.order_date, bt.created_at) DESC
         LIMIT 50
         `,
       ),
@@ -3353,6 +3637,89 @@ export class NurseWorklistService {
       );
     });
 
+    const bloodBankTransfusionItems = (bloodTransfusionRows || []).map((row: any) => {
+      const transfusionStatus = String(row?.transfusion_status || '').toLowerCase();
+      const reaction = Boolean(row?.transfusion_reaction);
+      const consentObtained = Boolean(row?.consent_obtained);
+      const ageHours = this.getHoursSince(row?.start_time || row?.order_date);
+      const recommendationBundle = this.buildBloodBankTransfusionRecommendationBundle({
+        transfusion: row,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `blood-bank-transfusion:${row.transfusion_id}`,
+          module: 'blood_bank',
+          item_type: 'blood_bank_transfusion_followup',
+          source_record_id: row.transfusion_id,
+          severity:
+            reaction
+              ? 'critical'
+              : transfusionStatus === 'ordered'
+                ? 'high'
+                : 'medium',
+          workflow_status: 'pending',
+          module_status: row.transfusion_status || 'ordered',
+          doctor_sync_status: reaction ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: reaction
+            ? 'Transfusion reaction escalation required'
+            : transfusionStatus === 'ordered'
+              ? 'Ordered transfusion awaiting safety initiation'
+              : 'Active transfusion follow-up in progress',
+          summary:
+            `${row.patient_name} has transfusion ${row.transfusion_id}` +
+            `${row.unit_number ? ` for unit ${row.unit_number}` : ''}` +
+            `${row.component_type ? ` (${String(row.component_type).replace(/_/g, ' ')})` : ''}.`,
+          recommended_action: reaction
+            ? 'Escalate reaction management immediately and synchronize with attending doctor.'
+            : transfusionStatus === 'ordered'
+              ? 'Confirm compatibility/consent and transition transfusion into monitored in-progress state.'
+              : 'Complete safety checklist and close transfusion workflow with documented outcomes.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.order_date,
+          updated_at: row.updated_at || row.start_time || row.order_date,
+          age_hours: ageHours,
+          sla_status:
+            reaction
+              ? 'breached'
+              : ageHours !== null && ageHours >= 8
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'blood-bank',
+            tab: 'blood-bank',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: reaction ? 'doctor' : 'nurse',
+            service: 'blood_bank',
+            specialty: 'Transfusion Medicine',
+          }),
+          metadata: {
+            transfusion_id: row.transfusion_id,
+            inventory_id: row.inventory_id || null,
+            unit_number: row.unit_number || null,
+            component_type: row.component_type || null,
+            blood_group: row.blood_group || null,
+            rh_factor: row.rh_factor || null,
+            patient_blood_type: row.patient_blood_type || null,
+            transfusion_status: row.transfusion_status || null,
+            consent_obtained: consentObtained,
+            transfusion_reaction: reaction,
+            reaction_type: row.reaction_type || null,
+            reaction_severity: row.reaction_severity || null,
+            ordered_by_name: row.ordered_by_name || null,
+            administered_by_name: row.administered_by_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
     const handoffItems = (handoffRows || []).map((row: any) => {
       const referenceTime = row.updated_at || row.reviewed_at || row.finalized_at || row.shared_at || null;
       const ageHours = this.getHoursSince(referenceTime);
@@ -3483,6 +3850,7 @@ export class NurseWorklistService {
       ...cardiologyProtocolItems,
       ...edProtocolItems,
       ...sepsisProtocolItems,
+      ...bloodBankTransfusionItems,
       ...handoffItems,
       ...medicationItems,
     ];
@@ -3621,7 +3989,7 @@ export class NurseWorklistService {
       this.isAccountsModule(this.normalizeModuleKey(item.module)),
     ).length;
     const specialtyCount = items.filter((item) =>
-      ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'telemedicine', 'lab', 'pharmacy'].includes(
+      ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'blood_bank', 'telemedicine', 'lab', 'pharmacy'].includes(
         this.normalizeModuleKey(item.module),
       ),
     ).length;
@@ -3640,6 +4008,7 @@ export class NurseWorklistService {
         ophthalmology: moduleCount('ophthalmology'),
         ed: moduleCount('ed'),
         sepsis: moduleCount('sepsis'),
+        blood_bank: moduleCount('blood_bank'),
         telemedicine: moduleCount('telemedicine'),
         lab: moduleCount('lab'),
         pharmacy: moduleCount('pharmacy'),
@@ -3894,6 +4263,7 @@ export class NurseWorklistService {
           'ophthalmology',
           'ed',
           'sepsis',
+          'blood_bank',
           'telemedicine',
           'lab',
           'pharmacy',
@@ -5499,6 +5869,285 @@ export class NurseWorklistService {
         actionId,
         actionTitle: payload.actionTitle || null,
         bundleId: resolvedBundleId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeBloodBankRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      transfusionId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedTransfusionId = this.extractBloodBankTransfusionId({
+      transfusionId: payload.transfusionId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedTransfusionId) {
+      throw new BadRequestException('transfusionId context is required for blood-bank recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    let result: any;
+
+    if (actionId === 'confirm-crossmatch-consent') {
+      const noteLine =
+        `${resultMarker} Compatibility and consent checkpoint confirmed by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendBloodBankTransfusionNote(
+        tenantDb,
+        resolvedTransfusionId,
+        resultMarker,
+        noteLine,
+      );
+
+      let consentUpdated = false;
+      if (!Boolean(update.transfusion?.consent_obtained)) {
+        await tenantDb.query(
+          `
+          UPDATE blood_transfusions
+          SET
+            consent_obtained = true,
+            consent_obtained_by = COALESCE(consent_obtained_by, $2),
+            updated_at = NOW()
+          WHERE id = $1
+          `,
+          [resolvedTransfusionId, user.id],
+        );
+        consentUpdated = true;
+      }
+
+      result = {
+        status: 'completed',
+        operation: consentUpdated ? 'transfusion_consent_confirmed' : 'transfusion_consent_already_confirmed',
+        transfusionId: resolvedTransfusionId,
+        patientId: update.transfusion?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'start-transfusion-monitoring') {
+      const noteLine =
+        `${resultMarker} Transfusion monitoring initiated by ${actorName} at ${timestampIso}.`;
+      const update = await this.appendBloodBankTransfusionNote(
+        tenantDb,
+        resolvedTransfusionId,
+        resultMarker,
+        noteLine,
+      );
+      const status = String(update.transfusion?.transfusion_status || '').toLowerCase();
+
+      let statusUpdated = false;
+      if (status === 'ordered') {
+        await tenantDb.query(
+          `
+          UPDATE blood_transfusions
+          SET
+            transfusion_status = 'in_progress',
+            start_time = COALESCE(start_time, NOW()),
+            administered_by = COALESCE(administered_by, $2),
+            monitored_by = COALESCE(monitored_by, $2),
+            updated_at = NOW()
+          WHERE id = $1
+          `,
+          [resolvedTransfusionId, user.id],
+        );
+        statusUpdated = true;
+      }
+
+      result = {
+        status: 'completed',
+        operation: statusUpdated ? 'transfusion_monitoring_started' : 'transfusion_monitoring_already_started',
+        transfusionId: resolvedTransfusionId,
+        patientId: update.transfusion?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-transfusion-checklist') {
+      const noteLine =
+        `${resultMarker} Transfusion completion checklist documented by ${actorName} at ${timestampIso}.`;
+      const update = await this.appendBloodBankTransfusionNote(
+        tenantDb,
+        resolvedTransfusionId,
+        resultMarker,
+        noteLine,
+      );
+      const status = String(update.transfusion?.transfusion_status || '').toLowerCase();
+
+      let completionUpdated = false;
+      if (status !== 'completed') {
+        await tenantDb.query(
+          `
+          UPDATE blood_transfusions
+          SET
+            transfusion_status = 'completed',
+            end_time = COALESCE(end_time, NOW()),
+            completion_notes = trim(
+              BOTH
+              FROM (
+                COALESCE(completion_notes, '') ||
+                CASE WHEN COALESCE(completion_notes, '') = '' THEN '' ELSE E'\n' END ||
+                $2
+              )
+            ),
+            updated_at = NOW()
+          WHERE id = $1
+          `,
+          [resolvedTransfusionId, noteLine],
+        );
+        completionUpdated = true;
+      }
+
+      result = {
+        status: 'completed',
+        operation: completionUpdated ? 'transfusion_completion_documented' : 'transfusion_completion_already_documented',
+        transfusionId: resolvedTransfusionId,
+        patientId: update.transfusion?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'document-transfusion-reaction-escalation') {
+      const noteLine =
+        `${resultMarker} Reaction escalation logged by ${actorName} at ${timestampIso}.`;
+      const update = await this.appendBloodBankTransfusionNote(
+        tenantDb,
+        resolvedTransfusionId,
+        resultMarker,
+        noteLine,
+      );
+      const reactionType = this.normalizeText(actionPayload?.reaction_type) || update.transfusion?.reaction_type || 'Suspected reaction';
+      const reactionSeverity =
+        this.normalizeText(actionPayload?.reaction_severity) || update.transfusion?.reaction_severity || 'high';
+      const reactionManagement =
+        this.normalizeText(actionPayload?.reaction_management) ||
+        `Escalated from nurse queue by ${actorName}. Immediate clinician review requested.`;
+
+      await tenantDb.query(
+        `
+        UPDATE blood_transfusions
+        SET
+          transfusion_reaction = true,
+          reaction_type = COALESCE(reaction_type, $2),
+          reaction_severity = COALESCE(reaction_severity, $3),
+          reaction_time = COALESCE(reaction_time, NOW()),
+          reaction_management = trim(
+            BOTH
+            FROM (
+              COALESCE(reaction_management, '') ||
+              CASE WHEN COALESCE(reaction_management, '') = '' THEN '' ELSE E'\n' END ||
+              $4
+            )
+          ),
+          monitored_by = COALESCE(monitored_by, $5),
+          updated_at = NOW()
+        WHERE id = $1
+        `,
+        [resolvedTransfusionId, reactionType, reactionSeverity, reactionManagement, user.id],
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'transfusion_reaction_escalated',
+        transfusionId: resolvedTransfusionId,
+        patientId: update.transfusion?.patient_id || null,
+        reactionType,
+        reactionSeverity,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported blood-bank recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'blood_bank',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedTransfusionId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || 'blood_bank',
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'blood_bank',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        transfusionId: resolvedTransfusionId,
         result,
       },
       riskLevel: 'medium',
