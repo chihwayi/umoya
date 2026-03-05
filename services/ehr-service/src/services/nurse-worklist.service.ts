@@ -932,6 +932,94 @@ export class NurseWorklistService {
     return null;
   }
 
+  private extractOphthalmologyEncounterId(payload: {
+    encounterId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.encounterId)) {
+      return String(payload.encounterId);
+    }
+    if (this.normalizeText(payload.actionPayload?.encounter_id)) {
+      return String(payload.actionPayload.encounter_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('ophthalmology-encounter:')) {
+      return normalizedItemId.replace('ophthalmology-encounter:', '').trim();
+    }
+    return null;
+  }
+
+  private extractTelemedicineConsultationId(payload: {
+    consultationId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.consultationId)) {
+      return String(payload.consultationId);
+    }
+    if (this.normalizeText(payload.actionPayload?.consultation_id)) {
+      return String(payload.actionPayload.consultation_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('telemedicine-consultation:')) {
+      return normalizedItemId.replace('telemedicine-consultation:', '').trim();
+    }
+    return null;
+  }
+
+  private extractLabCriticalAlertId(payload: {
+    alertId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.alertId)) {
+      return String(payload.alertId);
+    }
+    if (this.normalizeText(payload.actionPayload?.alert_id)) {
+      return String(payload.actionPayload.alert_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('lab-critical-alert:')) {
+      return normalizedItemId.replace('lab-critical-alert:', '').trim();
+    }
+    return null;
+  }
+
+  private extractPharmacyPrescriptionId(payload: {
+    prescriptionId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.prescriptionId)) {
+      return String(payload.prescriptionId);
+    }
+    if (this.normalizeText(payload.actionPayload?.prescription_id)) {
+      return String(payload.actionPayload.prescription_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('pharmacy-prescription:')) {
+      return normalizedItemId.replace('pharmacy-prescription:', '').trim();
+    }
+    return null;
+  }
+
   private parseJsonArray(value: any) {
     if (Array.isArray(value)) {
       return value;
@@ -1448,6 +1536,439 @@ export class NurseWorklistService {
         ...transfusion,
         ...(updatedRows[0] || {}),
         notes: nextNotes,
+      },
+    };
+  }
+
+  private async getOphthalmologyEncounterContext(tenantDb: DataSource, encounterId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        oe.id,
+        oe.patient_id,
+        oe.encounter_date,
+        oe.encounter_type,
+        oe.chief_complaint,
+        oe.assessment,
+        oe.plan,
+        oe.payment_status,
+        oe.finance_transaction_id
+      FROM ophthalmology_encounters oe
+      WHERE oe.id = $1
+      LIMIT 1
+      `,
+      [encounterId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendOphthalmologyEncounterTextNote(
+    tenantDb: DataSource,
+    encounterId: string,
+    field: 'assessment' | 'plan',
+    marker: string,
+    noteLine: string,
+  ) {
+    const encounter = await this.getOphthalmologyEncounterContext(tenantDb, encounterId);
+    if (!encounter) {
+      throw new BadRequestException('Ophthalmology encounter not found for recommendation action');
+    }
+
+    const existingValue = String(encounter[field] || '');
+    if (existingValue.includes(marker)) {
+      return {
+        reused: true,
+        encounter,
+      };
+    }
+
+    const nextValue = existingValue.length > 0 ? `${existingValue}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE ophthalmology_encounters
+      SET ${field} = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        encounter_date,
+        encounter_type,
+        chief_complaint,
+        assessment,
+        plan,
+        payment_status,
+        finance_transaction_id
+      `,
+      [nextValue, encounterId],
+    );
+
+    return {
+      reused: false,
+      encounter: {
+        ...encounter,
+        ...(updatedRows[0] || {}),
+        [field]: nextValue,
+      },
+    };
+  }
+
+  private async getTelemedicineConsultationContext(tenantDb: DataSource, consultationId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        tc.id,
+        tc.patient_id,
+        tc.doctor_id,
+        tc.consultation_type,
+        tc.status,
+        tc.scheduled_start_time,
+        tc.actual_start_time,
+        tc.patient_consent,
+        tc.consent_date,
+        tc.patient_joined,
+        tc.doctor_joined,
+        tc.technical_issues,
+        tc.notes
+      FROM telemedicine_consultations tc
+      WHERE tc.id = $1
+      LIMIT 1
+      `,
+      [consultationId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendTelemedicineConsultationNote(
+    tenantDb: DataSource,
+    consultationId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const consultation = await this.getTelemedicineConsultationContext(tenantDb, consultationId);
+    if (!consultation) {
+      throw new BadRequestException('Telemedicine consultation not found for recommendation action');
+    }
+
+    const existingNotes = String(consultation.notes || '');
+    if (existingNotes.includes(marker)) {
+      return {
+        reused: true,
+        consultation,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE telemedicine_consultations
+      SET notes = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        patient_id,
+        doctor_id,
+        consultation_type,
+        status,
+        scheduled_start_time,
+        actual_start_time,
+        patient_consent,
+        consent_date,
+        patient_joined,
+        doctor_joined,
+        technical_issues,
+        notes
+      `,
+      [nextNotes, consultationId],
+    );
+
+    return {
+      reused: false,
+      consultation: {
+        ...consultation,
+        ...(updatedRows[0] || {}),
+        notes: nextNotes,
+      },
+    };
+  }
+
+  private async getLabCriticalAlertContext(tenantDb: DataSource, alertId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        lca.id,
+        lca.patient_id,
+        lca.lab_order_id,
+        lca.component_name,
+        lca.result_value,
+        lca.critical_range,
+        lca.severity,
+        lca.alert_status,
+        lca.alerted_to,
+        lca.escalated_to,
+        lca.acknowledged_by,
+        lca.acknowledgment_notes,
+        lca.alerted_at,
+        lca.acknowledged_at,
+        lca.escalated_at
+      FROM lab_critical_alerts lca
+      WHERE lca.id = $1
+      LIMIT 1
+      `,
+      [alertId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendLabCriticalAlertNote(
+    tenantDb: DataSource,
+    alertId: string,
+    marker: string,
+    noteLine: string,
+    options?: {
+      status?: 'pending' | 'acknowledged' | 'escalated';
+      acknowledgedBy?: string | null;
+      escalatedTo?: string | null;
+    },
+  ) {
+    const alert = await this.getLabCriticalAlertContext(tenantDb, alertId);
+    if (!alert) {
+      throw new BadRequestException('Lab critical alert not found for recommendation action');
+    }
+
+    const existingNotes = String(alert.acknowledgment_notes || '');
+    const targetStatus = this.normalizeText(options?.status)?.toLowerCase() || null;
+    const statusAlreadyMet =
+      targetStatus && String(alert.alert_status || '').toLowerCase() === targetStatus;
+
+    if (existingNotes.includes(marker) && statusAlreadyMet) {
+      return {
+        reused: true,
+        alert,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const nextStatus = targetStatus || String(alert.alert_status || '').toLowerCase() || 'pending';
+    const acknowledgedBy = options?.acknowledgedBy || null;
+    const escalatedTo = options?.escalatedTo || null;
+
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE lab_critical_alerts
+      SET
+        acknowledgment_notes = $1,
+        alert_status = $2,
+        acknowledged_by = CASE WHEN $3::uuid IS NULL THEN acknowledged_by ELSE $3::uuid END,
+        acknowledged_at = CASE
+          WHEN $2 = 'acknowledged' AND acknowledged_at IS NULL THEN NOW()
+          ELSE acknowledged_at
+        END,
+        escalated_to = CASE WHEN $4::uuid IS NULL THEN escalated_to ELSE $4::uuid END,
+        escalated_at = CASE
+          WHEN $2 = 'escalated' AND escalated_at IS NULL THEN NOW()
+          ELSE escalated_at
+        END
+      WHERE id = $5
+      RETURNING
+        id,
+        patient_id,
+        lab_order_id,
+        component_name,
+        result_value,
+        critical_range,
+        severity,
+        alert_status,
+        alerted_to,
+        escalated_to,
+        acknowledged_by,
+        acknowledgment_notes,
+        alerted_at,
+        acknowledged_at,
+        escalated_at
+      `,
+      [nextNotes, nextStatus, acknowledgedBy, escalatedTo, alertId],
+    );
+
+    return {
+      reused: false,
+      alert: {
+        ...alert,
+        ...(updatedRows[0] || {}),
+        acknowledgment_notes: nextNotes,
+      },
+    };
+  }
+
+  private async appendLabOrderWorkflowEvent(
+    tenantDb: DataSource,
+    labOrderId: string,
+    marker: string,
+    eventPayload: Record<string, any>,
+  ) {
+    const orderRows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        id,
+        patient_id,
+        status,
+        tests,
+        priority,
+        payment_status,
+        workflow_events
+      FROM lab_orders
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [labOrderId],
+    );
+    const order = orderRows[0] || null;
+    if (!order) {
+      return {
+        reused: true,
+        order: null,
+      };
+    }
+
+    const existingEvents = this.parseJsonArray(order.workflow_events);
+    const markerExists = existingEvents.some((entry: any) => String(entry?.marker || '') === marker);
+    if (markerExists) {
+      return {
+        reused: true,
+        order: {
+          ...order,
+          workflow_events: existingEvents,
+        },
+      };
+    }
+
+    const nextEvents = [
+      ...existingEvents,
+      {
+        marker,
+        source: 'nurse_cross_module_queue',
+        ...(eventPayload || {}),
+      },
+    ];
+
+    try {
+      const updatedRows = await tenantDb.query(
+        `
+        UPDATE lab_orders
+        SET workflow_events = $1::jsonb, updated_at = NOW()
+        WHERE id = $2
+        RETURNING
+          id,
+          patient_id,
+          status,
+          tests,
+          priority,
+          payment_status,
+          workflow_events
+        `,
+        [JSON.stringify(nextEvents), labOrderId],
+      );
+
+      return {
+        reused: false,
+        order: {
+          ...order,
+          ...(updatedRows[0] || {}),
+          workflow_events: nextEvents,
+        },
+      };
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        return {
+          reused: false,
+          order,
+          workflowEventFallback: true,
+        };
+      }
+      throw error;
+    }
+  }
+
+  private async getPharmacyPrescriptionContext(tenantDb: DataSource, prescriptionId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        p.id,
+        p.patient_id,
+        p.medication_name,
+        p.dosage,
+        p.frequency,
+        p.quantity,
+        p.status,
+        p.instructions,
+        p.created_at,
+        COALESCE(stock.quantity_on_hand, 0)::int as stock_on_hand,
+        COALESCE(stock.reorder_level, 0)::int as reorder_level,
+        COALESCE(stock.inventory_match_count, 0)::int as inventory_match_count
+      FROM prescriptions p
+      LEFT JOIN LATERAL (
+        SELECT
+          SUM(pi.quantity_on_hand) as quantity_on_hand,
+          MIN(pi.reorder_level) as reorder_level,
+          COUNT(*) as inventory_match_count
+        FROM pharmacy_inventory pi
+        WHERE pi.status = 'active'
+          AND (
+            (p.medication_name IS NOT NULL AND (
+              pi.name ILIKE '%' || p.medication_name || '%'
+              OR pi.generic_name ILIKE '%' || p.medication_name || '%'
+            ))
+            OR (p.medication_name_snomed_code IS NOT NULL AND pi.snomed_code = p.medication_name_snomed_code)
+          )
+      ) stock ON TRUE
+      WHERE p.id = $1
+      LIMIT 1
+      `,
+      [prescriptionId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendPharmacyPrescriptionInstruction(
+    tenantDb: DataSource,
+    prescriptionId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const prescription = await this.getPharmacyPrescriptionContext(tenantDb, prescriptionId);
+    if (!prescription) {
+      throw new BadRequestException('Prescription not found for pharmacy recommendation action');
+    }
+
+    const existingInstructions = String(prescription.instructions || '');
+    if (existingInstructions.includes(marker)) {
+      return {
+        reused: true,
+        prescription,
+      };
+    }
+
+    const nextInstructions = existingInstructions.length > 0 ? `${existingInstructions}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE prescriptions
+      SET instructions = $1
+      WHERE id = $2
+      RETURNING id, patient_id, medication_name, dosage, frequency, quantity, status, instructions, created_at
+      `,
+      [nextInstructions, prescriptionId],
+    );
+
+    return {
+      reused: false,
+      prescription: {
+        ...prescription,
+        ...(updatedRows[0] || {}),
+        instructions: nextInstructions,
       },
     };
   }
@@ -2573,6 +3094,375 @@ export class NurseWorklistService {
     };
   }
 
+  private buildOphthalmologyProtocolRecommendationBundle(params: {
+    encounter: any;
+  }) {
+    const { encounter } = params;
+    const clinicalText = `${encounter?.chief_complaint || ''} ${encounter?.assessment || ''}`.toLowerCase();
+    const acuteRiskSignal =
+      clinicalText.includes('vision loss') ||
+      clinicalText.includes('sudden') ||
+      clinicalText.includes('retinal') ||
+      clinicalText.includes('acute glaucoma') ||
+      clinicalText.includes('trauma');
+    const paymentPending = String(encounter?.payment_status || '').toLowerCase() === 'awaiting_payment';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'ophthalmology.order_set',
+        'WHO eye care guidance: high-risk visual symptoms should trigger structured diagnostic pathways (visual acuity, pressure, retinal evaluation).',
+        'WHO integrated people-centred eye care guidance',
+      ),
+      this.createGuidelineCitation(
+        'ophthalmology.visit_prep',
+        'WHO eye health continuity guidance: encounter readiness and follow-up plans should be documented before clinical closure.',
+        'WHO integrated people-centred eye care guidance',
+      ),
+      acuteRiskSignal
+        ? this.createGuidelineCitation(
+            'ophthalmology.doctor_sync',
+            'WHO urgent eye-care guidance: suspected sight-threatening findings need immediate clinician synchronization.',
+            'WHO integrated people-centred eye care guidance',
+          )
+        : null,
+    ]);
+
+    const suggestedOrders = acuteRiskSignal
+      ? ['Urgent visual acuity reassessment', 'Intraocular pressure check', 'Retinal/OCT review']
+      : ['Visual acuity reassessment', 'Refraction review'];
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'prepare-ophthalmology-order-set',
+        type: 'order_set',
+        title: 'Prepare ophthalmology diagnostic order set',
+        urgency: acuteRiskSignal ? 'urgent' : 'high',
+        rationale:
+          'Eye-care queue bundles should convert risk signals into executable diagnostic order checkpoints.',
+        citations: citations.filter((citation) => citation.rule_id === 'ophthalmology.order_set'),
+        action_payload: {
+          encounter_id: encounter?.ophthalmology_encounter_id || encounter?.id || null,
+          suggested_orders: suggestedOrders,
+          payment_status: encounter?.payment_status || null,
+        },
+      },
+      {
+        id: 'complete-ophthalmology-visit-prep',
+        type: 'visit_preparation',
+        title: 'Complete ophthalmology visit-prep checkpoint',
+        urgency: paymentPending ? 'high' : 'routine',
+        rationale:
+          'Visit-prep completion and handoff context should be captured as executable queue events.',
+        citations: citations.filter((citation) => citation.rule_id === 'ophthalmology.visit_prep'),
+        action_payload: {
+          encounter_id: encounter?.ophthalmology_encounter_id || encounter?.id || null,
+          encounter_type: encounter?.encounter_type || null,
+          payment_status: encounter?.payment_status || null,
+        },
+      },
+    ];
+
+    if (acuteRiskSignal) {
+      items.push({
+        id: 'escalate-ophthalmology-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate ophthalmology findings to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Potentially sight-threatening findings require explicit doctor synchronization from queue execution.',
+        citations: citations.filter((citation) => citation.rule_id === 'ophthalmology.doctor_sync'),
+        action_payload: {
+          encounter_id: encounter?.ophthalmology_encounter_id || encounter?.id || null,
+          chief_complaint: encounter?.chief_complaint || null,
+          assessment: encounter?.assessment || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Ophthalmology protocol execution bundle',
+      summary: `${items.length} ophthalmology action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildTelemedicineRecommendationBundle(params: {
+    consultation: any;
+  }) {
+    const { consultation } = params;
+    const status = String(consultation?.status || '').toLowerCase();
+    const consented = Boolean(consultation?.patient_consent);
+    const technicalIssue = status === 'technical_issue' || this.normalizeText(consultation?.technical_issues) !== null;
+    const requiresDoctorSync = technicalIssue || status === 'in_progress';
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'telemedicine.consent',
+        'WHO digital health guidance: telemedicine encounters require explicit informed consent and traceable consent state.',
+        'WHO digital health guidance',
+      ),
+      this.createGuidelineCitation(
+        'telemedicine.visit_prep',
+        'WHO telehealth workflow guidance: pre-consult checks and documentation readiness should be completed before care decisions.',
+        'WHO digital health guidance',
+      ),
+      requiresDoctorSync
+        ? this.createGuidelineCitation(
+            'telemedicine.doctor_sync',
+            'WHO telehealth safety guidance: technical-risk or active consultations should trigger explicit clinician synchronization.',
+            'WHO digital health guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'confirm-telemedicine-consent',
+        type: 'safety_review',
+        title: 'Confirm telemedicine consent status',
+        urgency: consented ? 'routine' : 'high',
+        rationale:
+          'Consent state should be captured as executable workflow evidence before consultation progression.',
+        citations: citations.filter((citation) => citation.rule_id === 'telemedicine.consent'),
+        action_payload: {
+          consultation_id: consultation?.consultation_id || consultation?.id || null,
+          patient_consent: consented,
+        },
+      },
+      {
+        id: 'complete-telemedicine-visit-prep',
+        type: 'visit_preparation',
+        title: 'Complete telemedicine visit-prep checkpoint',
+        urgency: status === 'scheduled' || status === 'waiting' ? 'high' : 'routine',
+        rationale:
+          'Telemedicine readiness tasks should be one-click executable from the queue for doctor synchronization.',
+        citations: citations.filter((citation) => citation.rule_id === 'telemedicine.visit_prep'),
+        action_payload: {
+          consultation_id: consultation?.consultation_id || consultation?.id || null,
+          consultation_type: consultation?.consultation_type || null,
+          status: consultation?.status || null,
+        },
+      },
+    ];
+
+    if (requiresDoctorSync) {
+      items.push({
+        id: 'escalate-telemedicine-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate telemedicine consultation to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Technical risk and active consultation states need explicit doctor synchronization traceability.',
+        citations: citations.filter((citation) => citation.rule_id === 'telemedicine.doctor_sync'),
+        action_payload: {
+          consultation_id: consultation?.consultation_id || consultation?.id || null,
+          status: consultation?.status || null,
+          technical_issues: consultation?.technical_issues || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Telemedicine protocol execution bundle',
+      summary: `${items.length} telemedicine action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildLabCriticalRecommendationBundle(params: {
+    alert: any;
+  }) {
+    const { alert } = params;
+    const severity = String(alert?.severity || '').toLowerCase();
+    const panicSignal = severity === 'panic' || severity === 'critical';
+    const status = String(alert?.alert_status || '').toLowerCase();
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'lab.critical_ack',
+        'WHO laboratory quality guidance: critical laboratory alerts require immediate acknowledgment and documented response.',
+        'WHO laboratory quality management guidance',
+      ),
+      this.createGuidelineCitation(
+        'lab.order_set',
+        'WHO diagnostics stewardship guidance: critical lab results should trigger structured follow-up diagnostic actions.',
+        'WHO laboratory quality management guidance',
+      ),
+      panicSignal
+        ? this.createGuidelineCitation(
+            'lab.doctor_sync',
+            'WHO patient-safety guidance: panic/critical diagnostics should be escalated promptly for clinician synchronization.',
+            'WHO patient safety guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'acknowledge-critical-lab-alert',
+        type: 'safety_review',
+        title: 'Acknowledge critical lab alert',
+        urgency: status === 'pending' ? 'urgent' : 'high',
+        rationale:
+          'Critical lab alert acknowledgment must be captured as a first-class executable queue action.',
+        citations: citations.filter((citation) => citation.rule_id === 'lab.critical_ack'),
+        action_payload: {
+          alert_id: alert?.alert_id || alert?.id || null,
+          lab_order_id: alert?.lab_order_id || null,
+          component_name: alert?.component_name || null,
+          severity: alert?.severity || null,
+        },
+      },
+      {
+        id: 'prepare-critical-lab-order-set',
+        type: 'order_set',
+        title: 'Prepare critical-lab follow-up order set',
+        urgency: panicSignal ? 'urgent' : 'high',
+        rationale:
+          'Critical diagnostics should trigger executable follow-up order planning from queue context.',
+        citations: citations.filter((citation) => citation.rule_id === 'lab.order_set'),
+        action_payload: {
+          alert_id: alert?.alert_id || alert?.id || null,
+          lab_order_id: alert?.lab_order_id || null,
+          result_value: alert?.result_value || null,
+          critical_range: alert?.critical_range || null,
+        },
+      },
+    ];
+
+    if (panicSignal) {
+      items.push({
+        id: 'escalate-lab-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate critical lab alert to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Panic or critical lab alerts require explicit clinician synchronization and escalation evidence.',
+        citations: citations.filter((citation) => citation.rule_id === 'lab.doctor_sync'),
+        action_payload: {
+          alert_id: alert?.alert_id || alert?.id || null,
+          severity: alert?.severity || null,
+          alerted_to: alert?.alerted_to || null,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Critical lab safety execution bundle',
+      summary: `${items.length} lab action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
+  private buildPharmacyRecommendationBundle(params: {
+    prescription: any;
+  }) {
+    const { prescription } = params;
+    const quantityNeeded = Number(prescription?.quantity || 0);
+    const stockOnHand = Number(prescription?.stock_on_hand || 0);
+    const lowStock = Number.isFinite(quantityNeeded) && quantityNeeded > 0 && stockOnHand < quantityNeeded;
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'pharmacy.dispense_plan',
+        'WHO medication safety guidance: dispensing readiness should include structured dose/stock checks before administration.',
+        'WHO medication safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'pharmacy.counseling',
+        'WHO medicines optimization guidance: counseling checkpoints should be documented for safe medication use.',
+        'WHO medication safety guidance',
+      ),
+      lowStock
+        ? this.createGuidelineCitation(
+            'pharmacy.doctor_sync',
+            'WHO patient safety guidance: medication stock constraints should be synchronized with clinicians for treatment alternatives.',
+            'WHO patient safety guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [
+      {
+        id: 'prepare-pharmacy-dispense-plan',
+        type: 'order_set',
+        title: 'Prepare pharmacy dispense plan',
+        urgency: lowStock ? 'urgent' : 'high',
+        rationale:
+          'Pharmacy queue automation should convert prescription state into executable dispense planning actions.',
+        citations: citations.filter((citation) => citation.rule_id === 'pharmacy.dispense_plan'),
+        action_payload: {
+          prescription_id: prescription?.prescription_id || prescription?.id || null,
+          medication_name: prescription?.medication_name || null,
+          quantity: quantityNeeded || null,
+          stock_on_hand: stockOnHand || 0,
+        },
+      },
+      {
+        id: 'complete-pharmacy-counseling-checkpoint',
+        type: 'visit_preparation',
+        title: 'Complete medication counseling checkpoint',
+        urgency: 'routine',
+        rationale:
+          'Counseling completion should be a one-click operational workflow event, not only narrative documentation.',
+        citations: citations.filter((citation) => citation.rule_id === 'pharmacy.counseling'),
+        action_payload: {
+          prescription_id: prescription?.prescription_id || prescription?.id || null,
+          dosage: prescription?.dosage || null,
+          frequency: prescription?.frequency || null,
+        },
+      },
+    ];
+
+    if (lowStock) {
+      items.push({
+        id: 'escalate-pharmacy-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate stock-constrained prescription to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Low stock against active prescriptions requires immediate doctor synchronization for safe alternatives.',
+        citations: citations.filter((citation) => citation.rule_id === 'pharmacy.doctor_sync'),
+        action_payload: {
+          prescription_id: prescription?.prescription_id || prescription?.id || null,
+          medication_name: prescription?.medication_name || null,
+          quantity: quantityNeeded || null,
+          stock_on_hand: stockOnHand || 0,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Pharmacy dispensing safety bundle',
+      summary: `${items.length} pharmacy action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   async getCrossModuleEscalationFeed(tenantDb: DataSource) {
     const [
       workflowRows,
@@ -2586,9 +3476,13 @@ export class NurseWorklistService {
       oncologyInfusionRows,
       oncologyAdverseEventRows,
       cardiologyEncounterRows,
+      ophthalmologyEncounterRows,
+      telemedicineConsultationRows,
       edVisitRows,
       sepsisBundleRows,
       bloodTransfusionRows,
+      labCriticalAlertRows,
+      pharmacyPrescriptionRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
@@ -2893,6 +3787,61 @@ export class NurseWorklistService {
         tenantDb,
         `
         SELECT
+          oe.id as ophthalmology_encounter_id,
+          oe.patient_id,
+          oe.encounter_date,
+          oe.encounter_type,
+          oe.chief_complaint,
+          oe.assessment,
+          oe.plan,
+          oe.payment_status,
+          oe.finance_transaction_id,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          doc.first_name || ' ' || doc.last_name as ophthalmologist_name
+        FROM ophthalmology_encounters oe
+        INNER JOIN patients p ON p.id = oe.patient_id
+        LEFT JOIN users doc ON doc.id = oe.ophthalmologist_id
+        WHERE oe.encounter_date >= (NOW() - INTERVAL '60 days')
+          AND COALESCE(oe.payment_status, 'payment_confirmed') <> 'cancelled'
+        ORDER BY oe.encounter_date DESC, oe.updated_at DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          tc.id as consultation_id,
+          tc.patient_id,
+          tc.doctor_id,
+          tc.consultation_type,
+          tc.status,
+          tc.scheduled_start_time,
+          tc.actual_start_time,
+          tc.patient_consent,
+          tc.consent_date,
+          tc.patient_joined,
+          tc.doctor_joined,
+          tc.technical_issues,
+          tc.notes,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          doc.first_name || ' ' || doc.last_name as doctor_name
+        FROM telemedicine_consultations tc
+        INNER JOIN patients p ON p.id = tc.patient_id
+        LEFT JOIN users doc ON doc.id = tc.doctor_id
+        WHERE tc.status IN ('scheduled', 'waiting', 'in_progress', 'technical_issue')
+          AND tc.scheduled_start_time >= (NOW() - INTERVAL '24 hours')
+          AND tc.scheduled_start_time <= (NOW() + INTERVAL '72 hours')
+        ORDER BY tc.scheduled_start_time ASC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
           ev.id as ed_visit_id,
           ev.patient_id,
           ev.ed_visit_number,
@@ -3012,6 +3961,93 @@ export class NurseWorklistService {
         WHERE bt.transfusion_status IN ('ordered', 'in_progress')
           OR COALESCE(bt.transfusion_reaction, false) = true
         ORDER BY COALESCE(bt.start_time, bt.order_date, bt.created_at) DESC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          lca.id as alert_id,
+          lca.patient_id,
+          lca.lab_order_id,
+          lca.component_name,
+          lca.result_value,
+          lca.critical_range,
+          lca.severity,
+          lca.alert_status,
+          lca.alerted_to,
+          lca.escalated_to,
+          lca.alerted_at,
+          lca.acknowledged_at,
+          lca.created_at,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          alert_user.first_name || ' ' || alert_user.last_name as alerted_to_name,
+          esc_user.first_name || ' ' || esc_user.last_name as escalated_to_name,
+          EXTRACT(EPOCH FROM (NOW() - COALESCE(lca.alerted_at, lca.created_at))) / 3600.0 as age_hours
+        FROM lab_critical_alerts lca
+        INNER JOIN patients p ON p.id = lca.patient_id
+        LEFT JOIN users alert_user ON alert_user.id = lca.alerted_to
+        LEFT JOIN users esc_user ON esc_user.id = lca.escalated_to
+        WHERE lca.alert_status IN ('pending', 'acknowledged', 'escalated')
+          AND lca.created_at >= (NOW() - INTERVAL '14 days')
+        ORDER BY
+          CASE lca.severity
+            WHEN 'panic' THEN 3
+            WHEN 'critical' THEN 2
+            ELSE 1
+          END DESC,
+          COALESCE(lca.alerted_at, lca.created_at) ASC
+        LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          p.id as prescription_id,
+          p.patient_id,
+          p.doctor_id,
+          p.medication_name,
+          p.dosage,
+          p.frequency,
+          p.quantity,
+          p.status,
+          p.instructions,
+          p.created_at,
+          pt.first_name || ' ' || pt.last_name as patient_name,
+          pt.patient_number,
+          doc.first_name || ' ' || doc.last_name as prescriber_name,
+          COALESCE(stock.quantity_on_hand, 0)::int as stock_on_hand,
+          COALESCE(stock.reorder_level, 0)::int as reorder_level,
+          COALESCE(stock.inventory_match_count, 0)::int as inventory_match_count
+        FROM prescriptions p
+        INNER JOIN patients pt ON pt.id = p.patient_id
+        LEFT JOIN users doc ON doc.id = p.doctor_id
+        LEFT JOIN LATERAL (
+          SELECT
+            SUM(pi.quantity_on_hand) as quantity_on_hand,
+            MIN(pi.reorder_level) as reorder_level,
+            COUNT(*) as inventory_match_count
+          FROM pharmacy_inventory pi
+          WHERE pi.status = 'active'
+            AND (
+              (p.medication_name IS NOT NULL AND (
+                pi.name ILIKE '%' || p.medication_name || '%'
+                OR pi.generic_name ILIKE '%' || p.medication_name || '%'
+              ))
+              OR (p.medication_name_snomed_code IS NOT NULL AND pi.snomed_code = p.medication_name_snomed_code)
+            )
+        ) stock ON TRUE
+        WHERE p.status = 'active'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pharmacy_dispensings pd
+            WHERE pd.prescription_id = p.id
+              AND pd.status IN ('pending', 'dispensed', 'partial')
+          )
+        ORDER BY p.created_at DESC
         LIMIT 50
         `,
       ),
@@ -3509,6 +4545,284 @@ export class NurseWorklistService {
       );
     });
 
+    const ophthalmologyProtocolItems = (ophthalmologyEncounterRows || []).map((row: any) => {
+      const ageHours = this.getHoursSince(row.encounter_date);
+      const clinicalText = `${row?.chief_complaint || ''} ${row?.assessment || ''}`.toLowerCase();
+      const acuteRiskSignal =
+        clinicalText.includes('vision loss') ||
+        clinicalText.includes('sudden') ||
+        clinicalText.includes('retinal') ||
+        clinicalText.includes('acute glaucoma') ||
+        clinicalText.includes('trauma');
+      const paymentPending = String(row?.payment_status || '').toLowerCase() === 'awaiting_payment';
+      const recommendationBundle = this.buildOphthalmologyProtocolRecommendationBundle({
+        encounter: row,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `ophthalmology-encounter:${row.ophthalmology_encounter_id}`,
+          module: 'ophthalmology',
+          item_type: 'ophthalmology_protocol_followup',
+          source_record_id: row.ophthalmology_encounter_id,
+          severity: acuteRiskSignal ? 'critical' : paymentPending ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: row.encounter_type || 'follow_up',
+          doctor_sync_status: acuteRiskSignal ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: acuteRiskSignal
+            ? 'Sight-risk ophthalmology protocol escalation'
+            : 'Ophthalmology protocol follow-up pending',
+          summary:
+            `${row.patient_name} has an ophthalmology encounter on ` +
+            `${new Date(row.encounter_date).toISOString().split('T')[0]}.`,
+          recommended_action: acuteRiskSignal
+            ? 'Execute ophthalmology order-set and escalate immediate doctor synchronization for sight-risk findings.'
+            : 'Execute ophthalmology order-set and visit-prep checkpoints from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.encounter_date,
+          updated_at: row.encounter_date,
+          age_hours: ageHours,
+          sla_status:
+            acuteRiskSignal
+              ? 'due_soon'
+              : ageHours !== null && ageHours >= 72
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'ophthalmology',
+            tab: 'ophthalmology',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: acuteRiskSignal ? 'doctor' : 'nurse',
+            service: 'ophthalmology_protocol',
+            specialty: 'Ophthalmology',
+          }),
+          metadata: {
+            encounter_id: row.ophthalmology_encounter_id,
+            encounter_type: row.encounter_type || null,
+            chief_complaint: row.chief_complaint || null,
+            assessment: row.assessment || null,
+            payment_status: row.payment_status || null,
+            ophthalmologist_name: row.ophthalmologist_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const telemedicineProtocolItems = (telemedicineConsultationRows || []).map((row: any) => {
+      const status = String(row?.status || '').toLowerCase();
+      const consented = Boolean(row?.patient_consent);
+      const technicalIssue = status === 'technical_issue' || this.normalizeText(row?.technical_issues) !== null;
+      const requiresDoctorSync = technicalIssue || status === 'in_progress';
+      const ageHours = this.getHoursSince(row?.scheduled_start_time || row?.actual_start_time || row?.created_at);
+      const recommendationBundle = this.buildTelemedicineRecommendationBundle({
+        consultation: row,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `telemedicine-consultation:${row.consultation_id}`,
+          module: 'telemedicine',
+          item_type: 'telemedicine_protocol_followup',
+          source_record_id: row.consultation_id,
+          severity: technicalIssue ? 'critical' : !consented ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: row.status || 'scheduled',
+          doctor_sync_status: requiresDoctorSync ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: technicalIssue
+            ? 'Telemedicine technical-risk escalation'
+            : !consented
+              ? 'Telemedicine consent checkpoint pending'
+              : 'Telemedicine protocol follow-up pending',
+          summary:
+            `${row.patient_name} has a ${row.consultation_type || 'telemedicine'} consultation ` +
+            `${row.scheduled_start_time ? `scheduled for ${new Date(row.scheduled_start_time).toISOString().split('T')[0]}` : 'awaiting workflow follow-up'}.`,
+          recommended_action: requiresDoctorSync
+            ? 'Execute consent/visit-prep actions and escalate doctor synchronization for active or technical-risk consultation state.'
+            : 'Execute telemedicine consent and visit-prep actions from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.scheduled_start_time || row.actual_start_time || row.created_at,
+          updated_at: row.actual_start_time || row.scheduled_start_time || row.created_at,
+          age_hours: ageHours,
+          sla_status:
+            technicalIssue
+              ? 'breached'
+              : ageHours !== null && ageHours >= 12
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'telemedicine',
+            tab: 'telemedicine',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: requiresDoctorSync ? 'doctor' : 'nurse',
+            service: 'telemedicine_protocol',
+            specialty: 'Telemedicine',
+          }),
+          metadata: {
+            consultation_id: row.consultation_id,
+            consultation_type: row.consultation_type || null,
+            consultation_status: row.status || null,
+            patient_consent: consented,
+            technical_issues: row.technical_issues || null,
+            doctor_name: row.doctor_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const labCriticalItems = (labCriticalAlertRows || []).map((row: any) => {
+      const severityKey = String(row?.severity || '').toLowerCase();
+      const statusKey = String(row?.alert_status || '').toLowerCase();
+      const panicSignal = severityKey === 'panic';
+      const criticalSignal = panicSignal || severityKey === 'critical';
+      const requiresDoctorSync = panicSignal || statusKey === 'escalated';
+      const recommendationBundle = this.buildLabCriticalRecommendationBundle({
+        alert: row,
+      });
+      const ageHoursFromRow = Number(row?.age_hours);
+      const ageHours = Number.isFinite(ageHoursFromRow)
+        ? Math.round(ageHoursFromRow * 10) / 10
+        : this.getHoursSince(row?.alerted_at || row?.created_at);
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `lab-critical-alert:${row.alert_id}`,
+          module: 'lab',
+          item_type: 'lab_critical_alert_followup',
+          source_record_id: row.alert_id,
+          severity: panicSignal ? 'critical' : criticalSignal ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: row.alert_status || 'pending',
+          doctor_sync_status: requiresDoctorSync ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: panicSignal
+            ? 'Panic lab alert escalation required'
+            : criticalSignal
+              ? 'Critical lab alert follow-up required'
+              : 'Abnormal lab alert follow-up pending',
+          summary:
+            `${row.patient_name} has ${row.component_name || 'critical lab'} result ` +
+            `${row.result_value ? `${row.result_value}` : ''}${row.critical_range ? ` (critical range ${row.critical_range})` : ''}.`,
+          recommended_action: requiresDoctorSync
+            ? 'Acknowledge alert, prepare follow-up order set, and escalate immediate doctor synchronization.'
+            : 'Acknowledge alert and prepare critical-lab follow-up order set from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.alerted_at || row.created_at,
+          updated_at: row.acknowledged_at || row.alerted_at || row.created_at,
+          age_hours: ageHours,
+          sla_status:
+            panicSignal
+              ? 'breached'
+              : ageHours !== null && ageHours >= 2
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'lab',
+            tab: 'lab',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: criticalSignal ? 'doctor' : 'nurse',
+            service: 'critical_labs',
+            specialty: 'Laboratory Medicine',
+          }),
+          metadata: {
+            alert_id: row.alert_id,
+            lab_order_id: row.lab_order_id || null,
+            component_name: row.component_name || null,
+            result_value: row.result_value || null,
+            critical_range: row.critical_range || null,
+            severity: row.severity || null,
+            alert_status: row.alert_status || null,
+            alerted_to: row.alerted_to || null,
+            alerted_to_name: row.alerted_to_name || null,
+            escalated_to: row.escalated_to || null,
+            escalated_to_name: row.escalated_to_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
+    const pharmacyProtocolItems = (pharmacyPrescriptionRows || []).map((row: any) => {
+      const quantity = Number(row?.quantity || 0);
+      const stockOnHand = Number(row?.stock_on_hand || 0);
+      const lowStock = Number.isFinite(quantity) && quantity > 0 && stockOnHand < quantity;
+      const ageHours = this.getHoursSince(row.created_at);
+      const recommendationBundle = this.buildPharmacyRecommendationBundle({
+        prescription: row,
+      });
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `pharmacy-prescription:${row.prescription_id}`,
+          module: 'pharmacy',
+          item_type: 'pharmacy_protocol_followup',
+          source_record_id: row.prescription_id,
+          severity: lowStock ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: row.status || 'active',
+          doctor_sync_status: lowStock ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: lowStock
+            ? 'Stock-constrained prescription follow-up'
+            : 'Pharmacy dispensing follow-up pending',
+          summary:
+            `${row.patient_name} has active prescription ${row.medication_name || 'medication'} ` +
+            `(${row.dosage || 'dose not set'}, ${row.frequency || 'frequency not set'}).`,
+          recommended_action: lowStock
+            ? 'Prepare dispense plan, complete counseling checkpoint, and escalate doctor sync for low-stock coverage.'
+            : 'Prepare dispense plan and complete counseling checkpoint from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.created_at,
+          updated_at: row.created_at,
+          age_hours: ageHours,
+          sla_status: ageHours !== null && ageHours >= 24 ? 'due_soon' : 'within_sla',
+          next_route: {
+            section: 'pharmacy',
+            tab: 'pharmacy',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: lowStock ? 'doctor' : 'pharmacist',
+            service: 'pharmacy_dispensing',
+            specialty: 'Pharmacy',
+          }),
+          metadata: {
+            prescription_id: row.prescription_id,
+            medication_name: row.medication_name || null,
+            dosage: row.dosage || null,
+            frequency: row.frequency || null,
+            quantity: quantity || null,
+            stock_on_hand: stockOnHand,
+            reorder_level: Number(row?.reorder_level || 0),
+            inventory_match_count: Number(row?.inventory_match_count || 0),
+            prescriber_name: row.prescriber_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
     const edProtocolItems = (edVisitRows || []).map((row: any) => {
       const triageLevel = Number(row?.triage_level || 0);
       const triageAcuity = String(row?.triage_acuity || '').trim().toLowerCase();
@@ -3848,9 +5162,13 @@ export class NurseWorklistService {
       ...oncologyInfusionItems,
       ...oncologyToxicityItems,
       ...cardiologyProtocolItems,
+      ...ophthalmologyProtocolItems,
+      ...telemedicineProtocolItems,
       ...edProtocolItems,
       ...sepsisProtocolItems,
       ...bloodBankTransfusionItems,
+      ...labCriticalItems,
+      ...pharmacyProtocolItems,
       ...handoffItems,
       ...medicationItems,
     ];
@@ -6148,6 +7466,819 @@ export class NurseWorklistService {
         actionId,
         actionTitle: payload.actionTitle || null,
         transfusionId: resolvedTransfusionId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeOphthalmologyRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      encounterId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedEncounterId = this.extractOphthalmologyEncounterId({
+      encounterId: payload.encounterId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedEncounterId) {
+      throw new BadRequestException('encounterId context is required for ophthalmology recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    let result: any;
+
+    if (actionId === 'prepare-ophthalmology-order-set') {
+      const suggestedOrders = Array.isArray(actionPayload?.suggested_orders)
+        ? actionPayload.suggested_orders
+            .map((value: any) => this.normalizeText(value))
+            .filter((value: string | null): value is string => Boolean(value))
+        : ['Visual acuity reassessment', 'Intraocular pressure check', 'Retinal/OCT review'];
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} executed by ${actorName} ` +
+        `at ${timestampIso}. Suggested orders: ${suggestedOrders.join(', ')}.`;
+      const update = await this.appendOphthalmologyEncounterTextNote(
+        tenantDb,
+        resolvedEncounterId,
+        'assessment',
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ophthalmology_order_set_reused' : 'ophthalmology_order_set_prepared',
+        encounterId: resolvedEncounterId,
+        patientId: update.encounter?.patient_id || null,
+        suggestedOrders,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-ophthalmology-visit-prep') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendOphthalmologyEncounterTextNote(
+        tenantDb,
+        resolvedEncounterId,
+        'plan',
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ophthalmology_visit_prep_reused' : 'ophthalmology_visit_prep_completed',
+        encounterId: resolvedEncounterId,
+        patientId: update.encounter?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-ophthalmology-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Ophthalmology doctor synchronization requested by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendOphthalmologyEncounterTextNote(
+        tenantDb,
+        resolvedEncounterId,
+        'plan',
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'ophthalmology_doctor_sync_reused' : 'ophthalmology_doctor_sync_documented',
+        encounterId: resolvedEncounterId,
+        patientId: update.encounter?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported ophthalmology recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'ophthalmology',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedEncounterId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'ophthalmology',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        encounterId: resolvedEncounterId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeTelemedicineRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      consultationId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedConsultationId = this.extractTelemedicineConsultationId({
+      consultationId: payload.consultationId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedConsultationId) {
+      throw new BadRequestException('consultationId context is required for telemedicine recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    let result: any;
+
+    if (actionId === 'confirm-telemedicine-consent') {
+      const noteLine =
+        `${resultMarker} Telemedicine consent checkpoint confirmed by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendTelemedicineConsultationNote(
+        tenantDb,
+        resolvedConsultationId,
+        resultMarker,
+        noteLine,
+      );
+
+      let consentUpdated = false;
+      if (!Boolean(update.consultation?.patient_consent)) {
+        await tenantDb.query(
+          `
+          UPDATE telemedicine_consultations
+          SET
+            patient_consent = true,
+            consent_date = COALESCE(consent_date, NOW()),
+            updated_at = NOW()
+          WHERE id = $1
+          `,
+          [resolvedConsultationId],
+        );
+        consentUpdated = true;
+      }
+
+      result = {
+        status: 'completed',
+        operation: consentUpdated ? 'telemedicine_consent_confirmed' : 'telemedicine_consent_already_confirmed',
+        consultationId: resolvedConsultationId,
+        patientId: update.consultation?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-telemedicine-visit-prep') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendTelemedicineConsultationNote(
+        tenantDb,
+        resolvedConsultationId,
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'telemedicine_visit_prep_reused' : 'telemedicine_visit_prep_completed',
+        consultationId: resolvedConsultationId,
+        patientId: update.consultation?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-telemedicine-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Telemedicine doctor synchronization requested by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendTelemedicineConsultationNote(
+        tenantDb,
+        resolvedConsultationId,
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'telemedicine_doctor_sync_reused' : 'telemedicine_doctor_sync_documented',
+        consultationId: resolvedConsultationId,
+        patientId: update.consultation?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported telemedicine recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'telemedicine',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedConsultationId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'telemedicine',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        consultationId: resolvedConsultationId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeLabRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      alertId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedAlertId = this.extractLabCriticalAlertId({
+      alertId: payload.alertId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedAlertId) {
+      throw new BadRequestException('alertId context is required for lab recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    let result: any;
+
+    if (actionId === 'acknowledge-critical-lab-alert') {
+      const noteLine =
+        `${resultMarker} Critical lab alert acknowledged by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendLabCriticalAlertNote(
+        tenantDb,
+        resolvedAlertId,
+        resultMarker,
+        noteLine,
+        {
+          status: 'acknowledged',
+          acknowledgedBy: user.id,
+        },
+      );
+
+      const labOrderId = this.normalizeText(update.alert?.lab_order_id);
+      let orderUpdate: { reused: boolean; workflowEventFallback?: boolean } | null = null;
+      if (labOrderId) {
+        orderUpdate = await this.appendLabOrderWorkflowEvent(
+          tenantDb,
+          labOrderId,
+          resultMarker,
+          {
+            action_id: actionId,
+            action_title: payload.actionTitle || actionId,
+            event_type: 'critical_alert_acknowledged',
+            executed_by: actorName,
+            executed_at: timestampIso,
+          },
+        );
+      }
+
+      result = {
+        status: 'completed',
+        operation:
+          update.reused && (orderUpdate?.reused ?? true)
+            ? 'lab_alert_acknowledgement_reused'
+            : 'lab_alert_acknowledged',
+        alertId: resolvedAlertId,
+        patientId: update.alert?.patient_id || null,
+        labOrderId: labOrderId || null,
+        noteReused: update.reused,
+        workflowEventFallback: Boolean(orderUpdate?.workflowEventFallback),
+      };
+    } else if (actionId === 'prepare-critical-lab-order-set') {
+      const suggestedOrders = Array.isArray(actionPayload?.suggested_orders)
+        ? actionPayload.suggested_orders
+            .map((value: any) => this.normalizeText(value))
+            .filter((value: string | null): value is string => Boolean(value))
+        : ['Repeat critical panel', 'Clinician reassessment', 'Document urgent result communication'];
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} executed by ${actorName} ` +
+        `at ${timestampIso}. Suggested follow-up: ${suggestedOrders.join(', ')}.`;
+      const update = await this.appendLabCriticalAlertNote(
+        tenantDb,
+        resolvedAlertId,
+        resultMarker,
+        noteLine,
+        {
+          status: 'acknowledged',
+          acknowledgedBy: user.id,
+        },
+      );
+
+      const labOrderId = this.normalizeText(update.alert?.lab_order_id);
+      let orderUpdate: { reused: boolean; workflowEventFallback?: boolean } | null = null;
+      if (labOrderId) {
+        orderUpdate = await this.appendLabOrderWorkflowEvent(
+          tenantDb,
+          labOrderId,
+          resultMarker,
+          {
+            action_id: actionId,
+            action_title: payload.actionTitle || actionId,
+            event_type: 'critical_order_set_prepared',
+            executed_by: actorName,
+            executed_at: timestampIso,
+            suggested_orders: suggestedOrders,
+          },
+        );
+      }
+
+      result = {
+        status: 'completed',
+        operation:
+          labOrderId && orderUpdate?.reused && update.reused
+            ? 'lab_order_set_reused'
+            : labOrderId
+              ? 'lab_order_set_prepared'
+              : 'lab_order_set_documented_without_order',
+        alertId: resolvedAlertId,
+        patientId: update.alert?.patient_id || null,
+        labOrderId: labOrderId || null,
+        suggestedOrders,
+        noteReused: update.reused,
+        workflowEventFallback: Boolean(orderUpdate?.workflowEventFallback),
+      };
+    } else if (actionId === 'escalate-lab-doctor-sync') {
+      const escalatedTo =
+        this.normalizeText(payload.destinationUserId) ||
+        this.normalizeText(actionPayload?.escalated_to) ||
+        null;
+      const noteLine =
+        `${resultMarker} Critical lab escalation to doctor sync requested by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendLabCriticalAlertNote(
+        tenantDb,
+        resolvedAlertId,
+        resultMarker,
+        noteLine,
+        {
+          status: 'escalated',
+          acknowledgedBy: user.id,
+          escalatedTo,
+        },
+      );
+
+      const labOrderId = this.normalizeText(update.alert?.lab_order_id);
+      let orderUpdate: { reused: boolean; workflowEventFallback?: boolean } | null = null;
+      if (labOrderId) {
+        orderUpdate = await this.appendLabOrderWorkflowEvent(
+          tenantDb,
+          labOrderId,
+          resultMarker,
+          {
+            action_id: actionId,
+            action_title: payload.actionTitle || actionId,
+            event_type: 'critical_alert_escalated',
+            executed_by: actorName,
+            executed_at: timestampIso,
+            escalated_to: escalatedTo,
+          },
+        );
+      }
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'lab_doctor_sync_reused' : 'lab_doctor_sync_documented',
+        alertId: resolvedAlertId,
+        patientId: update.alert?.patient_id || null,
+        labOrderId: labOrderId || null,
+        escalatedTo: escalatedTo || null,
+        noteReused: update.reused,
+        workflowEventFallback: Boolean(orderUpdate?.workflowEventFallback),
+      };
+    } else {
+      throw new BadRequestException(`Unsupported lab recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'lab',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedAlertId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'lab',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        alertId: resolvedAlertId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executePharmacyRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      prescriptionId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedPrescriptionId = this.extractPharmacyPrescriptionId({
+      prescriptionId: payload.prescriptionId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedPrescriptionId) {
+      throw new BadRequestException('prescriptionId context is required for pharmacy recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    let result: any;
+
+    if (actionId === 'prepare-pharmacy-dispense-plan') {
+      const quantity = this.normalizeText(String(actionPayload?.quantity ?? ''));
+      const stockOnHand = this.normalizeText(String(actionPayload?.stock_on_hand ?? ''));
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} executed by ${actorName} at ${timestampIso}.` +
+        `${quantity ? ` Quantity: ${quantity}.` : ''}` +
+        `${stockOnHand ? ` Stock on hand: ${stockOnHand}.` : ''}`;
+      const update = await this.appendPharmacyPrescriptionInstruction(
+        tenantDb,
+        resolvedPrescriptionId,
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'pharmacy_dispense_plan_reused' : 'pharmacy_dispense_plan_prepared',
+        prescriptionId: resolvedPrescriptionId,
+        patientId: update.prescription?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'complete-pharmacy-counseling-checkpoint') {
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendPharmacyPrescriptionInstruction(
+        tenantDb,
+        resolvedPrescriptionId,
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused
+          ? 'pharmacy_counseling_checkpoint_reused'
+          : 'pharmacy_counseling_checkpoint_completed',
+        prescriptionId: resolvedPrescriptionId,
+        patientId: update.prescription?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-pharmacy-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Pharmacy doctor synchronization requested by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendPharmacyPrescriptionInstruction(
+        tenantDb,
+        resolvedPrescriptionId,
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'pharmacy_doctor_sync_reused' : 'pharmacy_doctor_sync_documented',
+        prescriptionId: resolvedPrescriptionId,
+        patientId: update.prescription?.patient_id || null,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported pharmacy recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'pharmacy',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedPrescriptionId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || null,
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'pharmacy',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        prescriptionId: resolvedPrescriptionId,
         result,
       },
       riskLevel: 'medium',

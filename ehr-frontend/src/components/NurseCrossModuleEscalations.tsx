@@ -203,6 +203,38 @@ function isExecutableRecommendationAction(module: string, item: Record<string, a
     );
   }
 
+  if (module === 'ophthalmology') {
+    return (
+      actionId === 'prepare-ophthalmology-order-set' ||
+      actionId === 'complete-ophthalmology-visit-prep' ||
+      actionId === 'escalate-ophthalmology-doctor-sync'
+    );
+  }
+
+  if (module === 'telemedicine') {
+    return (
+      actionId === 'confirm-telemedicine-consent' ||
+      actionId === 'complete-telemedicine-visit-prep' ||
+      actionId === 'escalate-telemedicine-doctor-sync'
+    );
+  }
+
+  if (module === 'lab') {
+    return (
+      actionId === 'acknowledge-critical-lab-alert' ||
+      actionId === 'prepare-critical-lab-order-set' ||
+      actionId === 'escalate-lab-doctor-sync'
+    );
+  }
+
+  if (module === 'pharmacy') {
+    return (
+      actionId === 'prepare-pharmacy-dispense-plan' ||
+      actionId === 'complete-pharmacy-counseling-checkpoint' ||
+      actionId === 'escalate-pharmacy-doctor-sync'
+    );
+  }
+
   return false;
 }
 

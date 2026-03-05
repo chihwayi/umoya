@@ -1477,6 +1477,114 @@ const DoctorDashboard: React.FC = () => {
           token,
           tenantSlug,
         );
+      } else if (item.module === 'ophthalmology') {
+        await ehrApi.executeOphthalmologyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            encounterId:
+              item.metadata?.encounter_id ||
+              recommendationItem?.action_payload?.encounter_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'telemedicine') {
+        await ehrApi.executeTelemedicineNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            consultationId:
+              item.metadata?.consultation_id ||
+              recommendationItem?.action_payload?.consultation_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'lab') {
+        await ehrApi.executeLabNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            alertId:
+              item.metadata?.alert_id ||
+              recommendationItem?.action_payload?.alert_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
+      } else if (item.module === 'pharmacy') {
+        await ehrApi.executePharmacyNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            prescriptionId:
+              item.metadata?.prescription_id ||
+              recommendationItem?.action_payload?.prescription_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          tenantSlug,
+        );
       } else {
         showError('Unable to execute recommendation', 'This module does not support executable recommendation actions.');
         return;

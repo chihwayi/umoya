@@ -1758,6 +1758,425 @@ describe('NurseWorklistService', () => {
     );
   });
 
+  it('builds ophthalmology, telemedicine, lab, and pharmacy protocol items with executable bundles', async () => {
+    const { service } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('FROM users') && sql.includes('WHERE is_active = true')) {
+          return [
+            { id: 'doctor-spec-1', role: 'doctor', specialization: 'Specialty', name: 'Dr. Specialist' },
+            { id: 'nurse-spec-1', role: 'nurse', specialization: 'Specialty', name: 'Nurse Specialist' },
+            { id: 'pharm-spec-1', role: 'pharmacist', specialization: 'Pharmacy', name: 'Pharm Specialist' },
+          ];
+        }
+        if (sql.includes('FROM referral_facilities')) {
+          return [];
+        }
+        if (sql.includes('FROM ophthalmology_encounters oe')) {
+          return [
+            {
+              ophthalmology_encounter_id: 'oph-enc-1',
+              patient_id: 'patient-oph-1',
+              encounter_date: '2026-03-04T08:00:00.000Z',
+              encounter_type: 'follow_up',
+              chief_complaint: 'Sudden vision loss',
+              assessment: null,
+              plan: null,
+              payment_status: 'payment_confirmed',
+              finance_transaction_id: null,
+              patient_name: 'Oph Patient',
+              patient_number: 'P-OPH-1',
+              ophthalmologist_name: 'Dr. Eye',
+            },
+          ];
+        }
+        if (sql.includes('FROM telemedicine_consultations tc')) {
+          return [
+            {
+              consultation_id: 'tele-1',
+              patient_id: 'patient-tele-1',
+              doctor_id: 'doctor-tele-1',
+              consultation_type: 'follow_up',
+              status: 'technical_issue',
+              scheduled_start_time: '2026-03-04T10:00:00.000Z',
+              actual_start_time: null,
+              patient_consent: false,
+              consent_date: null,
+              patient_joined: true,
+              doctor_joined: false,
+              technical_issues: 'Audio failure',
+              notes: null,
+              patient_name: 'Tele Patient',
+              patient_number: 'P-TELE-1',
+              doctor_name: 'Dr. Remote',
+            },
+          ];
+        }
+        if (sql.includes('FROM lab_critical_alerts lca')) {
+          return [
+            {
+              alert_id: 'lab-alert-1',
+              patient_id: 'patient-lab-1',
+              lab_order_id: 'lab-order-1',
+              component_name: 'Potassium',
+              result_value: '6.8',
+              critical_range: '5.5-7.0',
+              severity: 'critical',
+              alert_status: 'pending',
+              alerted_to: 'doctor-lab-1',
+              escalated_to: null,
+              alerted_at: '2026-03-04T07:00:00.000Z',
+              acknowledged_at: null,
+              created_at: '2026-03-04T07:00:00.000Z',
+              patient_name: 'Lab Patient',
+              patient_number: 'P-LAB-1',
+              alerted_to_name: 'Dr. Lab',
+              escalated_to_name: null,
+              age_hours: 2.3,
+            },
+          ];
+        }
+        if (sql.includes('FROM prescriptions p')) {
+          return [
+            {
+              prescription_id: 'rx-1',
+              patient_id: 'patient-rx-1',
+              doctor_id: 'doctor-rx-1',
+              medication_name: 'Atorvastatin',
+              dosage: '20mg',
+              frequency: 'daily',
+              quantity: 30,
+              status: 'active',
+              instructions: null,
+              created_at: '2026-03-04T06:00:00.000Z',
+              patient_name: 'Rx Patient',
+              patient_number: 'P-RX-1',
+              prescriber_name: 'Dr. Rx',
+              stock_on_hand: 12,
+              reorder_level: 20,
+              inventory_match_count: 1,
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getCrossModuleEscalationFeed(tenantDb);
+    const ophthalmologyItem = result.items.find((item: any) => item.module === 'ophthalmology');
+    const telemedicineItem = result.items.find((item: any) => item.module === 'telemedicine');
+    const labItem = result.items.find((item: any) => item.module === 'lab');
+    const pharmacyItem = result.items.find((item: any) => item.module === 'pharmacy');
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        ophthalmology: 1,
+        telemedicine: 1,
+        lab: 1,
+        pharmacy: 1,
+        specialty: 4,
+      }),
+    );
+    expect(ophthalmologyItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prepare-ophthalmology-order-set' }),
+        expect.objectContaining({ id: 'complete-ophthalmology-visit-prep' }),
+        expect.objectContaining({ id: 'escalate-ophthalmology-doctor-sync' }),
+      ]),
+    );
+    expect(telemedicineItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'confirm-telemedicine-consent' }),
+        expect.objectContaining({ id: 'complete-telemedicine-visit-prep' }),
+        expect.objectContaining({ id: 'escalate-telemedicine-doctor-sync' }),
+      ]),
+    );
+    expect(labItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'acknowledge-critical-lab-alert' }),
+        expect.objectContaining({ id: 'prepare-critical-lab-order-set' }),
+        expect.objectContaining({ id: 'escalate-lab-doctor-sync' }),
+      ]),
+    );
+    expect(pharmacyItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prepare-pharmacy-dispense-plan' }),
+        expect.objectContaining({ id: 'complete-pharmacy-counseling-checkpoint' }),
+        expect.objectContaining({ id: 'escalate-pharmacy-doctor-sync' }),
+      ]),
+    );
+  });
+
+  it('executes ophthalmology, telemedicine, lab, and pharmacy recommendation actions', async () => {
+    const { service, mocks } = makeService();
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+
+        if (sql.includes('FROM ophthalmology_encounters oe') && sql.includes('WHERE oe.id = $1')) {
+          return [
+            {
+              id: 'oph-enc-1',
+              patient_id: 'patient-oph-1',
+              encounter_date: '2026-03-04T08:00:00.000Z',
+              encounter_type: 'follow_up',
+              chief_complaint: 'Sudden vision loss',
+              assessment: null,
+              plan: null,
+              payment_status: 'payment_confirmed',
+              finance_transaction_id: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE ophthalmology_encounters') && sql.includes('SET assessment = $1')) {
+          return [
+            {
+              id: 'oph-enc-1',
+              patient_id: 'patient-oph-1',
+              assessment: 'Order set prepared',
+            },
+          ];
+        }
+
+        if (sql.includes('FROM telemedicine_consultations tc') && sql.includes('WHERE tc.id = $1')) {
+          return [
+            {
+              id: 'tele-1',
+              patient_id: 'patient-tele-1',
+              doctor_id: 'doctor-tele-1',
+              consultation_type: 'follow_up',
+              status: 'scheduled',
+              scheduled_start_time: '2026-03-04T10:00:00.000Z',
+              actual_start_time: null,
+              patient_consent: false,
+              consent_date: null,
+              patient_joined: false,
+              doctor_joined: false,
+              technical_issues: null,
+              notes: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE telemedicine_consultations') && sql.includes('SET notes = $1, updated_at = NOW()')) {
+          return [
+            {
+              id: 'tele-1',
+              patient_id: 'patient-tele-1',
+              notes: 'Consent checkpoint',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE telemedicine_consultations') && sql.includes('SET') && sql.includes('patient_consent = true')) {
+          return [];
+        }
+
+        if (sql.includes('FROM lab_critical_alerts lca') && sql.includes('WHERE lca.id = $1')) {
+          return [
+            {
+              id: 'lab-alert-1',
+              patient_id: 'patient-lab-1',
+              lab_order_id: 'lab-order-1',
+              component_name: 'Potassium',
+              result_value: '6.8',
+              critical_range: '5.5-7.0',
+              severity: 'critical',
+              alert_status: 'pending',
+              alerted_to: 'doctor-lab-1',
+              escalated_to: null,
+              acknowledged_by: null,
+              acknowledgment_notes: null,
+              alerted_at: '2026-03-04T07:00:00.000Z',
+              acknowledged_at: null,
+              escalated_at: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE lab_critical_alerts') && sql.includes('SET')) {
+          return [
+            {
+              id: 'lab-alert-1',
+              patient_id: 'patient-lab-1',
+              lab_order_id: 'lab-order-1',
+              alert_status: 'acknowledged',
+              acknowledgment_notes: 'Lab alert acknowledged',
+            },
+          ];
+        }
+        if (sql.includes('FROM lab_orders') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: 'lab-order-1',
+              patient_id: 'patient-lab-1',
+              status: 'ordered',
+              tests: [],
+              priority: 'urgent',
+              payment_status: 'paid',
+              workflow_events: [],
+            },
+          ];
+        }
+        if (sql.includes('UPDATE lab_orders') && sql.includes('SET workflow_events = $1::jsonb')) {
+          return [
+            {
+              id: 'lab-order-1',
+              patient_id: 'patient-lab-1',
+              workflow_events: [{ marker: '[nurse_queue_action:acknowledge-critical-lab-alert]' }],
+            },
+          ];
+        }
+
+        if (sql.includes('FROM prescriptions p') && sql.includes('WHERE p.id = $1')) {
+          return [
+            {
+              id: 'rx-1',
+              patient_id: 'patient-rx-1',
+              medication_name: 'Atorvastatin',
+              dosage: '20mg',
+              frequency: 'daily',
+              quantity: 30,
+              status: 'active',
+              instructions: null,
+              created_at: '2026-03-04T06:00:00.000Z',
+              stock_on_hand: 12,
+              reorder_level: 20,
+              inventory_match_count: 1,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE prescriptions') && sql.includes('SET instructions = $1')) {
+          return [
+            {
+              id: 'rx-1',
+              patient_id: 'patient-rx-1',
+              instructions: 'Dispense plan prepared',
+            },
+          ];
+        }
+
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+
+        return [];
+      }),
+    } as any;
+
+    const ophthalmologyResult = await service.executeOphthalmologyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'ophthalmology-encounter:oph-enc-1',
+        itemType: 'ophthalmology_protocol_followup',
+        sourceRecordId: 'oph-enc-1',
+        patientId: 'patient-oph-1',
+        encounterId: 'oph-enc-1',
+        actionId: 'prepare-ophthalmology-order-set',
+        actionType: 'order_set',
+        actionTitle: 'Prepare ophthalmology order set',
+      },
+      { sessionId: 'session-oph-1' },
+    );
+    expect(ophthalmologyResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'ophthalmology_order_set_prepared',
+        encounterId: 'oph-enc-1',
+      }),
+    );
+
+    const telemedicineResult = await service.executeTelemedicineRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'telemedicine-consultation:tele-1',
+        itemType: 'telemedicine_protocol_followup',
+        sourceRecordId: 'tele-1',
+        patientId: 'patient-tele-1',
+        consultationId: 'tele-1',
+        actionId: 'confirm-telemedicine-consent',
+        actionType: 'safety_review',
+        actionTitle: 'Confirm telemedicine consent status',
+      },
+      { sessionId: 'session-tele-1' },
+    );
+    expect(telemedicineResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'telemedicine_consent_confirmed',
+        consultationId: 'tele-1',
+      }),
+    );
+
+    const labResult = await service.executeLabRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'lab-critical-alert:lab-alert-1',
+        itemType: 'lab_critical_alert_followup',
+        sourceRecordId: 'lab-alert-1',
+        patientId: 'patient-lab-1',
+        alertId: 'lab-alert-1',
+        actionId: 'acknowledge-critical-lab-alert',
+        actionType: 'safety_review',
+        actionTitle: 'Acknowledge critical lab alert',
+      },
+      { sessionId: 'session-lab-1' },
+    );
+    expect(labResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'lab_alert_acknowledged',
+        alertId: 'lab-alert-1',
+      }),
+    );
+
+    const pharmacyResult = await service.executePharmacyRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'pharmacy-prescription:rx-1',
+        itemType: 'pharmacy_protocol_followup',
+        sourceRecordId: 'rx-1',
+        patientId: 'patient-rx-1',
+        prescriptionId: 'rx-1',
+        actionId: 'prepare-pharmacy-dispense-plan',
+        actionType: 'order_set',
+        actionTitle: 'Prepare pharmacy dispense plan',
+      },
+      { sessionId: 'session-rx-1' },
+    );
+    expect(pharmacyResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'pharmacy_dispense_plan_prepared',
+        prescriptionId: 'rx-1',
+      }),
+    );
+
+    expect(tenantDb.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+      expect.arrayContaining([
+        'pharmacy-prescription:rx-1',
+        'pharmacy',
+        'pharmacy_protocol_followup',
+      ]),
+    );
+    expect(mocks.hipaaAuditService.logAuditEvent).toHaveBeenCalledWith(
+      tenantDb,
+      expect.objectContaining({
+        action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+        resourceId: 'pharmacy-prescription:rx-1',
+        metadata: expect.objectContaining({
+          module: 'pharmacy',
+          actionId: 'prepare-pharmacy-dispense-plan',
+        }),
+      }),
+    );
+  });
+
   it('builds ED and sepsis protocol items with executable recommendation bundles', async () => {
     const { service } = makeService();
 

@@ -60,7 +60,7 @@ const argv = yargs(hideBin(process.argv))
   .option('modules', {
     type: 'string',
     describe: 'Comma-separated modules to validate',
-    default: 'hiv,oncology,cardiology,ed,sepsis,blood_bank',
+    default: 'hiv,oncology,cardiology,ophthalmology,telemedicine,ed,sepsis,blood_bank,lab,pharmacy',
   })
   .option('days', {
     type: 'number',
@@ -128,9 +128,13 @@ function resolveExecuteEndpoint(moduleName: string): string | null {
   if (moduleName === 'hiv') return '/nurse-worklist/cross-module/hiv-recommendation-action';
   if (moduleName === 'oncology') return '/nurse-worklist/cross-module/oncology-recommendation-action';
   if (moduleName === 'cardiology') return '/nurse-worklist/cross-module/cardiology-recommendation-action';
+  if (moduleName === 'ophthalmology') return '/nurse-worklist/cross-module/ophthalmology-recommendation-action';
+  if (moduleName === 'telemedicine') return '/nurse-worklist/cross-module/telemedicine-recommendation-action';
   if (moduleName === 'ed') return '/nurse-worklist/cross-module/ed-recommendation-action';
   if (moduleName === 'sepsis') return '/nurse-worklist/cross-module/sepsis-recommendation-action';
   if (moduleName === 'blood_bank') return '/nurse-worklist/cross-module/blood-bank-recommendation-action';
+  if (moduleName === 'lab') return '/nurse-worklist/cross-module/lab-recommendation-action';
+  if (moduleName === 'pharmacy') return '/nurse-worklist/cross-module/pharmacy-recommendation-action';
   return null;
 }
 
@@ -171,6 +175,20 @@ function buildExecutePayload(feedItem: FeedItem, action: RecommendationItem): Re
       feedItem.source_record_id ||
       null;
   }
+  if (moduleName === 'ophthalmology') {
+    payload.encounterId =
+      feedItem.metadata?.encounter_id ||
+      action?.action_payload?.encounter_id ||
+      feedItem.source_record_id ||
+      null;
+  }
+  if (moduleName === 'telemedicine') {
+    payload.consultationId =
+      feedItem.metadata?.consultation_id ||
+      action?.action_payload?.consultation_id ||
+      feedItem.source_record_id ||
+      null;
+  }
   if (moduleName === 'ed') {
     payload.visitId =
       feedItem.metadata?.ed_visit_id ||
@@ -192,6 +210,20 @@ function buildExecutePayload(feedItem: FeedItem, action: RecommendationItem): Re
       feedItem.source_record_id ||
       null;
   }
+  if (moduleName === 'lab') {
+    payload.alertId =
+      feedItem.metadata?.alert_id ||
+      action?.action_payload?.alert_id ||
+      feedItem.source_record_id ||
+      null;
+  }
+  if (moduleName === 'pharmacy') {
+    payload.prescriptionId =
+      feedItem.metadata?.prescription_id ||
+      action?.action_payload?.prescription_id ||
+      feedItem.source_record_id ||
+      null;
+  }
 
   return payload;
 }
@@ -200,9 +232,13 @@ function requireModuleContext(moduleName: string, payload: Record<string, any>) 
   if (moduleName === 'hiv') ensure(payload.enrollmentId, 'Missing enrollmentId context for HIV action');
   if (moduleName === 'oncology') ensure(payload.caseId, 'Missing caseId context for oncology action');
   if (moduleName === 'cardiology') ensure(payload.encounterId, 'Missing encounterId context for cardiology action');
+  if (moduleName === 'ophthalmology') ensure(payload.encounterId, 'Missing encounterId context for ophthalmology action');
+  if (moduleName === 'telemedicine') ensure(payload.consultationId, 'Missing consultationId context for telemedicine action');
   if (moduleName === 'ed') ensure(payload.visitId, 'Missing visitId context for ED action');
   if (moduleName === 'sepsis') ensure(payload.bundleId, 'Missing bundleId context for sepsis action');
   if (moduleName === 'blood_bank') ensure(payload.transfusionId, 'Missing transfusionId context for blood_bank action');
+  if (moduleName === 'lab') ensure(payload.alertId, 'Missing alertId context for lab action');
+  if (moduleName === 'pharmacy') ensure(payload.prescriptionId, 'Missing prescriptionId context for pharmacy action');
 }
 
 async function runModuleCheck(

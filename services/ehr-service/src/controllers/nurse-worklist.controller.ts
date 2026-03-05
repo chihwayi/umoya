@@ -341,6 +341,162 @@ export class NurseWorklistController {
     );
   }
 
+  @Post('cross-module/ophthalmology-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute an ophthalmology recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'Ophthalmology recommendation action executed' })
+  async executeOphthalmologyRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      encounterId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executeOphthalmologyRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('cross-module/telemedicine-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute a telemedicine recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'Telemedicine recommendation action executed' })
+  async executeTelemedicineRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      consultationId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executeTelemedicineRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('cross-module/lab-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute a lab recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'Lab recommendation action executed' })
+  async executeLabRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      alertId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executeLabRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
+  @Post('cross-module/pharmacy-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute a pharmacy recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'Pharmacy recommendation action executed' })
+  async executePharmacyRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      prescriptionId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executePharmacyRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
   @Post('tasks/:taskId/complete')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Persist server-scoped task completion for current user' })
