@@ -187,6 +187,43 @@ describe('PatientService.getPatientContext', () => {
       if (sql.includes('FROM lab_critical_alerts') && sql.includes('COUNT(*)')) {
         return [{ active_count: 1 }];
       }
+      if (sql.includes('FROM lab_orders') && sql.includes('LIMIT 1')) {
+        return [
+          {
+            id: 'lab-order-1',
+            order_number: 'LAB-2026-001',
+            status: 'pending',
+            priority: 'urgent',
+            test_name: 'Potassium',
+            clinical_info: 'Repeat due to hyperkalemia',
+            special_instructions: 'Collect stat sample',
+          },
+        ];
+      }
+      if (sql.includes('FROM lab_orders') && sql.includes('COUNT(*)')) {
+        return [{ active_count: 2 }];
+      }
+      if (sql.includes('FROM imaging_reports r') && sql.includes('LIMIT 1')) {
+        return [
+          {
+            id: 'img-report-1',
+            imaging_order_id: 'img-order-1',
+            report_status: 'final',
+            is_critical: true,
+            severity: 'high',
+            follow_up_recommended: true,
+            follow_up_interval: '24h',
+            impression: 'Possible lower lobe consolidation',
+            recommendations: 'Repeat CXR in 24 hours',
+            clinical_indication: 'Persistent cough',
+            study_name: 'Chest X-Ray',
+            modality_name: 'X-Ray',
+          },
+        ];
+      }
+      if (sql.includes('FROM imaging_reports r') && sql.includes('COUNT(*)')) {
+        return [{ active_count: 1 }];
+      }
       if (sql.includes('FROM prescriptions p') && sql.includes('LIMIT 1')) {
         return [
           {
@@ -245,6 +282,10 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.telemedicine.latestConsultation.id).toBe('tele-consult-1');
     expect(result.modules.lab.latestCriticalAlert.id).toBe('lab-alert-1');
     expect(result.modules.lab.unresolvedAlertCount).toBe(1);
+    expect(result.modules.lab.latestOrder.id).toBe('lab-order-1');
+    expect(result.modules.lab.activeOrderCount).toBe(2);
+    expect(result.modules.imaging.latestReport.id).toBe('img-report-1');
+    expect(result.modules.imaging.actionableUnacknowledgedCount).toBe(1);
     expect(result.modules.pharmacy.latestPrescription.id).toBe('rx-1');
     expect(result.modules.pharmacy.activePrescriptionCount).toBe(1);
   });
@@ -276,6 +317,10 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.telemedicine.latestConsultation).toBeNull();
     expect(result.modules.lab.latestCriticalAlert).toBeNull();
     expect(result.modules.lab.unresolvedAlertCount).toBe(0);
+    expect(result.modules.lab.latestOrder).toBeNull();
+    expect(result.modules.lab.activeOrderCount).toBe(0);
+    expect(result.modules.imaging.latestReport).toBeNull();
+    expect(result.modules.imaging.actionableUnacknowledgedCount).toBe(0);
     expect(result.modules.pharmacy.latestPrescription).toBeNull();
     expect(result.modules.pharmacy.activePrescriptionCount).toBe(0);
   });

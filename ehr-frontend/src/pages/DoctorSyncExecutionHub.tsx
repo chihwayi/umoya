@@ -17,6 +17,7 @@ const SUPPORTED_MODULES = new Set([
   'sepsis',
   'blood_bank',
   'lab',
+  'imaging',
   'pharmacy',
 ]);
 
@@ -256,6 +257,20 @@ const DoctorSyncExecutionHub: React.FC = () => {
           alertId:
             item.metadata?.alert_id ||
             recommendationItem?.action_payload?.alert_id ||
+            item.source_record_id ||
+            null,
+        },
+        token,
+        tenantSlug!,
+      );
+    }
+    if (item.module === 'imaging') {
+      return ehrApi.executeImagingNurseRecommendationAction(
+        {
+          ...payloadBase,
+          reportId:
+            item.metadata?.imaging_report_id ||
+            recommendationItem?.action_payload?.report_id ||
             item.source_record_id ||
             null,
         },

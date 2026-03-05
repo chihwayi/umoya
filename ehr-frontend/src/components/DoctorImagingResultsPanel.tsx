@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Camera,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clock,
   CreditCard,
   FileText,
+  ListFilter,
   Loader2,
   Sparkles,
   ShieldAlert,
@@ -234,6 +237,8 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
   const [ackTarget, setAckTarget] = useState<DoctorImagingResult | null>(null);
   const [ackNotes, setAckNotes] = useState('');
   const [ackSubmitting, setAckSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -482,6 +487,50 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
     }
   };
 
+  const getFilterCount = (key: FilterValue) => {
+    switch (key) {
+      case 'awaiting_payment':
+        return counts.awaiting_payment;
+      case 'pending':
+        return counts.pending;
+      case 'awaiting_ack':
+        return counts.awaiting_ack;
+      case 'completed':
+        return counts.completed;
+      case 'critical':
+        return counts.critical;
+      case 'all':
+      default:
+        return counts.total;
+    }
+  };
+
+  const filteredResults = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return results;
+    return results.filter((result) => {
+      const haystack = [
+        result.patient.full_name,
+        result.patient.patient_number,
+        result.order.study_name,
+        result.order.modality_code,
+        result.order.body_part,
+        result.order.clinical_indication,
+        result.order.suspected_diagnosis,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(term);
+    });
+  }, [results, searchTerm]);
+
+  const toggleCardExpansion = (cardKey: string) => {
+    setExpandedCards((prev) => ({
+      ...prev,
+      [cardKey]: !prev[cardKey],
+    }));
+  };
+
   return (
     <div
       className={`bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-2xl ${
@@ -516,55 +565,39 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {FILTER_OPTIONS.map(({ key, label }) => (
                 <button
-                key={key}
-                onClick={() => setInternalFilter(key)}
-                className={`px-4 py-2 text-xs font-bold rounded-xl border-2 transition-all shadow-md hover:shadow-lg ${
-                  appliedFilter === key
-                    ? key === 'all'
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-600 shadow-indigo-200'
-                      : key === 'awaiting_payment'
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-500 shadow-amber-200'
-                      : key === 'awaiting_ack'
-                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-600 shadow-red-200 animate-pulse'
-                      : key === 'critical'
-                      ? 'bg-gradient-to-r from-red-700 to-pink-600 text-white border-red-700 shadow-red-200 animate-pulse'
-                      : key === 'recent'
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-500 shadow-emerald-200'
-                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-600 shadow-indigo-200'
-                    : key === 'awaiting_payment'
-                    ? 'bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border-amber-300 hover:from-amber-200 hover:to-orange-200'
-                    : key === 'awaiting_ack'
-                    ? 'bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border-red-300 hover:from-red-200 hover:to-rose-200'
-                    : key === 'critical'
-                    ? 'bg-gradient-to-r from-red-100 to-pink-100 text-red-700 border-red-300 hover:from-red-200 hover:to-pink-200'
-                    : key === 'recent'
-                    ? 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 border-emerald-300 hover:from-emerald-200 hover:to-teal-200'
-                    : 'bg-gradient-to-r from-violet-100 to-purple-100 text-violet-700 border-violet-300 hover:from-violet-200 hover:to-purple-200'
-                }`}
-                disabled={!!statusFilter}
-              >
-                {label}
-                {key === 'awaiting_payment' && counts.awaiting_payment > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-amber-700 text-[10px] font-bold shadow">
-                    {counts.awaiting_payment}
-                  </span>
-                )}
-                {key === 'awaiting_ack' && counts.awaiting_ack > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-red-700 text-[10px] font-bold shadow animate-bounce">
-                    {counts.awaiting_ack}
-                  </span>
-                )}
-                {key === 'critical' && counts.critical > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-red-700 text-[10px] font-bold shadow animate-bounce">
-                    {counts.critical}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
+                  key={key}
+                  onClick={() => setInternalFilter(key)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                    appliedFilter === key
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  disabled={!!statusFilter}
+                >
+                  <span>{label}</span>
+                  <span className="ml-1.5 opacity-80">({getFilterCount(key)})</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search patient, study, modality, or indication…"
+            className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          />
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-600">
+          <ListFilter className="w-3.5 h-3.5" />
+          {filteredResults.length} match{filteredResults.length === 1 ? '' : 'es'}
+        </div>
+      </div>
 
       {!compact && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-5">
@@ -649,26 +682,30 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
         )}
 
         <div className="space-y-3">
-          {!loading && results.length === 0 && (
+          {!loading && filteredResults.length === 0 && (
             <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200 text-slate-600">
               <Camera className="w-10 h-10 mx-auto mb-3 text-slate-400" />
               <p className="font-medium">No imaging results to display</p>
               <p className="text-sm">
-                Orders will appear here as soon as imaging is requested.
+                {searchTerm.trim()
+                  ? 'No records match your search. Try a broader keyword.'
+                  : 'Orders will appear here as soon as imaging is requested.'}
               </p>
             </div>
           )}
 
           {!loading &&
-            results.map((result) => {
+            filteredResults.map((result) => {
               const structuredFindings = normalizeStructuredFindings(result.report?.structured_findings);
               const codedDiagnoses = Array.isArray(result.report?.coded_diagnoses)
                 ? (result.report?.coded_diagnoses as string[])
                 : [];
               const followUpRecommended = Boolean(result.report?.follow_up_recommended);
+              const cardKey = `${result.order.id}-${result.study?.id || 'no-study'}`;
+              const isExpanded = Boolean(expandedCards[cardKey]);
               return (
               <div
-                key={`${result.order.id}-${result.study?.id || 'no-study'}`}
+                key={cardKey}
                 className="border border-slate-200 rounded-xl p-4 bg-white/90 shadow-sm hover:shadow transition-shadow"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
@@ -731,6 +768,22 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
                         View Study
                       </button>
                     )}
+                    <button
+                      onClick={() => toggleCardExpansion(cardKey)}
+                      className="px-4 py-2 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="w-4 h-4" />
+                          Hide Details
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-4 h-4" />
+                          Show Details
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -754,6 +807,12 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
                   </div>
                 )}
 
+                <div className="text-sm text-slate-600 mb-3">
+                  <span className="font-semibold text-slate-700 mr-2">Indication:</span>
+                  <span>{result.order.clinical_indication || 'N/A'}</span>
+                </div>
+
+                {isExpanded && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600">
                   <div className="space-y-1">
                     <p className="font-semibold text-slate-700">
@@ -885,6 +944,7 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
                     </div>
                   )}
                 </div>
+                )}
               </div>
             );
           })}
@@ -995,5 +1055,4 @@ const DoctorImagingResultsPanel: React.FC<DoctorImagingResultsPanelProps> = ({
 };
 
 export default DoctorImagingResultsPanel;
-
 

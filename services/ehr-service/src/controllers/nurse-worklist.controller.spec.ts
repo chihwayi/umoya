@@ -8,6 +8,7 @@ describe('NurseWorklistController', () => {
     getCrossModuleEscalationFeed: jest.fn(),
     getDoctorOutcomeAnalytics: jest.fn(),
     executeLabRecommendationAction: jest.fn(),
+    executeImagingRecommendationAction: jest.fn(),
     executePharmacyRecommendationAction: jest.fn(),
   } as any;
 
@@ -132,6 +133,41 @@ describe('NurseWorklistController', () => {
         ipAddress: '10.0.0.11',
         userAgent: 'jest-agent',
         sessionId: undefined,
+      },
+    );
+  });
+
+  it('forwards imaging recommendation actions with request metadata', async () => {
+    const payload = {
+      itemId: 'imaging-report:img-report-1',
+      itemType: 'imaging_doctor_result_followup',
+      reportId: 'img-report-1',
+      actionId: 'prepare-radiology-followup-bundle',
+    };
+    const expected = { actionId: payload.actionId, status: 'executed' };
+    nurseWorklistService.executeImagingRecommendationAction.mockResolvedValue(expected);
+
+    const req = {
+      tenantDb: mockTenantDb,
+      user: mockUser,
+      headers: {
+        'x-forwarded-for': '10.0.0.12',
+        'user-agent': 'jest-agent',
+        'x-session-id': 'session-img-1',
+      },
+    } as any;
+
+    const result = await controller.executeImagingRecommendationAction(payload as any, req);
+
+    expect(result).toEqual(expected);
+    expect(nurseWorklistService.executeImagingRecommendationAction).toHaveBeenCalledWith(
+      mockTenantDb,
+      mockUser,
+      payload,
+      {
+        ipAddress: '10.0.0.12',
+        userAgent: 'jest-agent',
+        sessionId: 'session-img-1',
       },
     );
   });

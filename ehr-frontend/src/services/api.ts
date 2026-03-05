@@ -1591,6 +1591,37 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  executeImagingNurseRecommendationAction: async (
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      reportId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post('/nurse-worklist/cross-module/imaging-recommendation-action', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   executePharmacyNurseRecommendationAction: async (
     payload: {
       itemId: string;

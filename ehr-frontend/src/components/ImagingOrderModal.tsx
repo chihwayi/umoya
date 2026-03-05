@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Search, Camera, AlertCircle, Calendar, CreditCard, Brain } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { X, Camera, AlertCircle, CreditCard, Brain, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import {
+  buildSharedContextTags,
+  getImagingOrderDuplicateGuard,
+  getImagingOrderPrefill,
+} from '../services/doctorContextAdapter';
 
 interface Modality {
   id: string;
@@ -45,44 +50,177 @@ export default function ImagingOrderModal({
   const [selectedModality, setSelectedModality] = useState<string>('');
   const [studyTypes, setStudyTypes] = useState<StudyType[]>([]);
   const [selectedStudyType, setSelectedStudyType] = useState<StudyType | null>(null);
+  const [studySearchTerm, setStudySearchTerm] = useState('');
   const [clinicalIndication, setClinicalIndication] = useState('');
   const [clinicalHistory, setClinicalHistory] = useState('');
   const [suspectedDiagnosis, setSuspectedDiagnosis] = useState('');
+  const [showAdvancedDetails, setShowAdvancedDetails] = useState(false);
   const [priority, setPriority] = useState<'routine' | 'urgent' | 'stat'>('routine');
   const [loading, setLoading] = useState(false);
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
   const [cdssInsights, setCdssInsights] = useState<any | null>(null);
+  const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
+  const [loadingPatientContext, setLoadingPatientContext] = useState(false);
   const { showSuccess, showError } = useNotification();
 
-  useEffect(() => {
-    loadModalities();
+  const applyContextPrefill = useCallback((context: any) => {
+    const prefill = getImagingOrderPrefill(context);
+    setPriority((prev) => (prev === 'routine' && prefill.priority ? prefill.priority : prev));
+    setClinicalIndication((prev) => prev || prefill.clinicalIndication || '');
+    setClinicalHistory((prev) => prev || prefill.clinicalHistory || '');
+    setSuspectedDiagnosis((prev) => prev || prefill.suspectedDiagnosis || '');
+    if (prefill.clinicalHistory || prefill.suspectedDiagnosis) {
+      setShowAdvancedDetails(true);
+    }
   }, []);
 
-  useEffect(() => {
-    if (selectedModality) {
-      loadStudyTypes(selectedModality);
-    }
-  }, [selectedModality]);
-
-  const loadModalities = async () => {
+  const loadModalities = useCallback(async () => {
     try {
       const response = await ehrApi.getImagingModalities(tenantSlug, token);
-      setModalities(response.data.modalities || []);
+      const nextModalities = response.data.modalities || [];
+      setModalities(nextModalities);
     } catch (error) {
       console.error('Failed to load modalities:', error);
       showError('Failed to load imaging modalities', 'An error occurred while loading imaging modalities');
     }
-  };
+  }, [showError, tenantSlug, token]);
 
-  const loadStudyTypes = async (modalityCode: string) => {
+  const loadStudyTypes = useCallback(async (modalityCode: string) => {
     try {
       const response = await ehrApi.getImagingStudyTypes(tenantSlug, token, modalityCode);
-      setStudyTypes(response.data.studyTypes || []);
+      const nextStudies = response.data.studyTypes || [];
+      setStudyTypes(nextStudies);
+      setStudySearchTerm('');
+      const preferredStudyName = String(
+        selectedPatientContext?.modules?.imaging?.latestReport?.study_name || '',
+      )
+        .trim()
+        .toLowerCase();
+      const preferredStudy = nextStudies.find(
+        (study: StudyType) =>
+          preferredStudyName &&
+          study.study_name.toLowerCase() === preferredStudyName,
+      );
+      if (preferredStudy) {
+        setSelectedStudyType(preferredStudy);
+        return;
+      }
+      if (nextStudies.length === 1) {
+        setSelectedStudyType(nextStudies[0]);
+      }
     } catch (error) {
       console.error('Failed to load study types:', error);
       showError('Failed to load study types', 'An error occurred while loading study types');
     }
-  };
+  }, [selectedPatientContext, showError, tenantSlug, token]);
+
+  const loadSelectedPatientContext = useCallback(async () => {
+    if (!patientId || !token || !tenantSlug) return;
+    try {
+      setLoadingPatientContext(true);
+      const response = await ehrApi.getPatientContext(patientId, token, tenantSlug);
+      const context = response.data || null;
+      setSelectedPatientContext(context);
+      applyContextPrefill(context);
+    } catch (error) {
+      console.error('Failed to load shared patient context for imaging order', error);
+      setSelectedPatientContext(null);
+    } finally {
+      setLoadingPatientContext(false);
+    }
+  }, [applyContextPrefill, patientId, tenantSlug, token]);
+
+  useEffect(() => {
+    void loadModalities();
+  }, [loadModalities]);
+
+  useEffect(() => {
+    if (!selectedModality) return;
+    void loadStudyTypes(selectedModality);
+  }, [loadStudyTypes, selectedModality]);
+
+  useEffect(() => {
+    if (selectedModality || modalities.length === 0) return;
+
+    const preferredModalityName = String(
+      selectedPatientContext?.modules?.imaging?.latestReport?.modality_name || '',
+    )
+      .trim()
+      .toLowerCase();
+    const preferredModality = modalities.find(
+      (modality) =>
+        preferredModalityName &&
+        modality.modality_name.toLowerCase().includes(preferredModalityName),
+    );
+
+    if (preferredModality) {
+      setSelectedModality(preferredModality.modality_code);
+      return;
+    }
+
+    if (modalities.length === 1) {
+      setSelectedModality(modalities[0].modality_code);
+    }
+  }, [modalities, selectedModality, selectedPatientContext]);
+
+  useEffect(() => {
+    void loadSelectedPatientContext();
+  }, [loadSelectedPatientContext]);
+
+  const selectedPatientContextTags = useMemo(
+    () => buildSharedContextTags(selectedPatientContext),
+    [selectedPatientContext],
+  );
+
+  const filteredStudyTypes = useMemo(() => {
+    const term = studySearchTerm.trim().toLowerCase();
+    if (!term) return studyTypes;
+    return studyTypes.filter((study) => {
+      return (
+        study.study_name.toLowerCase().includes(term) ||
+        study.study_code.toLowerCase().includes(term) ||
+        study.body_part.toLowerCase().includes(term)
+      );
+    });
+  }, [studySearchTerm, studyTypes]);
+
+  const indicationSuggestions = useMemo(() => {
+    const candidates = [
+      selectedPatientContext?.modules?.ed?.latestVisit?.chief_complaint,
+      selectedPatientContext?.modules?.cardiology?.latestEncounter?.visit_reason,
+      selectedPatientContext?.modules?.imaging?.latestReport?.clinical_indication,
+      selectedPatientContext?.modules?.imaging?.latestReport?.impression,
+      selectedStudyType?.body_part ? `Focused ${selectedStudyType.body_part} evaluation` : null,
+    ]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+
+    const seen = new Set<string>();
+    const unique = candidates.filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return unique.slice(0, 4);
+  }, [selectedPatientContext, selectedStudyType]);
+
+  const workflowSteps = useMemo(
+    () => [
+      { label: 'Modality', done: Boolean(selectedModality) },
+      { label: 'Study', done: Boolean(selectedStudyType) },
+      { label: 'Indication', done: Boolean(clinicalIndication.trim()) },
+      { label: 'SNOMED', done: Boolean(orderConcept) },
+    ],
+    [clinicalIndication, orderConcept, selectedModality, selectedStudyType],
+  );
+
+  const canSubmit =
+    Boolean(selectedStudyType) &&
+    Boolean(clinicalIndication.trim()) &&
+    Boolean(orderConcept) &&
+    !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,6 +237,18 @@ export default function ImagingOrderModal({
     if (!orderConcept) {
       showError('SNOMED Required', 'Please select the SNOMED CT concept for this imaging order.');
       return;
+    }
+
+    const duplicatePrompt = getImagingOrderDuplicateGuard(selectedPatientContext, {
+      studyName: selectedStudyType.study_name,
+      clinicalIndication,
+      suspectedDiagnosis,
+    });
+    if (duplicatePrompt) {
+      const shouldProceed = window.confirm(duplicatePrompt.message);
+      if (!shouldProceed) {
+        return;
+      }
     }
 
     try {
@@ -156,6 +306,45 @@ export default function ImagingOrderModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-wrap gap-2">
+              {workflowSteps.map((step) => (
+                <span
+                  key={step.label}
+                  className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full border ${
+                    step.done
+                      ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                      : 'bg-white border-slate-200 text-slate-500'
+                  }`}
+                >
+                  {step.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {(loadingPatientContext || selectedPatientContextTags.length > 0) && (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                Shared patient context
+              </p>
+              {loadingPatientContext ? (
+                <p className="mt-2 text-xs text-indigo-600">Loading reusable context...</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedPatientContextTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-1 text-[11px] rounded-full bg-white border border-indigo-200 text-indigo-700"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {cdssInsights && (
             <div className="rounded-2xl border border-indigo-200 bg-white shadow-sm p-4 space-y-2">
               <div className="flex items-center gap-3">
@@ -230,8 +419,18 @@ export default function ImagingOrderModal({
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Study <span className="text-red-500">*</span>
               </label>
+              <div className="relative mb-3">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={studySearchTerm}
+                  onChange={(e) => setStudySearchTerm(e.target.value)}
+                  placeholder="Search by study, code, or body part..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
               <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-2">
-                {studyTypes.map((study) => (
+                {filteredStudyTypes.map((study) => (
                   <button
                     key={study.id}
                     type="button"
@@ -267,6 +466,11 @@ export default function ImagingOrderModal({
                     )}
                   </button>
                 ))}
+                {filteredStudyTypes.length === 0 && (
+                  <div className="px-3 py-4 text-sm text-slate-500 text-center">
+                    No studies match your search.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -334,6 +538,24 @@ export default function ImagingOrderModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Clinical Indication <span className="text-red-500">*</span>
             </label>
+            {indicationSuggestions.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {indicationSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() =>
+                      setClinicalIndication((prev) =>
+                        prev ? `${prev}${prev.endsWith('.') ? ' ' : '; '}${suggestion}` : suggestion,
+                      )
+                    }
+                    className="px-2.5 py-1 text-xs rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                  >
+                    + {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               value={clinicalIndication}
               onChange={(e) => setClinicalIndication(e.target.value)}
@@ -344,32 +566,43 @@ export default function ImagingOrderModal({
             />
           </div>
 
-          {/* Clinical History */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Clinical History
-            </label>
-            <textarea
-              value={clinicalHistory}
-              onChange={(e) => setClinicalHistory(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              rows={2}
-              placeholder="Relevant clinical history (e.g., 'Cough x 2 weeks, fever', 'Fall on outstretched hand')"
-            />
-          </div>
-
-          {/* Suspected Diagnosis */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Suspected Diagnosis
-            </label>
-            <input
-              type="text"
-              value={suspectedDiagnosis}
-              onChange={(e) => setSuspectedDiagnosis(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              placeholder="What are you looking for? (e.g., 'Pneumonia', 'Fracture', 'Mass')"
-            />
+          <div className="mb-6 border border-slate-200 rounded-lg bg-slate-50">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedDetails((prev) => !prev)}
+              className="w-full px-4 py-3 flex items-center justify-between text-sm font-semibold text-slate-700"
+            >
+              <span>Advanced Clinical Details (optional)</span>
+              {showAdvancedDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showAdvancedDetails && (
+              <div className="px-4 pb-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Clinical History
+                  </label>
+                  <textarea
+                    value={clinicalHistory}
+                    onChange={(e) => setClinicalHistory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={2}
+                    placeholder="Relevant clinical history (e.g., 'Cough x 2 weeks, fever', 'Fall on outstretched hand')"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Suspected Diagnosis
+                  </label>
+                  <input
+                    type="text"
+                    value={suspectedDiagnosis}
+                    onChange={(e) => setSuspectedDiagnosis(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="What are you looking for? (e.g., 'Pneumonia', 'Fracture', 'Mass')"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Order Summary */}
@@ -427,7 +660,7 @@ export default function ImagingOrderModal({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!selectedStudyType || !clinicalIndication.trim() || loading}
+                disabled={!canSubmit}
                 className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {loading ? (
@@ -449,4 +682,3 @@ export default function ImagingOrderModal({
     </div>
   );
 }
-

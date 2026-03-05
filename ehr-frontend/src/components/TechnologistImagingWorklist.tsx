@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
   Camera,
-  CheckCircle2,
   ClipboardList,
   Clock,
   Loader2,
   PlayCircle,
+  Search,
   ShieldAlert,
   StopCircle,
   Wallet,
@@ -49,6 +49,8 @@ interface TechnologistImagingWorklistProps {
   currentUser?: { id: string };
 }
 
+type QueueView = 'ready' | 'scheduled' | 'active' | 'payment' | 'all';
+
 const defaultDate = () => new Date().toISOString().slice(0, 10);
 const defaultTime = () => new Date().toISOString().slice(11, 16);
 
@@ -72,6 +74,8 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
 
   const [completeTarget, setCompleteTarget] = useState<ImagingStudy | null>(null);
   const [completionNotes, setCompletionNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeQueueView, setActiveQueueView] = useState<QueueView>('ready');
 
   const loadData = useCallback(async () => {
     if (!tenantSlug || !token) return;
@@ -121,6 +125,57 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
           order.payment_status !== 'awaiting_payment' && order.order_status === 'scheduled',
       ),
     [orders],
+  );
+
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+  const matchesOrderSearch = useCallback(
+    (order: ImagingOrder) => {
+      if (!normalizedSearchTerm) return true;
+      const haystack = [
+        order.patient_name,
+        order.patient_number,
+        order.study_name,
+        order.modality_name,
+        order.clinical_indication,
+        order.order_status,
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(normalizedSearchTerm);
+    },
+    [normalizedSearchTerm],
+  );
+
+  const matchesStudySearch = useCallback(
+    (study: ImagingStudy) => {
+      if (!normalizedSearchTerm) return true;
+      const haystack = [study.patient_name, study.study_name, study.study_status]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      return haystack.includes(normalizedSearchTerm);
+    },
+    [normalizedSearchTerm],
+  );
+
+  const filteredAwaitingPayment = useMemo(
+    () => awaitingPayment.filter(matchesOrderSearch),
+    [awaitingPayment, matchesOrderSearch],
+  );
+
+  const filteredReadyToSchedule = useMemo(
+    () => readyToSchedule.filter(matchesOrderSearch),
+    [readyToSchedule, matchesOrderSearch],
+  );
+
+  const filteredScheduledOrders = useMemo(
+    () => scheduledOrders.filter(matchesOrderSearch),
+    [scheduledOrders, matchesOrderSearch],
+  );
+
+  const filteredStudies = useMemo(
+    () => studies.filter(matchesStudySearch),
+    [matchesStudySearch, studies],
   );
 
   const handleScheduleSubmit = async () => {
@@ -327,6 +382,48 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
         ))}
       </div>
 
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search patient, study, modality, or indication…"
+            className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'ready', label: 'Ready', count: filteredReadyToSchedule.length },
+            { key: 'scheduled', label: 'Scheduled', count: filteredScheduledOrders.length },
+            { key: 'active', label: 'In Progress', count: filteredStudies.length },
+            { key: 'payment', label: 'Awaiting Payment', count: filteredAwaitingPayment.length },
+            {
+              key: 'all',
+              label: 'All',
+              count:
+                filteredReadyToSchedule.length +
+                filteredScheduledOrders.length +
+                filteredStudies.length +
+                filteredAwaitingPayment.length,
+            },
+          ].map((view) => (
+            <button
+              key={view.key}
+              onClick={() => setActiveQueueView(view.key as QueueView)}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                activeQueueView === view.key
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {view.label} ({view.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading && (
         <div className="flex items-center justify-center py-20 text-slate-500 gap-3">
           <Loader2 className="w-5 h-5 animate-spin" />
@@ -336,6 +433,7 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
 
       {!loading && (
         <>
+          {(activeQueueView === 'ready' || activeQueueView === 'all') && (
           <section className="space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
@@ -343,19 +441,19 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
                 Ready for Scheduling
               </h3>
               <span className="text-xs px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-medium">
-                {readyToSchedule.length} orders
+                {filteredReadyToSchedule.length} orders
               </span>
             </div>
-            {readyToSchedule.length === 0 ? (
+            {filteredReadyToSchedule.length === 0 ? (
               <div className="p-6 bg-white border border-slate-100 rounded-2xl text-center text-slate-500 shadow">
                 <p className="flex items-center justify-center gap-2">
                   <Sparkles className="w-4 h-4" />
-                  No orders waiting for scheduling.
+                  {searchTerm.trim() ? 'No ready orders match your search.' : 'No orders waiting for scheduling.'}
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {readyToSchedule.map((order) =>
+                {filteredReadyToSchedule.map((order) =>
                   renderOrderCard(
                     order,
                     <>
@@ -387,7 +485,9 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
               </div>
             )}
           </section>
+          )}
 
+          {(activeQueueView === 'scheduled' || activeQueueView === 'all') && (
           <section className="space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
@@ -395,16 +495,16 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
                 Scheduled Orders
               </h3>
               <span className="text-xs px-3 py-1 rounded-full bg-purple-50 text-purple-600 font-medium">
-                {scheduledOrders.length} upcoming
+                {filteredScheduledOrders.length} upcoming
               </span>
             </div>
-            {scheduledOrders.length === 0 ? (
+            {filteredScheduledOrders.length === 0 ? (
               <div className="p-6 bg-white border border-slate-100 rounded-2xl text-center text-slate-500 shadow">
-                No upcoming scheduled appointments.
+                {searchTerm.trim() ? 'No scheduled orders match your search.' : 'No upcoming scheduled appointments.'}
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {scheduledOrders.map((order) =>
+                {filteredScheduledOrders.map((order) =>
                   renderOrderCard(
                     order,
                     <button
@@ -423,7 +523,9 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
               </div>
             )}
           </section>
+          )}
 
+          {(activeQueueView === 'active' || activeQueueView === 'all') && (
           <section className="space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
@@ -431,26 +533,27 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
                 Studies In Progress
               </h3>
               <span className="text-xs px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 font-medium">
-                {studies.length} scanners busy
+                {filteredStudies.length} scanners busy
               </span>
             </div>
-            {studies.length === 0 ? (
+            {filteredStudies.length === 0 ? (
               <div className="p-6 bg-white border border-slate-100 rounded-2xl text-center text-slate-500 shadow">
-                No active studies at the moment.
+                {searchTerm.trim() ? 'No active studies match your search.' : 'No active studies at the moment.'}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{studies.map(renderStudyCard)}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{filteredStudies.map(renderStudyCard)}</div>
             )}
           </section>
+          )}
 
-          {awaitingPayment.length > 0 && (
+          {(activeQueueView === 'payment' || activeQueueView === 'all') && filteredAwaitingPayment.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-lg font-semibold text-amber-700 flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5" />
                 Waiting for Payment Clearance
               </h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {awaitingPayment.map((order) =>
+                {filteredAwaitingPayment.map((order) =>
                   renderOrderCard(
                     order,
                     <span className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-full px-3 py-1">
@@ -570,5 +673,3 @@ const TechnologistImagingWorklist: React.FC<TechnologistImagingWorklistProps> = 
 };
 
 export default TechnologistImagingWorklist;
-
-

@@ -70,6 +70,7 @@ interface NurseCrossModuleEscalationsProps {
     blood_bank?: number;
     telemedicine?: number;
     lab?: number;
+    imaging?: number;
     pharmacy?: number;
     accounts?: number;
     specialty?: number;
@@ -113,6 +114,7 @@ const moduleStyles: Record<string, string> = {
   blood_bank: 'bg-red-100 text-red-700',
   telemedicine: 'bg-blue-100 text-blue-700',
   lab: 'bg-indigo-100 text-indigo-700',
+  imaging: 'bg-purple-100 text-purple-700',
   pharmacy: 'bg-lime-100 text-lime-700',
   accounts: 'bg-yellow-100 text-yellow-700',
   billing: 'bg-yellow-100 text-yellow-700',
@@ -227,6 +229,14 @@ function isExecutableRecommendationAction(module: string, item: Record<string, a
     );
   }
 
+  if (module === 'imaging') {
+    return (
+      actionId === 'acknowledge-radiology-report' ||
+      actionId === 'prepare-radiology-followup-bundle' ||
+      actionId === 'escalate-radiology-doctor-sync'
+    );
+  }
+
   if (module === 'pharmacy') {
     return (
       actionId === 'prepare-pharmacy-dispense-plan' ||
@@ -264,7 +274,7 @@ export default function NurseCrossModuleEscalations({
               <h3 className="text-lg font-bold text-slate-900">Cross-Module Escalations</h3>
             </div>
             <p className="text-sm text-slate-600 mt-1">
-              Shared nurse visibility into maternity, HIV, oncology, blood-bank, specialty, accounts, handoff risk, and medication exception workflows.
+              Shared nurse visibility into maternity, HIV, oncology, radiology, blood-bank, specialty, accounts, handoff risk, and medication exception workflows.
             </p>
           </div>
           {onRefresh && (
@@ -298,6 +308,9 @@ export default function NurseCrossModuleEscalations({
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">
             {summary?.oncology ?? items.filter((item) => item.module === 'oncology').length} oncology
           </span>
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+            {summary?.imaging ?? items.filter((item) => item.module === 'imaging').length} radiology
+          </span>
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
             {summary?.blood_bank ?? items.filter((item) => item.module === 'blood_bank').length} blood bank
           </span>
@@ -314,7 +327,7 @@ export default function NurseCrossModuleEscalations({
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
             {summary?.specialty ??
               items.filter((item) =>
-                ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'blood_bank', 'telemedicine', 'lab', 'pharmacy'].includes(
+                ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'blood_bank', 'telemedicine', 'lab', 'imaging', 'pharmacy'].includes(
                   String(item.module || '').toLowerCase(),
                 ),
               ).length}{' '}
@@ -333,7 +346,7 @@ export default function NurseCrossModuleEscalations({
           <div className="py-12 text-center text-slate-500">
             <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-slate-300" />
             <p className="font-medium text-slate-700">No active cross-module escalations</p>
-            <p className="text-sm mt-1">Maternity, HIV, oncology, specialty, accounts, handoff, and medication follow-up items will appear here when action is needed.</p>
+            <p className="text-sm mt-1">Maternity, HIV, oncology, radiology, specialty, accounts, handoff, and medication follow-up items will appear here when action is needed.</p>
             <p className="text-sm mt-1">Blood-bank transfusion safety escalations are included in this queue.</p>
           </div>
         ) : (

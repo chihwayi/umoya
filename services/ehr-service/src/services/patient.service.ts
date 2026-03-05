@@ -87,6 +87,10 @@ export class PatientService {
 
     const [
       latestVitalsRows,
+      labOrderRows,
+      labOrderActiveCountRows,
+      imagingReportRows,
+      imagingActionableUnacknowledgedCountRows,
       hivEnrollmentRows,
       maternityEnrollmentRows,
       oncologyCaseRows,
@@ -126,6 +130,86 @@ export class PatientService {
         WHERE patient_id = $1
         ORDER BY recorded_at DESC
         LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          order_number,
+          status,
+          priority,
+          test_name,
+          clinical_info,
+          special_instructions,
+          ordered_at
+        FROM lab_orders
+        WHERE patient_id = $1
+        ORDER BY COALESCE(ordered_at, created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM lab_orders
+        WHERE patient_id = $1
+          AND COALESCE(status, 'pending') NOT IN ('completed', 'cancelled')
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          r.id,
+          r.imaging_order_id,
+          r.report_status,
+          r.report_datetime,
+          r.signed_at,
+          r.impression,
+          r.recommendations,
+          r.critical_findings,
+          r.is_critical,
+          r.severity,
+          r.follow_up_recommended,
+          r.follow_up_interval,
+          io.priority AS order_priority,
+          io.clinical_indication,
+          io.clinical_history,
+          st.study_name,
+          m.modality_name
+        FROM imaging_reports r
+        INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+        LEFT JOIN imaging_study_types st ON st.id = io.study_type_id
+        LEFT JOIN imaging_modalities m ON m.id = st.modality_id
+        WHERE io.patient_id = $1
+        ORDER BY COALESCE(r.report_datetime, r.signed_at, r.created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM imaging_reports r
+        INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+        WHERE io.patient_id = $1
+          AND LOWER(COALESCE(r.report_status, '')) = 'final'
+          AND (
+            COALESCE(r.is_critical, false) = true
+            OR COALESCE(r.follow_up_recommended, false) = true
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM imaging_report_acknowledgements ack
+            WHERE ack.imaging_report_id = r.id
+          )
         `,
         [patientId],
       ),
@@ -454,6 +538,12 @@ export class PatientService {
     const latestTelemedicineConsultation = telemedicineConsultationRows[0] || null;
     const latestLabCriticalAlert = labCriticalAlertRows[0] || null;
     const labCriticalAlertOpenCount = Number(labCriticalAlertOpenCountRows[0]?.active_count || 0);
+    const latestLabOrder = labOrderRows[0] || null;
+    const labOrderActiveCount = Number(labOrderActiveCountRows[0]?.active_count || 0);
+    const latestImagingReport = imagingReportRows[0] || null;
+    const imagingActionableUnacknowledgedCount = Number(
+      imagingActionableUnacknowledgedCountRows[0]?.active_count || 0,
+    );
     const latestPharmacyPrescription = pharmacyPrescriptionRows[0] || null;
     const pharmacyPrescriptionActiveCount = Number(
       pharmacyPrescriptionActiveCountRows[0]?.active_count || 0,
@@ -647,6 +737,12 @@ export class PatientService {
         lab: {
           latestCriticalAlert: latestLabCriticalAlert,
           unresolvedAlertCount: labCriticalAlertOpenCount,
+          latestOrder: latestLabOrder,
+          activeOrderCount: labOrderActiveCount,
+        },
+        imaging: {
+          latestReport: latestImagingReport,
+          actionableUnacknowledgedCount: imagingActionableUnacknowledgedCount,
         },
         pharmacy: {
           latestPrescription: latestPharmacyPrescription,

@@ -458,6 +458,45 @@ export class NurseWorklistController {
     );
   }
 
+  @Post('cross-module/imaging-recommendation-action')
+  @Roles('nurse', 'doctor', 'admin')
+  @ApiOperation({ summary: 'Execute an imaging/radiology recommendation bundle action from the nurse queue' })
+  @ApiResponse({ status: 200, description: 'Imaging recommendation action executed' })
+  async executeImagingRecommendationAction(
+    @Body()
+    body: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      reportId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    @Request() req: RequestWithTenant,
+  ) {
+    const user = req.user as any;
+    return this.nurseWorklistService.executeImagingRecommendationAction(
+      req.tenantDb,
+      user,
+      body,
+      {
+        ipAddress: String(req.ip || req.headers['x-forwarded-for'] || ''),
+        userAgent: req.headers['user-agent'],
+        sessionId: (req.headers['x-session-id'] as string) || undefined,
+      },
+    );
+  }
+
   @Post('cross-module/pharmacy-recommendation-action')
   @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Execute a pharmacy recommendation bundle action from the nurse queue' })

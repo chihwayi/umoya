@@ -998,6 +998,28 @@ export class NurseWorklistService {
     return null;
   }
 
+  private extractImagingReportId(payload: {
+    reportId?: string | null;
+    sourceRecordId?: string | null;
+    itemId: string;
+    actionPayload?: any;
+  }) {
+    if (this.normalizeText(payload.reportId)) {
+      return String(payload.reportId);
+    }
+    if (this.normalizeText(payload.actionPayload?.report_id)) {
+      return String(payload.actionPayload.report_id);
+    }
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('imaging-report:')) {
+      return normalizedItemId.replace('imaging-report:', '').trim();
+    }
+    return null;
+  }
+
   private extractPharmacyPrescriptionId(payload: {
     prescriptionId?: string | null;
     sourceRecordId?: string | null;
@@ -1890,6 +1912,159 @@ export class NurseWorklistService {
       }
       throw error;
     }
+  }
+
+  private async getImagingReportContext(tenantDb: DataSource, reportId: string) {
+    const rows = await this.safeQuery(
+      tenantDb,
+      `
+      SELECT
+        r.id,
+        r.imaging_order_id,
+        r.imaging_study_id,
+        r.patient_id,
+        r.report_status,
+        r.is_critical,
+        r.severity,
+        r.follow_up_recommended,
+        r.follow_up_interval,
+        r.findings,
+        r.impression,
+        r.recommendations,
+        r.critical_findings,
+        r.created_at,
+        r.updated_at,
+        r.signed_at,
+        io.order_number,
+        io.order_status,
+        io.payment_status,
+        io.priority,
+        io.ordering_provider,
+        ack.id as acknowledgement_id,
+        ack.acknowledged_at,
+        ack.acknowledgment_notes
+      FROM imaging_reports r
+      INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+      LEFT JOIN imaging_report_acknowledgements ack
+        ON ack.imaging_report_id = r.id
+       AND ack.doctor_id = io.ordering_provider
+      WHERE r.id = $1
+      LIMIT 1
+      `,
+      [reportId],
+    );
+    return rows[0] || null;
+  }
+
+  private async appendImagingReportFieldNote(
+    tenantDb: DataSource,
+    reportId: string,
+    field: 'recommendations' | 'critical_findings',
+    marker: string,
+    noteLine: string,
+  ) {
+    const report = await this.getImagingReportContext(tenantDb, reportId);
+    if (!report) {
+      throw new BadRequestException('Imaging report not found for recommendation action');
+    }
+
+    const existingValue = String(report[field] || '');
+    if (existingValue.includes(marker)) {
+      return {
+        reused: true,
+        report,
+      };
+    }
+
+    const nextValue = existingValue.length > 0 ? `${existingValue}\n${noteLine}` : noteLine;
+    const updatedRows = await tenantDb.query(
+      `
+      UPDATE imaging_reports
+      SET ${field} = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING
+        id,
+        imaging_order_id,
+        imaging_study_id,
+        patient_id,
+        report_status,
+        is_critical,
+        severity,
+        follow_up_recommended,
+        follow_up_interval,
+        findings,
+        impression,
+        recommendations,
+        critical_findings,
+        created_at,
+        updated_at,
+        signed_at
+      `,
+      [nextValue, reportId],
+    );
+
+    return {
+      reused: false,
+      report: {
+        ...report,
+        ...(updatedRows[0] || {}),
+        [field]: nextValue,
+      },
+    };
+  }
+
+  private async upsertImagingReportAcknowledgement(
+    tenantDb: DataSource,
+    reportId: string,
+    doctorId: string,
+    marker: string,
+    noteLine: string,
+  ) {
+    const report = await this.getImagingReportContext(tenantDb, reportId);
+    if (!report) {
+      throw new BadRequestException('Imaging report not found for recommendation action');
+    }
+
+    if (String(report.report_status || '').toLowerCase() !== 'final') {
+      throw new BadRequestException('Only finalized imaging reports can be acknowledged');
+    }
+
+    const existingNotes = String(report.acknowledgment_notes || '');
+    if (report.acknowledged_at && existingNotes.includes(marker)) {
+      return {
+        reused: true,
+        report,
+      };
+    }
+
+    const nextNotes = existingNotes.length > 0 ? `${existingNotes}\n${noteLine}` : noteLine;
+    const rows = await tenantDb.query(
+      `
+      INSERT INTO imaging_report_acknowledgements (
+        imaging_report_id,
+        doctor_id,
+        acknowledgment_notes
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (imaging_report_id, doctor_id)
+      DO UPDATE SET
+        acknowledgment_notes = EXCLUDED.acknowledgment_notes,
+        acknowledged_at = NOW(),
+        updated_at = NOW()
+      RETURNING id, imaging_report_id, doctor_id, acknowledged_at, acknowledgment_notes
+      `,
+      [reportId, doctorId, nextNotes],
+    );
+
+    return {
+      reused: false,
+      report: {
+        ...report,
+        acknowledgement_id: rows[0]?.id || report.acknowledgement_id || null,
+        acknowledged_at: rows[0]?.acknowledged_at || report.acknowledged_at || null,
+        acknowledgment_notes: rows[0]?.acknowledgment_notes || nextNotes,
+      },
+    };
   }
 
   private async getPharmacyPrescriptionContext(tenantDb: DataSource, prescriptionId: string) {
@@ -3372,6 +3547,114 @@ export class NurseWorklistService {
     };
   }
 
+  private buildImagingRecommendationBundle(params: {
+    report: any;
+  }) {
+    const { report } = params;
+    const reportStatus = String(report?.report_status || '').toLowerCase();
+    const severityKey = String(report?.report_severity || report?.severity || '').toLowerCase();
+    const criticalSignal = Boolean(report?.is_critical) || severityKey === 'critical';
+    const followUpSignal = Boolean(report?.follow_up_recommended);
+    const awaitingDoctorAck = reportStatus === 'final' && !report?.acknowledged_at;
+
+    const suggestedOrders = criticalSignal
+      ? ['Urgent clinical reassessment', 'Targeted laboratory panel', 'Escalated imaging follow-up']
+      : followUpSignal
+        ? ['Schedule recommended follow-up imaging', 'Clinical review checkpoint']
+        : ['Clinical correlation review'];
+
+    const citations = this.normalizeCitationList([
+      this.createGuidelineCitation(
+        'imaging.result_ack',
+        'WHO diagnostic safety guidance: final imaging reports with critical or actionable findings should be acknowledged promptly by the ordering clinician.',
+        'WHO diagnostic safety guidance',
+      ),
+      this.createGuidelineCitation(
+        'imaging.followup_bundle',
+        'WHO continuity-of-care guidance: imaging recommendations should be converted into explicit follow-up task bundles to avoid missed actions.',
+        'WHO continuity of care guidance',
+      ),
+      criticalSignal
+        ? this.createGuidelineCitation(
+            'imaging.doctor_sync',
+            'WHO patient safety guidance: critical imaging findings require explicit clinician synchronization and documented escalation.',
+            'WHO patient safety guidance',
+          )
+        : null,
+    ]);
+
+    const items: Array<Record<string, any>> = [];
+
+    if (awaitingDoctorAck) {
+      items.push({
+        id: 'acknowledge-radiology-report',
+        type: 'doctor_acknowledgement',
+        title: 'Acknowledge finalized radiology report',
+        urgency: criticalSignal ? 'urgent' : 'high',
+        rationale:
+          'Final radiology reports should not remain unacknowledged when actionable findings are present.',
+        citations: citations.filter((citation) => citation.rule_id === 'imaging.result_ack'),
+        action_payload: {
+          report_id: report?.imaging_report_id || report?.id || null,
+          imaging_order_id: report?.imaging_order_id || null,
+          ordering_provider: report?.ordering_provider || null,
+          report_status: report?.report_status || null,
+        },
+      });
+    }
+
+    if (criticalSignal || followUpSignal) {
+      items.push({
+        id: 'prepare-radiology-followup-bundle',
+        type: 'order_set',
+        title: 'Prepare radiology follow-up bundle',
+        urgency: criticalSignal ? 'urgent' : 'high',
+        rationale:
+          'Radiology recommendations should be converted into one-click operational follow-up tasks for nurse and doctor execution.',
+        citations: citations.filter((citation) => citation.rule_id === 'imaging.followup_bundle'),
+        action_payload: {
+          report_id: report?.imaging_report_id || report?.id || null,
+          imaging_order_id: report?.imaging_order_id || null,
+          imaging_study_id: report?.imaging_study_id || null,
+          modality_code: report?.modality_code || null,
+          suggested_orders: suggestedOrders,
+        },
+      });
+    }
+
+    if (criticalSignal || awaitingDoctorAck) {
+      items.push({
+        id: 'escalate-radiology-doctor-sync',
+        type: 'escalation',
+        title: 'Escalate radiology findings to doctor sync',
+        urgency: 'urgent',
+        rationale:
+          'Critical or unacknowledged radiology findings require explicit doctor synchronization from the queue.',
+        citations: citations.filter(
+          (citation) => citation.rule_id === 'imaging.doctor_sync' || citation.rule_id === 'imaging.result_ack',
+        ),
+        action_payload: {
+          report_id: report?.imaging_report_id || report?.id || null,
+          imaging_order_id: report?.imaging_order_id || null,
+          ordering_provider: report?.ordering_provider || null,
+          is_critical: criticalSignal,
+        },
+      });
+    }
+
+    return {
+      version: 1,
+      generated_at: new Date().toISOString(),
+      bundle_label: 'Radiology doctor-nurse synchronization bundle',
+      summary: `${items.length} radiology action${items.length === 1 ? '' : 's'} prepared for queue execution.`,
+      actionable_count: items.length,
+      pending_count: items.length,
+      applied_count: 0,
+      citations,
+      items,
+    };
+  }
+
   private buildPharmacyRecommendationBundle(params: {
     prescription: any;
   }) {
@@ -3473,6 +3756,7 @@ export class NurseWorklistService {
       approvedRegimenChanges,
       handoffRows,
       medicationRows,
+      imagingReportRows,
       oncologyInfusionRows,
       oncologyAdverseEventRows,
       cardiologyEncounterRows,
@@ -3676,6 +3960,59 @@ export class NurseWorklistService {
           AND mar.scheduled_time <= (NOW() - INTERVAL '30 minutes')
         ORDER BY mar.scheduled_time ASC
         LIMIT 50
+        `,
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          r.id as imaging_report_id,
+          r.imaging_order_id,
+          r.imaging_study_id,
+          r.patient_id,
+          r.report_status,
+          r.is_critical,
+          r.severity as report_severity,
+          r.follow_up_recommended,
+          r.follow_up_interval,
+          r.recommendations,
+          r.critical_findings,
+          r.signed_at,
+          r.created_at as report_created_at,
+          r.updated_at as report_updated_at,
+          io.order_number,
+          io.order_status,
+          io.payment_status,
+          io.priority,
+          io.ordering_provider,
+          st.study_name,
+          st.body_part,
+          m.modality_name,
+          m.modality_code,
+          p.first_name || ' ' || p.last_name as patient_name,
+          p.patient_number,
+          doc.first_name || ' ' || doc.last_name as ordering_provider_name,
+          ack.id as acknowledgement_id,
+          ack.acknowledged_at
+        FROM imaging_reports r
+        INNER JOIN imaging_orders io ON io.id = r.imaging_order_id
+        INNER JOIN patients p ON p.id = r.patient_id
+        LEFT JOIN imaging_studies s ON s.id = r.imaging_study_id
+        LEFT JOIN imaging_study_types st ON st.id = io.study_type_id
+        LEFT JOIN imaging_modalities m ON m.id = st.modality_id
+        LEFT JOIN users doc ON doc.id = io.ordering_provider
+        LEFT JOIN imaging_report_acknowledgements ack
+          ON ack.imaging_report_id = r.id
+         AND ack.doctor_id = io.ordering_provider
+        WHERE io.order_status <> 'cancelled'
+          AND r.created_at >= (NOW() - INTERVAL '60 days')
+          AND (
+            (LOWER(COALESCE(r.report_status, '')) = 'final' AND ack.acknowledged_at IS NULL)
+            OR COALESCE(r.is_critical, false) = true
+            OR COALESCE(r.follow_up_recommended, false) = true
+          )
+        ORDER BY COALESCE(r.signed_at, r.updated_at, r.created_at) DESC
+        LIMIT 75
         `,
       ),
       this.safeQuery(
@@ -4760,6 +5097,97 @@ export class NurseWorklistService {
       );
     });
 
+    const imagingProtocolItems = (imagingReportRows || []).map((row: any) => {
+      const reportStatus = String(row?.report_status || '').toLowerCase();
+      const severityKey = String(row?.report_severity || '').toLowerCase();
+      const criticalSignal = Boolean(row?.is_critical) || severityKey === 'critical';
+      const followUpSignal = Boolean(row?.follow_up_recommended);
+      const awaitingDoctorAck = reportStatus === 'final' && !row?.acknowledged_at;
+      const requiresDoctorSync = awaitingDoctorAck || criticalSignal;
+      const recommendationBundle = this.buildImagingRecommendationBundle({
+        report: row,
+      });
+      const ageHours = this.getHoursSince(row?.signed_at || row?.report_updated_at || row?.report_created_at);
+
+      return this.mergeCrossModuleWorkflowState(
+        {
+          id: `imaging-report:${row.imaging_report_id}`,
+          module: 'imaging',
+          item_type: 'imaging_doctor_result_followup',
+          source_record_id: row.imaging_report_id,
+          severity: criticalSignal ? 'critical' : awaitingDoctorAck ? 'high' : 'medium',
+          workflow_status: 'pending',
+          module_status: awaitingDoctorAck
+            ? 'awaiting_acknowledgement'
+            : followUpSignal
+              ? 'follow_up_recommended'
+              : row.report_status || 'reported',
+          doctor_sync_status: requiresDoctorSync ? 'doctor_review_recommended' : 'nurse_followup_required',
+          title: criticalSignal
+            ? 'Critical radiology finding synchronization required'
+            : awaitingDoctorAck
+              ? 'Final radiology report awaiting doctor acknowledgement'
+              : 'Radiology follow-up bundle pending',
+          summary:
+            `${row.patient_name} has ${row.modality_name || 'imaging'} report ` +
+            `${row.imaging_report_id} for ${row.study_name || 'ordered study'}.`,
+          recommended_action: requiresDoctorSync
+            ? 'Acknowledge and escalate radiology findings to doctor sync, then complete follow-up bundle actions.'
+            : 'Prepare and complete radiology follow-up bundle actions from the queue.',
+          patient_id: row.patient_id,
+          patient_name: row.patient_name,
+          patient_number: row.patient_number,
+          created_at: row.signed_at || row.report_created_at,
+          updated_at: row.report_updated_at || row.signed_at || row.report_created_at,
+          age_hours: ageHours,
+          sla_status:
+            criticalSignal
+              ? ageHours !== null && ageHours >= 6
+                ? 'breached'
+                : 'due_soon'
+              : awaitingDoctorAck && ageHours !== null && ageHours >= 24
+                ? 'due_soon'
+                : 'within_sla',
+          next_route: {
+            section: 'radiology',
+            tab: 'radiology',
+            patientId: row.patient_id,
+          },
+          ...this.buildDestination(destinationUsers, referralFacilities, {
+            role: requiresDoctorSync ? 'doctor' : 'nurse',
+            service: 'radiology_results',
+            specialty: 'Radiology',
+            preferredUserId: row.ordering_provider || null,
+            preferredUserName: row.ordering_provider_name || null,
+          }),
+          metadata: {
+            imaging_report_id: row.imaging_report_id,
+            imaging_order_id: row.imaging_order_id || null,
+            imaging_study_id: row.imaging_study_id || null,
+            order_number: row.order_number || null,
+            order_status: row.order_status || null,
+            payment_status: row.payment_status || null,
+            modality_name: row.modality_name || null,
+            modality_code: row.modality_code || null,
+            study_name: row.study_name || null,
+            body_part: row.body_part || null,
+            report_status: row.report_status || null,
+            report_severity: row.report_severity || null,
+            is_critical: Boolean(row?.is_critical),
+            follow_up_recommended: Boolean(row?.follow_up_recommended),
+            follow_up_interval: row.follow_up_interval || null,
+            acknowledged_at: row.acknowledged_at || null,
+            acknowledgement_id: row.acknowledgement_id || null,
+            ordering_provider: row.ordering_provider || null,
+            ordering_provider_name: row.ordering_provider_name || null,
+            recommendation_bundle: recommendationBundle,
+            guideline_citations: recommendationBundle.citations,
+          },
+        },
+        workflowRowsByKey,
+      );
+    });
+
     const pharmacyProtocolItems = (pharmacyPrescriptionRows || []).map((row: any) => {
       const quantity = Number(row?.quantity || 0);
       const stockOnHand = Number(row?.stock_on_hand || 0);
@@ -5168,6 +5596,7 @@ export class NurseWorklistService {
       ...sepsisProtocolItems,
       ...bloodBankTransfusionItems,
       ...labCriticalItems,
+      ...imagingProtocolItems,
       ...pharmacyProtocolItems,
       ...handoffItems,
       ...medicationItems,
@@ -5307,7 +5736,7 @@ export class NurseWorklistService {
       this.isAccountsModule(this.normalizeModuleKey(item.module)),
     ).length;
     const specialtyCount = items.filter((item) =>
-      ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'blood_bank', 'telemedicine', 'lab', 'pharmacy'].includes(
+      ['cardiology', 'ophthalmology', 'ed', 'sepsis', 'blood_bank', 'telemedicine', 'lab', 'imaging', 'pharmacy'].includes(
         this.normalizeModuleKey(item.module),
       ),
     ).length;
@@ -5329,6 +5758,7 @@ export class NurseWorklistService {
         blood_bank: moduleCount('blood_bank'),
         telemedicine: moduleCount('telemedicine'),
         lab: moduleCount('lab'),
+        imaging: moduleCount('imaging'),
         pharmacy: moduleCount('pharmacy'),
         accounts: accountsCount,
         specialty: specialtyCount,
@@ -5584,6 +6014,7 @@ export class NurseWorklistService {
           'blood_bank',
           'telemedicine',
           'lab',
+          'imaging',
           'pharmacy',
           'accounts',
           'billing',
@@ -7837,6 +8268,225 @@ export class NurseWorklistService {
         actionId,
         actionTitle: payload.actionTitle || null,
         consultationId: resolvedConsultationId,
+        result,
+      },
+      riskLevel: 'medium',
+      timestamp: new Date(),
+    });
+
+    return {
+      ok: true,
+      itemId: payload.itemId,
+      actionId,
+      result,
+    };
+  }
+
+  async executeImagingRecommendationAction(
+    tenantDb: DataSource,
+    user: { id: string; fullName?: string; firstName?: string; lastName?: string; email?: string; role?: string },
+    payload: {
+      itemId: string;
+      itemType: string;
+      sourceRecordId?: string | null;
+      patientId?: string | null;
+      reportId?: string | null;
+      actionId: string;
+      actionType?: string | null;
+      actionTitle?: string | null;
+      actionPayload?: any;
+      destinationRole?: string | null;
+      destinationService?: string | null;
+      destinationSpecialty?: string | null;
+      destinationUserId?: string | null;
+      destinationUserName?: string | null;
+      destinationFacilityId?: string | null;
+      destinationFacilityName?: string | null;
+    },
+    requestMeta?: { ipAddress?: string; userAgent?: string; sessionId?: string },
+  ) {
+    if (!this.normalizeText(payload?.itemId) || !this.normalizeText(payload?.actionId)) {
+      throw new BadRequestException('itemId and actionId are required');
+    }
+
+    const actionId = String(payload.actionId);
+    const actionPayload =
+      payload?.actionPayload && typeof payload.actionPayload === 'object' ? payload.actionPayload : {};
+    const resolvedReportId = this.extractImagingReportId({
+      reportId: payload.reportId,
+      sourceRecordId: payload.sourceRecordId,
+      itemId: payload.itemId,
+      actionPayload,
+    });
+    if (!resolvedReportId) {
+      throw new BadRequestException('reportId context is required for imaging recommendation actions');
+    }
+
+    const existingExecution = await this.getExistingRecommendationExecution(tenantDb, payload.itemId, actionId);
+    if (String(existingExecution?.status || '').toLowerCase() === 'completed') {
+      return {
+        ok: true,
+        itemId: payload.itemId,
+        actionId,
+        idempotent: true,
+        result: existingExecution?.result || { status: 'completed', operation: 'already_applied' },
+      };
+    }
+    if (String(existingExecution?.status || '').toLowerCase() === 'in_progress') {
+      throw new BadRequestException(`Action "${actionId}" is already in progress`);
+    }
+
+    const reportContext = await this.getImagingReportContext(tenantDb, resolvedReportId);
+    if (!reportContext) {
+      throw new BadRequestException('Imaging report not found for recommendation action');
+    }
+
+    const timestampIso = new Date().toISOString();
+    const resultMarker = `[nurse_queue_action:${actionId}]`;
+    const actorName = this.getUserDisplayName(user);
+    const actorRole = this.normalizeText(user.role)?.toLowerCase() || 'nurse';
+    let result: any;
+
+    if (actionId === 'acknowledge-radiology-report') {
+      const orderingProviderId = this.normalizeText(reportContext.ordering_provider);
+      const actorIsOrderingDoctor =
+        actorRole === 'doctor' && orderingProviderId !== null && orderingProviderId === user.id;
+
+      if (actorIsOrderingDoctor) {
+        const noteLine =
+          `${resultMarker} Radiology report acknowledged by ${actorName} ` +
+          `at ${timestampIso} from cross-module queue.`;
+        const update = await this.upsertImagingReportAcknowledgement(
+          tenantDb,
+          resolvedReportId,
+          user.id,
+          resultMarker,
+          noteLine,
+        );
+        result = {
+          status: 'completed',
+          operation: update.reused ? 'radiology_report_ack_reused' : 'radiology_report_acknowledged',
+          reportId: resolvedReportId,
+          patientId: update.report?.patient_id || null,
+          imagingOrderId: update.report?.imaging_order_id || null,
+          noteReused: update.reused,
+        };
+      } else {
+        const noteLine =
+          `${resultMarker} Acknowledgement request routed by ${actorName} ` +
+          `at ${timestampIso}. Ordering doctor confirmation pending.`;
+        const update = await this.appendImagingReportFieldNote(
+          tenantDb,
+          resolvedReportId,
+          'recommendations',
+          resultMarker,
+          noteLine,
+        );
+        result = {
+          status: 'completed',
+          operation: update.reused ? 'radiology_ack_request_reused' : 'radiology_ack_request_documented',
+          reportId: resolvedReportId,
+          patientId: update.report?.patient_id || null,
+          imagingOrderId: update.report?.imaging_order_id || null,
+          orderingProvider: update.report?.ordering_provider || null,
+          noteReused: update.reused,
+        };
+      }
+    } else if (actionId === 'prepare-radiology-followup-bundle') {
+      const suggestedOrders = Array.isArray(actionPayload?.suggested_orders)
+        ? actionPayload.suggested_orders
+            .map((value: any) => this.normalizeText(value))
+            .filter((value: string | null): value is string => Boolean(value))
+        : Boolean(reportContext?.is_critical)
+          ? ['Urgent clinical reassessment', 'Targeted laboratory panel', 'Escalated imaging follow-up']
+          : ['Schedule recommended follow-up imaging', 'Clinical review checkpoint'];
+      const noteLine =
+        `${resultMarker} ${payload.actionTitle || actionId} completed by ${actorName} at ${timestampIso}. ` +
+        `Suggested follow-up: ${suggestedOrders.join(', ')}.`;
+      const update = await this.appendImagingReportFieldNote(
+        tenantDb,
+        resolvedReportId,
+        'recommendations',
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'radiology_followup_bundle_reused' : 'radiology_followup_bundle_prepared',
+        reportId: resolvedReportId,
+        patientId: update.report?.patient_id || null,
+        imagingOrderId: update.report?.imaging_order_id || null,
+        suggestedOrders,
+        noteReused: update.reused,
+      };
+    } else if (actionId === 'escalate-radiology-doctor-sync') {
+      const noteLine =
+        `${resultMarker} Radiology doctor synchronization requested by ` +
+        `${actorName} at ${timestampIso}.`;
+      const update = await this.appendImagingReportFieldNote(
+        tenantDb,
+        resolvedReportId,
+        'critical_findings',
+        resultMarker,
+        noteLine,
+      );
+
+      result = {
+        status: 'completed',
+        operation: update.reused ? 'radiology_doctor_sync_reused' : 'radiology_doctor_sync_documented',
+        reportId: resolvedReportId,
+        patientId: update.report?.patient_id || null,
+        imagingOrderId: update.report?.imaging_order_id || null,
+        orderingProvider: update.report?.ordering_provider || null,
+        noteReused: update.reused,
+      };
+    } else {
+      throw new BadRequestException(`Unsupported imaging recommendation action "${actionId}"`);
+    }
+
+    const resolvedPatientId = this.normalizeText(payload.patientId) || this.normalizeText(result?.patientId);
+
+    await this.persistRecommendationExecutionState(
+      tenantDb,
+      user,
+      {
+        itemId: payload.itemId,
+        module: 'imaging',
+        itemType: payload.itemType,
+        sourceRecordId: payload.sourceRecordId || resolvedReportId || null,
+        patientId: resolvedPatientId || null,
+        enrollmentId: null,
+        destinationRole: payload.destinationRole || null,
+        destinationService: payload.destinationService || 'radiology_results',
+        destinationSpecialty: payload.destinationSpecialty || null,
+        destinationUserId: payload.destinationUserId || null,
+        destinationFacilityId: payload.destinationFacilityId || null,
+        destinationFacilityName: payload.destinationFacilityName || null,
+        actionId,
+        note: `${payload.actionTitle || actionId} executed from nurse cross-module escalation queue.`,
+      },
+      result,
+    );
+
+    await this.hipaaAuditService.logAuditEvent(tenantDb, {
+      userId: user.id,
+      userName: this.getUserDisplayName(user),
+      userRole: user.role || 'nurse',
+      action: HipaaAuditAction.NURSE_CROSS_MODULE_ACKNOWLEDGE,
+      resourceType: 'nurse_cross_module_recommendation_action',
+      resourceId: payload.itemId,
+      patientId: resolvedPatientId || undefined,
+      ipAddress: requestMeta?.ipAddress,
+      userAgent: requestMeta?.userAgent,
+      sessionId: requestMeta?.sessionId,
+      outcome: 'success',
+      metadata: {
+        module: 'imaging',
+        itemType: payload.itemType,
+        actionId,
+        actionTitle: payload.actionTitle || null,
+        reportId: resolvedReportId,
         result,
       },
       riskLevel: 'medium',

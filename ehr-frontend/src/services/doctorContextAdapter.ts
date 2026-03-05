@@ -46,6 +46,7 @@ export const buildSharedContextTags = (context: AnyRecord | null | undefined): s
   const sepsisBundle = context?.modules?.sepsis?.latestBundle;
   const telemedicineConsultation = context?.modules?.telemedicine?.latestConsultation;
   const labCriticalAlert = context?.modules?.lab?.latestCriticalAlert;
+  const imagingReport = context?.modules?.imaging?.latestReport;
   const pharmacyPrescription = context?.modules?.pharmacy?.latestPrescription;
   const latestVitals = context?.latestVitals;
 
@@ -75,6 +76,9 @@ export const buildSharedContextTags = (context: AnyRecord | null | undefined): s
   }
   if (labCriticalAlert?.id) {
     tags.push(`Lab Alert ${labCriticalAlert.id}`);
+  }
+  if (imagingReport?.id) {
+    tags.push(`Imaging ${imagingReport.id}`);
   }
   if (pharmacyPrescription?.prescription_number) {
     tags.push(`Rx ${pharmacyPrescription.prescription_number}`);
@@ -436,6 +440,7 @@ export const getLabOrderPrefill = (
   if (!context) return {};
 
   const latestLabAlert = context?.modules?.lab?.latestCriticalAlert;
+  const latestLabOrder = context?.modules?.lab?.latestOrder;
   const latestOncologyCase = context?.modules?.oncology?.latestCase;
   const latestSepsisScreening = context?.modules?.sepsis?.latestScreening;
   const latestTelemedicineConsultation = context?.modules?.telemedicine?.latestConsultation;
@@ -444,6 +449,8 @@ export const getLabOrderPrefill = (
   const priority: 'routine' | 'urgent' | 'stat' =
     severity === 'panic' || severity === 'critical'
       ? 'stat'
+      : normalizeText(latestLabOrder?.priority) === 'stat'
+        ? 'stat'
       : latestSepsisScreening?.sepsis_suspected
         ? 'urgent'
         : 'routine';
@@ -453,6 +460,9 @@ export const getLabOrderPrefill = (
     clinicalInfoLines.push(
       `Recent critical marker: ${latestLabAlert.component_name} = ${latestLabAlert.result_value}`,
     );
+  }
+  if (latestLabOrder?.clinical_info) {
+    clinicalInfoLines.push(`Latest lab order context: ${latestLabOrder.clinical_info}`);
   }
   if (latestOncologyCase?.primary_diagnosis) {
     clinicalInfoLines.push(`Oncology diagnosis: ${latestOncologyCase.primary_diagnosis}`);
@@ -470,6 +480,11 @@ export const getLabOrderPrefill = (
   if (latestLabAlert?.critical_range) {
     specialInstructionLines.push(`Critical range reference: ${latestLabAlert.critical_range}`);
   }
+  if (latestLabOrder?.special_instructions) {
+    specialInstructionLines.push(
+      `Latest lab order instruction: ${latestLabOrder.special_instructions}`,
+    );
+  }
 
   return {
     priority,
@@ -477,6 +492,117 @@ export const getLabOrderPrefill = (
     specialInstructions: specialInstructionLines.length
       ? specialInstructionLines.join('\n')
       : undefined,
+  };
+};
+
+export const getImagingOrderPrefill = (
+  context: AnyRecord | null | undefined,
+): {
+  priority?: 'routine' | 'urgent' | 'stat';
+  clinicalIndication?: string;
+  clinicalHistory?: string;
+  suspectedDiagnosis?: string;
+} => {
+  if (!context) return {};
+
+  const latestImagingReport = context?.modules?.imaging?.latestReport;
+  const latestLabAlert = context?.modules?.lab?.latestCriticalAlert;
+  const latestEdVisit = context?.modules?.ed?.latestVisit;
+  const latestCardiologyEncounter = context?.modules?.cardiology?.latestEncounter;
+  const latestOncologyCase = context?.modules?.oncology?.latestCase;
+
+  const criticalImaging =
+    Boolean(latestImagingReport?.is_critical) ||
+    normalizeText(latestImagingReport?.severity) === 'critical';
+  const criticalLab =
+    ['critical', 'panic'].includes(normalizeText(latestLabAlert?.severity));
+
+  const priority: 'routine' | 'urgent' | 'stat' = criticalImaging
+    ? 'stat'
+    : criticalLab
+      ? 'urgent'
+      : 'routine';
+
+  const indicationParts: string[] = [];
+  if (latestEdVisit?.chief_complaint) {
+    indicationParts.push(`ED complaint: ${latestEdVisit.chief_complaint}`);
+  }
+  if (latestCardiologyEncounter?.visit_reason) {
+    indicationParts.push(`Cardiology reason: ${latestCardiologyEncounter.visit_reason}`);
+  }
+  if (latestImagingReport?.clinical_indication) {
+    indicationParts.push(`Previous imaging indication: ${latestImagingReport.clinical_indication}`);
+  }
+
+  const historyLines: string[] = [];
+  if (latestImagingReport?.clinical_history) {
+    historyLines.push(`Prior imaging history: ${latestImagingReport.clinical_history}`);
+  }
+  if (latestImagingReport?.recommendations) {
+    historyLines.push(`Previous recommendation: ${latestImagingReport.recommendations}`);
+  }
+  if (latestLabAlert?.component_name && latestLabAlert?.result_value) {
+    historyLines.push(
+      `Related lab alert: ${latestLabAlert.component_name} ${latestLabAlert.result_value}`,
+    );
+  }
+  if (latestOncologyCase?.primary_diagnosis) {
+    historyLines.push(`Oncology diagnosis: ${latestOncologyCase.primary_diagnosis}`);
+  }
+
+  const suspectedDiagnosis =
+    latestImagingReport?.impression ||
+    latestOncologyCase?.primary_diagnosis ||
+    undefined;
+
+  return {
+    priority,
+    clinicalIndication: indicationParts.length ? indicationParts.join(' | ') : undefined,
+    clinicalHistory: historyLines.length ? historyLines.join('\n') : undefined,
+    suspectedDiagnosis,
+  };
+};
+
+export const getImagingOrderDuplicateGuard = (
+  context: AnyRecord | null | undefined,
+  draft: {
+    studyName?: string | null;
+    clinicalIndication?: string | null;
+    suspectedDiagnosis?: string | null;
+  },
+): DuplicateGuardPrompt | null => {
+  const latestReport = context?.modules?.imaging?.latestReport;
+  if (!latestReport) return null;
+
+  const recent = isWithinLastDays(
+    latestReport?.report_datetime || latestReport?.signed_at || latestReport?.created_at,
+    7,
+  );
+  if (!recent) return null;
+
+  const sameStudy =
+    normalizeText(draft.studyName) &&
+    normalizeText(draft.studyName) === normalizeText(latestReport?.study_name);
+
+  const sameIntent =
+    normalizeText(draft.suspectedDiagnosis) &&
+    normalizeText(draft.suspectedDiagnosis) === normalizeText(latestReport?.impression);
+
+  const sameIndication =
+    normalizeText(draft.clinicalIndication) &&
+    normalizeText(draft.clinicalIndication) === normalizeText(latestReport?.clinical_indication);
+
+  if (!sameStudy || (!sameIntent && !sameIndication)) {
+    return null;
+  }
+
+  return {
+    title: 'Possible Duplicate Imaging Order',
+    message:
+      `Recent ${latestReport.study_name || 'imaging'} report (${latestReport.id || 'existing'}) ` +
+      'matches the same study and indication in the last 7 days. Continue anyway?',
+    confirmText: 'Place New Imaging Order',
+    cancelText: 'Review Latest Imaging Report',
   };
 };
 

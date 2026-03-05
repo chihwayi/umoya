@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { TestTube, X, Search, Plus, Trash2, Calendar, Clock, User, Package } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { TestTube, X, Search, Trash2, Calendar, Clock, User, Package } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi } from '../services/api';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
+import { buildSharedContextTags, getLabOrderPrefill } from '../services/doctorContextAdapter';
 
 interface Appointment {
   id: string;
@@ -68,6 +69,79 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [loadingTests, setLoadingTests] = useState(false);
   const [orderConcept, setOrderConcept] = useState<SnomedConcept | null>(null);
+  const [selectedPatientContext, setSelectedPatientContext] = useState<any>(null);
+  const [loadingPatientContext, setLoadingPatientContext] = useState(false);
+
+  const applyContextPrefill = useCallback(
+    (context: any) => {
+      const prefill = getLabOrderPrefill(context);
+      setPriority((prev) => (prev === 'routine' && prefill.priority ? prefill.priority : prev));
+      setClinicalInfo((prev) => prev || prefill.clinicalInfo || appointment.notes || '');
+      setSpecialInstructions((prev) => prev || prefill.specialInstructions || '');
+    },
+    [appointment.notes],
+  );
+
+  const loadTests = useCallback(async () => {
+    try {
+      setLoadingTests(true);
+      const response = await ehrApi.getLabTests(
+        selectedCategory === 'all' ? undefined : selectedCategory,
+        undefined,
+        token,
+        tenantSlug,
+      );
+      setTests(response.data || []);
+    } catch (error) {
+      console.error('Failed to load tests:', error);
+      setTests([]);
+    } finally {
+      setLoadingTests(false);
+    }
+  }, [selectedCategory, tenantSlug, token]);
+
+  const loadOrderSets = useCallback(async () => {
+    try {
+      const response = await ehrApi.getLabOrderSets(undefined, token, tenantSlug);
+      setOrderSets(response.data || []);
+    } catch (error) {
+      console.error('Failed to load order sets:', error);
+      setOrderSets([]);
+    }
+  }, [tenantSlug, token]);
+
+  const searchTests = useCallback(async () => {
+    try {
+      setLoadingTests(true);
+      const response = await ehrApi.getLabTests(
+        selectedCategory === 'all' ? undefined : selectedCategory,
+        searchTerm,
+        token,
+        tenantSlug,
+      );
+      setTests(response.data || []);
+    } catch (error) {
+      console.error('Failed to search tests:', error);
+    } finally {
+      setLoadingTests(false);
+    }
+  }, [searchTerm, selectedCategory, tenantSlug, token]);
+
+  const loadSelectedPatientContext = useCallback(async () => {
+    if (!token || !tenantSlug || !appointment.patient.id) return;
+    try {
+      setLoadingPatientContext(true);
+      const response = await ehrApi.getPatientContext(appointment.patient.id, token, tenantSlug);
+      const context = response.data || null;
+      setSelectedPatientContext(context);
+      applyContextPrefill(context);
+    } catch (error) {
+      console.error('Failed to load patient context for lab order', error);
+      setSelectedPatientContext(null);
+    } finally {
+      setLoadingPatientContext(false);
+    }
+  }, [appointment.patient.id, applyContextPrefill, tenantSlug, token]);
 
   useEffect(() => {
     if (!open) {
@@ -79,57 +153,30 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       setClinicalInfo('');
       setSpecialInstructions('');
       setOrderConcept(null);
+      setSelectedPatientContext(null);
+      setLoadingPatientContext(false);
       return;
     }
-    loadTests();
-    loadOrderSets();
-  }, [open]);
-
-  const loadTests = async () => {
-    try {
-      setLoadingTests(true);
-      const response = await ehrApi.getLabTests(selectedCategory === 'all' ? undefined : selectedCategory, undefined, token, tenantSlug);
-      setTests(response.data || []);
-    } catch (error) {
-      console.error('Failed to load tests:', error);
-      setTests([]);
-    } finally {
-      setLoadingTests(false);
-    }
-  };
-
-  const loadOrderSets = async () => {
-    try {
-      const response = await ehrApi.getLabOrderSets(undefined, token, tenantSlug);
-      setOrderSets(response.data || []);
-    } catch (error) {
-      console.error('Failed to load order sets:', error);
-      setOrderSets([]);
-    }
-  };
-
-  const searchTests = async () => {
-    try {
-      setLoadingTests(true);
-      const response = await ehrApi.getLabTests(selectedCategory === 'all' ? undefined : selectedCategory, searchTerm, token, tenantSlug);
-      setTests(response.data || []);
-    } catch (error) {
-      console.error('Failed to search tests:', error);
-    } finally {
-      setLoadingTests(false);
-    }
-  };
+    void loadTests();
+    void loadOrderSets();
+    void loadSelectedPatientContext();
+  }, [loadOrderSets, loadSelectedPatientContext, loadTests, open]);
 
   useEffect(() => {
     if (searchTerm) {
       const debounce = setTimeout(() => {
-        searchTests();
+        void searchTests();
       }, 300);
       return () => clearTimeout(debounce);
     } else {
-      loadTests();
+      void loadTests();
     }
-  }, [searchTerm, selectedCategory]);
+  }, [loadTests, searchTerm, searchTests, selectedCategory]);
+
+  const selectedPatientContextTags = useMemo(
+    () => buildSharedContextTags(selectedPatientContext),
+    [selectedPatientContext],
+  );
 
   const handleAddOrderSet = async (orderSet: LabOrderSet) => {
     try {
@@ -295,6 +342,27 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
 
           {/* Content - Scrollable */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {(loadingPatientContext || selectedPatientContextTags.length > 0) && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                  Shared patient context
+                </p>
+                {loadingPatientContext ? (
+                  <p className="mt-2 text-xs text-indigo-600">Loading reusable context...</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedPatientContextTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 text-[11px] rounded-full bg-white border border-indigo-200 text-indigo-700"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
               <SnomedConceptPicker
                 value={orderConcept}

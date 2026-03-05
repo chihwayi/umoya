@@ -349,6 +349,30 @@ const NurseDashboard: React.FC = () => {
       return;
     }
 
+    if (item.module === 'lab') {
+      setActiveSection('main');
+      setActiveTab('orders');
+      showSuccess(
+        'Opened lab workflow',
+        item.patient_name
+          ? `Review lab workflow and critical result context for ${item.patient_name}.`
+          : 'Review lab workflow context for the selected escalation.',
+      );
+      return;
+    }
+
+    if (item.module === 'imaging') {
+      setActiveSection('main');
+      setActiveTab('orders');
+      showSuccess(
+        'Opened radiology workflow',
+        item.patient_name
+          ? `Review radiology follow-up context for ${item.patient_name} and execute queue actions.`
+          : 'Review radiology follow-up context and execute queue actions.',
+      );
+      return;
+    }
+
     setActiveSection('hiv');
     setActiveTab('hiv-patients');
     showSuccess(
@@ -679,6 +703,33 @@ const NurseDashboard: React.FC = () => {
             alertId:
               item.metadata?.alert_id ||
               recommendationItem?.action_payload?.alert_id ||
+              item.source_record_id ||
+              null,
+            actionId: String(recommendationItem?.id || ''),
+            actionType: recommendationItem?.type || null,
+            actionTitle: recommendationItem?.title || null,
+            actionPayload: recommendationItem?.action_payload || null,
+            destinationRole: item.destination_role || null,
+            destinationService: item.destination_service || null,
+            destinationSpecialty: item.destination_specialty || null,
+            destinationUserId: item.destination_user_id || null,
+            destinationUserName: item.destination_user_name || null,
+            destinationFacilityId: item.destination_facility_id || null,
+            destinationFacilityName: item.destination_facility_name || null,
+          },
+          token,
+          activeTenant,
+        );
+      } else if (item.module === 'imaging') {
+        await ehrApi.executeImagingNurseRecommendationAction(
+          {
+            itemId: item.id,
+            itemType: item.item_type,
+            sourceRecordId: item.source_record_id || null,
+            patientId: item.patient_id || null,
+            reportId:
+              item.metadata?.imaging_report_id ||
+              recommendationItem?.action_payload?.report_id ||
               item.source_record_id ||
               null,
             actionId: String(recommendationItem?.id || ''),

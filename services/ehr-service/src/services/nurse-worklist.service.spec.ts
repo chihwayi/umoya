@@ -501,6 +501,7 @@ describe('NurseWorklistService', () => {
       blood_bank: 0,
       telemedicine: 0,
       lab: 0,
+      imaging: 0,
       pharmacy: 0,
       accounts: 0,
       specialty: 0,
@@ -1758,7 +1759,7 @@ describe('NurseWorklistService', () => {
     );
   });
 
-  it('builds ophthalmology, telemedicine, lab, and pharmacy protocol items with executable bundles', async () => {
+  it('builds ophthalmology, telemedicine, lab, imaging, and pharmacy protocol items with executable bundles', async () => {
     const { service } = makeService();
 
     const tenantDb = {
@@ -1840,6 +1841,40 @@ describe('NurseWorklistService', () => {
             },
           ];
         }
+        if (sql.includes('FROM imaging_reports r') && sql.includes('imaging_report_acknowledgements ack')) {
+          return [
+            {
+              imaging_report_id: 'img-report-1',
+              imaging_order_id: 'img-order-1',
+              imaging_study_id: 'img-study-1',
+              patient_id: 'patient-img-1',
+              report_status: 'final',
+              is_critical: true,
+              report_severity: 'critical',
+              follow_up_recommended: true,
+              follow_up_interval: '24h',
+              recommendations: null,
+              critical_findings: 'Immediate follow-up required',
+              signed_at: '2026-03-04T08:30:00.000Z',
+              report_created_at: '2026-03-04T08:00:00.000Z',
+              report_updated_at: '2026-03-04T08:30:00.000Z',
+              order_number: 'IMG-001',
+              order_status: 'completed',
+              payment_status: 'payment_confirmed',
+              priority: 'urgent',
+              ordering_provider: 'doctor-spec-1',
+              study_name: 'CT Chest',
+              body_part: 'Chest',
+              modality_name: 'CT',
+              modality_code: 'CT',
+              patient_name: 'Imaging Patient',
+              patient_number: 'P-IMG-1',
+              ordering_provider_name: 'Dr. Specialist',
+              acknowledgement_id: null,
+              acknowledged_at: null,
+            },
+          ];
+        }
         if (sql.includes('FROM prescriptions p')) {
           return [
             {
@@ -1870,6 +1905,7 @@ describe('NurseWorklistService', () => {
     const ophthalmologyItem = result.items.find((item: any) => item.module === 'ophthalmology');
     const telemedicineItem = result.items.find((item: any) => item.module === 'telemedicine');
     const labItem = result.items.find((item: any) => item.module === 'lab');
+    const imagingItem = result.items.find((item: any) => item.module === 'imaging');
     const pharmacyItem = result.items.find((item: any) => item.module === 'pharmacy');
 
     expect(result.summary).toEqual(
@@ -1877,8 +1913,9 @@ describe('NurseWorklistService', () => {
         ophthalmology: 1,
         telemedicine: 1,
         lab: 1,
+        imaging: 1,
         pharmacy: 1,
-        specialty: 4,
+        specialty: 5,
       }),
     );
     expect(ophthalmologyItem?.metadata?.recommendation_bundle?.items).toEqual(
@@ -1902,6 +1939,13 @@ describe('NurseWorklistService', () => {
         expect.objectContaining({ id: 'escalate-lab-doctor-sync' }),
       ]),
     );
+    expect(imagingItem?.metadata?.recommendation_bundle?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'acknowledge-radiology-report' }),
+        expect.objectContaining({ id: 'prepare-radiology-followup-bundle' }),
+        expect.objectContaining({ id: 'escalate-radiology-doctor-sync' }),
+      ]),
+    );
     expect(pharmacyItem?.metadata?.recommendation_bundle?.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'prepare-pharmacy-dispense-plan' }),
@@ -1911,7 +1955,7 @@ describe('NurseWorklistService', () => {
     );
   });
 
-  it('executes ophthalmology, telemedicine, lab, and pharmacy recommendation actions', async () => {
+  it('executes ophthalmology, telemedicine, lab, imaging, and pharmacy recommendation actions', async () => {
     const { service, mocks } = makeService();
 
     const tenantDb = {
@@ -1995,6 +2039,60 @@ describe('NurseWorklistService', () => {
               alerted_at: '2026-03-04T07:00:00.000Z',
               acknowledged_at: null,
               escalated_at: null,
+            },
+          ];
+        }
+        if (
+          sql.includes('FROM imaging_reports r') &&
+          sql.includes('INNER JOIN imaging_orders io ON io.id = r.imaging_order_id') &&
+          sql.includes('WHERE r.id = $1')
+        ) {
+          return [
+            {
+              id: 'img-report-1',
+              imaging_order_id: 'img-order-1',
+              imaging_study_id: 'img-study-1',
+              patient_id: 'patient-img-1',
+              report_status: 'final',
+              is_critical: true,
+              severity: 'critical',
+              follow_up_recommended: true,
+              follow_up_interval: '24h',
+              findings: 'Consolidation',
+              impression: 'Probable pneumonia',
+              recommendations: null,
+              critical_findings: null,
+              created_at: '2026-03-04T08:00:00.000Z',
+              updated_at: '2026-03-04T08:30:00.000Z',
+              signed_at: '2026-03-04T08:30:00.000Z',
+              order_number: 'IMG-001',
+              order_status: 'completed',
+              payment_status: 'payment_confirmed',
+              priority: 'urgent',
+              ordering_provider: 'doctor-img-1',
+              acknowledgement_id: null,
+              acknowledged_at: null,
+              acknowledgment_notes: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE imaging_reports') && sql.includes('SET recommendations = $1, updated_at = NOW()')) {
+          return [
+            {
+              id: 'img-report-1',
+              imaging_order_id: 'img-order-1',
+              imaging_study_id: 'img-study-1',
+              patient_id: 'patient-img-1',
+              report_status: 'final',
+              is_critical: true,
+              severity: 'critical',
+              follow_up_recommended: true,
+              follow_up_interval: '24h',
+              recommendations: 'Follow-up bundle prepared',
+              critical_findings: null,
+              created_at: '2026-03-04T08:00:00.000Z',
+              updated_at: '2026-03-04T09:00:00.000Z',
+              signed_at: '2026-03-04T08:30:00.000Z',
             },
           ];
         }
@@ -2131,6 +2229,28 @@ describe('NurseWorklistService', () => {
       expect.objectContaining({
         operation: 'lab_alert_acknowledged',
         alertId: 'lab-alert-1',
+      }),
+    );
+
+    const imagingResult = await service.executeImagingRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'imaging-report:img-report-1',
+        itemType: 'imaging_doctor_result_followup',
+        sourceRecordId: 'img-report-1',
+        patientId: 'patient-img-1',
+        reportId: 'img-report-1',
+        actionId: 'prepare-radiology-followup-bundle',
+        actionType: 'order_set',
+        actionTitle: 'Prepare radiology follow-up bundle',
+      },
+      { sessionId: 'session-img-1' },
+    );
+    expect(imagingResult.result).toEqual(
+      expect.objectContaining({
+        operation: 'radiology_followup_bundle_prepared',
+        reportId: 'img-report-1',
       }),
     );
 
