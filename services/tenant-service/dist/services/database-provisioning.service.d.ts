@@ -27,7 +27,9 @@ export declare class DatabaseProvisioningService {
     private getGatewayConfigurationStatements;
     private getPortalEnhancementStatements;
     private getMedicationRemindersSchemaStatements;
+    private getMaternityCareTaskSchemaStatements;
     private getSprint46NurseCopilotSchemaStatements;
+    private getSprint47NurseCrossModuleWorkflowSchemaStatements;
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;

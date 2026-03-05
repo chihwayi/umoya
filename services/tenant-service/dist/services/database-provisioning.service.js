@@ -421,6 +421,20 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
                 statements: () => this.getSprint46NurseCopilotSchemaStatements(),
             },
             {
+                id: 'sprint47_nurse_cross_module_workflow',
+                label: 'Sprint 47 - Nurse Cross-Module Workflow',
+                version: '2026.03.04',
+                description: 'Shared workflow state for HIV, handoff, and medication escalations in the nurse cross-module queue',
+                statements: () => this.getSprint47NurseCrossModuleWorkflowSchemaStatements(),
+            },
+            {
+                id: 'maternity_care_tasks',
+                label: 'Maternity Care Task Workflow',
+                version: '2026.03.04',
+                description: 'Adds maternity escalation task persistence for nurse-doctor workflow state transitions',
+                statements: () => this.getMaternityCareTaskSchemaStatements(),
+            },
+            {
                 id: 'medication_reminders',
                 label: 'Medication Reminders',
                 version: '2026.02.12',
@@ -531,6 +545,47 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS idx_medication_reminders_prescription ON medication_reminders(prescription_id)`,
         ];
     }
+    getMaternityCareTaskSchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS maternity_care_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        source_type VARCHAR(30) NOT NULL CHECK (source_type IN ('anc_visit','delivery','postnatal_visit','risk_factor','manual')),
+        source_record_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','actioned','closed')),
+        priority VARCHAR(20) NOT NULL DEFAULT 'high' CHECK (priority IN ('low','medium','high','critical')),
+        title VARCHAR(255) NOT NULL,
+        summary TEXT,
+        blocker_count INTEGER NOT NULL DEFAULT 0,
+        warning_count INTEGER NOT NULL DEFAULT 0,
+        required_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+        suggested_orders JSONB NOT NULL DEFAULT '[]'::jsonb,
+        rule_trace JSONB NOT NULL DEFAULT '[]'::jsonb,
+        task_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+        assigned_to UUID REFERENCES users(id),
+        created_by UUID REFERENCES users(id),
+        acknowledged_by UUID REFERENCES users(id),
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        actioned_by UUID REFERENCES users(id),
+        actioned_at TIMESTAMP WITH TIME ZONE,
+        closed_by UUID REFERENCES users(id),
+        closed_at TIMESTAMP WITH TIME ZONE,
+        closed_reason TEXT,
+        latest_note TEXT,
+        last_event_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_enrollment_id ON maternity_care_tasks(maternity_enrollment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_patient_id ON maternity_care_tasks(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_status ON maternity_care_tasks(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_priority ON maternity_care_tasks(priority)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_assigned_to ON maternity_care_tasks(assigned_to)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_source ON maternity_care_tasks(source_type, source_record_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_maternity_care_tasks_last_event_at ON maternity_care_tasks(last_event_at DESC)`,
+        ];
+    }
     getSprint46NurseCopilotSchemaStatements() {
         return [
             `CREATE TABLE IF NOT EXISTS nurse_copilot_task_events (
@@ -613,6 +668,52 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `DROP TRIGGER IF EXISTS update_nurse_handoff_workflow_state_updated_at ON nurse_handoff_workflow_state`,
             `CREATE TRIGGER update_nurse_handoff_workflow_state_updated_at
         BEFORE UPDATE ON nurse_handoff_workflow_state
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+        ];
+    }
+    getSprint47NurseCrossModuleWorkflowSchemaStatements() {
+        return [
+            `CREATE TABLE IF NOT EXISTS nurse_cross_module_workflow_state (
+        workflow_key VARCHAR(160) PRIMARY KEY,
+        module VARCHAR(40) NOT NULL,
+        item_type VARCHAR(80) NOT NULL,
+        source_record_id VARCHAR(160),
+        enrollment_id UUID,
+        patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'acknowledged', 'completed')),
+        destination_role VARCHAR(80),
+        destination_service VARCHAR(120),
+        destination_specialty VARCHAR(160),
+        destination_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        destination_facility_id UUID,
+        destination_facility_name VARCHAR(255),
+        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        note TEXT,
+        context JSONB,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_module_status ON nurse_cross_module_workflow_state(module, status)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_item_type ON nurse_cross_module_workflow_state(item_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_patient ON nurse_cross_module_workflow_state(patient_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_enrollment ON nurse_cross_module_workflow_state(enrollment_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_destination_role ON nurse_cross_module_workflow_state(destination_role)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_destination_user ON nurse_cross_module_workflow_state(destination_user_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_nurse_cross_module_workflow_completed_at ON nurse_cross_module_workflow_state(completed_at DESC)`,
+            `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+            `DROP TRIGGER IF EXISTS update_nurse_cross_module_workflow_state_updated_at ON nurse_cross_module_workflow_state`,
+            `CREATE TRIGGER update_nurse_cross_module_workflow_state_updated_at
+        BEFORE UPDATE ON nurse_cross_module_workflow_state
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
         ];
@@ -1978,11 +2079,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_expected_delivery_date ON maternity_enrollments(expected_delivery_date)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_previous_complications_snomed ON maternity_enrollments USING GIN(previous_complications_snomed)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_enrollments_current_complications_snomed ON maternity_enrollments USING GIN(current_complications_snomed)`);
-        statements.push(`CREATE TABLE IF NOT EXISTS anc_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_number INTEGER NOT NULL, visit_date DATE NOT NULL, gestational_age INTEGER, gestational_age_days INTEGER, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, respiratory_rate INTEGER, fundal_height DECIMAL(4,1), fetal_heart_rate INTEGER, fetal_presentation VARCHAR(50), fetal_movement VARCHAR(50), edema VARCHAR(50), edema_location TEXT, proteinuria VARCHAR(50), glucose_urine VARCHAR(50), hemoglobin DECIMAL(4,1), blood_group VARCHAR(10), rhesus VARCHAR(10), vdrl_syphilis VARCHAR(20), hiv_status VARCHAR(20), hep_b_status VARCHAR(20), tetanus_immunization BOOLEAN, ipt_malaria INTEGER, iron_folate BOOLEAN, deworming BOOLEAN, insecticide_treated_net BOOLEAN, danger_signs_discussed BOOLEAN, birth_plan_discussed BOOLEAN, complications_identified TEXT, complications_snomed JSONB DEFAULT '[]'::jsonb, interventions TEXT, interventions_snomed JSONB DEFAULT '[]'::jsonb, referral_needed BOOLEAN, referral_reason TEXT, referral_reason_snomed_code VARCHAR(50), referral_reason_snomed_term TEXT, referral_reason_snomed_module_id VARCHAR(50), referral_reason_snomed_definition_status VARCHAR(50), referral_facility VARCHAR(255), next_visit_date DATE, provider UUID REFERENCES users(id), notes TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+        statements.push(`CREATE TABLE IF NOT EXISTS anc_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_number INTEGER NOT NULL, visit_date DATE NOT NULL, gestational_age INTEGER, gestational_age_days INTEGER, weight DECIMAL(5,2), height DECIMAL(5,2), bmi DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, respiratory_rate INTEGER, fundal_height DECIMAL(4,1), fetal_heart_rate INTEGER, fetal_presentation VARCHAR(50), fetal_movement VARCHAR(50), edema VARCHAR(50), edema_location TEXT, proteinuria VARCHAR(50), glucose_urine VARCHAR(50), hemoglobin DECIMAL(4,1), blood_group VARCHAR(10), rhesus VARCHAR(10), vdrl_syphilis VARCHAR(20), hiv_status VARCHAR(20), hep_b_status VARCHAR(20), tetanus_immunization BOOLEAN, ipt_malaria INTEGER, iron_folate BOOLEAN, deworming BOOLEAN, insecticide_treated_net BOOLEAN, danger_signs_discussed BOOLEAN, birth_plan_discussed BOOLEAN, complications_identified TEXT, complications_snomed JSONB DEFAULT '[]'::jsonb, interventions TEXT, interventions_snomed JSONB DEFAULT '[]'::jsonb, referral_needed BOOLEAN, referral_reason TEXT, referral_reason_snomed_code VARCHAR(50), referral_reason_snomed_term TEXT, referral_reason_snomed_module_id VARCHAR(50), referral_reason_snomed_definition_status VARCHAR(50), referral_facility VARCHAR(255), next_visit_date DATE, provider UUID REFERENCES users(id), notes TEXT, vitals_source_vital_id UUID REFERENCES vitals(id), vitals_auto_populated_at TIMESTAMP WITH TIME ZONE, vitals_overridden BOOLEAN DEFAULT false, vitals_override_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_maternity_enrollment_id ON anc_visits(maternity_enrollment_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_patient_id ON anc_visits(patient_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_visit_date ON anc_visits(visit_date)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_provider ON anc_visits(provider)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_vitals_source ON anc_visits(vitals_source_vital_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_next_visit_date ON anc_visits(next_visit_date)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_complications_snomed ON anc_visits USING GIN(complications_snomed)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_anc_visits_interventions_snomed ON anc_visits USING GIN(interventions_snomed)`);
@@ -2007,11 +2109,12 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_congenital_anomalies_snomed ON birth_outcomes USING GIN(congenital_anomalies_snomed)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_neonatal_complications_snomed ON birth_outcomes USING GIN(neonatal_complications_snomed)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_birth_outcomes_cause_of_death_snomed ON birth_outcomes(cause_of_death_snomed_code)`);
-        statements.push(`CREATE TABLE IF NOT EXISTS postnatal_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, delivery_id UUID REFERENCES deliveries(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_date DATE NOT NULL, days_postpartum INTEGER, weight DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, general_condition VARCHAR(50), uterine_involution VARCHAR(50), lochia VARCHAR(50), perineum_condition VARCHAR(50), breast_condition VARCHAR(50), breastfeeding_status VARCHAR(50), breastfeeding_problems TEXT, emotional_status VARCHAR(50), danger_signs TEXT, danger_signs_snomed JSONB DEFAULT '[]'::jsonb, family_planning_discussed BOOLEAN, family_planning_method VARCHAR(100), family_planning_method_snomed_code VARCHAR(50), family_planning_method_snomed_term TEXT, family_planning_method_snomed_module_id VARCHAR(50), family_planning_method_snomed_definition_status VARCHAR(50), newborn_status VARCHAR(50), newborn_complications TEXT, newborn_complications_snomed JSONB DEFAULT '[]'::jsonb, provider UUID REFERENCES users(id), notes TEXT, next_visit_date DATE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
+        statements.push(`CREATE TABLE IF NOT EXISTS postnatal_visits (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, delivery_id UUID REFERENCES deliveries(id), patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE, visit_date DATE NOT NULL, days_postpartum INTEGER, weight DECIMAL(5,2), blood_pressure_systolic INTEGER, blood_pressure_diastolic INTEGER, temperature DECIMAL(4,2), pulse INTEGER, general_condition VARCHAR(50), uterine_involution VARCHAR(50), lochia VARCHAR(50), perineum_condition VARCHAR(50), breast_condition VARCHAR(50), breastfeeding_status VARCHAR(50), breastfeeding_problems TEXT, emotional_status VARCHAR(50), danger_signs TEXT, danger_signs_snomed JSONB DEFAULT '[]'::jsonb, family_planning_discussed BOOLEAN, family_planning_method VARCHAR(100), family_planning_method_snomed_code VARCHAR(50), family_planning_method_snomed_term TEXT, family_planning_method_snomed_module_id VARCHAR(50), family_planning_method_snomed_definition_status VARCHAR(50), newborn_status VARCHAR(50), newborn_complications TEXT, newborn_complications_snomed JSONB DEFAULT '[]'::jsonb, provider UUID REFERENCES users(id), notes TEXT, next_visit_date DATE, vitals_source_vital_id UUID REFERENCES vitals(id), vitals_auto_populated_at TIMESTAMP WITH TIME ZONE, vitals_overridden BOOLEAN DEFAULT false, vitals_override_reason TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_maternity_enrollment_id ON postnatal_visits(maternity_enrollment_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_patient_id ON postnatal_visits(patient_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_visit_date ON postnatal_visits(visit_date)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_provider ON postnatal_visits(provider)`);
+        statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_vitals_source ON postnatal_visits(vitals_source_vital_id)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_newborn_complications_snomed ON postnatal_visits USING GIN(newborn_complications_snomed)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_postnatal_visits_family_planning_snomed ON postnatal_visits(family_planning_method_snomed_code)`);
         statements.push(`CREATE TABLE IF NOT EXISTS maternity_risk_factors (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), maternity_enrollment_id UUID NOT NULL REFERENCES maternity_enrollments(id) ON DELETE CASCADE, risk_factor VARCHAR(100) NOT NULL, risk_category VARCHAR(20) CHECK (risk_category IN ('medical','obstetric','social')), severity VARCHAR(20) CHECK (severity IN ('low','medium','high')), identified_date DATE NOT NULL, resolved_date DATE, notes TEXT, created_by UUID REFERENCES users(id), risk_factor_snomed_code VARCHAR(50), risk_factor_snomed_term TEXT, risk_factor_snomed_module_id VARCHAR(50), risk_factor_snomed_definition_status VARCHAR(50), created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())`);
@@ -2019,6 +2122,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_risk_category ON maternity_risk_factors(risk_category)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_severity ON maternity_risk_factors(severity)`);
         statements.push(`CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_snomed ON maternity_risk_factors(risk_factor_snomed_code)`);
+        statements.push(...this.getMaternityCareTaskSchemaStatements());
         statements.push(`
       CREATE TABLE IF NOT EXISTS hiv_tests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -5084,6 +5188,10 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_term TEXT`,
             `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_module_id VARCHAR(50)`,
             `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS referral_reason_snomed_definition_status VARCHAR(50)`,
+            `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_source_vital_id UUID REFERENCES vitals(id)`,
+            `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_auto_populated_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_overridden BOOLEAN DEFAULT false`,
+            `ALTER TABLE anc_visits ADD COLUMN IF NOT EXISTS vitals_override_reason TEXT`,
             `ALTER TABLE ultrasound_scans ADD COLUMN IF NOT EXISTS anomalies_snomed JSONB DEFAULT '[]'::jsonb`,
             `ALTER TABLE ultrasound_scans ADD COLUMN IF NOT EXISTS findings_snomed JSONB DEFAULT '[]'::jsonb`,
             `ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS indication_snomed_code VARCHAR(50)`,
@@ -5103,6 +5211,10 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS family_planning_method_snomed_module_id VARCHAR(50)`,
             `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS family_planning_method_snomed_definition_status VARCHAR(50)`,
             `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS newborn_complications_snomed JSONB DEFAULT '[]'::jsonb`,
+            `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_source_vital_id UUID REFERENCES vitals(id)`,
+            `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_auto_populated_at TIMESTAMP WITH TIME ZONE`,
+            `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_overridden BOOLEAN DEFAULT false`,
+            `ALTER TABLE postnatal_visits ADD COLUMN IF NOT EXISTS vitals_override_reason TEXT`,
             `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_code VARCHAR(50)`,
             `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_term TEXT`,
             `ALTER TABLE maternity_risk_factors ADD COLUMN IF NOT EXISTS risk_factor_snomed_module_id VARCHAR(50)`,
@@ -5124,6 +5236,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS idx_anc_visits_complications_snomed ON anc_visits USING GIN(complications_snomed)`,
             `CREATE INDEX IF NOT EXISTS idx_anc_visits_interventions_snomed ON anc_visits USING GIN(interventions_snomed)`,
             `CREATE INDEX IF NOT EXISTS idx_anc_visits_referral_reason_snomed ON anc_visits(referral_reason_snomed_code)`,
+            `CREATE INDEX IF NOT EXISTS idx_anc_visits_vitals_source ON anc_visits(vitals_source_vital_id)`,
             `CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_anomalies_snomed ON ultrasound_scans USING GIN(anomalies_snomed)`,
             `CREATE INDEX IF NOT EXISTS idx_ultrasound_scans_findings_snomed ON ultrasound_scans USING GIN(findings_snomed)`,
             `CREATE INDEX IF NOT EXISTS idx_deliveries_maternal_complications_snomed ON deliveries USING GIN(maternal_complications_snomed)`,
@@ -5132,6 +5245,7 @@ let DatabaseProvisioningService = DatabaseProvisioningService_1 = class Database
             `CREATE INDEX IF NOT EXISTS idx_birth_outcomes_cause_of_death_snomed ON birth_outcomes(cause_of_death_snomed_code)`,
             `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_newborn_complications_snomed ON postnatal_visits USING GIN(newborn_complications_snomed)`,
             `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_family_planning_snomed ON postnatal_visits(family_planning_method_snomed_code)`,
+            `CREATE INDEX IF NOT EXISTS idx_postnatal_visits_vitals_source ON postnatal_visits(vitals_source_vital_id)`,
             `CREATE INDEX IF NOT EXISTS idx_maternity_risk_factors_snomed ON maternity_risk_factors(risk_factor_snomed_code)`,
             `CREATE INDEX IF NOT EXISTS idx_triage_chief_complaint_snomed ON triage_assessments(chief_complaint_snomed_code)`,
             `CREATE INDEX IF NOT EXISTS idx_triage_observations_snomed ON triage_assessments USING GIN(observations_snomed)`,
