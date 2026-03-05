@@ -46,6 +46,7 @@
     "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
     "lint:changed": "node scripts/lint-changed-files.js",
     "lint:changed:strict": "node scripts/lint-changed-files.js --strict",
+    "lint:doctor:changed:strict": "node scripts/lint-doctor-changed-files.js",
     "check:proxy-only": "node scripts/check-cdss-proxy-only.js"
   },
   "eslintConfig": {

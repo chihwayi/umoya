@@ -98,6 +98,11 @@ export class PatientService {
       sepsisBundleRows,
       bloodTransfusionRows,
       bloodTransfusionActiveCountRows,
+      telemedicineConsultationRows,
+      labCriticalAlertRows,
+      labCriticalAlertOpenCountRows,
+      pharmacyPrescriptionRows,
+      pharmacyPrescriptionActiveCountRows,
     ] = await Promise.all([
       this.safeQuery(
         tenantDb,
@@ -345,6 +350,93 @@ export class PatientService {
         `,
         [patientId],
       ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          id,
+          doctor_id,
+          consultation_type,
+          status,
+          scheduled_start_time,
+          actual_start_time,
+          patient_consent,
+          consent_date,
+          technical_issues,
+          notes
+        FROM telemedicine_consultations
+        WHERE patient_id = $1
+        ORDER BY COALESCE(actual_start_time, scheduled_start_time, created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          lca.id,
+          lca.lab_order_id,
+          lca.component_name,
+          lca.result_value,
+          lca.critical_range,
+          lca.severity,
+          lca.alert_status,
+          lca.alerted_at,
+          lca.acknowledged_at,
+          lo.status AS lab_order_status
+        FROM lab_critical_alerts lca
+        LEFT JOIN lab_orders lo ON lo.id = lca.lab_order_id
+        WHERE lca.patient_id = $1
+        ORDER BY COALESCE(lca.alerted_at, lca.created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM lab_critical_alerts
+        WHERE patient_id = $1
+          AND COALESCE(alert_status, 'pending') NOT IN ('resolved', 'closed')
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT
+          p.id,
+          p.prescription_number,
+          p.medication_name,
+          p.generic_name,
+          p.dosage,
+          p.frequency,
+          p.quantity,
+          p.status,
+          p.prescribed_date,
+          p.created_at,
+          p.doctor_id,
+          u.first_name || ' ' || u.last_name AS prescriber_name
+        FROM prescriptions p
+        LEFT JOIN users u ON u.id = p.doctor_id
+        WHERE p.patient_id = $1
+        ORDER BY COALESCE(p.prescribed_date, p.created_at) DESC
+        LIMIT 1
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT COUNT(*)::int AS active_count
+        FROM prescriptions
+        WHERE patient_id = $1
+          AND COALESCE(status, 'active') = 'active'
+        `,
+        [patientId],
+      ),
     ]);
 
     const latestVitals = latestVitalsRows[0] || null;
@@ -359,6 +451,13 @@ export class PatientService {
     const latestSepsisBundle = sepsisBundleRows[0] || null;
     const latestBloodTransfusion = bloodTransfusionRows[0] || null;
     const bloodTransfusionActiveCount = Number(bloodTransfusionActiveCountRows[0]?.active_count || 0);
+    const latestTelemedicineConsultation = telemedicineConsultationRows[0] || null;
+    const latestLabCriticalAlert = labCriticalAlertRows[0] || null;
+    const labCriticalAlertOpenCount = Number(labCriticalAlertOpenCountRows[0]?.active_count || 0);
+    const latestPharmacyPrescription = pharmacyPrescriptionRows[0] || null;
+    const pharmacyPrescriptionActiveCount = Number(
+      pharmacyPrescriptionActiveCountRows[0]?.active_count || 0,
+    );
 
     const [latestHivVisitRows, latestAncVisitRows, latestPostnatalVisitRows, latestDeliveryRows] = await Promise.all([
       latestHivEnrollment?.id
@@ -541,6 +640,17 @@ export class PatientService {
         bloodBank: {
           latestTransfusion: latestBloodTransfusion,
           activeTransfusionCount: bloodTransfusionActiveCount,
+        },
+        telemedicine: {
+          latestConsultation: latestTelemedicineConsultation,
+        },
+        lab: {
+          latestCriticalAlert: latestLabCriticalAlert,
+          unresolvedAlertCount: labCriticalAlertOpenCount,
+        },
+        pharmacy: {
+          latestPrescription: latestPharmacyPrescription,
+          activePrescriptionCount: pharmacyPrescriptionActiveCount,
         },
       },
       generatedAt: new Date().toISOString(),

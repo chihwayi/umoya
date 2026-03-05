@@ -44,6 +44,9 @@ describe('PatientController', () => {
         hiv: { latestEnrollment: { id: 'hiv-enroll-1' } },
         maternity: { latestEnrollment: null },
         oncology: { latestCase: null, activeCaseCount: 0 },
+        telemedicine: { latestConsultation: null },
+        lab: { latestCriticalAlert: null, unresolvedAlertCount: 0 },
+        pharmacy: { latestPrescription: null, activePrescriptionCount: 0 },
       },
       generatedAt: '2026-03-05T12:00:00.000Z',
     };
@@ -55,4 +58,3 @@ describe('PatientController', () => {
     expect(result).toEqual(expected);
   });
 });
-

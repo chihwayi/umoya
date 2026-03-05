@@ -12,6 +12,7 @@ import PatientManagement from './pages/PatientManagement';
 import PatientDetail from './pages/PatientDetail';
 import AppointmentManagement from './pages/AppointmentManagement';
 import DoctorDashboard from './pages/DoctorDashboard';
+import DoctorSyncExecutionHub from './pages/DoctorSyncExecutionHub';
 import DoctorPatientDetail from './pages/DoctorPatientDetail';
 import DoctorAppointmentManagement from './pages/DoctorAppointmentManagement';
 import DoctorPatientsList from './pages/DoctorPatientsList';
@@ -128,6 +129,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor']}>
                   <DoctorDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/doctor/sync/:moduleKey"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor']}>
+                  <DoctorSyncExecutionHub />
                 </RoleProtectedRoute>
               }
             />

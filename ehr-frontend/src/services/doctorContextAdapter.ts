@@ -44,6 +44,9 @@ export const buildSharedContextTags = (context: AnyRecord | null | undefined): s
   const ophthalmologyEncounter = context?.modules?.ophthalmology?.latestEncounter;
   const edVisit = context?.modules?.ed?.latestVisit;
   const sepsisBundle = context?.modules?.sepsis?.latestBundle;
+  const telemedicineConsultation = context?.modules?.telemedicine?.latestConsultation;
+  const labCriticalAlert = context?.modules?.lab?.latestCriticalAlert;
+  const pharmacyPrescription = context?.modules?.pharmacy?.latestPrescription;
   const latestVitals = context?.latestVitals;
 
   if (hivEnrollment?.enrollment_number) {
@@ -66,6 +69,15 @@ export const buildSharedContextTags = (context: AnyRecord | null | undefined): s
   }
   if (sepsisBundle?.id) {
     tags.push(`Sepsis ${sepsisBundle.id}`);
+  }
+  if (telemedicineConsultation?.id) {
+    tags.push(`Telemedicine ${telemedicineConsultation.id}`);
+  }
+  if (labCriticalAlert?.id) {
+    tags.push(`Lab Alert ${labCriticalAlert.id}`);
+  }
+  if (pharmacyPrescription?.prescription_number) {
+    tags.push(`Rx ${pharmacyPrescription.prescription_number}`);
   }
   if (latestVitals?.recordedAt) {
     tags.push(`Vitals ${String(latestVitals.recordedAt).slice(0, 10)}`);
@@ -382,5 +394,129 @@ export const getEdRegistrationDuplicateGuard = (
       `with the same complaint in the last 48 hours. Continue anyway?`,
     confirmText: 'Register New ED Visit',
     cancelText: 'Review Existing ED Visit',
+  };
+};
+
+export const getTelemedicineConsultationPrefill = (
+  context: AnyRecord | null | undefined,
+): {
+  consultationType?: string;
+  scheduledDateTime: string;
+  notes?: string;
+} => {
+  const latestConsultation = context?.modules?.telemedicine?.latestConsultation;
+  const latestEdVisit = context?.modules?.ed?.latestVisit;
+  const latestVitals = context?.latestVitals;
+
+  const noteLines: string[] = [];
+  if (latestConsultation?.technical_issues) {
+    noteLines.push(`Previous technical issue: ${latestConsultation.technical_issues}`);
+  }
+  if (latestEdVisit?.chief_complaint) {
+    noteLines.push(`Recent ED complaint: ${latestEdVisit.chief_complaint}`);
+  }
+  if (latestVitals?.bloodPressure) {
+    noteLines.push(`Latest BP: ${latestVitals.bloodPressure}`);
+  }
+
+  return {
+    consultationType: latestConsultation?.consultation_type || undefined,
+    scheduledDateTime: toLocalDateTimeInputValue(),
+    notes: noteLines.length ? noteLines.join('\n') : undefined,
+  };
+};
+
+export const getLabOrderPrefill = (
+  context: AnyRecord | null | undefined,
+): {
+  priority?: 'routine' | 'urgent' | 'stat';
+  clinicalInfo?: string;
+  specialInstructions?: string;
+} => {
+  if (!context) return {};
+
+  const latestLabAlert = context?.modules?.lab?.latestCriticalAlert;
+  const latestOncologyCase = context?.modules?.oncology?.latestCase;
+  const latestSepsisScreening = context?.modules?.sepsis?.latestScreening;
+  const latestTelemedicineConsultation = context?.modules?.telemedicine?.latestConsultation;
+
+  const severity = normalizeText(latestLabAlert?.severity);
+  const priority: 'routine' | 'urgent' | 'stat' =
+    severity === 'panic' || severity === 'critical'
+      ? 'stat'
+      : latestSepsisScreening?.sepsis_suspected
+        ? 'urgent'
+        : 'routine';
+
+  const clinicalInfoLines: string[] = [];
+  if (latestLabAlert?.component_name && latestLabAlert?.result_value) {
+    clinicalInfoLines.push(
+      `Recent critical marker: ${latestLabAlert.component_name} = ${latestLabAlert.result_value}`,
+    );
+  }
+  if (latestOncologyCase?.primary_diagnosis) {
+    clinicalInfoLines.push(`Oncology diagnosis: ${latestOncologyCase.primary_diagnosis}`);
+  }
+  if (latestSepsisScreening?.sepsis_suspected) {
+    clinicalInfoLines.push('Recent sepsis screening suspected infection risk.');
+  }
+
+  const specialInstructionLines: string[] = [];
+  if (latestTelemedicineConsultation?.status) {
+    specialInstructionLines.push(
+      `Telemedicine context: ${String(latestTelemedicineConsultation.status).replace(/_/g, ' ')}`,
+    );
+  }
+  if (latestLabAlert?.critical_range) {
+    specialInstructionLines.push(`Critical range reference: ${latestLabAlert.critical_range}`);
+  }
+
+  return {
+    priority,
+    clinicalInfo: clinicalInfoLines.length ? clinicalInfoLines.join('\n') : undefined,
+    specialInstructions: specialInstructionLines.length
+      ? specialInstructionLines.join('\n')
+      : undefined,
+  };
+};
+
+export const getPharmacyPrescriptionPrefill = (
+  context: AnyRecord | null | undefined,
+): {
+  instructions?: string;
+  indication?: string;
+  pharmacyNotes?: string;
+} => {
+  if (!context) return {};
+
+  const latestPrescription = context?.modules?.pharmacy?.latestPrescription;
+  const latestHivEnrollment = context?.modules?.hiv?.latestEnrollment;
+  const latestTelemedicineConsultation = context?.modules?.telemedicine?.latestConsultation;
+  const latestLabAlert = context?.modules?.lab?.latestCriticalAlert;
+
+  const instructionLines: string[] = [];
+  if (latestPrescription?.dosage || latestPrescription?.frequency) {
+    instructionLines.push(
+      `Previous regimen context: ${latestPrescription.dosage || 'dose'} / ${latestPrescription.frequency || 'frequency'}`,
+    );
+  }
+  if (latestHivEnrollment?.enrollment_status === 'active') {
+    instructionLines.push('Coordinate adherence counseling with active HIV care plan.');
+  }
+
+  const noteLines: string[] = [];
+  if (latestTelemedicineConsultation?.status) {
+    noteLines.push(
+      `Last telemedicine status: ${String(latestTelemedicineConsultation.status).replace(/_/g, ' ')}`,
+    );
+  }
+  if (latestLabAlert?.component_name) {
+    noteLines.push(`Check medication safety against recent ${latestLabAlert.component_name} result.`);
+  }
+
+  return {
+    instructions: instructionLines.length ? instructionLines.join('\n') : undefined,
+    indication: latestPrescription?.medication_name || undefined,
+    pharmacyNotes: noteLines.length ? noteLines.join('\n') : undefined,
   };
 };

@@ -160,6 +160,48 @@ describe('PatientService.getPatientContext', () => {
       if (sql.includes('FROM blood_transfusions') && sql.includes('COUNT(*)')) {
         return [{ active_count: 1 }];
       }
+      if (sql.includes('FROM telemedicine_consultations')) {
+        return [
+          {
+            id: 'tele-consult-1',
+            consultation_type: 'follow_up',
+            status: 'scheduled',
+            scheduled_start_time: '2026-03-05T10:00:00.000Z',
+            patient_consent: false,
+          },
+        ];
+      }
+      if (sql.includes('FROM lab_critical_alerts lca') && sql.includes('LIMIT 1')) {
+        return [
+          {
+            id: 'lab-alert-1',
+            lab_order_id: 'lab-order-1',
+            component_name: 'Potassium',
+            result_value: '6.8',
+            critical_range: '>= 6.5',
+            severity: 'critical',
+            alert_status: 'pending',
+          },
+        ];
+      }
+      if (sql.includes('FROM lab_critical_alerts') && sql.includes('COUNT(*)')) {
+        return [{ active_count: 1 }];
+      }
+      if (sql.includes('FROM prescriptions p') && sql.includes('LIMIT 1')) {
+        return [
+          {
+            id: 'rx-1',
+            prescription_number: 'RX00000123',
+            medication_name: 'Atorvastatin',
+            dosage: '20 mg',
+            frequency: 'once daily',
+            status: 'active',
+          },
+        ];
+      }
+      if (sql.includes('FROM prescriptions') && sql.includes('COUNT(*)')) {
+        return [{ active_count: 1 }];
+      }
       if (sql.includes('FROM hiv_clinical_visits')) {
         return [
           {
@@ -200,6 +242,11 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.sepsis.latestBundle.id).toBe('sepsis-bundle-1');
     expect(result.modules.bloodBank.latestTransfusion.id).toBe('tx-1');
     expect(result.modules.bloodBank.activeTransfusionCount).toBe(1);
+    expect(result.modules.telemedicine.latestConsultation.id).toBe('tele-consult-1');
+    expect(result.modules.lab.latestCriticalAlert.id).toBe('lab-alert-1');
+    expect(result.modules.lab.unresolvedAlertCount).toBe(1);
+    expect(result.modules.pharmacy.latestPrescription.id).toBe('rx-1');
+    expect(result.modules.pharmacy.activePrescriptionCount).toBe(1);
   });
 
   it('returns base patient context even when module tables are missing', async () => {
@@ -226,5 +273,10 @@ describe('PatientService.getPatientContext', () => {
     expect(result.modules.sepsis.latestBundle).toBeNull();
     expect(result.modules.bloodBank.latestTransfusion).toBeNull();
     expect(result.modules.bloodBank.activeTransfusionCount).toBe(0);
+    expect(result.modules.telemedicine.latestConsultation).toBeNull();
+    expect(result.modules.lab.latestCriticalAlert).toBeNull();
+    expect(result.modules.lab.unresolvedAlertCount).toBe(0);
+    expect(result.modules.pharmacy.latestPrescription).toBeNull();
+    expect(result.modules.pharmacy.activePrescriptionCount).toBe(0);
   });
 });

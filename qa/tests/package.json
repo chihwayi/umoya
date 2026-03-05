@@ -13,7 +13,7 @@
     "test:s5": "playwright test scenario-s5-lab-critical-alert",
     "test:s7": "playwright test scenario-s7-cdss-hooks",
     "smoke:nurse:outcomes": "ts-node nurse-outcome-analytics-smoke.ts --url http://localhost:3013/nurse-worklist/analytics/outcomes --token $EHR_QA_TOKEN --days 30",
-    "smoke:doctor:cross-module": "ts-node doctor-cross-module-sync-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --modules hiv,oncology,cardiology,ed,sepsis,blood_bank --days 30 --evidence ./test-results/doctor-cross-module-sync-latest.json",
+    "smoke:doctor:cross-module": "ts-node doctor-cross-module-sync-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --modules hiv,oncology,cardiology,ophthalmology,telemedicine,ed,sepsis,blood_bank,lab,pharmacy --days 30 --evidence ./test-results/doctor-cross-module-sync-latest.json",
     "report": "playwright show-report"
   },
   "devDependencies": {

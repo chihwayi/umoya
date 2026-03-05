@@ -64,6 +64,11 @@ jobs:
       working-directory: ${{ matrix.path }}
       run: npm run lint:changed:strict
 
+    - name: Enforce Doctor Frontend Changed-Files Lint (Blocking)
+      if: matrix.service == 'ehr-frontend'
+      working-directory: ${{ matrix.path }}
+      run: npm run lint:doctor:changed:strict
+
     - name: Build
       working-directory: ${{ matrix.path }}
       run: npm run build
