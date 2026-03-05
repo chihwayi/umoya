@@ -108,9 +108,28 @@ function listChangedDoctorFiles(repoRoot, baseRef, headRef) {
     .filter((filePath) => extensions.has(path.extname(filePath)));
 }
 
-function runEslint(projectFiles) {
-  const eslintCli = path.join(frontendRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
-  if (!fs.existsSync(eslintCli)) {
+function resolveEslintCli(repoRoot) {
+  const candidates = [
+    path.join(frontendRoot, 'node_modules', 'eslint', 'bin', 'eslint.js'),
+    path.join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js'),
+  ];
+  const existing = candidates.find((candidate) => fs.existsSync(candidate));
+  if (existing) {
+    return existing;
+  }
+
+  try {
+    return require.resolve('eslint/bin/eslint.js', {
+      paths: [frontendRoot, repoRoot],
+    });
+  } catch {
+    return null;
+  }
+}
+
+function runEslint(projectFiles, repoRoot) {
+  const eslintCli = resolveEslintCli(repoRoot);
+  if (!eslintCli) {
     console.error('Doctor changed-files lint skipped: local eslint binary not found.');
     console.error('Run `npm install` at repo root first.');
     return 0;
@@ -149,7 +168,7 @@ console.log(
   `Running doctor changed-files lint on ${changedFiles.length} file(s) against range ${baseRef}...${headRef}.`,
 );
 
-const lintExitCode = runEslint(changedFiles);
+const lintExitCode = runEslint(changedFiles, repoRoot);
 if (lintExitCode === 0) {
   console.log('Doctor changed-files lint passed.');
   process.exit(0);

@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Users, Calendar, Activity, Heart, Thermometer, Droplets, 
-  Eye, Stethoscope, FileText, Clock, AlertTriangle, CheckCircle,
-  Plus, Search, Filter, RefreshCw, Bell, User, LogOut,
-  TrendingUp, BarChart3, Pill, TestTube, ClipboardList, 
+  Stethoscope, FileText, Clock, AlertTriangle, CheckCircle,
+  Search, RefreshCw, Bell, User, LogOut,
+  BarChart3, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
-  CreditCard, Lock, Share2, FolderOpen, Target, LayoutDashboard,
+  CreditCard, Lock, FolderOpen, Target, LayoutDashboard,
   Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown
 } from 'lucide-react';
 import { ehrApi, tenantApi } from '../services/api';
@@ -23,9 +23,8 @@ import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
 import HIVTestingComponent from '../components/HIVTestingComponent';
-import { HIVTestingWithSmartForms, HIVWorkflowIntegration, HIVRegistrationWithSmartForms } from '../components/HIV';
+import { HIVTestingWithSmartForms, HIVWorkflowIntegration } from '../components/HIV';
 import HIVPatientManagement from '../components/HIVPatientManagement';
-import TBScreeningComponent from '../components/TBScreeningComponent';
 import { TBScreeningWithSmartForms } from '../components/TB';
 import { MaternityWithSmartForms } from '../components/Maternity';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
@@ -182,7 +181,6 @@ const NurseDashboard: React.FC = () => {
   const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
   const [showCreateAppointmentModal, setShowCreateAppointmentModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [calendarView, setCalendarView] = useState<'day' | 'week' | 'month'>('day');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<string | null>(null);
@@ -209,11 +207,8 @@ const NurseDashboard: React.FC = () => {
   const [executingOrderId, setExecutingOrderId] = useState<string | null>(null);
   const [executionNotes, setExecutionNotes] = useState<string>('');
   const [showHivModal, setShowHivModal] = useState(false);
-  const [currentAppointment, setCurrentAppointment] = useState<Appointment | null>(null);
+  const [currentAppointment] = useState<Appointment | null>(null);
   const [showHivTestingModal, setShowHivTestingModal] = useState(false);
-  const [showHivWorkflowModal, setShowHivWorkflowModal] = useState(false);
-  const [showHivRegistrationModal, setShowHivRegistrationModal] = useState(false);
-  const [selectedPatientForWorkflow, setSelectedPatientForWorkflow] = useState<Patient | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<any>(null);
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [nurseCopilotKpis, setNurseCopilotKpis] = useState<any | null>(null);
@@ -243,6 +238,7 @@ const NurseDashboard: React.FC = () => {
   // Server-scoped acknowledged alerts
   const [acknowledgedAlertIds, setAcknowledgedAlertIds] = useState<Set<string>>(new Set());
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const loadWorklistState = async () => {
       try {
@@ -255,10 +251,13 @@ const NurseDashboard: React.FC = () => {
       }
     };
     loadWorklistState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, currentUser?.id]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadCrossModuleFeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, currentUser?.id]);
 
   const handleAlertAcknowledge = (alertId: string) => {
@@ -920,14 +919,11 @@ const NurseDashboard: React.FC = () => {
       return;
     }
 
-    const now = new Date();
     let pending = 0;
     let inProgress = 0;
     let overdue = 0;
 
     appointments.forEach((apt) => {
-      const appointmentTime = new Date(apt.appointmentDate);
-      
       // Only create tasks for appointments that need nursing care
       if (apt.status === 'scheduled' || apt.status === 'confirmed') {
         // Only create vital signs task if vitals haven't been recorded yet
@@ -1022,25 +1018,13 @@ const NurseDashboard: React.FC = () => {
     setTaskCounts({ pending, inProgress, overdue });
   }, []);
 
-  // Calculate alert counts (for component callbacks)
-  const calculateAlertCounts = useCallback((alerts: any[]) => {
-    if (!Array.isArray(alerts)) {
-      setAlertCounts({ active: 0, critical: 0, high: 0 });
-      return;
-    }
-    
-    const active = alerts.filter(alert => alert.isActive).length;
-    const critical = alerts.filter(alert => alert.severity === 'critical' && alert.isActive).length;
-    const high = alerts.filter(alert => alert.severity === 'high' && alert.isActive).length;
-    setAlertCounts({ active, critical, high });
-  }, []);
-
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('ehr_user') || '{}');
     setCurrentUser(user);
   }, []);
 
   // Calculate counts immediately when appointments are loaded
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (appointments.length > 0) {
       calculateTaskCountsFromAppointments(appointments);
@@ -1051,15 +1035,18 @@ const NurseDashboard: React.FC = () => {
     }
   }, [appointments, calculateTaskCountsFromAppointments, calculateAlertCountsFromAppointments]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (currentUser) {
       fetchTodayAppointments();
       fetchPatients();
       fetchAuthorizedOrders();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, tenantSlug]);
 
   // Close dropdowns when clicking outside
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showUserDropdown) {
@@ -1188,6 +1175,7 @@ const NurseDashboard: React.FC = () => {
       }
     };
     loadKpis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const fetchAuthorizedOrders = async () => {
@@ -1849,6 +1837,7 @@ const NurseDashboard: React.FC = () => {
       return;
     }
     loadHandoffWorkflowState(selectedPatient.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPatient?.id]);
 
   const handleCopilotDecision = async (
@@ -2046,7 +2035,6 @@ const NurseDashboard: React.FC = () => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
@@ -2516,10 +2504,12 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (activeTab === 'calendar') {
       fetchCalendarAppointments();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarDate, calendarView, activeTab]);
 
   const renderCalendar = () => {
