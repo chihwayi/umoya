@@ -11,6 +11,7 @@ const makeService = () => {
     getVlPathway: jest.fn(),
     createEacSession: jest.fn(),
     createReferral: jest.fn(),
+    logAuditAction: jest.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -680,6 +681,182 @@ describe('NurseWorklistService', () => {
         referralType: 'P',
         referralPriority: 'urgent',
       }),
+      tenantDb,
+    );
+  });
+
+  it('executes regimen counseling and visit-preparation actions for approved HIV regimen changes', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('UPDATE hiv_arv_change_requests')) {
+          return [
+            {
+              id: 'req-1',
+              enrollment_id: 'enroll-hiv-2',
+              status: 'approved',
+              visit_recorded: false,
+              requested_regimen_code: 'AZT/3TC/ATV/r',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+            },
+          ];
+        }
+        if (sql.includes('FROM hiv_arv_change_requests') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: 'req-1',
+              visit_recorded: false,
+              requested_regimen_code: 'AZT/3TC/ATV/r',
+              requested_regimen_name: 'AZT/3TC/ATV/r',
+            },
+          ];
+        }
+        if (sql.includes('INSERT INTO hiv_adherence_tracking')) {
+          return [{ id: 'adh-1', tracking_date: '2026-03-05' }];
+        }
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const counseling = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'regimen-counseling',
+        actionType: 'counseling',
+        actionTitle: 'Counsel patient on approved regimen switch',
+        actionPayload: {
+          current_regimen: 'TDF/3TC/DTG',
+          requested_regimen: 'AZT/3TC/ATV/r',
+        },
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(counseling.result).toEqual(
+      expect.objectContaining({
+        operation: 'regimen_counseling_completed',
+        requestId: 'req-1',
+        adherenceTrackingId: 'adh-1',
+      }),
+    );
+
+    const visitPrep = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-1',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-1',
+        patientId: 'patient-hiv-2',
+        enrollmentId: 'enroll-hiv-2',
+        actionId: 'visit-recording',
+        actionType: 'visit_preparation',
+        actionTitle: 'Prepare next HIV clinical visit recording',
+      },
+      { sessionId: 'session-1' },
+    );
+
+    expect(visitPrep.result).toEqual(
+      expect.objectContaining({
+        operation: 'visit_preparation_completed',
+        requestId: 'req-1',
+        requestedRegimenCode: 'AZT/3TC/ATV/r',
+      }),
+    );
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'regimen_counseling_completed',
+      expect.any(String),
+      'enroll-hiv-2',
+      null,
+      expect.objectContaining({
+        requestId: 'req-1',
+      }),
+      'user-1',
+      'Nurse Joy',
+      tenantDb,
+    );
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'regimen_visit_preparation_completed',
+      expect.any(String),
+      'enroll-hiv-2',
+      null,
+      expect.objectContaining({
+        requestId: 'req-1',
+      }),
+      'user-1',
+      'Nurse Joy',
+      tenantDb,
+    );
+  });
+
+  it('executes pediatric dose-review acknowledgment as a persisted HIV action', async () => {
+    const { service, mocks } = makeService();
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('INSERT INTO hiv_adherence_tracking')) {
+          return [{ id: 'adh-peds-1', tracking_date: '2026-03-05' }];
+        }
+        if (sql.includes('FROM nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.executeHivRecommendationAction(
+      tenantDb,
+      user,
+      {
+        itemId: 'hiv-regimen:req-3',
+        itemType: 'hiv_regimen_change',
+        sourceRecordId: 'req-3',
+        patientId: 'patient-hiv-3',
+        enrollmentId: 'enroll-hiv-3',
+        actionId: 'pediatric-dose-check',
+        actionType: 'dose_review',
+        actionTitle: 'Confirm pediatric weight-band dosing',
+        actionPayload: {
+          age: 12,
+          requested_regimen_code: 'ABC/3TC/DTG',
+        },
+      },
+      { sessionId: 'session-2' },
+    );
+
+    expect(result.result).toEqual(
+      expect.objectContaining({
+        operation: 'pediatric_dose_review_acknowledged',
+        adherenceTrackingId: 'adh-peds-1',
+        age: 12,
+        regimenCode: 'ABC/3TC/DTG',
+      }),
+    );
+    expect(mocks.hivService.logAuditAction).toHaveBeenCalledWith(
+      'pediatric_dose_review_acknowledged',
+      expect.any(String),
+      'enroll-hiv-3',
+      null,
+      expect.objectContaining({
+        actionId: 'pediatric-dose-check',
+        age: 12,
+      }),
+      'user-1',
+      'Nurse Joy',
       tenantDb,
     );
   });

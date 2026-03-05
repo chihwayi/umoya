@@ -121,7 +121,15 @@ function getRecommendationBundle(item: NurseCrossModuleFeedItem) {
 function isExecutableHivRecommendationAction(item: Record<string, any>) {
   const actionId = String(item?.id || '');
   const actionType = String(item?.type || '');
-  return actionId === 'eac-followup' || actionId === 'repeat-vl-plan' || actionType === 'pmtct_followup';
+  return (
+    actionId === 'eac-followup' ||
+    actionId === 'repeat-vl-plan' ||
+    actionId === 'regimen-counseling' ||
+    actionId === 'visit-recording' ||
+    actionId === 'pediatric-dose-check' ||
+    actionId === 'pediatric-adherence' ||
+    actionType === 'pmtct_followup'
+  );
 }
 
 export default function NurseCrossModuleEscalations({

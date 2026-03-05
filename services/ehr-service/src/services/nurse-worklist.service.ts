@@ -382,6 +382,84 @@ export class NurseWorklistService {
     return `${actionTitle || 'HIV follow-up action'} completed from nurse cross-module queue.`;
   }
 
+  private extractRegimenRequestId(payload: { sourceRecordId?: string | null; itemId: string }) {
+    if (this.normalizeText(payload.sourceRecordId)) {
+      return String(payload.sourceRecordId);
+    }
+    const normalizedItemId = String(payload.itemId || '');
+    if (normalizedItemId.startsWith('hiv-regimen:')) {
+      return normalizedItemId.replace('hiv-regimen:', '').trim();
+    }
+    return null;
+  }
+
+  private async appendArvChangeApprovalNote(
+    tenantDb: DataSource,
+    requestId: string,
+    note: string,
+  ) {
+    const rows = await tenantDb.query(
+      `
+      UPDATE hiv_arv_change_requests
+      SET
+        approval_notes = trim(
+          BOTH
+          FROM (
+            COALESCE(approval_notes, '') ||
+            CASE WHEN COALESCE(approval_notes, '') = '' THEN '' ELSE E'\n' END ||
+            $1
+          )
+        ),
+        updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, enrollment_id, status, visit_recorded, requested_regimen_code, requested_regimen_name
+      `,
+      [note, requestId],
+    );
+    return rows[0] || null;
+  }
+
+  private async createHivAdherenceTrackingEntry(
+    tenantDb: DataSource,
+    payload: {
+      enrollmentId: string;
+      recordedBy: string;
+      trackingDate: string;
+      interventions: string[];
+      notes: string;
+    },
+  ) {
+    try {
+      const rows = await tenantDb.query(
+        `
+        INSERT INTO hiv_adherence_tracking (
+          enrollment_id,
+          tracking_date,
+          adherence_method,
+          interventions_provided,
+          notes,
+          recorded_by
+        )
+        VALUES ($1, $2, 'self_report', $3, $4, $5)
+        RETURNING id, tracking_date
+        `,
+        [
+          payload.enrollmentId,
+          payload.trackingDate,
+          payload.interventions,
+          payload.notes,
+          payload.recordedBy,
+        ],
+      );
+      return rows[0] || null;
+    } catch (error) {
+      if (!this.isMissingTableError(error)) {
+        throw error;
+      }
+      return null;
+    }
+  }
+
   private async upsertHivMonitoringSchedule(
     tenantDb: DataSource,
     enrollmentId: string,
@@ -1494,6 +1572,169 @@ export class NurseWorklistService {
         operation: 'vl_monitoring_scheduled',
         scheduleId: schedule?.id || null,
         nextScheduledDate: schedule?.next_scheduled_date || nextVlDate,
+      };
+    } else if (actionId === 'regimen-counseling') {
+      const regimenRequestId = this.extractRegimenRequestId({
+        sourceRecordId: payload.sourceRecordId,
+        itemId: payload.itemId,
+      });
+      if (!regimenRequestId) {
+        throw new BadRequestException('Regimen counseling action requires a regimen change request context');
+      }
+
+      const currentRegimen = this.normalizeText(actionPayload?.current_regimen) || 'current regimen';
+      const requestedRegimen = this.normalizeText(actionPayload?.requested_regimen) || 'requested regimen';
+      const counselingNote =
+        `Nurse counseling completed from cross-module queue for regimen transition ${currentRegimen} -> ${requestedRegimen} on ${todayIso}.`;
+
+      const updatedRequest = await this.appendArvChangeApprovalNote(tenantDb, regimenRequestId, counselingNote);
+      if (!updatedRequest) {
+        throw new BadRequestException('Regimen change request not found for counseling action');
+      }
+
+      const adherenceEntry = await this.createHivAdherenceTrackingEntry(tenantDb, {
+        enrollmentId,
+        recordedBy: user.id,
+        trackingDate: todayIso,
+        interventions: ['Regimen switch counseling completed'],
+        notes: counselingNote,
+      });
+
+      await this.hivService.logAuditAction(
+        'regimen_counseling_completed',
+        'Nurse completed regimen counseling from HIV recommendation bundle',
+        enrollmentId,
+        null,
+        {
+          requestId: regimenRequestId,
+          currentRegimen,
+          requestedRegimen,
+          trackingId: adherenceEntry?.id || null,
+        },
+        user.id,
+        this.getUserDisplayName(user),
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'regimen_counseling_completed',
+        requestId: regimenRequestId,
+        adherenceTrackingId: adherenceEntry?.id || null,
+      };
+    } else if (actionId === 'visit-recording') {
+      let regimenRequestId = this.extractRegimenRequestId({
+        sourceRecordId: payload.sourceRecordId,
+        itemId: payload.itemId,
+      });
+
+      if (!regimenRequestId) {
+        const pendingRows = await tenantDb.query(
+          `
+          SELECT id
+          FROM hiv_arv_change_requests
+          WHERE enrollment_id = $1
+            AND status = 'approved'
+            AND COALESCE(visit_recorded, false) = false
+          ORDER BY approval_date DESC NULLS LAST, request_date DESC, created_at DESC
+          LIMIT 1
+          `,
+          [enrollmentId],
+        );
+        regimenRequestId = pendingRows[0]?.id || null;
+      }
+
+      if (!regimenRequestId) {
+        throw new BadRequestException('No approved pending regimen change request found for visit preparation');
+      }
+
+      const requestRows = await tenantDb.query(
+        `
+        SELECT id, visit_recorded, requested_regimen_code, requested_regimen_name
+        FROM hiv_arv_change_requests
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [regimenRequestId],
+      );
+      const request = requestRows[0] || null;
+      if (!request) {
+        throw new BadRequestException('Regimen change request not found for visit preparation');
+      }
+
+      if (Boolean(request.visit_recorded)) {
+        result = {
+          status: 'completed',
+          operation: 'visit_already_recorded',
+          requestId: regimenRequestId,
+        };
+      } else {
+        const prepNote =
+          `Nurse confirmed visit-prep completion from cross-module queue on ${todayIso} for requested regimen ${request.requested_regimen_name || request.requested_regimen_code || 'N/A'}.`;
+
+        await this.appendArvChangeApprovalNote(tenantDb, regimenRequestId, prepNote);
+        await this.hivService.logAuditAction(
+          'regimen_visit_preparation_completed',
+          'Nurse marked regimen change visit preparation as complete from HIV recommendation bundle',
+          enrollmentId,
+          null,
+          {
+            requestId: regimenRequestId,
+            requestedRegimenCode: request.requested_regimen_code || null,
+          },
+          user.id,
+          this.getUserDisplayName(user),
+          tenantDb,
+        );
+
+        result = {
+          status: 'completed',
+          operation: 'visit_preparation_completed',
+          requestId: regimenRequestId,
+          requestedRegimenCode: request.requested_regimen_code || null,
+        };
+      }
+    } else if (actionId === 'pediatric-dose-check' || actionId === 'pediatric-adherence') {
+      const age = actionPayload?.age ?? null;
+      const regimenCode =
+        this.normalizeText(actionPayload?.requested_regimen_code) ||
+        this.normalizeText(actionPayload?.current_regimen_code) ||
+        null;
+      const reviewNote =
+        `Pediatric dose review acknowledged from cross-module queue on ${todayIso}` +
+        `${age != null ? ` (age ${age})` : ''}` +
+        `${regimenCode ? ` for regimen ${regimenCode}` : ''}.`;
+
+      const adherenceEntry = await this.createHivAdherenceTrackingEntry(tenantDb, {
+        enrollmentId,
+        recordedBy: user.id,
+        trackingDate: todayIso,
+        interventions: ['Pediatric dose and caregiver adherence review completed'],
+        notes: reviewNote,
+      });
+
+      await this.hivService.logAuditAction(
+        'pediatric_dose_review_acknowledged',
+        'Nurse acknowledged pediatric dose review from HIV recommendation bundle',
+        enrollmentId,
+        null,
+        {
+          age,
+          regimenCode,
+          trackingId: adherenceEntry?.id || null,
+          actionId,
+        },
+        user.id,
+        this.getUserDisplayName(user),
+        tenantDb,
+      );
+
+      result = {
+        status: 'completed',
+        operation: 'pediatric_dose_review_acknowledged',
+        adherenceTrackingId: adherenceEntry?.id || null,
+        age,
+        regimenCode,
       };
     } else if (actionId === 'pmtct-linkage' || payload?.actionType === 'pmtct_followup') {
       const existingReferral = await this.safeQuery(
