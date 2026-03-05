@@ -100,6 +100,39 @@ interface HandoffWorkflowState {
   sharedBy: string | null;
 }
 
+interface NurseOutcomeAnalyticsSnapshot {
+  generatedAt?: string;
+  window?: {
+    days?: number;
+    since?: string;
+    until?: string;
+  };
+  crossModuleQueue?: {
+    totalItems?: number;
+    activeItems?: number;
+    completedItems?: number;
+    completionRatePercent?: number;
+    acknowledgementOrCompletionRatePercent?: number;
+    pendingOlderThan24h?: number;
+    averageActiveAgeHours?: number;
+  };
+  hivRecommendationExecution?: {
+    executedActionsTotal?: number;
+    reusedOrIdempotentTotal?: number;
+    visitPrepDraftsCreated?: number;
+    actionsPerQueueItem?: number;
+    executedByAction?: Record<string, number>;
+  };
+  maternityEscalationSla?: {
+    unresolvedTasks?: number;
+    criticalUnresolved?: number;
+    dueSoon?: number;
+    breached?: number;
+    averageOpenAgeHours?: number;
+    oldestOpenAgeHours?: number;
+  };
+}
+
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return null;
   const numeric = Number(value);
@@ -178,6 +211,8 @@ const NurseDashboard: React.FC = () => {
   const [ltfuPatients, setLtfuPatients] = useState<any[]>([]);
   const [nurseCopilotKpis, setNurseCopilotKpis] = useState<any | null>(null);
   const [nurseCopilotKpisLoading, setNurseCopilotKpisLoading] = useState(false);
+  const [nurseOutcomeAnalytics, setNurseOutcomeAnalytics] = useState<NurseOutcomeAnalyticsSnapshot | null>(null);
+  const [nurseOutcomeAnalyticsLoading, setNurseOutcomeAnalyticsLoading] = useState(false);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCarePlansModal, setShowCarePlansModal] = useState(false);
@@ -227,6 +262,25 @@ const NurseDashboard: React.FC = () => {
     });
   };
 
+  const loadNurseOutcomeAnalytics = async (days = 30) => {
+    try {
+      setNurseOutcomeAnalyticsLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        setNurseOutcomeAnalytics(null);
+        return;
+      }
+
+      const response = await ehrApi.getNurseOutcomeAnalytics(days, token, activeTenant);
+      setNurseOutcomeAnalytics(response.data || null);
+    } catch {
+      setNurseOutcomeAnalytics(null);
+    } finally {
+      setNurseOutcomeAnalyticsLoading(false);
+    }
+  };
+
   const loadCrossModuleFeed = async () => {
     try {
       setCrossModuleLoading(true);
@@ -243,6 +297,7 @@ const NurseDashboard: React.FC = () => {
       setCrossModuleSummary(
         response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 },
       );
+      await loadNurseOutcomeAnalytics(30);
     } catch {
       setCrossModuleItems([]);
       setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, nursing: 0, handoff: 0, medication: 0 });
@@ -853,7 +908,10 @@ const NurseDashboard: React.FC = () => {
     const loadKpis = async () => {
       try {
         setNurseCopilotKpisLoading(true);
-        const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
+        const [res] = await Promise.all([
+          ehrApi.getNurseCopilotKpis(token, activeTenant),
+          loadNurseOutcomeAnalytics(30),
+        ]);
         setNurseCopilotKpis(res.data || null);
       } catch {
       } finally {
@@ -1045,6 +1103,10 @@ const NurseDashboard: React.FC = () => {
   };
 
   const queueStats = getQueueStats();
+  const outcomeQueue = nurseOutcomeAnalytics?.crossModuleQueue;
+  const outcomeExecution = nurseOutcomeAnalytics?.hivRecommendationExecution;
+  const outcomeMaternity = nurseOutcomeAnalytics?.maternityEscalationSla;
+  const outcomeWindowDays = nurseOutcomeAnalytics?.window?.days ?? 30;
 
   const quickStats = [
     { label: 'Patients Waiting', value: queueStats.waiting.toString(), icon: Clock, color: 'text-blue-600' },
@@ -2369,6 +2431,82 @@ const NurseDashboard: React.FC = () => {
           </div>
         </div>
 
+        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/60 p-4 sm:p-6 shadow-md">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">AI/CDSS Outcome Snapshot</h3>
+              <p className="text-sm text-slate-600">
+                Live nurse queue execution and SLA outcomes for the last {outcomeWindowDays} days.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadNurseOutcomeAnalytics(30)}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-semibold"
+            >
+              <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics ? (
+            <div className="py-8 flex items-center justify-center text-slate-600">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              Loading outcome metrics...
+            </div>
+          ) : nurseOutcomeAnalytics ? (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Queue Completion</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeQueue?.completionRatePercent ?? 0}%
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Active Queue</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeQueue?.activeItems ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Pending &gt;24h</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeQueue?.pendingOlderThan24h ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">HIV Actions Executed</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeExecution?.executedActionsTotal ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Reused/Idempotent</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeExecution?.reusedOrIdempotentTotal ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Maternity SLA Breached</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {outcomeMaternity?.breached ?? 0}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-slate-500">
+                Last generated:{' '}
+                {nurseOutcomeAnalytics.generatedAt
+                  ? formatDateTimeToDDMMYYYYHHMM(nurseOutcomeAnalytics.generatedAt)
+                  : 'n/a'}
+              </div>
+            </>
+          ) : (
+            <div className="py-8 text-sm text-slate-600">No outcome analytics available yet.</div>
+          )}
+        </div>
+
         <NurseCrossModuleEscalations
           items={crossModuleItems}
           summary={crossModuleSummary}
@@ -2823,7 +2961,10 @@ const NurseDashboard: React.FC = () => {
                     }
                     try {
                       setNurseCopilotKpisLoading(true);
-                      const res = await ehrApi.getNurseCopilotKpis(token, activeTenant);
+                      const [res] = await Promise.all([
+                        ehrApi.getNurseCopilotKpis(token, activeTenant),
+                        loadNurseOutcomeAnalytics(30),
+                      ]);
                       setNurseCopilotKpis(res.data || null);
                     } catch {
                     } finally {
@@ -2833,7 +2974,7 @@ const NurseDashboard: React.FC = () => {
                   className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-semibold text-sm"
                 >
                   <RefreshCw className={`w-4 h-4 ${nurseCopilotKpisLoading ? 'animate-spin' : ''}`} />
-                  Refresh KPIs
+                  Refresh KPIs & Outcomes
                 </button>
               </div>
 
@@ -2939,6 +3080,71 @@ const NurseDashboard: React.FC = () => {
                   </p>
                 </div>
               )}
+
+              <div className="mt-6 border-t border-slate-200 pt-6">
+                <h3 className="text-lg font-bold text-slate-900 mb-1">Cross-Module Outcome Metrics</h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  Live execution and SLA outcomes from the nurse cross-module queue.
+                </p>
+
+                {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics ? (
+                  <div className="py-8 flex items-center justify-center text-slate-600">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    Loading outcome metrics...
+                  </div>
+                ) : nurseOutcomeAnalytics ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Queue Completion</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeQueue?.completionRatePercent ?? 0}%
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Queue Active</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeQueue?.activeItems ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Pending &gt;24h</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeQueue?.pendingOlderThan24h ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">HIV Actions</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeExecution?.executedActionsTotal ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Visit Drafts</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeExecution?.visitPrepDraftsCreated ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">SLA Breached</p>
+                        <p className="text-2xl font-bold text-slate-900">
+                          {outcomeMaternity?.breached ?? 0}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Window: last {outcomeWindowDays} days • Last generated:{' '}
+                      {nurseOutcomeAnalytics.generatedAt
+                        ? formatDateTimeToDDMMYYYYHHMM(nurseOutcomeAnalytics.generatedAt)
+                        : 'n/a'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-6 text-sm text-slate-600">
+                    No cross-module outcome metrics available yet.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
