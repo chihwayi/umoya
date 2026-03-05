@@ -70,6 +70,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
   const [mentalHealthResultConcept, setMentalHealthResultConcept] = useState<SnomedConcept | null>(null);
   const [mentalHealthManagementConcept, setMentalHealthManagementConcept] = useState<SnomedConcept | null>(null);
   const [referralReasonConceptSelection, setReferralReasonConceptSelection] = useState<SnomedConcept | null>(null);
+  const [sharedPatientContext, setSharedPatientContext] = useState<any | null>(null);
   
   // Determine if patient is female (for reproductive health step)
   const isFemale = enrollment?.gender?.toLowerCase() === 'female';
@@ -91,6 +92,23 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     conventional: 'Conventional clinic visit',
     fast_track: 'Fast track (drug collection)',
     group_dsd: 'Group DSD (CARG/club)',
+  };
+
+  const normalizePregnancyLactatingStatus = (rawValue: any): string => {
+    const value = String(rawValue || '').trim().toUpperCase();
+    if (['P', 'L', 'NPL', 'N/A'].includes(value)) {
+      return value;
+    }
+    if (['PREGNANT', 'PREGNANCY'].includes(value)) {
+      return 'P';
+    }
+    if (['LACTATING', 'BREASTFEEDING'].includes(value)) {
+      return 'L';
+    }
+    if (['NOT_PREGNANT_OR_LACTATING', 'NOT_PREGNANT_NOT_LACTATING'].includes(value)) {
+      return 'NPL';
+    }
+    return '';
   };
 
   const vlPathwayStatusLabel = (status: string | undefined) => {
@@ -330,6 +348,114 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
     loadVisitPreparationChecklist();
     loadVisitDecisionContext();
   }, []);
+
+  useEffect(() => {
+    const loadSharedContext = async () => {
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !enrollment?.patient_id || !tenantSlug) {
+        return;
+      }
+
+      try {
+        const response = await ehrApi.getPatientContext(enrollment.patient_id, token, tenantSlug);
+        const context = response.data || null;
+        setSharedPatientContext(context);
+
+        const latestVitals = context?.latestVitals || null;
+        const latestHivVisit = context?.modules?.hiv?.latestClinicalVisit || null;
+        const latestMaternityEnrollment = context?.modules?.maternity?.latestEnrollment || null;
+        const latestMaternityDelivery = context?.modules?.maternity?.latestDelivery || null;
+
+        setForm((prev) => {
+          const next = { ...prev };
+
+          if (!next.weightKg && latestVitals?.weightKg != null) {
+            next.weightKg = String(latestVitals.weightKg);
+          }
+          if (!next.heightCm && latestVitals?.heightCm != null) {
+            next.heightCm = String(latestVitals.heightCm);
+          }
+          if (!next.bmi && latestVitals?.bmi != null) {
+            next.bmi = String(latestVitals.bmi);
+          }
+          if (!next.bloodPressure && latestVitals?.bloodPressure) {
+            next.bloodPressure = String(latestVitals.bloodPressure);
+          }
+
+          if (!next.pregnancyLactatingStatus) {
+            const normalizedStatus = normalizePregnancyLactatingStatus(
+              latestHivVisit?.pregnancy_lactating_status,
+            );
+            if (normalizedStatus) {
+              next.pregnancyLactatingStatus = normalizedStatus;
+            } else if (isFemale) {
+              if (latestMaternityEnrollment?.enrollment_status === 'active') {
+                next.pregnancyLactatingStatus = 'P';
+              } else if (latestMaternityDelivery?.delivery_date) {
+                next.pregnancyLactatingStatus = 'L';
+              }
+            }
+          }
+
+          if (!next.firstAncBookingDate) {
+            const firstAnc =
+              latestHivVisit?.first_anc_booking_date ||
+              latestMaternityEnrollment?.enrollment_date ||
+              '';
+            if (firstAnc) {
+              next.firstAncBookingDate = String(firstAnc).slice(0, 10);
+            }
+          }
+
+          if (!next.deliveryDate) {
+            const deliveryDate = latestHivVisit?.delivery_date || latestMaternityDelivery?.delivery_date || '';
+            if (deliveryDate) {
+              next.deliveryDate = String(deliveryDate).slice(0, 10);
+            }
+          }
+
+          if (!next.functionalStatus && latestHivVisit?.functional_status) {
+            next.functionalStatus = String(latestHivVisit.functional_status);
+          }
+          if (!next.whoClinicalStage && latestHivVisit?.who_clinical_stage != null) {
+            next.whoClinicalStage = String(latestHivVisit.who_clinical_stage);
+          }
+
+          if (!next.arvStatus && latestHivVisit?.arv_status) {
+            next.arvStatus = String(latestHivVisit.arv_status);
+          }
+          if (!next.arvRegimenCode && latestHivVisit?.arv_regimen_code) {
+            next.arvRegimenCode = String(latestHivVisit.arv_regimen_code);
+          }
+          if (!next.arvRegimenName && latestHivVisit?.arv_regimen_name) {
+            next.arvRegimenName = String(latestHivVisit.arv_regimen_name);
+          }
+
+          if (!next.cd4Count && latestHivVisit?.cd4_count != null) {
+            next.cd4Count = String(latestHivVisit.cd4_count);
+          }
+          if (!next.cd4TestDate && latestHivVisit?.cd4_test_date) {
+            next.cd4TestDate = String(latestHivVisit.cd4_test_date).slice(0, 10);
+          }
+          if (!next.viralLoad && latestHivVisit?.viral_load != null) {
+            next.viralLoad = String(latestHivVisit.viral_load);
+          }
+          if (!next.viralLoadTestDate && latestHivVisit?.viral_load_test_date) {
+            next.viralLoadTestDate = String(latestHivVisit.viral_load_test_date).slice(0, 10);
+          }
+          if (!next.nextReviewDate && latestHivVisit?.next_review_date) {
+            next.nextReviewDate = String(latestHivVisit.next_review_date).slice(0, 10);
+          }
+
+          return next;
+        });
+      } catch (error) {
+        console.error('Failed to load shared patient context for HIV visit', error);
+      }
+    };
+
+    loadSharedContext();
+  }, [enrollment?.patient_id, isFemale, tenantSlug]);
 
   const loadVisitPreparationChecklist = async () => {
     try {
@@ -1151,6 +1277,19 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
             </button>
           </div>
         </div>
+
+        {sharedPatientContext && (
+          <div className="mx-6 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Smart Reuse Context</p>
+            <p className="text-sm text-emerald-900 mt-1">
+              Registration and cross-module data were prefilled where fields were empty:
+              {' '}
+              {sharedPatientContext?.latestVitals?.recordedAt ? 'latest vitals' : 'demographics'}
+              {sharedPatientContext?.modules?.maternity?.latestEnrollment ? ', maternity timeline' : ''}
+              {sharedPatientContext?.modules?.hiv?.latestClinicalVisit ? ', prior HIV visit status' : ''}.
+            </p>
+          </div>
+        )}
 
         {eacEligibility?.needsEac && (
           <div className="mx-6 mt-4 mb-6 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl p-6 shadow-2xl border-4 border-red-400 animate-pulse">

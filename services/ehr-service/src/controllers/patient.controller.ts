@@ -75,11 +75,11 @@ export class PatientController {
     return this.patientService.getStats(req.tenantDb);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get patient by ID' })
-  @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
-  async getPatientById(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.patientService.getPatientById(id, req.tenantDb);
+  @Get(':id/context')
+  @ApiOperation({ summary: 'Get unified reusable patient context across modules' })
+  @ApiResponse({ status: 200, description: 'Patient context retrieved successfully' })
+  async getPatientContext(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.patientService.getPatientContext(id, req.tenantDb);
   }
 
   @Get('mrn/:mrn')
@@ -87,6 +87,13 @@ export class PatientController {
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   async getPatientByMRN(@Param('mrn') mrn: string, @Request() req: RequestWithTenant) {
     return this.patientService.getPatientByMRN(mrn, req.tenantDb);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get patient by ID' })
+  @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
+  async getPatientById(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.patientService.getPatientById(id, req.tenantDb);
   }
 
   @Post()

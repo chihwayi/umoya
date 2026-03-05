@@ -169,7 +169,12 @@ const OncologyDashboard: React.FC = () => {
   const [primaryDiagnosisConcept, setPrimaryDiagnosisConcept] = useState<SnomedConcept | null>(null);
   const [regimenConcept, setRegimenConcept] = useState<SnomedConcept | null>(null);
   const [adverseEventConcept, setAdverseEventConcept] = useState<SnomedConcept | null>(null);
+  const [createCasePatientContext, setCreateCasePatientContext] = useState<any | null>(null);
+  const [loadingCreateCasePatientContext, setLoadingCreateCasePatientContext] = useState(false);
   const primaryDiagnosisInputRef = useRef<HTMLInputElement | null>(null);
+  const diagnosisDateInputRef = useRef<HTMLInputElement | null>(null);
+  const oncologistIdInputRef = useRef<HTMLInputElement | null>(null);
+  const carePlanInputRef = useRef<HTMLTextAreaElement | null>(null);
   const regimenNameInputRef = useRef<HTMLInputElement | null>(null);
   const adverseEventInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -282,8 +287,80 @@ const OncologyDashboard: React.FC = () => {
       setPrimaryDiagnosisConcept(null);
       setRegimenConcept(null);
       setAdverseEventConcept(null);
+      setCreateCasePatientContext(null);
+      setLoadingCreateCasePatientContext(false);
+    }
+    if (modalState && modalState.type !== 'createCase') {
+      setCreateCasePatientContext(null);
+      setLoadingCreateCasePatientContext(false);
     }
   }, [modalState]);
+
+  const loadCreateCasePatientContext = useCallback(
+    async (rawPatientId: string) => {
+      if (!ensureAuth()) return;
+      const patientId = String(rawPatientId || '').trim();
+      if (!patientId) {
+        setCreateCasePatientContext(null);
+        return;
+      }
+
+      try {
+        setLoadingCreateCasePatientContext(true);
+        const response = await ehrApi.getPatientContext(patientId, token!, tenantSlug!);
+        const context = response.data || null;
+        setCreateCasePatientContext(context);
+
+        const suggestedDiagnosisDate =
+          context?.modules?.oncology?.latestCase?.diagnosis_date ||
+          context?.modules?.hiv?.latestEnrollment?.date_confirmed_positive ||
+          '';
+        if (diagnosisDateInputRef.current && !diagnosisDateInputRef.current.value && suggestedDiagnosisDate) {
+          diagnosisDateInputRef.current.value = String(suggestedDiagnosisDate).slice(0, 10);
+        }
+
+        if (oncologistIdInputRef.current && !oncologistIdInputRef.current.value && currentUser?.id) {
+          oncologistIdInputRef.current.value = currentUser.id;
+        }
+
+        if (carePlanInputRef.current && !carePlanInputRef.current.value) {
+          const lines: string[] = [];
+          const hivEnrollment = context?.modules?.hiv?.latestEnrollment;
+          const maternityEnrollment = context?.modules?.maternity?.latestEnrollment;
+          const oncologyCase = context?.modules?.oncology?.latestCase;
+          const latestVitals = context?.latestVitals;
+
+          if (hivEnrollment?.enrollment_number) {
+            lines.push(
+              `HIV: ${hivEnrollment.enrollment_status || 'unknown'} enrollment ${hivEnrollment.enrollment_number}`,
+            );
+          }
+          if (maternityEnrollment?.enrollment_number) {
+            lines.push(
+              `Maternity: ${maternityEnrollment.enrollment_status || 'unknown'} enrollment ${maternityEnrollment.enrollment_number}`,
+            );
+          }
+          if (oncologyCase?.id) {
+            lines.push(`Previous oncology case: ${oncologyCase.id} (${oncologyCase.status || 'unknown'})`);
+          }
+          if (latestVitals?.recordedAt) {
+            lines.push(`Latest vitals captured: ${String(latestVitals.recordedAt).slice(0, 10)}`);
+          }
+
+          if (lines.length) {
+            carePlanInputRef.current.value = `Auto context summary:\n- ${lines.join('\n- ')}`;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load patient context for oncology case creation', error);
+        setCreateCasePatientContext(null);
+        showError('Unable to load patient context', 'Confirm patient ID or retry.');
+      } finally {
+        setLoadingCreateCasePatientContext(false);
+      }
+    },
+    [currentUser?.id, ensureAuth, showError, tenantSlug, token],
+  );
 
   useEffect(() => {
     const initialize = async () => {
@@ -559,7 +636,19 @@ const OncologyDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Patient ID</label>
-                      <input name="patient_id" required className="w-full border rounded-lg px-3 py-2" placeholder="UUID" />
+                      <input
+                        name="patient_id"
+                        required
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="UUID"
+                        onBlur={(event) => loadCreateCasePatientContext(event.target.value)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Enter patient ID once. Existing profile/HIV/maternity context will auto-fill where possible.
+                      </p>
+                      {loadingCreateCasePatientContext && (
+                        <p className="text-xs text-indigo-600 mt-1">Loading reusable patient context...</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Primary Diagnosis</label>
@@ -593,7 +682,12 @@ const OncologyDashboard: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Diagnosis Date</label>
-                      <input type="date" name="diagnosis_date" className="w-full border rounded-lg px-3 py-2" />
+                      <input
+                        type="date"
+                        name="diagnosis_date"
+                        ref={diagnosisDateInputRef}
+                        className="w-full border rounded-lg px-3 py-2"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Staging System</label>
@@ -629,7 +723,13 @@ const OncologyDashboard: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Oncologist ID</label>
-                      <input name="oncologist_id" className="w-full border rounded-lg px-3 py-2" placeholder="UUID" />
+                      <input
+                        name="oncologist_id"
+                        ref={oncologistIdInputRef}
+                        defaultValue={currentUser?.id || ''}
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="UUID"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
@@ -647,11 +747,29 @@ const OncologyDashboard: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Care Plan / Notes</label>
                     <textarea
                       name="care_plan"
+                      ref={carePlanInputRef}
                       rows={4}
                       className="w-full border rounded-lg px-3 py-2"
                       placeholder="Outline the high-level care plan, goals, genetics, molecular markers..."
                     />
                   </div>
+                  {createCasePatientContext && (
+                    <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900">
+                      Context loaded for{' '}
+                      <span className="font-semibold">
+                        {createCasePatientContext?.patient?.fullName || 'patient'}
+                      </span>
+                      {createCasePatientContext?.modules?.hiv?.latestEnrollment?.enrollment_number
+                        ? ` • HIV ${createCasePatientContext.modules.hiv.latestEnrollment.enrollment_number}`
+                        : ''}
+                      {createCasePatientContext?.modules?.maternity?.latestEnrollment?.enrollment_number
+                        ? ` • Maternity ${createCasePatientContext.modules.maternity.latestEnrollment.enrollment_number}`
+                        : ''}
+                      {createCasePatientContext?.latestVitals?.recordedAt
+                        ? ` • Vitals ${String(createCasePatientContext.latestVitals.recordedAt).slice(0, 10)}`
+                        : ''}.
+                    </div>
+                  )}
                 </>
               )}
 

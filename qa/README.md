@@ -52,6 +52,19 @@ Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analyt
   - Includes specialty drilldowns via `doctorQueue.moduleDrilldown` and action-frequency drilldowns via `recommendationExecution.topActions`
   - Supports drilldown query params: `module`, `status`, `caseId`, `dateFrom`, `dateTo`, `days`
 
+### Capture Once, Reuse Everywhere checks
+Shared patient context endpoint for cross-module prefill and no-repeat entry workflows:
+- `GET /patients/:id/context` → returns reusable registration + latest module context:
+  - `patient` demographics and contacts
+  - `latestVitals`
+  - `modules.hiv.latestEnrollment` and `modules.hiv.latestClinicalVisit`
+  - `modules.maternity.latestEnrollment/latestAncVisit/latestPostnatalVisit/latestDelivery`
+  - `modules.oncology.latestCase` and `modules.oncology.activeCaseCount`
+
+Frontend reuse points now wired:
+- HIV clinical visit modal auto-prefill (only empty fields are hydrated; nurse edits are not overwritten).
+- Oncology create-case modal patient context lookup on patient ID blur (auto-seeds diagnosis/care-plan hints and provider ID).
+
 ### Seeding data
 1. Provision a fresh tenant with all bundles:
    ```
