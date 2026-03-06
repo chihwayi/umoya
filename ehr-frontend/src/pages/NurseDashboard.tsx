@@ -158,6 +158,28 @@ interface PostVisitTrialMemoryAnalyticsSnapshot {
   };
 }
 
+interface PostVisitTrialSlaAccountabilitySnapshot {
+  generatedAt?: string;
+  summary?: {
+    totalEscalations?: number;
+    openEscalations?: number;
+    breachedOpenEscalations?: number;
+    resolvedWithinSlaPercent?: number;
+    cliniciansWithAssignments?: number;
+  };
+  items?: Array<{
+    clinician?: {
+      id?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      role?: string | null;
+    };
+    openCount?: number;
+    breachedOpenCount?: number;
+    resolvedWithinSlaPercent?: number;
+  }>;
+}
+
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return null;
   const numeric = Number(value);
@@ -237,6 +259,9 @@ const NurseDashboard: React.FC = () => {
   const [nurseOutcomeAnalyticsLoading, setNurseOutcomeAnalyticsLoading] = useState(false);
   const [postVisitTrialAnalytics, setPostVisitTrialAnalytics] = useState<PostVisitTrialMemoryAnalyticsSnapshot | null>(null);
   const [postVisitTrialAnalyticsLoading, setPostVisitTrialAnalyticsLoading] = useState(false);
+  const [postVisitTrialSlaAccountability, setPostVisitTrialSlaAccountability] = useState<PostVisitTrialSlaAccountabilitySnapshot | null>(null);
+  const [postVisitTrialSlaAccountabilityLoading, setPostVisitTrialSlaAccountabilityLoading] = useState(false);
+  const [postVisitTrialAuditExportLoading, setPostVisitTrialAuditExportLoading] = useState(false);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCarePlansModal, setShowCarePlansModal] = useState(false);
@@ -330,6 +355,65 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
+  const loadPostVisitTrialSlaAccountability = async (days = 30) => {
+    try {
+      setPostVisitTrialSlaAccountabilityLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        setPostVisitTrialSlaAccountability(null);
+        return;
+      }
+      const response = await ehrApi.getPostVisitTrialSlaAccountability(token, activeTenant, {
+        days,
+        routeTarget: 'nurse',
+        limit: 8,
+      });
+      setPostVisitTrialSlaAccountability((response.data || null) as PostVisitTrialSlaAccountabilitySnapshot | null);
+    } catch {
+      setPostVisitTrialSlaAccountability(null);
+    } finally {
+      setPostVisitTrialSlaAccountabilityLoading(false);
+    }
+  };
+
+  const exportPostVisitTrialAudit = async () => {
+    try {
+      setPostVisitTrialAuditExportLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        showError('Audit export', 'You must be signed in to export trial audit data.');
+        return;
+      }
+      const response = await ehrApi.exportPostVisitTrialMemoryAudit(token, activeTenant, {
+        days: 30,
+        format: 'csv',
+        routeTarget: 'nurse',
+        limit: 2000,
+      });
+      const csv = String(response.data?.csv || '').trim();
+      if (!csv) {
+        showError('Audit export', 'No trial audit data available for export.');
+        return;
+      }
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nurse-trial-sla-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showSuccess('Audit export ready', 'Downloaded trial SLA accountability audit CSV.');
+    } catch {
+      showError('Audit export', 'Unable to export trial SLA accountability audit.');
+    } finally {
+      setPostVisitTrialAuditExportLoading(false);
+    }
+  };
+
   const loadCrossModuleFeed = async () => {
     try {
       setCrossModuleLoading(true);
@@ -349,6 +433,7 @@ const NurseDashboard: React.FC = () => {
       await Promise.all([
         loadNurseOutcomeAnalytics(30),
         loadPostVisitTrialAnalytics(30),
+        loadPostVisitTrialSlaAccountability(30),
       ]);
     } catch {
       setCrossModuleItems([]);
@@ -2802,22 +2887,36 @@ const NurseDashboard: React.FC = () => {
                 Live nurse queue execution and SLA outcomes for the last {outcomeWindowDays} days.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void Promise.all([
-                  loadNurseOutcomeAnalytics(30),
-                  loadPostVisitTrialAnalytics(30),
-                ]);
-              }}
-              className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-semibold"
-            >
-              <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading || postVisitTrialAnalyticsLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void Promise.all([
+                    loadNurseOutcomeAnalytics(30),
+                    loadPostVisitTrialAnalytics(30),
+                    loadPostVisitTrialSlaAccountability(30),
+                  ]);
+                }}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-semibold"
+              >
+                <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading || postVisitTrialAnalyticsLoading || postVisitTrialSlaAccountabilityLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void exportPostVisitTrialAudit();
+                }}
+                disabled={postVisitTrialAuditExportLoading}
+                className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-2 text-sm font-semibold disabled:opacity-60"
+              >
+                <ArrowDown className={`w-4 h-4 ${postVisitTrialAuditExportLoading ? 'animate-bounce' : ''}`} />
+                {postVisitTrialAuditExportLoading ? 'Exporting…' : 'Export Trial Audit'}
+              </button>
+            </div>
           </div>
 
-          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics && !postVisitTrialAnalytics ? (
+          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics && !postVisitTrialAnalytics && !postVisitTrialSlaAccountability ? (
             <div className="py-8 flex items-center justify-center text-slate-600">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               Loading outcome metrics...
@@ -2879,7 +2978,41 @@ const NurseDashboard: React.FC = () => {
                     {(postVisitTrialAnalytics?.companionMemory?.active ?? 0)}/{(postVisitTrialAnalytics?.companionMemory?.retired ?? 0)}
                   </p>
                 </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">SLA Clinicians</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {postVisitTrialSlaAccountability?.summary?.cliniciansWithAssignments ?? 0}
+                  </p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-amber-700">Trial Breached Open</p>
+                  <p className="text-xl font-bold text-amber-800">
+                    {postVisitTrialSlaAccountability?.summary?.breachedOpenEscalations ?? 0}
+                  </p>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-emerald-700">Trial SLA Compliance</p>
+                  <p className="text-xl font-bold text-emerald-800">
+                    {postVisitTrialSlaAccountability?.summary?.resolvedWithinSlaPercent ?? 0}%
+                  </p>
+                </div>
               </div>
+
+              {Array.isArray(postVisitTrialSlaAccountability?.items) && postVisitTrialSlaAccountability.items.length > 0 && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Top Trial SLA Accountability</p>
+                  <div className="space-y-1">
+                    {postVisitTrialSlaAccountability.items.slice(0, 4).map((item, index) => {
+                      const clinicianName = [item.clinician?.firstName, item.clinician?.lastName].filter(Boolean).join(' ').trim();
+                      return (
+                        <p key={`${item.clinician?.id || 'clinician'}-${index}`} className="text-xs text-slate-700">
+                          {clinicianName || item.clinician?.id || 'Unassigned'}: open {item.openCount ?? 0} • breached {item.breachedOpenCount ?? 0} • SLA {item.resolvedWithinSlaPercent ?? 0}%
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-3 text-xs text-slate-500">
                 Last generated:{' '}

@@ -23,10 +23,44 @@ interface User {
   specialization?: string;
 }
 
+interface PostVisitTrialMemoryAnalyticsSnapshot {
+  summary?: {
+    total?: number;
+  };
+  trialFunnel?: {
+    enrolled?: number;
+  };
+  trialDecisionSla?: {
+    breachedEscalations?: number;
+    openEscalations?: number;
+  };
+}
+
+interface PostVisitTrialSlaAccountabilitySnapshot {
+  summary?: {
+    totalEscalations?: number;
+    openEscalations?: number;
+    breachedOpenEscalations?: number;
+    resolvedWithinSlaPercent?: number;
+    cliniciansWithAssignments?: number;
+  };
+  items?: Array<{
+    clinician?: {
+      id?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      role?: string | null;
+    };
+    openCount?: number;
+    breachedOpenCount?: number;
+    resolvedWithinSlaPercent?: number;
+  }>;
+}
+
 const EHRDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { showSuccess, showInfo } = useNotification();
+  const { showSuccess, showInfo, showError } = useNotification();
   const [user, setUser] = useState<User | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -185,7 +219,13 @@ const EHRDashboard: React.FC = () => {
     totalPatients: 0,
     systemUptime: '99.9%',
     securityAlerts: 0,
+    trialSlaBreached: 0,
+    trialSlaCompliancePercent: 0,
   });
+  const [postVisitAdminTrialAnalytics, setPostVisitAdminTrialAnalytics] = useState<PostVisitTrialMemoryAnalyticsSnapshot | null>(null);
+  const [postVisitAdminTrialSlaAccountability, setPostVisitAdminTrialSlaAccountability] = useState<PostVisitTrialSlaAccountabilitySnapshot | null>(null);
+  const [postVisitAdminTrialLoading, setPostVisitAdminTrialLoading] = useState(false);
+  const [postVisitAdminTrialExportLoading, setPostVisitAdminTrialExportLoading] = useState(false);
 
   const [accountStats, setAccountStats] = useState({
     todayReceipts: 0,
@@ -271,8 +311,71 @@ const EHRDashboard: React.FC = () => {
       } catch (err) {
         console.error('Failed to load breaches:', err);
       }
+
+      // Load post-visit trial SLA accountability and analytics
+      try {
+        setPostVisitAdminTrialLoading(true);
+        const [trialAnalyticsRes, trialSlaRes] = await Promise.all([
+          ehrApi.getPostVisitTrialMemoryAnalytics(token, tenantSlug, {
+            days: 30,
+            routeTarget: 'doctor',
+          }),
+          ehrApi.getPostVisitTrialSlaAccountability(token, tenantSlug, {
+            days: 30,
+            limit: 8,
+          }),
+        ]);
+        setPostVisitAdminTrialAnalytics((trialAnalyticsRes.data || null) as PostVisitTrialMemoryAnalyticsSnapshot | null);
+        setPostVisitAdminTrialSlaAccountability((trialSlaRes.data || null) as PostVisitTrialSlaAccountabilitySnapshot | null);
+        setAdminStats((prev) => ({
+          ...prev,
+          trialSlaBreached: Number(trialSlaRes.data?.summary?.breachedOpenEscalations || trialAnalyticsRes.data?.trialDecisionSla?.breachedEscalations || 0),
+          trialSlaCompliancePercent: Number(trialSlaRes.data?.summary?.resolvedWithinSlaPercent || 0),
+        }));
+      } catch (err) {
+        console.error('Failed to load post-visit trial SLA analytics:', err);
+        setPostVisitAdminTrialAnalytics(null);
+        setPostVisitAdminTrialSlaAccountability(null);
+      } finally {
+        setPostVisitAdminTrialLoading(false);
+      }
     } catch (error) {
       console.error('Failed to load admin stats:', error);
+    }
+  };
+
+  const exportPostVisitAdminTrialAudit = async () => {
+    try {
+      setPostVisitAdminTrialExportLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      if (!token || !tenantSlug) {
+        showError('Audit export', 'You must be signed in to export trial audit data.');
+        return;
+      }
+      const response = await ehrApi.exportPostVisitTrialMemoryAudit(token, tenantSlug, {
+        days: 30,
+        format: 'csv',
+        limit: 2000,
+      });
+      const csv = String(response.data?.csv || '').trim();
+      if (!csv) {
+        showError('Audit export', 'No trial/memory audit data available for export.');
+        return;
+      }
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `admin-trial-sla-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showSuccess('Audit export ready', 'Downloaded post-visit trial SLA audit CSV.');
+    } catch {
+      showError('Audit export', 'Unable to export post-visit trial SLA audit.');
+    } finally {
+      setPostVisitAdminTrialExportLoading(false);
     }
   };
 
@@ -283,6 +386,8 @@ const EHRDashboard: React.FC = () => {
         { label: 'Total Patients', value: adminStats.totalPatients.toLocaleString(), icon: Users, color: 'text-emerald-600' },
         { label: 'System Uptime', value: adminStats.systemUptime, icon: Server, color: 'text-green-600' },
         { label: 'Security Alerts', value: adminStats.securityAlerts.toString(), icon: Shield, color: adminStats.securityAlerts > 0 ? 'text-red-600' : 'text-green-600' },
+        { label: 'Trial SLA Breached', value: adminStats.trialSlaBreached.toString(), icon: AlertTriangle, color: adminStats.trialSlaBreached > 0 ? 'text-amber-600' : 'text-green-600' },
+        { label: 'Trial SLA Compliance', value: `${adminStats.trialSlaCompliancePercent}%`, icon: CheckCircle, color: 'text-emerald-600' },
       ];
     }
     if (role === 'radiologist') {
@@ -600,6 +705,76 @@ const EHRDashboard: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {user.role === 'admin' && (
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Post-Visit Trial SLA Oversight</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadAdminStats}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="Refresh trial SLA analytics"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-slate-600 ${postVisitAdminTrialLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      void exportPostVisitAdminTrialAudit();
+                    }}
+                    disabled={postVisitAdminTrialExportLoading}
+                    className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    <Download className={`w-4 h-4 ${postVisitAdminTrialExportLoading ? 'animate-bounce' : ''}`} />
+                    {postVisitAdminTrialExportLoading ? 'Exporting…' : 'Export Audit CSV'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-500">Trial Enrolled</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {Number(postVisitAdminTrialAnalytics?.trialFunnel?.enrolled || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-500">Open Trial SLA</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {Number(postVisitAdminTrialSlaAccountability?.summary?.openEscalations || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-700">Breached Open</p>
+                  <p className="text-xl font-bold text-amber-800">
+                    {Number(postVisitAdminTrialSlaAccountability?.summary?.breachedOpenEscalations || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs font-semibold text-emerald-700">SLA Compliance</p>
+                  <p className="text-xl font-bold text-emerald-800">
+                    {Number(postVisitAdminTrialSlaAccountability?.summary?.resolvedWithinSlaPercent || 0)}%
+                  </p>
+                </div>
+              </div>
+
+              {Array.isArray(postVisitAdminTrialSlaAccountability?.items) && postVisitAdminTrialSlaAccountability.items.length > 0 && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Clinician Accountability (Top)</p>
+                  <div className="space-y-1">
+                    {postVisitAdminTrialSlaAccountability.items.slice(0, 5).map((item, index) => {
+                      const clinicianName = [item.clinician?.firstName, item.clinician?.lastName].filter(Boolean).join(' ').trim();
+                      return (
+                        <p key={`${item.clinician?.id || 'clinician'}-${index}`} className="text-xs text-slate-700">
+                          {clinicianName || item.clinician?.id || 'Unassigned'}: open {Number(item.openCount || 0)} • breached {Number(item.breachedOpenCount || 0)} • SLA {Number(item.resolvedWithinSlaPercent || 0)}%
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -6745,6 +6745,110 @@ export class PostVisitService {
     );
   }
 
+  private async sendTrialSlaInboxNotification(
+    tenantDb: DataSource,
+    args: {
+      escalationId: string;
+      sessionId: string;
+      patientId: string;
+      recipientId: string;
+      recipientRole: string | null;
+      subject: string;
+      messageText: string;
+      isUrgent: boolean;
+    },
+  ) {
+    const tableRows = await tenantDb.query(
+      `
+        SELECT
+          to_regclass('message_threads') AS message_threads_table,
+          to_regclass('provider_messages') AS provider_messages_table
+      `,
+    );
+    const tables = tableRows?.[0] || {};
+    if (!tables.message_threads_table || !tables.provider_messages_table) {
+      return false;
+    }
+
+    const sessionRows = await tenantDb.query(
+      `
+        SELECT doctor_id, appointment_id
+        FROM post_visit_sessions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [args.sessionId],
+    );
+    const sessionRow = sessionRows?.[0] || {};
+    const senderId = sessionRow.doctor_id || args.recipientId;
+    if (!senderId) return false;
+
+    const participants = Array.from(new Set([String(senderId), String(args.recipientId)].filter(Boolean)));
+    const threadRows = await tenantDb.query(
+      `
+        INSERT INTO message_threads (
+          subject,
+          patient_id,
+          related_entity_type,
+          related_entity_id,
+          participants,
+          last_message_at
+        )
+        VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+        RETURNING id
+      `,
+      [args.subject, args.patientId, 'post_visit_escalation', args.escalationId, JSON.stringify(participants)],
+    );
+    const threadId = threadRows?.[0]?.id;
+    if (!threadId) return false;
+
+    await tenantDb.query(
+      `
+        INSERT INTO provider_messages (
+          thread_id,
+          sender_id,
+          recipient_id,
+          recipient_role,
+          recipient_team,
+          subject,
+          message_text,
+          message_type,
+          priority,
+          status,
+          patient_id,
+          appointment_id,
+          related_entity_type,
+          related_entity_id,
+          requires_response,
+          response_required_by,
+          is_urgent,
+          sent_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW() + INTERVAL '2 hours',$16,NOW()
+        )
+      `,
+      [
+        threadId,
+        senderId,
+        args.recipientId,
+        args.recipientRole || null,
+        null,
+        args.subject,
+        args.messageText,
+        'message',
+        args.isUrgent ? 'high' : 'normal',
+        'sent',
+        args.patientId,
+        sessionRow.appointment_id || null,
+        'post_visit_escalation',
+        args.escalationId,
+        true,
+        args.isUrgent === true,
+      ],
+    );
+    return true;
+  }
+
   private async sendTrialDecisionSlaFanout(
     tenantDb: DataSource,
     args: {
@@ -6767,6 +6871,7 @@ export class PostVisitService {
     const channels = {
       inAppQueue: true,
       inAppRecipientCount: 0,
+      inAppInboxSentCount: 0,
       emailSentCount: 0,
       smsSentCount: 0,
       emailPolicyMinSeverity: emailMinSeverity,
@@ -6817,6 +6922,26 @@ export class PostVisitService {
       role: row.role || null,
       label: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || String(row.id),
     }));
+
+    for (const recipient of uniqueRecipients) {
+      try {
+        const delivered = await this.sendTrialSlaInboxNotification(tenantDb, {
+          escalationId: args.escalationId,
+          sessionId: args.sessionId,
+          patientId: args.patientId,
+          recipientId: String(recipient.id),
+          recipientRole: recipient.role || null,
+          subject: notificationSubject,
+          messageText: notificationText,
+          isUrgent: args.severity === 'high' || args.severity === 'critical',
+        });
+        if (delivered) {
+          channels.inAppInboxSentCount += 1;
+        }
+      } catch (error: any) {
+        channels.errors.push(`in_app_inbox:${String(error?.message || error)}`);
+      }
+    }
 
     if (this.emailService && shouldSendEmail) {
       for (const recipient of uniqueRecipients) {
