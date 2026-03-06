@@ -1024,6 +1024,7 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_session ON post_visit_escalation_events(session_id, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status ON post_visit_escalation_events(status, severity, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_trigger ON post_visit_escalation_events(trigger_type, status, route_target, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient ON post_visit_escalation_events(patient_id, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_confidence ON post_visit_escalation_events(classification_confidence DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_temporality ON post_visit_escalation_events(classification_temporality, status, detected_at DESC)`);
@@ -1429,6 +1430,31 @@ export class PostVisitService {
     const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
     if (direct) return direct;
     return 'https://clinicaltrials.gov/api/v2/studies';
+  }
+
+  private getTrialDecisionSlaHours(): number {
+    const configured = Number((config as any)?.features?.postVisitTrialDecisionSlaHours);
+    const raw = Number.isFinite(configured)
+      ? configured
+      : Number(process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS || '72');
+    if (!Number.isFinite(raw)) return 72;
+    return Math.min(Math.max(Math.round(raw), 1), 24 * 30);
+  }
+
+  private getTrialDecisionEscalationRouteTarget(): 'doctor' | 'nurse' {
+    const configuredValue = (config as any)?.features?.postVisitTrialDecisionEscalationRoute;
+    const configured = String(configuredValue || process.env.POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE || 'doctor')
+      .trim()
+      .toLowerCase();
+    if (configured === 'nurse') return 'nurse';
+    return 'doctor';
+  }
+
+  private computeTrialDecisionAgeHours(createdAt: any, reviewedAt: any): number {
+    const reference = reviewedAt || createdAt;
+    const parsed = new Date(reference);
+    if (Number.isNaN(parsed.getTime())) return 0;
+    return Math.max(0, (Date.now() - parsed.getTime()) / (1000 * 60 * 60));
   }
 
   private normalizeVoiceCommand(input?: string | null): PostVisitVoiceCommand | null {
@@ -6611,6 +6637,131 @@ export class PostVisitService {
     return rows;
   }
 
+  private async ensureTrialDecisionSlaEscalations(
+    tenantDb: DataSource,
+    filters: {
+      sessionId?: string;
+      limit?: number;
+    } = {},
+  ) {
+    if (!this.isTrialMatcherEnabled()) {
+      return {
+        staleCandidates: 0,
+        insertedEscalations: 0,
+      };
+    }
+
+    const slaHours = this.getTrialDecisionSlaHours();
+    const routeTarget = this.getTrialDecisionEscalationRouteTarget();
+    const limit = Math.min(Math.max(Number(filters.limit || 150), 1), 500);
+    const conditions: string[] = [
+      `tm.match_status IN ('proposed','deferred')`,
+      `EXTRACT(EPOCH FROM (NOW() - COALESCE(tm.reviewed_at, tm.created_at))) / 3600 >= $1`,
+    ];
+    const params: any[] = [slaHours];
+    let paramIndex = 2;
+
+    if (filters.sessionId) {
+      conditions.push(`tm.session_id = $${paramIndex++}`);
+      params.push(filters.sessionId);
+    }
+
+    const staleRows = await tenantDb.query(
+      `
+        SELECT
+          tm.id,
+          tm.session_id,
+          tm.patient_id,
+          tm.trial_id,
+          tm.trial_title,
+          tm.match_status,
+          tm.eligibility_score,
+          tm.created_at,
+          tm.reviewed_at
+        FROM post_visit_trial_matches tm
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY COALESCE(tm.reviewed_at, tm.created_at) ASC
+        LIMIT $${paramIndex}
+      `,
+      [...params, limit],
+    );
+
+    let insertedEscalations = 0;
+    for (const row of staleRows) {
+      const existingRows = await tenantDb.query(
+        `
+          SELECT id
+          FROM post_visit_escalation_events
+          WHERE session_id = $1
+            AND status IN ('open', 'acknowledged')
+            AND trigger_type = 'trial_decision_sla_breach'
+            AND (metadata->>'trial_match_id') = $2
+          LIMIT 1
+        `,
+        [row.session_id, row.id],
+      );
+      if (existingRows?.length) {
+        continue;
+      }
+
+      const staleHours = this.computeTrialDecisionAgeHours(row.created_at, row.reviewed_at);
+      const severity: 'moderate' | 'high' = staleHours >= slaHours * 2 ? 'high' : 'moderate';
+
+      await tenantDb.query(
+        `
+          INSERT INTO post_visit_escalation_events (
+            session_id,
+            patient_id,
+            status,
+            severity,
+            route_target,
+            trigger_type,
+            trigger_terms,
+            signal_text,
+            classification_confidence,
+            classification_temporality,
+            classification_source,
+            classification_reason,
+            classification_stage,
+            detected_at,
+            sla_due_at,
+            workflow_key,
+            metadata
+          ) VALUES (
+            $1,$2,'open',$3,$4,'trial_decision_sla_breach',$5::jsonb,$6,$7,'current','rule_engine',$8,'trial_sla_v1',NOW(),NOW() + INTERVAL '2 hours','post_visit_trial_decision_sla',$9::jsonb
+          )
+        `,
+        [
+          row.session_id,
+          row.patient_id,
+          severity,
+          routeTarget,
+          JSON.stringify([row.match_status, row.trial_id].filter(Boolean)),
+          `Trial decision overdue for ${String(row.trial_title || row.trial_id || 'candidate trial').trim()}.`,
+          0.99,
+          `Trial decision pending beyond ${slaHours}h SLA threshold.`,
+          JSON.stringify({
+            trial_match_id: row.id,
+            trial_id: row.trial_id || null,
+            trial_title: row.trial_title || null,
+            match_status: row.match_status || null,
+            eligibility_score: row.eligibility_score === null || row.eligibility_score === undefined ? null : Number(row.eligibility_score),
+            stale_hours: Math.round(staleHours * 10) / 10,
+            sla_hours: slaHours,
+            route_policy: routeTarget,
+            source: 'post_visit_trial_sla_automation',
+          }),
+        ],
+      );
+      insertedEscalations += 1;
+    }
+
+    return {
+      staleCandidates: staleRows.length,
+      insertedEscalations,
+    };
+  }
+
   async listSessionTrialMatches(
     tenantDb: DataSource,
     sessionId: string,
@@ -6649,6 +6800,10 @@ export class PostVisitService {
     if (options.refresh === true || !rows.length) {
       rows = await this.refreshSessionTrialMatches(tenantDb, sessionRow, options.actorUserId);
     }
+    await this.ensureTrialDecisionSlaEscalations(tenantDb, {
+      sessionId,
+      limit: 80,
+    });
 
     const matches = rows.map((row: any) => this.mapTrialMatch(row));
     const summary = {
@@ -6767,6 +6922,27 @@ export class PostVisitService {
           eligibility_score: updated.eligibility_score ?? null,
           source: 'post_visit_doctor_trial_review',
         }),
+      ],
+    );
+
+    await tenantDb.query(
+      `
+        UPDATE post_visit_escalation_events
+        SET status = 'resolved',
+            resolved_at = NOW(),
+            resolved_by = COALESCE($3, resolved_by),
+            resolution_note = COALESCE($4, resolution_note),
+            updated_at = NOW()
+        WHERE session_id = $1
+          AND trigger_type = 'trial_decision_sla_breach'
+          AND status IN ('open','acknowledged')
+          AND (metadata->>'trial_match_id') = $2
+      `,
+      [
+        sessionId,
+        matchId,
+        options.actorUserId || null,
+        `Automatically resolved after trial decision action: ${payload.action}`,
       ],
     );
 
@@ -9763,12 +9939,252 @@ export class PostVisitService {
     return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
 
+  async getTrialMemoryAnalytics(
+    tenantDb: DataSource,
+    options: {
+      days?: number;
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+    } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.ensureTrialDecisionSlaEscalations(tenantDb, { limit: 300 });
+
+    const days = Math.min(Math.max(Number(options.days || 30), 1), 365);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const slaHours = this.getTrialDecisionSlaHours();
+
+    const trialRows = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE match_status = 'proposed')::int AS proposed,
+          COUNT(*) FILTER (WHERE match_status = 'considered')::int AS considered,
+          COUNT(*) FILTER (WHERE match_status = 'deferred')::int AS deferred,
+          COUNT(*) FILTER (WHERE match_status = 'excluded')::int AS excluded,
+          COUNT(*) FILTER (WHERE match_status = 'enrolled')::int AS enrolled,
+          COUNT(*) FILTER (
+            WHERE match_status = 'proposed'
+              AND EXTRACT(EPOCH FROM (NOW() - COALESCE(reviewed_at, created_at))) / 3600 >= $2
+          )::int AS stale_proposed,
+          COUNT(*) FILTER (
+            WHERE match_status = 'deferred'
+              AND EXTRACT(EPOCH FROM (NOW() - COALESCE(reviewed_at, created_at))) / 3600 >= $2
+          )::int AS stale_deferred
+        FROM post_visit_trial_matches
+        WHERE created_at >= $1
+      `,
+      [since.toISOString(), slaHours],
+    );
+
+    const actionRows = await tenantDb.query(
+      `
+        SELECT action, COUNT(*)::int AS count
+        FROM post_visit_trial_match_audit_log
+        WHERE created_at >= $1
+        GROUP BY action
+      `,
+      [since.toISOString()],
+    );
+
+    const memoryRows = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE is_active = TRUE)::int AS active,
+          COUNT(*) FILTER (WHERE is_active = FALSE)::int AS retired,
+          COUNT(*) FILTER (WHERE promoted_at IS NOT NULL AND promoted_at >= $1)::int AS promoted_recent,
+          COUNT(*) FILTER (WHERE retired_at IS NOT NULL AND retired_at >= $1)::int AS retired_recent
+        FROM post_visit_companion_memory
+        WHERE created_at >= $1 OR updated_at >= $1
+      `,
+      [since.toISOString()],
+    );
+
+    const escalationConditions: string[] = [`trigger_type = 'trial_decision_sla_breach'`, `detected_at >= $1`];
+    const escalationParams: any[] = [since.toISOString()];
+    if (options.routeTarget) {
+      escalationConditions.push(`route_target = $2`);
+      escalationParams.push(options.routeTarget);
+    }
+
+    const escalationRows = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
+          COUNT(*) FILTER (WHERE status = 'acknowledged')::int AS acknowledged_count,
+          COUNT(*) FILTER (
+            WHERE status IN ('open','acknowledged')
+              AND sla_due_at IS NOT NULL
+              AND sla_due_at < NOW()
+          )::int AS breached_count
+        FROM post_visit_escalation_events
+        WHERE ${escalationConditions.join(' AND ')}
+      `,
+      escalationParams,
+    );
+
+    const trial = trialRows?.[0] || {};
+    const memory = memoryRows?.[0] || {};
+    const escalation = escalationRows?.[0] || {};
+    const totalTrials = Number(trial.total || 0);
+    const considered = Number(trial.considered || 0);
+    const enrolled = Number(trial.enrolled || 0);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      window: {
+        days,
+        since: since.toISOString(),
+      },
+      trialFunnel: {
+        total: totalTrials,
+        proposed: Number(trial.proposed || 0),
+        considered,
+        deferred: Number(trial.deferred || 0),
+        excluded: Number(trial.excluded || 0),
+        enrolled,
+        staleProposed: Number(trial.stale_proposed || 0),
+        staleDeferred: Number(trial.stale_deferred || 0),
+        considerationRatePercent: totalTrials > 0 ? Math.round(((considered + enrolled) / totalTrials) * 100) : 0,
+        enrollmentRatePercent: totalTrials > 0 ? Math.round((enrolled / totalTrials) * 100) : 0,
+      },
+      trialActions: {
+        byAction: actionRows.reduce((acc: Record<string, number>, row: any) => {
+          acc[String(row.action || 'unknown')] = Number(row.count || 0);
+          return acc;
+        }, {}),
+      },
+      companionMemory: {
+        total: Number(memory.total || 0),
+        active: Number(memory.active || 0),
+        retired: Number(memory.retired || 0),
+        promotedRecent: Number(memory.promoted_recent || 0),
+        retiredRecent: Number(memory.retired_recent || 0),
+      },
+      trialDecisionSla: {
+        hours: slaHours,
+        openEscalations: Number(escalation.open_count || 0),
+        acknowledgedEscalations: Number(escalation.acknowledged_count || 0),
+        breachedEscalations: Number(escalation.breached_count || 0),
+        totalEscalations: Number(escalation.total || 0),
+      },
+    };
+  }
+
+  async listTrialDecisionCoordinationQueue(
+    tenantDb: DataSource,
+    filters: {
+      status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.ensureTrialDecisionSlaEscalations(tenantDb, { limit: 300 });
+
+    const status = filters.status || 'open';
+    const limit = Math.min(Math.max(Number(filters.limit || 30), 1), 200);
+    const offset = Math.max(Number(filters.offset || 0), 0);
+
+    const conditions: string[] = [`e.trigger_type = 'trial_decision_sla_breach'`, `e.status = $1`];
+    const params: any[] = [status];
+    let index = 2;
+    if (filters.routeTarget) {
+      conditions.push(`e.route_target = $${index++}`);
+      params.push(filters.routeTarget);
+    }
+
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          e.*,
+          p.first_name,
+          p.last_name,
+          p.patient_number
+        FROM post_visit_escalation_events e
+        LEFT JOIN patients p ON p.id = e.patient_id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY e.detected_at DESC
+        LIMIT $${index++}
+        OFFSET $${index++}
+      `,
+      [...params, limit, offset],
+    );
+
+    const summaryRows = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
+          COUNT(*) FILTER (WHERE status = 'acknowledged')::int AS acknowledged_count,
+          COUNT(*) FILTER (
+            WHERE status IN ('open','acknowledged')
+              AND sla_due_at IS NOT NULL
+              AND sla_due_at < NOW()
+          )::int AS breached_count
+        FROM post_visit_escalation_events
+        WHERE trigger_type = 'trial_decision_sla_breach'
+      `,
+    );
+
+    return {
+      items: rows.map((row: any) => ({
+        id: row.id,
+        escalation: this.mapEscalationEvent(row),
+        trialMatch: {
+          id: row.metadata?.trial_match_id || null,
+          trialId: row.metadata?.trial_id || null,
+          trialTitle: row.metadata?.trial_title || null,
+          matchStatus: row.metadata?.match_status || null,
+          eligibilityScore:
+            row.metadata?.eligibility_score === null || row.metadata?.eligibility_score === undefined
+              ? null
+              : Number(row.metadata.eligibility_score),
+          staleHours:
+            row.metadata?.stale_hours === null || row.metadata?.stale_hours === undefined
+              ? null
+              : Number(row.metadata.stale_hours),
+          slaHours:
+            row.metadata?.sla_hours === null || row.metadata?.sla_hours === undefined
+              ? this.getTrialDecisionSlaHours()
+              : Number(row.metadata.sla_hours),
+        },
+        patient: {
+          id: row.patient_id,
+          firstName: row.first_name || null,
+          lastName: row.last_name || null,
+          patientNumber: row.patient_number || null,
+        },
+      })),
+      summary: summaryRows?.[0]
+        ? {
+            total: Number(summaryRows[0].total || 0),
+            openCount: Number(summaryRows[0].open_count || 0),
+            acknowledgedCount: Number(summaryRows[0].acknowledged_count || 0),
+            breachedCount: Number(summaryRows[0].breached_count || 0),
+          }
+        : {
+            total: 0,
+            openCount: 0,
+            acknowledgedCount: 0,
+            breachedCount: 0,
+          },
+      paging: {
+        limit,
+        offset,
+      },
+    };
+  }
+
   async listEscalations(
     tenantDb: DataSource,
     filters: {
       status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
       severity?: 'low' | 'moderate' | 'high' | 'critical';
       routeTarget?: 'emergency' | 'doctor' | 'nurse';
+      triggerType?: string;
       temporality?: 'current' | 'historical' | 'unclear';
       minConfidence?: number;
       sessionId?: string;
@@ -9793,6 +10209,10 @@ export class PostVisitService {
     if (filters.routeTarget) {
       conditions.push(`e.route_target = $${index++}`);
       params.push(filters.routeTarget);
+    }
+    if (filters.triggerType) {
+      conditions.push(`e.trigger_type = $${index++}`);
+      params.push(String(filters.triggerType));
     }
     if (filters.temporality) {
       conditions.push(`e.classification_temporality = $${index++}`);
@@ -9838,8 +10258,10 @@ export class PostVisitService {
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
           COUNT(*) FILTER (WHERE severity IN ('high','critical') AND status IN ('open','acknowledged'))::int AS high_priority_open_count
-        FROM post_visit_escalation_events
+        FROM post_visit_escalation_events e
+        ${whereSql}
       `,
+      params,
     );
 
     return {

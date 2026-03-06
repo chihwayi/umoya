@@ -24,6 +24,8 @@ describe('PostVisitController', () => {
     listTrialMatchAuditLog: jest.fn(),
     listSessionCompanionMemory: jest.fn(),
     curateCompanionMemory: jest.fn(),
+    getTrialMemoryAnalytics: jest.fn(),
+    listTrialDecisionCoordinationQueue: jest.fn(),
     executeVoiceReviewCommand: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
@@ -705,6 +707,54 @@ describe('PostVisitController', () => {
     expect(result.memory.isActive).toBe(false);
   });
 
+  it('returns trial and memory analytics snapshot', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getTrialMemoryAnalytics.mockResolvedValue({
+      trialFunnel: { total: 10, enrolled: 2 },
+      companionMemory: { total: 5 },
+    });
+
+    const result = await controller.getTrialMemoryAnalytics(req, '30', 'doctor');
+    expect(postVisitServiceMock.getTrialMemoryAnalytics).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        days: 30,
+        routeTarget: 'doctor',
+      }),
+    );
+    expect(result.trialFunnel.total).toBe(10);
+  });
+
+  it('lists trial decision coordination queue', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listTrialDecisionCoordinationQueue.mockResolvedValue({
+      items: [{ id: 'esc-1' }],
+      summary: { total: 1, openCount: 1, breachedCount: 0 },
+    });
+
+    const result = await controller.listTrialDecisionCoordinationQueue(req, 'open', 'nurse', '20', '0');
+    expect(postVisitServiceMock.listTrialDecisionCoordinationQueue).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        status: 'open',
+        routeTarget: 'nurse',
+        limit: 20,
+        offset: 0,
+      }),
+    );
+    expect(result.items).toHaveLength(1);
+  });
+
   it('publishes reviewed post-visit session for patient companion access', async () => {
     const req = {
       tenantId: 'tenant-a',
@@ -758,6 +808,7 @@ describe('PostVisitController', () => {
       'open',
       'high',
       'doctor',
+      'trial_decision_sla_breach',
       undefined,
       undefined,
       undefined,
@@ -772,6 +823,7 @@ describe('PostVisitController', () => {
         status: 'open',
         severity: 'high',
         routeTarget: 'doctor',
+        triggerType: 'trial_decision_sla_breach',
         limit: 10,
         offset: 0,
       }),

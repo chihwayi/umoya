@@ -139,6 +139,25 @@ interface NurseOutcomeAnalyticsSnapshot {
   };
 }
 
+interface PostVisitTrialMemoryAnalyticsSnapshot {
+  generatedAt?: string;
+  trialFunnel?: {
+    total?: number;
+    enrolled?: number;
+    staleProposed?: number;
+    staleDeferred?: number;
+  };
+  companionMemory?: {
+    total?: number;
+    active?: number;
+    retired?: number;
+  };
+  trialDecisionSla?: {
+    breachedEscalations?: number;
+    openEscalations?: number;
+  };
+}
+
 const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined) return null;
   const numeric = Number(value);
@@ -216,6 +235,8 @@ const NurseDashboard: React.FC = () => {
   const [nurseCopilotKpisLoading, setNurseCopilotKpisLoading] = useState(false);
   const [nurseOutcomeAnalytics, setNurseOutcomeAnalytics] = useState<NurseOutcomeAnalyticsSnapshot | null>(null);
   const [nurseOutcomeAnalyticsLoading, setNurseOutcomeAnalyticsLoading] = useState(false);
+  const [postVisitTrialAnalytics, setPostVisitTrialAnalytics] = useState<PostVisitTrialMemoryAnalyticsSnapshot | null>(null);
+  const [postVisitTrialAnalyticsLoading, setPostVisitTrialAnalyticsLoading] = useState(false);
   const [showSharedDocumentsModal, setShowSharedDocumentsModal] = useState(false);
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCarePlansModal, setShowCarePlansModal] = useState(false);
@@ -288,6 +309,27 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
+  const loadPostVisitTrialAnalytics = async (days = 30) => {
+    try {
+      setPostVisitTrialAnalyticsLoading(true);
+      const token = localStorage.getItem('ehr_token');
+      const activeTenant = resolveTenantSlug();
+      if (!token || !activeTenant) {
+        setPostVisitTrialAnalytics(null);
+        return;
+      }
+      const response = await ehrApi.getPostVisitTrialMemoryAnalytics(token, activeTenant, {
+        days,
+        routeTarget: 'nurse',
+      });
+      setPostVisitTrialAnalytics((response.data || null) as PostVisitTrialMemoryAnalyticsSnapshot | null);
+    } catch {
+      setPostVisitTrialAnalytics(null);
+    } finally {
+      setPostVisitTrialAnalyticsLoading(false);
+    }
+  };
+
   const loadCrossModuleFeed = async () => {
     try {
       setCrossModuleLoading(true);
@@ -304,7 +346,10 @@ const NurseDashboard: React.FC = () => {
       setCrossModuleSummary(
         response.data?.summary || { total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, oncology: 0, nursing: 0, handoff: 0, medication: 0 },
       );
-      await loadNurseOutcomeAnalytics(30);
+      await Promise.all([
+        loadNurseOutcomeAnalytics(30),
+        loadPostVisitTrialAnalytics(30),
+      ]);
     } catch {
       setCrossModuleItems([]);
       setCrossModuleSummary({ total: 0, critical: 0, high: 0, maternity: 0, hiv: 0, oncology: 0, nursing: 0, handoff: 0, medication: 0 });
@@ -2759,15 +2804,20 @@ const NurseDashboard: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => loadNurseOutcomeAnalytics(30)}
+              onClick={() => {
+                void Promise.all([
+                  loadNurseOutcomeAnalytics(30),
+                  loadPostVisitTrialAnalytics(30),
+                ]);
+              }}
               className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-semibold"
             >
-              <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${nurseOutcomeAnalyticsLoading || postVisitTrialAnalyticsLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>
 
-          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics ? (
+          {nurseOutcomeAnalyticsLoading && !nurseOutcomeAnalytics && !postVisitTrialAnalytics ? (
             <div className="py-8 flex items-center justify-center text-slate-600">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
               Loading outcome metrics...
@@ -2809,6 +2859,24 @@ const NurseDashboard: React.FC = () => {
                   <p className="text-xs font-semibold text-slate-500">Maternity SLA Breached</p>
                   <p className="text-xl font-bold text-slate-900">
                     {outcomeMaternity?.breached ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Trial Enrolled</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {postVisitTrialAnalytics?.trialFunnel?.enrolled ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Trial SLA Breached</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {postVisitTrialAnalytics?.trialDecisionSla?.breachedEscalations ?? 0}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-slate-500">Memory Active/Retired</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {(postVisitTrialAnalytics?.companionMemory?.active ?? 0)}/{(postVisitTrialAnalytics?.companionMemory?.retired ?? 0)}
                   </p>
                 </div>
               </div>
@@ -3254,12 +3322,23 @@ const NurseDashboard: React.FC = () => {
               onExecuteRecommendationAction={handleExecuteRecommendationAction}
             />
             {tenantSlug && localStorage.getItem('ehr_token') && (
-              <PostVisitEscalationQueue
-                tenantSlug={tenantSlug}
-                token={localStorage.getItem('ehr_token') || ''}
-                defaultRouteTarget="nurse"
-                compact
-              />
+              <div className="space-y-4">
+                <PostVisitEscalationQueue
+                  tenantSlug={tenantSlug}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  defaultRouteTarget="nurse"
+                  compact
+                />
+                <PostVisitEscalationQueue
+                  tenantSlug={tenantSlug}
+                  token={localStorage.getItem('ehr_token') || ''}
+                  defaultRouteTarget="nurse"
+                  triggerType="trial_decision_sla_breach"
+                  title="Trial Decision SLA Queue"
+                  subtitle="Shared nurse/doctor queue for stale trial decisions."
+                  compact
+                />
+              </div>
             )}
           </div>
         )}

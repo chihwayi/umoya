@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 
 type SessionStatus = 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewed' | 'published' | 'closed';
 
@@ -226,6 +227,40 @@ interface TrialMatchesPayload {
     enrolled?: number;
   };
   message?: string;
+}
+
+interface TrialMemoryAnalyticsPayload {
+  generatedAt?: string;
+  window?: {
+    days?: number;
+    since?: string;
+  };
+  trialFunnel?: {
+    total?: number;
+    proposed?: number;
+    considered?: number;
+    deferred?: number;
+    excluded?: number;
+    enrolled?: number;
+    staleProposed?: number;
+    staleDeferred?: number;
+    considerationRatePercent?: number;
+    enrollmentRatePercent?: number;
+  };
+  companionMemory?: {
+    total?: number;
+    active?: number;
+    retired?: number;
+    promotedRecent?: number;
+    retiredRecent?: number;
+  };
+  trialDecisionSla?: {
+    hours?: number;
+    openEscalations?: number;
+    acknowledgedEscalations?: number;
+    breachedEscalations?: number;
+    totalEscalations?: number;
+  };
 }
 
 interface CompanionMemoryItem {
@@ -465,6 +500,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [adminDocumentsLoading, setAdminDocumentsLoading] = useState(false);
   const [trialMatches, setTrialMatches] = useState<TrialMatchesPayload | null>(null);
   const [trialMatchesLoading, setTrialMatchesLoading] = useState(false);
+  const [trialMemoryAnalytics, setTrialMemoryAnalytics] = useState<TrialMemoryAnalyticsPayload | null>(null);
+  const [trialMemoryAnalyticsLoading, setTrialMemoryAnalyticsLoading] = useState(false);
   const [trialAuditByMatchId, setTrialAuditByMatchId] = useState<Record<string, TrialMatchAuditPayload>>({});
   const [expandedTrialAuditMatchId, setExpandedTrialAuditMatchId] = useState<string | null>(null);
   const [trialAuditLoadingMatchId, setTrialAuditLoadingMatchId] = useState<string | null>(null);
@@ -820,6 +857,25 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadTrialMemoryAnalytics = useCallback(
+    async (days = 30) => {
+      if (!tenantSlug || !token) {
+        setTrialMemoryAnalytics(null);
+        return;
+      }
+      try {
+        setTrialMemoryAnalyticsLoading(true);
+        const response = await ehrApi.getPostVisitTrialMemoryAnalytics(token, tenantSlug, { days, routeTarget: 'doctor' });
+        setTrialMemoryAnalytics((response.data || null) as TrialMemoryAnalyticsPayload | null);
+      } catch {
+        setTrialMemoryAnalytics(null);
+      } finally {
+        setTrialMemoryAnalyticsLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   const loadTrialMatchAudit = useCallback(
     async (sessionId: string, matchId: string, limit = 30) => {
       if (!tenantSlug || !token || !sessionId || !matchId) return null;
@@ -871,6 +927,10 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   }, [loadSessions]);
 
   useEffect(() => {
+    loadTrialMemoryAnalytics(30);
+  }, [loadTrialMemoryAnalytics]);
+
+  useEffect(() => {
     if (selectedSessionId) return;
     setAdminDocuments([]);
     setTrialMatches(null);
@@ -897,6 +957,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadBillingIntelligence(selectedSessionId);
     loadAdminDocuments(selectedSessionId);
     loadTrialMatches(selectedSessionId);
+    loadTrialMemoryAnalytics(30);
     loadCompanionMemory(selectedSessionId, true);
     setTrialAuditByMatchId({});
     setExpandedTrialAuditMatchId(null);
@@ -918,7 +979,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadAdminDocuments, loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, loadTrialMatches, selectedSessionId, sessions]);
+  }, [loadAdminDocuments, loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, sessions]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -1297,6 +1358,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadIntraVisitAlerts(createdId),
         loadBillingIntelligence(createdId),
         loadTrialMatches(createdId),
+        loadTrialMemoryAnalytics(30),
         loadCompanionMemory(createdId, true),
       ]);
     } catch {
@@ -1317,6 +1379,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadBillingIntelligence,
     loadCompanionMemory,
     loadTrialMatches,
+    loadTrialMemoryAnalytics,
     showError,
     showSuccess,
     transcribeLanguage,
@@ -1344,6 +1407,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
         loadTrialMatches(selectedSessionId),
+        loadTrialMemoryAnalytics(30),
         loadCompanionMemory(selectedSessionId, true),
       ]);
     } catch {
@@ -1351,7 +1415,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleTranscribeSelectedSession = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -1383,6 +1447,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
         loadTrialMatches(selectedSessionId),
+        loadTrialMemoryAnalytics(30),
         loadCompanionMemory(selectedSessionId, true),
       ]);
     } catch {
@@ -1397,6 +1462,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadIntraVisitAlerts,
     loadBillingIntelligence,
     loadTrialMatches,
+    loadTrialMemoryAnalytics,
     loadCompanionMemory,
     selectedSessionId,
     sessionTranscribeFile,
@@ -1577,6 +1643,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadIntraVisitAlerts(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
           loadTrialMatches(selectedSessionId),
+          loadTrialMemoryAnalytics(30),
           loadCompanionMemory(selectedSessionId, true),
         ]);
       } catch {
@@ -1585,7 +1652,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReassignDiarization = useCallback(
@@ -1639,6 +1706,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadIntraVisitAlerts(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
           loadTrialMatches(selectedSessionId),
+          loadTrialMemoryAnalytics(30),
           loadCompanionMemory(selectedSessionId, true),
         ]);
       } catch {
@@ -1647,7 +1715,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReviewBillingSuggestion = useCallback(
@@ -1677,6 +1745,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadDraft(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
           loadTrialMatches(selectedSessionId),
+          loadTrialMemoryAnalytics(30),
         ]);
       } catch {
         showError(
@@ -1687,7 +1756,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadDraft, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadDraft, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleGenerateAdminDocuments = useCallback(async () => {
@@ -1741,6 +1810,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadBillingIntelligence(selectedSessionId),
         loadAdminDocuments(selectedSessionId),
         loadTrialMatches(selectedSessionId),
+        loadTrialMemoryAnalytics(30),
         loadCompanionMemory(selectedSessionId, true),
       ]);
     } catch (error: any) {
@@ -1758,6 +1828,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadIntraVisitAlerts,
     loadSessions,
     loadTrialMatches,
+    loadTrialMemoryAnalytics,
     selectedSessionId,
     showError,
     showSuccess,
@@ -1770,8 +1841,11 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
   const handleRefreshTrialMatches = useCallback(async () => {
     if (!selectedSessionId) return;
-    await loadTrialMatches(selectedSessionId, true);
-  }, [loadTrialMatches, selectedSessionId]);
+    await Promise.all([
+      loadTrialMatches(selectedSessionId, true),
+      loadTrialMemoryAnalytics(30),
+    ]);
+  }, [loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId]);
 
   const handleReviewTrialMatch = useCallback(
     async (matchId: string, action: 'consider' | 'defer' | 'exclude' | 'enroll') => {
@@ -1790,6 +1864,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         );
         showSuccess('Trial decision saved', `${action.toUpperCase()} recorded for ${matchId}.`);
         await loadTrialMatches(selectedSessionId);
+        await loadTrialMemoryAnalytics(30);
         if (expandedTrialAuditMatchId === matchId) {
           await loadTrialMatchAudit(selectedSessionId, matchId, 50);
         }
@@ -1799,7 +1874,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [expandedTrialAuditMatchId, loadTrialMatchAudit, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [expandedTrialAuditMatchId, loadTrialMatchAudit, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleToggleTrialAudit = useCallback(
@@ -1834,13 +1909,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         );
         showSuccess('Memory curated', `${action.toUpperCase()} applied.`);
         await loadCompanionMemory(selectedSessionId, true);
+        await loadTrialMemoryAnalytics(30);
       } catch {
         showError('Memory curation failed', 'Unable to update companion memory state.');
       } finally {
         setWorkingActionKey(null);
       }
     },
-    [loadCompanionMemory, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadCompanionMemory, loadTrialMemoryAnalytics, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handlePublish = useCallback(async () => {
@@ -1871,6 +1947,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
         loadTrialMatches(selectedSessionId),
+        loadTrialMemoryAnalytics(30),
         loadCompanionMemory(selectedSessionId, true),
       ]);
     } catch (error: any) {
@@ -1892,6 +1969,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadBillingIntelligence,
     loadCompanionMemory,
     loadTrialMatches,
+    loadTrialMemoryAnalytics,
     selectedSessionId,
     showError,
     showSuccess,
@@ -3243,6 +3321,62 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       </article>
                     ))}
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Trial + Memory Outcome Analytics</h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void loadTrialMemoryAnalytics(30);
+                      }}
+                      disabled={trialMemoryAnalyticsLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${trialMemoryAnalyticsLoading ? 'animate-spin' : ''}`} />
+                      Refresh analytics
+                    </button>
+                  </div>
+                  {trialMemoryAnalytics ? (
+                    <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        Trial total: {Number(trialMemoryAnalytics?.trialFunnel?.total || 0)}
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                        Enrolled: {Number(trialMemoryAnalytics?.trialFunnel?.enrolled || 0)} ({Number(trialMemoryAnalytics?.trialFunnel?.enrollmentRatePercent || 0)}%)
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+                        SLA breached: {Number(trialMemoryAnalytics?.trialDecisionSla?.breachedEscalations || 0)}
+                      </div>
+                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-indigo-700">
+                        Memory active/retired: {Number(trialMemoryAnalytics?.companionMemory?.active || 0)}/{Number(trialMemoryAnalytics?.companionMemory?.retired || 0)}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Analytics unavailable. Refresh once trial matcher and companion memory produce data.
+                    </p>
+                  )}
+                  {trialMemoryAnalytics?.generatedAt && (
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      Last generated: {formatDate(trialMemoryAnalytics.generatedAt)}
+                    </p>
+                  )}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  {tenantSlug && token && (
+                    <PostVisitEscalationQueue
+                      tenantSlug={tenantSlug}
+                      token={token}
+                      defaultRouteTarget="doctor"
+                      triggerType="trial_decision_sla_breach"
+                      title="Trial Decision SLA Queue"
+                      subtitle="Shared doctor/nurse coordination queue for stale proposed/deferred trial decisions."
+                      compact
+                    />
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

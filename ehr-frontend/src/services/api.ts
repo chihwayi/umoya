@@ -1854,6 +1854,7 @@ export const ehrApi = {
       status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
       severity?: 'low' | 'moderate' | 'high' | 'critical';
       routeTarget?: 'emergency' | 'doctor' | 'nurse';
+      triggerType?: string;
       temporality?: 'current' | 'historical' | 'unclear';
       minConfidence?: number;
       sessionId?: string;
@@ -1863,6 +1864,44 @@ export const ehrApi = {
     },
   ) => {
     const response = await ehrAxios.get('/post-visit/escalations', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitTrialMemoryAnalytics: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      days?: number;
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/analytics/trial-memory', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitTrialDecisionCoordinationQueue: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/coordination/trial-decisions', {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`,

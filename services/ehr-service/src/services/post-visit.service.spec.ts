@@ -1565,6 +1565,148 @@ describe('PostVisitService', () => {
     expect(result.match.matchStatus).toBe('considered');
   });
 
+  it('creates SLA escalation for stale trial decisions during trial match listing', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'true';
+    process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS = '48';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      let insertedSlaEscalation = false;
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_matches') && sql.includes('WHERE session_id = $1') && sql.includes('eligibility_score')) {
+            return [
+              {
+                id: 'trial-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                trial_source: 'clinicaltrials_gov_v2',
+                trial_id: 'NCT00000001',
+                trial_title: 'Hypertension Trial',
+                trial_phase: 'Phase 3',
+                trial_status: 'RECRUITING',
+                condition_tags: ['hypertension'],
+                source_url: 'https://clinicaltrials.gov/study/NCT00000001',
+                eligibility_score: 84,
+                eligibility_rationale: ['Matched condition terms'],
+                match_status: 'proposed',
+                created_at: '2026-01-01T00:00:00.000Z',
+                reviewed_at: null,
+                metadata: {},
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_matches tm')) {
+            return [
+              {
+                id: 'trial-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                trial_id: 'NCT00000001',
+                trial_title: 'Hypertension Trial',
+                match_status: 'proposed',
+                eligibility_score: 84,
+                created_at: '2026-01-01T00:00:00.000Z',
+                reviewed_at: null,
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_escalation_events') && sql.includes("trigger_type = 'trial_decision_sla_breach'")) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_escalation_events')) {
+            insertedSlaEscalation = true;
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.listSessionTrialMatches(tenantDb, 'session-1', { refresh: false, actorUserId: 'doctor-1' });
+      expect(result.matches).toHaveLength(1);
+      expect(insertedSlaEscalation).toBe(true);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+      delete process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS;
+    }
+  });
+
+  it('returns trial-memory analytics snapshot with funnel and SLA counts', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('FROM post_visit_trial_matches tm')) {
+            return [];
+          }
+          if (sql.includes('SELECT id') && sql.includes('post_visit_escalation_events') && sql.includes('trial_decision_sla_breach')) {
+            return [];
+          }
+          if (sql.includes('COUNT(*)::int AS total') && sql.includes('FROM post_visit_trial_matches')) {
+            return [
+              {
+                total: 12,
+                proposed: 5,
+                considered: 3,
+                deferred: 2,
+                excluded: 1,
+                enrolled: 1,
+                stale_proposed: 2,
+                stale_deferred: 1,
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_match_audit_log')) {
+            return [
+              { action: 'consider', count: 3 },
+              { action: 'enroll', count: 1 },
+            ];
+          }
+          if (sql.includes('FROM post_visit_companion_memory')) {
+            return [
+              {
+                total: 8,
+                active: 6,
+                retired: 2,
+                promoted_recent: 3,
+                retired_recent: 1,
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_escalation_events') && sql.includes("trigger_type = 'trial_decision_sla_breach'")) {
+            return [
+              {
+                total: 4,
+                open_count: 2,
+                acknowledged_count: 1,
+                breached_count: 1,
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.getTrialMemoryAnalytics(tenantDb, { days: 30, routeTarget: 'doctor' });
+      expect(result.trialFunnel.total).toBe(12);
+      expect(result.trialFunnel.enrollmentRatePercent).toBeGreaterThanOrEqual(0);
+      expect(result.trialDecisionSla.openEscalations).toBe(2);
+      expect(result.companionMemory.total).toBe(8);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    }
+  });
+
   it('returns trial match audit drilldown rows', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     const tenantDb = {

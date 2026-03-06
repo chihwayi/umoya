@@ -61,6 +61,8 @@ const envSchema = z.object({
   FEATURE_POSTVISIT_INTRAVISIT_ALERTS: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_TRIAL_MATCHER: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_COMPANION_MEMORY: z.enum(['true', 'false']).default('true'),
+  POSTVISIT_TRIAL_DECISION_SLA_HOURS: z.string().default('72'),
+  POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE: z.enum(['doctor', 'nurse']).default('doctor'),
   POSTVISIT_CLINICALTRIALS_API_URL: z.string().default('https://clinicaltrials.gov/api/v2/studies'),
   LOCAL_OCR_URL: z.string().optional(),
 
@@ -282,6 +284,8 @@ export const config = {
     postVisitIntraVisitAlerts: env.FEATURE_POSTVISIT_INTRAVISIT_ALERTS === 'true',
     postVisitTrialMatcher: env.FEATURE_POSTVISIT_TRIAL_MATCHER === 'true',
     postVisitCompanionMemory: env.FEATURE_POSTVISIT_COMPANION_MEMORY === 'true',
+    postVisitTrialDecisionSlaHours: Number(env.POSTVISIT_TRIAL_DECISION_SLA_HOURS || '72'),
+    postVisitTrialDecisionEscalationRoute: env.POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE,
   },
 
   notifications: {

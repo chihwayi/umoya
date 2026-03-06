@@ -26,6 +26,9 @@ interface PostVisitEscalationQueueProps {
   tenantSlug: string;
   token: string;
   defaultRouteTarget?: 'doctor' | 'nurse';
+  triggerType?: string;
+  title?: string;
+  subtitle?: string;
   compact?: boolean;
 }
 
@@ -47,6 +50,9 @@ export default function PostVisitEscalationQueue({
   tenantSlug,
   token,
   defaultRouteTarget,
+  triggerType,
+  title,
+  subtitle,
   compact = false,
 }: PostVisitEscalationQueueProps) {
   const { showError, showSuccess } = useNotification();
@@ -83,6 +89,7 @@ export default function PostVisitEscalationQueue({
         status: statusFilter,
         severity: severityFilter === 'all' ? undefined : severityFilter,
         routeTarget: defaultRouteTarget,
+        triggerType: triggerType || undefined,
         limit: compact ? 8 : 30,
       };
       const response = await ehrApi.getPostVisitEscalations(token, tenantSlug, filters);
@@ -99,7 +106,7 @@ export default function PostVisitEscalationQueue({
     } finally {
       setLoading(false);
     }
-  }, [compact, defaultRouteTarget, severityFilter, showError, statusFilter, tenantSlug, token]);
+  }, [compact, defaultRouteTarget, severityFilter, showError, statusFilter, tenantSlug, token, triggerType]);
 
   useEffect(() => {
     loadEscalations();
@@ -145,8 +152,8 @@ export default function PostVisitEscalationQueue({
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-rose-600" />
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-slate-900">Post-Visit Escalation Queue</h3>
-            <p className="text-xs text-slate-500">Companion safety signals with SLA routing</p>
+            <h3 className="text-sm sm:text-base font-bold text-slate-900">{title || 'Post-Visit Escalation Queue'}</h3>
+            <p className="text-xs text-slate-500">{subtitle || 'Companion safety signals with SLA routing'}</p>
           </div>
         </div>
         <button

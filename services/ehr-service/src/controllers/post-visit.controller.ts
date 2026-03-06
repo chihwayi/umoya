@@ -279,7 +279,7 @@ export class PostVisitController {
   }
 
   @Get('sessions/:id/trial-matches/:matchId/audit')
-  @Roles('doctor', 'admin')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'List doctor trial-match action audit timeline for drilldown' })
   @ApiResponse({ status: 200, description: 'Post-visit trial match audit timeline listed' })
   async listTrialMatchAuditLog(
@@ -294,7 +294,7 @@ export class PostVisitController {
   }
 
   @Get('sessions/:id/companion-memory')
-  @Roles('doctor', 'admin')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'List longitudinal patient companion memory profile for a session context' })
   @ApiResponse({ status: 200, description: 'Post-visit companion memory listed' })
   async listSessionCompanionMemory(
@@ -328,6 +328,57 @@ export class PostVisitController {
         actorUserId: this.resolveUserId(req),
       },
     );
+  }
+
+  @Get('analytics/trial-memory')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get post-visit trial funnel and companion memory analytics snapshot' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial/memory analytics fetched' })
+  async getTrialMemoryAnalytics(
+    @Request() req: RequestWithTenant,
+    @Query('days') days?: string,
+    @Query('routeTarget') routeTarget?: string,
+  ) {
+    const normalizedRouteTarget = (
+      ['doctor', 'nurse', 'emergency'].includes(String(routeTarget || '').toLowerCase())
+        ? String(routeTarget || '').toLowerCase()
+        : undefined
+    ) as 'doctor' | 'nurse' | 'emergency' | undefined;
+
+    return this.postVisitService.getTrialMemoryAnalytics(req.tenantDb, {
+      days: days ? Number(days) : undefined,
+      routeTarget: normalizedRouteTarget,
+    });
+  }
+
+  @Get('coordination/trial-decisions')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'List shared nurse/doctor trial decision SLA coordination queue' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial decision queue fetched' })
+  async listTrialDecisionCoordinationQueue(
+    @Request() req: RequestWithTenant,
+    @Query('status') status?: string,
+    @Query('routeTarget') routeTarget?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const normalizedStatus = (
+      ['open', 'acknowledged', 'resolved', 'dismissed'].includes(String(status || '').toLowerCase())
+        ? String(status || '').toLowerCase()
+        : undefined
+    ) as 'open' | 'acknowledged' | 'resolved' | 'dismissed' | undefined;
+    const normalizedRouteTarget = (
+      ['doctor', 'nurse', 'emergency'].includes(String(routeTarget || '').toLowerCase())
+        ? String(routeTarget || '').toLowerCase()
+        : undefined
+    ) as 'doctor' | 'nurse' | 'emergency' | undefined;
+
+    return this.postVisitService.listTrialDecisionCoordinationQueue(req.tenantDb, {
+      status: normalizedStatus,
+      routeTarget: normalizedRouteTarget,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @Post('sessions/:id/voice-command')
@@ -838,6 +889,7 @@ export class PostVisitController {
     @Query('status') status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed',
     @Query('severity') severity?: 'low' | 'moderate' | 'high' | 'critical',
     @Query('routeTarget') routeTarget?: 'emergency' | 'doctor' | 'nurse',
+    @Query('triggerType') triggerType?: string,
     @Query('temporality') temporality?: 'current' | 'historical' | 'unclear',
     @Query('minConfidence') minConfidence?: string,
     @Query('sessionId') sessionId?: string,
@@ -851,6 +903,7 @@ export class PostVisitController {
         status,
         severity,
         routeTarget,
+        triggerType: triggerType ? String(triggerType).trim() : undefined,
         temporality,
         minConfidence: minConfidence ? Number(minConfidence) : undefined,
         sessionId,
