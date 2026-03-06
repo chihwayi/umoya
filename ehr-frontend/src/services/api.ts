@@ -1386,6 +1386,47 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  ingestPostVisitDocumentIntelligence: async (
+    sessionId: string,
+    payload: {
+      file: File;
+      documentType?: 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+      language?: string;
+      note?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const formData = new FormData();
+    formData.append('file', payload.file);
+    if (payload.documentType) formData.append('documentType', payload.documentType);
+    if (payload.language) formData.append('language', payload.language);
+    if (payload.note) formData.append('note', payload.note);
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/documents/intelligence`, formData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  listPostVisitDocumentIntelligence: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    filters?: { limit?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/documents/intelligence`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
   reassignPostVisitDiarizationSegment: async (
     sessionId: string,
     segmentId: string,

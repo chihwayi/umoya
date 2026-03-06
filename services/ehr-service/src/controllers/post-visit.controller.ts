@@ -29,6 +29,7 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
+  IngestPostVisitDocumentIntelligenceDto,
   PublishPostVisitSessionDto,
   ReassignPostVisitDiarizationSegmentDto,
   ResolvePostVisitEscalationDto,
@@ -278,6 +279,93 @@ export class PostVisitController {
         actorUserId: this.resolveUserId(req),
       },
     );
+  }
+
+  @Post('sessions/:id/documents/intelligence')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Upload a document for post-visit OCR intelligence extraction and FHIR mapping' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+        documentType: {
+          type: 'string',
+          enum: ['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'],
+          default: 'other',
+        },
+        language: {
+          type: 'string',
+          default: 'en',
+        },
+        note: {
+          type: 'string',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Document intelligence extracted and persisted' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 25 * 1024 * 1024 },
+      fileFilter: (req, file, callback) => {
+        const allowedMimes = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/jpg',
+          'image/webp',
+          'text/plain',
+          'text/csv',
+          'application/json',
+        ];
+        if (allowedMimes.includes(String(file.mimetype || '').toLowerCase())) {
+          callback(null, true);
+        } else {
+          callback(
+            new HttpException(
+              `Invalid document file type. Allowed types: ${allowedMimes.join(', ')}`,
+              HttpStatus.BAD_REQUEST,
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async ingestDocumentIntelligence(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: IngestPostVisitDocumentIntelligenceDto,
+    @Request() req: RequestWithTenant,
+  ): Promise<Record<string, any>> {
+    if (!file) {
+      throw new HttpException('Document file is required', HttpStatus.BAD_REQUEST);
+    }
+    await this.uploadSecurityService.assertCleanUpload(file, 'document');
+    return this.postVisitService.ingestDocumentIntelligence(req.tenantDb, id, file, body, {
+      actorUserId: this.resolveUserId(req),
+      tenantId: req.tenantId,
+    });
+  }
+
+  @Get('sessions/:id/documents/intelligence')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'List post-visit document intelligence extracts for a session' })
+  @ApiResponse({ status: 200, description: 'Document intelligence list fetched' })
+  async listDocumentIntelligence(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('limit') limit?: string,
+  ): Promise<Record<string, any>> {
+    return this.postVisitService.listSessionDocumentIntelligence(req.tenantDb, id, {
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('sessions/:id/diarization')

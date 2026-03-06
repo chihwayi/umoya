@@ -217,3 +217,26 @@ export class ReassignPostVisitDiarizationSegmentDto {
   @MaxLength(300)
   note?: string;
 }
+
+export class IngestPostVisitDocumentIntelligenceDto {
+  @ApiPropertyOptional({
+    description: 'Document classification type',
+    enum: ['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'],
+    default: 'other',
+  })
+  @IsEnum(['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'])
+  @IsOptional()
+  documentType?: 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+
+  @ApiPropertyOptional({ description: 'Language hint for OCR pipeline', default: 'en' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(10)
+  language?: string;
+
+  @ApiPropertyOptional({ description: 'Optional clinician note for ingestion audit' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(400)
+  note?: string;
+}

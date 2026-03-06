@@ -39,6 +39,8 @@ const envSchema = z.object({
   FEATURE_POSTVISIT_ESCALATION_CONFIDENCE: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_DIARIZATION_REVIEW: z.enum(['true', 'false']).default('false'),
   POSTVISIT_DIARIZATION_MIN_CONFIDENCE: z.string().default('0.65'),
+  FEATURE_POSTVISIT_OCR_INTELLIGENCE: z.enum(['true', 'false']).default('false'),
+  LOCAL_OCR_URL: z.string().default('http://127.0.0.1:8081'),
 
   // Notifications (SMS)
   SMS_GATEWAY_ECONET: z.string().default('https://api.econet.co.zw/sms'),
@@ -125,6 +127,7 @@ export const config = {
   features: {
     postVisitEscalationConfidence: env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE === 'true',
     postVisitDiarizationReview: env.FEATURE_POSTVISIT_DIARIZATION_REVIEW === 'true',
+    postVisitOcrIntelligence: env.FEATURE_POSTVISIT_OCR_INTELLIGENCE === 'true',
   },
 
   notifications: {

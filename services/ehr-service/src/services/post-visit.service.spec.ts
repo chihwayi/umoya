@@ -343,6 +343,172 @@ describe('PostVisitService', () => {
     expect(result.reviewedBy).toBe('doctor-1');
   });
 
+  it('ingests post-visit document intelligence and emits structured extraction + FHIR payload', async () => {
+    process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE = 'false';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                source_type: 'in_person',
+                status: 'draft_ready',
+                language: 'en',
+                created_at: '2026-03-06T08:00:00.000Z',
+                updated_at: '2026-03-06T08:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_document_intelligence') && sql.includes('ORDER BY created_at DESC')) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_document_intelligence')) {
+            return [
+              {
+                id: 'doc-intel-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                document_type: params[2],
+                document_name: params[3],
+                extraction_status: params[9],
+                ocr_engine: params[10],
+                ocr_confidence: params[11],
+                created_at: '2026-03-06T08:01:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('UPDATE post_visit_sessions') && sql.includes('document_intelligence_last_ingested_at')) {
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      const file = {
+        buffer: Buffer.from('Potassium: 4.8 mmol/L\nAmoxicillin 500 mg twice daily'),
+        originalname: 'lab-report.txt',
+        mimetype: 'text/plain',
+        size: 64,
+      } as Express.Multer.File;
+
+      const result = await service.ingestDocumentIntelligence(
+        tenantDb,
+        'session-1',
+        file,
+        { documentType: 'lab_report', language: 'en' },
+        { actorUserId: 'doctor-1', tenantId: 'tenant-a' },
+      );
+
+      expect(result.id).toBe('doc-intel-1');
+      expect(result.duplicate).toBe(false);
+      expect(result.structured.observations.length).toBeGreaterThan(0);
+      expect(result.fhirResources.some((resource: any) => resource.resourceType === 'Observation')).toBe(true);
+      expect(result.fhirResources.some((resource: any) => resource.resourceType === 'DiagnosticReport')).toBe(true);
+      expect(result.criticalDetected).toBe(false);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE;
+    }
+  });
+
+  it('creates document-based escalation for critical extracted lab values', async () => {
+    process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE = 'false';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                source_type: 'in_person',
+                status: 'draft_ready',
+                language: 'en',
+                created_at: '2026-03-06T08:00:00.000Z',
+                updated_at: '2026-03-06T08:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_document_intelligence') && sql.includes('ORDER BY created_at DESC')) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_document_intelligence')) {
+            return [
+              {
+                id: 'doc-intel-critical-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                document_type: params[2],
+                document_name: params[3],
+                extraction_status: params[9],
+                ocr_engine: params[10],
+                ocr_confidence: params[11],
+                created_at: '2026-03-06T08:01:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('INSERT INTO post_visit_escalation_events')) {
+            return [
+              {
+                id: 'esc-doc-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                status: 'open',
+                severity: 'critical',
+                route_target: 'doctor',
+                trigger_type: 'document_critical_value',
+                trigger_terms: ['Potassium critical'],
+                detected_at: '2026-03-06T08:01:20.000Z',
+                metadata: {},
+                created_at: '2026-03-06T08:01:20.000Z',
+                updated_at: '2026-03-06T08:01:20.000Z',
+              },
+            ];
+          }
+          if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+            return [];
+          }
+          if (sql.includes('UPDATE post_visit_escalation_events') && sql.includes('SET workflow_key')) {
+            return [];
+          }
+          if (sql.includes('UPDATE post_visit_document_intelligence') && sql.includes('critical_routed = TRUE')) {
+            return [];
+          }
+          if (sql.includes('UPDATE post_visit_sessions') && sql.includes('document_intelligence_last_ingested_at')) {
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      const file = {
+        buffer: Buffer.from('Potassium: 6.4 mmol/L'),
+        originalname: 'critical-lab.txt',
+        mimetype: 'text/plain',
+        size: 20,
+      } as Express.Multer.File;
+
+      const result = await service.ingestDocumentIntelligence(
+        tenantDb,
+        'session-1',
+        file,
+        { documentType: 'lab_report', language: 'en' },
+        { actorUserId: 'doctor-1', tenantId: 'tenant-a' },
+      );
+
+      expect(result.criticalDetected).toBe(true);
+      expect(result.criticalFlags.length).toBeGreaterThan(0);
+      expect(result.escalationEvent).toEqual(expect.objectContaining({ id: 'esc-doc-1', routeTarget: 'doctor' }));
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE;
+    }
+  });
+
   it('generates recommendation bundle with per-rule citations from patient context', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     patientServiceMock.getPatientContext.mockResolvedValue({

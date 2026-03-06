@@ -1,6 +1,9 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
+import axios from 'axios';
+import * as FormData from 'form-data';
+import { createHash } from 'crypto';
 import {
   CreatePostVisitSessionDto,
   ExecutePostVisitRecommendationDto,
@@ -91,6 +94,40 @@ interface PublishSessionOptions {
   tenantId?: string;
   actorUserId?: string | null;
   source?: string;
+}
+
+type PostVisitDocumentType = 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+
+interface PostVisitDocumentObservation {
+  name: string;
+  value: number;
+  unit?: string | null;
+  referenceRange?: string | null;
+  interpretation?: string | null;
+}
+
+interface PostVisitMedicationMention {
+  medicationName: string;
+  dose?: string | null;
+  frequency?: string | null;
+  route?: string | null;
+}
+
+interface PostVisitDocumentIntelligenceModel {
+  documentType: PostVisitDocumentType;
+  summary: string;
+  observations: PostVisitDocumentObservation[];
+  medications: PostVisitMedicationMention[];
+  findings: string[];
+}
+
+interface PostVisitDocumentCriticalFlag {
+  code: string;
+  label: string;
+  severity: 'moderate' | 'high' | 'critical';
+  value: number;
+  unit?: string | null;
+  threshold: string;
 }
 
 interface ListPostVisitSessionsOptions {
@@ -372,6 +409,55 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_document_intelligence (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        document_type VARCHAR(40) NOT NULL
+          CHECK (document_type IN ('lab_report','prescription','imaging_report','discharge_summary','other')),
+        document_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(120),
+        file_size INTEGER,
+        file_sha256 VARCHAR(128) NOT NULL,
+        duplicate_of_document_id UUID REFERENCES post_visit_document_intelligence(id) ON DELETE SET NULL,
+        duplicate_similarity DOUBLE PRECISION,
+        extraction_status VARCHAR(20) NOT NULL DEFAULT 'processed'
+          CHECK (extraction_status IN ('processed','failed','duplicate')),
+        ocr_engine VARCHAR(120),
+        ocr_confidence DOUBLE PRECISION,
+        extracted_text TEXT,
+        structured_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        fhir_resources JSONB NOT NULL DEFAULT '[]'::jsonb,
+        critical_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        critical_detected BOOLEAN NOT NULL DEFAULT FALSE,
+        critical_routed BOOLEAN NOT NULL DEFAULT FALSE,
+        escalation_event_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_document_intelligence
+      ADD COLUMN IF NOT EXISTS duplicate_of_document_id UUID REFERENCES post_visit_document_intelligence(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS duplicate_similarity DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS extraction_status VARCHAR(20) NOT NULL DEFAULT 'processed'
+        CHECK (extraction_status IN ('processed','failed','duplicate')),
+      ADD COLUMN IF NOT EXISTS ocr_engine VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS ocr_confidence DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS extracted_text TEXT,
+      ADD COLUMN IF NOT EXISTS structured_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS fhir_resources JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS critical_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS critical_detected BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS critical_routed BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS escalation_event_id UUID,
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS post_visit_escalation_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -457,6 +543,9 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_thread ON post_visit_companion_messages(thread_id, created_at ASC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_patient ON post_visit_companion_messages(patient_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_escalation ON post_visit_companion_messages(escalation_detected, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_session ON post_visit_document_intelligence(session_id, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_hash ON post_visit_document_intelligence(session_id, file_sha256)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_doc_intelligence_critical ON post_visit_document_intelligence(session_id, critical_detected, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_session ON post_visit_escalation_events(session_id, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status ON post_visit_escalation_events(status, severity, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`);
@@ -582,6 +671,290 @@ export class PostVisitService {
     const year = Number(match[0]);
     if (!Number.isFinite(year)) return null;
     return year;
+  }
+
+  private isPostVisitOcrEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  }
+
+  private resolveLocalOcrUrl(): string {
+    const direct = String(process.env.LOCAL_OCR_URL || '').trim();
+    if (direct) {
+      return direct.replace(/\/+$/, '');
+    }
+    return 'http://127.0.0.1:8081';
+  }
+
+  private getLocalOcrTimeoutMs(): number {
+    const raw = Number(process.env.POSTVISIT_OCR_TIMEOUT_MS || 120000);
+    if (!Number.isFinite(raw)) return 120000;
+    return Math.min(300000, Math.max(5000, raw));
+  }
+
+  private hashFile(buffer: Buffer): string {
+    return createHash('sha256').update(buffer).digest('hex');
+  }
+
+  private normalizeDocumentText(text: string): string {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s./%-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private computeDocumentSimilarity(leftRaw: string, rightRaw: string): number {
+    const left = this.normalizeDocumentText(leftRaw);
+    const right = this.normalizeDocumentText(rightRaw);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+
+    const leftTokens = new Set(left.split(/\s+/).filter((token) => token.length > 1));
+    const rightTokens = new Set(right.split(/\s+/).filter((token) => token.length > 1));
+    if (!leftTokens.size || !rightTokens.size) return 0;
+
+    let overlap = 0;
+    for (const token of leftTokens) {
+      if (rightTokens.has(token)) overlap += 1;
+    }
+    const union = leftTokens.size + rightTokens.size - overlap;
+    if (union <= 0) return 0;
+    return overlap / union;
+  }
+
+  private normalizeDocumentType(type?: string): PostVisitDocumentType {
+    const normalized = String(type || '').trim().toLowerCase();
+    if (['lab_report', 'prescription', 'imaging_report', 'discharge_summary', 'other'].includes(normalized)) {
+      return normalized as PostVisitDocumentType;
+    }
+    return 'other';
+  }
+
+  private parseDocumentIntelligenceFromText(
+    text: string,
+    documentType: PostVisitDocumentType,
+  ): PostVisitDocumentIntelligenceModel {
+    const normalizedText = String(text || '').trim();
+    const lines = normalizedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    const observations: PostVisitDocumentObservation[] = [];
+    const medications: PostVisitMedicationMention[] = [];
+    const findings: string[] = [];
+
+    const observationPattern =
+      /^([A-Za-z][A-Za-z0-9()[\] %/._-]{1,80}?)\s*[:=-]\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z%/^\d.-]+)?(?:\s*\(([^)]+)\))?$/i;
+    const medicationPattern =
+      /^([A-Z][A-Za-z0-9-]+(?:\s+[A-Za-z0-9-]+){0,2})\s+(\d+(?:\.\d+)?)\s?(mg|mcg|g|ml|iu|units?)\b(?:\s*(.*))?$/i;
+
+    for (const line of lines) {
+      const observationMatch = line.match(observationPattern);
+      if (observationMatch) {
+        observations.push({
+          name: observationMatch[1].trim(),
+          value: Number(observationMatch[2]),
+          unit: observationMatch[3] ? observationMatch[3].trim() : null,
+          referenceRange: observationMatch[4] ? observationMatch[4].trim() : null,
+          interpretation: null,
+        });
+        continue;
+      }
+
+      const medicationMatch = line.match(medicationPattern);
+      if (medicationMatch) {
+        medications.push({
+          medicationName: medicationMatch[1].trim(),
+          dose: `${medicationMatch[2]} ${medicationMatch[3]}`,
+          frequency: medicationMatch[4] ? medicationMatch[4].trim() : null,
+          route: null,
+        });
+        continue;
+      }
+
+      if (/impression|conclusion|assessment|finding|diagnosis|recommendation/i.test(line)) {
+        findings.push(line);
+      }
+    }
+
+    return {
+      documentType,
+      summary: normalizedText.slice(0, 1200),
+      observations: observations.slice(0, 120),
+      medications: medications.slice(0, 80),
+      findings: findings.slice(0, 80),
+    };
+  }
+
+  private mapDocumentIntelligenceToFhir(
+    sessionRow: any,
+    documentId: string,
+    model: PostVisitDocumentIntelligenceModel,
+  ): any[] {
+    const encounterRef = `Encounter/post-visit-${sessionRow.id}`;
+    const patientRef = `Patient/${sessionRow.patient_id}`;
+    const effectiveDate = this.toIsoDate(new Date());
+
+    const observationResources = model.observations.map((observation, index) => ({
+      resourceType: 'Observation',
+      id: `post-visit-docobs-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'final',
+      category: [{ text: 'laboratory' }],
+      code: { text: observation.name },
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      effectiveDateTime: effectiveDate,
+      valueQuantity: {
+        value: observation.value,
+        unit: observation.unit || undefined,
+      },
+      referenceRange: observation.referenceRange
+        ? [
+            {
+              text: observation.referenceRange,
+            },
+          ]
+        : undefined,
+    }));
+
+    const medicationResources = model.medications.map((medication, index) => ({
+      resourceType: 'MedicationRequest',
+      id: `post-visit-docmed-${this.safeToken(documentId)}-${index + 1}`,
+      status: 'active',
+      intent: 'order',
+      subject: { reference: patientRef },
+      encounter: { reference: encounterRef },
+      authoredOn: effectiveDate,
+      medicationCodeableConcept: {
+        text: medication.medicationName,
+      },
+      dosageInstruction: [
+        {
+          text: [medication.dose, medication.frequency].filter(Boolean).join(' ').trim(),
+        },
+      ],
+    }));
+
+    const diagnosticReportResource = {
+      resourceType: 'DiagnosticReport',
+      id: `post-visit-docreport-${this.safeToken(documentId)}`,
+      status: 'final',
+      code: {
+        text: `${model.documentType.replace(/_/g, ' ')} intelligence extract`,
+      },
+      subject: {
+        reference: patientRef,
+      },
+      encounter: {
+        reference: encounterRef,
+      },
+      effectiveDateTime: effectiveDate,
+      issued: effectiveDate,
+      conclusion: model.findings.join('; ') || model.summary.slice(0, 500),
+      result: observationResources.map((observation) => ({
+        reference: `Observation/${observation.id}`,
+      })),
+    };
+
+    return [...observationResources, ...medicationResources, diagnosticReportResource];
+  }
+
+  private detectCriticalDocumentFlags(model: PostVisitDocumentIntelligenceModel): PostVisitDocumentCriticalFlag[] {
+    const flags: PostVisitDocumentCriticalFlag[] = [];
+    const thresholds: Array<{
+      code: string;
+      label: string;
+      matcher: RegExp;
+      criticalHigh?: number;
+      criticalLow?: number;
+      highHigh?: number;
+      highLow?: number;
+      unit?: string;
+    }> = [
+      {
+        code: 'potassium',
+        label: 'Potassium critical',
+        matcher: /potassium|k\+/i,
+        criticalHigh: 6.0,
+        criticalLow: 2.8,
+        highHigh: 5.5,
+        highLow: 3.0,
+        unit: 'mmol/L',
+      },
+      {
+        code: 'glucose',
+        label: 'Glucose critical',
+        matcher: /glucose|blood sugar/i,
+        criticalHigh: 22.0,
+        criticalLow: 2.5,
+        highHigh: 16.0,
+        highLow: 3.0,
+        unit: 'mmol/L',
+      },
+      {
+        code: 'hemoglobin',
+        label: 'Hemoglobin critical',
+        matcher: /hemoglobin|haemoglobin|hb/i,
+        criticalLow: 6.5,
+        highLow: 7.5,
+        unit: 'g/dL',
+      },
+    ];
+
+    for (const observation of model.observations) {
+      const name = String(observation.name || '');
+      const value = Number(observation.value);
+      if (!Number.isFinite(value)) continue;
+      for (const threshold of thresholds) {
+        if (!threshold.matcher.test(name)) continue;
+        if (threshold.criticalHigh !== undefined && value >= threshold.criticalHigh) {
+          flags.push({
+            code: threshold.code,
+            label: threshold.label,
+            severity: 'critical',
+            value,
+            unit: observation.unit || threshold.unit || null,
+            threshold: `>= ${threshold.criticalHigh}`,
+          });
+          continue;
+        }
+        if (threshold.criticalLow !== undefined && value <= threshold.criticalLow) {
+          flags.push({
+            code: threshold.code,
+            label: threshold.label,
+            severity: 'critical',
+            value,
+            unit: observation.unit || threshold.unit || null,
+            threshold: `<= ${threshold.criticalLow}`,
+          });
+          continue;
+        }
+        if (threshold.highHigh !== undefined && value >= threshold.highHigh) {
+          flags.push({
+            code: threshold.code,
+            label: threshold.label,
+            severity: 'high',
+            value,
+            unit: observation.unit || threshold.unit || null,
+            threshold: `>= ${threshold.highHigh}`,
+          });
+          continue;
+        }
+        if (threshold.highLow !== undefined && value <= threshold.highLow) {
+          flags.push({
+            code: threshold.code,
+            label: threshold.label,
+            severity: 'high',
+            value,
+            unit: observation.unit || threshold.unit || null,
+            threshold: `<= ${threshold.highLow}`,
+          });
+        }
+      }
+    }
+
+    return flags;
   }
 
   private splitIntoPhrases(value?: string) {
@@ -2360,7 +2733,7 @@ export class PostVisitService {
     await this.ensurePostVisitSchema(tenantDb);
     await this.getSessionRow(tenantDb, sessionId);
 
-    const [artifacts, extractedEntities, segments, reviewActions, ruleCitations, actionExecutions] = await Promise.all([
+    const [artifacts, extractedEntities, segments, reviewActions, ruleCitations, actionExecutions, documentIntelligenceRows] = await Promise.all([
       tenantDb.query(
         `
           SELECT id, artifact_type, artifact_status, content, citations, confidence, generated_by, created_at, updated_at
@@ -2449,6 +2822,35 @@ export class PostVisitService {
           WHERE session_id = $1
           ORDER BY executed_at DESC
           LIMIT 400
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            id,
+            document_type,
+            document_name,
+            mime_type,
+            file_size,
+            duplicate_of_document_id,
+            duplicate_similarity,
+            extraction_status,
+            ocr_engine,
+            ocr_confidence,
+            extracted_text,
+            structured_payload,
+            fhir_resources,
+            critical_flags,
+            critical_detected,
+            critical_routed,
+            escalation_event_id,
+            metadata,
+            created_at
+          FROM post_visit_document_intelligence
+          WHERE session_id = $1
+          ORDER BY created_at DESC
+          LIMIT 200
         `,
         [sessionId],
       ),
@@ -2550,6 +2952,33 @@ export class PostVisitService {
         executedAt: row.executed_at,
         source: row.source,
         metadata: row.metadata || {},
+      })),
+      documentIntelligence: documentIntelligenceRows.map((row: any) => ({
+        id: row.id,
+        documentType: row.document_type,
+        documentName: row.document_name,
+        mimeType: row.mime_type || null,
+        fileSize: row.file_size === null || row.file_size === undefined ? null : Number(row.file_size),
+        extractionStatus: row.extraction_status,
+        duplicateOfDocumentId: row.duplicate_of_document_id || null,
+        duplicateSimilarity:
+          row.duplicate_similarity === null || row.duplicate_similarity === undefined
+            ? null
+            : Number(row.duplicate_similarity),
+        ocrEngine: row.ocr_engine || null,
+        ocrConfidence:
+          row.ocr_confidence === null || row.ocr_confidence === undefined
+            ? null
+            : Number(row.ocr_confidence),
+        extractedText: row.extracted_text || null,
+        structured: row.structured_payload || {},
+        fhirResources: row.fhir_resources || [],
+        criticalFlags: row.critical_flags || [],
+        criticalDetected: row.critical_detected === true,
+        criticalRouted: row.critical_routed === true,
+        escalationEventId: row.escalation_event_id || null,
+        metadata: row.metadata || {},
+        createdAt: row.created_at,
       })),
     };
   }
@@ -2722,7 +3151,16 @@ export class PostVisitService {
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
 
-    const [summaryArtifact, recommendationArtifact, actionExecutionRows, citationRows, patientRows, doctorRows, acknowledgementRows] = await Promise.all([
+    const [
+      summaryArtifact,
+      recommendationArtifact,
+      actionExecutionRows,
+      citationRows,
+      patientRows,
+      doctorRows,
+      acknowledgementRows,
+      documentIntelligenceRows,
+    ] = await Promise.all([
       this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
       this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
       tenantDb.query(
@@ -2767,6 +3205,15 @@ export class PostVisitService {
         `
           SELECT acknowledgement_type, acknowledged, details, created_at
           FROM post_visit_companion_acknowledgements
+          WHERE session_id = $1
+          ORDER BY created_at ASC
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT id, document_type, document_name, fhir_resources, structured_payload, created_at
+          FROM post_visit_document_intelligence
           WHERE session_id = $1
           ORDER BY created_at ASC
         `,
@@ -2920,6 +3367,19 @@ export class PostVisitService {
         ],
       }));
 
+    const documentFhirResources = documentIntelligenceRows.flatMap((row: any) => {
+      const resources = Array.isArray(row?.fhir_resources) ? row.fhir_resources : [];
+      return resources
+        .filter((resource: any) => resource && typeof resource === 'object' && String(resource.resourceType || '').trim())
+        .map((resource: any, index: number) => ({
+          ...resource,
+          id:
+            typeof resource.id === 'string' && resource.id.trim().length > 0
+              ? resource.id
+              : `post-visit-doc-${this.safeToken(row.id || row.document_name || `${index}`)}-${index + 1}`,
+        }));
+    });
+
     const carePlanResource = {
       resourceType: 'CarePlan',
       id: `post-visit-careplan-${sessionId}`,
@@ -3026,6 +3486,7 @@ export class PostVisitService {
       questionnaireResponseResource,
       ...taskResources,
       ...serviceRequestResources,
+      ...documentFhirResources,
       provenanceResource,
     ];
 
@@ -3047,6 +3508,7 @@ export class PostVisitService {
         resourceCount: resources.length,
         recommendationTaskCount: taskResources.length,
         executedServiceRequestCount: serviceRequestResources.length,
+        documentResourceCount: documentFhirResources.length,
         acknowledgementCount: acknowledgementRows.length,
       },
     };
@@ -4967,6 +5429,398 @@ export class PostVisitService {
         errorMessage: executionRecord.error_message || null,
         executedAt: executionRecord.executed_at,
       },
+    };
+  }
+
+  private async extractDocumentTextWithLocalOcr(
+    file: Express.Multer.File,
+    options: { language?: string } = {},
+  ): Promise<{ text: string; confidence: number | null; engine: string; raw: any }> {
+    if (!file?.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw new BadRequestException('Document file buffer is empty');
+    }
+
+    const mime = String(file.mimetype || '').toLowerCase();
+    if (
+      mime.startsWith('text/') ||
+      mime.includes('json') ||
+      mime.includes('xml') ||
+      mime.includes('csv') ||
+      mime.includes('html')
+    ) {
+      const text = file.buffer.toString('utf8');
+      return {
+        text,
+        confidence: 1,
+        engine: 'native_text_decode',
+        raw: { mode: 'native_text_decode' },
+      };
+    }
+
+    if (!this.isPostVisitOcrEnabled()) {
+      return {
+        text: '',
+        confidence: null,
+        engine: 'ocr_disabled',
+        raw: { mode: 'ocr_disabled' },
+      };
+    }
+
+    const baseUrl = this.resolveLocalOcrUrl();
+    const endpoint = `${baseUrl}/extract`;
+    const formData = new FormData();
+    formData.append('file', file.buffer, {
+      filename: file.originalname || 'document.bin',
+      contentType: file.mimetype || 'application/octet-stream',
+    });
+    if (options.language) {
+      formData.append('language', String(options.language));
+    }
+
+    const response = await axios.post(endpoint, formData, {
+      headers: {
+        ...(formData.getHeaders() as Record<string, string>),
+      },
+      timeout: this.getLocalOcrTimeoutMs(),
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    const payload = response.data;
+    if (typeof payload === 'string') {
+      return {
+        text: payload,
+        confidence: null,
+        engine: 'local_ocr',
+        raw: payload,
+      };
+    }
+
+    const text =
+      String(payload?.text || payload?.ocr?.text || payload?.result?.text || payload?.data?.text || '').trim();
+    const confidence = Number(payload?.confidence ?? payload?.ocr?.confidence ?? payload?.result?.confidence);
+    const engine = String(payload?.engine || payload?.ocr?.engine || 'local_ocr').trim() || 'local_ocr';
+
+    return {
+      text,
+      confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : null,
+      engine,
+      raw: payload,
+    };
+  }
+
+  private async createDocumentCriticalEscalation(
+    tenantDb: DataSource,
+    args: {
+      sessionRow: any;
+      documentId: string;
+      documentName: string;
+      criticalFlags: PostVisitDocumentCriticalFlag[];
+      actorUserId?: string | null;
+    },
+  ) {
+    const severity: 'high' | 'critical' = args.criticalFlags.some((flag) => flag.severity === 'critical')
+      ? 'critical'
+      : 'high';
+    const detectedAt = new Date();
+    const slaMinutes = severity === 'critical' ? 30 : 90;
+    const slaDueAt = new Date(detectedAt.getTime() + slaMinutes * 60 * 1000);
+    const triggerTerms = args.criticalFlags.map((flag) => flag.label).slice(0, 8);
+
+    const rows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_escalation_events (
+          session_id,
+          patient_id,
+          thread_id,
+          message_id,
+          status,
+          severity,
+          route_target,
+          trigger_type,
+          trigger_terms,
+          signal_text,
+          classification_confidence,
+          classification_temporality,
+          classification_source,
+          classification_reason,
+          classification_stage,
+          detected_at,
+          sla_due_at,
+          metadata
+        ) VALUES (
+          $1,$2,NULL,NULL,'open',$3,'doctor','document_critical_value',$4::jsonb,$5,0.93,'current','document_intelligence_v1',$6,'v2',$7,$8,$9::jsonb
+        )
+        RETURNING *
+      `,
+      [
+        args.sessionRow.id,
+        args.sessionRow.patient_id,
+        severity,
+        JSON.stringify(triggerTerms),
+        `Critical value(s) detected in ${args.documentName}`,
+        `Critical values detected in document intelligence extract (${args.documentName})`,
+        detectedAt.toISOString(),
+        slaDueAt.toISOString(),
+        JSON.stringify({
+          source: 'post_visit_document_intelligence',
+          document_id: args.documentId,
+          critical_flags: args.criticalFlags,
+          triage_policy: 'non_emergency_clinician_queue',
+        }),
+      ],
+    );
+
+    const inserted = rows[0];
+    const workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
+      sessionRow: args.sessionRow,
+      escalationId: inserted.id,
+      routeTarget: 'doctor',
+      severity,
+      triggerTerms,
+    });
+
+    if (workflowKey) {
+      await tenantDb.query(
+        `
+          UPDATE post_visit_escalation_events
+          SET workflow_key = $2,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, workflowKey],
+      );
+      inserted.workflow_key = workflowKey;
+    }
+
+    return inserted;
+  }
+
+  async ingestDocumentIntelligence(
+    tenantDb: DataSource,
+    sessionId: string,
+    file: Express.Multer.File,
+    payload: { documentType?: string; language?: string; note?: string } = {},
+    options: { actorUserId?: string | null; tenantId?: string } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    if (!file?.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw new BadRequestException('Document file is required');
+    }
+
+    const fileHash = this.hashFile(file.buffer);
+    const documentType = this.normalizeDocumentType(payload.documentType);
+
+    const existingRows = await tenantDb.query(
+      `
+        SELECT id, file_sha256, extracted_text, document_name
+        FROM post_visit_document_intelligence
+        WHERE session_id = $1
+        ORDER BY created_at DESC
+        LIMIT 400
+      `,
+      [sessionId],
+    );
+
+    const exactDuplicate = existingRows.find((row: any) => String(row.file_sha256 || '') === fileHash);
+    let duplicateOfDocumentId: string | null = exactDuplicate ? String(exactDuplicate.id) : null;
+    let duplicateSimilarity = exactDuplicate ? 1 : 0;
+
+    const ocr = await this.extractDocumentTextWithLocalOcr(file, {
+      language: payload.language || sessionRow.language || 'en',
+    });
+
+    const extractedText = String(ocr.text || '').trim();
+    if (!duplicateOfDocumentId && extractedText.length > 0) {
+      for (const row of existingRows) {
+        const score = this.computeDocumentSimilarity(extractedText, String(row?.extracted_text || ''));
+        if (score > duplicateSimilarity) {
+          duplicateSimilarity = score;
+          duplicateOfDocumentId = score >= 0.9 ? String(row.id) : duplicateOfDocumentId;
+        }
+      }
+    }
+
+    const structured = this.parseDocumentIntelligenceFromText(extractedText, documentType);
+    const fhirResources = this.mapDocumentIntelligenceToFhir(sessionRow, `${sessionId}-${Date.now()}`, structured);
+    const criticalFlags = this.detectCriticalDocumentFlags(structured);
+    const criticalDetected = criticalFlags.length > 0;
+    const extractionStatus = duplicateOfDocumentId
+      ? 'duplicate'
+      : extractedText.length > 0
+        ? 'processed'
+        : 'failed';
+
+    const insertRows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_document_intelligence (
+          session_id,
+          patient_id,
+          document_type,
+          document_name,
+          mime_type,
+          file_size,
+          file_sha256,
+          duplicate_of_document_id,
+          duplicate_similarity,
+          extraction_status,
+          ocr_engine,
+          ocr_confidence,
+          extracted_text,
+          structured_payload,
+          fhir_resources,
+          critical_flags,
+          critical_detected,
+          critical_routed,
+          metadata,
+          created_by
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$18,$19::jsonb,$20
+        )
+        RETURNING *
+      `,
+      [
+        sessionId,
+        sessionRow.patient_id,
+        documentType,
+        file.originalname || `post-visit-document-${Date.now()}`,
+        file.mimetype || null,
+        Number(file.size || file.buffer.length || 0),
+        fileHash,
+        duplicateOfDocumentId,
+        duplicateSimilarity > 0 ? duplicateSimilarity : null,
+        extractionStatus,
+        ocr.engine,
+        ocr.confidence,
+        extractedText || null,
+        JSON.stringify(structured),
+        JSON.stringify(fhirResources),
+        JSON.stringify(criticalFlags),
+        criticalDetected,
+        false,
+        JSON.stringify({
+          source: 'post_visit_document_intelligence',
+          note: payload.note || null,
+          ocr_raw: ocr.raw || {},
+          duplicate_similarity: duplicateSimilarity,
+        }),
+        options.actorUserId || null,
+      ],
+    );
+
+    const inserted = insertRows[0];
+
+    let escalationEvent: any = null;
+    if (criticalDetected && !duplicateOfDocumentId) {
+      escalationEvent = await this.createDocumentCriticalEscalation(tenantDb, {
+        sessionRow,
+        documentId: inserted.id,
+        documentName: inserted.document_name,
+        criticalFlags,
+        actorUserId: options.actorUserId || null,
+      });
+
+      await tenantDb.query(
+        `
+          UPDATE post_visit_document_intelligence
+          SET escalation_event_id = $2,
+              critical_routed = TRUE,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [inserted.id, escalationEvent.id],
+      );
+      inserted.escalation_event_id = escalationEvent.id;
+      inserted.critical_routed = true;
+    }
+
+    await tenantDb.query(
+      `
+        UPDATE post_visit_sessions
+        SET updated_at = NOW(),
+            meta = COALESCE(meta, '{}'::jsonb) || $2::jsonb
+        WHERE id = $1
+      `,
+      [
+        sessionId,
+        JSON.stringify({
+          document_intelligence_last_ingested_at: new Date().toISOString(),
+          document_intelligence_count_delta: 1,
+        }),
+      ],
+    );
+
+    return {
+      id: inserted.id,
+      sessionId,
+      patientId: inserted.patient_id,
+      documentType: inserted.document_type,
+      documentName: inserted.document_name,
+      extractionStatus: inserted.extraction_status,
+      duplicate: Boolean(duplicateOfDocumentId),
+      duplicateOfDocumentId: duplicateOfDocumentId || null,
+      duplicateSimilarity: duplicateSimilarity > 0 ? duplicateSimilarity : null,
+      ocr: {
+        engine: inserted.ocr_engine,
+        confidence:
+          inserted.ocr_confidence === null || inserted.ocr_confidence === undefined
+            ? null
+            : Number(inserted.ocr_confidence),
+      },
+      structured,
+      fhirResources,
+      criticalDetected,
+      criticalFlags,
+      escalationEvent: escalationEvent ? this.mapEscalationEvent(escalationEvent) : null,
+      createdAt: inserted.created_at,
+    };
+  }
+
+  async listSessionDocumentIntelligence(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { limit?: number } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+    const limit = Math.min(Math.max(Number(options.limit || 80), 1), 300);
+
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_document_intelligence
+        WHERE session_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+      `,
+      [sessionId, limit],
+    );
+
+    return {
+      sessionId,
+      items: rows.map((row: any) => ({
+        id: row.id,
+        documentType: row.document_type,
+        documentName: row.document_name,
+        mimeType: row.mime_type || null,
+        extractionStatus: row.extraction_status,
+        duplicateOfDocumentId: row.duplicate_of_document_id || null,
+        duplicateSimilarity:
+          row.duplicate_similarity === null || row.duplicate_similarity === undefined
+            ? null
+            : Number(row.duplicate_similarity),
+        ocrEngine: row.ocr_engine || null,
+        ocrConfidence: row.ocr_confidence === null || row.ocr_confidence === undefined ? null : Number(row.ocr_confidence),
+        structured: row.structured_payload || {},
+        fhirResources: row.fhir_resources || [],
+        criticalFlags: row.critical_flags || [],
+        criticalDetected: row.critical_detected === true,
+        criticalRouted: row.critical_routed === true,
+        escalationEventId: row.escalation_event_id || null,
+        createdAt: row.created_at,
+      })),
     };
   }
 

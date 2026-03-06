@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   ClipboardList,
@@ -13,6 +14,7 @@ import {
   Rocket,
   ShieldCheck,
   Square,
+  Upload,
 } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -86,6 +88,7 @@ interface DraftPayload {
     supersededByGuidelineId?: string | null;
     acknowledgedSuperseded?: boolean;
   }>;
+  documentIntelligence?: DocumentIntelligenceItem[];
 }
 
 interface DiarizationSegment {
@@ -114,6 +117,26 @@ interface DiarizationPayload {
   segments: DiarizationSegment[];
 }
 
+interface DocumentIntelligenceItem {
+  id: string;
+  documentType: 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+  documentName: string;
+  extractionStatus: 'processed' | 'failed' | 'duplicate';
+  duplicateOfDocumentId?: string | null;
+  duplicateSimilarity?: number | null;
+  ocrEngine?: string | null;
+  ocrConfidence?: number | null;
+  structured?: {
+    observations?: Array<{ name: string; value: number; unit?: string | null }>;
+    medications?: Array<{ medicationName: string; dose?: string | null; frequency?: string | null }>;
+    findings?: string[];
+  };
+  criticalDetected?: boolean;
+  criticalRouted?: boolean;
+  escalationEventId?: string | null;
+  createdAt?: string;
+}
+
 const STATUS_OPTIONS: Array<'all' | SessionStatus> = [
   'all',
   'captured',
@@ -122,6 +145,17 @@ const STATUS_OPTIONS: Array<'all' | SessionStatus> = [
   'doctor_reviewed',
   'published',
   'closed',
+];
+
+const DOCUMENT_TYPE_OPTIONS: Array<{
+  value: 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+  label: string;
+}> = [
+  { value: 'lab_report', label: 'Lab report' },
+  { value: 'prescription', label: 'Prescription' },
+  { value: 'imaging_report', label: 'Imaging report' },
+  { value: 'discharge_summary', label: 'Discharge summary' },
+  { value: 'other', label: 'Other document' },
 ];
 
 const formatDate = (value?: string | null) => {
@@ -185,6 +219,15 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [pendingSpeakerRole, setPendingSpeakerRole] = useState<Record<string, 'doctor' | 'patient' | 'unknown'>>({});
   const [supersededCitationAcknowledgements, setSupersededCitationAcknowledgements] = useState<Record<string, boolean>>({});
+  const [documentIntelligence, setDocumentIntelligence] = useState<DocumentIntelligenceItem[]>([]);
+  const [documentIntelligenceLoading, setDocumentIntelligenceLoading] = useState(false);
+  const [documentIntelligenceLoadedSessionId, setDocumentIntelligenceLoadedSessionId] = useState<string | null>(null);
+  const [documentIntelligenceFile, setDocumentIntelligenceFile] = useState<File | null>(null);
+  const [documentIntelligenceType, setDocumentIntelligenceType] = useState<
+    'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other'
+  >('other');
+  const [documentIntelligenceLanguage, setDocumentIntelligenceLanguage] = useState('en');
+  const [documentIntelligenceNote, setDocumentIntelligenceNote] = useState('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -225,6 +268,60 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [supersededCitationAcknowledgements, supersededCitations],
   );
 
+  const effectiveDocumentIntelligence = useMemo(() => {
+    if (documentIntelligenceLoadedSessionId && documentIntelligenceLoadedSessionId === selectedSessionId) {
+      return documentIntelligence;
+    }
+    const draftRows = Array.isArray(draftData?.documentIntelligence)
+      ? (draftData?.documentIntelligence as DocumentIntelligenceItem[])
+      : [];
+    return draftRows;
+  }, [documentIntelligence, documentIntelligenceLoadedSessionId, draftData?.documentIntelligence, selectedSessionId]);
+
+  const labObservationTrends = useMemo(() => {
+    const trendMap = new Map<string, Array<{ value: number; unit: string; createdAt: string }>>();
+    for (const item of effectiveDocumentIntelligence) {
+      if (item.documentType !== 'lab_report') continue;
+      const createdAt = item.createdAt || new Date(0).toISOString();
+      const observations = Array.isArray(item.structured?.observations) ? item.structured?.observations : [];
+      for (const observation of observations) {
+        const numericValue = Number(observation?.value);
+        if (!Number.isFinite(numericValue)) continue;
+        const name = String(observation?.name || '').trim();
+        if (!name) continue;
+        const unit = String(observation?.unit || '').trim();
+        const key = `${name}__${unit}`;
+        if (!trendMap.has(key)) {
+          trendMap.set(key, []);
+        }
+        trendMap.get(key)?.push({ value: numericValue, unit, createdAt });
+      }
+    }
+
+    return Array.from(trendMap.entries())
+      .map(([key, points]) => {
+        const [name, unit] = key.split('__');
+        const sortedPoints = [...points]
+          .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+          .slice(-8);
+        const values = sortedPoints.map((point) => point.value);
+        const max = Math.max(...values);
+        const min = Math.min(...values);
+        return {
+          key,
+          name,
+          unit,
+          points: sortedPoints,
+          latest: sortedPoints[sortedPoints.length - 1]?.value ?? null,
+          previous: sortedPoints.length > 1 ? sortedPoints[sortedPoints.length - 2]?.value ?? null : null,
+          min,
+          max,
+        };
+      })
+      .sort((left, right) => right.points.length - left.points.length)
+      .slice(0, 6);
+  }, [effectiveDocumentIntelligence]);
+
   const loadSessions = useCallback(async () => {
     if (!tenantSlug || !token) return;
     try {
@@ -241,6 +338,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setSelectedSessionId(null);
         setDraftData(null);
         setDiarizationData(null);
+        setDocumentIntelligence([]);
+        setDocumentIntelligenceLoadedSessionId(null);
         return;
       }
       const selectedExists = selectedSessionId && rows.some((session) => session.id === selectedSessionId);
@@ -290,6 +389,27 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadDocumentIntelligence = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) return;
+      try {
+        setDocumentIntelligenceLoading(true);
+        const response = await ehrApi.listPostVisitDocumentIntelligence(sessionId, token, tenantSlug, {
+          limit: 80,
+        });
+        const rows = Array.isArray(response.data?.items) ? (response.data.items as DocumentIntelligenceItem[]) : [];
+        setDocumentIntelligence(rows);
+        setDocumentIntelligenceLoadedSessionId(sessionId);
+      } catch {
+        setDocumentIntelligence([]);
+        setDocumentIntelligenceLoadedSessionId(sessionId);
+      } finally {
+        setDocumentIntelligenceLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -298,8 +418,11 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     if (!selectedSessionId) return;
     loadDraft(selectedSessionId);
     loadDiarization(selectedSessionId);
+    loadDocumentIntelligence(selectedSessionId);
     setSessionTranscribeFile(null);
-  }, [loadDiarization, loadDraft, selectedSessionId]);
+    setDocumentIntelligenceFile(null);
+    setDocumentIntelligenceNote('');
+  }, [loadDiarization, loadDocumentIntelligence, loadDraft, selectedSessionId]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -593,6 +716,62 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     transcribeLanguage,
     transcribePrompt,
     transcribeTemperature,
+  ]);
+
+  const handleUploadDocumentIntelligence = useCallback(async () => {
+    if (!tenantSlug || !token || !selectedSessionId) return;
+    if (!documentIntelligenceFile) {
+      showError('Document intelligence', 'Select a document file before uploading.');
+      return;
+    }
+    try {
+      setWorkingActionKey('upload-document-intelligence');
+      const response = await ehrApi.ingestPostVisitDocumentIntelligence(
+        selectedSessionId,
+        {
+          file: documentIntelligenceFile,
+          documentType: documentIntelligenceType,
+          language: documentIntelligenceLanguage.trim() || 'en',
+          note: documentIntelligenceNote.trim() || undefined,
+        },
+        token,
+        tenantSlug,
+      );
+      const critical = response.data?.criticalDetected === true;
+      showSuccess(
+        'Document intelligence ingested',
+        critical
+          ? 'Critical values were detected and routed to clinician escalation workflow.'
+          : 'Extraction, structuring, and FHIR mapping completed.',
+      );
+      setDocumentIntelligenceFile(null);
+      setDocumentIntelligenceNote('');
+      await Promise.all([
+        loadSessions(),
+        loadDraft(selectedSessionId),
+        loadDocumentIntelligence(selectedSessionId),
+      ]);
+    } catch {
+      showError(
+        'Document intelligence failed',
+        'Unable to ingest document intelligence. Verify file type and OCR configuration.',
+      );
+    } finally {
+      setWorkingActionKey(null);
+    }
+  }, [
+    documentIntelligenceFile,
+    documentIntelligenceLanguage,
+    documentIntelligenceNote,
+    documentIntelligenceType,
+    loadDocumentIntelligence,
+    loadDraft,
+    loadSessions,
+    selectedSessionId,
+    showError,
+    showSuccess,
+    tenantSlug,
+    token,
   ]);
 
   const handleReviewArtifact = useCallback(
@@ -1096,6 +1275,198 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       <Mic className="mr-1 inline h-3.5 w-3.5" />
                       {workingActionKey === 'transcribe-session' ? 'Transcribing…' : 'Transcribe + Generate Draft'}
                     </button>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Document Intelligence (OCR to FHIR)</h3>
+                    <button
+                      type="button"
+                      onClick={() => selectedSessionId && loadDocumentIntelligence(selectedSessionId)}
+                      disabled={!selectedSessionId || documentIntelligenceLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${documentIntelligenceLoading ? 'animate-spin' : ''}`} />
+                      Refresh docs
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-xs text-slate-600 sm:col-span-2">
+                        Upload document
+                        <input
+                          type="file"
+                          accept=".pdf,image/*,.txt,.csv,.json"
+                          onChange={(event) => setDocumentIntelligenceFile(event.target.files?.[0] || null)}
+                          className="mt-1 w-full text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-cyan-600 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-white"
+                        />
+                      </label>
+                      <label className="text-xs text-slate-600">
+                        Document type
+                        <select
+                          value={documentIntelligenceType}
+                          onChange={(event) =>
+                            setDocumentIntelligenceType(
+                              event.target.value as 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other',
+                            )
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                        >
+                          {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs text-slate-600">
+                        Language hint
+                        <input
+                          value={documentIntelligenceLanguage}
+                          onChange={(event) => setDocumentIntelligenceLanguage(event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                          placeholder="en"
+                        />
+                      </label>
+                      <label className="text-xs text-slate-600 sm:col-span-2">
+                        Ingestion note (optional)
+                        <input
+                          value={documentIntelligenceNote}
+                          onChange={(event) => setDocumentIntelligenceNote(event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                          placeholder="e.g. uploaded from lab desk handover"
+                        />
+                      </label>
+                      {documentIntelligenceFile && (
+                        <p className="text-[11px] text-slate-600 sm:col-span-2">Selected file: {documentIntelligenceFile.name}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUploadDocumentIntelligence}
+                      disabled={workingActionKey === 'upload-document-intelligence' || !documentIntelligenceFile}
+                      className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
+                    >
+                      <Upload className="mr-1 inline h-3.5 w-3.5" />
+                      {workingActionKey === 'upload-document-intelligence' ? 'Ingesting…' : 'Ingest Document'}
+                    </button>
+                  </div>
+
+                  {labObservationTrends.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Lab trend chart (recent)</h4>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {labObservationTrends.map((trend) => {
+                          const spread = Math.max(0.000001, trend.max - trend.min);
+                          return (
+                            <article key={trend.key} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold text-slate-800">{trend.name}</p>
+                                <p className="text-[11px] text-slate-500">
+                                  Latest: {trend.latest}
+                                  {trend.unit ? ` ${trend.unit}` : ''}
+                                </p>
+                              </div>
+                              <div className="mb-1 flex h-10 items-end gap-1">
+                                {trend.points.map((point, index) => {
+                                  const normalizedHeight = ((point.value - trend.min) / spread) * 100;
+                                  const safeHeight = Math.max(10, Math.round(Number.isFinite(normalizedHeight) ? normalizedHeight : 10));
+                                  return (
+                                    <div
+                                      key={`${trend.key}-${index}`}
+                                      className="w-2.5 rounded-sm bg-cyan-500/80"
+                                      style={{ height: `${safeHeight}%` }}
+                                      title={`${point.value}${point.unit ? ` ${point.unit}` : ''} @ ${formatDate(point.createdAt)}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                              <p className="text-[11px] text-slate-500">
+                                {trend.previous === null || trend.latest === null
+                                  ? 'Only one data point so far.'
+                                  : `Delta: ${(trend.latest - trend.previous).toFixed(2)}${trend.unit ? ` ${trend.unit}` : ''}`}
+                              </p>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {documentIntelligenceLoading && (
+                      <p className="text-xs text-slate-500">Loading document intelligence extracts…</p>
+                    )}
+                    {!documentIntelligenceLoading && effectiveDocumentIntelligence.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        No document intelligence ingests yet. Upload a report/prescription image or PDF to extract and map FHIR.
+                      </p>
+                    )}
+                    {effectiveDocumentIntelligence.map((item) => {
+                      const observations = Array.isArray(item.structured?.observations) ? item.structured?.observations : [];
+                      const medications = Array.isArray(item.structured?.medications) ? item.structured?.medications : [];
+                      const findings = Array.isArray(item.structured?.findings) ? item.structured?.findings : [];
+                      return (
+                        <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{item.documentName}</p>
+                              <p className="text-[11px] text-slate-500">
+                                {item.documentType.replace('_', ' ')} • status {item.extractionStatus} • uploaded {formatDate(item.createdAt)}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                OCR {item.ocrEngine || 'n/a'} • confidence{' '}
+                                {item.ocrConfidence === null || item.ocrConfidence === undefined
+                                  ? 'n/a'
+                                  : `${Math.round(item.ocrConfidence * 100)}%`}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {item.extractionStatus === 'duplicate' && (
+                                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                  duplicate
+                                </span>
+                              )}
+                              {item.criticalDetected && (
+                                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                  critical detected
+                                </span>
+                              )}
+                              {item.criticalRouted && (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  escalation routed
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-2 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
+                            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                              Observations: {observations.length}
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                              Medications: {medications.length}
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                              Findings: {findings.length}
+                            </div>
+                          </div>
+                          {item.extractionStatus === 'duplicate' && item.duplicateSimilarity !== null && item.duplicateSimilarity !== undefined && (
+                            <p className="mt-2 text-[11px] text-slate-500">
+                              Similarity: {(item.duplicateSimilarity * 100).toFixed(1)}%
+                              {item.duplicateOfDocumentId ? ` • duplicate of ${item.duplicateOfDocumentId}` : ''}
+                            </p>
+                          )}
+                          {item.criticalDetected && (
+                            <p className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-700">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Review clinician escalation {item.escalationEventId ? `(${item.escalationEventId})` : 'event'} for follow-up.
+                            </p>
+                          )}
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
 

@@ -18,6 +18,8 @@ describe('PostVisitController', () => {
     generateDraftArtifacts: jest.fn(),
     reviewDraftArtifact: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
+    ingestDocumentIntelligence: jest.fn(),
+    listSessionDocumentIntelligence: jest.fn(),
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
@@ -157,6 +159,68 @@ describe('PostVisitController', () => {
     expect(result).toEqual({
       session: { id: 'session-1', status: 'draft_ready' },
     });
+  });
+
+  it('ingests post-visit document intelligence from uploaded file', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      headers: { authorization: 'Bearer token' },
+      user: { id: 'doctor-1' },
+    } as any;
+    const file = {
+      buffer: Buffer.from('Potassium: 6.4 mmol/L'),
+      originalname: 'lab-report.txt',
+      mimetype: 'text/plain',
+      size: 25,
+    } as Express.Multer.File;
+
+    uploadSecurityServiceMock.assertCleanUpload.mockResolvedValue(undefined);
+    postVisitServiceMock.ingestDocumentIntelligence.mockResolvedValue({
+      id: 'doc-intel-1',
+      criticalDetected: true,
+    });
+
+    const result = await controller.ingestDocumentIntelligence(
+      'session-1',
+      file,
+      { documentType: 'lab_report', language: 'en', note: 'uploaded from doctor workspace' },
+      req,
+    );
+
+    expect(uploadSecurityServiceMock.assertCleanUpload).toHaveBeenCalledWith(file, 'document');
+    expect(postVisitServiceMock.ingestDocumentIntelligence).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      file,
+      expect.objectContaining({ documentType: 'lab_report' }),
+      expect.objectContaining({
+        actorUserId: 'doctor-1',
+        tenantId: 'tenant-a',
+      }),
+    );
+    expect(result.criticalDetected).toBe(true);
+  });
+
+  it('lists document intelligence extracts for a session', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listSessionDocumentIntelligence.mockResolvedValue({
+      sessionId: 'session-1',
+      items: [{ id: 'doc-intel-1' }],
+    });
+
+    const result = await controller.listDocumentIntelligence('session-1', req, '30');
+    expect(postVisitServiceMock.listSessionDocumentIntelligence).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({ limit: 30 }),
+    );
+    expect(result.items).toHaveLength(1);
   });
 
   it('regenerates draft artifacts from transcript + context', async () => {
