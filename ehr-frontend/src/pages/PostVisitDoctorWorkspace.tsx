@@ -334,7 +334,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     for (const item of effectiveDocumentIntelligence) {
       if (item.documentType !== 'lab_report') continue;
       const createdAt = item.createdAt || new Date(0).toISOString();
-      const observations = Array.isArray(item.structured?.observations) ? item.structured?.observations : [];
+      const structuredObservations = item.structured?.observations;
+      const observations = Array.isArray(structuredObservations) ? structuredObservations : [];
       for (const observation of observations) {
         const numericValue = Number(observation?.value);
         if (!Number.isFinite(numericValue)) continue;
