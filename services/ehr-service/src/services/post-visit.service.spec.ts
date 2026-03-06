@@ -1128,4 +1128,216 @@ describe('PostVisitService', () => {
     expect(result.events.some((event: any) => event.eventType === 'post_visit.escalation.resolved')).toBe(true);
     expect(result.events.some((event: any) => event.eventType === 'post_visit.patient.acknowledged')).toBe(true);
   });
+
+  it('applies grounded LLM polish to doctor summary/recommendation bundle when available', async () => {
+    const groundedLlmServiceMock = {
+      polishDoctorContent: jest.fn(async () => ({
+        plainLanguageSummary: 'Polished grounded summary.',
+        keyPoints: ['Polished point 1', 'Polished point 2'],
+        summaryText: 'Polished summary text.',
+        recommendationRewrites: [
+          {
+            recommendationId: 'htn_followup',
+            title: 'Polished HTN follow-up',
+            description: 'Polished recommendation description.',
+          },
+        ],
+        citationsUsed: ['htn_followup_rule-1'],
+        model: 'gpt-4o-mini',
+      })),
+      answerPatientQuestion: jest.fn(),
+    };
+    const service = new PostVisitService(
+      transcriptionServiceMock as any,
+      patientServiceMock as any,
+      undefined,
+      undefined,
+      undefined,
+      groundedLlmServiceMock as any,
+    );
+    patientServiceMock.getPatientContext.mockResolvedValue({
+      patient: { id: 'patient-1', fullName: 'Jane Doe' },
+      latestVitals: { blood_pressure: '150/95' },
+      modules: {},
+    });
+
+    const artifactWrites: any[] = [];
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', source_type: 'in_person', status: 'draft_ready' }];
+        }
+        if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'soap_note') {
+            return [
+              {
+                id: 'soap-1',
+                content: {
+                  soap_note: {
+                    subjective: 'headache',
+                    objective: 'BP 150/95',
+                    assessment: 'possible hypertension',
+                    plan: 'follow-up in 7 days',
+                  },
+                },
+              },
+            ];
+          }
+          return [];
+        }
+        if (sql.includes('FROM post_visit_extracted_entities')) {
+          return [{ entity_type: 'vital_blood_pressure', entity_value: '150/95' }];
+        }
+        if (sql.includes('FROM post_visit_action_executions')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO post_visit_draft_artifacts')) {
+          artifactWrites.push({
+            artifactType: params[1],
+            content: JSON.parse(String(params[3] || '{}')),
+          });
+          return [{ id: `artifact-${params[1]}` }];
+        }
+        return [];
+      }),
+    } as any;
+
+    await service.generateDraftArtifacts(tenantDb, 'session-1', { actorUserId: 'doctor-1' });
+
+    const summaryWrite = artifactWrites.find((entry) => entry.artifactType === 'visit_summary');
+    const recommendationWrite = artifactWrites.find((entry) => entry.artifactType === 'recommendation_bundle');
+    expect(summaryWrite.content.plain_language_summary).toBe('Polished grounded summary.');
+    expect(recommendationWrite.content.items[0].title).toBe('Polished HTN follow-up');
+    expect(recommendationWrite.content.grounded_llm).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        model: 'gpt-4o-mini',
+      }),
+    );
+    expect(groundedLlmServiceMock.polishDoctorContent).toHaveBeenCalled();
+  });
+
+  it('uses grounded LLM answer for patient companion when citation-safe output is returned', async () => {
+    const groundedLlmServiceMock = {
+      polishDoctorContent: jest.fn(),
+      answerPatientQuestion: jest.fn(async () => ({
+        answer: 'Grounded LLM answer for the patient.',
+        citationsUsed: ['hiv_followup_continuity_rule-1'],
+        model: 'gpt-4o-mini',
+        abstained: false,
+        urgentSignal: false,
+      })),
+    };
+    const service = new PostVisitService(
+      transcriptionServiceMock as any,
+      patientServiceMock as any,
+      undefined,
+      undefined,
+      undefined,
+      groundedLlmServiceMock as any,
+    );
+
+    let messageInsertCount = 0;
+    let assistantMetadata: any = null;
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'published',
+              source_type: 'in_person',
+              language: 'en',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'visit_summary') {
+            return [
+              {
+                id: 'artifact-summary-1',
+                artifact_status: 'published',
+                content: { plain_language_summary: 'Doctor-approved summary.' },
+                session_id: 'session-1',
+              },
+            ];
+          }
+          if (params[1] === 'recommendation_bundle') {
+            return [
+              {
+                id: 'artifact-rec-1',
+                artifact_status: 'published',
+                content: {
+                  items: [
+                    {
+                      id: 'hiv_followup_continuity',
+                      title: 'HIV continuity follow-up scheduling',
+                      citations: [
+                        {
+                          citation_id: 'hiv_followup_continuity_rule-1',
+                          guideline_id: 'who-hiv-care-followup-2024',
+                          label: 'WHO HIV care and treatment clinical follow-up guidance',
+                          source: 'WHO HIV Guidelines',
+                        },
+                      ],
+                    },
+                  ],
+                },
+                session_id: 'session-1',
+              },
+            ];
+          }
+        }
+        if (sql.includes('INSERT INTO post_visit_companion_threads')) {
+          return [{ id: 'thread-1', status: 'active', message_count: 0 }];
+        }
+        if (sql.includes('INSERT INTO post_visit_companion_messages')) {
+          messageInsertCount += 1;
+          if (messageInsertCount === 1) {
+            return [
+              {
+                id: 'msg-patient-1',
+                message_text: 'Can you explain my follow-up?',
+                message_type: 'question',
+                escalation_detected: false,
+                escalation_event_id: null,
+                created_at: '2026-03-06T12:00:00.000Z',
+              },
+            ];
+          }
+          assistantMetadata = JSON.parse(String(params[8] || '{}'));
+          return [
+            {
+              id: 'msg-assistant-1',
+              message_text: 'Grounded LLM answer for the patient.',
+              message_type: 'answer',
+              created_at: '2026-03-06T12:00:05.000Z',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_companion_threads')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.sendCompanionMessage(
+      tenantDb,
+      'session-1',
+      'patient-1',
+      { message: 'Can you explain my follow-up?' },
+    );
+
+    expect(result.assistantMessage.message).toBe('Grounded LLM answer for the patient.');
+    expect(assistantMetadata).toEqual(
+      expect.objectContaining({
+        answer_engine: 'llm',
+        llm_model: 'gpt-4o-mini',
+        grounded_citation_ids: ['hiv_followup_continuity_rule-1'],
+      }),
+    );
+    expect(groundedLlmServiceMock.answerPatientQuestion).toHaveBeenCalled();
+  });
 });

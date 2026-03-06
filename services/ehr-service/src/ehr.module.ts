@@ -224,6 +224,7 @@ import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
 import { QualityMeasuresService } from './services/quality-measures.service';
 import { NurseWorklistService } from './services/nurse-worklist.service';
 import { PostVisitService } from './services/post-visit.service';
+import { PostVisitGroundedLlmService } from './services/post-visit-grounded-llm.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -466,6 +467,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     UploadSecurityService,
     WhoSmartGuidelinesService,
     NurseWorklistService,
+    PostVisitGroundedLlmService,
     PostVisitService,
     RolesGuard,
     JwtStrategy,

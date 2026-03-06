@@ -16,6 +16,7 @@ import { PatientService } from './patient.service';
 import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
 import { PatientNotificationsService } from './patient-notifications.service';
+import { GroundingCitation, PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
 
 type PostVisitSessionStatus =
   | 'captured'
@@ -109,6 +110,7 @@ export class PostVisitService {
     private readonly notificationsService?: NotificationsService,
     private readonly emailService?: EmailService,
     private readonly patientNotificationsService?: PatientNotificationsService,
+    private readonly groundedLlmService?: PostVisitGroundedLlmService,
   ) {}
 
   private async ensurePostVisitSchema(tenantDb: DataSource) {
@@ -980,14 +982,85 @@ export class PostVisitService {
     return channels;
   }
 
-  private buildGroundedCompanionAnswer(args: {
+  private buildCitationCatalogFromRecommendations(recommendationArtifact: any): GroundingCitation[] {
+    const items = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+      : [];
+    const citations: GroundingCitation[] = [];
+    for (const item of items) {
+      const recommendationId = String(item?.id || item?.recommendation_id || '').trim();
+      const ruleId = String(item?.rule_id || '').trim() || undefined;
+      const itemCitations = Array.isArray(item?.citations) ? item.citations : [];
+      for (const citation of itemCitations) {
+        const citationId = String(citation?.citation_id || '').trim();
+        if (!citationId) {
+          continue;
+        }
+        citations.push({
+          id: citationId,
+          label: String(citation?.label || citation?.title || '').trim() || citationId,
+          source: String(citation?.source || '').trim() || undefined,
+          url: citation?.url || null,
+          excerpt: citation?.excerpt || null,
+          guidelineId: String(citation?.guideline_id || '').trim() || undefined,
+          recommendationId: recommendationId || undefined,
+          ruleId,
+        });
+      }
+    }
+    return citations;
+  }
+
+  private applyRecommendationLlmRewrites(
+    recommendationItems: any[],
+    rewrites: Array<{ recommendationId: string; title?: string; description?: string }>,
+  ) {
+    if (!Array.isArray(recommendationItems) || !Array.isArray(rewrites) || rewrites.length === 0) {
+      return recommendationItems;
+    }
+    const rewriteById = new Map<string, { title?: string; description?: string }>();
+    for (const rewrite of rewrites) {
+      const recommendationId = String(rewrite?.recommendationId || '').trim();
+      if (!recommendationId) continue;
+      rewriteById.set(recommendationId, {
+        title: typeof rewrite.title === 'string' ? rewrite.title.trim() : undefined,
+        description: typeof rewrite.description === 'string' ? rewrite.description.trim() : undefined,
+      });
+    }
+    return recommendationItems.map((item) => {
+      const rewrite = rewriteById.get(String(item?.id || '').trim());
+      if (!rewrite) {
+        return item;
+      }
+      return {
+        ...item,
+        title: rewrite.title || item?.title,
+        description: rewrite.description || item?.description,
+      };
+    });
+  }
+
+  private async buildGroundedCompanionAnswer(args: {
+    sessionId: string;
     question: string;
     visitSummaryArtifact: any;
     recommendationArtifact: any;
     escalation: EscalationDetectionResult;
-  }) {
+  }): Promise<{
+    answer: string;
+    source: 'deterministic' | 'llm';
+    citationsUsed: string[];
+    model: string | null;
+    abstained: boolean;
+  }> {
     if (args.escalation.detected && args.escalation.routeTarget === 'emergency') {
-      return 'Your symptoms may be urgent. Please call emergency services now or go to the nearest emergency facility immediately.';
+      return {
+        answer: 'Your symptoms may be urgent. Please call emergency services now or go to the nearest emergency facility immediately.',
+        source: 'deterministic',
+        citationsUsed: [],
+        model: null,
+        abstained: false,
+      };
     }
 
     const summary = String(args.visitSummaryArtifact?.content?.plain_language_summary || '').trim();
@@ -995,25 +1068,78 @@ export class PostVisitService {
       ? args.recommendationArtifact.content.items
       : [];
     const checklist = recommendations.slice(0, 3).map((item: any) => String(item?.title || '').trim()).filter(Boolean);
+    const citationCatalog = this.buildCitationCatalogFromRecommendations(args.recommendationArtifact).slice(0, 30);
+
+    if (this.groundedLlmService) {
+      const llmResult = await this.groundedLlmService.answerPatientQuestion({
+        sessionId: String(args.sessionId || args.visitSummaryArtifact?.session_id || args.recommendationArtifact?.session_id || ''),
+        language: String(args.visitSummaryArtifact?.content?.language || 'en'),
+        question: args.question,
+        summary,
+        checklist,
+        citations: citationCatalog,
+      });
+      if (llmResult && !llmResult.abstained && llmResult.answer) {
+        const answer = args.escalation.detected
+          ? `${llmResult.answer} We have also routed your concern to the care team for follow-up.`
+          : llmResult.answer;
+        return {
+          answer,
+          source: 'llm',
+          citationsUsed: llmResult.citationsUsed || [],
+          model: llmResult.model || null,
+          abstained: false,
+        };
+      }
+    }
+
     const lowerQuestion = String(args.question || '').toLowerCase();
+    const clinicianEscalationSuffix = args.escalation.detected
+      ? ' We have alerted the care team to review your message.'
+      : '';
 
     if (lowerQuestion.includes('medicine') || lowerQuestion.includes('medication') || lowerQuestion.includes('dose')) {
       if (checklist.length) {
-        return `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.`;
+        return {
+          answer: `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.${clinicianEscalationSuffix}`,
+          source: 'deterministic',
+          citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
+          model: null,
+          abstained: false,
+        };
       }
     }
 
     if (lowerQuestion.includes('when') || lowerQuestion.includes('follow up') || lowerQuestion.includes('next visit')) {
       if (checklist.length) {
-        return `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.`;
+        return {
+          answer: `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.${clinicianEscalationSuffix}`,
+          source: 'deterministic',
+          citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
+          model: null,
+          abstained: false,
+        };
       }
     }
 
     if (summary) {
-      return `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.`;
+      return {
+        answer: `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.${clinicianEscalationSuffix}`,
+        source: 'deterministic',
+        citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
+        model: null,
+        abstained: false,
+      };
     }
 
-    return 'I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.';
+    return {
+      answer:
+        `I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.${clinicianEscalationSuffix}`.trim(),
+      source: 'deterministic',
+      citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
+      model: null,
+      abstained: false,
+    };
   }
 
   private async touchCompanionThreadAfterMessage(
@@ -2492,19 +2618,12 @@ export class PostVisitService {
       patientContext = null;
     }
 
-    const summaryContent = this.buildVisitSummaryContent({
-      patientContext,
-      soapNote,
-      extractedEntities: extractedEntityRows,
-      session: sessionRow,
-    });
-
     const rules = this.buildRecommendationRules(patientContext, extractedEntityRows);
     const executionByRecommendationId = new Map<string, any>(
       actionExecutionRows.map((row: any) => [String(row.recommendation_id), row]),
     );
 
-    const recommendationItems = rules.map((rule) => ({
+    let recommendationItems = rules.map((rule) => ({
       id: rule.recommendationId,
       rule_id: rule.ruleId,
       title: rule.title,
@@ -2555,6 +2674,73 @@ export class PostVisitService {
       })),
     );
 
+    let summaryContent: any = this.buildVisitSummaryContent({
+      patientContext,
+      soapNote,
+      extractedEntities: extractedEntityRows,
+      session: sessionRow,
+    });
+
+    const llmCitationCatalog: GroundingCitation[] = recommendationItems.flatMap((item: any) =>
+      (Array.isArray(item?.citations) ? item.citations : [])
+        .map((citation: any) => ({
+          id: String(citation?.citation_id || '').trim(),
+          label: String(citation?.label || '').trim(),
+          source: String(citation?.source || '').trim() || undefined,
+          url: citation?.url || null,
+          excerpt: citation?.excerpt || null,
+          guidelineId: String(citation?.guideline_id || '').trim() || undefined,
+          recommendationId: String(item?.id || '').trim() || undefined,
+          ruleId: String(item?.rule_id || '').trim() || undefined,
+        }))
+        .filter((citation: GroundingCitation) => citation.id.length > 0),
+    );
+
+    if (this.groundedLlmService) {
+      const llmPolish = await this.groundedLlmService.polishDoctorContent({
+        sessionId,
+        language: sessionRow.language || 'en',
+        soapNote,
+        baseSummary: {
+          summaryText: summaryContent.summary_text,
+          plainLanguageSummary: summaryContent.plain_language_summary,
+          keyPoints: summaryContent.key_points,
+        },
+        recommendationItems: recommendationItems.map((item: any) => ({
+          id: String(item?.id || ''),
+          title: String(item?.title || ''),
+          description: String(item?.description || ''),
+        })),
+        citations: llmCitationCatalog,
+      });
+
+      if (llmPolish) {
+        recommendationItems = this.applyRecommendationLlmRewrites(recommendationItems, llmPolish.recommendationRewrites);
+        summaryContent = {
+          ...summaryContent,
+          summary_text: llmPolish.summaryText || summaryContent.summary_text,
+          plain_language_summary: llmPolish.plainLanguageSummary || summaryContent.plain_language_summary,
+          key_points: Array.isArray(llmPolish.keyPoints) && llmPolish.keyPoints.length
+            ? llmPolish.keyPoints
+            : summaryContent.key_points,
+          grounded_llm: {
+            enabled: true,
+            model: llmPolish.model,
+            citations_used: llmPolish.citationsUsed,
+            polished_at: new Date().toISOString(),
+          },
+        };
+      } else {
+        summaryContent = {
+          ...summaryContent,
+          grounded_llm: {
+            enabled: false,
+            reason: 'fallback_deterministic',
+          },
+        };
+      }
+    }
+
     const recommendationContent = {
       generated_at: new Date().toISOString(),
       generated_by: options.source || 'post_visit_draft_generation',
@@ -2568,6 +2754,10 @@ export class PostVisitService {
       context_snapshot: {
         patient_id: sessionRow.patient_id,
         modules_available: patientContext ? Object.keys(patientContext.modules || {}) : [],
+      },
+      grounded_llm: summaryContent.grounded_llm || {
+        enabled: false,
+        reason: 'not_configured',
       },
     };
 
@@ -3223,7 +3413,8 @@ export class PostVisitService {
       patientMessage.escalation_event_id = escalation.id;
     }
 
-    const assistantMessageText = this.buildGroundedCompanionAnswer({
+    const assistantAnswer = await this.buildGroundedCompanionAnswer({
+      sessionId,
       question: messageText,
       visitSummaryArtifact,
       recommendationArtifact,
@@ -3252,7 +3443,7 @@ export class PostVisitService {
         sessionId,
         patientId,
         detection.detected ? 'alert' : 'answer',
-        assistantMessageText,
+        assistantAnswer.answer,
         JSON.stringify(groundedContext),
         detection.detected,
         escalation?.id || null,
@@ -3260,6 +3451,10 @@ export class PostVisitService {
           source: 'post_visit_companion_assistant',
           escalation_route: detection.detected ? detection.routeTarget : null,
           escalation_severity: detection.detected ? detection.severity : null,
+          answer_engine: assistantAnswer.source,
+          llm_model: assistantAnswer.model,
+          grounded_citation_ids: assistantAnswer.citationsUsed,
+          llm_abstained: assistantAnswer.abstained,
         }),
       ],
     );

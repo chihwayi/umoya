@@ -19,6 +19,10 @@ Sprint 5/6 implementation added:
   - `GET /post-visit/sessions/:id/mobile-events?version=v1`
 - Backend contract tests:
   - `post-visit.controller.spec.ts` and `post-visit.service.spec.ts`
+- Grounded LLM safety layer:
+  - doctor-note polishing from approved SOAP/context (citation-allow-list validated)
+  - patient Q&A grounded to approved summary/checklist only (abstain + deterministic fallback on unsafe output)
+  - implementation service: `PostVisitGroundedLlmService`
 - QA automation additions:
   - `qa/tests/post-visit-fhir-mobile-contract-smoke.ts`
   - `qa/tests/post-visit-end-to-end-journey-smoke.ts`

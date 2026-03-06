@@ -20,6 +20,7 @@ Sprint 4-6 hardening checkpoint for Post-Visit AI Companion:
 - [ ] Urgent symptom messages generate escalation events with severity/route target.
 - [ ] Clinician queue resolution path closes escalation with audit trace.
 - [ ] Escalation metadata includes notification-channel delivery outcomes.
+- [ ] Grounded LLM outputs use citation allow-list only; invalid/ungrounded outputs fall back to deterministic answers.
 
 ### QA Automation Gates
 - [ ] `qa/tests/post-visit-session-smoke.ts` passes.
