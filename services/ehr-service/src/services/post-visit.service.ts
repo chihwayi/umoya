@@ -130,6 +130,47 @@ interface PostVisitDocumentCriticalFlag {
   threshold: string;
 }
 
+type MedicationRiskSeverity = 'contraindicated' | 'major' | 'moderate' | 'minor';
+
+interface MedicationNormalizationRecord {
+  inputName: string;
+  normalizedName: string;
+  rxCui: string | null;
+  source: 'rxnorm_dictionary' | 'heuristic' | 'unknown';
+}
+
+interface MedicationInteractionSignal {
+  pair: [string, string];
+  severity: MedicationRiskSeverity;
+  rationale: string;
+  guidelineId: string;
+}
+
+interface MedicationBeersSignal {
+  medication: string;
+  severity: 'major' | 'moderate';
+  rationale: string;
+}
+
+interface MedicationRenalSignal {
+  medication: string;
+  severity: 'major' | 'moderate';
+  rationale: string;
+  egfr: number;
+}
+
+interface MedicationIntelligenceAssessment {
+  enabled: boolean;
+  medications: MedicationNormalizationRecord[];
+  interactions: MedicationInteractionSignal[];
+  beersAlerts: MedicationBeersSignal[];
+  renalAlerts: MedicationRenalSignal[];
+  highestSeverity: MedicationRiskSeverity | null;
+  highRiskCount: number;
+  egfr: number | null;
+  riskNarrative: string;
+}
+
 interface ListPostVisitSessionsOptions {
   status?: PostVisitSessionStatus;
   patientId?: string;
@@ -677,6 +718,10 @@ export class PostVisitService {
     return String(process.env.FEATURE_POSTVISIT_OCR_INTELLIGENCE || 'false').toLowerCase() === 'true';
   }
 
+  private isMedicationIntelligenceV2Enabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 || 'false').toLowerCase() === 'true';
+  }
+
   private resolveLocalOcrUrl(): string {
     const direct = String(process.env.LOCAL_OCR_URL || '').trim();
     if (direct) {
@@ -975,6 +1020,293 @@ export class PostVisitService {
     return {
       systolic: Number(match[1]),
       diastolic: Number(match[2]),
+    };
+  }
+
+  private parseNumericValue(value: any): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const match = raw.match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const numeric = Number(match[0]);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  private normalizeMedicationToken(value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu|units?)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private splitMedicationTextList(value: string): string[] {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    return raw
+      .split(/[,\n;|]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+
+  private getMedicationSeverityRank(severity: MedicationRiskSeverity | 'major' | 'moderate' | null | undefined): number {
+    if (severity === 'contraindicated') return 4;
+    if (severity === 'major') return 3;
+    if (severity === 'moderate') return 2;
+    if (severity === 'minor') return 1;
+    return 0;
+  }
+
+  private inferMedicationNormalization(inputName: string): MedicationNormalizationRecord {
+    const normalizedInput = this.normalizeMedicationToken(inputName);
+    const dictionary: Array<{ token: string; normalizedName: string; rxCui: string }> = [
+      { token: 'metformin', normalizedName: 'metformin', rxCui: '6809' },
+      { token: 'gabapentin', normalizedName: 'gabapentin', rxCui: '25480' },
+      { token: 'rivaroxaban', normalizedName: 'rivaroxaban', rxCui: '1114195' },
+      { token: 'warfarin', normalizedName: 'warfarin', rxCui: '11289' },
+      { token: 'aspirin', normalizedName: 'aspirin', rxCui: '1191' },
+      { token: 'clarithromycin', normalizedName: 'clarithromycin', rxCui: '21212' },
+      { token: 'simvastatin', normalizedName: 'simvastatin', rxCui: '36567' },
+      { token: 'lisinopril', normalizedName: 'lisinopril', rxCui: '29046' },
+      { token: 'spironolactone', normalizedName: 'spironolactone', rxCui: '9997' },
+      { token: 'sildenafil', normalizedName: 'sildenafil', rxCui: '136411' },
+      { token: 'nitroglycerin', normalizedName: 'nitroglycerin', rxCui: '4917' },
+      { token: 'diazepam', normalizedName: 'diazepam', rxCui: '3322' },
+      { token: 'diphenhydramine', normalizedName: 'diphenhydramine', rxCui: '3498' },
+      { token: 'amitriptyline', normalizedName: 'amitriptyline', rxCui: '704' },
+      { token: 'zolpidem', normalizedName: 'zolpidem', rxCui: '39993' },
+      { token: 'nitrofurantoin', normalizedName: 'nitrofurantoin', rxCui: '7454' },
+      { token: 'enoxaparin', normalizedName: 'enoxaparin', rxCui: '67108' },
+    ];
+
+    const dictionaryHit = dictionary.find((entry) => normalizedInput.includes(entry.token));
+    if (dictionaryHit) {
+      return {
+        inputName,
+        normalizedName: dictionaryHit.normalizedName,
+        rxCui: dictionaryHit.rxCui,
+        source: 'rxnorm_dictionary',
+      };
+    }
+
+    const fallbackToken = normalizedInput.split(/\s+/)[0] || normalizedInput;
+    return {
+      inputName,
+      normalizedName: fallbackToken || normalizedInput || 'unknown_medication',
+      rxCui: null,
+      source: fallbackToken ? 'heuristic' : 'unknown',
+    };
+  }
+
+  private extractEstimatedEgfr(patientContext: any, extractedEntities: any[]): number | null {
+    const entityHit = extractedEntities.find((entity: any) => {
+      const type = String(entity?.entity_type || entity?.type || '').toLowerCase();
+      const value = String(entity?.entity_value || entity?.value || '').toLowerCase();
+      return type.includes('egfr') || /e\s*gfr|glomerular/i.test(value);
+    });
+    const entityEgfr = this.parseNumericValue(entityHit?.entity_value || entityHit?.value);
+    if (entityEgfr !== null) return entityEgfr;
+
+    const labAlert = patientContext?.modules?.lab?.latestCriticalAlert;
+    const componentName = String(labAlert?.component_name || '').toLowerCase();
+    if (componentName.includes('egfr') || componentName.includes('glomerular')) {
+      const alertEgfr = this.parseNumericValue(labAlert?.result_value);
+      if (alertEgfr !== null) return alertEgfr;
+    }
+
+    return null;
+  }
+
+  private buildMedicationIntelligenceAssessment(
+    patientContext: any,
+    extractedEntities: any[],
+  ): MedicationIntelligenceAssessment {
+    if (!this.isMedicationIntelligenceV2Enabled()) {
+      return {
+        enabled: false,
+        medications: [],
+        interactions: [],
+        beersAlerts: [],
+        renalAlerts: [],
+        highestSeverity: null,
+        highRiskCount: 0,
+        egfr: null,
+        riskNarrative: 'Medication intelligence v2 is disabled by feature flag.',
+      };
+    }
+
+    const modules = patientContext?.modules || {};
+    const age = Number(patientContext?.patient?.age || 0);
+    const medicationCandidates: string[] = [];
+    const pushCandidate = (value?: any) => {
+      const text = String(value || '').trim();
+      if (!text) return;
+      medicationCandidates.push(text);
+    };
+
+    const latestPrescription = modules?.pharmacy?.latestPrescription;
+    pushCandidate(latestPrescription?.medication_name);
+    pushCandidate(latestPrescription?.generic_name);
+
+    const edCurrentMedications = this.splitMedicationTextList(modules?.ed?.latestVisit?.current_medications || '');
+    for (const med of edCurrentMedications) {
+      pushCandidate(med);
+    }
+
+    pushCandidate(modules?.hiv?.latestEnrollment?.current_regimen);
+    pushCandidate(modules?.hiv?.latestClinicalVisit?.arv_regimen_name);
+
+    for (const entity of extractedEntities) {
+      const entityType = String(entity?.entity_type || entity?.type || '').toLowerCase();
+      const entityValue = String(entity?.entity_value || entity?.value || '').trim();
+      if (!entityValue) continue;
+      if (entityType.includes('medication') || entityType.includes('drug') || /\b\d+(?:\.\d+)?\s?(mg|mcg|g|ml|iu)\b/i.test(entityValue)) {
+        pushCandidate(entityValue);
+      }
+    }
+
+    const deduped = Array.from(
+      new Map(
+        medicationCandidates
+          .map((candidate) => [this.normalizeMedicationToken(candidate), candidate] as const)
+          .filter(([key]) => key.length > 0),
+      ).entries(),
+    ).map(([, original]) => original);
+
+    const medications = deduped.map((name) => this.inferMedicationNormalization(name));
+    const normalizedMedicationSet = new Set(medications.map((item) => item.normalizedName));
+
+    const interactionCatalog: MedicationInteractionSignal[] = [
+      {
+        pair: ['sildenafil', 'nitroglycerin'],
+        severity: 'contraindicated',
+        rationale: 'Concurrent PDE5 inhibitors and nitrates can cause profound hypotension.',
+        guidelineId: 'fda-drug-safety-pde5-nitrates',
+      },
+      {
+        pair: ['clarithromycin', 'simvastatin'],
+        severity: 'major',
+        rationale: 'Clarithromycin increases simvastatin concentration and myopathy risk.',
+        guidelineId: 'fda-simvastatin-drug-interaction-safety',
+      },
+      {
+        pair: ['warfarin', 'aspirin'],
+        severity: 'major',
+        rationale: 'Dual anticoagulant/antiplatelet exposure increases bleeding risk.',
+        guidelineId: 'acc-antithrombotic-bleeding-risk',
+      },
+      {
+        pair: ['spironolactone', 'lisinopril'],
+        severity: 'major',
+        rationale: 'Combined RAAS/potassium-sparing therapy increases hyperkalemia risk.',
+        guidelineId: 'kdigo-hyperkalemia-management',
+      },
+    ];
+
+    const interactions = interactionCatalog.filter(
+      (item) => normalizedMedicationSet.has(item.pair[0]) && normalizedMedicationSet.has(item.pair[1]),
+    );
+
+    const beersCatalog: Array<{ medication: string; severity: 'major' | 'moderate'; rationale: string }> = [
+      { medication: 'diphenhydramine', severity: 'major', rationale: 'High anticholinergic burden in older adults.' },
+      { medication: 'amitriptyline', severity: 'major', rationale: 'Strong anticholinergic and orthostatic hypotension risk.' },
+      { medication: 'diazepam', severity: 'major', rationale: 'Long-acting benzodiazepine with fall/cognitive risk.' },
+      { medication: 'zolpidem', severity: 'moderate', rationale: 'Sedative-hypnotic with confusion/fall risk in age 65+.' },
+    ];
+    const beersAlerts: MedicationBeersSignal[] =
+      age >= 65
+        ? beersCatalog.filter((item) => normalizedMedicationSet.has(item.medication))
+        : [];
+
+    const egfr = this.extractEstimatedEgfr(patientContext, extractedEntities);
+    const renalAlerts: MedicationRenalSignal[] = [];
+    if (egfr !== null) {
+      const pushRenalAlert = (
+        medication: string,
+        severity: 'major' | 'moderate',
+        rationale: string,
+      ) => {
+        if (!normalizedMedicationSet.has(medication)) return;
+        renalAlerts.push({ medication, severity, rationale, egfr });
+      };
+
+      if (egfr < 30) {
+        pushRenalAlert('metformin', 'major', 'Metformin should generally be avoided when eGFR is below 30 mL/min.');
+        pushRenalAlert('nitrofurantoin', 'major', 'Nitrofurantoin efficacy/safety is reduced in severe renal impairment.');
+        pushRenalAlert('enoxaparin', 'major', 'Enoxaparin dosing requires major adjustment when eGFR is below 30.');
+      } else if (egfr < 45) {
+        pushRenalAlert('metformin', 'moderate', 'Metformin dose reduction and closer monitoring are recommended when eGFR < 45.');
+      }
+      if (egfr < 60) {
+        pushRenalAlert('gabapentin', 'moderate', 'Gabapentin dose review is recommended when eGFR < 60.');
+      }
+      if (egfr < 50) {
+        pushRenalAlert('rivaroxaban', 'major', 'Rivaroxaban renal-dose review is required when eGFR < 50.');
+      }
+    }
+
+    let highestSeverity: MedicationRiskSeverity | null = null;
+    for (const interaction of interactions) {
+      if (!highestSeverity || this.getMedicationSeverityRank(interaction.severity) > this.getMedicationSeverityRank(highestSeverity)) {
+        highestSeverity = interaction.severity;
+      }
+    }
+    for (const beers of beersAlerts) {
+      if (!highestSeverity || this.getMedicationSeverityRank(beers.severity) > this.getMedicationSeverityRank(highestSeverity)) {
+        highestSeverity = beers.severity;
+      }
+    }
+    for (const renal of renalAlerts) {
+      if (!highestSeverity || this.getMedicationSeverityRank(renal.severity) > this.getMedicationSeverityRank(highestSeverity)) {
+        highestSeverity = renal.severity;
+      }
+    }
+
+    const highRiskCount =
+      interactions.filter((item) => ['contraindicated', 'major'].includes(item.severity)).length +
+      beersAlerts.filter((item) => item.severity === 'major').length +
+      renalAlerts.filter((item) => item.severity === 'major').length;
+
+    const narrativeParts: string[] = [];
+    if (medications.length > 0) {
+      const mappedCount = medications.filter((item) => item.rxCui).length;
+      narrativeParts.push(`${medications.length} medication signal(s) identified (${mappedCount} RxNorm mapped).`);
+    }
+    if (interactions.length > 0) {
+      narrativeParts.push(
+        `Interaction alerts: ${interactions
+          .map((item) => `${item.pair[0]} + ${item.pair[1]} (${item.severity})`)
+          .join('; ')}.`,
+      );
+    }
+    if (beersAlerts.length > 0) {
+      narrativeParts.push(`Beers age-65+ alerts: ${beersAlerts.map((item) => `${item.medication} (${item.severity})`).join('; ')}.`);
+    }
+    if (renalAlerts.length > 0 && egfr !== null) {
+      narrativeParts.push(
+        `Renal dosing alerts at eGFR ${egfr}: ${renalAlerts.map((item) => `${item.medication} (${item.severity})`).join('; ')}.`,
+      );
+    } else if (egfr !== null) {
+      narrativeParts.push(`eGFR ${egfr} reviewed with no deterministic renal dosing flags.`);
+    }
+    if (narrativeParts.length === 0) {
+      narrativeParts.push('No medication safety signals were found from available context.');
+    }
+
+    return {
+      enabled: true,
+      medications,
+      interactions,
+      beersAlerts,
+      renalAlerts,
+      highestSeverity,
+      highRiskCount,
+      egfr,
+      riskNarrative: narrativeParts.join(' ').slice(0, 1200),
     };
   }
 
@@ -2200,6 +2532,56 @@ export class PostVisitService {
       });
     }
 
+    const medicationIntelligence = this.buildMedicationIntelligenceAssessment(patientContext, extractedEntities);
+    if (medicationIntelligence.enabled && medicationIntelligence.medications.length > 0) {
+      const highestSeverity = medicationIntelligence.highestSeverity;
+      const hasHighRisk = highestSeverity !== null && this.getMedicationSeverityRank(highestSeverity) >= 3;
+      const issueCount =
+        medicationIntelligence.interactions.length +
+        medicationIntelligence.beersAlerts.length +
+        medicationIntelligence.renalAlerts.length;
+
+      if (issueCount > 0) {
+        rules.push({
+          ruleId: 'medication_safety_intelligence_v2_rule',
+          recommendationId: 'medication_safety_intelligence_v2',
+          title: hasHighRisk ? 'High-risk medication safety review' : 'Medication safety review',
+          description: medicationIntelligence.riskNarrative,
+          urgency: hasHighRisk ? 'urgent' : 'routine',
+          actionType: 'medication',
+          confidence: hasHighRisk ? 0.91 : 0.83,
+          context: {
+            medicationIntelligence,
+            issueCount,
+            highRisk: hasHighRisk,
+          },
+          citations: [
+            {
+              guidelineId: 'fda-drug-safety-interactions',
+              label: 'FDA drug interaction safety communication',
+              source: 'FDA Safety',
+              excerpt: 'Clinicians should proactively identify and mitigate high-risk drug-drug interactions.',
+              confidence: 0.86,
+            },
+            {
+              guidelineId: 'ags-beers-criteria-2023',
+              label: 'AGS Beers Criteria for potentially inappropriate medications in older adults',
+              source: 'AGS Beers',
+              excerpt: 'Avoid high-risk medications in adults 65+ when safer alternatives exist.',
+              confidence: 0.85,
+            },
+            {
+              guidelineId: 'kdigo-drug-dosing-ckd-2024',
+              label: 'KDIGO kidney disease drug dosing safety recommendations',
+              source: 'KDIGO',
+              excerpt: 'Renally cleared medications require eGFR-based dose review and adjustment.',
+              confidence: 0.84,
+            },
+          ],
+        });
+      }
+    }
+
     const activePrescriptionCount =
       Number(modules?.pharmacy?.activePrescriptionCount || 0) ||
       Number(modules?.pharmacy?.active_count || 0);
@@ -2209,12 +2591,21 @@ export class PostVisitService {
         recommendationId: 'medication_adherence_reinforcement',
         title: 'Medication adherence reinforcement',
         description:
-          'Issue plain-language medication adherence reminders and confirm patient understanding via teach-back.',
+          medicationIntelligence.enabled
+            ? `${medicationIntelligence.riskNarrative} Reinforce adherence and confirm understanding using teach-back.`
+            : 'Issue plain-language medication adherence reminders and confirm patient understanding via teach-back.',
         urgency: 'routine',
         actionType: 'medication',
         confidence: 0.78,
         context: {
           activePrescriptionCount,
+          medicationIntelligence: medicationIntelligence.enabled
+            ? {
+                highestSeverity: medicationIntelligence.highestSeverity,
+                highRiskCount: medicationIntelligence.highRiskCount,
+                egfr: medicationIntelligence.egfr,
+              }
+            : null,
         },
         citations: [
           {

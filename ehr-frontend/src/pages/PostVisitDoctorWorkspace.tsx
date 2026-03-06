@@ -1687,6 +1687,19 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       const executionStatus = String(item?.execution?.status || '').toLowerCase();
                       const alreadyExecuted = executionStatus === 'executed';
                       const title = String(item?.title || actionId || 'Recommendation');
+                      const medicationIntelligence = item?.context?.medicationIntelligence || null;
+                      const medicationHighestSeverity = String(medicationIntelligence?.highestSeverity || '').toLowerCase();
+                      const medicationHighRiskCount =
+                        Number(medicationIntelligence?.highRiskCount ?? item?.context?.highRiskCount ?? 0) || 0;
+                      const medicationInteractionCount = Array.isArray(medicationIntelligence?.interactions)
+                        ? medicationIntelligence.interactions.length
+                        : 0;
+                      const medicationBeersCount = Array.isArray(medicationIntelligence?.beersAlerts)
+                        ? medicationIntelligence.beersAlerts.length
+                        : 0;
+                      const medicationRenalCount = Array.isArray(medicationIntelligence?.renalAlerts)
+                        ? medicationIntelligence.renalAlerts.length
+                        : 0;
                       const itemCitations = Array.isArray(item?.citations) ? item.citations : [];
                       const weakCitationCount = itemCitations.filter((citation: any) => {
                         const score = Number(citation?.relevance_score ?? citation?.relevanceScore);
@@ -1710,6 +1723,18 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                                   {weakCitationCount > 0 && supersededCitationCount > 0 ? ' • ' : ''}
                                   {supersededCitationCount > 0 ? `${supersededCitationCount} superseded` : ''}
                                 </p>
+                              )}
+                              {medicationIntelligence && (
+                                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-700">
+                                  <p className="font-semibold text-slate-800">
+                                    Medication intelligence
+                                    {medicationHighestSeverity ? ` • severity ${medicationHighestSeverity}` : ''}
+                                    {medicationHighRiskCount > 0 ? ` • high-risk ${medicationHighRiskCount}` : ''}
+                                  </p>
+                                  <p className="mt-1 text-slate-600">
+                                    Interactions {medicationInteractionCount} • Beers {medicationBeersCount} • Renal {medicationRenalCount}
+                                  </p>
+                                </div>
                               )}
                             </div>
                             <button

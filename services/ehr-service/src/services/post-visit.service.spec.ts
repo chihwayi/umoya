@@ -580,6 +580,98 @@ describe('PostVisitService', () => {
     expect(citationInsertCalls.length).toBeGreaterThan(0);
   });
 
+  it('adds medication intelligence v2 recommendation with high-risk signals when enabled', async () => {
+    process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      patientServiceMock.getPatientContext.mockResolvedValue({
+        patient: { id: 'patient-1', fullName: 'Jane Doe', age: 72 },
+        latestVitals: {},
+        modules: {
+          pharmacy: {
+            latestPrescription: { medication_name: 'Simvastatin', generic_name: 'simvastatin' },
+            activePrescriptionCount: 1,
+          },
+          lab: {
+            latestCriticalAlert: {
+              id: 'lab-egfr-1',
+              component_name: 'eGFR',
+              result_value: '38',
+              alert_status: 'pending',
+              severity: 'high',
+            },
+          },
+        },
+      });
+
+      const artifactWrites: any[] = [];
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                source_type: 'in_person',
+                status: 'draft_ready',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+            if (params[1] === 'soap_note') {
+              return [
+                {
+                  id: 'soap-1',
+                  content: {
+                    soap_note: {
+                      subjective: 'myalgia',
+                      objective: 'review meds',
+                      assessment: 'possible drug interaction',
+                      plan: 'medication reconciliation',
+                    },
+                  },
+                },
+              ];
+            }
+            return [];
+          }
+          if (sql.includes('FROM post_visit_extracted_entities')) {
+            return [
+              { entity_type: 'medication_mentioned', entity_value: 'Clarithromycin 500 mg twice daily' },
+              { entity_type: 'lab_egfr', entity_value: 'eGFR 38' },
+            ];
+          }
+          if (sql.includes('FROM post_visit_action_executions')) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_draft_artifacts')) {
+            artifactWrites.push({
+              artifactType: params[1],
+              content: JSON.parse(String(params[3] || '{}')),
+            });
+            return [{ id: `artifact-${params[1]}` }];
+          }
+          return [];
+        }),
+      } as any;
+
+      await service.generateDraftArtifacts(tenantDb, 'session-1', {
+        actorUserId: 'doctor-1',
+      });
+
+      const recommendationWrite = artifactWrites.find((entry) => entry.artifactType === 'recommendation_bundle');
+      expect(recommendationWrite).toBeTruthy();
+      const medicationSafetyItem = (recommendationWrite?.content?.items || []).find(
+        (item: any) => String(item?.id) === 'medication_safety_intelligence_v2',
+      );
+      expect(medicationSafetyItem).toBeTruthy();
+      expect(medicationSafetyItem.context.medicationIntelligence.highRiskCount).toBeGreaterThan(0);
+      expect(medicationSafetyItem.context.medicationIntelligence.highestSeverity).toBe('major');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2;
+    }
+  });
+
   it('records review action and marks artifact reviewed', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 
