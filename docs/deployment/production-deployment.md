@@ -106,6 +106,13 @@ SESSION_SECRET=<session-secret>
 # Database
 DB_PASSWORD=<strong-password>
 REDIS_PASSWORD=<redis-password>
+
+# URL inheritance (configure once)
+SERVICE_BASE_URL=https://api.your-domain.com
+REACT_APP_API_BASE_URL=https://api.your-domain.com
+SERVICE_TENANT_PATH=/tenant-service
+SERVICE_EHR_PATH=/ehr-service
+SERVICE_CDSS_PATH=/cdss-service
 ```
 
 ### Firewall Configuration
@@ -272,4 +279,3 @@ docker compose exec ehr-service npm run migration:run
 - Phone support
 - Ticketing system
 - Documentation
-

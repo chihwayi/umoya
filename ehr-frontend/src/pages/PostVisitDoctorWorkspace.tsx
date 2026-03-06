@@ -264,7 +264,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   }, [recommendationArtifact, visitSummaryArtifact]);
 
   const supersededCitations = useMemo(() => {
-    const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
+    const draftRuleCitations = draftData?.ruleCitations;
+    const rows = Array.isArray(draftRuleCitations) ? draftRuleCitations : [];
     return rows.filter((row) => row?.isSuperseded === true);
   }, [draftData]);
 

@@ -282,7 +282,9 @@ export class TranscriptionService {
   private resolveLocalWhisperUrl(): string {
     const raw = String(this.LOCAL_WHISPER_URL || '').trim();
     if (!raw) {
-      return 'http://127.0.0.1:8080/inference';
+      throw new Error(
+        'LOCAL_WHISPER_URL is not configured. Set LOCAL_WHISPER_URL or LOCAL_AI_BASE_URL + LOCAL_WHISPER_PATH.',
+      );
     }
     try {
       const parsed = new URL(raw);

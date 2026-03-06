@@ -22,6 +22,10 @@ Set values in env files, secret manager, or CI/CD variables instead of changing 
 
 | Variable | Required | Used By | Example |
 |---|---|---|---|
+| `SERVICE_BASE_URL` | Recommended | Backend + Frontends | `https://api.example.com` |
+| `SERVICE_TENANT_PATH` / `SERVICE_EHR_PATH` / `SERVICE_CDSS_PATH` | Optional | Config resolver | `/tenant-service`, `/ehr-service`, `/cdss-service` |
+| `REACT_APP_API_BASE_URL` | Recommended | Frontends | `https://api.example.com` |
+| `REACT_APP_TENANT_API_PATH` / `REACT_APP_EHR_API_PATH` / `REACT_APP_CDSS_API_PATH` | Optional | Frontend config resolver | `/tenant-service`, `/ehr-service`, `/cdss-service` |
 | `SERVICE_TENANT_URL` / `REACT_APP_TENANT_API_URL` | Yes | Frontends | `https://tenant.example.com/api` |
 | `SERVICE_EHR_URL` / `REACT_APP_EHR_API_URL` | Yes | Frontends + CDSS | `https://ehr.example.com/api` |
 | `SERVICE_CDSS_URL` / `REACT_APP_CDSS_API_URL` | Yes | EHR + Frontends | `https://cdss.example.com` |
@@ -29,6 +33,18 @@ Set values in env files, secret manager, or CI/CD variables instead of changing 
 | `PORTAL_BASE_URL` | Yes | `ehr-service` patient auth links | Patient portal URL |
 | `REACT_APP_BASE_DOMAIN` | Recommended | Admin/web frontends | Tenant URL rendering |
 | `REACT_APP_PROTOCOL` | Recommended | Admin/web frontends | `https` in production |
+| `LOCAL_AI_BASE_URL` + `LOCAL_WHISPER_PATH` / `LOCAL_OCR_PATH` | Optional | EHR AI pipeline | One base for local AI endpoints (whisper/OCR) |
+| `LOCAL_WHISPER_URL` / `LOCAL_OCR_URL` | Optional override | EHR AI pipeline | Explicit full endpoint URLs override inherited local AI base |
+
+### URL Resolution Precedence
+
+1. Explicit URL wins: `SERVICE_EHR_URL`, `REACT_APP_EHR_API_URL` (and tenant/CDSS equivalents).
+2. If explicit URL is not set, resolver builds URL from single base + path:
+   - `SERVICE_BASE_URL + SERVICE_*_PATH`
+   - `REACT_APP_API_BASE_URL + REACT_APP_*_API_PATH`
+3. Development fallback defaults are used only when neither explicit URL nor base URL is provided.
+
+This lets you set one base URL once and avoid repeating full server URLs across variables.
 
 ## CDSS Security and AI
 

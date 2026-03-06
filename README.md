@@ -104,7 +104,18 @@ MediCore is a comprehensive, multi-tenant Electronic Health Record (eHR) system 
    docker-compose up -d
    ```
 
-4. **Access the application**
+4. **Configure URLs once (no repeated host edits)**
+   ```bash
+   # Example production-style pattern
+   SERVICE_BASE_URL=https://api.your-domain.com
+   REACT_APP_API_BASE_URL=https://api.your-domain.com
+   SERVICE_TENANT_PATH=/tenant-service
+   SERVICE_EHR_PATH=/ehr-service
+   SERVICE_CDSS_PATH=/cdss-service
+   ```
+   You can still override any single endpoint with explicit `SERVICE_*_URL` / `REACT_APP_*_API_URL`.
+
+5. **Access the application**
    - **Super Admin Portal**: http://localhost:3011 (admin@medicore.co.zw / medicore123)
    - **EHR System**: http://localhost:3014/ehr/bulawayo-general (admin@bulawayo-general.co.zw / ildc3m37)
    - **Features**: Complete tenant management, user management, modern medical UI

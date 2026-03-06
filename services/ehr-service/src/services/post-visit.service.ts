@@ -4,6 +4,7 @@ import 'multer';
 import axios from 'axios';
 import * as FormData from 'form-data';
 import { createHash } from 'crypto';
+import { config } from '@medicore/config';
 import {
   CreatePostVisitSessionDto,
   ExecutePostVisitRecommendationDto,
@@ -749,11 +750,11 @@ export class PostVisitService {
   }
 
   private resolveLocalOcrUrl(): string {
-    const direct = String(process.env.LOCAL_OCR_URL || '').trim();
+    const direct = String(process.env.LOCAL_OCR_URL || config.ai?.ocr?.localUrl || '').trim();
     if (direct) {
       return direct.replace(/\/+$/, '');
     }
-    return 'http://127.0.0.1:8081';
+    return '';
   }
 
   private getLocalOcrTimeoutMs(): number {
@@ -6215,7 +6216,12 @@ export class PostVisitService {
     }
 
     const baseUrl = this.resolveLocalOcrUrl();
-    const endpoint = `${baseUrl}/extract`;
+    if (!baseUrl) {
+      throw new BadRequestException(
+        'LOCAL_OCR_URL is not configured. Set LOCAL_OCR_URL or LOCAL_AI_BASE_URL + LOCAL_OCR_PATH.',
+      );
+    }
+    const endpoint = /\/extract$/i.test(baseUrl) ? baseUrl : `${baseUrl}/extract`;
     const formData = new FormData();
     formData.append('file', file.buffer, {
       filename: file.originalname || 'document.bin',
