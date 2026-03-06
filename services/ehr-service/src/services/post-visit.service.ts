@@ -16,7 +16,8 @@ import { PatientService } from './patient.service';
 import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
 import { PatientNotificationsService } from './patient-notifications.service';
-import { GroundingCitation, PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
+import { GroundingCitation, LlmAuditMetadata, PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
+import { HipaaAuditService } from './hipaa-audit.service';
 
 type PostVisitSessionStatus =
   | 'captured'
@@ -121,6 +122,7 @@ export class PostVisitService {
     private readonly emailService?: EmailService,
     private readonly patientNotificationsService?: PatientNotificationsService,
     private readonly groundedLlmService?: PostVisitGroundedLlmService,
+    private readonly hipaaAuditService?: HipaaAuditService,
   ) {}
 
   private async ensurePostVisitSchema(tenantDb: DataSource) {
@@ -1062,6 +1064,7 @@ export class PostVisitService {
     citationsUsed: string[];
     model: string | null;
     abstained: boolean;
+    llmAudit: LlmAuditMetadata | null;
   }> {
     if (args.escalation.detected && args.escalation.routeTarget === 'emergency') {
       return {
@@ -1070,6 +1073,7 @@ export class PostVisitService {
         citationsUsed: [],
         model: null,
         abstained: false,
+        llmAudit: null,
       };
     }
 
@@ -1079,6 +1083,9 @@ export class PostVisitService {
       : [];
     const checklist = recommendations.slice(0, 3).map((item: any) => String(item?.title || '').trim()).filter(Boolean);
     const citationCatalog = this.buildCitationCatalogFromRecommendations(args.recommendationArtifact).slice(0, 30);
+    let llmAuditAttempt: LlmAuditMetadata | null = null;
+    let llmModelAttempt: string | null = null;
+    let llmAbstainedAttempt = false;
 
     if (this.groundedLlmService) {
       const llmResult = await this.groundedLlmService.answerPatientQuestion({
@@ -1089,6 +1096,9 @@ export class PostVisitService {
         checklist,
         citations: citationCatalog,
       });
+      llmAuditAttempt = llmResult?.audit || null;
+      llmModelAttempt = llmResult?.model || null;
+      llmAbstainedAttempt = llmResult?.abstained === true;
       if (llmResult && !llmResult.abstained && llmResult.answer) {
         const answer = args.escalation.detected
           ? `${llmResult.answer} We have also routed your concern to the care team for follow-up.`
@@ -1099,6 +1109,7 @@ export class PostVisitService {
           citationsUsed: llmResult.citationsUsed || [],
           model: llmResult.model || null,
           abstained: false,
+          llmAudit: llmAuditAttempt,
         };
       }
     }
@@ -1114,8 +1125,9 @@ export class PostVisitService {
           answer: `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.${clinicianEscalationSuffix}`,
           source: 'deterministic',
           citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-          model: null,
-          abstained: false,
+          model: llmModelAttempt,
+          abstained: llmAbstainedAttempt,
+          llmAudit: llmAuditAttempt,
         };
       }
     }
@@ -1126,8 +1138,9 @@ export class PostVisitService {
           answer: `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.${clinicianEscalationSuffix}`,
           source: 'deterministic',
           citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-          model: null,
-          abstained: false,
+          model: llmModelAttempt,
+          abstained: llmAbstainedAttempt,
+          llmAudit: llmAuditAttempt,
         };
       }
     }
@@ -1137,8 +1150,9 @@ export class PostVisitService {
         answer: `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.${clinicianEscalationSuffix}`,
         source: 'deterministic',
         citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-        model: null,
-        abstained: false,
+        model: llmModelAttempt,
+        abstained: llmAbstainedAttempt,
+        llmAudit: llmAuditAttempt,
       };
     }
 
@@ -1147,9 +1161,92 @@ export class PostVisitService {
         `I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.${clinicianEscalationSuffix}`.trim(),
       source: 'deterministic',
       citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
-      model: null,
-      abstained: false,
+      model: llmModelAttempt,
+      abstained: llmAbstainedAttempt,
+      llmAudit: llmAuditAttempt,
     };
+  }
+
+  private async persistGroundedLlmAudit(
+    tenantDb: DataSource,
+    args: {
+      model: string | null;
+      audit: LlmAuditMetadata | null;
+      sessionId: string;
+      patientId?: string | null;
+      encounterId?: string | null;
+      actorUserId?: string | null;
+      actorRole?: string | null;
+      requestId?: string | null;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<void> {
+    if (!this.hipaaAuditService) {
+      return;
+    }
+    const modelName = String(args.model || '').trim();
+    if (!modelName || !args.audit?.promptHash) {
+      return;
+    }
+
+    try {
+      const modelId = this.toModelRegistryId(modelName);
+      await this.hipaaAuditService.registerModelEntry(tenantDb, {
+        modelId,
+        modelName,
+        modelVersion: String(args.audit.templateVersion || 'v1'),
+        provider: this.inferModelProvider(modelName),
+        status: 'active',
+        metadata: {
+          feature: 'post_visit_grounded_llm',
+        },
+      });
+
+      await this.hipaaAuditService.logPromptAudit(tenantDb, {
+        promptHash: args.audit.promptHash,
+        templateVersion: args.audit.templateVersion || 'postvisit-grounded-v1',
+        modelId,
+        sessionId: args.sessionId,
+        patientId: args.patientId || null,
+        encounterId: args.encounterId || null,
+        actorId: this.normalizeUuid(args.actorUserId),
+        actorRole: args.actorRole || null,
+        inputTokenCount: args.audit.inputTokenCount,
+        outputTokenCount: args.audit.outputTokenCount,
+        latencyMs: args.audit.latencyMs,
+        safetyGateTriggered: args.audit.safetyGateTriggered === true,
+        requestId: args.requestId || null,
+        metadata: {
+          model_name: modelName,
+          ...args.metadata,
+        },
+      });
+    } catch (_error) {
+      // Prompt/model audit is best-effort and must not block patient or doctor workflows.
+    }
+  }
+
+  private toModelRegistryId(modelName: string): string {
+    return `postvisit.${String(modelName || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')}`;
+  }
+
+  private inferModelProvider(modelName: string): string {
+    const normalized = String(modelName || '').toLowerCase();
+    if (!normalized) return 'unknown';
+    if (normalized.includes('gpt') || normalized.includes('openai')) return 'openai';
+    if (normalized.includes('claude')) return 'anthropic';
+    if (normalized.includes('llama') || normalized.includes('mistral') || normalized.includes('qwen')) return 'ollama';
+    if (normalized.includes('whisper')) return 'whisper-local';
+    return 'custom';
+  }
+
+  private normalizeUuid(value?: string | null): string | null {
+    const normalized = String(value || '').trim();
+    if (!normalized) return null;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized) ? normalized : null;
   }
 
   private async touchCompanionThreadAfterMessage(
@@ -2861,6 +2958,20 @@ export class PostVisitService {
             polished_at: new Date().toISOString(),
           },
         };
+        await this.persistGroundedLlmAudit(tenantDb, {
+          model: llmPolish.model || null,
+          audit: llmPolish.audit || null,
+          sessionId,
+          patientId: sessionRow.patient_id,
+          encounterId: sessionRow.appointment_id || sessionRow.consultation_id || null,
+          actorUserId: options.actorUserId || null,
+          actorRole: 'doctor',
+          metadata: {
+            channel: 'doctor_draft_polish',
+            source: options.source || 'post_visit_draft_generation',
+            citation_count: Array.isArray(llmPolish.citationsUsed) ? llmPolish.citationsUsed.length : 0,
+          },
+        });
       } else {
         summaryContent = {
           ...summaryContent,
@@ -3550,6 +3661,21 @@ export class PostVisitService {
       visitSummaryArtifact,
       recommendationArtifact,
       escalation: detection,
+    });
+    await this.persistGroundedLlmAudit(tenantDb, {
+      model: assistantAnswer.model,
+      audit: assistantAnswer.llmAudit,
+      sessionId,
+      patientId,
+      encounterId: sessionRow.appointment_id || sessionRow.consultation_id || null,
+      actorUserId: null,
+      actorRole: 'patient',
+      metadata: {
+        channel: 'patient_companion_answer',
+        answer_engine: assistantAnswer.source,
+        escalation_detected: detection.detected,
+        citation_count: Array.isArray(assistantAnswer.citationsUsed) ? assistantAnswer.citationsUsed.length : 0,
+      },
     });
 
     const assistantMessageRows = await tenantDb.query(

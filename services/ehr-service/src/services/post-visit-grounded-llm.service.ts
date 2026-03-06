@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { createHash } from 'crypto';
 
 export interface GroundingCitation {
   id: string;
@@ -40,6 +41,7 @@ export interface PostVisitDoctorPolishOutput {
   }>;
   citationsUsed: string[];
   model: string;
+  audit?: LlmAuditMetadata;
 }
 
 export interface PostVisitPatientAnswerInput {
@@ -58,6 +60,16 @@ export interface PostVisitPatientAnswerOutput {
   abstained: boolean;
   abstainReason?: string;
   urgentSignal: boolean;
+  audit?: LlmAuditMetadata;
+}
+
+export interface LlmAuditMetadata {
+  promptHash: string;
+  templateVersion: string;
+  inputTokenCount: number;
+  outputTokenCount: number;
+  latencyMs: number;
+  safetyGateTriggered: boolean;
 }
 
 @Injectable()
@@ -90,7 +102,7 @@ export class PostVisitGroundedLlmService {
     const allowedCitationIds = new Set(input.citations.map((citation) => String(citation.id || '').trim()).filter(Boolean));
 
     try {
-      const json = await this.requestJsonCompletion(
+      const llmResponse = await this.requestJsonCompletion(
         [
           {
             role: 'system',
@@ -127,6 +139,7 @@ export class PostVisitGroundedLlmService {
         ],
         0.1,
       );
+      const json = llmResponse.json;
 
       const abstain = json?.abstain === true;
       if (abstain) {
@@ -164,6 +177,10 @@ export class PostVisitGroundedLlmService {
         recommendationRewrites,
         citationsUsed,
         model: this.apiModel,
+        audit: {
+          ...llmResponse.audit,
+          safetyGateTriggered: false,
+        },
       };
     } catch (error: any) {
       this.logger.warn(`Doctor polish LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -183,7 +200,7 @@ export class PostVisitGroundedLlmService {
     const allowedCitationIds = new Set(input.citations.map((citation) => String(citation.id || '').trim()).filter(Boolean));
 
     try {
-      const json = await this.requestJsonCompletion(
+      const llmResponse = await this.requestJsonCompletion(
         [
           {
             role: 'system',
@@ -218,6 +235,7 @@ export class PostVisitGroundedLlmService {
         ],
         0.1,
       );
+      const json = llmResponse.json;
 
       const abstained = json?.abstain === true;
       const citationsUsed = this.validateCitationIds(
@@ -237,6 +255,10 @@ export class PostVisitGroundedLlmService {
           abstained: true,
           abstainReason: this.normalizeText(json?.abstain_reason, 400) || 'Insufficient grounded context.',
           urgentSignal: json?.urgent_signal === true,
+          audit: {
+            ...llmResponse.audit,
+            safetyGateTriggered: true,
+          },
         };
       }
 
@@ -251,6 +273,10 @@ export class PostVisitGroundedLlmService {
         model: this.apiModel,
         abstained: false,
         urgentSignal: json?.urgent_signal === true,
+        audit: {
+          ...llmResponse.audit,
+          safetyGateTriggered: false,
+        },
       };
     } catch (error: any) {
       this.logger.warn(`Patient answer LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -289,7 +315,14 @@ export class PostVisitGroundedLlmService {
     return normalized;
   }
 
+  private approximateTokenCount(text: string): number {
+    return Math.max(1, Math.ceil(String(text || '').length / 4));
+  }
+
   private async requestJsonCompletion(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, temperature = 0.1) {
+    const promptText = messages.map((message) => `${message.role}:${message.content}`).join('\n');
+    const promptHash = createHash('sha256').update(promptText).digest('hex');
+    const startedAt = Date.now();
     const response = await axios.post(
       this.apiUrl,
       {
@@ -308,6 +341,7 @@ export class PostVisitGroundedLlmService {
         timeout: this.timeoutMs,
       },
     );
+    const latencyMs = Date.now() - startedAt;
 
     const content = response?.data?.choices?.[0]?.message?.content;
     if (typeof content !== 'string' || content.trim().length === 0) {
@@ -315,7 +349,17 @@ export class PostVisitGroundedLlmService {
     }
 
     try {
-      return JSON.parse(content);
+      return {
+        json: JSON.parse(content),
+        audit: {
+          promptHash,
+          templateVersion: 'postvisit-grounded-v1',
+          inputTokenCount: this.approximateTokenCount(promptText),
+          outputTokenCount: this.approximateTokenCount(content),
+          latencyMs,
+          safetyGateTriggered: false,
+        } as LlmAuditMetadata,
+      };
     } catch (error) {
       throw new Error('LLM JSON parse failed');
     }

@@ -55,6 +55,7 @@ import { WaitlistController } from './controllers/waitlist.controller';
 import { DiabetesController } from './controllers/diabetes.controller';
 import { CcdaController } from './controllers/ccda.controller';
 import { HipaaAuditController } from './controllers/hipaa-audit.controller';
+import { AdminAuditController } from './controllers/admin-audit.controller';
 import { QualityMeasuresController } from './controllers/quality-measures.controller';
 import { PharmacyController } from './controllers/pharmacy.controller';
 import { DoctorAvailabilityController } from './controllers/doctor-availability.controller';
@@ -299,6 +300,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     DiabetesController,
     CcdaController,
     HipaaAuditController,
+    AdminAuditController,
     QualityMeasuresController,
     PharmacyController,
     DoctorAvailabilityController,

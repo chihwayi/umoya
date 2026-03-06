@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { createHash } from 'crypto';
 
 export enum HipaaAuditAction {
   // Authentication & Authorization
@@ -107,9 +108,138 @@ export interface HipaaAuditLogEntry {
   timestamp: Date;
 }
 
+export interface ModelRegistryEntry {
+  modelId: string;
+  modelName: string;
+  modelVersion: string;
+  provider?: string;
+  status?: 'active' | 'retired' | 'testing';
+  sha256Hash?: string | null;
+  benchmarkScores?: any[];
+  metadata?: Record<string, any>;
+}
+
+export interface PromptAuditLogEntry {
+  promptHash: string;
+  templateVersion?: string;
+  modelId: string;
+  sessionId?: string | null;
+  patientId?: string | null;
+  encounterId?: string | null;
+  actorId?: string | null;
+  actorRole?: string | null;
+  inputTokenCount?: number;
+  outputTokenCount?: number;
+  latencyMs?: number;
+  safetyGateTriggered?: boolean;
+  requestId?: string | null;
+  metadata?: Record<string, any>;
+}
+
 @Injectable()
 export class HipaaAuditService {
   private readonly logger = new Logger(HipaaAuditService.name);
+  private readonly ensuredSchema = new WeakSet<DataSource>();
+
+  private async ensureAdvancedAuditSchema(tenantDb: DataSource): Promise<void> {
+    if (this.ensuredSchema.has(tenantDb)) {
+      return;
+    }
+
+    const statements = [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `ALTER TABLE IF EXISTS hipaa_audit_logs
+        ADD COLUMN IF NOT EXISTS event_type VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS operation VARCHAR(20)
+          CHECK (operation IN ('READ', 'WRITE', 'DELETE', 'EXPORT', 'PRINT', 'SHARE')),
+        ADD COLUMN IF NOT EXISTS data_classification VARCHAR(20)
+          CHECK (data_classification IN ('PHI', 'CLINICAL', 'BILLING', 'ADMIN')),
+        ADD COLUMN IF NOT EXISTS request_id VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS ip_address_hash TEXT,
+        ADD COLUMN IF NOT EXISTS changes_delta JSONB,
+        ADD COLUMN IF NOT EXISTS immutable BOOLEAN NOT NULL DEFAULT TRUE`,
+      `UPDATE hipaa_audit_logs SET immutable = TRUE WHERE immutable IS DISTINCT FROM TRUE`,
+      `CREATE INDEX IF NOT EXISTS idx_hipaa_audit_event_type ON hipaa_audit_logs(event_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_hipaa_audit_operation ON hipaa_audit_logs(operation)`,
+      `CREATE INDEX IF NOT EXISTS idx_hipaa_audit_data_classification ON hipaa_audit_logs(data_classification)`,
+      `CREATE INDEX IF NOT EXISTS idx_hipaa_audit_request_id ON hipaa_audit_logs(request_id)`,
+      `CREATE TABLE IF NOT EXISTS audit_integrity_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        audit_date DATE NOT NULL UNIQUE,
+        event_count INTEGER NOT NULL DEFAULT 0,
+        merkle_root_hash TEXT NOT NULL,
+        chain_hash TEXT,
+        generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_integrity_generated_at ON audit_integrity_log(generated_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_integrity_date ON audit_integrity_log(audit_date DESC)`,
+      `CREATE TABLE IF NOT EXISTS model_registry (
+        model_id TEXT PRIMARY KEY,
+        model_name TEXT NOT NULL,
+        model_version TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'local',
+        status TEXT NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active', 'retired', 'testing')),
+        sha256_hash TEXT,
+        benchmark_scores JSONB NOT NULL DEFAULT '[]'::jsonb,
+        deployed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        retired_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_model_registry_status ON model_registry(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_model_registry_model_name ON model_registry(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_model_registry_deployed_at ON model_registry(deployed_at DESC)`,
+      `CREATE TABLE IF NOT EXISTS prompt_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        prompt_hash TEXT NOT NULL,
+        template_version TEXT NOT NULL DEFAULT 'v1',
+        model_id TEXT NOT NULL REFERENCES model_registry(model_id) ON DELETE RESTRICT,
+        session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
+        patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+        encounter_id UUID,
+        actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        actor_role VARCHAR(40),
+        input_token_count INTEGER NOT NULL DEFAULT 0,
+        output_token_count INTEGER NOT NULL DEFAULT 0,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        safety_gate_triggered BOOLEAN NOT NULL DEFAULT FALSE,
+        request_id VARCHAR(120),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_prompt_audit_prompt_hash ON prompt_audit_log(prompt_hash)`,
+      `CREATE INDEX IF NOT EXISTS idx_prompt_audit_model_id ON prompt_audit_log(model_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_prompt_audit_patient_id ON prompt_audit_log(patient_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_prompt_audit_session_id ON prompt_audit_log(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_prompt_audit_created_at ON prompt_audit_log(created_at DESC)`,
+      `CREATE OR REPLACE FUNCTION prevent_hipaa_audit_logs_mutation()
+        RETURNS TRIGGER AS $$
+        BEGIN
+          RAISE EXCEPTION 'hipaa_audit_logs is append-only and cannot be %', TG_OP;
+        END;
+        $$ LANGUAGE plpgsql`,
+      `DROP TRIGGER IF EXISTS trg_prevent_hipaa_audit_logs_update ON hipaa_audit_logs`,
+      `CREATE TRIGGER trg_prevent_hipaa_audit_logs_update
+        BEFORE UPDATE ON hipaa_audit_logs
+        FOR EACH ROW
+        EXECUTE FUNCTION prevent_hipaa_audit_logs_mutation()`,
+      `DROP TRIGGER IF EXISTS trg_prevent_hipaa_audit_logs_delete ON hipaa_audit_logs`,
+      `CREATE TRIGGER trg_prevent_hipaa_audit_logs_delete
+        BEFORE DELETE ON hipaa_audit_logs
+        FOR EACH ROW
+        EXECUTE FUNCTION prevent_hipaa_audit_logs_mutation()`,
+    ];
+
+    for (const statement of statements) {
+      await tenantDb.query(statement);
+    }
+
+    this.ensuredSchema.add(tenantDb);
+  }
 
   /**
    * Log HIPAA-compliant audit event
@@ -119,6 +249,8 @@ export class HipaaAuditService {
     entry: HipaaAuditLogEntry,
   ): Promise<void> {
     try {
+      await this.ensureAdvancedAuditSchema(tenantDb);
+
       // Skip logging if userId is 'anonymous' or invalid (not a valid UUID)
       // This happens for unauthenticated requests or patient portal users
       if (entry.userId === 'anonymous' || !entry.userId || entry.userId === 'undefined' || entry.userId === 'unknown') {
@@ -132,31 +264,41 @@ export class HipaaAuditService {
 
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(entry.userId)) {
-        this.logger.debug(`Skipping audit log for non-UUID user: ${entry.userId}`);
+      let normalizedUserId: string | null = null;
+      if (entry.userId && uuidRegex.test(entry.userId)) {
+        normalizedUserId = entry.userId;
+      } else if (entry.patientId) {
+        // Patient portal/non-user principal access still needs PHI audit coverage.
+        normalizedUserId = null;
+      } else {
+        this.logger.debug(`Skipping audit log for non-UUID user without patient context: ${entry.userId}`);
         return;
       }
 
-      // For patient portal users, user_id might reference patients table, not users table
-      // So we'll allow NULL user_id for patient portal access (they're tracked by patient_id instead)
-      // Only set user_id if it's a valid UUID that exists in users table
-      // Otherwise, set to NULL and rely on patient_id for tracking
+      const operation = this.mapOperation(entry.action);
+      const dataClassification = this.mapDataClassification(entry.resourceType, operation);
+      const eventType = this.mapEventType(entry.action, operation, entry.outcome);
+      const requestId = String(entry.metadata?.requestId || entry.metadata?.request_id || '').trim() || null;
+      const ipAddressHash = this.hashIpAddress(entry.ipAddress);
+      const changesDelta = this.buildChangesDelta(entry.oldValues, entry.newValues);
 
       await tenantDb.query(
         `
         INSERT INTO hipaa_audit_logs (
           user_id, user_name, user_role, action, resource_type, resource_id,
           patient_id, ip_address, user_agent, session_id, outcome, reason,
-          data_accessed, old_values, new_values, metadata, risk_level, created_at
+          data_accessed, old_values, new_values, metadata, risk_level, created_at,
+          event_type, operation, data_classification, request_id, ip_address_hash, changes_delta, immutable
         )
         VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10, $11, $12,
-          $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17, $18
+          $13::jsonb, $14::jsonb, $15::jsonb, $16::jsonb, $17, $18,
+          $19, $20, $21, $22, $23, $24::jsonb, true
         )
       `,
         [
-          entry.userId || null, // Allow NULL for patient portal users
+          normalizedUserId,
           entry.userName || null,
           entry.userRole || null,
           entry.action,
@@ -174,8 +316,16 @@ export class HipaaAuditService {
           entry.metadata ? JSON.stringify(entry.metadata) : null,
           entry.riskLevel || 'low',
           entry.timestamp || new Date(),
+          eventType,
+          operation,
+          dataClassification,
+          requestId,
+          ipAddressHash,
+          changesDelta ? JSON.stringify(changesDelta) : null,
         ],
       );
+
+      await this.upsertAuditIntegrityForDate(tenantDb, entry.timestamp || new Date(), normalizedUserId);
     } catch (error: any) {
       // Never fail the main operation due to audit logging failure
       // But log the error for investigation
@@ -362,6 +512,103 @@ export class HipaaAuditService {
     });
   }
 
+  async registerModelEntry(
+    tenantDb: DataSource,
+    entry: ModelRegistryEntry,
+  ): Promise<void> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+    if (!entry?.modelId || !entry?.modelName || !entry?.modelVersion) {
+      return;
+    }
+
+    await tenantDb.query(
+      `
+        INSERT INTO model_registry (
+          model_id,
+          model_name,
+          model_version,
+          provider,
+          status,
+          sha256_hash,
+          benchmark_scores,
+          metadata,
+          deployed_at,
+          updated_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,NOW(),NOW())
+        ON CONFLICT (model_id) DO UPDATE
+        SET model_name = EXCLUDED.model_name,
+            model_version = EXCLUDED.model_version,
+            provider = EXCLUDED.provider,
+            status = EXCLUDED.status,
+            sha256_hash = EXCLUDED.sha256_hash,
+            benchmark_scores = EXCLUDED.benchmark_scores,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+      `,
+      [
+        entry.modelId,
+        entry.modelName,
+        entry.modelVersion,
+        entry.provider || 'local',
+        entry.status || 'active',
+        entry.sha256Hash || null,
+        JSON.stringify(Array.isArray(entry.benchmarkScores) ? entry.benchmarkScores : []),
+        JSON.stringify(entry.metadata || {}),
+      ],
+    );
+  }
+
+  async logPromptAudit(
+    tenantDb: DataSource,
+    entry: PromptAuditLogEntry,
+  ): Promise<void> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+    if (!entry?.promptHash || !entry?.modelId) {
+      return;
+    }
+
+    await tenantDb.query(
+      `
+        INSERT INTO prompt_audit_log (
+          prompt_hash,
+          template_version,
+          model_id,
+          session_id,
+          patient_id,
+          encounter_id,
+          actor_id,
+          actor_role,
+          input_token_count,
+          output_token_count,
+          latency_ms,
+          safety_gate_triggered,
+          request_id,
+          metadata
+        )
+        VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb
+        )
+      `,
+      [
+        entry.promptHash,
+        entry.templateVersion || 'v1',
+        entry.modelId,
+        entry.sessionId || null,
+        entry.patientId || null,
+        entry.encounterId || null,
+        entry.actorId || null,
+        entry.actorRole || null,
+        Number(entry.inputTokenCount || 0),
+        Number(entry.outputTokenCount || 0),
+        Number(entry.latencyMs || 0),
+        entry.safetyGateTriggered === true,
+        entry.requestId || null,
+        JSON.stringify(entry.metadata || {}),
+      ],
+    );
+  }
+
   /**
    * Get audit logs with filtering
    */
@@ -380,6 +627,8 @@ export class HipaaAuditService {
       offset?: number;
     },
   ): Promise<{ logs: any[]; total: number }> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+
     const params: any[] = [];
     const conditions: string[] = [];
 
@@ -463,6 +712,8 @@ export class HipaaAuditService {
     startDate: Date,
     endDate: Date,
   ): Promise<any> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+
     const [summary] = await tenantDb.query(
       `
       SELECT
@@ -523,6 +774,8 @@ export class HipaaAuditService {
    * Detect potential breaches
    */
   async detectBreaches(tenantDb: DataSource, lookbackDays: number = 30): Promise<any[]> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - lookbackDays);
 
@@ -619,6 +872,8 @@ export class HipaaAuditService {
     startDate?: Date,
     endDate?: Date,
   ): Promise<any> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+
     const params: any[] = [patientId];
     const conditions: string[] = ['patient_id = $1'];
 
@@ -682,7 +937,307 @@ export class HipaaAuditService {
     };
   }
 
+  async getDisclosureReport(
+    tenantDb: DataSource,
+    patientId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<any> {
+    await this.ensureAdvancedAuditSchema(tenantDb);
+    const params: any[] = [patientId];
+    const conditions: string[] = ['hal.patient_id = $1'];
+
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`hal.created_at >= $${params.length}`);
+    }
+
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`hal.created_at <= $${params.length}`);
+    }
+
+    const [patientRows, events, summaryRows] = await Promise.all([
+      tenantDb.query(
+        `
+          SELECT id, first_name, last_name, patient_number
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [patientId],
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            hal.id,
+            hal.created_at,
+            hal.event_type,
+            hal.operation,
+            hal.data_classification,
+            hal.action,
+            hal.resource_type,
+            hal.resource_id,
+            hal.outcome,
+            hal.reason,
+            hal.request_id,
+            hal.user_id,
+            COALESCE(hal.user_name, tu.first_name || ' ' || tu.last_name, tu.email, 'Unknown User') AS actor_name,
+            hal.user_role,
+            hal.metadata
+          FROM hipaa_audit_logs hal
+          LEFT JOIN users tu ON tu.id = hal.user_id
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY hal.created_at DESC
+          LIMIT 5000
+        `,
+        params,
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            COUNT(*)::int AS total_events,
+            COUNT(*) FILTER (WHERE operation = 'READ')::int AS read_events,
+            COUNT(*) FILTER (WHERE operation = 'WRITE')::int AS write_events,
+            COUNT(*) FILTER (WHERE operation = 'DELETE')::int AS delete_events,
+            COUNT(*) FILTER (WHERE operation = 'EXPORT')::int AS export_events,
+            COUNT(*) FILTER (WHERE operation = 'SHARE')::int AS share_events,
+            COUNT(*) FILTER (WHERE outcome = 'denied')::int AS denied_events
+          FROM hipaa_audit_logs hal
+          WHERE ${conditions.join(' AND ')}
+        `,
+        params,
+      ),
+    ]);
+
+    const patient = patientRows?.[0];
+    return {
+      reportType: 'hipaa_accounting_of_disclosures',
+      generatedAt: new Date().toISOString(),
+      patient: patient
+        ? {
+            id: patient.id,
+            firstName: patient.first_name,
+            lastName: patient.last_name,
+            patientNumber: patient.patient_number,
+          }
+        : {
+            id: patientId,
+          },
+      period: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
+      summary: summaryRows?.[0] || {
+        total_events: 0,
+        read_events: 0,
+        write_events: 0,
+        delete_events: 0,
+        export_events: 0,
+        share_events: 0,
+        denied_events: 0,
+      },
+      events: events.map((row: any) => ({
+        id: row.id,
+        timestamp: row.created_at,
+        eventType: row.event_type || null,
+        operation: row.operation || null,
+        dataClassification: row.data_classification || null,
+        action: row.action,
+        resourceType: row.resource_type,
+        resourceId: row.resource_id || null,
+        outcome: row.outcome,
+        reason: row.reason || null,
+        requestId: row.request_id || null,
+        actor: {
+          id: row.user_id || null,
+          name: row.actor_name || 'Unknown User',
+          role: row.user_role || null,
+        },
+        metadata: row.metadata || {},
+      })),
+    };
+  }
+
   // ========== Helper Methods ==========
+
+  private mapOperation(action: HipaaAuditAction): 'READ' | 'WRITE' | 'DELETE' | 'EXPORT' | 'PRINT' | 'SHARE' {
+    const raw = String(action || '').toLowerCase();
+    if (raw.includes('export')) return 'EXPORT';
+    if (raw.includes('print')) return 'PRINT';
+    if (raw.includes('share')) return 'SHARE';
+    if (raw.includes('_delete')) return 'DELETE';
+    if (
+      raw.includes('_create') ||
+      raw.includes('_update') ||
+      raw.includes('change') ||
+      raw.includes('resolve') ||
+      raw.includes('report')
+    ) {
+      return 'WRITE';
+    }
+    return 'READ';
+  }
+
+  private mapDataClassification(
+    resourceType: string,
+    operation: 'READ' | 'WRITE' | 'DELETE' | 'EXPORT' | 'PRINT' | 'SHARE',
+  ): 'PHI' | 'CLINICAL' | 'BILLING' | 'ADMIN' {
+    const normalizedResource = String(resourceType || '').toLowerCase();
+    if (
+      normalizedResource.includes('billing') ||
+      normalizedResource.includes('claim') ||
+      normalizedResource.includes('invoice') ||
+      normalizedResource.includes('payment')
+    ) {
+      return 'BILLING';
+    }
+    if (
+      normalizedResource.includes('authentication') ||
+      normalizedResource.includes('admin') ||
+      normalizedResource.includes('system')
+    ) {
+      return 'ADMIN';
+    }
+    if (operation === 'READ' || operation === 'EXPORT' || operation === 'PRINT' || operation === 'SHARE') {
+      return 'PHI';
+    }
+    return 'CLINICAL';
+  }
+
+  private mapEventType(
+    action: HipaaAuditAction,
+    operation: 'READ' | 'WRITE' | 'DELETE' | 'EXPORT' | 'PRINT' | 'SHARE',
+    outcome: 'success' | 'failure' | 'denied',
+  ): string {
+    if (outcome === 'denied' || outcome === 'failure') {
+      return 'AUTH_FAILURE';
+    }
+    if (action === HipaaAuditAction.DATA_EXPORT || operation === 'EXPORT') {
+      return 'PHI_EXPORT';
+    }
+    if (operation === 'READ') return 'PHI_READ';
+    if (operation === 'WRITE') return 'PHI_WRITE';
+    if (operation === 'DELETE') return 'PHI_DELETE';
+    if (operation === 'PRINT') return 'PHI_PRINT';
+    if (operation === 'SHARE') return 'PHI_SHARE';
+    return 'PHI_ACCESS';
+  }
+
+  private hashIpAddress(ipAddress?: string): string | null {
+    const normalizedIp = String(ipAddress || '').trim();
+    if (!normalizedIp) {
+      return null;
+    }
+    const salt = String(process.env.HIPAA_AUDIT_IP_HASH_SALT || 'medicore-hipaa-audit-salt-v1');
+    return createHash('sha256').update(`${salt}:${normalizedIp}`).digest('hex');
+  }
+
+  private buildChangesDelta(oldValues?: any, newValues?: any): Array<{ op: 'add' | 'remove' | 'replace'; path: string; value?: any }> | null {
+    if (!oldValues || !newValues || typeof oldValues !== 'object' || typeof newValues !== 'object') {
+      return null;
+    }
+    const oldObject = oldValues as Record<string, any>;
+    const newObject = newValues as Record<string, any>;
+    const patch: Array<{ op: 'add' | 'remove' | 'replace'; path: string; value?: any }> = [];
+    const keys = new Set<string>([...Object.keys(oldObject), ...Object.keys(newObject)]);
+
+    for (const key of keys) {
+      const oldExists = Object.prototype.hasOwnProperty.call(oldObject, key);
+      const newExists = Object.prototype.hasOwnProperty.call(newObject, key);
+      const path = `/${String(key).replace(/\//g, '~1')}`;
+
+      if (!oldExists && newExists) {
+        patch.push({ op: 'add', path, value: newObject[key] });
+        continue;
+      }
+      if (oldExists && !newExists) {
+        patch.push({ op: 'remove', path });
+        continue;
+      }
+      if (JSON.stringify(oldObject[key]) !== JSON.stringify(newObject[key])) {
+        patch.push({ op: 'replace', path, value: newObject[key] });
+      }
+    }
+
+    return patch.length ? patch : null;
+  }
+
+  private async upsertAuditIntegrityForDate(
+    tenantDb: DataSource,
+    at: Date,
+    generatedBy?: string | null,
+  ): Promise<void> {
+    const auditDate = new Date(at);
+    const auditDateIso = `${auditDate.getUTCFullYear()}-${String(auditDate.getUTCMonth() + 1).padStart(2, '0')}-${String(auditDate.getUTCDate()).padStart(2, '0')}`;
+
+    const hashRows = await tenantDb.query(
+      `
+        WITH ordered AS (
+          SELECT id, created_at, action, resource_type, patient_id, outcome, request_id
+          FROM hipaa_audit_logs
+          WHERE created_at::date = $1::date
+          ORDER BY created_at ASC, id ASC
+        )
+        SELECT
+          COUNT(*)::int AS event_count,
+          encode(
+            digest(
+              COALESCE(string_agg(
+                id::text || '|' ||
+                created_at::text || '|' ||
+                COALESCE(action, '') || '|' ||
+                COALESCE(resource_type, '') || '|' ||
+                COALESCE(patient_id::text, '') || '|' ||
+                COALESCE(outcome, '') || '|' ||
+                COALESCE(request_id, ''),
+                '||'
+              ), ''),
+              'sha256'
+            ),
+            'hex'
+          ) AS merkle_root_hash
+        FROM ordered
+      `,
+      [auditDateIso],
+    );
+
+    const row = hashRows?.[0] || {};
+    const eventCount = Number(row.event_count || 0);
+    const merkleRootHash = String(row.merkle_root_hash || '').trim();
+    if (!merkleRootHash) {
+      return;
+    }
+
+    await tenantDb.query(
+      `
+        INSERT INTO audit_integrity_log (
+          audit_date,
+          event_count,
+          merkle_root_hash,
+          generated_at,
+          generated_by,
+          metadata
+        )
+        VALUES ($1::date, $2, $3, NOW(), $4, $5::jsonb)
+        ON CONFLICT (audit_date) DO UPDATE
+        SET event_count = EXCLUDED.event_count,
+            merkle_root_hash = EXCLUDED.merkle_root_hash,
+            generated_at = NOW(),
+            generated_by = EXCLUDED.generated_by,
+            metadata = EXCLUDED.metadata
+      `,
+      [
+        auditDateIso,
+        eventCount,
+        merkleRootHash,
+        generatedBy || null,
+        JSON.stringify({
+          source: 'hipaa_audit_service_auto_snapshot',
+        }),
+      ],
+    );
+  }
 
   private calculateRiskLevel(action: HipaaAuditAction, recordCount?: number): 'low' | 'medium' | 'high' | 'critical' {
     // High-risk actions
@@ -750,6 +1305,13 @@ export class HipaaAuditService {
       newValues: log.new_values,
       metadata: log.metadata,
       riskLevel: log.risk_level,
+      eventType: log.event_type || null,
+      operation: log.operation || null,
+      dataClassification: log.data_classification || null,
+      requestId: log.request_id || null,
+      ipAddressHash: log.ip_address_hash || null,
+      changesDelta: log.changes_delta || null,
+      immutable: log.immutable !== false,
       createdAt: log.created_at,
     };
   }

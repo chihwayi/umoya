@@ -19,6 +19,13 @@ Validate sprint-4/5/6 post-visit companion behavior end-to-end:
 
 ## Acceptance Checklist
 
+### Audit Chain-Of-Custody (Sprint A1)
+- [ ] `GET /admin/audit/disclosure-report?patientId=:id` returns HIPAA accounting payload (`summary` + `events`).
+- [ ] Attempting `UPDATE` or `DELETE` on `hipaa_audit_logs` is rejected (append-only guard active).
+- [ ] Grounded doctor polish run writes one `model_registry` entry and one `prompt_audit_log` row.
+- [ ] Grounded patient Q&A run writes one `prompt_audit_log` row with `metadata.channel = patient_companion_answer`.
+- [ ] `audit_integrity_log` contains a row for the active date with non-empty `merkle_root_hash`.
+
 ### Doctor Signoff and Publish
 - [ ] `GET /post-visit/sessions/:id` returns expected session context.
 - [ ] `GET /post-visit/sessions/:id/draft` returns draft artifacts.

@@ -1198,6 +1198,10 @@ describe('PostVisitService', () => {
   });
 
   it('applies grounded LLM polish to doctor summary/recommendation bundle when available', async () => {
+    const hipaaAuditServiceMock = {
+      registerModelEntry: jest.fn(async () => undefined),
+      logPromptAudit: jest.fn(async () => undefined),
+    };
     const groundedLlmServiceMock = {
       polishDoctorContent: jest.fn(async () => ({
         plainLanguageSummary: 'Polished grounded summary.',
@@ -1212,6 +1216,14 @@ describe('PostVisitService', () => {
         ],
         citationsUsed: ['htn_followup_rule-1'],
         model: 'gpt-4o-mini',
+        audit: {
+          promptHash: 'prompt-hash-polish',
+          templateVersion: 'postvisit-grounded-v1',
+          inputTokenCount: 120,
+          outputTokenCount: 45,
+          latencyMs: 220,
+          safetyGateTriggered: false,
+        },
       })),
       answerPatientQuestion: jest.fn(),
     };
@@ -1222,6 +1234,7 @@ describe('PostVisitService', () => {
       undefined,
       undefined,
       groundedLlmServiceMock as any,
+      hipaaAuditServiceMock as any,
     );
     patientServiceMock.getPatientContext.mockResolvedValue({
       patient: { id: 'patient-1', fullName: 'Jane Doe' },
@@ -1283,9 +1296,15 @@ describe('PostVisitService', () => {
       }),
     );
     expect(groundedLlmServiceMock.polishDoctorContent).toHaveBeenCalled();
+    expect(hipaaAuditServiceMock.registerModelEntry).toHaveBeenCalled();
+    expect(hipaaAuditServiceMock.logPromptAudit).toHaveBeenCalled();
   });
 
   it('uses grounded LLM answer for patient companion when citation-safe output is returned', async () => {
+    const hipaaAuditServiceMock = {
+      registerModelEntry: jest.fn(async () => undefined),
+      logPromptAudit: jest.fn(async () => undefined),
+    };
     const groundedLlmServiceMock = {
       polishDoctorContent: jest.fn(),
       answerPatientQuestion: jest.fn(async () => ({
@@ -1294,6 +1313,14 @@ describe('PostVisitService', () => {
         model: 'gpt-4o-mini',
         abstained: false,
         urgentSignal: false,
+        audit: {
+          promptHash: 'prompt-hash-answer',
+          templateVersion: 'postvisit-grounded-v1',
+          inputTokenCount: 80,
+          outputTokenCount: 32,
+          latencyMs: 145,
+          safetyGateTriggered: false,
+        },
       })),
     };
     const service = new PostVisitService(
@@ -1303,6 +1330,7 @@ describe('PostVisitService', () => {
       undefined,
       undefined,
       groundedLlmServiceMock as any,
+      hipaaAuditServiceMock as any,
     );
 
     let messageInsertCount = 0;
@@ -1407,5 +1435,7 @@ describe('PostVisitService', () => {
       }),
     );
     expect(groundedLlmServiceMock.answerPatientQuestion).toHaveBeenCalled();
+    expect(hipaaAuditServiceMock.registerModelEntry).toHaveBeenCalled();
+    expect(hipaaAuditServiceMock.logPromptAudit).toHaveBeenCalled();
   });
 });
