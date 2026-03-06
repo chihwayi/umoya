@@ -27,11 +27,13 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
+  AnalyzePostVisitIntraVisitAlertDto,
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
   IngestPostVisitDocumentIntelligenceDto,
   PublishPostVisitSessionDto,
   ReassignPostVisitDiarizationSegmentDto,
+  ResolvePostVisitIntraVisitAlertDto,
   ResolvePostVisitEscalationDto,
   ExecutePostVisitRecommendationDto,
   RegeneratePostVisitDraftDto,
@@ -276,6 +278,68 @@ export class PostVisitController {
       {
         tenantId: req.tenantId,
         authorization: req.headers?.authorization as string | undefined,
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Post('sessions/:id/intravisit/analyze')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Analyze a live transcript chunk for intra-visit safety alerts' })
+  @ApiResponse({ status: 200, description: 'Intra-visit transcript chunk analyzed' })
+  async analyzeIntraVisitAlertChunk(
+    @Param('id') id: string,
+    @Body() body: AnalyzePostVisitIntraVisitAlertDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.analyzeIntraVisitAlerts(
+      req.tenantDb,
+      id,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Get('sessions/:id/intravisit/alerts')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'List intra-visit safety alerts for a post-visit session' })
+  @ApiResponse({ status: 200, description: 'Intra-visit alerts fetched' })
+  async listIntraVisitAlerts(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('status') status?: 'open' | 'confirmed' | 'dismissed',
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.postVisitService.listIntraVisitAlerts(
+      req.tenantDb,
+      id,
+      {
+        status,
+        limit: limit ? Number(limit) : undefined,
+        offset: offset ? Number(offset) : undefined,
+      },
+    );
+  }
+
+  @Post('sessions/:id/intravisit/alerts/:alertId/resolve')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Confirm or dismiss an intra-visit safety alert' })
+  @ApiResponse({ status: 200, description: 'Intra-visit alert updated' })
+  async resolveIntraVisitAlert(
+    @Param('id') id: string,
+    @Param('alertId') alertId: string,
+    @Body() body: ResolvePostVisitIntraVisitAlertDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.resolveIntraVisitAlert(
+      req.tenantDb,
+      id,
+      alertId,
+      body,
+      {
         actorUserId: this.resolveUserId(req),
       },
     );

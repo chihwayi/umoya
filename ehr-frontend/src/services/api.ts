@@ -1427,6 +1427,57 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  analyzePostVisitIntraVisitAlerts: async (
+    sessionId: string,
+    payload: { text: string; source?: string; transcriptOffsetSeconds?: number },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/intravisit/analyze`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  listPostVisitIntraVisitAlerts: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    filters?: { status?: 'open' | 'confirmed' | 'dismissed'; limit?: number; offset?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/intravisit/alerts`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  resolvePostVisitIntraVisitAlert: async (
+    sessionId: string,
+    alertId: string,
+    payload: { status: 'confirmed' | 'dismissed'; note?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      `/post-visit/sessions/${sessionId}/intravisit/alerts/${alertId}/resolve`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
   reassignPostVisitDiarizationSegment: async (
     sessionId: string,
     segmentId: string,

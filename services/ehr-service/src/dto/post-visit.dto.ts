@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, IsObject } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, IsObject, IsNumber } from 'class-validator';
 
 export class CreatePostVisitSessionDto {
   @ApiProperty({ description: 'Patient ID' })
@@ -238,5 +238,37 @@ export class IngestPostVisitDocumentIntelligenceDto {
   @IsString()
   @IsOptional()
   @MaxLength(400)
+  note?: string;
+}
+
+export class AnalyzePostVisitIntraVisitAlertDto {
+  @ApiProperty({ description: 'Live transcript chunk to analyze for safety alerts' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  text: string;
+
+  @ApiPropertyOptional({ description: 'Source channel label', default: 'streamed_transcript' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(40)
+  source?: string;
+
+  @ApiPropertyOptional({ description: 'Optional transcript offset in seconds' })
+  @IsNumber()
+  @IsOptional()
+  transcriptOffsetSeconds?: number;
+}
+
+export class ResolvePostVisitIntraVisitAlertDto {
+  @ApiProperty({ description: 'Doctor resolution action', enum: ['confirmed', 'dismissed'] })
+  @IsEnum(['confirmed', 'dismissed'])
+  @IsNotEmpty()
+  status: 'confirmed' | 'dismissed';
+
+  @ApiPropertyOptional({ description: 'Optional resolution note' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
   note?: string;
 }

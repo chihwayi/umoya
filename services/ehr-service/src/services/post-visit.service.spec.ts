@@ -2109,4 +2109,134 @@ describe('PostVisitService', () => {
     expect(hipaaAuditServiceMock.registerModelEntry).toHaveBeenCalled();
     expect(hipaaAuditServiceMock.logPromptAudit).toHaveBeenCalled();
   });
+
+  it('detects and stores intra-visit safety alerts from streamed transcript chunk', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    jest.spyOn(service as any, 'isIntraVisitAlertsEnabled').mockReturnValue(true);
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', status: 'draft_ready', source_type: 'in_person' }];
+        }
+        if (sql.includes('FROM post_visit_intravisit_alert_events') && sql.includes('detected_at >= NOW() - INTERVAL')) {
+          return [];
+        }
+        if (sql.includes('INSERT INTO post_visit_intravisit_alert_events')) {
+          return [
+            {
+              id: 'intravisit-1',
+              session_id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'open',
+              alert_type: params[2],
+              severity: params[3],
+              source: params[4],
+              transcript_offset_seconds: params[5],
+              signal_text: params[6],
+              alert_message: params[7],
+              suggested_action: params[8],
+              confidence: params[9],
+              trigger_terms: JSON.parse(String(params[10] || '[]')),
+              metadata: JSON.parse(String(params[11] || '{}')),
+              detected_at: '2026-03-06T10:00:00.000Z',
+              resolved_at: null,
+              resolved_by: null,
+              resolution_note: null,
+              created_at: '2026-03-06T10:00:00.000Z',
+              updated_at: '2026-03-06T10:00:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('COUNT(*)::int AS total') && sql.includes('post_visit_intravisit_alert_events')) {
+          return [
+            {
+              total: 1,
+              open_count: 1,
+              critical_open_count: 1,
+              high_open_count: 0,
+              moderate_open_count: 0,
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.analyzeIntraVisitAlerts(
+      tenantDb,
+      'session-1',
+      {
+        text: 'Patient reports chest pain and cannot breathe right now.',
+        source: 'streamed_transcript',
+        transcriptOffsetSeconds: 22,
+      },
+      { actorUserId: 'doctor-1' },
+    );
+
+    expect(result.featureEnabled).toBe(true);
+    expect(result.alerts.length).toBeGreaterThan(0);
+    expect(result.summary.openCount).toBe(1);
+    expect(result.alerts[0].severity).toBe('critical');
+  });
+
+  it('confirms an intra-visit alert with clinician resolution metadata', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', status: 'draft_ready', source_type: 'in_person' }];
+        }
+        if (sql.includes('FROM post_visit_intravisit_alert_events') && sql.includes('LIMIT 1')) {
+          return [
+            {
+              id: 'intravisit-1',
+              session_id: 'session-1',
+              status: 'open',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_intravisit_alert_events')) {
+          return [
+            {
+              id: 'intravisit-1',
+              session_id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'confirmed',
+              alert_type: 'cardiorespiratory_emergency_signal',
+              severity: 'critical',
+              source: 'streamed_transcript',
+              transcript_offset_seconds: 22,
+              signal_text: 'Patient reports chest pain and cannot breathe right now.',
+              alert_message: 'Potential cardiorespiratory emergency signal detected in live transcript.',
+              suggested_action: 'Pause routine flow and activate emergency response pathway with immediate vital reassessment.',
+              confidence: 0.94,
+              trigger_terms: ['chest pain'],
+              metadata: {},
+              detected_at: '2026-03-06T10:00:00.000Z',
+              resolved_at: '2026-03-06T10:02:00.000Z',
+              resolved_by: 'doctor-1',
+              resolution_note: 'Confirmed bedside risk.',
+              created_at: '2026-03-06T10:00:00.000Z',
+              updated_at: '2026-03-06T10:02:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.resolveIntraVisitAlert(
+      tenantDb,
+      'session-1',
+      'intravisit-1',
+      { status: 'confirmed', note: 'Confirmed bedside risk.' },
+      { actorUserId: 'doctor-1' },
+    );
+
+    expect(result.status).toBe('confirmed');
+    expect(result.resolvedBy).toBe('doctor-1');
+    expect(result.resolutionNote).toBe('Confirmed bedside risk.');
+  });
 });

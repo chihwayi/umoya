@@ -58,6 +58,7 @@ const envSchema = z.object({
   FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_SPECIALTY_SOAP: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK: z.enum(['true', 'false']).default('false'),
+  FEATURE_POSTVISIT_INTRAVISIT_ALERTS: z.enum(['true', 'false']).default('false'),
   LOCAL_OCR_URL: z.string().optional(),
 
   // Notifications (SMS)
@@ -275,6 +276,7 @@ export const config = {
     postVisitMedicationIntelligenceV2: env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 === 'true',
     postVisitSpecialtySoap: env.FEATURE_POSTVISIT_SPECIALTY_SOAP === 'true',
     postVisitMultilingualTeachBack: env.FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK === 'true',
+    postVisitIntraVisitAlerts: env.FEATURE_POSTVISIT_INTRAVISIT_ALERTS === 'true',
   },
 
   notifications: {

@@ -137,6 +137,23 @@ interface DocumentIntelligenceItem {
   createdAt?: string;
 }
 
+interface IntraVisitAlertItem {
+  id: string;
+  status: 'open' | 'confirmed' | 'dismissed';
+  alertType: string;
+  severity: 'moderate' | 'high' | 'critical';
+  source?: string | null;
+  transcriptOffsetSeconds?: number | null;
+  signalText?: string | null;
+  alertMessage: string;
+  suggestedAction?: string | null;
+  confidence?: number | null;
+  triggerTerms?: string[];
+  detectedAt?: string;
+  resolvedAt?: string | null;
+  resolutionNote?: string | null;
+}
+
 const STATUS_OPTIONS: Array<'all' | SessionStatus> = [
   'all',
   'captured',
@@ -228,6 +245,23 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   >('other');
   const [documentIntelligenceLanguage, setDocumentIntelligenceLanguage] = useState('en');
   const [documentIntelligenceNote, setDocumentIntelligenceNote] = useState('');
+  const [intraVisitAlerts, setIntraVisitAlerts] = useState<IntraVisitAlertItem[]>([]);
+  const [intraVisitAlertsLoading, setIntraVisitAlertsLoading] = useState(false);
+  const [intraVisitFeatureEnabled, setIntraVisitFeatureEnabled] = useState(true);
+  const [intraVisitSummary, setIntraVisitSummary] = useState<{
+    total: number;
+    openCount: number;
+    criticalOpenCount: number;
+    highOpenCount: number;
+    moderateOpenCount: number;
+  }>({
+    total: 0,
+    openCount: 0,
+    criticalOpenCount: 0,
+    highOpenCount: 0,
+    moderateOpenCount: 0,
+  });
+  const [liveTranscriptChunk, setLiveTranscriptChunk] = useState('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -235,6 +269,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const recordingIntervalRef = useRef<number | null>(null);
   const recordingStartRef = useRef<number>(0);
   const recordingCancelledRef = useRef<boolean>(false);
+  const lastAutoAnalyzedSegmentRef = useRef<string>('');
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.id === selectedSessionId) || null,
@@ -419,6 +454,41 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadIntraVisitAlerts = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) return;
+      try {
+        setIntraVisitAlertsLoading(true);
+        const response = await ehrApi.listPostVisitIntraVisitAlerts(sessionId, token, tenantSlug, {
+          limit: 40,
+          offset: 0,
+        });
+        const items = Array.isArray(response.data?.items) ? (response.data.items as IntraVisitAlertItem[]) : [];
+        setIntraVisitAlerts(items);
+        setIntraVisitFeatureEnabled(response.data?.featureEnabled !== false);
+        setIntraVisitSummary({
+          total: Number(response.data?.summary?.total || 0),
+          openCount: Number(response.data?.summary?.openCount || 0),
+          criticalOpenCount: Number(response.data?.summary?.criticalOpenCount || 0),
+          highOpenCount: Number(response.data?.summary?.highOpenCount || 0),
+          moderateOpenCount: Number(response.data?.summary?.moderateOpenCount || 0),
+        });
+      } catch {
+        setIntraVisitAlerts([]);
+        setIntraVisitSummary({
+          total: 0,
+          openCount: 0,
+          criticalOpenCount: 0,
+          highOpenCount: 0,
+          moderateOpenCount: 0,
+        });
+      } finally {
+        setIntraVisitAlertsLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -428,10 +498,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDraft(selectedSessionId);
     loadDiarization(selectedSessionId);
     loadDocumentIntelligence(selectedSessionId);
+    loadIntraVisitAlerts(selectedSessionId);
     setSessionTranscribeFile(null);
     setDocumentIntelligenceFile(null);
     setDocumentIntelligenceNote('');
-  }, [loadDiarization, loadDocumentIntelligence, loadDraft, selectedSessionId]);
+    setLiveTranscriptChunk('');
+    lastAutoAnalyzedSegmentRef.current = '';
+  }, [loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, selectedSessionId]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -443,6 +516,40 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     }
     setSupersededCitationAcknowledgements(next);
   }, [draftData]);
+
+  useEffect(() => {
+    if (!tenantSlug || !token || !selectedSessionId || !intraVisitFeatureEnabled) return;
+    const segments = Array.isArray(diarizationData?.segments) ? diarizationData?.segments : [];
+    const latestSegment = segments[segments.length - 1];
+    if (!latestSegment?.id || !latestSegment?.text) return;
+    const segmentText = String(latestSegment.text || '').trim();
+    if (!segmentText) return;
+
+    const dedupeKey = `${selectedSessionId}:${latestSegment.id}:${segmentText}`;
+    if (lastAutoAnalyzedSegmentRef.current === dedupeKey) return;
+    lastAutoAnalyzedSegmentRef.current = dedupeKey;
+
+    void ehrApi
+      .analyzePostVisitIntraVisitAlerts(
+        selectedSessionId,
+        {
+          text: segmentText,
+          source: 'streamed_transcript_auto',
+          transcriptOffsetSeconds: Number.isFinite(Number(latestSegment.end))
+            ? Math.max(0, Math.floor(Number(latestSegment.end)))
+            : undefined,
+        },
+        token,
+        tenantSlug,
+      )
+      .then((response) => {
+        const generatedAlerts = Array.isArray(response.data?.alerts) ? response.data.alerts : [];
+        if (generatedAlerts.length > 0) {
+          void loadIntraVisitAlerts(selectedSessionId);
+        }
+      })
+      .catch(() => undefined);
+  }, [diarizationData?.segments, intraVisitFeatureEnabled, loadIntraVisitAlerts, selectedSessionId, tenantSlug, token]);
 
   const clearRecordingInterval = useCallback(() => {
     if (recordingIntervalRef.current !== null) {
@@ -640,7 +747,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       setNewSessionAudioFile(null);
       await loadSessions();
       setSelectedSessionId(createdId);
-      await Promise.all([loadDraft(createdId), loadDiarization(createdId)]);
+      await Promise.all([loadDraft(createdId), loadDiarization(createdId), loadIntraVisitAlerts(createdId)]);
     } catch {
       showError('Create session failed', 'Unable to create post-visit session. Check patient ID and context.');
     } finally {
@@ -655,6 +762,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     newSourceType,
     loadDiarization,
     loadDraft,
+    loadIntraVisitAlerts,
     showError,
     showSuccess,
     transcribeLanguage,
@@ -675,13 +783,18 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         tenantSlug,
       );
       showSuccess('Draft refreshed', 'Recommendation bundle and summary were regenerated.');
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+      await Promise.all([
+        loadSessions(),
+        loadDraft(selectedSessionId),
+        loadDiarization(selectedSessionId),
+        loadIntraVisitAlerts(selectedSessionId),
+      ]);
     } catch {
       showError('Draft regeneration failed', 'Could not regenerate post-visit artifacts.');
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleTranscribeSelectedSession = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -706,7 +819,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       showSuccess('Session transcription completed', 'Transcript, entities, and draft artifacts were refreshed.');
       setSessionTranscribeFile(null);
       setRecordingDurationMs(0);
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+      await Promise.all([
+        loadSessions(),
+        loadDraft(selectedSessionId),
+        loadDiarization(selectedSessionId),
+        loadIntraVisitAlerts(selectedSessionId),
+      ]);
     } catch {
       showError('Session transcription failed', 'Unable to transcribe selected audio for this session.');
     } finally {
@@ -716,6 +834,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDraft,
     loadDiarization,
     loadSessions,
+    loadIntraVisitAlerts,
     selectedSessionId,
     sessionTranscribeFile,
     showError,
@@ -726,6 +845,67 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     transcribePrompt,
     transcribeTemperature,
   ]);
+
+  const handleAnalyzeIntraVisitChunk = useCallback(async () => {
+    if (!tenantSlug || !token || !selectedSessionId) return;
+    const text = liveTranscriptChunk.trim();
+    if (!text) {
+      showError('Intra-visit alert engine', 'Enter transcript text before running safety analysis.');
+      return;
+    }
+    try {
+      setWorkingActionKey('intravisit-analyze');
+      const response = await ehrApi.analyzePostVisitIntraVisitAlerts(
+        selectedSessionId,
+        {
+          text,
+          source: 'doctor_workspace_manual',
+        },
+        token,
+        tenantSlug,
+      );
+      const generatedCount = Array.isArray(response.data?.alerts) ? response.data.alerts.length : 0;
+      if (generatedCount > 0) {
+        showSuccess('Intra-visit alerts detected', `${generatedCount} alert(s) generated from this transcript chunk.`);
+      } else {
+        showSuccess('Intra-visit analysis complete', 'No new safety alerts were generated from this chunk.');
+      }
+      setLiveTranscriptChunk('');
+      await loadIntraVisitAlerts(selectedSessionId);
+    } catch {
+      showError('Intra-visit analysis failed', 'Unable to analyze transcript chunk for safety alerts.');
+    } finally {
+      setWorkingActionKey(null);
+    }
+  }, [liveTranscriptChunk, loadIntraVisitAlerts, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+
+  const handleResolveIntraVisitAlert = useCallback(
+    async (alertId: string, status: 'confirmed' | 'dismissed') => {
+      if (!tenantSlug || !token || !selectedSessionId) return;
+      try {
+        setWorkingActionKey(`intravisit-resolve:${alertId}:${status}`);
+        await ehrApi.resolvePostVisitIntraVisitAlert(
+          selectedSessionId,
+          alertId,
+          {
+            status,
+            note:
+              status === 'confirmed'
+                ? 'Confirmed from doctor intra-visit alert bar.'
+                : 'Dismissed from doctor intra-visit alert bar.',
+          },
+          token,
+          tenantSlug,
+        );
+        await loadIntraVisitAlerts(selectedSessionId);
+      } catch {
+        showError('Intra-visit alert update failed', 'Unable to update intra-visit alert status.');
+      } finally {
+        setWorkingActionKey(null);
+      }
+    },
+    [loadIntraVisitAlerts, selectedSessionId, showError, tenantSlug, token],
+  );
 
   const handleUploadDocumentIntelligence = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -803,14 +983,19 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           tenantSlug,
         );
         showSuccess('Artifact reviewed', `${artifactType.replace('_', ' ')} marked as doctor-reviewed.`);
-        await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+        await Promise.all([
+          loadSessions(),
+          loadDraft(selectedSessionId),
+          loadDiarization(selectedSessionId),
+          loadIntraVisitAlerts(selectedSessionId),
+        ]);
       } catch {
         showError('Review failed', `Unable to review ${artifactType.replace('_', ' ')}.`);
       } finally {
         setWorkingActionKey(null);
       }
     },
-    [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReassignDiarization = useCallback(
@@ -857,14 +1042,19 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           tenantSlug,
         );
         showSuccess('Recommendation executed', title);
-        await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+        await Promise.all([
+          loadSessions(),
+          loadDraft(selectedSessionId),
+          loadDiarization(selectedSessionId),
+          loadIntraVisitAlerts(selectedSessionId),
+        ]);
       } catch {
         showError('Execution failed', `Unable to execute recommendation: ${title}`);
       } finally {
         setWorkingActionKey(null);
       }
     },
-    [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handlePublish = useCallback(async () => {
@@ -888,7 +1078,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         tenantSlug,
       );
       showSuccess('Published', 'Post-visit companion summary is now available to patient portal.');
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+      await Promise.all([
+        loadSessions(),
+        loadDraft(selectedSessionId),
+        loadDiarization(selectedSessionId),
+        loadIntraVisitAlerts(selectedSessionId),
+      ]);
     } catch (error: any) {
       const details =
         String(error?.response?.data?.message || '').trim() ||
@@ -904,6 +1099,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDiarization,
     loadDraft,
     loadSessions,
+    loadIntraVisitAlerts,
     selectedSessionId,
     showError,
     showSuccess,
@@ -1284,6 +1480,124 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       <Mic className="mr-1 inline h-3.5 w-3.5" />
                       {workingActionKey === 'transcribe-session' ? 'Transcribing…' : 'Transcribe + Generate Draft'}
                     </button>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-rose-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Live Intra-Visit Safety Alert Bar</h3>
+                    <button
+                      type="button"
+                      onClick={() => selectedSessionId && loadIntraVisitAlerts(selectedSessionId)}
+                      disabled={!selectedSessionId || intraVisitAlertsLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${intraVisitAlertsLoading ? 'animate-spin' : ''}`} />
+                      Refresh alerts
+                    </button>
+                  </div>
+
+                  {!intraVisitFeatureEnabled && (
+                    <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Feature disabled. Enable <code>FEATURE_POSTVISIT_INTRAVISIT_ALERTS</code> to activate streamed transcript safety checks.
+                    </p>
+                  )}
+
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <label className="text-xs text-slate-600">
+                      Analyze live transcript chunk
+                      <textarea
+                        value={liveTranscriptChunk}
+                        onChange={(event) => setLiveTranscriptChunk(event.target.value)}
+                        className="mt-1 h-20 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                        placeholder="Paste or stream transcript text for immediate safety analysis."
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAnalyzeIntraVisitChunk}
+                      disabled={!intraVisitFeatureEnabled || workingActionKey === 'intravisit-analyze' || !liveTranscriptChunk.trim()}
+                      className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                    >
+                      <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                      {workingActionKey === 'intravisit-analyze' ? 'Analyzing…' : 'Analyze Chunk'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-5">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Open: {intraVisitSummary.openCount}</div>
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                      Critical: {intraVisitSummary.criticalOpenCount}
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+                      High: {intraVisitSummary.highOpenCount}
+                    </div>
+                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-700">
+                      Moderate: {intraVisitSummary.moderateOpenCount}
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Total: {intraVisitSummary.total}</div>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {intraVisitAlertsLoading && <p className="text-xs text-slate-500">Loading intra-visit alerts…</p>}
+                    {!intraVisitAlertsLoading && intraVisitAlerts.length === 0 && (
+                      <p className="text-xs text-slate-500">No intra-visit alerts recorded for this session yet.</p>
+                    )}
+                    {intraVisitAlerts.map((item) => {
+                      const isOpen = item.status === 'open';
+                      const confidenceLabel =
+                        item.confidence === null || item.confidence === undefined
+                          ? 'n/a'
+                          : `${Math.round(Math.max(0, Math.min(1, Number(item.confidence))) * 100)}%`;
+                      const severityClasses =
+                        item.severity === 'critical'
+                          ? 'border-rose-300 bg-rose-50/70'
+                          : item.severity === 'high'
+                            ? 'border-amber-300 bg-amber-50/70'
+                            : 'border-cyan-300 bg-cyan-50/70';
+
+                      return (
+                        <article key={item.id} className={`rounded-xl border p-3 ${severityClasses}`}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{item.alertMessage}</p>
+                              <p className="text-[11px] text-slate-600">
+                                {item.severity.toUpperCase()} • {item.status} • confidence {confidenceLabel} • detected {formatDate(item.detectedAt)}
+                              </p>
+                              {item.suggestedAction && (
+                                <p className="mt-1 text-[11px] text-slate-700">Action: {item.suggestedAction}</p>
+                              )}
+                              {item.signalText && (
+                                <p className="mt-1 line-clamp-2 text-[11px] text-slate-600">Signal: {item.signalText}</p>
+                              )}
+                              {Array.isArray(item.triggerTerms) && item.triggerTerms.length > 0 && (
+                                <p className="mt-1 text-[11px] text-slate-600">Triggers: {item.triggerTerms.join(', ')}</p>
+                              )}
+                            </div>
+                            {isOpen && (
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveIntraVisitAlert(item.id, 'confirmed')}
+                                  disabled={workingActionKey === `intravisit-resolve:${item.id}:confirmed`}
+                                  className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolveIntraVisitAlert(item.id, 'dismissed')}
+                                  disabled={workingActionKey === `intravisit-resolve:${item.id}:dismissed`}
+                                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
 

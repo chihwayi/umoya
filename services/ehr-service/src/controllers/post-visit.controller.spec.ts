@@ -20,6 +20,9 @@ describe('PostVisitController', () => {
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
     listSessionDocumentIntelligence: jest.fn(),
+    analyzeIntraVisitAlerts: jest.fn(),
+    listIntraVisitAlerts: jest.fn(),
+    resolveIntraVisitAlert: jest.fn(),
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
@@ -580,5 +583,90 @@ describe('PostVisitController', () => {
       expect.objectContaining({ actorUserId: 'doctor-1' }),
     );
     expect(result.status).toBe('resolved');
+  });
+
+  it('analyzes intra-visit transcript chunk for safety alerts', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.analyzeIntraVisitAlerts.mockResolvedValue({
+      featureEnabled: true,
+      alerts: [{ id: 'intravisit-1', severity: 'critical' }],
+    });
+
+    const result = await controller.analyzeIntraVisitAlertChunk(
+      'session-1',
+      { text: 'Patient has chest pain and cannot breathe', source: 'streamed_transcript', transcriptOffsetSeconds: 33 },
+      req,
+    );
+
+    expect(postVisitServiceMock.analyzeIntraVisitAlerts).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        text: 'Patient has chest pain and cannot breathe',
+      }),
+      expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.alerts).toHaveLength(1);
+  });
+
+  it('lists intra-visit alerts with normalized paging filters', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listIntraVisitAlerts.mockResolvedValue({
+      featureEnabled: true,
+      items: [{ id: 'intravisit-1', status: 'open' }],
+      paging: { limit: 20, offset: 0 },
+    });
+
+    const result = await controller.listIntraVisitAlerts('session-1', req, 'open', '20', '0');
+
+    expect(postVisitServiceMock.listIntraVisitAlerts).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        status: 'open',
+        limit: 20,
+        offset: 0,
+      }),
+    );
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('resolves intra-visit alert from doctor workspace', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.resolveIntraVisitAlert.mockResolvedValue({
+      id: 'intravisit-1',
+      status: 'confirmed',
+    });
+
+    const result = await controller.resolveIntraVisitAlert(
+      'session-1',
+      'intravisit-1',
+      { status: 'confirmed', note: 'Confirmed at bedside' },
+      req,
+    );
+
+    expect(postVisitServiceMock.resolveIntraVisitAlert).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      'intravisit-1',
+      expect.objectContaining({ status: 'confirmed' }),
+      expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.status).toBe('confirmed');
   });
 });
