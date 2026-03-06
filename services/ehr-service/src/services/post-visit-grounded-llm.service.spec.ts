@@ -100,4 +100,42 @@ describe('PostVisitGroundedLlmService', () => {
 
     expect(result).toBeNull();
   });
+
+  it('classifies escalation signals with normalized confidence and temporality', async () => {
+    process.env.POSTVISIT_LLM_API_KEY = 'test-key';
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                severity: 'high',
+                route_target: 'doctor',
+                temporality: 'current',
+                confidence: 0.84,
+                rationale: 'Current severe symptom language',
+              }),
+            },
+          },
+        ],
+      },
+    } as any);
+
+    const service = new PostVisitGroundedLlmService();
+    const result = await service.classifyEscalationSignal({
+      sessionId: 'session-1',
+      message: 'I have severe headache right now',
+      triggerTerms: ['severe headache'],
+      candidateSeverity: 'high',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        severity: 'high',
+        routeTarget: 'doctor',
+        temporality: 'current',
+        confidence: 0.84,
+      }),
+    );
+  });
 });

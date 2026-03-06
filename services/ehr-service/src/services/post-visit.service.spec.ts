@@ -1197,6 +1197,53 @@ describe('PostVisitService', () => {
     expect(result.events.some((event: any) => event.eventType === 'post_visit.patient.acknowledged')).toBe(true);
   });
 
+  it('classifies historical high-risk message as suppressed when escalation confidence v2 is enabled', async () => {
+    const originalFlag = process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE;
+    process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE = 'true';
+    const groundedLlmServiceMock = {
+      polishDoctorContent: jest.fn(),
+      answerPatientQuestion: jest.fn(),
+      classifyEscalationSignal: jest.fn(async () => ({
+        severity: 'critical',
+        routeTarget: 'emergency',
+        temporality: 'historical',
+        confidence: 0.96,
+        rationale: 'Symptoms described as last week, not current.',
+        model: 'gpt-4o-mini',
+      })),
+    };
+
+    try {
+      const service = new PostVisitService(
+        transcriptionServiceMock as any,
+        patientServiceMock as any,
+        undefined,
+        undefined,
+        undefined,
+        groundedLlmServiceMock as any,
+      );
+      const tenantDb = {
+        query: jest.fn(async () => []),
+      } as any;
+
+      const result = await service.classifyEscalation(tenantDb, {
+        message: 'I had chest pain last week but feel better now',
+        sessionId: '0f089143-703e-4cf4-89dc-36fef2f5f1ff',
+      });
+
+      expect(result.classification.detected).toBe(false);
+      expect(result.classification.temporality).toBe('historical');
+      expect(result.classification.suppressedReason).toBe('historical_signal');
+      expect(result.classification.routeTarget).toBe('doctor');
+    } finally {
+      if (typeof originalFlag === 'string') {
+        process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE = originalFlag;
+      } else {
+        delete process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE;
+      }
+    }
+  });
+
   it('applies grounded LLM polish to doctor summary/recommendation bundle when available', async () => {
     const hipaaAuditServiceMock = {
       registerModelEntry: jest.fn(async () => undefined),

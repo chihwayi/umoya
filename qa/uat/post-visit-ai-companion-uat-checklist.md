@@ -42,6 +42,9 @@ Validate sprint-4/5/6 post-visit companion behavior end-to-end:
 - [ ] `GET /post-visit/escalations` shows the new escalation in clinician queue.
 - [ ] Channel delivery metadata is present (`metadata.channel_delivery`) and traceable.
 - [ ] `POST /post-visit/escalations/:id/resolve` updates escalation to `resolved` (or `dismissed` for false positives).
+- [ ] `POST /post-visit/escalation/classify` returns confidence + temporality + suppression reason fields.
+- [ ] Emergency routing only occurs for `temporality = current` and threshold-passing confidence.
+- [ ] Sub-threshold/historical classifications are persisted in `post_visit_escalation_events` and visible with `status = dismissed`.
 
 ### FHIR + Mobile Contracts (Sprint 5)
 - [ ] `GET /post-visit/sessions/:id/fhir` returns `exportVersion = post-visit-fhir-r4.v1`.

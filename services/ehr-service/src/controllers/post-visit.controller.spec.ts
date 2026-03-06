@@ -19,6 +19,7 @@ describe('PostVisitController', () => {
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
+    classifyEscalation: jest.fn(),
     listEscalations: jest.fn(),
     resolveEscalation: jest.fn(),
   };
@@ -376,6 +377,8 @@ describe('PostVisitController', () => {
       'doctor',
       undefined,
       undefined,
+      undefined,
+      undefined,
       '10',
       '0',
     );
@@ -391,6 +394,37 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.summary.openCount).toBe(1);
+  });
+
+  it('classifies escalation messages using v2 endpoint', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.classifyEscalation.mockResolvedValue({
+      classification: {
+        detected: true,
+        severity: 'high',
+        routeTarget: 'doctor',
+        confidence: 0.84,
+        temporality: 'current',
+      },
+    });
+
+    const result = await controller.classifyEscalation(
+      { message: 'I have severe headache right now', sessionId: '0f089143-703e-4cf4-89dc-36fef2f5f1ff' },
+      req,
+    );
+
+    expect(postVisitServiceMock.classifyEscalation).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        message: 'I have severe headache right now',
+      }),
+    );
+    expect(result.classification.confidence).toBe(0.84);
   });
 
   it('resolves escalation events from post-visit safety queue', async () => {

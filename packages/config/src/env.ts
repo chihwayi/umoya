@@ -36,6 +36,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   USE_LOCAL_WHISPER: z.enum(['true', 'false']).default('true'),
   LOCAL_WHISPER_URL: z.string().default('http://127.0.0.1:8080'),
+  FEATURE_POSTVISIT_ESCALATION_CONFIDENCE: z.enum(['true', 'false']).default('false'),
 
   // Notifications (SMS)
   SMS_GATEWAY_ECONET: z.string().default('https://api.econet.co.zw/sms'),
@@ -117,6 +118,10 @@ export const config = {
       apiUrl: env.WHISPER_API_URL,
       apiKey: env.OPENAI_API_KEY || env.WHISPER_API_KEY,
     }
+  },
+
+  features: {
+    postVisitEscalationConfidence: env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE === 'true',
   },
 
   notifications: {

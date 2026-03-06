@@ -8,6 +8,10 @@ interface PostVisitEscalationItem {
   status: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
   severity: 'low' | 'moderate' | 'high' | 'critical';
   routeTarget: 'emergency' | 'doctor' | 'nurse';
+  classificationConfidence?: number | null;
+  classificationTemporality?: 'current' | 'historical' | 'unclear' | null;
+  classificationSource?: string | null;
+  classificationReason?: string | null;
   signalText?: string | null;
   detectedAt: string;
   slaDueAt?: string | null;
@@ -208,12 +212,27 @@ export default function PostVisitEscalationQueue({
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Route: {item.routeTarget}
                 </span>
+                {typeof item.classificationConfidence === 'number' && (
+                  <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600">
+                    Conf: {Math.round(item.classificationConfidence * 100)}%
+                  </span>
+                )}
+                {item.classificationTemporality && (
+                  <span className="px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-[11px] font-semibold text-indigo-700 uppercase">
+                    {item.classificationTemporality}
+                  </span>
+                )}
               </div>
               <span className="text-[11px] text-slate-500">{new Date(item.detectedAt).toLocaleString()}</span>
             </div>
             <p className="mt-2 text-sm text-slate-800">
               {item.signalText || 'Companion escalation event captured.'}
             </p>
+            {item.classificationReason && (
+              <p className="mt-1 text-xs text-slate-500">
+                Classification note: {item.classificationReason}
+              </p>
+            )}
             <p className="mt-1 text-xs text-slate-500">
               Patient: {item.patient?.firstName || 'Unknown'} {item.patient?.lastName || ''} {item.patient?.patientNumber ? `(${item.patient.patientNumber})` : ''}
             </p>

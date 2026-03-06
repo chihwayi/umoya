@@ -16,7 +16,12 @@ import { PatientService } from './patient.service';
 import { NotificationsService } from './notifications.service';
 import { EmailService } from './email.service';
 import { PatientNotificationsService } from './patient-notifications.service';
-import { GroundingCitation, LlmAuditMetadata, PostVisitGroundedLlmService } from './post-visit-grounded-llm.service';
+import {
+  GroundingCitation,
+  LlmAuditMetadata,
+  PostVisitEscalationClassifierOutput,
+  PostVisitGroundedLlmService,
+} from './post-visit-grounded-llm.service';
 import { HipaaAuditService } from './hipaa-audit.service';
 
 type PostVisitSessionStatus =
@@ -101,6 +106,23 @@ interface EscalationDetectionResult {
   triggerTerms: string[];
   triggerType: string;
   slaMinutes: number;
+  confidence: number;
+  temporality: 'current' | 'historical' | 'unclear';
+  classifierSource: 'keyword_prefilter' | 'llm_v2' | 'hybrid_v2';
+  candidateSeverity: 'low' | 'moderate' | 'high' | 'critical';
+  escalationSuppressedReason?: 'no_stage1_match' | 'low_confidence' | 'historical_signal' | 'unclear_temporality' | null;
+  classifierModel?: string | null;
+  classifierRationale?: string | null;
+  classifierAudit?: LlmAuditMetadata | null;
+}
+
+interface EscalationPrefilterResult {
+  matched: boolean;
+  text: string;
+  candidateSeverity: 'low' | 'moderate' | 'high' | 'critical';
+  routeTarget: 'emergency' | 'doctor' | 'nurse';
+  triggerTerms: string[];
+  triggerType: string;
 }
 
 interface PostVisitMobileEvent {
@@ -321,6 +343,12 @@ export class PostVisitService {
         trigger_type VARCHAR(50) NOT NULL DEFAULT 'symptom_keyword',
         trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
         signal_text TEXT,
+        classification_confidence DOUBLE PRECISION,
+        classification_temporality VARCHAR(20)
+          CHECK (classification_temporality IN ('current','historical','unclear')),
+        classification_source VARCHAR(30),
+        classification_reason TEXT,
+        classification_stage VARCHAR(20) NOT NULL DEFAULT 'v1',
         detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         sla_due_at TIMESTAMP WITH TIME ZONE,
         acknowledged_at TIMESTAMP WITH TIME ZONE,
@@ -333,6 +361,16 @@ export class PostVisitService {
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_escalation_events
+      ADD COLUMN IF NOT EXISTS classification_confidence DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS classification_temporality VARCHAR(20)
+        CHECK (classification_temporality IN ('current','historical','unclear')),
+      ADD COLUMN IF NOT EXISTS classification_source VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS classification_reason TEXT,
+      ADD COLUMN IF NOT EXISTS classification_stage VARCHAR(20) NOT NULL DEFAULT 'v1'
     `);
 
     await tenantDb.query(`
@@ -373,6 +411,8 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status ON post_visit_escalation_events(status, severity, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient ON post_visit_escalation_events(patient_id, detected_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_confidence ON post_visit_escalation_events(classification_confidence DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_temporality ON post_visit_escalation_events(classification_temporality, status, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -414,6 +454,14 @@ export class PostVisitService {
       triggerType: row.trigger_type,
       triggerTerms: row.trigger_terms || [],
       signalText: row.signal_text || null,
+      classificationConfidence:
+        row.classification_confidence === null || row.classification_confidence === undefined
+          ? null
+          : Number(row.classification_confidence),
+      classificationTemporality: row.classification_temporality || null,
+      classificationSource: row.classification_source || null,
+      classificationReason: row.classification_reason || null,
+      classificationStage: row.classification_stage || 'v1',
       detectedAt: row.detected_at,
       slaDueAt: row.sla_due_at || null,
       acknowledgedAt: row.acknowledged_at || null,
@@ -572,8 +620,12 @@ export class PostVisitService {
     return rows[0];
   }
 
-  private detectEscalationSignals(message: string): EscalationDetectionResult {
-    const text = String(message || '').toLowerCase();
+  private isEscalationConfidenceV2Enabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE || 'false').toLowerCase() === 'true';
+  }
+
+  private buildEscalationPrefilter(message: string): EscalationPrefilterResult {
+    const text = String(message || '').toLowerCase().trim();
     const criticalTerms = [
       'chest pain',
       'shortness of breath',
@@ -596,6 +648,8 @@ export class PostVisitService {
       'very dizzy',
       'palpitations',
       'worsening pain',
+      'severe pain',
+      'passed out',
     ];
     const moderateTerms = [
       'dizziness',
@@ -605,52 +659,188 @@ export class PostVisitService {
       'rash',
       'side effects',
       'medication reaction',
+      'mild pain',
+      'headache',
     ];
 
     const matched = (terms: string[]) => terms.filter((term) => text.includes(term));
     const criticalMatches = matched(criticalTerms);
     if (criticalMatches.length) {
       return {
-        detected: true,
-        severity: 'critical',
+        matched: true,
+        text,
+        candidateSeverity: 'critical',
         routeTarget: 'emergency',
         triggerTerms: criticalMatches,
         triggerType: 'symptom_keyword',
-        slaMinutes: 15,
       };
     }
 
     const highMatches = matched(highTerms);
     if (highMatches.length) {
       return {
-        detected: true,
-        severity: 'high',
+        matched: true,
+        text,
+        candidateSeverity: 'high',
         routeTarget: 'doctor',
         triggerTerms: highMatches,
         triggerType: 'symptom_keyword',
-        slaMinutes: 60,
       };
     }
 
     const moderateMatches = matched(moderateTerms);
     if (moderateMatches.length) {
       return {
-        detected: true,
-        severity: 'moderate',
+        matched: true,
+        text,
+        candidateSeverity: 'moderate',
         routeTarget: 'nurse',
         triggerTerms: moderateMatches,
         triggerType: 'symptom_keyword',
-        slaMinutes: 240,
       };
     }
 
     return {
-      detected: false,
-      severity: 'low',
+      matched: false,
+      text,
+      candidateSeverity: 'low',
       routeTarget: 'nurse',
       triggerTerms: [],
       triggerType: 'none',
-      slaMinutes: 0,
+    };
+  }
+
+  private inferTemporalityFromText(text: string): 'current' | 'historical' | 'unclear' {
+    const normalized = String(text || '').toLowerCase();
+    if (!normalized) return 'unclear';
+    if (
+      normalized.includes('right now') ||
+      normalized.includes('currently') ||
+      normalized.includes('at the moment') ||
+      normalized.includes('today') ||
+      normalized.includes('now ')
+    ) {
+      return 'current';
+    }
+    if (
+      normalized.includes('last week') ||
+      normalized.includes('last month') ||
+      normalized.includes('yesterday') ||
+      normalized.includes('previously') ||
+      normalized.includes('used to')
+    ) {
+      return 'historical';
+    }
+    return 'unclear';
+  }
+
+  private getEscalationConfidenceThreshold(severity: 'low' | 'moderate' | 'high' | 'critical'): number {
+    if (severity === 'critical') return 0.85;
+    if (severity === 'high') return 0.7;
+    if (severity === 'moderate') return 0.55;
+    return 0.5;
+  }
+
+  private getSlaMinutesForSeverity(severity: 'low' | 'moderate' | 'high' | 'critical'): number {
+    if (severity === 'critical') return 15;
+    if (severity === 'high') return 60;
+    if (severity === 'moderate') return 240;
+    return 0;
+  }
+
+  private async classifyEscalationSignals(args: {
+    sessionId: string;
+    message: string;
+    language?: string;
+  }): Promise<EscalationDetectionResult> {
+    const prefilter = this.buildEscalationPrefilter(args.message);
+    const confidenceV2Enabled = this.isEscalationConfidenceV2Enabled();
+
+    if (!confidenceV2Enabled) {
+      const severity = prefilter.candidateSeverity;
+      const confidence = prefilter.matched ? (severity === 'critical' ? 0.9 : severity === 'high' ? 0.8 : 0.68) : 0.2;
+      const temporality = prefilter.matched ? 'current' : 'unclear';
+      return {
+        detected: prefilter.matched,
+        severity,
+        routeTarget: prefilter.routeTarget,
+        triggerTerms: prefilter.triggerTerms,
+        triggerType: prefilter.triggerType,
+        slaMinutes: this.getSlaMinutesForSeverity(severity),
+        confidence,
+        temporality,
+        classifierSource: 'keyword_prefilter',
+        candidateSeverity: prefilter.candidateSeverity,
+        escalationSuppressedReason: prefilter.matched ? null : 'no_stage1_match',
+        classifierModel: null,
+        classifierRationale: null,
+        classifierAudit: null,
+      };
+    }
+
+    let llmClassification: PostVisitEscalationClassifierOutput | null = null;
+    if (prefilter.matched && this.groundedLlmService) {
+      llmClassification = await this.groundedLlmService.classifyEscalationSignal({
+        sessionId: args.sessionId,
+        message: args.message,
+        triggerTerms: prefilter.triggerTerms,
+        candidateSeverity: prefilter.candidateSeverity,
+      });
+    }
+
+    const severity = llmClassification?.severity || prefilter.candidateSeverity;
+    const suggestedRoute = llmClassification?.routeTarget || prefilter.routeTarget;
+    const confidence = Math.min(
+      1,
+      Math.max(
+        0,
+        Number.isFinite(Number(llmClassification?.confidence))
+          ? Number(llmClassification?.confidence)
+          : prefilter.matched
+            ? severity === 'critical'
+              ? 0.78
+              : severity === 'high'
+                ? 0.66
+                : 0.56
+            : 0.18,
+      ),
+    );
+    const temporality =
+      llmClassification?.temporality || this.inferTemporalityFromText(prefilter.text) || 'unclear';
+    const threshold = this.getEscalationConfidenceThreshold(severity);
+    const temporalGatePassed = temporality === 'current';
+    const confidenceGatePassed = confidence >= threshold;
+    const detected = prefilter.matched && temporalGatePassed && confidenceGatePassed;
+
+    let finalRoute: 'emergency' | 'doctor' | 'nurse' = suggestedRoute;
+    let suppressionReason: EscalationDetectionResult['escalationSuppressedReason'] = null;
+
+    if (!prefilter.matched) {
+      finalRoute = 'nurse';
+      suppressionReason = 'no_stage1_match';
+    } else if (!confidenceGatePassed) {
+      finalRoute = severity === 'critical' || severity === 'high' ? 'doctor' : 'nurse';
+      suppressionReason = 'low_confidence';
+    } else if (!temporalGatePassed) {
+      finalRoute = severity === 'critical' || severity === 'high' ? 'doctor' : 'nurse';
+      suppressionReason = temporality === 'historical' ? 'historical_signal' : 'unclear_temporality';
+    }
+
+    return {
+      detected,
+      severity,
+      routeTarget: finalRoute,
+      triggerTerms: prefilter.triggerTerms,
+      triggerType: prefilter.triggerType,
+      slaMinutes: detected ? this.getSlaMinutesForSeverity(severity) : 0,
+      confidence,
+      temporality,
+      classifierSource: llmClassification ? 'hybrid_v2' : 'keyword_prefilter',
+      candidateSeverity: prefilter.candidateSeverity,
+      escalationSuppressedReason: detected ? null : suppressionReason,
+      classifierModel: llmClassification?.model || null,
+      classifierRationale: llmClassification?.rationale || null,
+      classifierAudit: llmClassification?.audit || null,
     };
   }
 
@@ -747,6 +937,7 @@ export class PostVisitService {
       args.detection.slaMinutes > 0
         ? new Date(detectedAt.getTime() + args.detection.slaMinutes * 60 * 1000)
         : null;
+    const initialStatus = args.detection.detected ? 'open' : 'dismissed';
 
     const rows = await tenantDb.query(
       `
@@ -761,11 +952,16 @@ export class PostVisitService {
           trigger_type,
           trigger_terms,
           signal_text,
+          classification_confidence,
+          classification_temporality,
+          classification_source,
+          classification_reason,
+          classification_stage,
           detected_at,
           sla_due_at,
           metadata
         ) VALUES (
-          $1,$2,$3,$4,'open',$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb
+          $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17::jsonb
         )
         RETURNING *
       `,
@@ -774,62 +970,102 @@ export class PostVisitService {
         args.sessionRow.patient_id,
         args.threadId,
         args.messageId,
+        initialStatus,
         args.detection.severity,
         args.detection.routeTarget,
         args.detection.triggerType,
         JSON.stringify(args.detection.triggerTerms),
         args.messageText,
+        args.detection.confidence,
+        args.detection.temporality,
+        args.detection.classifierSource,
+        args.detection.classifierRationale || args.detection.escalationSuppressedReason || null,
+        args.detection.classifierSource === 'keyword_prefilter' ? 'v1' : 'v2',
         detectedAt.toISOString(),
         slaDueAt ? slaDueAt.toISOString() : null,
         JSON.stringify({
           source: 'post_visit_companion_message',
           trigger_terms: args.detection.triggerTerms,
+          classification: {
+            confidence: args.detection.confidence,
+            temporality: args.detection.temporality,
+            source: args.detection.classifierSource,
+            candidate_severity: args.detection.candidateSeverity,
+            final_severity: args.detection.severity,
+            final_route_target: args.detection.routeTarget,
+            detected: args.detection.detected,
+            suppression_reason: args.detection.escalationSuppressedReason || null,
+            classifier_model: args.detection.classifierModel || null,
+            rationale: args.detection.classifierRationale || null,
+          },
         }),
       ],
     );
 
     const inserted = rows[0];
-    const workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
-      sessionRow: args.sessionRow,
-      escalationId: inserted.id,
-      routeTarget: args.detection.routeTarget,
-      severity: args.detection.severity,
-      triggerTerms: args.detection.triggerTerms,
-    });
+    if (args.detection.detected) {
+      const workflowKey = await this.routeEscalationToWorkflow(tenantDb, {
+        sessionRow: args.sessionRow,
+        escalationId: inserted.id,
+        routeTarget: args.detection.routeTarget,
+        severity: args.detection.severity,
+        triggerTerms: args.detection.triggerTerms,
+      });
 
-    if (workflowKey) {
+      if (workflowKey) {
+        await tenantDb.query(
+          `
+            UPDATE post_visit_escalation_events
+            SET workflow_key = $2,
+                updated_at = NOW()
+            WHERE id = $1
+          `,
+          [inserted.id, workflowKey],
+        );
+        inserted.workflow_key = workflowKey;
+      }
+
+      const channelDelivery = await this.sendEscalationAlerts(tenantDb, {
+        escalationId: inserted.id,
+        sessionRow: args.sessionRow,
+        detection: args.detection,
+        messageText: args.messageText,
+        tenantId: args.tenantId,
+      });
+      inserted.metadata = {
+        ...(inserted.metadata || {}),
+        channel_delivery: channelDelivery,
+      };
       await tenantDb.query(
         `
           UPDATE post_visit_escalation_events
-          SET workflow_key = $2,
+          SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
               updated_at = NOW()
           WHERE id = $1
         `,
-        [inserted.id, workflowKey],
+        [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
       );
-      inserted.workflow_key = workflowKey;
     }
 
-    const channelDelivery = await this.sendEscalationAlerts(tenantDb, {
-      escalationId: inserted.id,
-      sessionRow: args.sessionRow,
-      detection: args.detection,
-      messageText: args.messageText,
-      tenantId: args.tenantId,
-    });
-    inserted.metadata = {
-      ...(inserted.metadata || {}),
-      channel_delivery: channelDelivery,
-    };
-    await tenantDb.query(
-      `
-        UPDATE post_visit_escalation_events
-        SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
-            updated_at = NOW()
-        WHERE id = $1
-      `,
-      [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
-    );
+    if (args.detection.classifierAudit && args.detection.classifierModel) {
+      await this.persistGroundedLlmAudit(tenantDb, {
+        model: args.detection.classifierModel,
+        audit: args.detection.classifierAudit,
+        sessionId: args.sessionRow.id,
+        patientId: args.sessionRow.patient_id,
+        encounterId: args.sessionRow.appointment_id || args.sessionRow.consultation_id || null,
+        actorRole: 'patient',
+        metadata: {
+          channel: 'post_visit_escalation_classifier',
+          escalation_id: inserted.id,
+          classification_detected: args.detection.detected,
+          route_target: args.detection.routeTarget,
+          severity: args.detection.severity,
+          temporality: args.detection.temporality,
+          confidence: args.detection.confidence,
+        },
+      });
+    }
 
     return inserted;
   }
@@ -3629,9 +3865,13 @@ export class PostVisitService {
     const patientMessage = patientMessageRows[0];
     await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'patient');
 
-    const detection = this.detectEscalationSignals(messageText);
+    const detection = await this.classifyEscalationSignals({
+      sessionId,
+      message: messageText,
+      language: this.normalizeLanguage(payload.language || sessionRow.language || 'en'),
+    });
     let escalation: any = null;
-    if (detection.detected) {
+    if (detection.detected || this.isEscalationConfidenceV2Enabled()) {
       escalation = await this.createEscalationEvent(tenantDb, {
         sessionRow,
         threadId: thread.id,
@@ -3708,6 +3948,10 @@ export class PostVisitService {
           source: 'post_visit_companion_assistant',
           escalation_route: detection.detected ? detection.routeTarget : null,
           escalation_severity: detection.detected ? detection.severity : null,
+          escalation_confidence: detection.confidence,
+          escalation_temporality: detection.temporality,
+          escalation_classifier_source: detection.classifierSource,
+          escalation_suppressed_reason: detection.detected ? null : detection.escalationSuppressedReason || null,
           answer_engine: assistantAnswer.source,
           llm_model: assistantAnswer.model,
           grounded_citation_ids: assistantAnswer.citationsUsed,
@@ -3735,7 +3979,7 @@ export class PostVisitService {
         messageType: assistantMessage.message_type,
         createdAt: assistantMessage.created_at,
       },
-      escalation: escalation ? this.mapEscalationEvent(escalation) : null,
+      escalation: escalation && detection.detected ? this.mapEscalationEvent(escalation) : null,
     };
   }
 
@@ -3787,12 +4031,53 @@ export class PostVisitService {
     };
   }
 
+  async classifyEscalation(
+    tenantDb: DataSource,
+    payload: { message: string; sessionId?: string; language?: string },
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const message = String(payload.message || '').trim();
+    if (!message) {
+      throw new BadRequestException('Message is required');
+    }
+    if (message.length > 4000) {
+      throw new BadRequestException('Message exceeds maximum allowed length');
+    }
+
+    const sessionId = String(payload.sessionId || '').trim();
+    const classification = await this.classifyEscalationSignals({
+      sessionId: sessionId || 'adhoc',
+      message,
+      language: this.normalizeLanguage(payload.language || 'en'),
+    });
+
+    return {
+      sessionId: sessionId || null,
+      message,
+      classification: {
+        detected: classification.detected,
+        severity: classification.severity,
+        routeTarget: classification.routeTarget,
+        triggerType: classification.triggerType,
+        triggerTerms: classification.triggerTerms,
+        confidence: classification.confidence,
+        temporality: classification.temporality,
+        classifierSource: classification.classifierSource,
+        classifierModel: classification.classifierModel || null,
+        suppressedReason: classification.escalationSuppressedReason || null,
+        slaMinutes: classification.slaMinutes,
+      },
+    };
+  }
+
   async listEscalations(
     tenantDb: DataSource,
     filters: {
       status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
       severity?: 'low' | 'moderate' | 'high' | 'critical';
       routeTarget?: 'emergency' | 'doctor' | 'nurse';
+      temporality?: 'current' | 'historical' | 'unclear';
+      minConfidence?: number;
       sessionId?: string;
       patientId?: string;
       limit?: number;
@@ -3815,6 +4100,14 @@ export class PostVisitService {
     if (filters.routeTarget) {
       conditions.push(`e.route_target = $${index++}`);
       params.push(filters.routeTarget);
+    }
+    if (filters.temporality) {
+      conditions.push(`e.classification_temporality = $${index++}`);
+      params.push(filters.temporality);
+    }
+    if (typeof filters.minConfidence === 'number' && Number.isFinite(filters.minConfidence)) {
+      conditions.push(`COALESCE(e.classification_confidence, 0) >= $${index++}`);
+      params.push(Math.max(0, Math.min(1, Number(filters.minConfidence))));
     }
     if (filters.sessionId) {
       conditions.push(`e.session_id = $${index++}`);

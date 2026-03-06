@@ -172,3 +172,22 @@ export class ResolvePostVisitEscalationDto {
   @MaxLength(2000)
   resolutionNote?: string;
 }
+
+export class ClassifyPostVisitEscalationDto {
+  @ApiProperty({ description: 'Patient companion message text for escalation classification' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  message: string;
+
+  @ApiPropertyOptional({ description: 'Optional post-visit session ID for context-aware classification' })
+  @IsUUID()
+  @IsOptional()
+  sessionId?: string;
+
+  @ApiPropertyOptional({ description: 'Message language hint', default: 'en' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(10)
+  language?: string;
+}

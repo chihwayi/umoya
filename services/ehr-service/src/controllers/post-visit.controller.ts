@@ -27,6 +27,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
+  ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
   PublishPostVisitSessionDto,
   ResolvePostVisitEscalationDto,
@@ -322,6 +323,17 @@ export class PostVisitController {
     );
   }
 
+  @Post('escalation/classify')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Classify a post-visit patient message using escalation confidence pipeline v2' })
+  @ApiResponse({ status: 200, description: 'Escalation classification completed' })
+  async classifyEscalation(
+    @Body() body: ClassifyPostVisitEscalationDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.classifyEscalation(req.tenantDb, body);
+  }
+
   @Get('escalations')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'List post-visit companion escalation events with SLA metadata' })
@@ -331,6 +343,8 @@ export class PostVisitController {
     @Query('status') status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed',
     @Query('severity') severity?: 'low' | 'moderate' | 'high' | 'critical',
     @Query('routeTarget') routeTarget?: 'emergency' | 'doctor' | 'nurse',
+    @Query('temporality') temporality?: 'current' | 'historical' | 'unclear',
+    @Query('minConfidence') minConfidence?: string,
     @Query('sessionId') sessionId?: string,
     @Query('patientId') patientId?: string,
     @Query('limit') limit?: string,
@@ -342,6 +356,8 @@ export class PostVisitController {
         status,
         severity,
         routeTarget,
+        temporality,
+        minConfidence: minConfidence ? Number(minConfidence) : undefined,
         sessionId,
         patientId,
         limit: limit ? Number(limit) : undefined,

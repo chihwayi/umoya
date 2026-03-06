@@ -288,7 +288,7 @@ Acceptance:
 
 Planned migration sequence:
 - `039-post-visit-audit-chain-of-custody.sql`
-- `040-post-visit-escalation-confidence-diarization.sql`
+- `040-post-visit-escalation-confidence-v2.sql`
 - `041-post-visit-citation-quality-v2.sql`
 - `042-post-visit-document-intelligence.sql`
 - `043-post-visit-medication-intelligence-v2.sql`
@@ -303,7 +303,7 @@ Planned migration sequence:
 
 Provisioning scripts (paired with migrations):
 - `scripts/provision-sprint52-post-visit-audit-safety.ts`
-- `scripts/provision-sprint53-post-visit-escalation-diarization.ts`
+- `scripts/provision-sprint53-post-visit-escalation-confidence-v2.ts`
 - `scripts/provision-sprint54-post-visit-core-intelligence.ts`
 - `scripts/provision-sprint55-post-visit-premium-differentiators.ts`
 - `scripts/provision-sprint56-post-visit-enterprise-gates.ts`
@@ -333,8 +333,7 @@ Mandatory CI checks for each sprint:
 
 ## 9) Immediate Next Action
 
-Start Sprint A1 implementation:
-1. Add audit chain-of-custody schema extensions + append-only constraints.
-2. Add prompt/model audit tables and service wrappers.
-3. Add disclosure-report endpoint and UAT checklist updates.
-
+Current execution status:
+1. Sprint A1 completed (audit chain-of-custody + prompt/model audit + disclosure report endpoint).
+2. Sprint A2 started (confidence/temporality escalation classifier, routing gate, and queue visibility).
+3. Next in sequence: Sprint A3 diarization quality + correction UX.

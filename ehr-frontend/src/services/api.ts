@@ -1481,6 +1481,8 @@ export const ehrApi = {
       status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
       severity?: 'low' | 'moderate' | 'high' | 'critical';
       routeTarget?: 'emergency' | 'doctor' | 'nurse';
+      temporality?: 'current' | 'historical' | 'unclear';
+      minConfidence?: number;
       sessionId?: string;
       patientId?: string;
       limit?: number;
@@ -1493,6 +1495,20 @@ export const ehrApi = {
         'Authorization': `Bearer ${token}`,
       },
       params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  classifyPostVisitEscalation: async (
+    payload: { message: string; sessionId?: string; language?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/post-visit/escalation/classify', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
     });
     return { data: response.data };
   },

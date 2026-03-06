@@ -63,6 +63,23 @@ export interface PostVisitPatientAnswerOutput {
   audit?: LlmAuditMetadata;
 }
 
+export interface PostVisitEscalationClassifierInput {
+  sessionId?: string;
+  message: string;
+  triggerTerms: string[];
+  candidateSeverity: 'low' | 'moderate' | 'high' | 'critical';
+}
+
+export interface PostVisitEscalationClassifierOutput {
+  severity: 'low' | 'moderate' | 'high' | 'critical';
+  routeTarget: 'emergency' | 'doctor' | 'nurse';
+  temporality: 'current' | 'historical' | 'unclear';
+  confidence: number;
+  rationale?: string;
+  model: string;
+  audit?: LlmAuditMetadata;
+}
+
 export interface LlmAuditMetadata {
   promptHash: string;
   templateVersion: string;
@@ -280,6 +297,94 @@ export class PostVisitGroundedLlmService {
       };
     } catch (error: any) {
       this.logger.warn(`Patient answer LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
+      return null;
+    }
+  }
+
+  async classifyEscalationSignal(
+    input: PostVisitEscalationClassifierInput,
+  ): Promise<PostVisitEscalationClassifierOutput | null> {
+    if (!this.canUseLlm()) {
+      return null;
+    }
+
+    const message = this.normalizeText(input?.message, 1200);
+    if (!message) {
+      return null;
+    }
+
+    try {
+      const llmResponse = await this.requestJsonCompletion(
+        [
+          {
+            role: 'system',
+            content:
+              'You are a clinical escalation classifier for post-visit patient messages. Output strict JSON only. Classify severity, route, temporality, and confidence. Be conservative for emergency routing.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: 'post_visit_escalation_classification_v2',
+              session_id: input?.sessionId || null,
+              message,
+              stage1_prefilter: {
+                trigger_terms: Array.isArray(input.triggerTerms) ? input.triggerTerms.slice(0, 12) : [],
+                candidate_severity: input.candidateSeverity || 'low',
+              },
+              rules: {
+                emergency_requires_current_temporality: true,
+                route_targets: ['emergency', 'doctor', 'nurse'],
+                temporality_values: ['current', 'historical', 'unclear'],
+                confidence_range: [0, 1],
+              },
+              output_schema: {
+                severity: 'low|moderate|high|critical',
+                route_target: 'emergency|doctor|nurse',
+                temporality: 'current|historical|unclear',
+                confidence: 'number',
+                rationale: 'string|null',
+              },
+            }),
+          },
+        ],
+        0.05,
+      );
+
+      const json = llmResponse.json || {};
+      const severityRaw = String(json?.severity || '').toLowerCase();
+      const routeRaw = String(json?.route_target || '').toLowerCase();
+      const temporalityRaw = String(json?.temporality || '').toLowerCase();
+      const confidenceRaw = Number(json?.confidence);
+
+      const severity = ['low', 'moderate', 'high', 'critical'].includes(severityRaw)
+        ? (severityRaw as 'low' | 'moderate' | 'high' | 'critical')
+        : null;
+      const routeTarget = ['emergency', 'doctor', 'nurse'].includes(routeRaw)
+        ? (routeRaw as 'emergency' | 'doctor' | 'nurse')
+        : null;
+      const temporality = ['current', 'historical', 'unclear'].includes(temporalityRaw)
+        ? (temporalityRaw as 'current' | 'historical' | 'unclear')
+        : null;
+
+      if (!severity || !routeTarget || !temporality || !Number.isFinite(confidenceRaw)) {
+        return null;
+      }
+
+      return {
+        severity,
+        routeTarget,
+        temporality,
+        confidence: Math.min(1, Math.max(0, confidenceRaw)),
+        rationale: this.normalizeText(json?.rationale, 600) || undefined,
+        model: this.apiModel,
+        audit: {
+          ...llmResponse.audit,
+          templateVersion: 'postvisit-escalation-v2',
+          safetyGateTriggered: false,
+        },
+      };
+    } catch (error: any) {
+      this.logger.warn(`Escalation classifier LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
       return null;
     }
   }
