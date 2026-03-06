@@ -744,6 +744,10 @@ export class PostVisitService {
     return String(process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP || 'false').toLowerCase() === 'true';
   }
 
+  private isMultilingualTeachBackEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK || 'false').toLowerCase() === 'true';
+  }
+
   private resolveLocalOcrUrl(): string {
     const direct = String(process.env.LOCAL_OCR_URL || '').trim();
     if (direct) {
@@ -2799,6 +2803,111 @@ export class PostVisitService {
     };
   }
 
+  private simplifyClinicalLanguage(value: string): string {
+    let text = String(value || '').trim();
+    if (!text) return '';
+    const replacements: Array<[RegExp, string]> = [
+      [/\bhypertension\b/gi, 'high blood pressure'],
+      [/\bmyocardial infarction\b/gi, 'heart attack'],
+      [/\bdyspnea\b/gi, 'shortness of breath'],
+      [/\badherence\b/gi, 'taking medicine as directed'],
+      [/\bmonitoring\b/gi, 'regular checking'],
+      [/\bevaluation\b/gi, 'checkup'],
+      [/\bprophylaxis\b/gi, 'prevention treatment'],
+      [/\bcontraindicated\b/gi, 'not safe together'],
+    ];
+    for (const [pattern, replacement] of replacements) {
+      text = text.replace(pattern, replacement);
+    }
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
+  private estimateLiteracyScore(value: string): { score: number; level: 'easy' | 'moderate' | 'hard' } {
+    const text = String(value || '').trim();
+    if (!text) {
+      return { score: 100, level: 'easy' };
+    }
+    const sentences = text.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean);
+    const words = text.split(/\s+/).map((part) => part.trim()).filter(Boolean);
+    const sentenceCount = Math.max(1, sentences.length);
+    const wordCount = Math.max(1, words.length);
+    const averageWordsPerSentence = wordCount / sentenceCount;
+    const averageWordLength = words.reduce((sum, word) => sum + word.length, 0) / wordCount;
+
+    const score = Math.max(0, Math.min(100, Math.round(100 - averageWordsPerSentence * 1.4 - averageWordLength * 5.5)));
+    if (score >= 70) {
+      return { score, level: 'easy' };
+    }
+    if (score >= 45) {
+      return { score, level: 'moderate' };
+    }
+    return { score, level: 'hard' };
+  }
+
+  private localizePlainSummary(value: string, language: string): string {
+    const normalizedLanguage = this.normalizeLanguage(language || 'en');
+    const text = String(value || '').trim();
+    if (!text) return '';
+    if (normalizedLanguage === 'sn') {
+      return `Pfupiso yekushanya kwanhasi: ${text}`;
+    }
+    if (normalizedLanguage === 'nd') {
+      return `Isifinyezo sokuhlangana kwanamhlanje: ${text}`;
+    }
+    return text;
+  }
+
+  private buildTeachBackQuestions(keyPoints: string[], language: string): string[] {
+    const normalizedLanguage = this.normalizeLanguage(language || 'en');
+    const prompts =
+      normalizedLanguage === 'sn'
+        ? [
+            'Mungatsanangura nemazwi enyu kuti muchaita sei:',
+            'Kana zviratidzo zvikawedzera, muchaita sei:',
+            'Ndeipi nguva yekudzoka muchipatara yamanzwisisa:',
+          ]
+        : normalizedLanguage === 'nd'
+          ? [
+              'Ungachaza ngamazwi akho ukuthi uzakwenza njani:',
+              'Nxa izimpawu zisiba zimbi, uzakwenzani:',
+              'Yisiphi isikhathi sokubuya esivunyelwene:',
+            ]
+          : [
+              'Can you explain in your own words how you will do this step:',
+              'If symptoms get worse, what will you do first:',
+              'What follow-up date or timing did you understand:',
+            ];
+    return keyPoints
+      .filter((point) => point.length > 0)
+      .slice(0, 3)
+      .map((point, index) => `${prompts[index] || prompts[prompts.length - 1]} ${point}`);
+  }
+
+  private buildCompanionTopicChecklist(summary: string, plan: string, keyPoints: string[]): string[] {
+    const combined = `${summary} ${plan}`.toLowerCase();
+    const topics: string[] = [];
+    if (/(medication|dose|tablet|medicine|drug)/i.test(combined)) {
+      topics.push('Medication schedule and dose clarity');
+    }
+    if (/(follow|review|return|appointment|clinic)/i.test(combined)) {
+      topics.push('Follow-up date and return plan');
+    }
+    if (/(danger|worse|urgent|emergency|warning|severe|pain|bleeding|breathing)/i.test(combined)) {
+      topics.push('Warning signs and escalation plan');
+    }
+    if (topics.length === 0) {
+      topics.push('Key care instructions');
+    }
+
+    const extraPoints = keyPoints
+      .slice(0, 2)
+      .map((point) => point.replace(/\s+/g, ' ').trim())
+      .filter((point) => point.length > 0)
+      .map((point) => `Confirm understanding: ${point}`);
+
+    return [...topics, ...extraPoints].slice(0, 5);
+  }
+
   private buildVisitSummaryContent(args: {
     patientContext: any;
     soapNote: any;
@@ -2818,7 +2927,7 @@ export class PostVisitService {
       .flatMap((part) => this.splitIntoPhrases(part))
       .slice(0, 8);
 
-    const plainLanguageSummary = [
+    const plainLanguageSummaryRaw = [
       `Today ${patientName} was reviewed.`,
       assessment ? `Main clinical assessment: ${assessment}.` : '',
       plan ? `Next steps: ${plan}.` : '',
@@ -2826,10 +2935,28 @@ export class PostVisitService {
       .filter(Boolean)
       .join(' ');
 
+    const simplifiedSummary = this.simplifyClinicalLanguage(plainLanguageSummaryRaw);
+    const preferredLanguage = this.normalizeLanguage(
+      args.session?.language || args.patientContext?.patient?.preferredLanguage || 'en',
+    );
+    const localizedPlainLanguageSummary = this.localizePlainSummary(simplifiedSummary, preferredLanguage);
+    const literacy = this.estimateLiteracyScore(localizedPlainLanguageSummary);
+    const teachBackQuestions = this.isMultilingualTeachBackEnabled()
+      ? this.buildTeachBackQuestions(keyPoints.length ? keyPoints : [plan || assessment || subjective], preferredLanguage)
+      : [];
+    const companionTopicChecklist = this.isMultilingualTeachBackEnabled()
+      ? this.buildCompanionTopicChecklist(localizedPlainLanguageSummary, plan, keyPoints)
+      : [];
+
     return {
       summary_text: [subjective, objective, assessment, plan].filter(Boolean).join('\n\n'),
-      plain_language_summary: plainLanguageSummary,
+      plain_language_summary: localizedPlainLanguageSummary || simplifiedSummary || plainLanguageSummaryRaw,
       key_points: keyPoints,
+      language: preferredLanguage,
+      literacy_score: literacy.score,
+      literacy_level: literacy.level,
+      teach_back_questions: teachBackQuestions,
+      companion_topic_checklist: companionTopicChecklist,
       generated_from: {
         sessionId: args.session.id,
         sourceType: args.session.source_type,

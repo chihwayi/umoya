@@ -1608,6 +1608,17 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       <p className="mt-2 text-sm text-slate-800">
                         {String(visitSummaryArtifact?.content?.plain_language_summary || '').trim() || 'No generated summary yet.'}
                       </p>
+                      {Array.isArray(visitSummaryArtifact?.content?.teach_back_questions) &&
+                        visitSummaryArtifact?.content?.teach_back_questions.length > 0 && (
+                          <div className="mt-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              Teach-back prompts
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-700">
+                              {visitSummaryArtifact.content.teach_back_questions.slice(0, 3).join(' | ')}
+                            </p>
+                          </div>
+                        )}
                       <button
                         type="button"
                         onClick={() => handleReviewArtifact('visit_summary')}
@@ -1766,7 +1777,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="mb-2 text-sm font-bold text-slate-900">Clinical Context Snapshot</h3>
-                  <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
+                  <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-5">
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                       Transcript segments: {draftData?.transcript?.segmentCount || 0}
                     </div>
@@ -1782,6 +1793,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                         ? `${String(specialtySoapValidation.specialty || 'general_practice').replace('_', ' ')} • ${
                             specialtySoapValidation.isComplete ? 'complete' : 'incomplete'
                           }`
+                        : 'n/a'}
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      Literacy:{' '}
+                      {visitSummaryArtifact?.content?.literacy_score !== undefined
+                        ? `${visitSummaryArtifact?.content?.literacy_score} (${visitSummaryArtifact?.content?.literacy_level || 'n/a'})`
                         : 'n/a'}
                     </div>
                   </div>

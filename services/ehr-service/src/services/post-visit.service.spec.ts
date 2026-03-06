@@ -672,6 +672,80 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('generates multilingual teach-back summary fields when feature flag is enabled', async () => {
+    process.env.FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      patientServiceMock.getPatientContext.mockResolvedValue({
+        patient: { id: 'patient-1', fullName: 'Jane Doe', age: 40 },
+        latestVitals: {},
+        modules: {},
+      });
+
+      const artifactWrites: any[] = [];
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                source_type: 'in_person',
+                status: 'draft_ready',
+                language: 'sn',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+            if (params[1] === 'soap_note') {
+              return [
+                {
+                  id: 'soap-1',
+                  content: {
+                    soap_note: {
+                      subjective: 'headache and dizziness',
+                      objective: 'blood pressure elevated',
+                      assessment: 'hypertension follow-up',
+                      plan: 'medication adherence and clinic review in 7 days',
+                    },
+                  },
+                },
+              ];
+            }
+            return [];
+          }
+          if (sql.includes('FROM post_visit_extracted_entities')) {
+            return [];
+          }
+          if (sql.includes('FROM post_visit_action_executions')) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_draft_artifacts')) {
+            artifactWrites.push({
+              artifactType: params[1],
+              content: JSON.parse(String(params[3] || '{}')),
+            });
+            return [{ id: `artifact-${params[1]}` }];
+          }
+          return [];
+        }),
+      } as any;
+
+      await service.generateDraftArtifacts(tenantDb, 'session-1', { actorUserId: 'doctor-1' });
+
+      const summaryWrite = artifactWrites.find((entry) => entry.artifactType === 'visit_summary');
+      expect(summaryWrite).toBeTruthy();
+      expect(summaryWrite.content.language).toBe('sn');
+      expect(Array.isArray(summaryWrite.content.teach_back_questions)).toBe(true);
+      expect(summaryWrite.content.teach_back_questions.length).toBeGreaterThan(0);
+      expect(Array.isArray(summaryWrite.content.companion_topic_checklist)).toBe(true);
+      expect(summaryWrite.content.companion_topic_checklist.length).toBeGreaterThan(0);
+      expect(typeof summaryWrite.content.literacy_score).toBe('number');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_MULTILINGUAL_TEACHBACK;
+    }
+  });
+
   it('records review action and marks artifact reviewed', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 
