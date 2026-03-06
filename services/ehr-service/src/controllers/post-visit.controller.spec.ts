@@ -8,6 +8,7 @@ describe('PostVisitController', () => {
 
   const postVisitServiceMock = {
     createSession: jest.fn(),
+    listSessions: jest.fn(),
     getSession: jest.fn(),
     getSessionDraft: jest.fn(),
     getSessionFhirProjection: jest.fn(),
@@ -70,6 +71,44 @@ describe('PostVisitController', () => {
       },
     );
     expect(result).toEqual({ id: 'session-1' });
+  });
+
+  it('lists clinician post-visit sessions with normalized query filters', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listSessions.mockResolvedValue({
+      sessions: [{ id: 'session-1' }],
+      paging: { limit: 10, offset: 0, total: 1 },
+    });
+
+    const result = await controller.listSessions(
+      req,
+      'doctor_reviewed',
+      'patient-1',
+      'doctor-1',
+      'telemedicine',
+      'true',
+      '10',
+      '0',
+    );
+
+    expect(postVisitServiceMock.listSessions).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        status: 'doctor_reviewed',
+        patientId: 'patient-1',
+        doctorId: 'doctor-1',
+        sourceType: 'telemedicine',
+        includePublishedOnly: true,
+        limit: 10,
+        offset: 0,
+      }),
+    );
+    expect(result.paging.total).toBe(1);
   });
 
   it('transcribes and persists audio for a session', async () => {

@@ -73,6 +73,74 @@ describe('PostVisitService', () => {
     );
   });
 
+  it('lists post-visit sessions for clinician workspace with paging', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM post_visit_sessions s') && sql.includes('COUNT(*)::int AS total')) {
+          return [{ total: 1 }];
+        }
+        if (sql.includes('FROM post_visit_sessions s') && sql.includes('LIMIT')) {
+          return [
+            {
+              id: 'session-1',
+              tenant_id: 'tenant-a',
+              patient_id: 'patient-1',
+              doctor_id: 'doctor-1',
+              appointment_id: null,
+              consultation_id: null,
+              status: 'doctor_reviewed',
+              source_type: 'telemedicine',
+              language: 'en',
+              started_at: '2026-03-06T08:00:00.000Z',
+              completed_at: '2026-03-06T08:20:00.000Z',
+              reviewed_at: '2026-03-06T08:25:00.000Z',
+              reviewed_by: 'doctor-1',
+              published_at: null,
+              safety_level: null,
+              risk_flags: {},
+              meta: {},
+              created_at: '2026-03-06T08:00:00.000Z',
+              updated_at: '2026-03-06T08:25:00.000Z',
+              patient_first_name: 'Jane',
+              patient_last_name: 'Doe',
+              patient_number: 'P-001',
+              doctor_first_name: 'Ava',
+              doctor_last_name: 'Nyathi',
+              visit_summary_status: 'reviewed',
+              recommendation_bundle_status: 'reviewed',
+              transcript_segment_count: 12,
+              companion_message_count: 2,
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.listSessions(tenantDb, {
+      status: 'doctor_reviewed',
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]).toEqual(
+      expect.objectContaining({
+        id: 'session-1',
+        status: 'doctor_reviewed',
+        patient: expect.objectContaining({
+          firstName: 'Jane',
+          patientNumber: 'P-001',
+        }),
+        telemetry: expect.objectContaining({
+          transcriptSegmentCount: 12,
+        }),
+      }),
+    );
+    expect(result.paging.total).toBe(1);
+  });
+
   it('persists transcript segments and triggers draft generation after ingestion', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     const generateDraftSpy = jest

@@ -2435,11 +2435,11 @@ const DoctorDashboard: React.FC = () => {
                     )}
                   </button>
                   <button
-                    onClick={() => navigate(`/ehr/${tenantSlug}/patient/post-visit`)}
+                    onClick={() => navigate(`/ehr/${tenantSlug}/post-visit/doctor`)}
                     className="p-4 bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-xl hover:shadow-md transition-all group"
                   >
                     <Shield className="w-6 h-6 text-cyan-700 mb-2 mx-auto group-hover:scale-110 transition-transform" />
-                    <div className="text-sm font-semibold text-slate-900">Post-Visit Companion</div>
+                    <div className="text-sm font-semibold text-slate-900">Post-Visit Workspace</div>
                   </button>
                 </div>
               </div>

@@ -1282,6 +1282,198 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  listPostVisitSessions: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      status?: 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewed' | 'published' | 'closed';
+      patientId?: string;
+      doctorId?: string;
+      sourceType?: 'in_person' | 'telemedicine' | 'hybrid';
+      publishedOnly?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/sessions', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  createPostVisitSession: async (
+    payload: {
+      patientId: string;
+      doctorId?: string;
+      appointmentId?: string;
+      consultationId?: string;
+      sourceType?: 'in_person' | 'telemedicine' | 'hybrid';
+      language?: string;
+      startedAt?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post('/post-visit/sessions', payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitSessionDraft: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/draft`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  transcribePostVisitSession: async (
+    sessionId: string,
+    payload: {
+      audioFile: File;
+      language?: 'en' | 'sn' | 'nd' | 'auto';
+      temperature?: number;
+      prompt?: string;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const formData = new FormData();
+    formData.append('audio', payload.audioFile);
+    if (payload.language) {
+      formData.append('language', payload.language);
+    }
+    if (typeof payload.temperature === 'number') {
+      formData.append('temperature', String(payload.temperature));
+    }
+    if (payload.prompt) {
+      formData.append('prompt', payload.prompt);
+    }
+
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/transcribe`, formData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return { data: response.data };
+  },
+
+  regeneratePostVisitDraft: async (
+    sessionId: string,
+    payload: { reason?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/draft/regenerate`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  reviewPostVisitArtifact: async (
+    sessionId: string,
+    payload: {
+      artifactType: 'soap_note' | 'visit_summary' | 'recommendation_bundle' | 'letter';
+      action: 'accept' | 'edit' | 'reject';
+      reason?: string;
+      editedContent?: Record<string, any>;
+      reviewMetadata?: Record<string, any>;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/review`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  executePostVisitRecommendation: async (
+    sessionId: string,
+    actionId: string,
+    payload: { note?: string; actionPayload?: Record<string, any> },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/recommendations/${actionId}/execute`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  publishPostVisitSession: async (
+    sessionId: string,
+    payload: { note?: string; publishMetadata?: Record<string, any> },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/publish`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitSessionFhir: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/fhir`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitMobileContract: async (sessionId: string, token: string, tenantSlug: string, version = 'v1') => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/mobile-contract`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: { version },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitMobileEvents: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    filters?: { version?: string; limit?: number; offset?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/mobile-events`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || { version: 'v1' },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitEscalations: async (
     token: string,
     tenantSlug: string,

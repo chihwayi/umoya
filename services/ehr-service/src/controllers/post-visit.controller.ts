@@ -64,6 +64,56 @@ export class PostVisitController {
     });
   }
 
+  @Get('sessions')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'List post-visit sessions for clinician workspace' })
+  @ApiResponse({ status: 200, description: 'Post-visit sessions listed' })
+  async listSessions(
+    @Request() req: RequestWithTenant,
+    @Query('status') status?: string,
+    @Query('patientId') patientId?: string,
+    @Query('doctorId') doctorId?: string,
+    @Query('sourceType') sourceType?: string,
+    @Query('publishedOnly') publishedOnly?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const normalizedStatus = (
+      ['captured', 'processing', 'draft_ready', 'doctor_reviewed', 'published', 'closed'].includes(
+        String(status || '').toLowerCase(),
+      )
+        ? String(status || '').toLowerCase()
+        : undefined
+    ) as
+      | 'captured'
+      | 'processing'
+      | 'draft_ready'
+      | 'doctor_reviewed'
+      | 'published'
+      | 'closed'
+      | undefined;
+
+    const normalizedSourceType = (
+      ['in_person', 'telemedicine', 'hybrid'].includes(String(sourceType || '').toLowerCase())
+        ? String(sourceType || '').toLowerCase()
+        : undefined
+    ) as 'in_person' | 'telemedicine' | 'hybrid' | undefined;
+
+    const includePublishedOnly = ['1', 'true', 'yes', 'published'].includes(
+      String(publishedOnly || '').toLowerCase(),
+    );
+
+    return this.postVisitService.listSessions(req.tenantDb, {
+      status: normalizedStatus,
+      patientId: patientId || undefined,
+      doctorId: doctorId || undefined,
+      sourceType: normalizedSourceType,
+      includePublishedOnly,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
   @Get('sessions/:id')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Get a post-visit session by ID' })

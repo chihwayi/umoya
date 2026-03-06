@@ -26,6 +26,7 @@ import TechnologistImagingDashboard from './pages/TechnologistImagingDashboard';
 import NursePatientSummary from './pages/NursePatientSummary';
 import LabDashboard from './pages/LabDashboard';
 import PostVisitCompanionPortal from './pages/PostVisitCompanionPortal';
+import PostVisitDoctorWorkspace from './pages/PostVisitDoctorWorkspace';
 import OncologyDashboard from './pages/OncologyDashboard';
 import OphthalmologyDashboard from './pages/OphthalmologyDashboard';
 import AccountsDashboard from './pages/AccountsDashboard';
@@ -500,6 +501,14 @@ function App() {
             />
             <Route path="/ehr/:tenantSlug/patient/post-visit" element={<PostVisitCompanionPortal />} />
             <Route path="/ehr/:tenantSlug/post-visit/companion" element={<PostVisitCompanionPortal />} />
+            <Route
+              path="/ehr/:tenantSlug/post-visit/doctor"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'admin']}>
+                  <PostVisitDoctorWorkspace />
+                </RoleProtectedRoute>
+              }
+            />
             <Route
               path="/ehr/:tenantSlug/analytics"
               element={

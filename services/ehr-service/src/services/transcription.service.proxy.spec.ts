@@ -33,6 +33,7 @@ describe('TranscriptionService local whisper proxy forwarding', () => {
 
     expect(axiosPostSpy).toHaveBeenCalledTimes(1);
     const call = axiosPostSpy.mock.calls[0];
+    expect(call[0]).toContain('/inference');
     expect(call[2]?.timeout).toBe(300000);
     expect(call[2]?.headers?.['X-Tenant-ID']).toBe('tenant-a');
     expect(call[2]?.headers?.Authorization).toBe('Bearer clinician-token');
@@ -43,5 +44,13 @@ describe('TranscriptionService local whisper proxy forwarding', () => {
         confidence: 0.88,
       }),
     );
+  });
+
+  it('auto-resolves base LOCAL_WHISPER_URL to whisper.cpp /inference endpoint', () => {
+    const service = new TranscriptionService() as any;
+    service.LOCAL_WHISPER_URL = 'http://127.0.0.1:8080';
+
+    const resolved = service.resolveLocalWhisperUrl();
+    expect(resolved).toBe('http://127.0.0.1:8080/inference');
   });
 });

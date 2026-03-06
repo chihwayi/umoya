@@ -12,6 +12,14 @@ This plan extends current Medicore capabilities (voice transcription, CDSS, tele
 ## Execution Status Update (March 6, 2026)
 
 Sprint 5/6 implementation added:
+- Doctor workspace MVP with full execution controls:
+  - `GET /post-visit/sessions` (clinician list + filters + paging)
+  - frontend route/page: `/ehr/:tenantSlug/post-visit/doctor` (`PostVisitDoctorWorkspace`)
+  - one-click actions: regenerate draft, review artifacts, execute recommendation items, publish, FHIR/mobile preview
+  - continuous audio-to-draft flow:
+    - optional audio upload during session creation (`create + auto transcribe`)
+    - selected-session re-transcription action (`POST /post-visit/sessions/:id/transcribe`)
+    - in-browser recording in doctor workspace transcription panel (record/pause/resume/stop -> transcribe without manual external recorder)
 - Post-visit FHIR projection endpoint:
   - `GET /post-visit/sessions/:id/fhir`
 - Versioned mobile contracts:

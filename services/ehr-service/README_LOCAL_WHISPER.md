@@ -42,6 +42,20 @@ npm run dev
 
 **Done!** Your backend will now use local Whisper instead of OpenAI API.
 
+## ✅ whisper.cpp Integration (127.0.0.1:8080)
+
+If you run `whisper.cpp` server locally, set:
+
+```bash
+USE_LOCAL_WHISPER=true
+LOCAL_WHISPER_URL=http://127.0.0.1:8080
+```
+
+Notes:
+- The backend now auto-resolves base whisper.cpp URLs to `/inference`.
+- `http://127.0.0.1:8080` and `http://127.0.0.1:8080/inference` both work.
+- If local Whisper fails and an OpenAI key is configured, backend falls back to OpenAI Whisper automatically.
+
 ## 🔄 Switching Between Local and OpenAI
 
 **Use Local Whisper:**

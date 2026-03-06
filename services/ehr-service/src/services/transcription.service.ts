@@ -75,7 +75,17 @@ export class TranscriptionService {
 
       // Use local Whisper if configured, otherwise use OpenAI API
       if (this.USE_LOCAL_WHISPER) {
-        return await this.transcribeWithLocalWhisper(audioFile, { language, temperature, prompt }, requestContext);
+        try {
+          return await this.transcribeWithLocalWhisper(audioFile, { language, temperature, prompt }, requestContext);
+        } catch (localError: any) {
+          if (this.WHISPER_API_KEY) {
+            this.logger.warn(
+              `Local Whisper failed at ${this.resolveLocalWhisperUrl()}, falling back to OpenAI Whisper: ${localError?.message || localError}`,
+            );
+            return await this.transcribeWithOpenAI(audioFile, { language, temperature, prompt });
+          }
+          throw localError;
+        }
       } else {
         return await this.transcribeWithOpenAI(audioFile, { language, temperature, prompt });
       }
@@ -155,25 +165,41 @@ export class TranscriptionService {
     requestContext: TranscriptionRequestContext = {},
   ): Promise<TranscriptionResult> {
     try {
+      const targetUrl = this.resolveLocalWhisperUrl();
+      const isWhisperCpp = this.isWhisperCppInferenceUrl(targetUrl);
       const formData = new FormData();
-      // CDSS Service expects 'file' parameter
+      // Both whisper.cpp and internal CDSS local server expect multipart "file"
       formData.append('file', audioFile.buffer, {
         filename: audioFile.originalname || 'recording.wav',
         contentType: audioFile.mimetype || 'audio/wav',
       });
 
-      // CDSS Service parameters
-      formData.append('generate_soap', 'true');
-      
-      if (options.language && options.language !== 'auto') {
-        formData.append('language', options.language);
+      if (isWhisperCpp) {
+        // whisper.cpp contract
+        formData.append('response_format', 'verbose_json');
+        if (options.temperature !== undefined) {
+          formData.append('temperature', options.temperature.toString());
+        }
+        if (options.language && options.language !== 'auto') {
+          formData.append('language', options.language);
+        }
+        if (options.prompt) {
+          formData.append('prompt', options.prompt);
+        }
+      } else {
+        // Existing CDSS-local whisper contract
+        formData.append('generate_soap', 'true');
+
+        if (options.language && options.language !== 'auto') {
+          formData.append('language', options.language);
+        }
+
+        if (options.temperature !== undefined) {
+          formData.append('temperature', options.temperature.toString());
+        }
       }
 
-      if (options.temperature !== undefined) {
-        formData.append('temperature', options.temperature.toString());
-      }
-
-      this.logger.log(`Sending transcription request to ${this.LOCAL_WHISPER_URL}`);
+      this.logger.log(`Sending transcription request to ${targetUrl}`);
 
       const headers: Record<string, string> = {
         ...(formData.getHeaders() as Record<string, string>),
@@ -185,7 +211,7 @@ export class TranscriptionService {
         headers['Authorization'] = requestContext.authorization;
       }
 
-      const response = await axios.post(this.LOCAL_WHISPER_URL, formData, {
+      const response = await axios.post(targetUrl, formData, {
         headers,
         timeout: 300000, // 5 minute timeout for local processing
         maxContentLength: Infinity,
@@ -200,6 +226,15 @@ export class TranscriptionService {
   }
 
   private parseLocalWhisperResponse(responseData: any, fallbackLanguage: string): TranscriptionResult {
+    // Text-only contract
+    if (typeof responseData === 'string' && responseData.trim().length > 0) {
+      return {
+        text: this.requireNonEmptyString(responseData, 'text'),
+        language: this.normalizeLanguage(fallbackLanguage, fallbackLanguage),
+        segments: [],
+      };
+    }
+
     // Preferred CDSS contract
     const nested = responseData?.transcription;
     if (nested && typeof nested === 'object') {
@@ -237,6 +272,31 @@ export class TranscriptionService {
     }
 
     throw new Error('Invalid transcription response contract from local Whisper service');
+  }
+
+  private resolveLocalWhisperUrl(): string {
+    const raw = String(this.LOCAL_WHISPER_URL || '').trim();
+    if (!raw) {
+      return 'http://127.0.0.1:8080/inference';
+    }
+    try {
+      const parsed = new URL(raw);
+      if (!parsed.pathname || parsed.pathname === '/' || parsed.pathname === '') {
+        parsed.pathname = '/inference';
+      }
+      return parsed.toString().replace(/\/$/, '');
+    } catch {
+      // Non-URL fallback; preserve explicit path if present
+      const normalized = raw.replace(/\/+$/, '');
+      if (/\/(inference|transcribe)$/.test(normalized)) {
+        return normalized;
+      }
+      return `${normalized}/inference`;
+    }
+  }
+
+  private isWhisperCppInferenceUrl(url: string): boolean {
+    return /\/inference$/i.test(String(url || '').replace(/\/+$/, ''));
   }
 
   private normalizeLanguage(value: any, fallbackLanguage: string): string {

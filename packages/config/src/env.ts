@@ -35,7 +35,7 @@ const envSchema = z.object({
   WHISPER_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   USE_LOCAL_WHISPER: z.enum(['true', 'false']).default('true'),
-  LOCAL_WHISPER_URL: z.string().default('http://localhost:8001'),
+  LOCAL_WHISPER_URL: z.string().default('http://127.0.0.1:8080'),
 
   // Notifications (SMS)
   SMS_GATEWAY_ECONET: z.string().default('https://api.econet.co.zw/sms'),

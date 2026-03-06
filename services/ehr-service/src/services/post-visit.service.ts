@@ -83,6 +83,16 @@ interface PublishSessionOptions {
   source?: string;
 }
 
+interface ListPostVisitSessionsOptions {
+  status?: PostVisitSessionStatus;
+  patientId?: string;
+  doctorId?: string;
+  sourceType?: 'in_person' | 'telemedicine' | 'hybrid';
+  includePublishedOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 interface EscalationDetectionResult {
   detected: boolean;
   severity: 'low' | 'moderate' | 'high' | 'critical';
@@ -1781,6 +1791,127 @@ export class PostVisitService {
     await this.ensurePostVisitSchema(tenantDb);
     const row = await this.getSessionRow(tenantDb, sessionId);
     return this.mapSession(row);
+  }
+
+  async listSessions(
+    tenantDb: DataSource,
+    options: ListPostVisitSessionsOptions = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+
+    const limit = Math.min(Math.max(Number(options.limit || 25), 1), 100);
+    const offset = Math.max(Number(options.offset || 0), 0);
+    const whereClauses: string[] = [];
+    const whereParams: any[] = [];
+    const allowedStatuses: PostVisitSessionStatus[] = [
+      'captured',
+      'processing',
+      'draft_ready',
+      'doctor_reviewed',
+      'published',
+      'closed',
+    ];
+    const allowedSourceTypes = new Set(['in_person', 'telemedicine', 'hybrid']);
+
+    if (options.includePublishedOnly) {
+      whereClauses.push(`s.status IN ('published','closed')`);
+    }
+    if (options.status && allowedStatuses.includes(options.status)) {
+      whereParams.push(options.status);
+      whereClauses.push(`s.status = $${whereParams.length}`);
+    }
+    if (options.patientId) {
+      whereParams.push(options.patientId);
+      whereClauses.push(`s.patient_id = $${whereParams.length}`);
+    }
+    if (options.doctorId) {
+      whereParams.push(options.doctorId);
+      whereClauses.push(`s.doctor_id = $${whereParams.length}`);
+    }
+    if (options.sourceType && allowedSourceTypes.has(options.sourceType)) {
+      whereParams.push(options.sourceType);
+      whereClauses.push(`s.source_type = $${whereParams.length}`);
+    }
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          s.*,
+          p.first_name AS patient_first_name,
+          p.last_name AS patient_last_name,
+          p.patient_number AS patient_number,
+          d.first_name AS doctor_first_name,
+          d.last_name AS doctor_last_name,
+          vs.artifact_status AS visit_summary_status,
+          rb.artifact_status AS recommendation_bundle_status,
+          COALESCE(seg.segment_count, 0) AS transcript_segment_count,
+          COALESCE(msg.message_count, 0) AS companion_message_count
+        FROM post_visit_sessions s
+        LEFT JOIN patients p ON p.id = s.patient_id
+        LEFT JOIN users d ON d.id = s.doctor_id
+        LEFT JOIN post_visit_draft_artifacts vs
+          ON vs.session_id = s.id
+         AND vs.artifact_type = 'visit_summary'
+        LEFT JOIN post_visit_draft_artifacts rb
+          ON rb.session_id = s.id
+         AND rb.artifact_type = 'recommendation_bundle'
+        LEFT JOIN (
+          SELECT session_id, COUNT(*)::int AS segment_count
+          FROM post_visit_transcript_segments
+          GROUP BY session_id
+        ) seg ON seg.session_id = s.id
+        LEFT JOIN (
+          SELECT session_id, COUNT(*)::int AS message_count
+          FROM post_visit_companion_messages
+          GROUP BY session_id
+        ) msg ON msg.session_id = s.id
+        ${whereSql}
+        ORDER BY COALESCE(s.started_at, s.created_at) DESC
+        LIMIT $${whereParams.length + 1}
+        OFFSET $${whereParams.length + 2}
+      `,
+      [...whereParams, limit, offset],
+    );
+
+    const totalRows = await tenantDb.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM post_visit_sessions s
+        ${whereSql}
+      `,
+      whereParams,
+    );
+
+    return {
+      sessions: rows.map((row: any) => ({
+        ...this.mapSession(row),
+        patient: {
+          id: row.patient_id,
+          firstName: row.patient_first_name || null,
+          lastName: row.patient_last_name || null,
+          patientNumber: row.patient_number || null,
+        },
+        doctor: {
+          id: row.doctor_id || null,
+          firstName: row.doctor_first_name || null,
+          lastName: row.doctor_last_name || null,
+        },
+        artifacts: {
+          visitSummaryStatus: row.visit_summary_status || null,
+          recommendationBundleStatus: row.recommendation_bundle_status || null,
+        },
+        telemetry: {
+          transcriptSegmentCount: Number(row.transcript_segment_count || 0),
+          companionMessageCount: Number(row.companion_message_count || 0),
+        },
+      })),
+      paging: {
+        limit,
+        offset,
+        total: Number(totalRows?.[0]?.total || 0),
+      },
+    };
   }
 
   async getSessionDraft(tenantDb: DataSource, sessionId: string) {
