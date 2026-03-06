@@ -50,6 +50,7 @@ export interface PostVisitPatientAnswerInput {
   question: string;
   summary: string;
   checklist: string[];
+  memoryFacts?: string[];
   citations: GroundingCitation[];
 }
 
@@ -239,6 +240,7 @@ export class PostVisitGroundedLlmService {
               question,
               approved_summary: input.summary,
               approved_checklist: input.checklist,
+              companion_memory_facts: Array.isArray(input.memoryFacts) ? input.memoryFacts.slice(0, 8) : [],
               allowed_citations: input.citations,
               output_schema: {
                 abstain: 'boolean',

@@ -42,6 +42,7 @@ import {
   RegeneratePostVisitDraftDto,
   ReviewPostVisitBillingSuggestionDto,
   ReviewPostVisitArtifactDto,
+  ReviewPostVisitTrialMatchDto,
 } from '../dto/post-visit.dto';
 import { PostVisitService } from '../services/post-visit.service';
 import { UploadSecurityService } from '../services/upload-security.service';
@@ -238,6 +239,56 @@ export class PostVisitController {
     @Request() req: RequestWithTenant,
   ) {
     return this.postVisitService.listSessionAdminDocuments(req.tenantDb, id);
+  }
+
+  @Get('sessions/:id/trial-matches')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List or refresh de-identified clinical trial matches for a post-visit session' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial matches listed' })
+  async listSessionTrialMatches(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('refresh') refresh?: string,
+  ) {
+    return this.postVisitService.listSessionTrialMatches(req.tenantDb, id, {
+      refresh: ['1', 'true', 'yes', 'refresh'].includes(String(refresh || '').toLowerCase()),
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Post('sessions/:id/trial-matches/:matchId/review')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Record doctor decision for a post-visit trial match candidate' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial match decision persisted' })
+  async reviewTrialMatch(
+    @Param('id') id: string,
+    @Param('matchId') matchId: string,
+    @Body() body: ReviewPostVisitTrialMatchDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.reviewTrialMatch(
+      req.tenantDb,
+      id,
+      matchId,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Get('sessions/:id/companion-memory')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List longitudinal patient companion memory profile for a session context' })
+  @ApiResponse({ status: 200, description: 'Post-visit companion memory listed' })
+  async listSessionCompanionMemory(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('limit') limit?: string,
+  ) {
+    return this.postVisitService.listSessionCompanionMemory(req.tenantDb, id, {
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Post('sessions/:id/voice-command')

@@ -9,6 +9,7 @@ import {
   CreatePostVisitSessionDto,
   ExecutePostVisitVoiceCommandDto,
   GeneratePostVisitAdminDocumentsDto,
+  ReviewPostVisitTrialMatchDto,
   ReviewPostVisitBillingSuggestionDto,
   ExecutePostVisitRecommendationDto,
   ReviewPostVisitArtifactDto,
@@ -108,6 +109,8 @@ type PostVisitVoiceCommand =
   | 'GENERATE_ADMIN_DOCS'
   | 'REGENERATE_DRAFT'
   | 'SIGN_AND_PUBLISH';
+type PostVisitTrialMatchStatus = 'proposed' | 'considered' | 'deferred' | 'excluded' | 'enrolled';
+type PostVisitTrialReviewAction = 'consider' | 'defer' | 'exclude' | 'enroll';
 
 interface PostVisitDocumentObservation {
   name: string;
@@ -847,6 +850,85 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_trial_matches (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
+        trial_id VARCHAR(80) NOT NULL,
+        trial_title TEXT NOT NULL,
+        trial_phase VARCHAR(80),
+        trial_status VARCHAR(80),
+        condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        source_url TEXT,
+        eligibility_score INTEGER NOT NULL DEFAULT 0,
+        eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
+        match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+          CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        review_note TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, trial_id)
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_trial_matches
+      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
+      ADD COLUMN IF NOT EXISTS trial_id VARCHAR(80),
+      ADD COLUMN IF NOT EXISTS trial_title TEXT,
+      ADD COLUMN IF NOT EXISTS trial_phase VARCHAR(80),
+      ADD COLUMN IF NOT EXISTS trial_status VARCHAR(80),
+      ADD COLUMN IF NOT EXISTS condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS source_url TEXT,
+      ADD COLUMN IF NOT EXISTS eligibility_score INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+        CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
+      ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS review_note TEXT,
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_companion_memory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        memory_type VARCHAR(60) NOT NULL,
+        memory_key VARCHAR(120) NOT NULL,
+        memory_value TEXT NOT NULL,
+        confidence DOUBLE PRECISION,
+        source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
+        created_by UUID,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_companion_memory
+      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS memory_type VARCHAR(60),
+      ADD COLUMN IF NOT EXISTS memory_key VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS memory_value TEXT,
+      ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS created_by UUID,
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS post_visit_companion_acknowledgements (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -912,6 +994,12 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_session ON post_visit_admin_documents(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_session ON post_visit_trial_matches(session_id, eligibility_score DESC, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_patient ON post_visit_trial_matches(patient_id, match_status, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_trial_id ON post_visit_trial_matches(trial_id)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_patient ON post_visit_companion_memory(patient_id, is_active, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_session ON post_visit_companion_memory(session_id, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -1087,6 +1175,49 @@ export class PostVisitService {
     };
   }
 
+  private mapTrialMatch(row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      trialSource: row.trial_source || 'clinicaltrials_gov_v2',
+      trialId: row.trial_id,
+      trialTitle: row.trial_title,
+      trialPhase: row.trial_phase || null,
+      trialStatus: row.trial_status || null,
+      conditionTags: Array.isArray(row.condition_tags) ? row.condition_tags : [],
+      sourceUrl: row.source_url || null,
+      eligibilityScore: Number(row.eligibility_score || 0),
+      eligibilityRationale: Array.isArray(row.eligibility_rationale) ? row.eligibility_rationale : [],
+      matchStatus: (row.match_status || 'proposed') as PostVisitTrialMatchStatus,
+      reviewedBy: row.reviewed_by || null,
+      reviewedAt: row.reviewed_at || null,
+      reviewNote: row.review_note || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private mapCompanionMemory(row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      memoryType: row.memory_type,
+      memoryKey: row.memory_key,
+      memoryValue: row.memory_value,
+      confidence:
+        row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
+      sourceMessageId: row.source_message_id || null,
+      createdBy: row.created_by || null,
+      isActive: row.is_active !== false,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private normalizeLanguage(language?: string | null) {
     const raw = String(language || '').trim().toLowerCase();
     if (!raw) return 'en';
@@ -1199,6 +1330,28 @@ export class PostVisitService {
       return configured;
     }
     return String(process.env.FEATURE_POSTVISIT_VOICE_REVIEW || 'false').toLowerCase() === 'true';
+  }
+
+  private isTrialMatcherEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitTrialMatcher;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_TRIAL_MATCHER || 'false').toLowerCase() === 'true';
+  }
+
+  private isCompanionMemoryEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitCompanionMemory;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_COMPANION_MEMORY || 'true').toLowerCase() !== 'false';
+  }
+
+  private resolveClinicalTrialsApiUrl(): string {
+    const direct = String(process.env.POSTVISIT_CLINICALTRIALS_API_URL || '').trim();
+    if (direct) return direct;
+    return 'https://clinicaltrials.gov/api/v2/studies';
   }
 
   private normalizeVoiceCommand(input?: string | null): PostVisitVoiceCommand | null {
@@ -2961,6 +3114,7 @@ export class PostVisitService {
     visitSummaryArtifact: any;
     recommendationArtifact: any;
     escalation: EscalationDetectionResult;
+    memoryFacts?: string[];
   }): Promise<{
     answer: string;
     source: 'deterministic' | 'llm';
@@ -2985,6 +3139,7 @@ export class PostVisitService {
       ? args.recommendationArtifact.content.items
       : [];
     const checklist = recommendations.slice(0, 3).map((item: any) => String(item?.title || '').trim()).filter(Boolean);
+    const memoryFacts = Array.isArray(args.memoryFacts) ? args.memoryFacts.slice(0, 8) : [];
     const citationCatalog = this.buildCitationCatalogFromRecommendations(args.recommendationArtifact).slice(0, 30);
     let llmAuditAttempt: LlmAuditMetadata | null = null;
     let llmModelAttempt: string | null = null;
@@ -2997,6 +3152,7 @@ export class PostVisitService {
         question: args.question,
         summary,
         checklist,
+        memoryFacts,
         citations: citationCatalog,
       });
       llmAuditAttempt = llmResult?.audit || null;
@@ -3021,11 +3177,14 @@ export class PostVisitService {
     const clinicianEscalationSuffix = args.escalation.detected
       ? ' We have alerted the care team to review your message.'
       : '';
+    const memorySuffix = memoryFacts.length
+      ? ` I also remembered these prior context points: ${memoryFacts.slice(0, 2).join(' ; ')}.`
+      : '';
 
     if (lowerQuestion.includes('medicine') || lowerQuestion.includes('medication') || lowerQuestion.includes('dose')) {
       if (checklist.length) {
         return {
-          answer: `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.${clinicianEscalationSuffix}`,
+          answer: `Based on your approved visit plan, follow these medication-related actions: ${checklist.join('; ')}. If symptoms worsen, contact the clinic immediately.${memorySuffix}${clinicianEscalationSuffix}`,
           source: 'deterministic',
           citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
           model: llmModelAttempt,
@@ -3038,7 +3197,7 @@ export class PostVisitService {
     if (lowerQuestion.includes('when') || lowerQuestion.includes('follow up') || lowerQuestion.includes('next visit')) {
       if (checklist.length) {
         return {
-          answer: `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.${clinicianEscalationSuffix}`,
+          answer: `Your approved follow-up checklist includes: ${checklist.join('; ')}. Please complete these and keep your next review appointment.${memorySuffix}${clinicianEscalationSuffix}`,
           source: 'deterministic',
           citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
           model: llmModelAttempt,
@@ -3050,7 +3209,7 @@ export class PostVisitService {
 
     if (summary) {
       return {
-        answer: `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.${clinicianEscalationSuffix}`,
+        answer: `From your approved visit summary: ${summary} Please follow the checklist and contact the clinic if you have worsening symptoms.${memorySuffix}${clinicianEscalationSuffix}`,
         source: 'deterministic',
         citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
         model: llmModelAttempt,
@@ -3061,7 +3220,7 @@ export class PostVisitService {
 
     return {
       answer:
-        `I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.${clinicianEscalationSuffix}`.trim(),
+        `I can help with your approved visit plan and checklist. If you share your concern, I will guide you based on your doctor-approved instructions.${memorySuffix}${clinicianEscalationSuffix}`.trim(),
       source: 'deterministic',
       citationsUsed: citationCatalog.map((citation) => citation.id).slice(0, 3),
       model: llmModelAttempt,
@@ -5891,6 +6050,654 @@ export class PostVisitService {
     };
   }
 
+  private normalizeTrialSearchToken(value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private deriveTrialSearchTerms(input: string): string[] {
+    const normalized = this.normalizeTrialSearchToken(input);
+    if (!normalized) return [];
+
+    const conditionRules: Array<{ term: string; pattern: RegExp }> = [
+      { term: 'hiv', pattern: /\bhiv\b|human immunodeficiency/ },
+      { term: 'tuberculosis', pattern: /\btb\b|tuberculosis/ },
+      { term: 'hypertension', pattern: /hypertension|blood pressure/ },
+      { term: 'heart failure', pattern: /heart failure/ },
+      { term: 'atrial fibrillation', pattern: /atrial fibrillation|afib/ },
+      { term: 'diabetes', pattern: /diabetes|hyperglyc/ },
+      { term: 'asthma', pattern: /asthma/ },
+      { term: 'copd', pattern: /copd|chronic obstructive/ },
+      { term: 'chronic kidney disease', pattern: /chronic kidney|renal/ },
+      { term: 'stroke', pattern: /stroke|cerebrovascular/ },
+      { term: 'depression', pattern: /depression|major depressive/ },
+      { term: 'anxiety', pattern: /anxiety/ },
+      { term: 'pregnancy', pattern: /pregnan|antenatal|maternal/ },
+      { term: 'breast cancer', pattern: /breast cancer/ },
+      { term: 'lung cancer', pattern: /lung cancer/ },
+      { term: 'prostate cancer', pattern: /prostate cancer/ },
+      { term: 'cancer', pattern: /\bcancer\b|oncology|tumou?r/ },
+    ];
+
+    const terms = new Set<string>();
+    for (const rule of conditionRules) {
+      if (rule.pattern.test(normalized)) {
+        terms.add(rule.term);
+      }
+    }
+
+    if (terms.size > 0) {
+      return Array.from(terms).slice(0, 5);
+    }
+
+    const fallback = normalized
+      .split(' ')
+      .filter((token) => token.length >= 4)
+      .filter((token) => !['with', 'from', 'this', 'that', 'have', 'been', 'were', 'patient', 'visit', 'follow', 'need'].includes(token))
+      .slice(0, 6)
+      .join(' ');
+    return fallback ? [fallback] : [];
+  }
+
+  private extractTrialStudyCandidates(payload: any): Array<{
+    trialId: string;
+    trialTitle: string;
+    trialPhase: string | null;
+    trialStatus: string | null;
+    conditions: string[];
+    sourceUrl: string | null;
+  }> {
+    const studies = Array.isArray(payload?.studies)
+      ? payload.studies
+      : Array.isArray(payload?.data?.studies)
+        ? payload.data.studies
+        : Array.isArray(payload?.StudyFieldsResponse?.StudyFields)
+          ? payload.StudyFieldsResponse.StudyFields
+          : [];
+
+    const results = [] as Array<{
+      trialId: string;
+      trialTitle: string;
+      trialPhase: string | null;
+      trialStatus: string | null;
+      conditions: string[];
+      sourceUrl: string | null;
+    }>;
+
+    for (const study of studies) {
+      const module = study?.protocolSection || {};
+      const id = String(
+        study?.nctId ||
+          module?.identificationModule?.nctId ||
+          (Array.isArray(study?.NCTId) ? study.NCTId[0] : '') ||
+          '',
+      ).trim();
+      if (!id) continue;
+
+      const title = String(
+        module?.identificationModule?.briefTitle ||
+          study?.briefTitle ||
+          (Array.isArray(study?.BriefTitle) ? study.BriefTitle[0] : '') ||
+          '',
+      ).trim();
+      if (!title) continue;
+
+      const phaseRaw =
+        module?.designModule?.phases ||
+        study?.phase ||
+        (Array.isArray(study?.Phase) ? study.Phase[0] : null);
+      const phase = Array.isArray(phaseRaw) ? String(phaseRaw[0] || '').trim() : String(phaseRaw || '').trim();
+
+      const status = String(
+        module?.statusModule?.overallStatus ||
+          study?.overallStatus ||
+          (Array.isArray(study?.OverallStatus) ? study.OverallStatus[0] : '') ||
+          '',
+      ).trim();
+
+      const conditionsRaw =
+        module?.conditionsModule?.conditions ||
+        study?.conditions ||
+        (Array.isArray(study?.Condition) ? study.Condition : []);
+      const conditions = Array.isArray(conditionsRaw)
+        ? conditionsRaw.map((entry: any) => String(entry || '').trim()).filter((entry: string) => entry.length > 0)
+        : [];
+
+      const sourceUrl = `https://clinicaltrials.gov/study/${id}`;
+      results.push({
+        trialId: id,
+        trialTitle: title,
+        trialPhase: phase || null,
+        trialStatus: status || null,
+        conditions,
+        sourceUrl,
+      });
+    }
+
+    return results;
+  }
+
+  private scoreTrialMatchCandidate(args: {
+    trial: {
+      trialId: string;
+      trialTitle: string;
+      trialPhase: string | null;
+      trialStatus: string | null;
+      conditions: string[];
+      sourceUrl: string | null;
+    };
+    searchTerms: string[];
+  }) {
+    const rationale: string[] = [];
+    let score = 30;
+    const loweredTitle = this.normalizeTrialSearchToken(args.trial.trialTitle);
+    const loweredConditions = args.trial.conditions.map((item) => this.normalizeTrialSearchToken(item));
+
+    let termMatches = 0;
+    for (const term of args.searchTerms) {
+      const normalizedTerm = this.normalizeTrialSearchToken(term);
+      const matchInTitle = loweredTitle.includes(normalizedTerm);
+      const matchInCondition = loweredConditions.some((condition) => condition.includes(normalizedTerm));
+      if (matchInTitle || matchInCondition) {
+        termMatches += 1;
+      }
+    }
+    if (termMatches > 0) {
+      score += Math.min(30, termMatches * 12);
+      rationale.push(`Matched ${termMatches} condition/search term(s) from post-visit context.`);
+    }
+
+    const status = String(args.trial.trialStatus || '').toLowerCase();
+    if (status.includes('recruit')) {
+      score += 20;
+      rationale.push('Trial status indicates actively recruiting.');
+    } else if (status.includes('active')) {
+      score += 10;
+      rationale.push('Trial status is active.');
+    } else if (status.length > 0) {
+      score -= 8;
+      rationale.push(`Trial status is ${args.trial.trialStatus}; recruitment may be limited.`);
+    }
+
+    const phase = String(args.trial.trialPhase || '').toLowerCase();
+    if (phase.includes('phase 3') || phase.includes('phase 4')) {
+      score += 8;
+      rationale.push('Late-phase trial often has mature protocol pathways.');
+    } else if (phase.includes('phase 1')) {
+      score -= 3;
+      rationale.push('Early-phase trial may have stricter eligibility and experimental interventions.');
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    if (rationale.length === 0) {
+      rationale.push('General candidate trial based on available context.');
+    }
+
+    return {
+      score,
+      rationale,
+    };
+  }
+
+  private async fetchClinicalTrialCandidates(searchTerms: string[]) {
+    const apiUrl = this.resolveClinicalTrialsApiUrl();
+    const candidates = [] as Array<{
+      trialId: string;
+      trialTitle: string;
+      trialPhase: string | null;
+      trialStatus: string | null;
+      conditions: string[];
+      sourceUrl: string | null;
+    }>;
+
+    for (const term of searchTerms.slice(0, 4)) {
+      try {
+        const response = await axios.get(apiUrl, {
+          params: {
+            'query.term': term,
+            pageSize: 8,
+            format: 'json',
+          },
+          timeout: 12000,
+        });
+        const parsed = this.extractTrialStudyCandidates(response.data);
+        candidates.push(...parsed);
+      } catch {
+        // External trial lookup is best-effort and should not block doctor workflows.
+      }
+    }
+
+    const deduped = new Map<string, typeof candidates[0]>();
+    for (const item of candidates) {
+      if (!item?.trialId) continue;
+      if (!deduped.has(item.trialId)) {
+        deduped.set(item.trialId, item);
+      }
+    }
+    return Array.from(deduped.values());
+  }
+
+  private async refreshSessionTrialMatches(
+    tenantDb: DataSource,
+    sessionRow: any,
+    actorUserId?: string | null,
+  ) {
+    const [visitSummaryArtifact, recommendationArtifact] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionRow.id, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionRow.id, 'recommendation_bundle'),
+    ]);
+
+    const summaryText = String(visitSummaryArtifact?.content?.plain_language_summary || '').trim();
+    const recommendationText = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+          .map((item: any) => `${String(item?.title || '').trim()} ${String(item?.description || '').trim()}`)
+          .join(' ')
+      : '';
+    const searchTerms = this.deriveTrialSearchTerms([summaryText, recommendationText].filter(Boolean).join(' '));
+
+    if (searchTerms.length === 0) {
+      return [];
+    }
+
+    const trialCandidates = await this.fetchClinicalTrialCandidates(searchTerms);
+    const scoredCandidates = trialCandidates
+      .map((candidate) => {
+        const scoring = this.scoreTrialMatchCandidate({
+          trial: candidate,
+          searchTerms,
+        });
+        return {
+          ...candidate,
+          eligibilityScore: scoring.score,
+          eligibilityRationale: scoring.rationale,
+        };
+      })
+      .sort((left, right) => right.eligibilityScore - left.eligibilityScore)
+      .slice(0, 15);
+
+    for (const match of scoredCandidates) {
+      await tenantDb.query(
+        `
+          INSERT INTO post_visit_trial_matches (
+            session_id,
+            patient_id,
+            trial_source,
+            trial_id,
+            trial_title,
+            trial_phase,
+            trial_status,
+            condition_tags,
+            source_url,
+            eligibility_score,
+            eligibility_rationale,
+            metadata
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11::jsonb,$12::jsonb)
+          ON CONFLICT (session_id, trial_id)
+          DO UPDATE SET
+            trial_title = EXCLUDED.trial_title,
+            trial_phase = EXCLUDED.trial_phase,
+            trial_status = EXCLUDED.trial_status,
+            condition_tags = EXCLUDED.condition_tags,
+            source_url = EXCLUDED.source_url,
+            eligibility_score = EXCLUDED.eligibility_score,
+            eligibility_rationale = EXCLUDED.eligibility_rationale,
+            metadata = COALESCE(post_visit_trial_matches.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+            updated_at = NOW()
+        `,
+        [
+          sessionRow.id,
+          sessionRow.patient_id,
+          'clinicaltrials_gov_v2',
+          match.trialId,
+          match.trialTitle,
+          match.trialPhase,
+          match.trialStatus,
+          JSON.stringify(match.conditions),
+          match.sourceUrl,
+          match.eligibilityScore,
+          JSON.stringify(match.eligibilityRationale),
+          JSON.stringify({
+            refreshed_by: actorUserId || null,
+            refreshed_at: new Date().toISOString(),
+            search_terms: searchTerms,
+          }),
+        ],
+      );
+    }
+
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_trial_matches
+        WHERE session_id = $1
+        ORDER BY eligibility_score DESC, created_at DESC
+      `,
+      [sessionRow.id],
+    );
+    return rows;
+  }
+
+  async listSessionTrialMatches(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { refresh?: boolean; actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    if (!this.isTrialMatcherEnabled()) {
+      return {
+        featureEnabled: false,
+        sessionId,
+        matches: [],
+        summary: {
+          total: 0,
+          proposed: 0,
+          considered: 0,
+          deferred: 0,
+          excluded: 0,
+          enrolled: 0,
+        },
+        message: 'Clinical trial matcher is disabled by feature flag.',
+      };
+    }
+
+    let rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_trial_matches
+        WHERE session_id = $1
+        ORDER BY eligibility_score DESC, created_at DESC
+      `,
+      [sessionId],
+    );
+
+    if (options.refresh === true || !rows.length) {
+      rows = await this.refreshSessionTrialMatches(tenantDb, sessionRow, options.actorUserId);
+    }
+
+    const matches = rows.map((row: any) => this.mapTrialMatch(row));
+    const summary = {
+      total: matches.length,
+      proposed: matches.filter((item: any) => item.matchStatus === 'proposed').length,
+      considered: matches.filter((item: any) => item.matchStatus === 'considered').length,
+      deferred: matches.filter((item: any) => item.matchStatus === 'deferred').length,
+      excluded: matches.filter((item: any) => item.matchStatus === 'excluded').length,
+      enrolled: matches.filter((item: any) => item.matchStatus === 'enrolled').length,
+    };
+
+    return {
+      featureEnabled: true,
+      sessionId,
+      matches,
+      summary,
+    };
+  }
+
+  async reviewTrialMatch(
+    tenantDb: DataSource,
+    sessionId: string,
+    matchId: string,
+    payload: ReviewPostVisitTrialMatchDto,
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    const statusMap: Record<PostVisitTrialReviewAction, PostVisitTrialMatchStatus> = {
+      consider: 'considered',
+      defer: 'deferred',
+      exclude: 'excluded',
+      enroll: 'enrolled',
+    };
+
+    const nextStatus = statusMap[payload.action as PostVisitTrialReviewAction];
+    if (!nextStatus) {
+      throw new BadRequestException('Invalid trial review action');
+    }
+
+    const rows = await tenantDb.query(
+      `
+        UPDATE post_visit_trial_matches
+        SET match_status = $3,
+            reviewed_by = $4,
+            reviewed_at = NOW(),
+            review_note = $5,
+            metadata = COALESCE(metadata, '{}'::jsonb) || $6::jsonb,
+            updated_at = NOW()
+        WHERE id = $1
+          AND session_id = $2
+        RETURNING *
+      `,
+      [
+        matchId,
+        sessionId,
+        nextStatus,
+        options.actorUserId || null,
+        payload.note || null,
+        JSON.stringify({
+          review_action: payload.action,
+          reviewed_at: new Date().toISOString(),
+        }),
+      ],
+    );
+
+    if (!rows?.length) {
+      throw new NotFoundException('Trial match not found for this post-visit session');
+    }
+
+    return {
+      sessionId,
+      action: payload.action,
+      match: this.mapTrialMatch(rows[0]),
+    };
+  }
+
+  private extractCompanionMemoryCandidates(message: string) {
+    const text = String(message || '').trim();
+    if (!text) return [] as Array<{ memoryType: string; memoryKey: string; memoryValue: string; confidence: number }>;
+    const lower = text.toLowerCase();
+    const candidates = [] as Array<{ memoryType: string; memoryKey: string; memoryValue: string; confidence: number }>;
+
+    const allergyMatch = lower.match(/(?:allergic to|allergy to|cannot take)\s+([a-z0-9\s-]{3,60})/i);
+    if (allergyMatch?.[1]) {
+      candidates.push({
+        memoryType: 'clinical_constraint',
+        memoryKey: 'allergy',
+        memoryValue: allergyMatch[1].trim(),
+        confidence: 0.82,
+      });
+    }
+
+    const preferenceMatch = lower.match(/(?:i prefer|prefer to|please)\s+([a-z0-9\s-]{4,90})/i);
+    if (preferenceMatch?.[1]) {
+      candidates.push({
+        memoryType: 'preference',
+        memoryKey: 'communication_preference',
+        memoryValue: preferenceMatch[1].trim(),
+        confidence: 0.64,
+      });
+    }
+
+    const barrierMatch = lower.match(/(?:cannot|can.t|unable to|struggle to)\s+([a-z0-9\s-]{4,90})/i);
+    if (barrierMatch?.[1]) {
+      candidates.push({
+        memoryType: 'adherence_barrier',
+        memoryKey: 'followup_barrier',
+        memoryValue: barrierMatch[1].trim(),
+        confidence: 0.68,
+      });
+    }
+
+    const commitmentMatch = lower.match(/(?:i will|i can|i plan to)\s+([a-z0-9\s-]{4,90})/i);
+    if (commitmentMatch?.[1]) {
+      candidates.push({
+        memoryType: 'followup_commitment',
+        memoryKey: 'patient_commitment',
+        memoryValue: commitmentMatch[1].trim(),
+        confidence: 0.6,
+      });
+    }
+
+    const dedupe = new Set<string>();
+    return candidates.filter((entry) => {
+      const key = `${entry.memoryType}:${entry.memoryKey}:${entry.memoryValue}`.toLowerCase();
+      if (dedupe.has(key)) return false;
+      dedupe.add(key);
+      return true;
+    });
+  }
+
+  private async persistCompanionMemoryEntries(
+    tenantDb: DataSource,
+    args: {
+      sessionId: string;
+      patientId: string;
+      sourceMessageId?: string | null;
+      createdBy?: string | null;
+      entries: Array<{ memoryType: string; memoryKey: string; memoryValue: string; confidence: number }>;
+      metadata?: Record<string, any>;
+    },
+  ) {
+    if (!this.isCompanionMemoryEnabled()) {
+      return [];
+    }
+    if (!Array.isArray(args.entries) || args.entries.length === 0) return [];
+
+    const inserted = [] as any[];
+    for (const entry of args.entries.slice(0, 8)) {
+      const value = String(entry.memoryValue || '').trim();
+      if (!value) continue;
+      const existingRows = await tenantDb.query(
+        `
+          SELECT id
+          FROM post_visit_companion_memory
+          WHERE patient_id = $1
+            AND memory_type = $2
+            AND memory_key = $3
+            AND memory_value = $4
+            AND is_active = TRUE
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [args.patientId, entry.memoryType, entry.memoryKey, value],
+      );
+      if (existingRows?.length) {
+        continue;
+      }
+
+      const rows = await tenantDb.query(
+        `
+          INSERT INTO post_visit_companion_memory (
+            session_id,
+            patient_id,
+            memory_type,
+            memory_key,
+            memory_value,
+            confidence,
+            source_message_id,
+            created_by,
+            is_active,
+            metadata
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9::jsonb)
+          RETURNING *
+        `,
+        [
+          args.sessionId,
+          args.patientId,
+          entry.memoryType,
+          entry.memoryKey,
+          value,
+          Number(entry.confidence || 0.5),
+          args.sourceMessageId || null,
+          args.createdBy || null,
+          JSON.stringify(args.metadata || {}),
+        ],
+      );
+      if (rows?.[0]) {
+        inserted.push(rows[0]);
+      }
+    }
+
+    return inserted;
+  }
+
+  private async getPatientCompanionMemoryFacts(
+    tenantDb: DataSource,
+    patientId: string,
+    limit = 8,
+  ) {
+    if (!this.isCompanionMemoryEnabled()) {
+      return [] as string[];
+    }
+
+    const rows = await tenantDb.query(
+      `
+        SELECT memory_type, memory_key, memory_value
+        FROM post_visit_companion_memory
+        WHERE patient_id = $1
+          AND is_active = TRUE
+        ORDER BY created_at DESC
+        LIMIT $2
+      `,
+      [patientId, Math.min(Math.max(Number(limit || 8), 1), 30)],
+    );
+
+    const facts = [] as string[];
+    const dedupe = new Set<string>();
+    for (const row of rows) {
+      const label = `${String(row.memory_type || '').replace(/_/g, ' ')}: ${String(row.memory_value || '').trim()}`;
+      const normalized = label.toLowerCase();
+      if (!label.trim() || dedupe.has(normalized)) continue;
+      dedupe.add(normalized);
+      facts.push(label);
+    }
+    return facts;
+  }
+
+  async listSessionCompanionMemory(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { limit?: number } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+    if (!this.isCompanionMemoryEnabled()) {
+      return {
+        featureEnabled: false,
+        sessionId,
+        memories: [],
+        message: 'Companion memory is disabled by feature flag.',
+      };
+    }
+
+    const limit = Math.min(Math.max(Number(options.limit || 30), 1), 120);
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_companion_memory
+        WHERE patient_id = $1
+          AND is_active = TRUE
+        ORDER BY created_at DESC
+        LIMIT $2
+      `,
+      [sessionRow.patient_id, limit],
+    );
+
+    return {
+      featureEnabled: true,
+      sessionId,
+      patientId: sessionRow.patient_id,
+      memories: rows.map((row: any) => this.mapCompanionMemory(row)),
+      summary: {
+        total: rows.length,
+      },
+    };
+  }
+
   async getSessionDiarization(
     tenantDb: DataSource,
     sessionId: string,
@@ -7872,6 +8679,19 @@ export class PostVisitService {
     const patientMessage = patientMessageRows[0];
     await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'patient');
 
+    const memoryCandidates = this.extractCompanionMemoryCandidates(messageText);
+    const persistedMemories = await this.persistCompanionMemoryEntries(tenantDb, {
+      sessionId,
+      patientId,
+      sourceMessageId: patientMessage.id,
+      createdBy: patientId,
+      entries: memoryCandidates,
+      metadata: {
+        source: 'patient_message',
+      },
+    });
+    const memoryFacts = await this.getPatientCompanionMemoryFacts(tenantDb, patientId, 8);
+
     const detection = await this.classifyEscalationSignals({
       sessionId,
       message: messageText,
@@ -7908,6 +8728,7 @@ export class PostVisitService {
       visitSummaryArtifact,
       recommendationArtifact,
       escalation: detection,
+      memoryFacts,
     });
     await this.persistGroundedLlmAudit(tenantDb, {
       model: assistantAnswer.model,
@@ -7922,6 +8743,7 @@ export class PostVisitService {
         answer_engine: assistantAnswer.source,
         escalation_detected: detection.detected,
         citation_count: Array.isArray(assistantAnswer.citationsUsed) ? assistantAnswer.citationsUsed.length : 0,
+        memory_fact_count: memoryFacts.length,
       },
     });
 
@@ -7987,6 +8809,11 @@ export class PostVisitService {
         createdAt: assistantMessage.created_at,
       },
       escalation: escalation && detection.detected ? this.mapEscalationEvent(escalation) : null,
+      memory: {
+        enabled: this.isCompanionMemoryEnabled(),
+        newEntries: persistedMemories.map((row: any) => this.mapCompanionMemory(row)),
+        factCount: memoryFacts.length,
+      },
     };
   }
 
@@ -8026,6 +8853,27 @@ export class PostVisitService {
         patientId,
       ],
     );
+
+    if (payload.acknowledgementType === 'follow_up_commitment' && payload.acknowledged !== false) {
+      const commitmentText = String(payload.details?.commitment || payload.details?.note || 'Patient confirmed follow-up commitment').trim();
+      await this.persistCompanionMemoryEntries(tenantDb, {
+        sessionId,
+        patientId,
+        createdBy: patientId,
+        entries: [
+          {
+            memoryType: 'followup_commitment',
+            memoryKey: 'acknowledged_commitment',
+            memoryValue: commitmentText,
+            confidence: 0.9,
+          },
+        ],
+        metadata: {
+          source: 'acknowledgement',
+          acknowledgement_type: payload.acknowledgementType,
+        },
+      });
+    }
 
     return {
       id: rows[0].id,

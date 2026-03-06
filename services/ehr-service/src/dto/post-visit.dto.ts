@@ -164,6 +164,19 @@ export class ExecutePostVisitVoiceCommandDto {
   publishMetadata?: Record<string, any>;
 }
 
+export class ReviewPostVisitTrialMatchDto {
+  @ApiProperty({ description: 'Doctor trial workflow decision', enum: ['consider', 'defer', 'exclude', 'enroll'] })
+  @IsEnum(['consider', 'defer', 'exclude', 'enroll'])
+  @IsNotEmpty()
+  action: 'consider' | 'defer' | 'exclude' | 'enroll';
+
+  @ApiPropertyOptional({ description: 'Optional clinician rationale for trial decision' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  note?: string;
+}
+
 export class PublishPostVisitSessionDto {
   @ApiPropertyOptional({ description: 'Optional publish note for audit trail' })
   @IsString()

@@ -19,6 +19,9 @@ describe('PostVisitController', () => {
     reviewDraftArtifact: jest.fn(),
     generateSessionAdminDocuments: jest.fn(),
     listSessionAdminDocuments: jest.fn(),
+    listSessionTrialMatches: jest.fn(),
+    reviewTrialMatch: jest.fn(),
+    listSessionCompanionMemory: jest.fn(),
     executeVoiceReviewCommand: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
@@ -559,6 +562,88 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.status).toBe('executed');
+  });
+
+  it('lists trial matches with refresh option for doctor workflow', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listSessionTrialMatches.mockResolvedValue({
+      featureEnabled: true,
+      sessionId: 'session-1',
+      matches: [{ id: 'trial-1', matchStatus: 'proposed' }],
+    });
+
+    const result = await controller.listSessionTrialMatches('session-1', req, 'true');
+    expect(postVisitServiceMock.listSessionTrialMatches).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        refresh: true,
+        actorUserId: 'doctor-1',
+      }),
+    );
+    expect(result.matches).toHaveLength(1);
+  });
+
+  it('persists trial match review decision', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.reviewTrialMatch.mockResolvedValue({
+      sessionId: 'session-1',
+      action: 'consider',
+      match: { id: 'trial-1', matchStatus: 'considered' },
+    });
+
+    const result = await controller.reviewTrialMatch(
+      'session-1',
+      'trial-1',
+      {
+        action: 'consider',
+        note: 'Potential fit for this patient',
+      },
+      req,
+    );
+
+    expect(postVisitServiceMock.reviewTrialMatch).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      'trial-1',
+      expect.objectContaining({ action: 'consider' }),
+      expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.match.matchStatus).toBe('considered');
+  });
+
+  it('lists companion memory profile for doctor review', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listSessionCompanionMemory.mockResolvedValue({
+      featureEnabled: true,
+      sessionId: 'session-1',
+      memories: [{ id: 'mem-1', memoryType: 'preference' }],
+    });
+
+    const result = await controller.listSessionCompanionMemory('session-1', req, '20');
+    expect(postVisitServiceMock.listSessionCompanionMemory).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        limit: 20,
+      }),
+    );
+    expect(result.memories).toHaveLength(1);
   });
 
   it('publishes reviewed post-visit session for patient companion access', async () => {

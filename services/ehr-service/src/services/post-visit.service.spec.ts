@@ -1463,6 +1463,95 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('returns feature-disabled response for trial matcher when flag is off', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'false';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.listSessionTrialMatches(tenantDb, 'session-1', { refresh: true, actorUserId: 'doctor-1' });
+      expect(result.featureEnabled).toBe(false);
+      expect(Array.isArray(result.matches)).toBe(true);
+      expect(result.matches).toHaveLength(0);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    }
+  });
+
+  it('records trial match review decision state change', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              doctor_id: 'doctor-1',
+              status: 'doctor_reviewed',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_trial_matches')) {
+          return [
+            {
+              id: params[0],
+              session_id: params[1],
+              patient_id: 'patient-1',
+              trial_source: 'clinicaltrials_gov_v2',
+              trial_id: 'NCT00000001',
+              trial_title: 'Hypertension Trial',
+              trial_phase: 'Phase 3',
+              trial_status: 'RECRUITING',
+              condition_tags: ['hypertension'],
+              source_url: 'https://clinicaltrials.gov/study/NCT00000001',
+              eligibility_score: 84,
+              eligibility_rationale: ['Matched condition terms'],
+              match_status: params[2],
+              reviewed_by: params[3],
+              reviewed_at: '2026-03-06T13:00:00.000Z',
+              review_note: params[4],
+              metadata: JSON.parse(params[5] || '{}'),
+              created_at: '2026-03-06T12:00:00.000Z',
+              updated_at: '2026-03-06T13:00:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.reviewTrialMatch(
+      tenantDb,
+      'session-1',
+      'trial-1',
+      {
+        action: 'consider',
+        note: 'candidate for discussion',
+      },
+      {
+        actorUserId: 'doctor-1',
+      },
+    );
+
+    expect(result.action).toBe('consider');
+    expect(result.match.matchStatus).toBe('considered');
+  });
+
   it('publishes reviewed artifacts and initializes patient companion thread', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 

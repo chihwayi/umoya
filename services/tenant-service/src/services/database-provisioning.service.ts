@@ -525,6 +525,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint55PostVisitAdminDocsSchemaStatements(),
       },
       {
+        id: 'sprint56_post_visit_trials_memory',
+        label: 'Sprint 56 - Post-Visit Trial Matcher and Companion Memory',
+        version: '2026.03.06',
+        description: 'Adds de-identified clinical trial match persistence and longitudinal companion memory state',
+        statements: () => this.getSprint56PostVisitTrialMemorySchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1389,6 +1396,95 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_post_visit_admin_documents_updated_at ON post_visit_admin_documents`,
       `CREATE TRIGGER update_post_visit_admin_documents_updated_at
         BEFORE UPDATE ON post_visit_admin_documents
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint56PostVisitTrialMemorySchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_trial_matches (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
+        trial_id VARCHAR(80) NOT NULL,
+        trial_title TEXT NOT NULL,
+        trial_phase VARCHAR(80),
+        trial_status VARCHAR(80),
+        condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        source_url TEXT,
+        eligibility_score INTEGER NOT NULL DEFAULT 0,
+        eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
+        match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+          CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        review_note TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, trial_id)
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_trial_matches
+        ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS trial_source VARCHAR(40) NOT NULL DEFAULT 'clinicaltrials_gov_v2',
+        ADD COLUMN IF NOT EXISTS trial_id VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS trial_title TEXT,
+        ADD COLUMN IF NOT EXISTS trial_phase VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS trial_status VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS condition_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS source_url TEXT,
+        ADD COLUMN IF NOT EXISTS eligibility_score INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS eligibility_rationale JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS match_status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+          CHECK (match_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS review_note TEXT,
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS post_visit_companion_memory (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        memory_type VARCHAR(60) NOT NULL,
+        memory_key VARCHAR(120) NOT NULL,
+        memory_value TEXT NOT NULL,
+        confidence DOUBLE PRECISION,
+        source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
+        created_by UUID,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_companion_memory
+        ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS memory_type VARCHAR(60),
+        ADD COLUMN IF NOT EXISTS memory_key VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS memory_value TEXT,
+        ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS created_by UUID,
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_session ON post_visit_trial_matches(session_id, eligibility_score DESC, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_patient ON post_visit_trial_matches(patient_id, match_status, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_trial_id ON post_visit_trial_matches(trial_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_patient ON post_visit_companion_memory(patient_id, is_active, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_session ON post_visit_companion_memory(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`,
+      `DROP TRIGGER IF EXISTS update_post_visit_trial_matches_updated_at ON post_visit_trial_matches`,
+      `CREATE TRIGGER update_post_visit_trial_matches_updated_at
+        BEFORE UPDATE ON post_visit_trial_matches
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_companion_memory_updated_at ON post_visit_companion_memory`,
+      `CREATE TRIGGER update_post_visit_companion_memory_updated_at
+        BEFORE UPDATE ON post_visit_companion_memory
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

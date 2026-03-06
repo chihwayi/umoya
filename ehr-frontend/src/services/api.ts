@@ -1619,6 +1619,58 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitTrialMatches: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { refresh?: boolean },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/trial-matches`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: {
+        refresh: options?.refresh ? 'true' : undefined,
+      },
+    });
+    return { data: response.data };
+  },
+
+  reviewPostVisitTrialMatch: async (
+    sessionId: string,
+    matchId: string,
+    payload: { action: 'consider' | 'defer' | 'exclude' | 'enroll'; note?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/trial-matches/${matchId}/review`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitCompanionMemory: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { limit?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/companion-memory`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: {
+        limit: options?.limit,
+      },
+    });
+    return { data: response.data };
+  },
+
   executePostVisitVoiceCommand: async (
     sessionId: string,
     payload: {

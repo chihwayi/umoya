@@ -180,6 +180,43 @@ interface AdminDocumentItem {
   createdAt?: string;
 }
 
+interface TrialMatchItem {
+  id: string;
+  trialId: string;
+  trialTitle: string;
+  trialPhase?: string | null;
+  trialStatus?: string | null;
+  conditionTags?: string[];
+  sourceUrl?: string | null;
+  eligibilityScore?: number;
+  eligibilityRationale?: string[];
+  matchStatus: 'proposed' | 'considered' | 'deferred' | 'excluded' | 'enrolled';
+  reviewNote?: string | null;
+}
+
+interface TrialMatchesPayload {
+  featureEnabled: boolean;
+  matches: TrialMatchItem[];
+  summary?: {
+    total?: number;
+    proposed?: number;
+    considered?: number;
+    deferred?: number;
+    excluded?: number;
+    enrolled?: number;
+  };
+  message?: string;
+}
+
+interface CompanionMemoryItem {
+  id: string;
+  memoryType: string;
+  memoryKey: string;
+  memoryValue: string;
+  confidence?: number | null;
+  createdAt?: string;
+}
+
 interface DiarizationSegment {
   id: string;
   order: number;
@@ -400,6 +437,10 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [preVisitBriefLoading, setPreVisitBriefLoading] = useState(false);
   const [adminDocuments, setAdminDocuments] = useState<AdminDocumentItem[]>([]);
   const [adminDocumentsLoading, setAdminDocumentsLoading] = useState(false);
+  const [trialMatches, setTrialMatches] = useState<TrialMatchesPayload | null>(null);
+  const [trialMatchesLoading, setTrialMatchesLoading] = useState(false);
+  const [companionMemory, setCompanionMemory] = useState<CompanionMemoryItem[]>([]);
+  const [companionMemoryLoading, setCompanionMemoryLoading] = useState(false);
   const [voiceCommandIntent, setVoiceCommandIntent] = useState<
     'APPROVE_SUMMARY' | 'APPROVE_BUNDLE' | 'GENERATE_ADMIN_DOCS' | 'REGENERATE_DRAFT' | 'SIGN_AND_PUBLISH'
   >('APPROVE_SUMMARY');
@@ -725,6 +766,45 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadTrialMatches = useCallback(
+    async (sessionId: string, refresh = false) => {
+      if (!tenantSlug || !token || !sessionId) {
+        setTrialMatches(null);
+        return;
+      }
+      try {
+        setTrialMatchesLoading(true);
+        const response = await ehrApi.getPostVisitTrialMatches(sessionId, token, tenantSlug, { refresh });
+        setTrialMatches((response.data || null) as TrialMatchesPayload | null);
+      } catch {
+        setTrialMatches(null);
+      } finally {
+        setTrialMatchesLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
+  const loadCompanionMemory = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) {
+        setCompanionMemory([]);
+        return;
+      }
+      try {
+        setCompanionMemoryLoading(true);
+        const response = await ehrApi.getPostVisitCompanionMemory(sessionId, token, tenantSlug, { limit: 20 });
+        const rows = Array.isArray(response.data?.memories) ? (response.data.memories as CompanionMemoryItem[]) : [];
+        setCompanionMemory(rows);
+      } catch {
+        setCompanionMemory([]);
+      } finally {
+        setCompanionMemoryLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -732,6 +812,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   useEffect(() => {
     if (selectedSessionId) return;
     setAdminDocuments([]);
+    setTrialMatches(null);
+    setCompanionMemory([]);
     setVoiceCommandNote('');
     setVoiceConfirmSignAndPublish(false);
   }, [selectedSessionId]);
@@ -751,6 +833,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadIntraVisitAlerts(selectedSessionId);
     loadBillingIntelligence(selectedSessionId);
     loadAdminDocuments(selectedSessionId);
+    loadTrialMatches(selectedSessionId);
+    loadCompanionMemory(selectedSessionId);
     const selected = sessions.find((item) => item.id === selectedSessionId);
     if (selected?.appointmentId) {
       loadPreVisitBrief(selected.appointmentId);
@@ -769,7 +853,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadAdminDocuments, loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, selectedSessionId, sessions]);
+  }, [loadAdminDocuments, loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, loadTrialMatches, selectedSessionId, sessions]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -1147,6 +1231,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDiarization(createdId),
         loadIntraVisitAlerts(createdId),
         loadBillingIntelligence(createdId),
+        loadTrialMatches(createdId),
+        loadCompanionMemory(createdId),
       ]);
     } catch {
       showError('Create session failed', 'Unable to create post-visit session. Check patient ID and context.');
@@ -1164,6 +1250,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDraft,
     loadIntraVisitAlerts,
     loadBillingIntelligence,
+    loadCompanionMemory,
+    loadTrialMatches,
     showError,
     showSuccess,
     transcribeLanguage,
@@ -1190,13 +1278,15 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
+        loadTrialMatches(selectedSessionId),
+        loadCompanionMemory(selectedSessionId),
       ]);
     } catch {
       showError('Draft regeneration failed', 'Could not regenerate post-visit artifacts.');
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleTranscribeSelectedSession = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -1227,6 +1317,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
+        loadTrialMatches(selectedSessionId),
+        loadCompanionMemory(selectedSessionId),
       ]);
     } catch {
       showError('Session transcription failed', 'Unable to transcribe selected audio for this session.');
@@ -1239,6 +1331,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadSessions,
     loadIntraVisitAlerts,
     loadBillingIntelligence,
+    loadTrialMatches,
+    loadCompanionMemory,
     selectedSessionId,
     sessionTranscribeFile,
     showError,
@@ -1417,6 +1511,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadDiarization(selectedSessionId),
           loadIntraVisitAlerts(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
+          loadTrialMatches(selectedSessionId),
+          loadCompanionMemory(selectedSessionId),
         ]);
       } catch {
         showError('Review failed', `Unable to review ${artifactType.replace('_', ' ')}.`);
@@ -1424,7 +1520,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReassignDiarization = useCallback(
@@ -1477,6 +1573,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadDiarization(selectedSessionId),
           loadIntraVisitAlerts(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
+          loadTrialMatches(selectedSessionId),
+          loadCompanionMemory(selectedSessionId),
         ]);
       } catch {
         showError('Execution failed', `Unable to execute recommendation: ${title}`);
@@ -1484,7 +1582,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReviewBillingSuggestion = useCallback(
@@ -1513,6 +1611,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         await Promise.all([
           loadDraft(selectedSessionId),
           loadBillingIntelligence(selectedSessionId),
+          loadTrialMatches(selectedSessionId),
         ]);
       } catch {
         showError(
@@ -1523,7 +1622,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadBillingIntelligence, loadDraft, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadDraft, loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleGenerateAdminDocuments = useCallback(async () => {
@@ -1576,6 +1675,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
         loadAdminDocuments(selectedSessionId),
+        loadTrialMatches(selectedSessionId),
+        loadCompanionMemory(selectedSessionId),
       ]);
     } catch (error: any) {
       const details = String(error?.response?.data?.message || '').trim() || 'Unable to execute voice command.';
@@ -1586,10 +1687,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   }, [
     loadAdminDocuments,
     loadBillingIntelligence,
+    loadCompanionMemory,
     loadDiarization,
     loadDraft,
     loadIntraVisitAlerts,
     loadSessions,
+    loadTrialMatches,
     selectedSessionId,
     showError,
     showSuccess,
@@ -1599,6 +1702,37 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     voiceCommandNote,
     voiceConfirmSignAndPublish,
   ]);
+
+  const handleRefreshTrialMatches = useCallback(async () => {
+    if (!selectedSessionId) return;
+    await loadTrialMatches(selectedSessionId, true);
+  }, [loadTrialMatches, selectedSessionId]);
+
+  const handleReviewTrialMatch = useCallback(
+    async (matchId: string, action: 'consider' | 'defer' | 'exclude' | 'enroll') => {
+      if (!tenantSlug || !token || !selectedSessionId) return;
+      try {
+        setWorkingActionKey(`trial:${action}:${matchId}`);
+        await ehrApi.reviewPostVisitTrialMatch(
+          selectedSessionId,
+          matchId,
+          {
+            action,
+            note: `Doctor action from trial panel: ${action}`,
+          },
+          token,
+          tenantSlug,
+        );
+        showSuccess('Trial decision saved', `${action.toUpperCase()} recorded for ${matchId}.`);
+        await loadTrialMatches(selectedSessionId);
+      } catch {
+        showError('Trial decision failed', 'Unable to update trial match decision.');
+      } finally {
+        setWorkingActionKey(null);
+      }
+    },
+    [loadTrialMatches, selectedSessionId, showError, showSuccess, tenantSlug, token],
+  );
 
   const handlePublish = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -1627,6 +1761,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
         loadBillingIntelligence(selectedSessionId),
+        loadTrialMatches(selectedSessionId),
+        loadCompanionMemory(selectedSessionId),
       ]);
     } catch (error: any) {
       const details =
@@ -1645,6 +1781,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadSessions,
     loadIntraVisitAlerts,
     loadBillingIntelligence,
+    loadCompanionMemory,
+    loadTrialMatches,
     selectedSessionId,
     showError,
     showSuccess,
@@ -2993,6 +3131,150 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                             hash {String(doc.immutableHash || '').slice(0, 12) || 'n/a'}
                           </span>
                         </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Clinical Trial Matcher (De-Identified)</h3>
+                    <button
+                      type="button"
+                      onClick={handleRefreshTrialMatches}
+                      disabled={!selectedSessionId || trialMatchesLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${trialMatchesLoading ? 'animate-spin' : ''}`} />
+                      Refresh matches
+                    </button>
+                  </div>
+
+                  {trialMatches?.featureEnabled === false && (
+                    <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Feature disabled. Enable <code>FEATURE_POSTVISIT_TRIAL_MATCHER</code> to activate de-identified trial matching.
+                    </p>
+                  )}
+
+                  {trialMatches?.featureEnabled !== false && (
+                    <>
+                      <div className="mb-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-6">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          Total: {Number(trialMatches?.summary?.total || 0)}
+                        </div>
+                        <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-700">
+                          Proposed: {Number(trialMatches?.summary?.proposed || 0)}
+                        </div>
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                          Considered: {Number(trialMatches?.summary?.considered || 0)}
+                        </div>
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+                          Deferred: {Number(trialMatches?.summary?.deferred || 0)}
+                        </div>
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                          Excluded: {Number(trialMatches?.summary?.excluded || 0)}
+                        </div>
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-indigo-700">
+                          Enrolled: {Number(trialMatches?.summary?.enrolled || 0)}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {Array.isArray(trialMatches?.matches) && trialMatches.matches.length > 0 ? (
+                          trialMatches.matches.map((match) => (
+                            <article key={match.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {match.trialTitle} ({match.trialId})
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-slate-600">
+                                    Score {Number(match.eligibilityScore || 0)} • {match.trialPhase || 'phase n/a'} •{' '}
+                                    {match.trialStatus || 'status n/a'} • {match.matchStatus}
+                                  </p>
+                                  {Array.isArray(match.eligibilityRationale) && match.eligibilityRationale.length > 0 && (
+                                    <p className="mt-1 text-[11px] text-slate-700">
+                                      {match.eligibilityRationale.slice(0, 2).join(' • ')}
+                                    </p>
+                                  )}
+                                  {match.sourceUrl && (
+                                    <a
+                                      href={match.sourceUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-1 inline-block text-[11px] font-semibold text-cyan-700 hover:text-cyan-800"
+                                    >
+                                      Open trial source
+                                    </a>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReviewTrialMatch(match.id, 'consider')}
+                                    disabled={workingActionKey === `trial:consider:${match.id}`}
+                                    className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                  >
+                                    {workingActionKey === `trial:consider:${match.id}` ? 'Saving…' : 'Consider'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReviewTrialMatch(match.id, 'defer')}
+                                    disabled={workingActionKey === `trial:defer:${match.id}`}
+                                    className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                  >
+                                    {workingActionKey === `trial:defer:${match.id}` ? 'Saving…' : 'Defer'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReviewTrialMatch(match.id, 'exclude')}
+                                    disabled={workingActionKey === `trial:exclude:${match.id}`}
+                                    className="rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                  >
+                                    {workingActionKey === `trial:exclude:${match.id}` ? 'Saving…' : 'Exclude'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReviewTrialMatch(match.id, 'enroll')}
+                                    disabled={workingActionKey === `trial:enroll:${match.id}`}
+                                    className="rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                                  >
+                                    {workingActionKey === `trial:enroll:${match.id}` ? 'Saving…' : 'Enroll'}
+                                  </button>
+                                </div>
+                              </div>
+                            </article>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500">
+                            No trial matches currently available for this session context.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Companion Memory (Longitudinal)</h3>
+                    {companionMemoryLoading && <span className="text-xs text-slate-500">Loading memory…</span>}
+                  </div>
+                  <div className="space-y-2">
+                    {companionMemory.length === 0 && !companionMemoryLoading && (
+                      <p className="text-xs text-slate-500">
+                        No memory items captured yet from patient companion conversations.
+                      </p>
+                    )}
+                    {companionMemory.slice(0, 8).map((memory) => (
+                      <article key={memory.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {String(memory.memoryType || '').replace(/_/g, ' ')} • {String(memory.memoryKey || '').replace(/_/g, ' ')}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">{memory.memoryValue}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Confidence {memory.confidence !== null && memory.confidence !== undefined ? Math.round(Number(memory.confidence) * 100) : 'n/a'}%
+                          {memory.createdAt ? ` • ${formatDate(memory.createdAt)}` : ''}
+                        </p>
                       </article>
                     ))}
                   </div>
