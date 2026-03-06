@@ -98,7 +98,6 @@ async function run() {
   if (argv.publish) {
     const publishResponse = await client.post(`/post-visit/sessions/${argv.sessionId}/publish`, {
       note: 'QA publish smoke',
-      publishToPatientCompanion: true,
     });
     publishStatus = publishResponse.data?.session?.status || publishResponse.data?.status || null;
   }

@@ -1,0 +1,17 @@
+{
+  "runAt": "2026-03-06T20:42:56.289Z",
+  "sessionId": "dc140fdd-30f2-4da9-99ad-68a305b7c83e",
+  "escalationId": "16833f69-2d08-4bfc-a1c3-14e6e713ba15",
+  "escalationSeverity": "critical",
+  "escalationRoute": "emergency",
+  "queueMatch": true,
+  "resolvedStatus": "resolved",
+  "channelDelivery": {
+    "patientInApp": true,
+    "patientSms": true,
+    "patientEmail": true,
+    "clinicianSms": true,
+    "clinicianEmail": true,
+    "errors": []
+  }
+}

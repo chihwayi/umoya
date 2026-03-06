@@ -1,0 +1,16 @@
+{
+  "runAt": "2026-03-06T20:41:56.644Z",
+  "sessionId": "dc140fdd-30f2-4da9-99ad-68a305b7c83e",
+  "sessionStatusBefore": "published",
+  "publishAttempted": false,
+  "publishStatus": null,
+  "executedActionId": "general_post_visit_followup",
+  "executionStatus": "executed",
+  "escalationId": "90ca7f36-533a-4acd-b55f-4aaabcdc62df",
+  "escalationSeverity": "critical",
+  "escalationRoute": "emergency",
+  "resolveStatus": "resolved",
+  "mobileContractVersion": "post-visit-mobile.v1",
+  "mobileEventCount": 16,
+  "fhirResourceCount": 8
+}

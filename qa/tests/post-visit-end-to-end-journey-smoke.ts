@@ -181,7 +181,16 @@ async function run() {
       status: 'resolved',
       resolutionNote: 'QA journey close-loop resolution',
     });
-    resolveStatus = resolveResponse.data?.status || null;
+    resolveStatus = resolveResponse.data?.status || resolveResponse.data?.escalation?.status || null;
+    if (String(resolveStatus || '').toLowerCase() !== 'resolved') {
+      const resolvedQueue = await clinicianClient.get('/post-visit/escalations', {
+        params: { sessionId: argv.sessionId, status: 'resolved', limit: 50, offset: 0 },
+      });
+      const resolvedEscalations = Array.isArray(resolvedQueue.data?.escalations) ? resolvedQueue.data.escalations : [];
+      const isResolved = resolvedEscalations.some((item: { id?: string }) => String(item.id || '') === escalationId);
+      ensure(isResolved, 'Escalation not found in resolved queue after resolve request');
+      resolveStatus = 'resolved';
+    }
   }
 
   const [mobileContractResponse, mobileEventsResponse, fhirResponse] = await Promise.all([

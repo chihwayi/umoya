@@ -9,6 +9,34 @@ export class PatientNotificationsService {
 
   constructor(private tenantService: TenantService) {}
 
+  private async ensureNotificationSchema(connection: DataSource): Promise<void> {
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS patient_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(120) NOT NULL,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        notification_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        action_url VARCHAR(500),
+        action_label VARCHAR(100),
+        priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        read_at TIMESTAMP WITH TIME ZONE,
+        sent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await connection.query(`CREATE INDEX IF NOT EXISTS idx_patient_notifications_tenant ON patient_notifications(tenant_id)`);
+    await connection.query(`CREATE INDEX IF NOT EXISTS idx_patient_notifications_patient ON patient_notifications(patient_id)`);
+    await connection.query(`CREATE INDEX IF NOT EXISTS idx_patient_notifications_patient_read ON patient_notifications(patient_id, read)`);
+    await connection.query(`CREATE INDEX IF NOT EXISTS idx_patient_notifications_type ON patient_notifications(notification_type)`);
+    await connection.query(`CREATE INDEX IF NOT EXISTS idx_patient_notifications_sent_at ON patient_notifications(sent_at DESC)`);
+  }
+
   async createNotification(
     patientId: string,
     notificationType: NotificationType,
@@ -27,6 +55,7 @@ export class PatientNotificationsService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+    await this.ensureNotificationSchema(connection);
 
     const query = `
       INSERT INTO patient_notifications (
@@ -76,6 +105,7 @@ export class PatientNotificationsService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+    await this.ensureNotificationSchema(connection);
 
     let query = `
       SELECT 
@@ -144,6 +174,7 @@ export class PatientNotificationsService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+    await this.ensureNotificationSchema(connection);
 
     await connection.query(
       `UPDATE patient_notifications 
@@ -158,6 +189,7 @@ export class PatientNotificationsService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+    await this.ensureNotificationSchema(connection);
 
     await connection.query(
       `UPDATE patient_notifications 
@@ -172,6 +204,7 @@ export class PatientNotificationsService {
     if (!connection) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
+    await this.ensureNotificationSchema(connection);
 
     await connection.query(
       `DELETE FROM patient_notifications 
@@ -286,4 +319,3 @@ export class PatientNotificationsService {
     );
   }
 }
-

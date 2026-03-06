@@ -226,6 +226,7 @@ const EHRDashboard: React.FC = () => {
   const [postVisitAdminTrialSlaAccountability, setPostVisitAdminTrialSlaAccountability] = useState<PostVisitTrialSlaAccountabilitySnapshot | null>(null);
   const [postVisitAdminTrialLoading, setPostVisitAdminTrialLoading] = useState(false);
   const [postVisitAdminTrialExportLoading, setPostVisitAdminTrialExportLoading] = useState(false);
+  const postVisitAdminTrialSlaItems = postVisitAdminTrialSlaAccountability?.items ?? [];
 
   const [accountStats, setAccountStats] = useState({
     todayReceipts: 0,
@@ -760,11 +761,11 @@ const EHRDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {Array.isArray(postVisitAdminTrialSlaAccountability?.items) && postVisitAdminTrialSlaAccountability.items.length > 0 && (
+              {postVisitAdminTrialSlaItems.length > 0 && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold text-slate-600 mb-2">Clinician Accountability (Top)</p>
                   <div className="space-y-1">
-                    {postVisitAdminTrialSlaAccountability.items.slice(0, 5).map((item, index) => {
+                    {postVisitAdminTrialSlaItems.slice(0, 5).map((item, index) => {
                       const clinicianName = [item.clinician?.firstName, item.clinician?.lastName].filter(Boolean).join(' ').trim();
                       return (
                         <p key={`${item.clinician?.id || 'clinician'}-${index}`} className="text-xs text-slate-700">

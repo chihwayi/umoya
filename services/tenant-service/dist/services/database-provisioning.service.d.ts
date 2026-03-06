@@ -30,6 +30,16 @@ export declare class DatabaseProvisioningService {
     private getMaternityCareTaskSchemaStatements;
     private getSprint46NurseCopilotSchemaStatements;
     private getSprint47NurseCrossModuleWorkflowSchemaStatements;
+    private getSprint48PostVisitCompanionSchemaStatements;
+    private getSprint49PostVisitReviewCitationSchemaStatements;
+    private getSprint50PostVisitExecutionActionSchemaStatements;
+    private getSprint51PostVisitCompanionEscalationSchemaStatements;
+    private getSprint52PostVisitIntraVisitRoutingSchemaStatements;
+    private getSprint53PostVisitBillingIntelligenceSchemaStatements;
+    private getSprint54PostVisitPreVisitBriefSchemaStatements;
+    private getSprint55PostVisitAdminDocsSchemaStatements;
+    private getSprint56PostVisitTrialMemorySchemaStatements;
+    private getSprint57PostVisitDocumentIntelligenceAndNotificationsSchemaStatements;
     private getWhoSmartFormsDataSchemaStatements;
     createDatabase(databaseName: string): Promise<string>;
     private generateConnectionString;

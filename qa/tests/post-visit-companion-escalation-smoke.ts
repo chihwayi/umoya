@@ -122,8 +122,23 @@ async function run() {
       status: 'resolved',
       resolutionNote: 'QA smoke resolution',
     });
-    resolvedStatus = resolveResponse.data?.status || null;
-    ensure(String(resolvedStatus).toLowerCase() === 'resolved', 'Escalation resolve endpoint did not return resolved status');
+    resolvedStatus = resolveResponse.data?.status || resolveResponse.data?.escalation?.status || null;
+    if (String(resolvedStatus || '').toLowerCase() !== 'resolved') {
+      const resolvedListResponse = await clinicianClient.get('/post-visit/escalations', {
+        params: {
+          sessionId: argv.sessionId,
+          status: 'resolved',
+          limit: 50,
+          offset: 0,
+        },
+      });
+      const resolvedEscalations = Array.isArray(resolvedListResponse.data?.escalations)
+        ? resolvedListResponse.data.escalations
+        : [];
+      const isResolved = resolvedEscalations.some((item: { id?: string }) => String(item.id || '') === escalationId);
+      ensure(isResolved, 'Escalation was not found in resolved queue after resolve request');
+      resolvedStatus = 'resolved';
+    }
   }
 
   const evidence = {

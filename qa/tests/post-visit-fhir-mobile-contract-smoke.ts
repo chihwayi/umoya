@@ -6,6 +6,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 const argv = yargs(hideBin(process.argv))
+  .version(false)
   .option('baseUrl', {
     type: 'string',
     default: 'http://localhost:3013',

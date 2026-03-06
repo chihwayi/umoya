@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
@@ -2229,6 +2229,14 @@ export class PostVisitService {
     sessionRow: any,
     createdBy: string | null,
   ) {
+    const resolvedSessionId = String(sessionRow?.id || '').trim();
+    const resolvedPatientId = String(sessionRow?.patient_id || '').trim();
+    if (!resolvedSessionId || !resolvedPatientId) {
+      throw new InternalServerErrorException(
+        'Unable to initialize companion thread due to missing post-visit session identity.',
+      );
+    }
+
     const rows = await tenantDb.query(
       `
         INSERT INTO post_visit_companion_threads (
@@ -2241,7 +2249,7 @@ export class PostVisitService {
         DO UPDATE SET updated_at = NOW()
         RETURNING *
       `,
-      [sessionRow.id, sessionRow.patient_id, createdBy],
+      [resolvedSessionId, resolvedPatientId, createdBy],
     );
     return rows[0];
   }
@@ -2847,11 +2855,11 @@ export class PostVisitService {
             $2,
             $3,
             'pending',
-            $4,
+            $4::varchar(80),
             'post_visit_companion',
             CASE
-              WHEN $4 = 'emergency' THEN 'Emergency'
-              WHEN $4 = 'doctor' THEN 'General Medicine'
+              WHEN $4::varchar(80) = 'emergency'::varchar(80) THEN 'Emergency'
+              WHEN $4::varchar(80) = 'doctor'::varchar(80) THEN 'General Medicine'
               ELSE 'Nursing'
             END,
             $5,
@@ -2931,7 +2939,7 @@ export class PostVisitService {
           sla_due_at,
           metadata
         ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17::jsonb
+          $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb
         )
         RETURNING *
       `,
@@ -9312,7 +9320,13 @@ export class PostVisitService {
       ],
     );
 
-    const thread = await this.ensureCompanionThread(tenantDb, updatedSessionRows[0], options.actorUserId);
+    const publishedSessionRow = updatedSessionRows?.[0] || null;
+    let threadSessionRow = publishedSessionRow;
+    if (!threadSessionRow?.id || !threadSessionRow?.patient_id) {
+      threadSessionRow = await this.getSessionRow(tenantDb, sessionId);
+    }
+    const resolvedPublishedSession = threadSessionRow;
+    const thread = await this.ensureCompanionThread(tenantDb, resolvedPublishedSession, options.actorUserId);
 
     const [visitSummaryArtifact, recommendationArtifact] = await Promise.all([
       this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
@@ -9363,7 +9377,7 @@ export class PostVisitService {
         [
           thread.id,
           sessionId,
-          updatedSessionRows[0].patient_id,
+          resolvedPublishedSession.patient_id,
           options.actorUserId,
           summaryMessage,
           JSON.stringify({
@@ -9379,7 +9393,7 @@ export class PostVisitService {
     }
 
     return {
-      session: this.mapSession(updatedSessionRows[0]),
+      session: this.mapSession(resolvedPublishedSession),
       companionThread: {
         id: thread.id,
         status: thread.status,

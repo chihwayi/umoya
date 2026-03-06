@@ -1,0 +1,37 @@
+{
+  "runAt": "2026-03-06T20:41:55.844Z",
+  "sessionId": "dc140fdd-30f2-4da9-99ad-68a305b7c83e",
+  "fhir": {
+    "exportVersion": "post-visit-fhir-r4.v1",
+    "resourceCount": 7,
+    "taskCount": 1
+  },
+  "mobileContract": {
+    "contractVersion": "post-visit-mobile.v1",
+    "cards": [
+      {
+        "id": "post_visit_summary",
+        "status": "published"
+      },
+      {
+        "id": "post_visit_checklist",
+        "status": "in_progress"
+      },
+      {
+        "id": "post_visit_escalations",
+        "status": "attention"
+      }
+    ],
+    "checklistCount": 1
+  },
+  "mobileEvents": {
+    "contractVersion": "post-visit-mobile-events.v1",
+    "eventCount": 13,
+    "eventTypes": [
+      "post_visit.escalation.resolved",
+      "post_visit.escalation.triggered",
+      "post_visit.session.published",
+      "post_visit.review_action.recorded"
+    ]
+  }
+}
