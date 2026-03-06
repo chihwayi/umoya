@@ -518,6 +518,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint54PostVisitPreVisitBriefSchemaStatements(),
       },
       {
+        id: 'sprint55_post_visit_admin_docs_voice_review',
+        label: 'Sprint 55 - Post-Visit Admin Docs and Voice Review',
+        version: '2026.03.06',
+        description: 'Adds signed admin document persistence and immutable hash trail for voice-driven doctor workflow',
+        statements: () => this.getSprint55PostVisitAdminDocsSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1333,6 +1340,55 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_post_visit_previsit_briefs_updated_at ON post_visit_previsit_briefs`,
       `CREATE TRIGGER update_post_visit_previsit_briefs_updated_at
         BEFORE UPDATE ON post_visit_previsit_briefs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint55PostVisitAdminDocsSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_admin_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        document_type VARCHAR(40) NOT NULL
+          CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
+        version_no INTEGER NOT NULL DEFAULT 1,
+        status VARCHAR(20) NOT NULL DEFAULT 'signed'
+          CHECK (status IN ('draft','signed','dispatched','voided')),
+        title VARCHAR(255) NOT NULL,
+        body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        immutable_hash VARCHAR(128) NOT NULL,
+        signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        signed_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, document_type, version_no)
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_admin_documents
+        ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS document_type VARCHAR(40)
+          CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
+        ADD COLUMN IF NOT EXISTS version_no INTEGER NOT NULL DEFAULT 1,
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'signed'
+          CHECK (status IN ('draft','signed','dispatched','voided')),
+        ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS immutable_hash VARCHAR(128),
+        ADD COLUMN IF NOT EXISTS signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_session ON post_visit_admin_documents(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`,
+      `DROP TRIGGER IF EXISTS update_post_visit_admin_documents_updated_at ON post_visit_admin_documents`,
+      `CREATE TRIGGER update_post_visit_admin_documents_updated_at
+        BEFORE UPDATE ON post_visit_admin_documents
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

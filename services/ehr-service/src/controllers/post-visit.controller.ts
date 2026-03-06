@@ -31,6 +31,8 @@ import {
   AnalyzePostVisitIntraVisitAlertDto,
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
+  ExecutePostVisitVoiceCommandDto,
+  GeneratePostVisitAdminDocumentsDto,
   IngestPostVisitDocumentIntelligenceDto,
   PublishPostVisitSessionDto,
   ReassignPostVisitDiarizationSegmentDto,
@@ -206,6 +208,56 @@ export class PostVisitController {
       actorUserId: this.resolveUserId(req),
       source: 'post_visit_review_endpoint',
     });
+  }
+
+  @Post('sessions/:id/admin-docs/generate')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Generate and sign template-driven post-visit admin documents' })
+  @ApiResponse({ status: 200, description: 'Post-visit admin documents generated' })
+  async generateSessionAdminDocuments(
+    @Param('id') id: string,
+    @Body() body: GeneratePostVisitAdminDocumentsDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.generateSessionAdminDocuments(
+      req.tenantDb,
+      id,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Get('sessions/:id/admin-docs')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List generated post-visit admin documents for doctor workspace' })
+  @ApiResponse({ status: 200, description: 'Post-visit admin documents listed' })
+  async listSessionAdminDocuments(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.listSessionAdminDocuments(req.tenantDb, id);
+  }
+
+  @Post('sessions/:id/voice-command')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Execute doctor voice command intents for review/signoff workflow' })
+  @ApiResponse({ status: 200, description: 'Voice command executed' })
+  async executeVoiceCommand(
+    @Param('id') id: string,
+    @Body() body: ExecutePostVisitVoiceCommandDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.executeVoiceReviewCommand(
+      req.tenantDb,
+      id,
+      body,
+      {
+        tenantId: req.tenantId,
+        actorUserId: this.resolveUserId(req),
+      },
+    );
   }
 
   @Post('sessions/:id/transcribe')

@@ -7,6 +7,8 @@ import { createHash } from 'crypto';
 import { config } from '@medicore/config';
 import {
   CreatePostVisitSessionDto,
+  ExecutePostVisitVoiceCommandDto,
+  GeneratePostVisitAdminDocumentsDto,
   ReviewPostVisitBillingSuggestionDto,
   ExecutePostVisitRecommendationDto,
   ReviewPostVisitArtifactDto,
@@ -99,6 +101,13 @@ interface PublishSessionOptions {
 }
 
 type PostVisitDocumentType = 'lab_report' | 'prescription' | 'imaging_report' | 'discharge_summary' | 'other';
+type PostVisitAdminDocumentType = 'referral_letter' | 'sick_note' | 'return_to_work';
+type PostVisitVoiceCommand =
+  | 'APPROVE_SUMMARY'
+  | 'APPROVE_BUNDLE'
+  | 'GENERATE_ADMIN_DOCS'
+  | 'REGENERATE_DRAFT'
+  | 'SIGN_AND_PUBLISH';
 
 interface PostVisitDocumentObservation {
   name: string;
@@ -797,6 +806,47 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_admin_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        document_type VARCHAR(40) NOT NULL
+          CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
+        version_no INTEGER NOT NULL DEFAULT 1,
+        status VARCHAR(20) NOT NULL DEFAULT 'signed'
+          CHECK (status IN ('draft','signed','dispatched','voided')),
+        title VARCHAR(255) NOT NULL,
+        body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        immutable_hash VARCHAR(128) NOT NULL,
+        signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        signed_at TIMESTAMP WITH TIME ZONE,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, document_type, version_no)
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_admin_documents
+      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS document_type VARCHAR(40)
+        CHECK (document_type IN ('referral_letter','sick_note','return_to_work')),
+      ADD COLUMN IF NOT EXISTS version_no INTEGER NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'signed'
+        CHECK (status IN ('draft','signed','dispatched','voided')),
+      ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS body_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS immutable_hash VARCHAR(128),
+      ADD COLUMN IF NOT EXISTS signed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS signed_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS post_visit_companion_acknowledgements (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -859,6 +909,9 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_patient ON post_visit_previsit_briefs(patient_id, generated_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_session ON post_visit_admin_documents(session_id, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_patient ON post_visit_admin_documents(patient_id, document_type, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_admin_documents_hash ON post_visit_admin_documents(immutable_hash)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -1014,6 +1067,26 @@ export class PostVisitService {
     };
   }
 
+  private mapAdminDocument(row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      documentType: row.document_type,
+      version: Number(row.version_no || 1),
+      status: row.status || 'signed',
+      title: row.title || null,
+      body: row.body_json || {},
+      immutableHash: row.immutable_hash || null,
+      signedBy: row.signed_by || null,
+      signedAt: row.signed_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private normalizeLanguage(language?: string | null) {
     const raw = String(language || '').trim().toLowerCase();
     if (!raw) return 'en';
@@ -1110,6 +1183,48 @@ export class PostVisitService {
       return configured;
     }
     return String(process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF || 'false').toLowerCase() === 'true';
+  }
+
+  private isAdminDocumentsEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitAdminDocuments;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_ADMIN_DOCS || 'false').toLowerCase() === 'true';
+  }
+
+  private isVoiceReviewEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitVoiceReview;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_VOICE_REVIEW || 'false').toLowerCase() === 'true';
+  }
+
+  private normalizeVoiceCommand(input?: string | null): PostVisitVoiceCommand | null {
+    const normalized = String(input || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+
+    const aliases: Record<string, PostVisitVoiceCommand> = {
+      APPROVE_SUMMARY: 'APPROVE_SUMMARY',
+      ACCEPT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_VISIT_SUMMARY: 'APPROVE_SUMMARY',
+      APPROVE_BUNDLE: 'APPROVE_BUNDLE',
+      ACCEPT_BUNDLE: 'APPROVE_BUNDLE',
+      APPROVE_RECOMMENDATION_BUNDLE: 'APPROVE_BUNDLE',
+      GENERATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      CREATE_ADMIN_DOCS: 'GENERATE_ADMIN_DOCS',
+      REGENERATE_DRAFT: 'REGENERATE_DRAFT',
+      REFRESH_DRAFT: 'REGENERATE_DRAFT',
+      SIGN_AND_PUBLISH: 'SIGN_AND_PUBLISH',
+      PUBLISH: 'SIGN_AND_PUBLISH',
+    };
+
+    return aliases[normalized] || null;
   }
 
   private resolveFollowUpRiskTier(score: number): PostVisitFollowUpRiskTier {
@@ -5394,6 +5509,385 @@ export class PostVisitService {
       featureEnabled: true,
       ...this.mapPreVisitBrief(upsertedRows[0]),
       reused: false,
+    };
+  }
+
+  private buildAdminDocumentTemplate(args: {
+    documentType: PostVisitAdminDocumentType;
+    sessionRow: any;
+    patientLabel: string | null;
+    doctorLabel: string | null;
+    summaryText: string;
+    recommendationTitles: string[];
+    note?: string | null;
+    appointmentReason?: string | null;
+  }) {
+    const dateIssued = new Date().toISOString();
+    const subjectLine = args.appointmentReason || 'Post-visit follow-up plan';
+    const recommendations = args.recommendationTitles.slice(0, 8);
+    const summary = args.summaryText || 'Clinician-reviewed post-visit summary available in chart.';
+
+    if (args.documentType === 'referral_letter') {
+      const title = `Referral Letter - ${args.patientLabel || 'Patient'}`;
+      return {
+        title,
+        body: {
+          templateVersion: 'd1.v1',
+          templateType: 'referral_letter',
+          issuedAt: dateIssued,
+          patient: args.patientLabel,
+          clinician: args.doctorLabel,
+          subject: subjectLine,
+          summary,
+          referralReason: subjectLine,
+          recommendedActions: recommendations,
+          note: args.note || null,
+        },
+      };
+    }
+
+    if (args.documentType === 'sick_note') {
+      const title = `Medical Sick Note - ${args.patientLabel || 'Patient'}`;
+      return {
+        title,
+        body: {
+          templateVersion: 'd1.v1',
+          templateType: 'sick_note',
+          issuedAt: dateIssued,
+          patient: args.patientLabel,
+          clinician: args.doctorLabel,
+          clinicalSummary: summary,
+          recommendationHighlights: recommendations,
+          note: args.note || null,
+        },
+      };
+    }
+
+    const title = `Return-to-Work Certificate - ${args.patientLabel || 'Patient'}`;
+    return {
+      title,
+      body: {
+        templateVersion: 'd1.v1',
+        templateType: 'return_to_work',
+        issuedAt: dateIssued,
+        patient: args.patientLabel,
+        clinician: args.doctorLabel,
+        clinicalSummary: summary,
+        workReadinessBasis: recommendations.length ? recommendations : ['No active high-risk blockers in post-visit checklist.'],
+        note: args.note || null,
+      },
+    };
+  }
+
+  async generateSessionAdminDocuments(
+    tenantDb: DataSource,
+    sessionId: string,
+    payload: GeneratePostVisitAdminDocumentsDto = {},
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    if (!this.isAdminDocumentsEnabled()) {
+      return {
+        featureEnabled: false,
+        sessionId,
+        documents: [],
+        message: 'Post-visit admin document generation is disabled by feature flag.',
+      };
+    }
+
+    if (!options.actorUserId) {
+      throw new BadRequestException('Authenticated doctor user is required to sign admin documents');
+    }
+
+    const allowedTypes: PostVisitAdminDocumentType[] = ['referral_letter', 'sick_note', 'return_to_work'];
+    const requestedTypes = Array.isArray(payload.documentTypes)
+      ? payload.documentTypes
+          .map((item) => String(item || '').trim().toLowerCase())
+          .filter((item): item is PostVisitAdminDocumentType => allowedTypes.includes(item as PostVisitAdminDocumentType))
+      : [];
+    const documentTypes: PostVisitAdminDocumentType[] = requestedTypes.length ? Array.from(new Set(requestedTypes)) : allowedTypes;
+    const signImmediately = payload.signImmediately !== false;
+
+    const [patientRows, doctorRows] = await Promise.all([
+      tenantDb.query(
+        `
+          SELECT id, first_name, last_name, patient_number
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [sessionRow.patient_id],
+      ),
+      sessionRow.doctor_id
+        ? tenantDb.query(
+            `
+              SELECT id, first_name, last_name
+              FROM users
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [sessionRow.doctor_id],
+          )
+        : Promise.resolve([]),
+    ]);
+
+    const patientLabel = this.buildPatientDisplay(patientRows?.[0] || null);
+    const doctorLabel = this.buildUserDisplay(doctorRows?.[0] || null);
+
+    const [visitSummaryArtifact, recommendationArtifact, appointmentRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      sessionRow.appointment_id
+        ? tenantDb.query(`SELECT reason FROM appointments WHERE id = $1 LIMIT 1`, [sessionRow.appointment_id])
+        : Promise.resolve([]),
+    ]);
+
+    const summaryText = String(visitSummaryArtifact?.content?.plain_language_summary || '').trim();
+    const recommendationTitles = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+          .map((item: any) => String(item?.title || '').trim())
+          .filter((title: string) => title.length > 0)
+      : [];
+    const appointmentReason = String(appointmentRows?.[0]?.reason || '').trim() || null;
+
+    const documents = [] as any[];
+    for (const documentType of documentTypes) {
+      const [versionRow] = await tenantDb.query(
+        `
+          SELECT COALESCE(MAX(version_no), 0)::int AS current_version
+          FROM post_visit_admin_documents
+          WHERE session_id = $1
+            AND document_type = $2
+        `,
+        [sessionId, documentType],
+      );
+      const version = Number(versionRow?.current_version || 0) + 1;
+      const template = this.buildAdminDocumentTemplate({
+        documentType,
+        sessionRow,
+        patientLabel,
+        doctorLabel,
+        summaryText,
+        recommendationTitles,
+        note: payload.note || null,
+        appointmentReason,
+      });
+      const immutableHash = createHash('sha256')
+        .update(
+          JSON.stringify({
+            sessionId,
+            documentType,
+            version,
+            patientId: sessionRow.patient_id,
+            doctorId: sessionRow.doctor_id || null,
+            signedBy: options.actorUserId,
+            template,
+          }),
+        )
+        .digest('hex');
+
+      const insertedRows = await tenantDb.query(
+        `
+          INSERT INTO post_visit_admin_documents (
+            session_id,
+            patient_id,
+            doctor_id,
+            document_type,
+            version_no,
+            status,
+            title,
+            body_json,
+            immutable_hash,
+            signed_by,
+            signed_at,
+            metadata
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb
+          )
+          RETURNING *
+        `,
+        [
+          sessionId,
+          sessionRow.patient_id,
+          sessionRow.doctor_id || null,
+          documentType,
+          version,
+          signImmediately ? 'signed' : 'draft',
+          template.title,
+          JSON.stringify(template.body),
+          immutableHash,
+          signImmediately ? options.actorUserId : null,
+          signImmediately ? new Date().toISOString() : null,
+          JSON.stringify({
+            source: 'post_visit_admin_docs_v1',
+            note: payload.note || null,
+            generated_by: options.actorUserId || null,
+            sign_immediately: signImmediately,
+          }),
+        ],
+      );
+
+      if (insertedRows?.[0]) {
+        documents.push(this.mapAdminDocument(insertedRows[0]));
+      }
+    }
+
+    return {
+      featureEnabled: true,
+      sessionId,
+      generatedCount: documents.length,
+      documents,
+    };
+  }
+
+  async listSessionAdminDocuments(
+    tenantDb: DataSource,
+    sessionId: string,
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    if (!this.isAdminDocumentsEnabled()) {
+      return {
+        featureEnabled: false,
+        sessionId,
+        documents: [],
+        message: 'Post-visit admin document generation is disabled by feature flag.',
+      };
+    }
+
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_admin_documents
+        WHERE session_id = $1
+        ORDER BY created_at DESC
+      `,
+      [sessionId],
+    );
+    return {
+      featureEnabled: true,
+      sessionId,
+      documents: rows.map((row: any) => this.mapAdminDocument(row)),
+    };
+  }
+
+  async executeVoiceReviewCommand(
+    tenantDb: DataSource,
+    sessionId: string,
+    payload: ExecutePostVisitVoiceCommandDto,
+    options: { tenantId?: string; actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!options.actorUserId) {
+      throw new BadRequestException('Authenticated doctor user is required for voice review actions');
+    }
+
+    if (!this.isVoiceReviewEnabled()) {
+      return {
+        featureEnabled: false,
+        sessionId,
+        command: String(payload.command || ''),
+        status: 'ignored',
+        message: 'Voice review command execution is disabled by feature flag.',
+      };
+    }
+
+    const normalizedCommand = this.normalizeVoiceCommand(payload.command);
+    if (!normalizedCommand) {
+      throw new BadRequestException(
+        'Unsupported voice command. Supported commands: APPROVE_SUMMARY, APPROVE_BUNDLE, GENERATE_ADMIN_DOCS, REGENERATE_DRAFT, SIGN_AND_PUBLISH.',
+      );
+    }
+
+    const baseNote = String(payload.note || '').trim() || `Voice command ${normalizedCommand}`;
+    let result: any = null;
+    if (normalizedCommand === 'APPROVE_SUMMARY') {
+      result = await this.reviewDraftArtifact(
+        tenantDb,
+        sessionId,
+        {
+          artifactType: 'visit_summary',
+          action: 'accept',
+          reason: baseNote,
+          reviewMetadata: { channel: 'voice_command', command: normalizedCommand },
+        },
+        {
+          tenantId: options.tenantId,
+          actorUserId: options.actorUserId,
+          source: 'post_visit_voice_command',
+        },
+      );
+    } else if (normalizedCommand === 'APPROVE_BUNDLE') {
+      result = await this.reviewDraftArtifact(
+        tenantDb,
+        sessionId,
+        {
+          artifactType: 'recommendation_bundle',
+          action: 'accept',
+          reason: baseNote,
+          reviewMetadata: { channel: 'voice_command', command: normalizedCommand },
+        },
+        {
+          tenantId: options.tenantId,
+          actorUserId: options.actorUserId,
+          source: 'post_visit_voice_command',
+        },
+      );
+    } else if (normalizedCommand === 'GENERATE_ADMIN_DOCS') {
+      result = await this.generateSessionAdminDocuments(
+        tenantDb,
+        sessionId,
+        {
+          signImmediately: true,
+          note: baseNote,
+        },
+        {
+          actorUserId: options.actorUserId,
+        },
+      );
+    } else if (normalizedCommand === 'REGENERATE_DRAFT') {
+      result = await this.generateDraftArtifacts(
+        tenantDb,
+        sessionId,
+        {
+          tenantId: options.tenantId,
+          actorUserId: options.actorUserId,
+          source: 'post_visit_voice_command',
+          reason: baseNote,
+        },
+      );
+    } else if (normalizedCommand === 'SIGN_AND_PUBLISH') {
+      if (payload.confirmSignAndPublish !== true) {
+        throw new BadRequestException('SIGN_AND_PUBLISH requires explicit confirmSignAndPublish=true.');
+      }
+      result = await this.publishSession(
+        tenantDb,
+        sessionId,
+        {
+          note: baseNote,
+          publishMetadata: {
+            ...(payload.publishMetadata || {}),
+            command: normalizedCommand,
+            channel: 'voice_command',
+          },
+        },
+        {
+          tenantId: options.tenantId,
+          actorUserId: options.actorUserId,
+          source: 'post_visit_voice_command',
+        },
+      );
+    }
+
+    return {
+      featureEnabled: true,
+      sessionId,
+      command: normalizedCommand,
+      status: 'executed',
+      result,
     };
   }
 

@@ -1300,6 +1300,169 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('generates signed post-visit admin documents with immutable hashes', async () => {
+    process.env.FEATURE_POSTVISIT_ADMIN_DOCS = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      let insertedCount = 0;
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                appointment_id: null,
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          if (sql.includes('FROM patients') && sql.includes('WHERE id = $1')) {
+            return [{ id: 'patient-1', first_name: 'Jane', last_name: 'Doe', patient_number: 'P-001' }];
+          }
+          if (sql.includes('FROM users') && sql.includes('WHERE id = $1')) {
+            return [{ id: 'doctor-1', first_name: 'Ava', last_name: 'Nyathi' }];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+            if (params[1] === 'visit_summary') {
+              return [
+                {
+                  id: 'summary-1',
+                  content: { plain_language_summary: 'Patient requires close follow-up.' },
+                },
+              ];
+            }
+            if (params[1] === 'recommendation_bundle') {
+              return [
+                {
+                  id: 'bundle-1',
+                  content: { items: [{ title: 'Repeat BP review in 3 days' }] },
+                },
+              ];
+            }
+            return [];
+          }
+          if (sql.includes('FROM post_visit_admin_documents') && sql.includes('MAX(version_no)')) {
+            return [{ current_version: 0 }];
+          }
+          if (sql.includes('INSERT INTO post_visit_admin_documents')) {
+            insertedCount += 1;
+            return [
+              {
+                id: `doc-${insertedCount}`,
+                session_id: params[0],
+                patient_id: params[1],
+                doctor_id: params[2],
+                document_type: params[3],
+                version_no: params[4],
+                status: params[5],
+                title: params[6],
+                body_json: JSON.parse(params[7] || '{}'),
+                immutable_hash: params[8],
+                signed_by: params[9],
+                signed_at: params[10],
+                metadata: JSON.parse(params[11] || '{}'),
+                created_at: '2026-03-06T12:00:00.000Z',
+                updated_at: '2026-03-06T12:00:00.000Z',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.generateSessionAdminDocuments(
+        tenantDb,
+        'session-1',
+        {
+          documentTypes: ['referral_letter', 'sick_note'],
+          note: 'Generate templates',
+          signImmediately: true,
+        },
+        {
+          actorUserId: 'doctor-1',
+        },
+      );
+
+      expect(result.featureEnabled).toBe(true);
+      expect(result.generatedCount).toBe(2);
+      expect(result.documents[0].status).toBe('signed');
+      expect(String(result.documents[0].immutableHash || '').length).toBeGreaterThan(20);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_ADMIN_DOCS;
+    }
+  });
+
+  it('requires explicit confirmation for voice SIGN_AND_PUBLISH command', async () => {
+    process.env.FEATURE_POSTVISIT_VOICE_REVIEW = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async () => []),
+      } as any;
+
+      await expect(
+        service.executeVoiceReviewCommand(
+          tenantDb,
+          'session-1',
+          {
+            command: 'SIGN_AND_PUBLISH',
+            note: 'voice publish',
+          },
+          {
+            actorUserId: 'doctor-1',
+          },
+        ),
+      ).rejects.toThrow('confirmSignAndPublish=true');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_VOICE_REVIEW;
+    }
+  });
+
+  it('executes voice APPROVE_SUMMARY command through review pipeline', async () => {
+    process.env.FEATURE_POSTVISIT_VOICE_REVIEW = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async () => []),
+      } as any;
+      const reviewSpy = jest.spyOn(service, 'reviewDraftArtifact').mockResolvedValue({
+        session: { id: 'session-1', status: 'doctor_reviewed' },
+      } as any);
+
+      const result = await service.executeVoiceReviewCommand(
+        tenantDb,
+        'session-1',
+        {
+          command: 'APPROVE_SUMMARY',
+          note: 'voice approve summary',
+        },
+        {
+          actorUserId: 'doctor-1',
+          tenantId: 'tenant-a',
+        },
+      );
+
+      expect(reviewSpy).toHaveBeenCalledWith(
+        tenantDb,
+        'session-1',
+        expect.objectContaining({
+          artifactType: 'visit_summary',
+          action: 'accept',
+        }),
+        expect.objectContaining({
+          actorUserId: 'doctor-1',
+          source: 'post_visit_voice_command',
+        }),
+      );
+      expect(result.status).toBe('executed');
+      expect(result.command).toBe('APPROVE_SUMMARY');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_VOICE_REVIEW;
+    }
+  });
+
   it('publishes reviewed artifacts and initializes patient companion thread', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 

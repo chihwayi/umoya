@@ -163,6 +163,23 @@ interface PreVisitBriefPayload {
   message?: string;
 }
 
+interface AdminDocumentItem {
+  id: string;
+  sessionId: string;
+  patientId: string;
+  doctorId?: string | null;
+  documentType: 'referral_letter' | 'sick_note' | 'return_to_work';
+  version: number;
+  status: 'draft' | 'signed' | 'dispatched' | 'voided';
+  title?: string | null;
+  body?: Record<string, any>;
+  immutableHash?: string | null;
+  signedBy?: string | null;
+  signedAt?: string | null;
+  metadata?: Record<string, any>;
+  createdAt?: string;
+}
+
 interface DiarizationSegment {
   id: string;
   order: number;
@@ -381,6 +398,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [billingIntelligenceLoadedSessionId, setBillingIntelligenceLoadedSessionId] = useState<string | null>(null);
   const [preVisitBrief, setPreVisitBrief] = useState<PreVisitBriefPayload | null>(null);
   const [preVisitBriefLoading, setPreVisitBriefLoading] = useState(false);
+  const [adminDocuments, setAdminDocuments] = useState<AdminDocumentItem[]>([]);
+  const [adminDocumentsLoading, setAdminDocumentsLoading] = useState(false);
+  const [voiceCommandIntent, setVoiceCommandIntent] = useState<
+    'APPROVE_SUMMARY' | 'APPROVE_BUNDLE' | 'GENERATE_ADMIN_DOCS' | 'REGENERATE_DRAFT' | 'SIGN_AND_PUBLISH'
+  >('APPROVE_SUMMARY');
+  const [voiceCommandNote, setVoiceCommandNote] = useState('');
+  const [voiceConfirmSignAndPublish, setVoiceConfirmSignAndPublish] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -681,9 +705,36 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadAdminDocuments = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) {
+        setAdminDocuments([]);
+        return;
+      }
+      try {
+        setAdminDocumentsLoading(true);
+        const response = await ehrApi.getPostVisitAdminDocuments(sessionId, token, tenantSlug);
+        const rows = Array.isArray(response.data?.documents) ? (response.data.documents as AdminDocumentItem[]) : [];
+        setAdminDocuments(rows);
+      } catch {
+        setAdminDocuments([]);
+      } finally {
+        setAdminDocumentsLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    if (selectedSessionId) return;
+    setAdminDocuments([]);
+    setVoiceCommandNote('');
+    setVoiceConfirmSignAndPublish(false);
+  }, [selectedSessionId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -699,6 +750,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDocumentIntelligence(selectedSessionId);
     loadIntraVisitAlerts(selectedSessionId);
     loadBillingIntelligence(selectedSessionId);
+    loadAdminDocuments(selectedSessionId);
     const selected = sessions.find((item) => item.id === selectedSessionId);
     if (selected?.appointmentId) {
       loadPreVisitBrief(selected.appointmentId);
@@ -712,10 +764,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     setLiveStreamTranscript('');
     setLastStreamingAnalyzedAt(null);
     setStreamingAnalysisStatus('idle');
+    setVoiceCommandNote('');
+    setVoiceConfirmSignAndPublish(false);
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, selectedSessionId, sessions]);
+  }, [loadAdminDocuments, loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, selectedSessionId, sessions]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -1471,6 +1525,80 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     },
     [loadBillingIntelligence, loadDraft, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
+
+  const handleGenerateAdminDocuments = useCallback(async () => {
+    if (!tenantSlug || !token || !selectedSessionId) return;
+    try {
+      setWorkingActionKey('admin-docs:generate');
+      await ehrApi.generatePostVisitAdminDocuments(
+        selectedSessionId,
+        {
+          note: voiceCommandNote || 'Generated from doctor post-visit workspace',
+          signImmediately: true,
+        },
+        token,
+        tenantSlug,
+      );
+      showSuccess('Admin documents generated', 'Referral/sick-note/RTW templates were signed and stored.');
+      await loadAdminDocuments(selectedSessionId);
+    } catch (error: any) {
+      const details = String(error?.response?.data?.message || '').trim() || 'Unable to generate admin documents.';
+      showError('Admin document generation failed', details);
+    } finally {
+      setWorkingActionKey(null);
+    }
+  }, [loadAdminDocuments, selectedSessionId, showError, showSuccess, tenantSlug, token, voiceCommandNote]);
+
+  const handleExecuteVoiceCommand = useCallback(async () => {
+    if (!tenantSlug || !token || !selectedSessionId) return;
+    if (voiceCommandIntent === 'SIGN_AND_PUBLISH' && !voiceConfirmSignAndPublish) {
+      showError('Voice command confirmation required', 'Enable confirmation before SIGN_AND_PUBLISH.');
+      return;
+    }
+    try {
+      setWorkingActionKey('voice-command:execute');
+      await ehrApi.executePostVisitVoiceCommand(
+        selectedSessionId,
+        {
+          command: voiceCommandIntent,
+          note: voiceCommandNote || `Voice command ${voiceCommandIntent}`,
+          confirmSignAndPublish: voiceCommandIntent === 'SIGN_AND_PUBLISH' ? voiceConfirmSignAndPublish : undefined,
+          publishMetadata: voiceCommandIntent === 'SIGN_AND_PUBLISH' ? { source: 'doctor_voice_command_panel' } : undefined,
+        },
+        token,
+        tenantSlug,
+      );
+      showSuccess('Voice command executed', `${voiceCommandIntent} completed.`);
+      await Promise.all([
+        loadSessions(),
+        loadDraft(selectedSessionId),
+        loadDiarization(selectedSessionId),
+        loadIntraVisitAlerts(selectedSessionId),
+        loadBillingIntelligence(selectedSessionId),
+        loadAdminDocuments(selectedSessionId),
+      ]);
+    } catch (error: any) {
+      const details = String(error?.response?.data?.message || '').trim() || 'Unable to execute voice command.';
+      showError('Voice command failed', details);
+    } finally {
+      setWorkingActionKey(null);
+    }
+  }, [
+    loadAdminDocuments,
+    loadBillingIntelligence,
+    loadDiarization,
+    loadDraft,
+    loadIntraVisitAlerts,
+    loadSessions,
+    selectedSessionId,
+    showError,
+    showSuccess,
+    tenantSlug,
+    token,
+    voiceCommandIntent,
+    voiceCommandNote,
+    voiceConfirmSignAndPublish,
+  ]);
 
   const handlePublish = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -2773,6 +2901,101 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Auto-Admin Docs + Voice Review</h3>
+                    <button
+                      type="button"
+                      onClick={handleGenerateAdminDocuments}
+                      disabled={!selectedSessionId || workingActionKey === 'admin-docs:generate'}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <FileCog className="mr-1 inline h-3.5 w-3.5" />
+                      {workingActionKey === 'admin-docs:generate' ? 'Generating…' : 'Generate signed docs'}
+                    </button>
+                  </div>
+
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Voice command control</p>
+                    <div className="mt-2 grid gap-2 md:grid-cols-[1fr,2fr,auto]">
+                      <select
+                        value={voiceCommandIntent}
+                        onChange={(event) =>
+                          setVoiceCommandIntent(
+                            event.target.value as
+                              | 'APPROVE_SUMMARY'
+                              | 'APPROVE_BUNDLE'
+                              | 'GENERATE_ADMIN_DOCS'
+                              | 'REGENERATE_DRAFT'
+                              | 'SIGN_AND_PUBLISH',
+                          )
+                        }
+                        className="rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+                      >
+                        <option value="APPROVE_SUMMARY">APPROVE_SUMMARY</option>
+                        <option value="APPROVE_BUNDLE">APPROVE_BUNDLE</option>
+                        <option value="GENERATE_ADMIN_DOCS">GENERATE_ADMIN_DOCS</option>
+                        <option value="REGENERATE_DRAFT">REGENERATE_DRAFT</option>
+                        <option value="SIGN_AND_PUBLISH">SIGN_AND_PUBLISH</option>
+                      </select>
+                      <input
+                        value={voiceCommandNote}
+                        onChange={(event) => setVoiceCommandNote(event.target.value)}
+                        placeholder="Optional command note"
+                        className="rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleExecuteVoiceCommand}
+                        disabled={!selectedSessionId || workingActionKey === 'voice-command:execute'}
+                        className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        <Mic className="mr-1 inline h-3.5 w-3.5" />
+                        {workingActionKey === 'voice-command:execute' ? 'Executing…' : 'Execute'}
+                      </button>
+                    </div>
+                    {voiceCommandIntent === 'SIGN_AND_PUBLISH' && (
+                      <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={voiceConfirmSignAndPublish}
+                          onChange={(event) => setVoiceConfirmSignAndPublish(event.target.checked)}
+                        />
+                        Confirm explicit sign-and-publish intent.
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {adminDocumentsLoading && (
+                      <p className="text-xs text-slate-500">Loading admin documents…</p>
+                    )}
+                    {!adminDocumentsLoading && adminDocuments.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        No admin documents yet. Generate signed templates to create referral, sick-note, and return-to-work outputs.
+                      </p>
+                    )}
+                    {adminDocuments.map((doc) => (
+                      <article key={doc.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {doc.title || doc.documentType} • v{Number(doc.version || 1)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-600">
+                              Type {doc.documentType} • status {doc.status}
+                              {doc.signedAt ? ` • signed ${formatDate(doc.signedAt)}` : ''}
+                            </p>
+                          </div>
+                          <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+                            hash {String(doc.immutableHash || '').slice(0, 12) || 'n/a'}
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -17,6 +17,9 @@ describe('PostVisitController', () => {
     listSessionMobileEvents: jest.fn(),
     generateDraftArtifacts: jest.fn(),
     reviewDraftArtifact: jest.fn(),
+    generateSessionAdminDocuments: jest.fn(),
+    listSessionAdminDocuments: jest.fn(),
+    executeVoiceReviewCommand: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
     listSessionDocumentIntelligence: jest.fn(),
@@ -481,6 +484,81 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.followUpRisk.score).toBe(72);
+  });
+
+  it('generates and signs post-visit admin documents for doctor workflow', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.generateSessionAdminDocuments.mockResolvedValue({
+      featureEnabled: true,
+      sessionId: 'session-1',
+      generatedCount: 2,
+      documents: [{ id: 'doc-1', documentType: 'referral_letter', status: 'signed' }],
+    });
+
+    const result = await controller.generateSessionAdminDocuments(
+      'session-1',
+      {
+        documentTypes: ['referral_letter', 'sick_note'],
+        note: 'Generate all docs from doctor workspace',
+      },
+      req,
+    );
+
+    expect(postVisitServiceMock.generateSessionAdminDocuments).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        documentTypes: ['referral_letter', 'sick_note'],
+      }),
+      expect.objectContaining({
+        actorUserId: 'doctor-1',
+      }),
+    );
+    expect(result.generatedCount).toBe(2);
+  });
+
+  it('executes voice command workflow action with tenant context', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.executeVoiceReviewCommand.mockResolvedValue({
+      featureEnabled: true,
+      sessionId: 'session-1',
+      command: 'SIGN_AND_PUBLISH',
+      status: 'executed',
+    });
+
+    const result = await controller.executeVoiceCommand(
+      'session-1',
+      {
+        command: 'SIGN_AND_PUBLISH',
+        note: 'Voice sign and publish',
+        confirmSignAndPublish: true,
+      },
+      req,
+    );
+
+    expect(postVisitServiceMock.executeVoiceReviewCommand).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        command: 'SIGN_AND_PUBLISH',
+        confirmSignAndPublish: true,
+      }),
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        actorUserId: 'doctor-1',
+      }),
+    );
+    expect(result.status).toBe('executed');
   });
 
   it('publishes reviewed post-visit session for patient companion access', async () => {

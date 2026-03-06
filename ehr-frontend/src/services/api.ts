@@ -1586,6 +1586,59 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  generatePostVisitAdminDocuments: async (
+    sessionId: string,
+    payload: {
+      documentTypes?: Array<'referral_letter' | 'sick_note' | 'return_to_work'>;
+      note?: string;
+      signImmediately?: boolean;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/admin-docs/generate`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitAdminDocuments: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/admin-docs`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  executePostVisitVoiceCommand: async (
+    sessionId: string,
+    payload: {
+      command: 'APPROVE_SUMMARY' | 'APPROVE_BUNDLE' | 'GENERATE_ADMIN_DOCS' | 'REGENERATE_DRAFT' | 'SIGN_AND_PUBLISH';
+      note?: string;
+      confirmSignAndPublish?: boolean;
+      publishMetadata?: Record<string, any>;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/voice-command`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   executePostVisitRecommendation: async (
     sessionId: string,
     actionId: string,

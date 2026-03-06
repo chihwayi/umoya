@@ -114,6 +114,56 @@ export class ReviewPostVisitBillingSuggestionDto {
   note?: string;
 }
 
+export class GeneratePostVisitAdminDocumentsDto {
+  @ApiPropertyOptional({
+    description: 'Subset of admin document templates to generate and sign',
+    enum: ['referral_letter', 'sick_note', 'return_to_work'],
+    type: [String],
+  })
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsEnum(['referral_letter', 'sick_note', 'return_to_work'], { each: true })
+  @IsOptional()
+  documentTypes?: Array<'referral_letter' | 'sick_note' | 'return_to_work'>;
+
+  @ApiPropertyOptional({ description: 'Optional note attached to generated admin documents' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  note?: string;
+
+  @ApiPropertyOptional({ description: 'Whether to sign documents immediately', default: true })
+  @IsBoolean()
+  @IsOptional()
+  signImmediately?: boolean;
+}
+
+export class ExecutePostVisitVoiceCommandDto {
+  @ApiProperty({
+    description: 'Normalized doctor voice command intent',
+    enum: ['APPROVE_SUMMARY', 'APPROVE_BUNDLE', 'GENERATE_ADMIN_DOCS', 'REGENERATE_DRAFT', 'SIGN_AND_PUBLISH'],
+  })
+  @IsEnum(['APPROVE_SUMMARY', 'APPROVE_BUNDLE', 'GENERATE_ADMIN_DOCS', 'REGENERATE_DRAFT', 'SIGN_AND_PUBLISH'])
+  @IsNotEmpty()
+  command: 'APPROVE_SUMMARY' | 'APPROVE_BUNDLE' | 'GENERATE_ADMIN_DOCS' | 'REGENERATE_DRAFT' | 'SIGN_AND_PUBLISH';
+
+  @ApiPropertyOptional({ description: 'Optional operator note captured with the command execution' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  note?: string;
+
+  @ApiPropertyOptional({ description: 'Mandatory confirmation when command=SIGN_AND_PUBLISH', default: false })
+  @IsBoolean()
+  @IsOptional()
+  confirmSignAndPublish?: boolean;
+
+  @ApiPropertyOptional({ description: 'Optional publish metadata passed through for SIGN_AND_PUBLISH' })
+  @IsObject()
+  @IsOptional()
+  publishMetadata?: Record<string, any>;
+}
+
 export class PublishPostVisitSessionDto {
   @ApiPropertyOptional({ description: 'Optional publish note for audit trail' })
   @IsString()
