@@ -41,6 +41,7 @@ const envSchema = z.object({
   POSTVISIT_DIARIZATION_MIN_CONFIDENCE: z.string().default('0.65'),
   FEATURE_POSTVISIT_OCR_INTELLIGENCE: z.enum(['true', 'false']).default('false'),
   FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2: z.enum(['true', 'false']).default('false'),
+  FEATURE_POSTVISIT_SPECIALTY_SOAP: z.enum(['true', 'false']).default('false'),
   LOCAL_OCR_URL: z.string().default('http://127.0.0.1:8081'),
 
   // Notifications (SMS)
@@ -130,6 +131,7 @@ export const config = {
     postVisitDiarizationReview: env.FEATURE_POSTVISIT_DIARIZATION_REVIEW === 'true',
     postVisitOcrIntelligence: env.FEATURE_POSTVISIT_OCR_INTELLIGENCE === 'true',
     postVisitMedicationIntelligenceV2: env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 === 'true',
+    postVisitSpecialtySoap: env.FEATURE_POSTVISIT_SPECIALTY_SOAP === 'true',
   },
 
   notifications: {

@@ -1117,6 +1117,74 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('blocks publish when specialty SOAP template is enabled and required checks are missing', async () => {
+    process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      patientServiceMock.getPatientContext.mockResolvedValue({
+        patient: { id: 'patient-1', age: 63 },
+        modules: {
+          cardiology: { latestEncounter: { id: 'card-1' } },
+        },
+      });
+
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                tenant_id: 'tenant-a',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+                source_type: 'in_person',
+                language: 'en',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type IN')) {
+            return [
+              { artifact_type: 'visit_summary', artifact_status: 'reviewed' },
+              { artifact_type: 'recommendation_bundle', artifact_status: 'reviewed' },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+            if (params[1] === 'soap_note') {
+              return [
+                {
+                  id: 'soap-1',
+                  artifact_status: 'reviewed',
+                  content: {
+                    soap_note: {
+                      subjective: 'patient reports mild fatigue',
+                      objective: '',
+                      assessment: 'stable',
+                      plan: 'review medications',
+                    },
+                  },
+                },
+              ];
+            }
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      await expect(
+        service.publishSession(
+          tenantDb,
+          'session-1',
+          { note: 'attempt publish with incomplete specialty SOAP' },
+          { actorUserId: 'doctor-1' },
+        ),
+      ).rejects.toThrow('Publish blocked. Specialty SOAP template (cardiology) incomplete');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP;
+    }
+  });
+
   it('creates escalation event when patient companion message contains urgent symptoms', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     let companionInsertCount = 0;

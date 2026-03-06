@@ -255,6 +255,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     return Array.isArray(raw) ? raw : [];
   }, [recommendationArtifact]);
 
+  const specialtySoapValidation = useMemo(() => {
+    const summaryValue = visitSummaryArtifact?.content?.specialty_soap;
+    if (summaryValue && typeof summaryValue === 'object') return summaryValue as Record<string, any>;
+    const recommendationValue = recommendationArtifact?.content?.specialty_soap;
+    if (recommendationValue && typeof recommendationValue === 'object') return recommendationValue as Record<string, any>;
+    return null;
+  }, [recommendationArtifact, visitSummaryArtifact]);
+
   const supersededCitations = useMemo(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
     return rows.filter((row) => row?.isSuperseded === true);
@@ -1758,7 +1766,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="mb-2 text-sm font-bold text-slate-900">Clinical Context Snapshot</h3>
-                  <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                  <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                       Transcript segments: {draftData?.transcript?.segmentCount || 0}
                     </div>
@@ -1767,6 +1775,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                       Review actions: {draftData?.reviewActions?.length || 0}
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      Specialty SOAP:{' '}
+                      {specialtySoapValidation
+                        ? `${String(specialtySoapValidation.specialty || 'general_practice').replace('_', ' ')} • ${
+                            specialtySoapValidation.isComplete ? 'complete' : 'incomplete'
+                          }`
+                        : 'n/a'}
                     </div>
                   </div>
                 </section>

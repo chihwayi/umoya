@@ -171,6 +171,24 @@ interface MedicationIntelligenceAssessment {
   riskNarrative: string;
 }
 
+type PostVisitSoapSpecialty = 'general_practice' | 'mental_health' | 'cardiology' | 'paediatrics';
+
+interface SpecialtySoapCheckResult {
+  id: string;
+  label: string;
+  passed: boolean;
+  guidance: string;
+}
+
+interface SpecialtySoapValidationSummary {
+  specialty: PostVisitSoapSpecialty;
+  templateVersion: 'v1';
+  isComplete: boolean;
+  completenessScore: number;
+  checks: SpecialtySoapCheckResult[];
+  missingCheckIds: string[];
+}
+
 interface ListPostVisitSessionsOptions {
   status?: PostVisitSessionStatus;
   patientId?: string;
@@ -720,6 +738,10 @@ export class PostVisitService {
 
   private isMedicationIntelligenceV2Enabled(): boolean {
     return String(process.env.FEATURE_POSTVISIT_MEDICATION_INTELLIGENCE_V2 || 'false').toLowerCase() === 'true';
+  }
+
+  private isSpecialtySoapEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_SPECIALTY_SOAP || 'false').toLowerCase() === 'true';
   }
 
   private resolveLocalOcrUrl(): string {
@@ -2645,6 +2667,138 @@ export class PostVisitService {
     return rules;
   }
 
+  private resolveSoapSpecialty(patientContext: any): PostVisitSoapSpecialty {
+    const modules = patientContext?.modules || {};
+    const age = Number(patientContext?.patient?.age || 0);
+
+    if (modules?.cardiology?.latestEncounter) {
+      return 'cardiology';
+    }
+    if (age > 0 && age < 15) {
+      return 'paediatrics';
+    }
+    if (modules?.mentalHealth?.latestEncounter || modules?.mental_health?.latestEncounter) {
+      return 'mental_health';
+    }
+    return 'general_practice';
+  }
+
+  private evaluateSpecialtySoapTemplate(
+    specialty: PostVisitSoapSpecialty,
+    soapNote: any,
+    patientContext: any,
+  ): SpecialtySoapValidationSummary {
+    const subjective = String(soapNote?.subjective || '').trim();
+    const objective = String(soapNote?.objective || '').trim();
+    const assessment = String(soapNote?.assessment || '').trim();
+    const plan = String(soapNote?.plan || '').trim();
+
+    const modules = patientContext?.modules || {};
+    const age = Number(patientContext?.patient?.age || 0);
+    const hasWeight =
+      this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
+      this.parseNumericValue(patientContext?.latestVitals?.weight) !== null;
+
+    const checksBySpecialty: Record<PostVisitSoapSpecialty, SpecialtySoapCheckResult[]> = {
+      general_practice: [
+        {
+          id: 'gp_subjective_present',
+          label: 'Subjective history documented',
+          passed: subjective.length > 0,
+          guidance: 'Capture chief complaint and patient-reported symptoms in subjective.',
+        },
+        {
+          id: 'gp_assessment_present',
+          label: 'Assessment documented',
+          passed: assessment.length > 0,
+          guidance: 'Document clinical impression/diagnosis in assessment.',
+        },
+        {
+          id: 'gp_plan_present',
+          label: 'Plan documented',
+          passed: plan.length > 0,
+          guidance: 'Document clear follow-up or treatment plan.',
+        },
+      ],
+      cardiology: [
+        {
+          id: 'cardio_subjective_symptoms',
+          label: 'Cardiac symptom narrative present',
+          passed: /(chest|palpitation|dyspnea|shortness of breath|syncope|edema|angina)/i.test(subjective),
+          guidance: 'Document key cardiac symptoms (e.g., chest pain, dyspnea, palpitations).',
+        },
+        {
+          id: 'cardio_objective_vitals',
+          label: 'Objective cardiovascular findings present',
+          passed:
+            /(bp|blood pressure|heart rate|ecg|ekg|rhythm|murmur|troponin|spo2)/i.test(objective) ||
+            !!modules?.cardiology?.latestEncounter,
+          guidance: 'Include objective cardiovascular findings/vitals or ECG context.',
+        },
+        {
+          id: 'cardio_plan_followup',
+          label: 'Cardiology follow-up/management plan present',
+          passed: /(follow|echo|ecg|stress|angi|cardio|review)/i.test(plan),
+          guidance: 'Include cardiology-specific plan/follow-up actions.',
+        },
+      ],
+      paediatrics: [
+        {
+          id: 'peds_age_context',
+          label: 'Paediatric age context confirmed',
+          passed: age > 0 && age < 15,
+          guidance: 'Ensure paediatric template is used only for paediatric patients.',
+        },
+        {
+          id: 'peds_weight_documented',
+          label: 'Weight documented for dosing context',
+          passed: hasWeight || /(weight|kg)/i.test(objective),
+          guidance: 'Capture child weight for safe dosing and growth context.',
+        },
+        {
+          id: 'peds_guardian_plan',
+          label: 'Caregiver/follow-up instructions present',
+          passed: /(caregiver|guardian|parent|return|follow)/i.test(plan),
+          guidance: 'Document caregiver education and return/follow-up instructions.',
+        },
+      ],
+      mental_health: [
+        {
+          id: 'mh_subjective_mse',
+          label: 'Mood/affect symptom narrative present',
+          passed: /(mood|anxiety|sleep|stress|depress|psych|panic|hallucinat)/i.test(subjective),
+          guidance: 'Capture symptom narrative relevant to mental health visit.',
+        },
+        {
+          id: 'mh_assessment_risk',
+          label: 'Risk/safety assessment documented',
+          passed: /(risk|suicid|self-harm|homicid|safety)/i.test(assessment),
+          guidance: 'Include risk/safety assessment in mental-health assessment.',
+        },
+        {
+          id: 'mh_plan_support',
+          label: 'Plan includes support/therapy/follow-up',
+          passed: /(therapy|counsel|follow|support|referral|safety plan)/i.test(plan),
+          guidance: 'Include treatment/support or referral plan.',
+        },
+      ],
+    };
+
+    const checks = checksBySpecialty[specialty];
+    const missingCheckIds = checks.filter((check) => !check.passed).map((check) => check.id);
+    const passedCount = checks.filter((check) => check.passed).length;
+    const completenessScore = checks.length ? Number((passedCount / checks.length).toFixed(2)) : 0;
+
+    return {
+      specialty,
+      templateVersion: 'v1',
+      isComplete: missingCheckIds.length === 0,
+      completenessScore,
+      checks,
+      missingCheckIds,
+    };
+  }
+
   private buildVisitSummaryContent(args: {
     patientContext: any;
     soapNote: any;
@@ -4256,7 +4410,40 @@ export class PostVisitService {
       patientContext = null;
     }
 
-    const rules = this.buildRecommendationRules(patientContext, extractedEntityRows);
+    const soapSpecialty = this.resolveSoapSpecialty(patientContext);
+    const specialtySoapValidation = this.evaluateSpecialtySoapTemplate(soapSpecialty, soapNote, patientContext);
+
+    let rules = this.buildRecommendationRules(patientContext, extractedEntityRows);
+    if (this.isSpecialtySoapEnabled() && !specialtySoapValidation.isComplete) {
+      const missingLabels = specialtySoapValidation.checks
+        .filter((check) => !check.passed)
+        .map((check) => check.label)
+        .slice(0, 3);
+      rules = [
+        {
+          ruleId: 'specialty_soap_completion_rule',
+          recommendationId: 'specialty_soap_completion',
+          title: `Complete ${soapSpecialty.replace('_', ' ')} SOAP checklist`,
+          description: `Specialty SOAP template is incomplete. Missing checks: ${missingLabels.join('; ')}.`,
+          urgency: 'routine',
+          actionType: 'follow_up',
+          confidence: 0.88,
+          context: {
+            specialtySoap: specialtySoapValidation,
+          },
+          citations: [
+            {
+              guidelineId: 'who-clinical-documentation-quality',
+              label: 'Clinical documentation quality and continuity guidance',
+              source: 'WHO Documentation Quality',
+              excerpt: 'Structured encounter documentation should capture required specialty context before signoff.',
+              confidence: 0.82,
+            },
+          ],
+        },
+        ...rules,
+      ];
+    }
     const executionByRecommendationId = new Map<string, any>(
       actionExecutionRows.map((row: any) => [String(row.recommendation_id), row]),
     );
@@ -4324,6 +4511,10 @@ export class PostVisitService {
       extractedEntities: extractedEntityRows,
       session: sessionRow,
     });
+    summaryContent = {
+      ...summaryContent,
+      specialty_soap: specialtySoapValidation,
+    };
 
     const llmCitationCatalog: GroundingCitation[] = recommendationItems.flatMap((item: any) =>
       (Array.isArray(item?.citations) ? item.citations : [])
@@ -4413,6 +4604,7 @@ export class PostVisitService {
         patient_id: sessionRow.patient_id,
         modules_available: patientContext ? Object.keys(patientContext.modules || {}) : [],
       },
+      specialty_soap: specialtySoapValidation,
       grounded_llm: summaryContent.grounded_llm || {
         enabled: false,
         reason: 'not_configured',
@@ -4726,6 +4918,41 @@ export class PostVisitService {
     return removedCount;
   }
 
+  private async enforceSpecialtySoapPublishGate(
+    tenantDb: DataSource,
+    sessionRow: any,
+  ): Promise<SpecialtySoapValidationSummary | null> {
+    if (!this.isSpecialtySoapEnabled()) {
+      return null;
+    }
+
+    const soapArtifact = await this.getArtifactRow(tenantDb, sessionRow.id, 'soap_note');
+    if (!soapArtifact?.content?.soap_note) {
+      throw new BadRequestException('Publish blocked. SOAP note is missing for specialty template validation.');
+    }
+
+    let patientContext: any = null;
+    try {
+      patientContext = await this.patientService.getPatientContext(sessionRow.patient_id, tenantDb);
+    } catch {
+      patientContext = null;
+    }
+
+    const specialty = this.resolveSoapSpecialty(patientContext);
+    const validation = this.evaluateSpecialtySoapTemplate(specialty, soapArtifact.content.soap_note, patientContext);
+    if (!validation.isComplete) {
+      const missingLabels = validation.checks
+        .filter((check) => !check.passed)
+        .map((check) => check.label)
+        .join('; ');
+      throw new BadRequestException(
+        `Publish blocked. Specialty SOAP template (${specialty.replace('_', ' ')}) incomplete: ${missingLabels}`,
+      );
+    }
+
+    return validation;
+  }
+
   async publishSession(
     tenantDb: DataSource,
     sessionId: string,
@@ -4766,6 +4993,8 @@ export class PostVisitService {
         `Publish blocked. Artifact(s) require doctor review: ${missingOrUnreviewed.join(', ')}`,
       );
     }
+
+    const specialtySoapValidation = await this.enforceSpecialtySoapPublishGate(tenantDb, sessionRow);
 
     let citationQualityMeta: Record<string, any> | null = null;
     if (this.isCitationQualityV2Enabled()) {
@@ -4908,6 +5137,7 @@ export class PostVisitService {
           publish_metadata: {
             ...(payload.publishMetadata || {}),
             ...(citationQualityMeta ? { citation_quality: citationQualityMeta } : {}),
+            ...(specialtySoapValidation ? { specialty_soap: specialtySoapValidation } : {}),
           },
         }),
       ],
