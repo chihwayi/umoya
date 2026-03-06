@@ -1636,6 +1636,24 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitAppointmentPreVisitBrief: async (
+    appointmentId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { refresh?: boolean },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/appointments/${appointmentId}/previsit-brief`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: {
+        refresh: options?.refresh ? 'true' : undefined,
+      },
+    });
+    return { data: response.data };
+  },
+
   publishPostVisitSession: async (
     sessionId: string,
     payload: { note?: string; publishMetadata?: Record<string, any>; acknowledgedSupersededCitationIds?: string[] },

@@ -24,6 +24,9 @@ describe('PostVisitController', () => {
     analyzeIntraVisitAlerts: jest.fn(),
     listIntraVisitAlerts: jest.fn(),
     resolveIntraVisitAlert: jest.fn(),
+    getSessionBillingIntelligence: jest.fn(),
+    reviewBillingSuggestion: jest.fn(),
+    generateAppointmentPreVisitBrief: jest.fn(),
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
@@ -452,6 +455,32 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.execution.status).toBe('executed');
+  });
+
+  it('returns generated pre-visit brief and follow-up risk for appointment context', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.generateAppointmentPreVisitBrief.mockResolvedValue({
+      featureEnabled: true,
+      appointmentId: 'appt-1',
+      followUpRisk: { score: 72, tier: 'high' },
+    });
+
+    const result = await controller.getAppointmentPreVisitBrief('appt-1', req, 'true');
+
+    expect(postVisitServiceMock.generateAppointmentPreVisitBrief).toHaveBeenCalledWith(
+      req.tenantDb,
+      'appt-1',
+      expect.objectContaining({
+        actorUserId: 'doctor-1',
+        forceRefresh: true,
+      }),
+    );
+    expect(result.followUpRisk.score).toBe(72);
   });
 
   it('publishes reviewed post-visit session for patient companion access', async () => {

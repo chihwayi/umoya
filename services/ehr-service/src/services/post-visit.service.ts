@@ -243,6 +243,15 @@ interface PostVisitBillingSuggestionDraft {
   metadata?: Record<string, any>;
 }
 
+type PostVisitFollowUpRiskTier = 'low' | 'moderate' | 'high' | 'critical';
+
+interface PostVisitFollowUpRiskAssessment {
+  score: number;
+  tier: PostVisitFollowUpRiskTier;
+  reasons: string[];
+  nudgePolicy: string;
+}
+
 interface ListPostVisitSessionsOptions {
   status?: PostVisitSessionStatus;
   patientId?: string;
@@ -744,6 +753,50 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_previsit_briefs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        scheduled_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(20) NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active','archived')),
+        brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
+        follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
+          CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
+        follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+        nudge_policy VARCHAR(120),
+        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
+        generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_previsit_briefs
+      ADD COLUMN IF NOT EXISTS appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active','archived')),
+      ADD COLUMN IF NOT EXISTS brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
+        CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
+      ADD COLUMN IF NOT EXISTS follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS nudge_policy VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
+      ADD COLUMN IF NOT EXISTS generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS post_visit_companion_acknowledgements (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -802,6 +855,10 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_code ON post_visit_billing_suggestions(code_type, code)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_session ON post_visit_billing_audit_log(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_suggestion ON post_visit_billing_audit_log(suggestion_id, created_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_appointment ON post_visit_previsit_briefs(appointment_id)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_patient ON post_visit_previsit_briefs(patient_id, generated_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -933,6 +990,30 @@ export class PostVisitService {
     };
   }
 
+  private mapPreVisitBrief(row: any) {
+    return {
+      id: row.id,
+      appointmentId: row.appointment_id,
+      patientId: row.patient_id,
+      doctorId: row.doctor_id || null,
+      scheduledAt: row.scheduled_at || null,
+      status: row.status || 'active',
+      brief: row.brief_content || {},
+      followUpRisk: {
+        score: Number(row.follow_up_risk_score || 0),
+        tier: row.follow_up_risk_tier || 'low',
+        reasons: Array.isArray(row.follow_up_risk_reasons) ? row.follow_up_risk_reasons : [],
+        nudgePolicy: row.nudge_policy || null,
+      },
+      source: row.source || 'post_visit_previsit_brief_v1',
+      generatedBy: row.generated_by || null,
+      generatedAt: row.generated_at,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private normalizeLanguage(language?: string | null) {
     const raw = String(language || '').trim().toLowerCase();
     if (!raw) return 'en';
@@ -1021,6 +1102,28 @@ export class PostVisitService {
       return configured;
     }
     return String(process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  }
+
+  private isPreVisitBriefEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitPreVisitBrief;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF || 'false').toLowerCase() === 'true';
+  }
+
+  private resolveFollowUpRiskTier(score: number): PostVisitFollowUpRiskTier {
+    if (score >= 80) return 'critical';
+    if (score >= 60) return 'high';
+    if (score >= 30) return 'moderate';
+    return 'low';
+  }
+
+  private resolveNudgePolicyForRiskTier(tier: PostVisitFollowUpRiskTier): string {
+    if (tier === 'critical') return 'immediate_clinician_outreach';
+    if (tier === 'high') return 'same_day_nurse_followup';
+    if (tier === 'moderate') return 'next_day_companion_nudge';
+    return 'routine_weekly_checkin';
   }
 
   private resolveLocalOcrUrl(): string {
@@ -4985,6 +5088,312 @@ export class PostVisitService {
       action,
       workflowKey,
       suggestion: after,
+    };
+  }
+
+  private buildFollowUpRiskAssessment(args: {
+    openCriticalEscalationCount: number;
+    openHighEscalationCount: number;
+    pendingActionCount: number;
+    failedActionCount: number;
+    followUpCommitmentAcknowledged: boolean;
+    unresolvedIntraVisitCriticalCount: number;
+  }): PostVisitFollowUpRiskAssessment {
+    let score = 0;
+    const reasons: string[] = [];
+
+    if (args.openCriticalEscalationCount > 0) {
+      score += 35;
+      reasons.push(`${args.openCriticalEscalationCount} critical post-visit escalation(s) still open.`);
+    }
+    if (args.openHighEscalationCount > 0) {
+      score += 20;
+      reasons.push(`${args.openHighEscalationCount} high-severity escalation(s) pending.`);
+    }
+    if (args.unresolvedIntraVisitCriticalCount > 0) {
+      score += 20;
+      reasons.push(`${args.unresolvedIntraVisitCriticalCount} unresolved intra-visit critical alert(s).`);
+    }
+    if (args.pendingActionCount >= 3) {
+      score += 15;
+      reasons.push(`${args.pendingActionCount} follow-up checklist item(s) remain unexecuted.`);
+    } else if (args.pendingActionCount > 0) {
+      score += 8;
+      reasons.push(`${args.pendingActionCount} follow-up action(s) still pending.`);
+    }
+    if (args.failedActionCount > 0) {
+      score += 12;
+      reasons.push(`${args.failedActionCount} prior recommendation execution(s) failed.`);
+    }
+    if (!args.followUpCommitmentAcknowledged) {
+      score += 10;
+      reasons.push('No recent follow-up commitment acknowledgement was recorded.');
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    const tier = this.resolveFollowUpRiskTier(score);
+    const nudgePolicy = this.resolveNudgePolicyForRiskTier(tier);
+    if (reasons.length === 0) {
+      reasons.push('No unresolved high-risk post-visit signals found.');
+    }
+
+    return {
+      score,
+      tier,
+      reasons,
+      nudgePolicy,
+    };
+  }
+
+  async generateAppointmentPreVisitBrief(
+    tenantDb: DataSource,
+    appointmentId: string,
+    options: { actorUserId?: string | null; forceRefresh?: boolean } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const appointmentRows = await tenantDb.query(
+      `
+        SELECT
+          a.id,
+          a.patient_id,
+          a.doctor_id,
+          a.appointment_date,
+          a.appointment_type,
+          a.reason,
+          a.notes,
+          p.first_name AS patient_first_name,
+          p.last_name AS patient_last_name,
+          p.patient_number,
+          d.first_name AS doctor_first_name,
+          d.last_name AS doctor_last_name
+        FROM appointments a
+        LEFT JOIN patients p ON p.id = a.patient_id
+        LEFT JOIN users d ON d.id = a.doctor_id
+        WHERE a.id = $1
+        LIMIT 1
+      `,
+      [appointmentId],
+    );
+    if (!appointmentRows?.length) {
+      throw new NotFoundException('Appointment not found for pre-visit brief');
+    }
+    const appointment = appointmentRows[0];
+
+    if (!this.isPreVisitBriefEnabled()) {
+      return {
+        featureEnabled: false,
+        appointmentId,
+        patientId: appointment.patient_id,
+        doctorId: appointment.doctor_id || null,
+        message: 'Pre-visit AI brief is disabled by feature flag.',
+      };
+    }
+
+    const existingRows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_previsit_briefs
+        WHERE appointment_id = $1
+        LIMIT 1
+      `,
+      [appointmentId],
+    );
+    const existing = existingRows?.[0] || null;
+    if (existing && options.forceRefresh !== true) {
+      return {
+        featureEnabled: true,
+        ...this.mapPreVisitBrief(existing),
+        reused: true,
+      };
+    }
+
+    const [latestSessionRows, openEscalationRows, intraVisitRows, actionStatusRows, followupAckRows] = await Promise.all([
+      tenantDb.query(
+        `
+          SELECT id, published_at, updated_at
+          FROM post_visit_sessions
+          WHERE patient_id = $1
+            AND status IN ('published','closed')
+          ORDER BY COALESCE(published_at, updated_at) DESC
+          LIMIT 1
+        `,
+        [appointment.patient_id],
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            COUNT(*) FILTER (WHERE severity = 'critical')::int AS critical_count,
+            COUNT(*) FILTER (WHERE severity = 'high')::int AS high_count
+          FROM post_visit_escalation_events
+          WHERE patient_id = $1
+            AND status IN ('open','acknowledged')
+        `,
+        [appointment.patient_id],
+      ),
+      tenantDb.query(
+        `
+          SELECT COUNT(*)::int AS unresolved_critical_count
+          FROM post_visit_intravisit_alert_events
+          WHERE patient_id = $1
+            AND status = 'open'
+            AND severity = 'critical'
+        `,
+        [appointment.patient_id],
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            COUNT(*) FILTER (WHERE status <> 'executed')::int AS pending_count,
+            COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count
+          FROM post_visit_action_executions pvae
+          WHERE pvae.session_id IN (
+            SELECT id
+            FROM post_visit_sessions
+            WHERE patient_id = $1
+              AND status IN ('published','closed')
+            ORDER BY COALESCE(published_at, updated_at) DESC
+            LIMIT 3
+          )
+        `,
+        [appointment.patient_id],
+      ),
+      tenantDb.query(
+        `
+          SELECT COUNT(*)::int AS acknowledged_count
+          FROM post_visit_companion_acknowledgements
+          WHERE patient_id = $1
+            AND acknowledgement_type = 'follow_up_commitment'
+            AND acknowledged = TRUE
+            AND created_at >= NOW() - INTERVAL '120 days'
+        `,
+        [appointment.patient_id],
+      ),
+    ]);
+
+    const latestSessionId = latestSessionRows?.[0]?.id || null;
+    const [latestSummaryArtifact, latestRecommendationArtifact] = latestSessionId
+      ? await Promise.all([
+          this.getArtifactRow(tenantDb, latestSessionId, 'visit_summary'),
+          this.getArtifactRow(tenantDb, latestSessionId, 'recommendation_bundle'),
+        ])
+      : [null, null];
+
+    const recommendationItems = Array.isArray(latestRecommendationArtifact?.content?.items)
+      ? latestRecommendationArtifact.content.items
+      : [];
+    const pendingActions = recommendationItems
+      .filter((item: any) => String(item?.execution?.status || '').toLowerCase() !== 'executed')
+      .slice(0, 6)
+      .map((item: any) => ({
+        id: item?.id || null,
+        title: item?.title || null,
+        urgency: item?.urgency || 'routine',
+        actionType: item?.action_type || 'follow_up',
+      }));
+
+    const openEscalations = openEscalationRows?.[0] || { critical_count: 0, high_count: 0 };
+    const actionStatus = actionStatusRows?.[0] || { pending_count: 0, failed_count: 0 };
+    const intraVisitStatus = intraVisitRows?.[0] || { unresolved_critical_count: 0 };
+    const followupAck = followupAckRows?.[0] || { acknowledged_count: 0 };
+
+    const risk = this.buildFollowUpRiskAssessment({
+      openCriticalEscalationCount: Number(openEscalations.critical_count || 0),
+      openHighEscalationCount: Number(openEscalations.high_count || 0),
+      pendingActionCount: Number(actionStatus.pending_count || 0),
+      failedActionCount: Number(actionStatus.failed_count || 0),
+      followUpCommitmentAcknowledged: Number(followupAck.acknowledged_count || 0) > 0,
+      unresolvedIntraVisitCriticalCount: Number(intraVisitStatus.unresolved_critical_count || 0),
+    });
+
+    const summaryText = String(latestSummaryArtifact?.content?.plain_language_summary || '').trim();
+    const briefContent = {
+      appointment: {
+        appointmentId,
+        scheduledAt: appointment.appointment_date || null,
+        appointmentType: appointment.appointment_type || null,
+        reason: appointment.reason || null,
+      },
+      patient: {
+        id: appointment.patient_id,
+        fullName: `${String(appointment.patient_first_name || '').trim()} ${String(appointment.patient_last_name || '').trim()}`.trim(),
+        patientNumber: appointment.patient_number || null,
+      },
+      doctor: {
+        id: appointment.doctor_id || null,
+        fullName: `${String(appointment.doctor_first_name || '').trim()} ${String(appointment.doctor_last_name || '').trim()}`.trim() || null,
+      },
+      latestPostVisitSessionId: latestSessionId,
+      latestSummary: summaryText || null,
+      pendingActions,
+      escalationSnapshot: {
+        criticalOpen: Number(openEscalations.critical_count || 0),
+        highOpen: Number(openEscalations.high_count || 0),
+        unresolvedIntraVisitCritical: Number(intraVisitStatus.unresolved_critical_count || 0),
+      },
+      followUpRisk: risk,
+      generatedAt: new Date().toISOString(),
+    };
+
+    const upsertedRows = await tenantDb.query(
+      `
+        INSERT INTO post_visit_previsit_briefs (
+          appointment_id,
+          patient_id,
+          doctor_id,
+          scheduled_at,
+          status,
+          brief_content,
+          follow_up_risk_score,
+          follow_up_risk_tier,
+          follow_up_risk_reasons,
+          nudge_policy,
+          source,
+          generated_by,
+          generated_at,
+          metadata
+        ) VALUES (
+          $1,$2,$3,$4,'active',$5::jsonb,$6,$7,$8::jsonb,$9,$10,$11,NOW(),$12::jsonb
+        )
+        ON CONFLICT (appointment_id) DO UPDATE
+        SET patient_id = EXCLUDED.patient_id,
+            doctor_id = EXCLUDED.doctor_id,
+            scheduled_at = EXCLUDED.scheduled_at,
+            status = 'active',
+            brief_content = EXCLUDED.brief_content,
+            follow_up_risk_score = EXCLUDED.follow_up_risk_score,
+            follow_up_risk_tier = EXCLUDED.follow_up_risk_tier,
+            follow_up_risk_reasons = EXCLUDED.follow_up_risk_reasons,
+            nudge_policy = EXCLUDED.nudge_policy,
+            source = EXCLUDED.source,
+            generated_by = EXCLUDED.generated_by,
+            generated_at = NOW(),
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+        RETURNING *
+      `,
+      [
+        appointmentId,
+        appointment.patient_id,
+        appointment.doctor_id || null,
+        appointment.appointment_date || null,
+        JSON.stringify(briefContent),
+        risk.score,
+        risk.tier,
+        JSON.stringify(risk.reasons),
+        risk.nudgePolicy,
+        'post_visit_previsit_brief_v1',
+        options.actorUserId || null,
+        JSON.stringify({
+          regenerated: options.forceRefresh === true,
+          latest_session_id: latestSessionId,
+        }),
+      ],
+    );
+
+    return {
+      featureEnabled: true,
+      ...this.mapPreVisitBrief(upsertedRows[0]),
+      reused: false,
     };
   }
 

@@ -511,6 +511,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint53PostVisitBillingIntelligenceSchemaStatements(),
       },
       {
+        id: 'sprint54_post_visit_previsit_briefs',
+        label: 'Sprint 54 - Post-Visit Pre-Visit Briefs and Follow-Up Risk',
+        version: '2026.03.06',
+        description: 'Adds appointment pre-visit briefing persistence with follow-up risk scoring and nudge policy metadata',
+        statements: () => this.getSprint54PostVisitPreVisitBriefSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1273,6 +1280,59 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_post_visit_billing_suggestions_updated_at ON post_visit_billing_suggestions`,
       `CREATE TRIGGER update_post_visit_billing_suggestions_updated_at
         BEFORE UPDATE ON post_visit_billing_suggestions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint54PostVisitPreVisitBriefSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_previsit_briefs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        scheduled_at TIMESTAMP WITH TIME ZONE,
+        status VARCHAR(20) NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active','archived')),
+        brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
+        follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
+          CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
+        follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+        nudge_policy VARCHAR(120),
+        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
+        generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_previsit_briefs
+        ADD COLUMN IF NOT EXISTS appointment_id UUID UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active','archived')),
+        ADD COLUMN IF NOT EXISTS brief_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS follow_up_risk_score INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS follow_up_risk_tier VARCHAR(20) NOT NULL DEFAULT 'low'
+          CHECK (follow_up_risk_tier IN ('low','moderate','high','critical')),
+        ADD COLUMN IF NOT EXISTS follow_up_risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS nudge_policy VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_previsit_brief_v1',
+        ADD COLUMN IF NOT EXISTS generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS generated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_appointment ON post_visit_previsit_briefs(appointment_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_patient ON post_visit_previsit_briefs(patient_id, generated_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_doctor ON post_visit_previsit_briefs(doctor_id, generated_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_previsit_briefs_risk ON post_visit_previsit_briefs(follow_up_risk_tier, follow_up_risk_score DESC)`,
+      `DROP TRIGGER IF EXISTS update_post_visit_previsit_briefs_updated_at ON post_visit_previsit_briefs`,
+      `CREATE TRIGGER update_post_visit_previsit_briefs_updated_at
+        BEFORE UPDATE ON post_visit_previsit_briefs
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

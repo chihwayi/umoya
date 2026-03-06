@@ -1182,6 +1182,124 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('generates appointment pre-visit brief with follow-up risk scoring and persists snapshot', async () => {
+    process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('FROM appointments a')) {
+            return [
+              {
+                id: 'appt-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                appointment_date: '2026-03-10T09:00:00.000Z',
+                appointment_type: 'follow_up',
+                reason: 'Blood pressure review',
+                notes: null,
+                patient_first_name: 'Jane',
+                patient_last_name: 'Doe',
+                patient_number: 'P-001',
+                doctor_first_name: 'Ava',
+                doctor_last_name: 'Nyathi',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_previsit_briefs') && sql.includes('appointment_id = $1')) {
+            return [];
+          }
+          if (sql.includes('FROM post_visit_sessions') && sql.includes("status IN ('published','closed')")) {
+            return [{ id: 'session-1', published_at: '2026-03-06T08:00:00.000Z', updated_at: '2026-03-06T08:10:00.000Z' }];
+          }
+          if (sql.includes('FROM post_visit_escalation_events')) {
+            return [{ critical_count: 0, high_count: 1 }];
+          }
+          if (sql.includes('FROM post_visit_intravisit_alert_events')) {
+            return [{ unresolved_critical_count: 0 }];
+          }
+          if (sql.includes('FROM post_visit_action_executions pvae')) {
+            return [{ pending_count: 3, failed_count: 1 }];
+          }
+          if (sql.includes('FROM post_visit_companion_acknowledgements')) {
+            return [{ acknowledged_count: 0 }];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+            if (params[1] === 'visit_summary') {
+              return [
+                {
+                  id: 'summary-1',
+                  artifact_status: 'published',
+                  content: { plain_language_summary: 'Patient requires close blood-pressure follow-up.' },
+                },
+              ];
+            }
+            if (params[1] === 'recommendation_bundle') {
+              return [
+                {
+                  id: 'bundle-1',
+                  artifact_status: 'published',
+                  content: {
+                    items: [
+                      { id: 'bp_review', title: 'Repeat BP check in 3 days', urgency: 'urgent' },
+                      { id: 'med_review', title: 'Medication adherence call', urgency: 'routine' },
+                    ],
+                  },
+                },
+              ];
+            }
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_previsit_briefs')) {
+            return [
+              {
+                id: 'brief-1',
+                appointment_id: 'appt-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                scheduled_at: '2026-03-10T09:00:00.000Z',
+                status: 'active',
+                brief_content: JSON.parse(params[4] || '{}'),
+                follow_up_risk_score: params[5],
+                follow_up_risk_tier: params[6],
+                follow_up_risk_reasons: JSON.parse(params[7] || '[]'),
+                nudge_policy: params[8],
+                source: 'post_visit_previsit_brief_v1',
+                generated_by: params[10],
+                generated_at: '2026-03-06T12:00:00.000Z',
+                metadata: JSON.parse(params[11] || '{}'),
+                created_at: '2026-03-06T12:00:00.000Z',
+                updated_at: '2026-03-06T12:00:00.000Z',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.generateAppointmentPreVisitBrief(
+        tenantDb,
+        'appt-1',
+        {
+          actorUserId: 'doctor-1',
+          forceRefresh: true,
+        },
+      );
+
+      expect(result.featureEnabled).toBe(true);
+      expect(result.appointmentId).toBe('appt-1');
+      if (!('followUpRisk' in result)) {
+        throw new Error('Expected follow-up risk payload when pre-visit brief is generated.');
+      }
+      expect(result.followUpRisk.score).toBeGreaterThanOrEqual(30);
+      expect(['moderate', 'high', 'critical']).toContain(result.followUpRisk.tier);
+      expect(result.followUpRisk.nudgePolicy).toBeTruthy();
+      expect(result.reused).toBe(false);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_PREVISIT_BRIEF;
+    }
+  });
+
   it('publishes reviewed artifacts and initializes patient companion thread', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 

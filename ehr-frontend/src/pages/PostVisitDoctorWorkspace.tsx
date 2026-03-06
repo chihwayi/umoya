@@ -23,6 +23,7 @@ type SessionStatus = 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewe
 
 interface SessionListItem {
   id: string;
+  appointmentId?: string | null;
   status: SessionStatus;
   sourceType?: string;
   language?: string;
@@ -135,6 +136,31 @@ interface BillingIntelligencePayload {
     rejectedCount?: number;
     highConfidenceCount?: number;
   };
+}
+
+interface PreVisitBriefPayload {
+  featureEnabled: boolean;
+  id?: string;
+  appointmentId?: string | null;
+  patientId?: string | null;
+  doctorId?: string | null;
+  scheduledAt?: string | null;
+  brief?: {
+    appointment?: {
+      appointmentType?: string | null;
+      reason?: string | null;
+    };
+    latestSummary?: string | null;
+    pendingActions?: Array<{ title?: string | null; urgency?: string }>;
+  };
+  followUpRisk?: {
+    score?: number;
+    tier?: 'low' | 'moderate' | 'high' | 'critical';
+    reasons?: string[];
+    nudgePolicy?: string | null;
+  };
+  reused?: boolean;
+  message?: string;
 }
 
 interface DiarizationSegment {
@@ -353,6 +379,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [billingIntelligence, setBillingIntelligence] = useState<BillingIntelligencePayload | null>(null);
   const [billingIntelligenceLoading, setBillingIntelligenceLoading] = useState(false);
   const [billingIntelligenceLoadedSessionId, setBillingIntelligenceLoadedSessionId] = useState<string | null>(null);
+  const [preVisitBrief, setPreVisitBrief] = useState<PreVisitBriefPayload | null>(null);
+  const [preVisitBriefLoading, setPreVisitBriefLoading] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -501,6 +529,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setDocumentIntelligenceLoadedSessionId(null);
         setBillingIntelligence(null);
         setBillingIntelligenceLoadedSessionId(null);
+        setPreVisitBrief(null);
         return;
       }
       const selectedExists = selectedSessionId && rows.some((session) => session.id === selectedSessionId);
@@ -628,6 +657,30 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadPreVisitBrief = useCallback(
+    async (appointmentId: string, refresh = false) => {
+      if (!tenantSlug || !token || !appointmentId) {
+        setPreVisitBrief(null);
+        return;
+      }
+      try {
+        setPreVisitBriefLoading(true);
+        const response = await ehrApi.getPostVisitAppointmentPreVisitBrief(
+          appointmentId,
+          token,
+          tenantSlug,
+          { refresh },
+        );
+        setPreVisitBrief((response.data || null) as PreVisitBriefPayload | null);
+      } catch {
+        setPreVisitBrief(null);
+      } finally {
+        setPreVisitBriefLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -646,6 +699,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDocumentIntelligence(selectedSessionId);
     loadIntraVisitAlerts(selectedSessionId);
     loadBillingIntelligence(selectedSessionId);
+    const selected = sessions.find((item) => item.id === selectedSessionId);
+    if (selected?.appointmentId) {
+      loadPreVisitBrief(selected.appointmentId);
+    } else {
+      setPreVisitBrief(null);
+    }
     setSessionTranscribeFile(null);
     setDocumentIntelligenceFile(null);
     setDocumentIntelligenceNote('');
@@ -656,7 +715,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, selectedSessionId]);
+  }, [loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, selectedSessionId, sessions]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -2640,6 +2699,80 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       );
                     })}
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Pre-Visit AI Brief + Follow-Up Risk</h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSession?.appointmentId) {
+                          void loadPreVisitBrief(selectedSession.appointmentId, true);
+                        }
+                      }}
+                      disabled={!selectedSession?.appointmentId || preVisitBriefLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${preVisitBriefLoading ? 'animate-spin' : ''}`} />
+                      Regenerate brief
+                    </button>
+                  </div>
+
+                  {!selectedSession?.appointmentId && (
+                    <p className="text-xs text-slate-500">
+                      This session is not linked to an appointment yet, so pre-visit brief generation is unavailable.
+                    </p>
+                  )}
+
+                  {selectedSession?.appointmentId && preVisitBrief?.featureEnabled === false && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Feature disabled. Enable <code>FEATURE_POSTVISIT_PREVISIT_BRIEF</code> to activate appointment pre-visit briefing.
+                    </p>
+                  )}
+
+                  {selectedSession?.appointmentId && preVisitBrief?.featureEnabled !== false && preVisitBrief && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-600">
+                        Appointment type: {preVisitBrief?.brief?.appointment?.appointmentType || 'n/a'} • Reason:{' '}
+                        {preVisitBrief?.brief?.appointment?.reason || 'n/a'}
+                      </p>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-xs font-semibold text-slate-800">
+                          Follow-up risk score {Number(preVisitBrief?.followUpRisk?.score || 0)} •{' '}
+                          {String(preVisitBrief?.followUpRisk?.tier || 'low')}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-600">
+                          Nudge policy: {preVisitBrief?.followUpRisk?.nudgePolicy || 'routine_weekly_checkin'}
+                        </p>
+                        {Array.isArray(preVisitBrief?.followUpRisk?.reasons) && preVisitBrief.followUpRisk.reasons.length > 0 && (
+                          <p className="mt-1 text-[11px] text-slate-700">
+                            {preVisitBrief.followUpRisk.reasons.slice(0, 3).join(' • ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Latest summary</p>
+                        <p className="mt-1 text-xs text-slate-700">
+                          {String(preVisitBrief?.brief?.latestSummary || '').trim() || 'No recent published post-visit summary found.'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pending follow-up actions</p>
+                        <div className="mt-1 space-y-1">
+                          {Array.isArray(preVisitBrief?.brief?.pendingActions) && preVisitBrief.brief.pendingActions.length > 0 ? (
+                            preVisitBrief.brief.pendingActions.slice(0, 5).map((action, index) => (
+                              <p key={`${action.title || 'action'}-${index}`} className="text-[11px] text-slate-700">
+                                {action.title || 'Untitled action'} • {action.urgency || 'routine'}
+                              </p>
+                            ))
+                          ) : (
+                            <p className="text-[11px] text-slate-500">No pending follow-up actions detected.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

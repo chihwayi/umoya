@@ -636,6 +636,25 @@ export class PostVisitController {
     );
   }
 
+  @Get('appointments/:appointmentId/previsit-brief')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Generate or fetch appointment pre-visit AI brief with follow-up risk scoring' })
+  @ApiResponse({ status: 200, description: 'Pre-visit brief fetched' })
+  async getAppointmentPreVisitBrief(
+    @Param('appointmentId') appointmentId: string,
+    @Request() req: RequestWithTenant,
+    @Query('refresh') refresh?: string,
+  ): Promise<any> {
+    return this.postVisitService.generateAppointmentPreVisitBrief(
+      req.tenantDb,
+      appointmentId,
+      {
+        actorUserId: this.resolveUserId(req),
+        forceRefresh: ['1', 'true', 'yes', 'refresh'].includes(String(refresh || '').toLowerCase()),
+      },
+    );
+  }
+
   @Post('sessions/:id/publish')
   @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Publish doctor-approved post-visit summary/checklist for patient companion access' })
