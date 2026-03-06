@@ -1506,6 +1506,19 @@ describe('PostVisitService', () => {
             },
           ];
         }
+        if (sql.includes('FROM post_visit_trial_matches') && sql.includes('WHERE id = $1')) {
+          return [
+            {
+              id: params[0],
+              session_id: params[1],
+              patient_id: 'patient-1',
+              match_status: 'proposed',
+              trial_id: 'NCT00000001',
+              trial_title: 'Hypertension Trial',
+              eligibility_score: 84,
+            },
+          ];
+        }
         if (sql.includes('UPDATE post_visit_trial_matches')) {
           return [
             {
@@ -1550,6 +1563,118 @@ describe('PostVisitService', () => {
 
     expect(result.action).toBe('consider');
     expect(result.match.matchStatus).toBe('considered');
+  });
+
+  it('returns trial match audit drilldown rows', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              doctor_id: 'doctor-1',
+              status: 'doctor_reviewed',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_trial_match_audit_log')) {
+          return [
+            {
+              id: 'audit-1',
+              session_id: params[0],
+              trial_match_id: params[1],
+              patient_id: 'patient-1',
+              action: 'consider',
+              previous_status: 'proposed',
+              next_status: 'considered',
+              note: 'candidate for discussion',
+              acted_by: 'doctor-1',
+              acted_at: '2026-03-06T13:00:00.000Z',
+              metadata: {},
+              created_at: '2026-03-06T13:00:00.000Z',
+              updated_at: '2026-03-06T13:00:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.listTrialMatchAuditLog(tenantDb, 'session-1', 'trial-1', { limit: 20 });
+    expect(result.summary.total).toBe(1);
+    expect(result.entries[0].action).toBe('consider');
+  });
+
+  it('curates companion memory entry via promote/retire controls', async () => {
+    process.env.FEATURE_POSTVISIT_COMPANION_MEMORY = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_companion_memory') && sql.includes('WHERE id = $1')) {
+            return [
+              {
+                id: params[0],
+                patient_id: params[1],
+                memory_type: 'preference',
+                memory_key: 'communication_preference',
+                memory_value: 'phone call reminders',
+                is_active: true,
+                metadata: {},
+                created_at: '2026-03-06T12:00:00.000Z',
+                updated_at: '2026-03-06T12:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('UPDATE post_visit_companion_memory')) {
+            return [
+              {
+                id: params[0],
+                session_id: 'session-1',
+                patient_id: params[1],
+                memory_type: 'preference',
+                memory_key: 'communication_preference',
+                memory_value: 'phone call reminders',
+                is_active: params[2],
+                curation_note: params[6],
+                metadata: JSON.parse(params[7] || '{}'),
+                created_at: '2026-03-06T12:00:00.000Z',
+                updated_at: '2026-03-06T13:00:00.000Z',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const retired = await service.curateCompanionMemory(
+        tenantDb,
+        'session-1',
+        'mem-1',
+        {
+          action: 'retire',
+          note: 'no longer clinically relevant',
+        },
+        {
+          actorUserId: 'doctor-1',
+        },
+      );
+      expect(retired.memory.isActive).toBe(false);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_COMPANION_MEMORY;
+    }
   });
 
   it('publishes reviewed artifacts and initializes patient companion thread', async () => {

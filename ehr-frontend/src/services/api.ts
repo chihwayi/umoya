@@ -1653,11 +1653,30 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitTrialMatchAudit: async (
+    sessionId: string,
+    matchId: string,
+    token: string,
+    tenantSlug: string,
+    options?: { limit?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/trial-matches/${matchId}/audit`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: {
+        limit: options?.limit,
+      },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitCompanionMemory: async (
     sessionId: string,
     token: string,
     tenantSlug: string,
-    options?: { limit?: number },
+    options?: { limit?: number; includeInactive?: boolean },
   ) => {
     const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/companion-memory`, {
       headers: {
@@ -1666,6 +1685,23 @@ export const ehrApi = {
       },
       params: {
         limit: options?.limit,
+        includeInactive: options?.includeInactive ? 'true' : undefined,
+      },
+    });
+    return { data: response.data };
+  },
+
+  curatePostVisitCompanionMemory: async (
+    sessionId: string,
+    memoryId: string,
+    payload: { action: 'promote' | 'retire' | 'reactivate'; note?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/companion-memory/${memoryId}/curate`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
       },
     });
     return { data: response.data };

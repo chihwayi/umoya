@@ -31,6 +31,7 @@ import {
   AnalyzePostVisitIntraVisitAlertDto,
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
+  CuratePostVisitCompanionMemoryDto,
   ExecutePostVisitVoiceCommandDto,
   GeneratePostVisitAdminDocumentsDto,
   IngestPostVisitDocumentIntelligenceDto,
@@ -277,6 +278,21 @@ export class PostVisitController {
     );
   }
 
+  @Get('sessions/:id/trial-matches/:matchId/audit')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'List doctor trial-match action audit timeline for drilldown' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial match audit timeline listed' })
+  async listTrialMatchAuditLog(
+    @Param('id') id: string,
+    @Param('matchId') matchId: string,
+    @Request() req: RequestWithTenant,
+    @Query('limit') limit?: string,
+  ) {
+    return this.postVisitService.listTrialMatchAuditLog(req.tenantDb, id, matchId, {
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Get('sessions/:id/companion-memory')
   @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'List longitudinal patient companion memory profile for a session context' })
@@ -285,10 +301,33 @@ export class PostVisitController {
     @Param('id') id: string,
     @Request() req: RequestWithTenant,
     @Query('limit') limit?: string,
+    @Query('includeInactive') includeInactive?: string,
   ) {
     return this.postVisitService.listSessionCompanionMemory(req.tenantDb, id, {
       limit: limit ? Number(limit) : undefined,
+      includeInactive: ['1', 'true', 'yes', 'all'].includes(String(includeInactive || '').toLowerCase()),
     });
+  }
+
+  @Post('sessions/:id/companion-memory/:memoryId/curate')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Curate companion memory entries (promote/retire/reactivate) from doctor workspace' })
+  @ApiResponse({ status: 200, description: 'Post-visit companion memory curation saved' })
+  async curateCompanionMemory(
+    @Param('id') id: string,
+    @Param('memoryId') memoryId: string,
+    @Body() body: CuratePostVisitCompanionMemoryDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.curateCompanionMemory(
+      req.tenantDb,
+      id,
+      memoryId,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
+      },
+    );
   }
 
   @Post('sessions/:id/voice-command')

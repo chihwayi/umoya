@@ -21,7 +21,9 @@ describe('PostVisitController', () => {
     listSessionAdminDocuments: jest.fn(),
     listSessionTrialMatches: jest.fn(),
     reviewTrialMatch: jest.fn(),
+    listTrialMatchAuditLog: jest.fn(),
     listSessionCompanionMemory: jest.fn(),
+    curateCompanionMemory: jest.fn(),
     executeVoiceReviewCommand: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
@@ -622,6 +624,30 @@ describe('PostVisitController', () => {
     expect(result.match.matchStatus).toBe('considered');
   });
 
+  it('returns trial match action audit drilldown', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listTrialMatchAuditLog.mockResolvedValue({
+      sessionId: 'session-1',
+      matchId: 'trial-1',
+      entries: [{ id: 'audit-1', action: 'consider' }],
+      summary: { total: 1, lastAction: 'consider' },
+    });
+
+    const result = await controller.listTrialMatchAuditLog('session-1', 'trial-1', req, '40');
+    expect(postVisitServiceMock.listTrialMatchAuditLog).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      'trial-1',
+      expect.objectContaining({ limit: 40 }),
+    );
+    expect(result.entries).toHaveLength(1);
+  });
+
   it('lists companion memory profile for doctor review', async () => {
     const req = {
       tenantId: 'tenant-a',
@@ -641,9 +667,42 @@ describe('PostVisitController', () => {
       'session-1',
       expect.objectContaining({
         limit: 20,
+        includeInactive: false,
       }),
     );
     expect(result.memories).toHaveLength(1);
+  });
+
+  it('curates companion memory entry from doctor workspace', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.curateCompanionMemory.mockResolvedValue({
+      sessionId: 'session-1',
+      action: 'retire',
+      memory: { id: 'mem-1', isActive: false },
+    });
+
+    const result = await controller.curateCompanionMemory(
+      'session-1',
+      'mem-1',
+      {
+        action: 'retire',
+        note: 'Outdated after medication reconciliation',
+      },
+      req,
+    );
+    expect(postVisitServiceMock.curateCompanionMemory).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      'mem-1',
+      expect.objectContaining({ action: 'retire' }),
+      expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.memory.isActive).toBe(false);
   });
 
   it('publishes reviewed post-visit session for patient companion access', async () => {

@@ -177,6 +177,19 @@ export class ReviewPostVisitTrialMatchDto {
   note?: string;
 }
 
+export class CuratePostVisitCompanionMemoryDto {
+  @ApiProperty({ description: 'Companion memory curation action', enum: ['promote', 'retire', 'reactivate'] })
+  @IsEnum(['promote', 'retire', 'reactivate'])
+  @IsNotEmpty()
+  action: 'promote' | 'retire' | 'reactivate';
+
+  @ApiPropertyOptional({ description: 'Optional curation note/rationale' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  note?: string;
+}
+
 export class PublishPostVisitSessionDto {
   @ApiPropertyOptional({ description: 'Optional publish note for audit trail' })
   @IsString()

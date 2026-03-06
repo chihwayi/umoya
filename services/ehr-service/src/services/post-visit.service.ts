@@ -6,6 +6,7 @@ import * as FormData from 'form-data';
 import { createHash } from 'crypto';
 import { config } from '@medicore/config';
 import {
+  CuratePostVisitCompanionMemoryDto,
   CreatePostVisitSessionDto,
   ExecutePostVisitVoiceCommandDto,
   GeneratePostVisitAdminDocumentsDto,
@@ -111,6 +112,7 @@ type PostVisitVoiceCommand =
   | 'SIGN_AND_PUBLISH';
 type PostVisitTrialMatchStatus = 'proposed' | 'considered' | 'deferred' | 'excluded' | 'enrolled';
 type PostVisitTrialReviewAction = 'consider' | 'defer' | 'exclude' | 'enroll';
+type PostVisitCompanionMemoryCurationAction = 'promote' | 'retire' | 'reactivate';
 
 interface PostVisitDocumentObservation {
   name: string;
@@ -897,6 +899,44 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_trial_match_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        trial_match_id UUID NOT NULL REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        action VARCHAR(20) NOT NULL
+          CHECK (action IN ('consider','defer','exclude','enroll')),
+        previous_status VARCHAR(20)
+          CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        next_status VARCHAR(20) NOT NULL
+          CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        note TEXT,
+        acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_trial_match_audit_log
+      ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS trial_match_id UUID REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS action VARCHAR(20)
+        CHECK (action IN ('consider','defer','exclude','enroll')),
+      ADD COLUMN IF NOT EXISTS previous_status VARCHAR(20)
+        CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
+      ADD COLUMN IF NOT EXISTS next_status VARCHAR(20)
+        CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
+      ADD COLUMN IF NOT EXISTS note TEXT,
+      ADD COLUMN IF NOT EXISTS acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    `);
+
+    await tenantDb.query(`
       CREATE TABLE IF NOT EXISTS post_visit_companion_memory (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -908,6 +948,11 @@ export class PostVisitService {
         source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
         created_by UUID,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        promoted_at TIMESTAMP WITH TIME ZONE,
+        promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        retired_at TIMESTAMP WITH TIME ZONE,
+        retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        curation_note TEXT,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -925,6 +970,11 @@ export class PostVisitService {
       ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS created_by UUID,
       ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS retired_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS curation_note TEXT,
       ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb
     `);
 
@@ -997,9 +1047,13 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_session ON post_visit_trial_matches(session_id, eligibility_score DESC, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_patient ON post_visit_trial_matches(patient_id, match_status, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_trial_id ON post_visit_trial_matches(trial_id)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_session ON post_visit_trial_match_audit_log(session_id, acted_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_match ON post_visit_trial_match_audit_log(trial_match_id, acted_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_actor ON post_visit_trial_match_audit_log(acted_by, acted_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_patient ON post_visit_companion_memory(patient_id, is_active, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_session ON post_visit_companion_memory(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_curation ON post_visit_companion_memory(patient_id, promoted_at DESC, retired_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -1199,6 +1253,24 @@ export class PostVisitService {
     };
   }
 
+  private mapTrialMatchAuditRow(row: any) {
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      trialMatchId: row.trial_match_id,
+      patientId: row.patient_id,
+      action: row.action || null,
+      previousStatus: row.previous_status || null,
+      nextStatus: row.next_status || null,
+      note: row.note || null,
+      actedBy: row.acted_by || null,
+      actedAt: row.acted_at || row.created_at || null,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private mapCompanionMemory(row: any) {
     return {
       id: row.id,
@@ -1212,6 +1284,11 @@ export class PostVisitService {
       sourceMessageId: row.source_message_id || null,
       createdBy: row.created_by || null,
       isActive: row.is_active !== false,
+      promotedAt: row.promoted_at || null,
+      promotedBy: row.promoted_by || null,
+      retiredAt: row.retired_at || null,
+      retiredBy: row.retired_by || null,
+      curationNote: row.curation_note || null,
       metadata: row.metadata || {},
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -6109,6 +6186,9 @@ export class PostVisitService {
     trialStatus: string | null;
     conditions: string[];
     sourceUrl: string | null;
+    eligibleSexes: Array<'male' | 'female'>;
+    minAgeYears: number | null;
+    maxAgeYears: number | null;
   }> {
     const studies = Array.isArray(payload?.studies)
       ? payload.studies
@@ -6125,6 +6205,9 @@ export class PostVisitService {
       trialStatus: string | null;
       conditions: string[];
       sourceUrl: string | null;
+      eligibleSexes: Array<'male' | 'female'>;
+      minAgeYears: number | null;
+      maxAgeYears: number | null;
     }>;
 
     for (const study of studies) {
@@ -6166,6 +6249,33 @@ export class PostVisitService {
         ? conditionsRaw.map((entry: any) => String(entry || '').trim()).filter((entry: string) => entry.length > 0)
         : [];
 
+      const eligibilityModule = module?.eligibilityModule || {};
+      const sexRaw = String(
+        eligibilityModule?.sex ||
+          study?.sex ||
+          (Array.isArray(study?.Gender) ? study.Gender[0] : '') ||
+          '',
+      )
+        .trim()
+        .toLowerCase();
+      const eligibleSexes: Array<'male' | 'female'> =
+        sexRaw === 'male'
+          ? ['male']
+          : sexRaw === 'female'
+            ? ['female']
+            : ['male', 'female'];
+
+      const minimumAgeRaw =
+        eligibilityModule?.minimumAge ||
+        study?.minimumAge ||
+        (Array.isArray(study?.MinimumAge) ? study.MinimumAge[0] : null);
+      const maximumAgeRaw =
+        eligibilityModule?.maximumAge ||
+        study?.maximumAge ||
+        (Array.isArray(study?.MaximumAge) ? study.MaximumAge[0] : null);
+      const minAgeYears = this.parseTrialAgeYears(minimumAgeRaw);
+      const maxAgeYears = this.parseTrialAgeYears(maximumAgeRaw);
+
       const sourceUrl = `https://clinicaltrials.gov/study/${id}`;
       results.push({
         trialId: id,
@@ -6174,10 +6284,73 @@ export class PostVisitService {
         trialStatus: status || null,
         conditions,
         sourceUrl,
+        eligibleSexes,
+        minAgeYears,
+        maxAgeYears,
       });
     }
 
     return results;
+  }
+
+  private parseTrialAgeYears(rawValue: any): number | null {
+    const raw = String(rawValue || '').trim().toLowerCase();
+    if (!raw || raw === 'n/a' || raw === 'na') {
+      return null;
+    }
+    const match = raw.match(/(\d+(?:\.\d+)?)\s*(year|years|month|months|week|weeks|day|days)/i);
+    if (!match) {
+      const numeric = Number(raw.replace(/[^0-9.]/g, ''));
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+    const value = Number(match[1]);
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+    const unit = String(match[2] || '').toLowerCase();
+    if (unit.startsWith('month')) return value / 12;
+    if (unit.startsWith('week')) return value / 52;
+    if (unit.startsWith('day')) return value / 365;
+    return value;
+  }
+
+  private calculateAgeInYears(dateOfBirth: any): number | null {
+    if (!dateOfBirth) return null;
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age >= 0 ? age : null;
+  }
+
+  private normalizeSexLabel(value: any): 'male' | 'female' | null {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase();
+    if (['male', 'm'].includes(normalized)) return 'male';
+    if (['female', 'f'].includes(normalized)) return 'female';
+    return null;
+  }
+
+  private async getPatientTrialEligibilityContext(tenantDb: DataSource, patientId: string) {
+    const rows = await tenantDb.query(
+      `
+        SELECT date_of_birth, gender
+        FROM patients
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [patientId],
+    );
+    const row = rows?.[0] || null;
+    return {
+      ageYears: this.calculateAgeInYears(row?.date_of_birth),
+      sex: this.normalizeSexLabel(row?.gender),
+    };
   }
 
   private scoreTrialMatchCandidate(args: {
@@ -6188,8 +6361,15 @@ export class PostVisitService {
       trialStatus: string | null;
       conditions: string[];
       sourceUrl: string | null;
+      eligibleSexes: Array<'male' | 'female'>;
+      minAgeYears: number | null;
+      maxAgeYears: number | null;
     };
     searchTerms: string[];
+    patient: {
+      ageYears: number | null;
+      sex: 'male' | 'female' | null;
+    };
   }) {
     const rationale: string[] = [];
     let score = 30;
@@ -6231,6 +6411,46 @@ export class PostVisitService {
       rationale.push('Early-phase trial may have stricter eligibility and experimental interventions.');
     }
 
+    if (args.patient.sex) {
+      if (Array.isArray(args.trial.eligibleSexes) && args.trial.eligibleSexes.length > 0) {
+        if (args.trial.eligibleSexes.includes(args.patient.sex)) {
+          score += 10;
+          rationale.push(`Sex eligibility aligned (${args.patient.sex}).`);
+        } else {
+          score -= 35;
+          rationale.push('Sex eligibility mismatch with trial criteria.');
+        }
+      }
+    } else {
+      rationale.push('Patient sex unavailable for strict eligibility filtering.');
+    }
+
+    if (args.patient.ageYears !== null && args.patient.ageYears !== undefined) {
+      if (
+        args.trial.minAgeYears !== null &&
+        args.trial.minAgeYears !== undefined &&
+        args.patient.ageYears < args.trial.minAgeYears
+      ) {
+        score -= 30;
+        rationale.push(`Patient age below minimum (${Math.floor(args.trial.minAgeYears)}y).`);
+      } else if (
+        args.trial.maxAgeYears !== null &&
+        args.trial.maxAgeYears !== undefined &&
+        args.patient.ageYears > args.trial.maxAgeYears
+      ) {
+        score -= 30;
+        rationale.push(`Patient age above maximum (${Math.floor(args.trial.maxAgeYears)}y).`);
+      } else if (
+        (args.trial.minAgeYears !== null && args.trial.minAgeYears !== undefined) ||
+        (args.trial.maxAgeYears !== null && args.trial.maxAgeYears !== undefined)
+      ) {
+        score += 10;
+        rationale.push(`Age appears within trial bounds (${args.patient.ageYears}y).`);
+      }
+    } else {
+      rationale.push('Patient age unavailable for strict eligibility filtering.');
+    }
+
     score = Math.max(0, Math.min(100, score));
     if (rationale.length === 0) {
       rationale.push('General candidate trial based on available context.');
@@ -6251,6 +6471,9 @@ export class PostVisitService {
       trialStatus: string | null;
       conditions: string[];
       sourceUrl: string | null;
+      eligibleSexes: Array<'male' | 'female'>;
+      minAgeYears: number | null;
+      maxAgeYears: number | null;
     }>;
 
     for (const term of searchTerms.slice(0, 4)) {
@@ -6302,12 +6525,14 @@ export class PostVisitService {
       return [];
     }
 
+    const patientEligibility = await this.getPatientTrialEligibilityContext(tenantDb, sessionRow.patient_id);
     const trialCandidates = await this.fetchClinicalTrialCandidates(searchTerms);
     const scoredCandidates = trialCandidates
       .map((candidate) => {
         const scoring = this.scoreTrialMatchCandidate({
           trial: candidate,
           searchTerms,
+          patient: patientEligibility,
         });
         return {
           ...candidate,
@@ -6363,6 +6588,12 @@ export class PostVisitService {
             refreshed_by: actorUserId || null,
             refreshed_at: new Date().toISOString(),
             search_terms: searchTerms,
+            patient_eligibility_context: patientEligibility,
+            trial_eligibility_profile: {
+              eligible_sexes: match.eligibleSexes,
+              min_age_years: match.minAgeYears,
+              max_age_years: match.maxAgeYears,
+            },
           }),
         ],
       );
@@ -6445,7 +6676,7 @@ export class PostVisitService {
     options: { actorUserId?: string | null } = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
-    await this.getSessionRow(tenantDb, sessionId);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
 
     const statusMap: Record<PostVisitTrialReviewAction, PostVisitTrialMatchStatus> = {
       consider: 'considered',
@@ -6459,6 +6690,22 @@ export class PostVisitService {
       throw new BadRequestException('Invalid trial review action');
     }
 
+    const existingRows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_trial_matches
+        WHERE id = $1
+          AND session_id = $2
+        LIMIT 1
+      `,
+      [matchId, sessionId],
+    );
+    const existing = existingRows?.[0];
+    if (!existing) {
+      throw new NotFoundException('Trial match not found for this post-visit session');
+    }
+
+    const previousStatus = (existing.match_status || 'proposed') as PostVisitTrialMatchStatus;
     const rows = await tenantDb.query(
       `
         UPDATE post_visit_trial_matches
@@ -6488,11 +6735,77 @@ export class PostVisitService {
     if (!rows?.length) {
       throw new NotFoundException('Trial match not found for this post-visit session');
     }
+    const updated = rows[0];
+
+    await tenantDb.query(
+      `
+        INSERT INTO post_visit_trial_match_audit_log (
+          session_id,
+          trial_match_id,
+          patient_id,
+          action,
+          previous_status,
+          next_status,
+          note,
+          acted_by,
+          acted_at,
+          metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),$9::jsonb)
+      `,
+      [
+        sessionId,
+        matchId,
+        sessionRow.patient_id,
+        payload.action,
+        previousStatus,
+        nextStatus,
+        payload.note || null,
+        options.actorUserId || null,
+        JSON.stringify({
+          trial_id: updated.trial_id || null,
+          trial_title: updated.trial_title || null,
+          eligibility_score: updated.eligibility_score ?? null,
+          source: 'post_visit_doctor_trial_review',
+        }),
+      ],
+    );
 
     return {
       sessionId,
       action: payload.action,
-      match: this.mapTrialMatch(rows[0]),
+      match: this.mapTrialMatch(updated),
+    };
+  }
+
+  async listTrialMatchAuditLog(
+    tenantDb: DataSource,
+    sessionId: string,
+    matchId: string,
+    options: { limit?: number } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+    const limit = Math.min(Math.max(Number(options.limit || 50), 1), 200);
+    const rows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_trial_match_audit_log
+        WHERE session_id = $1
+          AND trial_match_id = $2
+        ORDER BY acted_at DESC, created_at DESC
+        LIMIT $3
+      `,
+      [sessionId, matchId, limit],
+    );
+    const entries = rows.map((row: any) => this.mapTrialMatchAuditRow(row));
+    return {
+      sessionId,
+      matchId,
+      entries,
+      summary: {
+        total: entries.length,
+        lastAction: entries.length > 0 ? entries[0].action : null,
+      },
     };
   }
 
@@ -6661,7 +6974,7 @@ export class PostVisitService {
   async listSessionCompanionMemory(
     tenantDb: DataSource,
     sessionId: string,
-    options: { limit?: number } = {},
+    options: { limit?: number; includeInactive?: boolean } = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
@@ -6675,26 +6988,114 @@ export class PostVisitService {
     }
 
     const limit = Math.min(Math.max(Number(options.limit || 30), 1), 120);
+    const includeInactive = options.includeInactive === true;
     const rows = await tenantDb.query(
       `
         SELECT *
         FROM post_visit_companion_memory
         WHERE patient_id = $1
-          AND is_active = TRUE
-        ORDER BY created_at DESC
+          AND ($3::boolean = TRUE OR is_active = TRUE)
+        ORDER BY is_active DESC, updated_at DESC, created_at DESC
         LIMIT $2
       `,
-      [sessionRow.patient_id, limit],
+      [sessionRow.patient_id, limit, includeInactive],
     );
 
+    const memories = rows.map((row: any) => this.mapCompanionMemory(row));
     return {
       featureEnabled: true,
       sessionId,
       patientId: sessionRow.patient_id,
-      memories: rows.map((row: any) => this.mapCompanionMemory(row)),
+      memories,
       summary: {
-        total: rows.length,
+        total: memories.length,
+        active: memories.filter((item: any) => item.isActive !== false).length,
+        retired: memories.filter((item: any) => item.isActive === false).length,
       },
+    };
+  }
+
+  async curateCompanionMemory(
+    tenantDb: DataSource,
+    sessionId: string,
+    memoryId: string,
+    payload: CuratePostVisitCompanionMemoryDto,
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isCompanionMemoryEnabled()) {
+      throw new BadRequestException('Companion memory is disabled by feature flag');
+    }
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+    const action = String(payload.action || '').toLowerCase() as PostVisitCompanionMemoryCurationAction;
+    if (!['promote', 'retire', 'reactivate'].includes(action)) {
+      throw new BadRequestException('Invalid companion memory curation action');
+    }
+
+    const existingRows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_companion_memory
+        WHERE id = $1
+          AND patient_id = $2
+        LIMIT 1
+      `,
+      [memoryId, sessionRow.patient_id],
+    );
+    const existing = existingRows?.[0];
+    if (!existing) {
+      throw new NotFoundException('Companion memory entry not found for this session patient');
+    }
+
+    const shouldRetire = action === 'retire';
+    const metadataPatch =
+      action === 'retire'
+        ? {
+            retired_via: 'doctor_workspace',
+            retired_at: new Date().toISOString(),
+            retired_by: options.actorUserId || null,
+          }
+        : {
+            promoted_via: 'doctor_workspace',
+            promoted_at: new Date().toISOString(),
+            promoted_by: options.actorUserId || null,
+          };
+
+    const rows = await tenantDb.query(
+      `
+        UPDATE post_visit_companion_memory
+        SET is_active = $3,
+            promoted_at = CASE WHEN $4::boolean = TRUE THEN NOW() ELSE promoted_at END,
+            promoted_by = CASE WHEN $4::boolean = TRUE THEN $5 ELSE promoted_by END,
+            retired_at = CASE WHEN $6::boolean = TRUE THEN NOW() ELSE NULL END,
+            retired_by = CASE WHEN $6::boolean = TRUE THEN $5 ELSE NULL END,
+            curation_note = $7,
+            metadata = COALESCE(metadata, '{}'::jsonb) || $8::jsonb,
+            updated_at = NOW()
+        WHERE id = $1
+          AND patient_id = $2
+        RETURNING *
+      `,
+      [
+        memoryId,
+        sessionRow.patient_id,
+        !shouldRetire,
+        !shouldRetire,
+        options.actorUserId || null,
+        shouldRetire,
+        payload.note || null,
+        JSON.stringify(metadataPatch),
+      ],
+    );
+    if (!rows?.length) {
+      throw new NotFoundException('Companion memory entry not found for this session patient');
+    }
+
+    return {
+      sessionId,
+      patientId: sessionRow.patient_id,
+      action,
+      memory: this.mapCompanionMemory(rows[0]),
     };
   }
 

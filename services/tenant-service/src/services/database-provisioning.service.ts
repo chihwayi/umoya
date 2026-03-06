@@ -1445,6 +1445,38 @@ export class DatabaseProvisioningService {
         ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE,
         ADD COLUMN IF NOT EXISTS review_note TEXT,
         ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS post_visit_trial_match_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        trial_match_id UUID NOT NULL REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        action VARCHAR(20) NOT NULL
+          CHECK (action IN ('consider','defer','exclude','enroll')),
+        previous_status VARCHAR(20)
+          CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        next_status VARCHAR(20) NOT NULL
+          CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        note TEXT,
+        acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_trial_match_audit_log
+        ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS trial_match_id UUID REFERENCES post_visit_trial_matches(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS action VARCHAR(20)
+          CHECK (action IN ('consider','defer','exclude','enroll')),
+        ADD COLUMN IF NOT EXISTS previous_status VARCHAR(20)
+          CHECK (previous_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        ADD COLUMN IF NOT EXISTS next_status VARCHAR(20)
+          CHECK (next_status IN ('proposed','considered','deferred','excluded','enrolled')),
+        ADD COLUMN IF NOT EXISTS note TEXT,
+        ADD COLUMN IF NOT EXISTS acted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS acted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
       `CREATE TABLE IF NOT EXISTS post_visit_companion_memory (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
@@ -1456,6 +1488,11 @@ export class DatabaseProvisioningService {
         source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
         created_by UUID,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        promoted_at TIMESTAMP WITH TIME ZONE,
+        promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        retired_at TIMESTAMP WITH TIME ZONE,
+        retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        curation_note TEXT,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -1470,16 +1507,30 @@ export class DatabaseProvisioningService {
         ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
         ADD COLUMN IF NOT EXISTS created_by UUID,
         ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS retired_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS retired_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS curation_note TEXT,
         ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_session ON post_visit_trial_matches(session_id, eligibility_score DESC, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_patient ON post_visit_trial_matches(patient_id, match_status, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_matches_trial_id ON post_visit_trial_matches(trial_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_session ON post_visit_trial_match_audit_log(session_id, acted_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_match ON post_visit_trial_match_audit_log(trial_match_id, acted_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_trial_audit_actor ON post_visit_trial_match_audit_log(acted_by, acted_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_patient ON post_visit_companion_memory(patient_id, is_active, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_session ON post_visit_companion_memory(session_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_key ON post_visit_companion_memory(memory_type, memory_key, is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_memory_curation ON post_visit_companion_memory(patient_id, promoted_at DESC, retired_at DESC)`,
       `DROP TRIGGER IF EXISTS update_post_visit_trial_matches_updated_at ON post_visit_trial_matches`,
       `CREATE TRIGGER update_post_visit_trial_matches_updated_at
         BEFORE UPDATE ON post_visit_trial_matches
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_trial_match_audit_log_updated_at ON post_visit_trial_match_audit_log`,
+      `CREATE TRIGGER update_post_visit_trial_match_audit_log_updated_at
+        BEFORE UPDATE ON post_visit_trial_match_audit_log
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
       `DROP TRIGGER IF EXISTS update_post_visit_companion_memory_updated_at ON post_visit_companion_memory`,
