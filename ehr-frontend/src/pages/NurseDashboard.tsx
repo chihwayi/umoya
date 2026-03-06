@@ -1379,6 +1379,13 @@ const NurseDashboard: React.FC = () => {
         action: () => setActiveTab('cross-module'),
         badge: crossModuleSummary.total > 0 ? crossModuleSummary.total : undefined,
       },
+      {
+        icon: BookOpen,
+        label: 'Post-Visit Companion',
+        desc: 'Open patient-safe summary and escalation chat view',
+        color: 'from-cyan-600 to-blue-700',
+        action: () => navigate(`/ehr/${tenantSlug}/patient/post-visit`),
+      },
       { icon: Calendar, label: 'Today\'s Schedule', desc: 'View today\'s appointments', color: 'from-blue-500 to-cyan-500', action: () => setActiveTab('calendar') },
       { icon: AlertCircle, label: 'Emergency Dept', desc: 'ED tracking board & triage', color: 'from-red-500 to-orange-600', action: () => navigate(`/ehr/${tenantSlug}/emergency`) },
       { icon: Bed, label: 'Bed Management', desc: 'Hospital-wide bed status & ADT', color: 'from-blue-600 to-cyan-600', action: () => navigate(`/ehr/${tenantSlug}/bed-management`) },

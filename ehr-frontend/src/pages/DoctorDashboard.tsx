@@ -2400,7 +2400,7 @@ const DoctorDashboard: React.FC = () => {
               {/* Quick Actions */}
               <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-slate-200/50 p-6">
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                   <button
                     onClick={() => setActiveTab('current-appointment')}
                     className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-xl hover:shadow-md transition-all group"
@@ -2433,6 +2433,13 @@ const DoctorDashboard: React.FC = () => {
                         {unreadMessageCount}
                       </span>
                     )}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/ehr/${tenantSlug}/patient/post-visit`)}
+                    className="p-4 bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200 rounded-xl hover:shadow-md transition-all group"
+                  >
+                    <Shield className="w-6 h-6 text-cyan-700 mb-2 mx-auto group-hover:scale-110 transition-transform" />
+                    <div className="text-sm font-semibold text-slate-900">Post-Visit Companion</div>
                   </button>
                 </div>
               </div>

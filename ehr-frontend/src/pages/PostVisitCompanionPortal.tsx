@@ -1,6 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ListChecks,
+  LogOut,
+  MessageSquare,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 import { patientPortalApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 
@@ -36,8 +45,13 @@ type CompanionMessage = {
   escalationEventId?: string | null;
 };
 
+type ClinicianContext = {
+  role?: string;
+} | null;
+
 const PostVisitCompanionPortal: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
 
   const [token, setToken] = useState<string>(() => localStorage.getItem('patient_portal_token') || '');
@@ -61,7 +75,66 @@ const PostVisitCompanionPortal: React.FC = () => {
     signalText?: string | null;
   } | null>(null);
 
+  const messageListRef = useRef<HTMLDivElement | null>(null);
+
+  const clinicianContext = useMemo<ClinicianContext>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const raw = localStorage.getItem('ehr_user');
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, []);
+
   const hasAccess = Boolean(tenantSlug && token);
+  const checklistItems = Array.isArray(summaryPayload?.checklist) ? summaryPayload!.checklist! : [];
+  const checklistCompleted = checklistItems.filter((item) => Boolean(item.completed)).length;
+  const pendingChecklistCount = Math.max(checklistItems.length - checklistCompleted, 0);
+
+  const getUrgencyBadgeClass = useCallback((urgency?: string) => {
+    const normalized = String(urgency || 'routine').toLowerCase();
+    if (normalized === 'stat') {
+      return 'border-rose-300 bg-rose-100 text-rose-700';
+    }
+    if (normalized === 'urgent') {
+      return 'border-amber-300 bg-amber-100 text-amber-700';
+    }
+    return 'border-slate-300 bg-slate-100 text-slate-700';
+  }, []);
+
+  const handleBackToWorkspace = useCallback(() => {
+    if (!tenantSlug) {
+      return;
+    }
+    const role = String(clinicianContext?.role || '').toLowerCase();
+    if (role === 'doctor') {
+      navigate(`/ehr/${tenantSlug}/doctor`);
+      return;
+    }
+    if (role === 'nurse' || role === 'nurse_accounts') {
+      navigate(`/ehr/${tenantSlug}/nurse`);
+      return;
+    }
+    navigate(`/ehr/${tenantSlug}/dashboard`);
+  }, [clinicianContext?.role, navigate, tenantSlug]);
+
+  const handlePortalSignOut = useCallback(() => {
+    localStorage.removeItem('patient_portal_token');
+    setToken('');
+    setSessions([]);
+    setSelectedSessionId(null);
+    setSummaryPayload(null);
+    setMessages([]);
+    setLastEscalation(null);
+    setDraftMessage('');
+    showSuccess('Signed out', 'Patient companion session closed.');
+  }, [showSuccess]);
 
   const loadSessions = useCallback(async () => {
     if (!tenantSlug || !token) {
@@ -70,14 +143,22 @@ const PostVisitCompanionPortal: React.FC = () => {
     try {
       setSessionsLoading(true);
       const response = await patientPortalApi.getPostVisitSessions(token, tenantSlug, { limit: 20, offset: 0 });
-      const sessionRows = Array.isArray(response.data?.sessions) ? response.data.sessions : [];
+      const sessionRows: PostVisitSessionItem[] = Array.isArray(response.data?.sessions)
+        ? (response.data.sessions as PostVisitSessionItem[])
+        : [];
       setSessions(sessionRows);
-      if (!selectedSessionId && sessionRows.length > 0) {
+      if (sessionRows.length === 0) {
+        setSelectedSessionId(null);
+        return;
+      }
+      const hasSelected = selectedSessionId && sessionRows.some((session) => session.id === selectedSessionId);
+      if (!hasSelected) {
         setSelectedSessionId(sessionRows[0].id);
       }
     } catch {
       showError('Post-visit companion', 'Unable to load published post-visit sessions.');
       setSessions([]);
+      setSelectedSessionId(null);
     } finally {
       setSessionsLoading(false);
     }
@@ -120,6 +201,16 @@ const PostVisitCompanionPortal: React.FC = () => {
     loadSessionDetail();
   }, [hasAccess, loadSessionDetail, selectedSessionId]);
 
+  useEffect(() => {
+    if (!messageListRef.current) {
+      return;
+    }
+    messageListRef.current.scrollTo({
+      top: messageListRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages.length]);
+
   const handlePatientLogin = useCallback(async () => {
     if (!tenantSlug || !email || !password) {
       showError('Patient login', 'Tenant, email, and password are required.');
@@ -148,7 +239,8 @@ const PostVisitCompanionPortal: React.FC = () => {
   }, [email, password, showError, showSuccess, tenantSlug]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!tenantSlug || !token || !selectedSessionId || !draftMessage.trim()) {
+    const trimmed = draftMessage.trim();
+    if (!tenantSlug || !token || !selectedSessionId || !trimmed) {
       return;
     }
     try {
@@ -156,7 +248,7 @@ const PostVisitCompanionPortal: React.FC = () => {
       const response = await patientPortalApi.sendPostVisitMessage(
         selectedSessionId,
         {
-          message: draftMessage.trim(),
+          message: trimmed,
           messageType: 'question',
         },
         token,
@@ -251,32 +343,70 @@ const PostVisitCompanionPortal: React.FC = () => {
   }, [selectedSessionId, sessions]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50 p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        <div className="rounded-2xl border border-cyan-200 bg-white p-4 sm:p-5">
-          <h1 className="text-xl font-bold text-slate-900">Post-Visit AI Companion</h1>
-          <p className="text-sm text-slate-600">
-            Patient-safe summary, checklist, and grounded follow-up messaging with safety escalation detection.
-          </p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50 to-blue-100 p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-5">
+        <section className="rounded-2xl border border-cyan-200 bg-white/90 backdrop-blur-sm p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Post-Visit AI Companion</h1>
+              <p className="text-sm text-slate-600 mt-1">
+                Clinically grounded patient follow-up with safety escalation detection and closed-loop acknowledgement.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {clinicianContext && (
+                <button
+                  type="button"
+                  onClick={handleBackToWorkspace}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Workspace
+                </button>
+              )}
+              {hasAccess && (
+                <button
+                  type="button"
+                  onClick={handlePortalSignOut}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
 
         {!hasAccess && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3 max-w-lg">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3 max-w-lg shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Patient Portal Login</h2>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Patient email"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
+            <div>
+              <label htmlFor="postvisit-email" className="block text-xs font-semibold text-slate-600 mb-1">
+                Email
+              </label>
+              <input
+                id="postvisit-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Patient email"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="postvisit-password" className="block text-xs font-semibold text-slate-600 mb-1">
+                Password
+              </label>
+              <input
+                id="postvisit-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
             <button
               type="button"
               disabled={authLoading || !tenantSlug}
@@ -285,192 +415,238 @@ const PostVisitCompanionPortal: React.FC = () => {
             >
               {authLoading ? 'Signing in...' : 'Sign in'}
             </button>
-          </div>
+          </section>
         )}
 
         {hasAccess && (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-            <aside className="xl:col-span-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-slate-900">Published Sessions</h2>
-                <button
-                  type="button"
-                  onClick={loadSessions}
-                  className="text-xs font-semibold text-cyan-700 inline-flex items-center gap-1"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
+          <>
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold text-slate-500">Published Sessions</p>
+                <p className="text-xl font-bold text-slate-900">{sessions.length}</p>
               </div>
-              <div className="space-y-2">
-                {sessionsLoading && <p className="text-xs text-slate-500">Loading sessions...</p>}
-                {!sessionsLoading && sessions.length === 0 && (
-                  <p className="text-xs text-slate-500">No published post-visit sessions found.</p>
-                )}
-                {sessions.map((session) => (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold text-slate-500">Checklist Pending</p>
+                <p className="text-xl font-bold text-slate-900">{pendingChecklistCount}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold text-slate-500">Checklist Completed</p>
+                <p className="text-xl font-bold text-slate-900">{checklistCompleted}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold text-slate-500">Conversation Messages</p>
+                <p className="text-xl font-bold text-slate-900">{messages.length}</p>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+              <aside className="xl:col-span-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-slate-900">Published Sessions</h2>
                   <button
-                    key={session.id}
                     type="button"
-                    onClick={() => setSelectedSessionId(session.id)}
-                    className={`w-full text-left rounded-xl border px-3 py-2 ${
-                      selectedSessionId === session.id ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'
-                    }`}
+                    onClick={loadSessions}
+                    className="text-xs font-semibold text-cyan-700 inline-flex items-center gap-1"
                   >
-                    <p className="text-sm font-semibold text-slate-900 truncate">{session.summarySnippet || 'Post-visit summary'}</p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      {session.publishedAt ? new Date(session.publishedAt).toLocaleDateString() : session.status}
-                      {' • '}
-                      {session.checklistCount ?? 0} checklist items
-                    </p>
+                    <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
                   </button>
-                ))}
-              </div>
-            </aside>
-
-            <section className="xl:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Companion Session</h2>
-                  <p className="text-xs text-slate-500">{selectedSessionLabel}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={loadSessionDetail}
-                  disabled={!selectedSessionId || chatLoading}
-                  className="text-xs font-semibold text-cyan-700 inline-flex items-center gap-1 disabled:opacity-60"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${chatLoading ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
-              </div>
-
-              {lastEscalation && (
-                <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
-                  <p className="text-sm font-semibold text-rose-800 flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" />
-                    Escalation routed to {lastEscalation.routeTarget}
-                  </p>
-                  <p className="text-xs text-rose-700 mt-1">
-                    Severity: {lastEscalation.severity} • Event: {lastEscalation.id}
-                  </p>
-                </div>
-              )}
-
-              {summaryPayload?.summary && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    Doctor-approved summary
-                  </p>
-                  <p className="text-sm text-slate-700 mt-2">{summaryPayload.summary.plainLanguageSummary || 'No summary available.'}</p>
-                  {(summaryPayload.summary.keyPoints || []).length > 0 && (
-                    <ul className="mt-2 space-y-1">
-                      {(summaryPayload.summary.keyPoints || []).map((point, index) => (
-                        <li key={`summary-point-${index}`} className="text-xs text-slate-600">
-                          • {point}
-                        </li>
-                      ))}
-                    </ul>
+                <div className="space-y-2">
+                  {sessionsLoading && <p className="text-xs text-slate-500">Loading sessions...</p>}
+                  {!sessionsLoading && sessions.length === 0 && (
+                    <p className="text-xs text-slate-500">No published post-visit sessions found.</p>
                   )}
+                  {sessions.map((session) => (
+                    <button
+                      key={session.id}
+                      type="button"
+                      onClick={() => setSelectedSessionId(session.id)}
+                      className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${
+                        selectedSessionId === session.id
+                          ? 'border-cyan-300 bg-cyan-50'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-900 truncate">{session.summarySnippet || 'Post-visit summary'}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {session.publishedAt ? new Date(session.publishedAt).toLocaleDateString() : session.status}
+                        {' • '}
+                        {session.checklistCount ?? 0} checklist items
+                      </p>
+                    </button>
+                  ))}
                 </div>
-              )}
+              </aside>
 
-              {(summaryPayload?.checklist || []).length > 0 && (
+              <section className="xl:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">Companion Session</h2>
+                    <p className="text-xs text-slate-500">{selectedSessionLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadSessionDetail}
+                    disabled={!selectedSessionId || chatLoading}
+                    className="text-xs font-semibold text-cyan-700 inline-flex items-center gap-1 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${chatLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+
+                {lastEscalation && (
+                  <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2" aria-live="assertive">
+                    <p className="text-sm font-semibold text-rose-800 flex items-center gap-1">
+                      <AlertTriangle className="w-4 h-4" />
+                      Escalation routed to {lastEscalation.routeTarget}
+                    </p>
+                    <p className="text-xs text-rose-700 mt-1">
+                      Severity: {lastEscalation.severity} • Event: {lastEscalation.id}
+                    </p>
+                    {lastEscalation.signalText && (
+                      <p className="text-xs text-rose-700 mt-1">Signal: {lastEscalation.signalText}</p>
+                    )}
+                  </div>
+                )}
+
+                {summaryPayload?.summary && (
+                  <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-3">
+                    <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      Doctor-approved summary
+                    </p>
+                    <p className="text-sm text-slate-700 mt-2">{summaryPayload.summary.plainLanguageSummary || 'No summary available.'}</p>
+                    {(summaryPayload.summary.keyPoints || []).length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {(summaryPayload.summary.keyPoints || []).map((point, index) => (
+                          <li key={`summary-point-${index}`} className="text-xs text-slate-600">
+                            • {point}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {checklistItems.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                    <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                      <ListChecks className="w-4 h-4 text-cyan-700" />
+                      Follow-up checklist
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {checklistItems.map((item, index) => (
+                        <div key={item.id || `checklist-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2 justify-between">
+                            <p className="text-sm font-medium text-slate-800">{item.title || 'Checklist item'}</p>
+                            <span className={`px-2 py-0.5 rounded-full border text-[11px] font-semibold ${getUrgencyBadgeClass(item.urgency)}`}>
+                              {(item.urgency || 'routine').toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1">{item.description || 'No description'}</p>
+                          <p className="text-[11px] text-slate-500 mt-1">Status: {item.completed ? 'completed' : 'pending'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Follow-up checklist</p>
-                  <div className="mt-2 space-y-2">
-                    {(summaryPayload?.checklist || []).map((item, index) => (
-                      <div key={item.id || `checklist-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
-                        <p className="text-sm font-medium text-slate-800">{item.title || 'Checklist item'}</p>
-                        <p className="text-xs text-slate-600 mt-1">{item.description || 'No description'}</p>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Urgency: {item.urgency || 'routine'} • Status: {item.completed ? 'completed' : 'pending'}
+                  <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-cyan-700" />
+                    Companion chat
+                  </p>
+                  <div ref={messageListRef} className="mt-3 max-h-72 overflow-y-auto space-y-2 pr-1" aria-live="polite">
+                    {messages.length === 0 && <p className="text-xs text-slate-500">No messages yet.</p>}
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`rounded-lg px-3 py-2 ${
+                          message.senderType === 'patient'
+                            ? 'bg-cyan-50 border border-cyan-200'
+                            : 'bg-slate-50 border border-slate-200'
+                        }`}
+                      >
+                        <p className="text-xs font-semibold text-slate-700">
+                          {message.senderType === 'patient' ? 'You' : 'Companion'} • {new Date(message.createdAt).toLocaleString()}
                         </p>
+                        <p className="text-sm text-slate-800 mt-1">{message.message}</p>
+                        {message.escalationDetected && (
+                          <p className="text-[11px] text-rose-700 mt-1">
+                            Escalation detected: {message.escalationEventId || 'pending id'}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
 
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-cyan-700" />
-                  Companion chat
-                </p>
-                <div className="mt-3 max-h-72 overflow-y-auto space-y-2">
-                  {messages.length === 0 && <p className="text-xs text-slate-500">No messages yet.</p>}
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`rounded-lg px-3 py-2 ${
-                        message.senderType === 'patient' ? 'bg-cyan-50 border border-cyan-200' : 'bg-slate-50 border border-slate-200'
-                      }`}
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={draftMessage}
+                      onChange={(event) => setDraftMessage(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          if (!sending) {
+                            void handleSendMessage();
+                          }
+                        }
+                      }}
+                      placeholder="Ask a follow-up question..."
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={sending || !draftMessage.trim() || !selectedSessionId}
+                      onClick={() => {
+                        void handleSendMessage();
+                      }}
+                      className="px-3 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700 disabled:opacity-60"
                     >
-                      <p className="text-xs font-semibold text-slate-700">
-                        {message.senderType === 'patient' ? 'You' : 'Companion'} • {new Date(message.createdAt).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-slate-800 mt-1">{message.message}</p>
-                      {message.escalationDetected && (
-                        <p className="text-[11px] text-rose-700 mt-1">Escalation detected: {message.escalationEventId || 'pending id'}</p>
-                      )}
-                    </div>
-                  ))}
+                      {sending ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                  <input
-                    value={draftMessage}
-                    onChange={(event) => setDraftMessage(event.target.value)}
-                    placeholder="Ask a follow-up question..."
-                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  />
-                  <button
-                    type="button"
-                    disabled={sending || !draftMessage.trim() || !selectedSessionId}
-                    onClick={handleSendMessage}
-                    className="px-3 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700 disabled:opacity-60"
-                  >
-                    {sending ? 'Sending...' : 'Send'}
-                  </button>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-sm font-semibold text-slate-900">Patient acknowledgement</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAcknowledge('teach_back')}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
+                      Teach-back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAcknowledge('medication_adherence')}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
+                    >
+                      Medication adherence
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAcknowledge('follow_up_commitment')}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
+                    >
+                      Follow-up commitment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAcknowledge('warning_sign_understanding')}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
+                    >
+                      Warning-sign understanding
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                <p className="text-sm font-semibold text-slate-900">Patient acknowledgement</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleAcknowledge('teach_back')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />
-                    Teach-back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAcknowledge('medication_adherence')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
-                  >
-                    Medication adherence
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAcknowledge('follow_up_commitment')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
-                  >
-                    Follow-up commitment
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAcknowledge('warning_sign_understanding')}
-                    className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-white"
-                  >
-                    Warning-sign understanding
-                  </button>
-                </div>
-              </div>
+              </section>
             </section>
-          </div>
+          </>
         )}
       </div>
     </div>

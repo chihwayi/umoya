@@ -499,6 +499,7 @@ function App() {
               }
             />
             <Route path="/ehr/:tenantSlug/patient/post-visit" element={<PostVisitCompanionPortal />} />
+            <Route path="/ehr/:tenantSlug/post-visit/companion" element={<PostVisitCompanionPortal />} />
             <Route
               path="/ehr/:tenantSlug/analytics"
               element={

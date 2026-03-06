@@ -38,6 +38,11 @@ Validate sprint-4 post-visit companion behavior end-to-end:
 ### Dashboard Visibility
 - [ ] Doctor dashboard includes post-visit escalation queue panel and allows resolve/dismiss.
 - [ ] Nurse cross-module area includes post-visit escalation queue panel and allows resolve/dismiss.
+- [ ] Direct companion route works from both entry points:
+  - `/ehr/:tenantSlug/patient/post-visit`
+  - `/ehr/:tenantSlug/post-visit/companion`
+- [ ] Doctor and nurse quick-action cards open the post-visit companion route.
+- [ ] Companion chat supports keyboard submit (`Enter`) and auto-scrolls to latest response.
 
 ## Smoke Commands
 
