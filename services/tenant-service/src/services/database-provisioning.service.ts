@@ -504,6 +504,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint52PostVisitIntraVisitRoutingSchemaStatements(),
       },
       {
+        id: 'sprint53_post_visit_billing_intelligence',
+        label: 'Sprint 53 - Post-Visit Billing Intelligence',
+        version: '2026.03.06',
+        description: 'Adds billing suggestion intelligence persistence and approval audit trail for post-visit workflow',
+        statements: () => this.getSprint53PostVisitBillingIntelligenceSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1195,6 +1202,77 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_post_visit_intravisit_alert_events_updated_at ON post_visit_intravisit_alert_events`,
       `CREATE TRIGGER update_post_visit_intravisit_alert_events_updated_at
         BEFORE UPDATE ON post_visit_intravisit_alert_events
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint53PostVisitBillingIntelligenceSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_billing_suggestions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        suggestion_key VARCHAR(120) NOT NULL,
+        code_type VARCHAR(20) NOT NULL CHECK (code_type IN ('cpt','icd10')),
+        code VARCHAR(20) NOT NULL,
+        description TEXT NOT NULL,
+        confidence DOUBLE PRECISION,
+        justification TEXT,
+        documentation_checks JSONB NOT NULL DEFAULT '[]'::jsonb,
+        documentation_score INTEGER NOT NULL DEFAULT 0,
+        documentation_status VARCHAR(20) NOT NULL DEFAULT 'insufficient'
+          CHECK (documentation_status IN ('sufficient','partial','insufficient')),
+        status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+          CHECK (status IN ('proposed','approved','rejected')),
+        approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        approved_at TIMESTAMP WITH TIME ZONE,
+        approval_note TEXT,
+        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_billing_intelligence_v1',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, suggestion_key)
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_billing_suggestions
+        ADD COLUMN IF NOT EXISTS suggestion_key VARCHAR(120),
+        ADD COLUMN IF NOT EXISTS code_type VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS code VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION,
+        ADD COLUMN IF NOT EXISTS justification TEXT,
+        ADD COLUMN IF NOT EXISTS documentation_checks JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS documentation_score INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS documentation_status VARCHAR(20) NOT NULL DEFAULT 'insufficient'
+          CHECK (documentation_status IN ('sufficient','partial','insufficient')),
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'proposed'
+          CHECK (status IN ('proposed','approved','rejected')),
+        ADD COLUMN IF NOT EXISTS approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS approval_note TEXT,
+        ADD COLUMN IF NOT EXISTS source VARCHAR(80) NOT NULL DEFAULT 'post_visit_billing_intelligence_v1',
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS post_visit_billing_audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        suggestion_id UUID REFERENCES post_visit_billing_suggestions(id) ON DELETE CASCADE,
+        action VARCHAR(30) NOT NULL CHECK (action IN ('generated','approved','rejected','refreshed')),
+        action_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        action_note TEXT,
+        before_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        after_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_session ON post_visit_billing_suggestions(session_id, status, code_type, confidence DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_patient ON post_visit_billing_suggestions(patient_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_suggestions_code ON post_visit_billing_suggestions(code_type, code)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_session ON post_visit_billing_audit_log(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_billing_audit_suggestion ON post_visit_billing_audit_log(suggestion_id, created_at DESC)`,
+      `DROP TRIGGER IF EXISTS update_post_visit_billing_suggestions_updated_at ON post_visit_billing_suggestions`,
+      `CREATE TRIGGER update_post_visit_billing_suggestions_updated_at
+        BEFORE UPDATE ON post_visit_billing_suggestions
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

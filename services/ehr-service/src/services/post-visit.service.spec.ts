@@ -965,6 +965,223 @@ describe('PostVisitService', () => {
     expect(result.execution.resultResourceId).toBe('order-11');
   });
 
+  it('returns post-visit billing intelligence suggestions with documentation summary', async () => {
+    process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                source_type: 'in_person',
+                status: 'draft_ready',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_billing_suggestions')) {
+            return [
+              {
+                id: 'bill-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                suggestion_key: 'cpt:99214',
+                code_type: 'cpt',
+                code: '99214',
+                description: 'Established patient office/outpatient visit, moderate complexity',
+                confidence: 0.89,
+                justification: 'Draft supports moderate complexity.',
+                documentation_checks: [
+                  { id: 'subjective_documented', label: 'Subjective documented', passed: true, guidance: 'ok' },
+                  { id: 'objective_documented', label: 'Objective documented', passed: false, guidance: 'Add objective findings.' },
+                ],
+                documentation_score: 72,
+                documentation_status: 'partial',
+                status: 'proposed',
+                approved_by: null,
+                approved_at: null,
+                approval_note: null,
+                source: 'post_visit_billing_intelligence_v1',
+                metadata: { documentation: { gaps: ['Add objective findings.'] } },
+                created_at: '2026-03-06T10:00:00.000Z',
+                updated_at: '2026-03-06T10:00:00.000Z',
+              },
+              {
+                id: 'bill-2',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                suggestion_key: 'icd10:I10',
+                code_type: 'icd10',
+                code: 'I10',
+                description: 'Essential hypertension',
+                confidence: 0.81,
+                justification: 'Assessment indicates hypertension.',
+                documentation_checks: [],
+                documentation_score: 72,
+                documentation_status: 'partial',
+                status: 'approved',
+                approved_by: 'doctor-1',
+                approved_at: '2026-03-06T10:05:00.000Z',
+                approval_note: 'Looks good',
+                source: 'post_visit_billing_intelligence_v1',
+                metadata: {},
+                created_at: '2026-03-06T10:01:00.000Z',
+                updated_at: '2026-03-06T10:05:00.000Z',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.getSessionBillingIntelligence(tenantDb, 'session-1');
+      expect(result.featureEnabled).toBe(true);
+      expect(result.suggestions).toHaveLength(2);
+      expect(result.documentation).toEqual(
+        expect.objectContaining({
+          score: 72,
+          status: 'partial',
+        }),
+      );
+      expect(result.summary).toEqual(
+        expect.objectContaining({
+          total: 2,
+          proposedCount: 1,
+          approvedCount: 1,
+        }),
+      );
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE;
+    }
+  });
+
+  it('approves billing suggestion and routes to accounts workflow with audit trail', async () => {
+    process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                source_type: 'in_person',
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_billing_suggestions') && sql.includes('LIMIT 1')) {
+            return [
+              {
+                id: 'bill-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                suggestion_key: 'icd10:I10',
+                code_type: 'icd10',
+                code: 'I10',
+                description: 'Essential hypertension',
+                confidence: 0.84,
+                justification: 'Hypertension present.',
+                documentation_checks: [],
+                documentation_score: 88,
+                documentation_status: 'sufficient',
+                status: 'proposed',
+                metadata: {},
+                created_at: '2026-03-06T10:00:00.000Z',
+                updated_at: '2026-03-06T10:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('UPDATE post_visit_billing_suggestions') && sql.includes('SET status = $3')) {
+            return [
+              {
+                id: 'bill-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                suggestion_key: 'icd10:I10',
+                code_type: 'icd10',
+                code: 'I10',
+                description: 'Essential hypertension',
+                confidence: 0.84,
+                justification: 'Hypertension present.',
+                documentation_checks: [],
+                documentation_score: 88,
+                documentation_status: 'sufficient',
+                status: 'approved',
+                approved_by: 'doctor-1',
+                approved_at: '2026-03-06T10:02:00.000Z',
+                approval_note: params[4],
+                source: 'post_visit_billing_intelligence_v1',
+                metadata: {},
+                created_at: '2026-03-06T10:00:00.000Z',
+                updated_at: '2026-03-06T10:02:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('INSERT INTO nurse_cross_module_workflow_state')) {
+            return [];
+          }
+          if (sql.includes('UPDATE post_visit_billing_suggestions') && sql.includes('workflow_key')) {
+            return [
+              {
+                id: 'bill-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                suggestion_key: 'icd10:I10',
+                code_type: 'icd10',
+                code: 'I10',
+                description: 'Essential hypertension',
+                confidence: 0.84,
+                justification: 'Hypertension present.',
+                documentation_checks: [],
+                documentation_score: 88,
+                documentation_status: 'sufficient',
+                status: 'approved',
+                approved_by: 'doctor-1',
+                approved_at: '2026-03-06T10:02:00.000Z',
+                approval_note: 'Approve to accounts',
+                source: 'post_visit_billing_intelligence_v1',
+                metadata: { workflow_key: 'post_visit_billing:bill-1' },
+                created_at: '2026-03-06T10:00:00.000Z',
+                updated_at: '2026-03-06T10:02:10.000Z',
+              },
+            ];
+          }
+          if (sql.includes('INSERT INTO post_visit_billing_audit_log')) {
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.reviewBillingSuggestion(
+        tenantDb,
+        'session-1',
+        'bill-1',
+        {
+          action: 'approve',
+          note: 'Approve to accounts',
+        },
+        {
+          actorUserId: 'doctor-1',
+        },
+      );
+
+      expect(result.action).toBe('approve');
+      expect(result.workflowKey).toBe('post_visit_billing:bill-1');
+      expect(result.suggestion.status).toBe('approved');
+      expect(tenantDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO nurse_cross_module_workflow_state'),
+        expect.any(Array),
+      );
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE;
+    }
+  });
+
   it('publishes reviewed artifacts and initializes patient companion thread', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 

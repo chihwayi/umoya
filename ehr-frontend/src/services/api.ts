@@ -1602,6 +1602,40 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitBillingIntelligence: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/billing-intelligence`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
+  reviewPostVisitBillingSuggestion: async (
+    sessionId: string,
+    suggestionId: string,
+    payload: { action: 'approve' | 'reject'; note?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      `/post-visit/sessions/${sessionId}/billing-suggestions/${suggestionId}/review`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
   publishPostVisitSession: async (
     sessionId: string,
     payload: { note?: string; publishMetadata?: Record<string, any>; acknowledgedSupersededCitationIds?: string[] },

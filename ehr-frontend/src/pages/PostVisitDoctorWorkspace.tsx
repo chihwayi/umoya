@@ -89,6 +89,52 @@ interface DraftPayload {
     acknowledgedSuperseded?: boolean;
   }>;
   documentIntelligence?: DocumentIntelligenceItem[];
+  billingIntelligence?: BillingIntelligencePayload;
+}
+
+interface BillingDocumentationCheck {
+  id: string;
+  label: string;
+  passed: boolean;
+  guidance: string;
+}
+
+interface BillingDocumentationSummary {
+  score: number;
+  status: 'sufficient' | 'partial' | 'insufficient';
+  checks: BillingDocumentationCheck[];
+  gaps: string[];
+}
+
+interface BillingSuggestionItem {
+  id: string;
+  suggestionKey: string;
+  codeType: 'cpt' | 'icd10';
+  code: string;
+  description: string;
+  confidence?: number | null;
+  justification?: string | null;
+  documentationChecks?: BillingDocumentationCheck[];
+  documentationScore?: number;
+  documentationStatus?: 'sufficient' | 'partial' | 'insufficient';
+  status: 'proposed' | 'approved' | 'rejected';
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  approvalNote?: string | null;
+  metadata?: Record<string, any>;
+}
+
+interface BillingIntelligencePayload {
+  featureEnabled: boolean;
+  documentation?: BillingDocumentationSummary | null;
+  suggestions: BillingSuggestionItem[];
+  summary?: {
+    total?: number;
+    proposedCount?: number;
+    approvedCount?: number;
+    rejectedCount?: number;
+    highConfidenceCount?: number;
+  };
 }
 
 interface DiarizationSegment {
@@ -304,6 +350,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [streamingAnalysisEnabled, setStreamingAnalysisEnabled] = useState(true);
   const [streamingAnalysisStatus, setStreamingAnalysisStatus] = useState<'idle' | 'running' | 'paused'>('idle');
   const [lastStreamingAnalyzedAt, setLastStreamingAnalyzedAt] = useState<string | null>(null);
+  const [billingIntelligence, setBillingIntelligence] = useState<BillingIntelligencePayload | null>(null);
+  const [billingIntelligenceLoading, setBillingIntelligenceLoading] = useState(false);
+  const [billingIntelligenceLoadedSessionId, setBillingIntelligenceLoadedSessionId] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -366,6 +415,26 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       : [];
     return draftRows;
   }, [documentIntelligence, documentIntelligenceLoadedSessionId, draftData?.documentIntelligence, selectedSessionId]);
+
+  const effectiveBillingIntelligence = useMemo(() => {
+    if (billingIntelligenceLoadedSessionId && billingIntelligenceLoadedSessionId === selectedSessionId && billingIntelligence) {
+      return billingIntelligence;
+    }
+    return (
+      draftData?.billingIntelligence || {
+        featureEnabled: false,
+        documentation: null,
+        suggestions: [],
+        summary: {
+          total: 0,
+          proposedCount: 0,
+          approvedCount: 0,
+          rejectedCount: 0,
+          highConfidenceCount: 0,
+        },
+      }
+    );
+  }, [billingIntelligence, billingIntelligenceLoadedSessionId, draftData?.billingIntelligence, selectedSessionId]);
 
   const labObservationTrends = useMemo(() => {
     const trendMap = new Map<string, Array<{ value: number; unit: string; createdAt: string }>>();
@@ -430,6 +499,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setDiarizationData(null);
         setDocumentIntelligence([]);
         setDocumentIntelligenceLoadedSessionId(null);
+        setBillingIntelligence(null);
+        setBillingIntelligenceLoadedSessionId(null);
         return;
       }
       const selectedExists = selectedSessionId && rows.some((session) => session.id === selectedSessionId);
@@ -539,6 +610,24 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadBillingIntelligence = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) return;
+      try {
+        setBillingIntelligenceLoading(true);
+        const response = await ehrApi.getPostVisitBillingIntelligence(sessionId, token, tenantSlug);
+        setBillingIntelligence((response.data || null) as BillingIntelligencePayload | null);
+        setBillingIntelligenceLoadedSessionId(sessionId);
+      } catch {
+        setBillingIntelligence(null);
+        setBillingIntelligenceLoadedSessionId(sessionId);
+      } finally {
+        setBillingIntelligenceLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -556,6 +645,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDiarization(selectedSessionId);
     loadDocumentIntelligence(selectedSessionId);
     loadIntraVisitAlerts(selectedSessionId);
+    loadBillingIntelligence(selectedSessionId);
     setSessionTranscribeFile(null);
     setDocumentIntelligenceFile(null);
     setDocumentIntelligenceNote('');
@@ -566,7 +656,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, selectedSessionId]);
+  }, [loadBillingIntelligence, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, selectedSessionId]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -939,7 +1029,12 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       setNewSessionAudioFile(null);
       await loadSessions();
       setSelectedSessionId(createdId);
-      await Promise.all([loadDraft(createdId), loadDiarization(createdId), loadIntraVisitAlerts(createdId)]);
+      await Promise.all([
+        loadDraft(createdId),
+        loadDiarization(createdId),
+        loadIntraVisitAlerts(createdId),
+        loadBillingIntelligence(createdId),
+      ]);
     } catch {
       showError('Create session failed', 'Unable to create post-visit session. Check patient ID and context.');
     } finally {
@@ -955,6 +1050,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDiarization,
     loadDraft,
     loadIntraVisitAlerts,
+    loadBillingIntelligence,
     showError,
     showSuccess,
     transcribeLanguage,
@@ -980,13 +1076,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDraft(selectedSessionId),
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
+        loadBillingIntelligence(selectedSessionId),
       ]);
     } catch {
       showError('Draft regeneration failed', 'Could not regenerate post-visit artifacts.');
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleTranscribeSelectedSession = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -1016,6 +1113,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDraft(selectedSessionId),
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
+        loadBillingIntelligence(selectedSessionId),
       ]);
     } catch {
       showError('Session transcription failed', 'Unable to transcribe selected audio for this session.');
@@ -1027,6 +1125,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDiarization,
     loadSessions,
     loadIntraVisitAlerts,
+    loadBillingIntelligence,
     selectedSessionId,
     sessionTranscribeFile,
     showError,
@@ -1204,6 +1303,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadDraft(selectedSessionId),
           loadDiarization(selectedSessionId),
           loadIntraVisitAlerts(selectedSessionId),
+          loadBillingIntelligence(selectedSessionId),
         ]);
       } catch {
         showError('Review failed', `Unable to review ${artifactType.replace('_', ' ')}.`);
@@ -1211,7 +1311,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleReassignDiarization = useCallback(
@@ -1263,6 +1363,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           loadDraft(selectedSessionId),
           loadDiarization(selectedSessionId),
           loadIntraVisitAlerts(selectedSessionId),
+          loadBillingIntelligence(selectedSessionId),
         ]);
       } catch {
         showError('Execution failed', `Unable to execute recommendation: ${title}`);
@@ -1270,7 +1371,46 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setWorkingActionKey(null);
       }
     },
-    [loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadBillingIntelligence, loadDiarization, loadDraft, loadIntraVisitAlerts, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+  );
+
+  const handleReviewBillingSuggestion = useCallback(
+    async (suggestionId: string, action: 'approve' | 'reject') => {
+      if (!tenantSlug || !token || !selectedSessionId) return;
+      const note =
+        action === 'approve'
+          ? 'Approved from doctor post-visit billing panel.'
+          : 'Rejected from doctor post-visit billing panel.';
+      try {
+        setWorkingActionKey(`billing:${action}:${suggestionId}`);
+        await ehrApi.reviewPostVisitBillingSuggestion(
+          selectedSessionId,
+          suggestionId,
+          {
+            action,
+            note,
+          },
+          token,
+          tenantSlug,
+        );
+        showSuccess(
+          action === 'approve' ? 'Billing suggestion approved' : 'Billing suggestion rejected',
+          `Suggestion ${suggestionId} updated.`,
+        );
+        await Promise.all([
+          loadDraft(selectedSessionId),
+          loadBillingIntelligence(selectedSessionId),
+        ]);
+      } catch {
+        showError(
+          'Billing suggestion review failed',
+          'Unable to update billing suggestion status.',
+        );
+      } finally {
+        setWorkingActionKey(null);
+      }
+    },
+    [loadBillingIntelligence, loadDraft, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handlePublish = useCallback(async () => {
@@ -1299,6 +1439,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         loadDraft(selectedSessionId),
         loadDiarization(selectedSessionId),
         loadIntraVisitAlerts(selectedSessionId),
+        loadBillingIntelligence(selectedSessionId),
       ]);
     } catch (error: any) {
       const details =
@@ -1316,6 +1457,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDraft,
     loadSessions,
     loadIntraVisitAlerts,
+    loadBillingIntelligence,
     selectedSessionId,
     showError,
     showSuccess,
@@ -2376,6 +2518,123 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                             >
                               {alreadyExecuted ? 'Executed' : workingActionKey === `execute:${actionId}` ? 'Executing…' : 'Execute'}
                             </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Billing Intelligence (Doctor Approval Trail)</h3>
+                    <button
+                      type="button"
+                      onClick={() => selectedSessionId && loadBillingIntelligence(selectedSessionId)}
+                      disabled={!selectedSessionId || billingIntelligenceLoading}
+                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${billingIntelligenceLoading ? 'animate-spin' : ''}`} />
+                      Refresh billing
+                    </button>
+                  </div>
+
+                  {!effectiveBillingIntelligence.featureEnabled && (
+                    <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Feature disabled. Enable <code>FEATURE_POSTVISIT_BILLING_INTELLIGENCE</code> to activate automated CPT/ICD suggestions.
+                    </p>
+                  )}
+
+                  {effectiveBillingIntelligence.documentation && (
+                    <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-800">
+                        Documentation sufficiency score {effectiveBillingIntelligence.documentation.score}% •{' '}
+                        {effectiveBillingIntelligence.documentation.status}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-600">
+                        Passed checks:{' '}
+                        {effectiveBillingIntelligence.documentation.checks.filter((check) => check.passed).length}/
+                        {effectiveBillingIntelligence.documentation.checks.length}
+                      </p>
+                      {effectiveBillingIntelligence.documentation.gaps.length > 0 && (
+                        <p className="mt-1 text-[11px] text-amber-700">
+                          Gaps: {effectiveBillingIntelligence.documentation.gaps.slice(0, 3).join(' • ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mb-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-5">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      Total: {Number(effectiveBillingIntelligence.summary?.total || 0)}
+                    </div>
+                    <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-cyan-700">
+                      Proposed: {Number(effectiveBillingIntelligence.summary?.proposedCount || 0)}
+                    </div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                      Approved: {Number(effectiveBillingIntelligence.summary?.approvedCount || 0)}
+                    </div>
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                      Rejected: {Number(effectiveBillingIntelligence.summary?.rejectedCount || 0)}
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      High confidence: {Number(effectiveBillingIntelligence.summary?.highConfidenceCount || 0)}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {effectiveBillingIntelligence.suggestions.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        No billing suggestions generated yet. Regenerate draft after transcription.
+                      </p>
+                    )}
+                    {effectiveBillingIntelligence.suggestions.map((item) => {
+                      const confidence =
+                        item.confidence === null || item.confidence === undefined
+                          ? 'n/a'
+                          : `${Math.round(Math.max(0, Math.min(1, Number(item.confidence))) * 100)}%`;
+                      const isApproved = item.status === 'approved';
+                      const isRejected = item.status === 'rejected';
+                      return (
+                        <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {String(item.codeType || '').toUpperCase()} {item.code} • {item.description}
+                              </p>
+                              <p className="mt-1 text-[11px] text-slate-600">
+                                Confidence {confidence} • status {item.status}
+                                {item.documentationScore !== null && item.documentationScore !== undefined
+                                  ? ` • docs ${item.documentationScore}%`
+                                  : ''}
+                              </p>
+                              {item.justification && (
+                                <p className="mt-1 text-[11px] text-slate-600">{item.justification}</p>
+                              )}
+                              {item.approvedAt && (
+                                <p className="mt-1 text-[11px] font-semibold text-emerald-700">
+                                  Approved at {formatDate(item.approvedAt)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleReviewBillingSuggestion(item.id, 'approve')}
+                                disabled={isApproved || workingActionKey === `billing:approve:${item.id}`}
+                                className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                {workingActionKey === `billing:approve:${item.id}` ? 'Approving…' : 'Approve'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReviewBillingSuggestion(item.id, 'reject')}
+                                disabled={isRejected || workingActionKey === `billing:reject:${item.id}`}
+                                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                {workingActionKey === `billing:reject:${item.id}` ? 'Rejecting…' : 'Reject'}
+                              </button>
+                            </div>
                           </div>
                         </article>
                       );

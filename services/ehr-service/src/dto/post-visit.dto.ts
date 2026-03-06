@@ -101,6 +101,19 @@ export class ExecutePostVisitRecommendationDto {
   actionPayload?: Record<string, any>;
 }
 
+export class ReviewPostVisitBillingSuggestionDto {
+  @ApiProperty({ description: 'Billing review action', enum: ['approve', 'reject'] })
+  @IsEnum(['approve', 'reject'])
+  @IsNotEmpty()
+  action: 'approve' | 'reject';
+
+  @ApiPropertyOptional({ description: 'Optional doctor note for approval/rejection audit trail' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(2000)
+  note?: string;
+}
+
 export class PublishPostVisitSessionDto {
   @ApiPropertyOptional({ description: 'Optional publish note for audit trail' })
   @IsString()

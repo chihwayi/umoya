@@ -38,6 +38,7 @@ import {
   ResolvePostVisitEscalationDto,
   ExecutePostVisitRecommendationDto,
   RegeneratePostVisitDraftDto,
+  ReviewPostVisitBillingSuggestionDto,
   ReviewPostVisitArtifactDto,
 } from '../dto/post-visit.dto';
 import { PostVisitService } from '../services/post-visit.service';
@@ -132,7 +133,7 @@ export class PostVisitController {
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Get current draft artifacts, transcript, and extracted entities for a session' })
   @ApiResponse({ status: 200, description: 'Post-visit draft fetched' })
-  async getSessionDraft(@Param('id') id: string, @Request() req: RequestWithTenant) {
+  async getSessionDraft(@Param('id') id: string, @Request() req: RequestWithTenant): Promise<any> {
     return this.postVisitService.getSessionDraft(req.tenantDb, id);
   }
 
@@ -182,7 +183,7 @@ export class PostVisitController {
     @Param('id') id: string,
     @Body() body: RegeneratePostVisitDraftDto,
     @Request() req: RequestWithTenant,
-  ) {
+  ): Promise<any> {
     return this.postVisitService.generateDraftArtifacts(req.tenantDb, id, {
       tenantId: req.tenantId,
       actorUserId: this.resolveUserId(req),
@@ -261,7 +262,7 @@ export class PostVisitController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { language?: string; temperature?: string; prompt?: string },
     @Request() req: RequestWithTenant,
-  ) {
+  ): Promise<any> {
     if (!file) {
       throw new HttpException('Audio file is required', HttpStatus.BAD_REQUEST);
     }
@@ -599,6 +600,38 @@ export class PostVisitController {
         tenantId: req.tenantId,
         actorUserId: this.resolveUserId(req),
         source: 'post_visit_execute_recommendation_endpoint',
+      },
+    );
+  }
+
+  @Get('sessions/:id/billing-intelligence')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Get post-visit billing intelligence suggestions and documentation sufficiency summary' })
+  @ApiResponse({ status: 200, description: 'Billing intelligence fetched' })
+  async getSessionBillingIntelligence(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+  ): Promise<any> {
+    return this.postVisitService.getSessionBillingIntelligence(req.tenantDb, id);
+  }
+
+  @Post('sessions/:id/billing-suggestions/:suggestionId/review')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Approve or reject a post-visit billing suggestion with audit trail and accounts routing' })
+  @ApiResponse({ status: 200, description: 'Billing suggestion reviewed' })
+  async reviewBillingSuggestion(
+    @Param('id') id: string,
+    @Param('suggestionId') suggestionId: string,
+    @Body() body: ReviewPostVisitBillingSuggestionDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.reviewBillingSuggestion(
+      req.tenantDb,
+      id,
+      suggestionId,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
       },
     );
   }
