@@ -262,6 +262,10 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     moderateOpenCount: 0,
   });
   const [liveTranscriptChunk, setLiveTranscriptChunk] = useState('');
+  const [liveStreamTranscript, setLiveStreamTranscript] = useState('');
+  const [streamingAnalysisEnabled, setStreamingAnalysisEnabled] = useState(true);
+  const [streamingAnalysisStatus, setStreamingAnalysisStatus] = useState<'idle' | 'running' | 'paused'>('idle');
+  const [lastStreamingAnalyzedAt, setLastStreamingAnalyzedAt] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -270,6 +274,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const recordingStartRef = useRef<number>(0);
   const recordingCancelledRef = useRef<boolean>(false);
   const lastAutoAnalyzedSegmentRef = useRef<string>('');
+  const streamingChunkBufferRef = useRef<Blob[]>([]);
+  const streamingAnalyzeInFlightRef = useRef<boolean>(false);
+  const streamingChunkSequenceRef = useRef<number>(0);
 
   const selectedSession = useMemo(
     () => sessions.find((item) => item.id === selectedSessionId) || null,
@@ -503,6 +510,11 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     setDocumentIntelligenceFile(null);
     setDocumentIntelligenceNote('');
     setLiveTranscriptChunk('');
+    setLiveStreamTranscript('');
+    setLastStreamingAnalyzedAt(null);
+    setStreamingAnalysisStatus('idle');
+    streamingChunkBufferRef.current = [];
+    streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
   }, [loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, selectedSessionId]);
 
@@ -551,6 +563,96 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       .catch(() => undefined);
   }, [diarizationData?.segments, intraVisitFeatureEnabled, loadIntraVisitAlerts, selectedSessionId, tenantSlug, token]);
 
+  const flushStreamingAudioAnalysis = useCallback(
+    async (force = false) => {
+      if (!tenantSlug || !token || !selectedSessionId || !streamingAnalysisEnabled) return;
+      if (streamingAnalyzeInFlightRef.current) return;
+      const minBatchSize = 3;
+      if (!force && streamingChunkBufferRef.current.length < minBatchSize) return;
+
+      const chunks = streamingChunkBufferRef.current;
+      streamingChunkBufferRef.current = [];
+      if (!chunks.length) return;
+
+      const mimeType = chunks[0]?.type || 'audio/webm';
+      const audioBlob = new Blob(chunks, { type: mimeType });
+      if (audioBlob.size <= 0) return;
+
+      const extension = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : 'webm';
+      const file = new File([audioBlob], `post-visit-live-stream-${Date.now()}.${extension}`, { type: mimeType });
+
+      streamingAnalyzeInFlightRef.current = true;
+      setStreamingAnalysisStatus('running');
+      try {
+        const response = await ehrApi.analyzePostVisitIntraVisitAudioChunk(
+          selectedSessionId,
+          {
+            audioFile: file,
+            language: transcribeLanguage,
+            temperature: Number.isFinite(Number(transcribeTemperature)) ? Number(transcribeTemperature) : 0,
+            prompt: transcribePrompt.trim() || undefined,
+            source: 'browser_live_stream',
+            transcriptOffsetSeconds: Math.max(0, Math.floor(recordingDurationMs / 1000)),
+          },
+          token,
+          tenantSlug,
+        );
+
+        const transcriptText = String(response.data?.transcript?.text || '').trim();
+        if (transcriptText) {
+          setLiveStreamTranscript((previous) => {
+            const combined = previous ? `${previous}\n${transcriptText}` : transcriptText;
+            return combined.slice(-6000);
+          });
+          setLastStreamingAnalyzedAt(new Date().toISOString());
+        }
+        setIntraVisitFeatureEnabled(response.data?.featureEnabled !== false);
+        if (response.data?.summary) {
+          setIntraVisitSummary({
+            total: Number(response.data.summary.total || 0),
+            openCount: Number(response.data.summary.openCount || 0),
+            criticalOpenCount: Number(response.data.summary.criticalOpenCount || 0),
+            highOpenCount: Number(response.data.summary.highOpenCount || 0),
+            moderateOpenCount: Number(response.data.summary.moderateOpenCount || 0),
+          });
+        }
+
+        const alerts = Array.isArray(response.data?.alerts) ? response.data.alerts : [];
+        if (alerts.length > 0) {
+          showSuccess('Live safety alerts detected', `${alerts.length} intra-visit alert(s) triggered from live audio stream.`);
+          await loadIntraVisitAlerts(selectedSessionId);
+        }
+      } catch {
+        setStreamingAnalysisStatus('paused');
+      } finally {
+        streamingAnalyzeInFlightRef.current = false;
+        if (isRecordingAudio && streamingAnalysisEnabled) {
+          setStreamingAnalysisStatus('running');
+        } else {
+          setStreamingAnalysisStatus('idle');
+        }
+        if (streamingChunkBufferRef.current.length >= minBatchSize) {
+          window.setTimeout(() => {
+            void flushStreamingAudioAnalysis(false);
+          }, 0);
+        }
+      }
+    },
+    [
+      isRecordingAudio,
+      loadIntraVisitAlerts,
+      recordingDurationMs,
+      selectedSessionId,
+      showSuccess,
+      streamingAnalysisEnabled,
+      tenantSlug,
+      token,
+      transcribeLanguage,
+      transcribePrompt,
+      transcribeTemperature,
+    ],
+  );
+
   const clearRecordingInterval = useCallback(() => {
     if (recordingIntervalRef.current !== null) {
       window.clearInterval(recordingIntervalRef.current);
@@ -584,6 +686,10 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
       audioChunksRef.current = [];
+      streamingChunkBufferRef.current = [];
+      streamingChunkSequenceRef.current = 0;
+      setLiveStreamTranscript('');
+      setLastStreamingAnalyzedAt(null);
 
       const preferredTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg'];
       const selectedMimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported(type));
@@ -592,6 +698,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       recorder.ondataavailable = (event: BlobEvent) => {
         if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          if (streamingAnalysisEnabled) {
+            streamingChunkBufferRef.current.push(event.data);
+            streamingChunkSequenceRef.current += 1;
+            if (streamingChunkSequenceRef.current % 3 === 0) {
+              void flushStreamingAudioAnalysis(false);
+            }
+          }
         }
       };
 
@@ -604,8 +717,15 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         if (recordingCancelledRef.current) {
           recordingCancelledRef.current = false;
           audioChunksRef.current = [];
+          streamingChunkBufferRef.current = [];
+          streamingChunkSequenceRef.current = 0;
           setRecordingDurationMs(0);
+          setStreamingAnalysisStatus('idle');
           return;
+        }
+
+        if (streamingAnalysisEnabled && streamingChunkBufferRef.current.length > 0) {
+          void flushStreamingAudioAnalysis(true);
         }
 
         if (!audioChunksRef.current.length) {
@@ -626,6 +746,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       setRecordingDurationMs(0);
       setIsRecordingAudio(true);
       setIsRecordingPaused(false);
+      setStreamingAnalysisStatus(streamingAnalysisEnabled ? 'running' : 'idle');
       recordingStartRef.current = Date.now();
       recorder.start(1000);
       recordingIntervalRef.current = window.setInterval(() => {
@@ -635,13 +756,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       stopAudioStream();
       showError('Microphone access failed', 'Could not access microphone. Check browser permission settings.');
     }
-  }, [clearRecordingInterval, selectedSessionId, showError, showSuccess, stopAudioStream]);
+  }, [clearRecordingInterval, flushStreamingAudioAnalysis, selectedSessionId, showError, showSuccess, stopAudioStream, streamingAnalysisEnabled]);
 
   const pauseInBrowserRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state !== 'recording') return;
     recorder.pause();
     setIsRecordingPaused(true);
+    setStreamingAnalysisStatus('paused');
   }, []);
 
   const resumeInBrowserRecording = useCallback(() => {
@@ -649,8 +771,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     if (!recorder || recorder.state !== 'paused') return;
     recorder.resume();
     setIsRecordingPaused(false);
+    setStreamingAnalysisStatus(streamingAnalysisEnabled ? 'running' : 'idle');
     recordingStartRef.current = Date.now() - recordingDurationMs;
-  }, [recordingDurationMs]);
+  }, [recordingDurationMs, streamingAnalysisEnabled]);
 
   const stopInBrowserRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -661,6 +784,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const cancelInBrowserRecording = useCallback(() => {
     recordingCancelledRef.current = true;
     setSessionTranscribeFile(null);
+    streamingChunkBufferRef.current = [];
+    streamingChunkSequenceRef.current = 0;
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
@@ -671,6 +796,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     setIsRecordingAudio(false);
     setIsRecordingPaused(false);
     setRecordingDurationMs(0);
+    setStreamingAnalysisStatus('idle');
   }, [clearRecordingInterval, stopAudioStream]);
 
   useEffect(() => {
@@ -688,6 +814,20 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       setRecordingDurationMs(0);
     }
   }, [cancelInBrowserRecording, isRecordingAudio, selectedSessionId]);
+
+  useEffect(() => {
+    if (!isRecordingAudio) {
+      setStreamingAnalysisStatus('idle');
+      return;
+    }
+    if (!streamingAnalysisEnabled) {
+      streamingChunkBufferRef.current = [];
+      streamingChunkSequenceRef.current = 0;
+      setStreamingAnalysisStatus('idle');
+      return;
+    }
+    setStreamingAnalysisStatus(isRecordingPaused ? 'paused' : 'running');
+  }, [isRecordingAudio, isRecordingPaused, streamingAnalysisEnabled]);
 
   const handleCreateSession = useCallback(async () => {
     if (!tenantSlug || !token) return;
@@ -1503,6 +1643,26 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     </p>
                   )}
 
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={streamingAnalysisEnabled}
+                          onChange={(event) => setStreamingAnalysisEnabled(event.target.checked)}
+                        />
+                        Stream recorder chunks to live alert engine
+                      </label>
+                      <span className="text-[11px] text-slate-600">
+                        Stream status: {streamingAnalysisStatus}
+                        {lastStreamingAnalyzedAt ? ` • last analyzed ${formatDate(lastStreamingAnalyzedAt)}` : ''}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      While recording, audio chunks are transcribed and screened in near real time for critical safety signals.
+                    </p>
+                  </div>
+
                   <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                     <label className="text-xs text-slate-600">
                       Analyze live transcript chunk
@@ -1537,6 +1697,24 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Total: {intraVisitSummary.total}</div>
                   </div>
+
+                  {liveStreamTranscript.trim().length > 0 && (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Live streamed transcript feed</p>
+                        <button
+                          type="button"
+                          onClick={() => setLiveStreamTranscript('')}
+                          className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <pre className="max-h-28 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-700">
+                        {liveStreamTranscript}
+                      </pre>
+                    </div>
+                  )}
 
                   <div className="mt-3 space-y-2">
                     {intraVisitAlertsLoading && <p className="text-xs text-slate-500">Loading intra-visit alerts…</p>}

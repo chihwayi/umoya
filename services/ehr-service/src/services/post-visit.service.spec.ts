@@ -2180,6 +2180,73 @@ describe('PostVisitService', () => {
     expect(result.alerts[0].severity).toBe('critical');
   });
 
+  it('transcribes a live audio chunk and feeds intra-visit alert analysis', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    jest.spyOn(service as any, 'isIntraVisitAlertsEnabled').mockReturnValue(true);
+    const analyzeSpy = jest.spyOn(service, 'analyzeIntraVisitAlerts').mockResolvedValue({
+      featureEnabled: true,
+      sessionId: 'session-1',
+      analyzedAt: '2026-03-06T10:01:00.000Z',
+      alerts: [{ id: 'intravisit-2', severity: 'critical' } as any],
+      summary: {
+        total: 1,
+        openCount: 1,
+        criticalOpenCount: 1,
+        highOpenCount: 0,
+        moderateOpenCount: 0,
+      },
+    } as any);
+
+    transcriptionServiceMock.transcribe.mockResolvedValue({
+      text: 'Patient says chest pain and cannot breathe now.',
+      language: 'en',
+      confidence: 0.9,
+      segments: [{ start: 0, end: 2, text: 'Patient says chest pain and cannot breathe now.' }],
+    });
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', status: 'draft_ready', source_type: 'in_person' }];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.analyzeIntraVisitAudioChunk(
+      tenantDb,
+      'session-1',
+      {
+        buffer: Buffer.from('audio-chunk'),
+        originalname: 'chunk.webm',
+        mimetype: 'audio/webm',
+      } as Express.Multer.File,
+      {
+        language: 'en',
+        source: 'browser_live_stream',
+        transcriptOffsetSeconds: 18,
+      },
+      {
+        tenantId: 'tenant-a',
+        authorization: 'Bearer token',
+        actorUserId: 'doctor-1',
+      },
+    );
+
+    expect(transcriptionServiceMock.transcribe).toHaveBeenCalled();
+    expect(analyzeSpy).toHaveBeenCalledWith(
+      tenantDb,
+      'session-1',
+      expect.objectContaining({
+        text: 'Patient says chest pain and cannot breathe now.',
+      }),
+      expect.objectContaining({
+        actorUserId: 'doctor-1',
+      }),
+    );
+    expect(result.alerts).toHaveLength(1);
+  });
+
   it('confirms an intra-visit alert with clinician resolution metadata', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
 

@@ -20,6 +20,7 @@ describe('PostVisitController', () => {
     reassignDiarizationSegment: jest.fn(),
     ingestDocumentIntelligence: jest.fn(),
     listSessionDocumentIntelligence: jest.fn(),
+    analyzeIntraVisitAudioChunk: jest.fn(),
     analyzeIntraVisitAlerts: jest.fn(),
     listIntraVisitAlerts: jest.fn(),
     resolveIntraVisitAlert: jest.fn(),
@@ -610,6 +611,53 @@ describe('PostVisitController', () => {
         text: 'Patient has chest pain and cannot breathe',
       }),
       expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.alerts).toHaveLength(1);
+  });
+
+  it('transcribes and analyzes intra-visit audio chunk for safety alerts', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      headers: { authorization: 'Bearer token' },
+      user: { id: 'doctor-1' },
+    } as any;
+    const file = {
+      buffer: Buffer.from('audio-bytes'),
+      originalname: 'live-chunk.webm',
+      mimetype: 'audio/webm',
+      size: 1024,
+    } as Express.Multer.File;
+
+    uploadSecurityServiceMock.assertCleanUpload.mockResolvedValue(undefined);
+    postVisitServiceMock.analyzeIntraVisitAudioChunk.mockResolvedValue({
+      featureEnabled: true,
+      transcript: { text: 'Patient says chest pain now' },
+      alerts: [{ id: 'intravisit-2', severity: 'critical' }],
+    });
+
+    const result = await controller.analyzeIntraVisitAudioChunk(
+      'session-1',
+      file,
+      { language: 'en', temperature: '0', source: 'browser_live_stream', transcriptOffsetSeconds: '12' },
+      req,
+    );
+
+    expect(uploadSecurityServiceMock.assertCleanUpload).toHaveBeenCalledWith(file, 'audio');
+    expect(postVisitServiceMock.analyzeIntraVisitAudioChunk).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      file,
+      expect.objectContaining({
+        language: 'en',
+        source: 'browser_live_stream',
+        transcriptOffsetSeconds: 12,
+      }),
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        authorization: 'Bearer token',
+        actorUserId: 'doctor-1',
+      }),
     );
     expect(result.alerts).toHaveLength(1);
   });

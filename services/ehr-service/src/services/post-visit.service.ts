@@ -6253,6 +6253,94 @@ export class PostVisitService {
     };
   }
 
+  async analyzeIntraVisitAudioChunk(
+    tenantDb: DataSource,
+    sessionId: string,
+    audioFile: Express.Multer.File,
+    payload: {
+      language?: 'en' | 'sn' | 'nd' | 'auto';
+      temperature?: number;
+      prompt?: string;
+      source?: string;
+      transcriptOffsetSeconds?: number;
+    } = {},
+    options: { actorUserId?: string | null; tenantId?: string; authorization?: string } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    if (!audioFile?.buffer || !Buffer.isBuffer(audioFile.buffer) || audioFile.buffer.length === 0) {
+      throw new BadRequestException('Audio chunk file is required');
+    }
+
+    const normalizedLanguage =
+      payload.language === 'en' || payload.language === 'sn' || payload.language === 'nd' || payload.language === 'auto'
+        ? payload.language
+        : 'auto';
+    const temperatureRaw = Number(payload.temperature);
+    const normalizedTemperature = Number.isFinite(temperatureRaw)
+      ? Math.max(0, Math.min(1, temperatureRaw))
+      : 0;
+
+    const transcription = await this.transcriptionService.transcribe(
+      audioFile,
+      {
+        language: normalizedLanguage,
+        temperature: normalizedTemperature,
+        prompt:
+          String(payload.prompt || '').trim() ||
+          'Live medical consultation chunk. Transcribe critical symptoms, vitals, medication reactions, and emergency safety phrases accurately.',
+      },
+      {
+        tenantId: options.tenantId,
+        authorization: options.authorization,
+      },
+    );
+
+    const transcriptText = String(transcription.text || '').trim();
+    if (!transcriptText) {
+      const existing = await this.listIntraVisitAlerts(tenantDb, sessionId, { status: 'open', limit: 20, offset: 0 });
+      return {
+        featureEnabled: existing.featureEnabled,
+        sessionId,
+        transcript: {
+          text: '',
+          language: transcription.language || normalizedLanguage || 'en',
+          confidence: transcription.confidence ?? null,
+          segmentCount: Array.isArray(transcription.segments) ? transcription.segments.length : 0,
+        },
+        alerts: [],
+        summary: existing.summary,
+      };
+    }
+
+    const analyzed = await this.analyzeIntraVisitAlerts(
+      tenantDb,
+      sessionId,
+      {
+        text: transcriptText,
+        source: payload.source || 'streamed_audio_chunk',
+        transcriptOffsetSeconds: payload.transcriptOffsetSeconds,
+      },
+      {
+        actorUserId: options.actorUserId || null,
+      },
+    );
+
+    return {
+      featureEnabled: analyzed.featureEnabled,
+      sessionId,
+      transcript: {
+        text: transcriptText,
+        language: transcription.language || normalizedLanguage || 'en',
+        confidence: transcription.confidence ?? null,
+        segmentCount: Array.isArray(transcription.segments) ? transcription.segments.length : 0,
+      },
+      alerts: analyzed.alerts,
+      summary: analyzed.summary,
+    };
+  }
+
   async listIntraVisitAlerts(
     tenantDb: DataSource,
     sessionId: string,

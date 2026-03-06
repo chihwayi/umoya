@@ -283,6 +283,95 @@ export class PostVisitController {
     );
   }
 
+  @Post('sessions/:id/intravisit/analyze-audio')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Transcribe and analyze a live audio chunk for intra-visit safety alerts' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        audio: {
+          type: 'string',
+          format: 'binary',
+        },
+        language: {
+          type: 'string',
+          enum: ['en', 'sn', 'nd', 'auto'],
+          default: 'auto',
+        },
+        temperature: {
+          type: 'number',
+          default: 0.0,
+        },
+        prompt: {
+          type: 'string',
+        },
+        source: {
+          type: 'string',
+          default: 'streamed_audio_chunk',
+        },
+        transcriptOffsetSeconds: {
+          type: 'number',
+        },
+      },
+      required: ['audio'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Intra-visit audio chunk analyzed' })
+  @UseInterceptors(
+    FileInterceptor('audio', {
+      limits: { fileSize: 8 * 1024 * 1024 },
+      fileFilter: (req, file, callback) => {
+        const allowedMimes = [
+          'audio/wav',
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/m4a',
+          'audio/webm',
+          'audio/ogg',
+          'audio/x-m4a',
+        ];
+        if (allowedMimes.includes(file.mimetype)) {
+          callback(null, true);
+        } else {
+          callback(
+            new HttpException(`Invalid file type. Allowed types: ${allowedMimes.join(', ')}`, HttpStatus.BAD_REQUEST),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async analyzeIntraVisitAudioChunk(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { language?: string; temperature?: string; prompt?: string; source?: string; transcriptOffsetSeconds?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    if (!file) {
+      throw new HttpException('Audio file is required', HttpStatus.BAD_REQUEST);
+    }
+    await this.uploadSecurityService.assertCleanUpload(file, 'audio');
+    return this.postVisitService.analyzeIntraVisitAudioChunk(
+      req.tenantDb,
+      id,
+      file,
+      {
+        language: (body.language as 'en' | 'sn' | 'nd' | 'auto') || 'auto',
+        temperature: body.temperature ? Number(body.temperature) : 0.0,
+        prompt: body.prompt,
+        source: body.source,
+        transcriptOffsetSeconds: body.transcriptOffsetSeconds ? Number(body.transcriptOffsetSeconds) : undefined,
+      },
+      {
+        tenantId: req.tenantId,
+        authorization: req.headers?.authorization as string | undefined,
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
   @Post('sessions/:id/intravisit/analyze')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Analyze a live transcript chunk for intra-visit safety alerts' })

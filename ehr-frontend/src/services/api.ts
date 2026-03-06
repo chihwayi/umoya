@@ -1442,6 +1442,38 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  analyzePostVisitIntraVisitAudioChunk: async (
+    sessionId: string,
+    payload: {
+      audioFile: File;
+      language?: 'en' | 'sn' | 'nd' | 'auto';
+      temperature?: number;
+      prompt?: string;
+      source?: string;
+      transcriptOffsetSeconds?: number;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const formData = new FormData();
+    formData.append('audio', payload.audioFile);
+    if (payload.language) formData.append('language', payload.language);
+    if (typeof payload.temperature === 'number') formData.append('temperature', String(payload.temperature));
+    if (payload.prompt) formData.append('prompt', payload.prompt);
+    if (payload.source) formData.append('source', payload.source);
+    if (typeof payload.transcriptOffsetSeconds === 'number') {
+      formData.append('transcriptOffsetSeconds', String(payload.transcriptOffsetSeconds));
+    }
+
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/intravisit/analyze-audio`, formData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   listPostVisitIntraVisitAlerts: async (
     sessionId: string,
     token: string,
