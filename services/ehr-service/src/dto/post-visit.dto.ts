@@ -272,3 +272,11 @@ export class ResolvePostVisitIntraVisitAlertDto {
   @MaxLength(500)
   note?: string;
 }
+
+export class AcknowledgePostVisitIntraVisitAlertDto {
+  @ApiPropertyOptional({ description: 'Optional acknowledgement note' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  note?: string;
+}

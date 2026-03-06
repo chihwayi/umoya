@@ -497,6 +497,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint51PostVisitCompanionEscalationSchemaStatements(),
       },
       {
+        id: 'sprint52_post_visit_intravisit_routing_sla',
+        label: 'Sprint 52 - Post-Visit Intra-Visit Routing and SLA',
+        version: '2026.03.06',
+        description: 'Adds clinician routing policy metadata and acknowledgement SLA timers for intra-visit live safety alerts',
+        statements: () => this.getSprint52PostVisitIntraVisitRoutingSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1115,6 +1122,79 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_post_visit_companion_acknowledgements_updated_at ON post_visit_companion_acknowledgements`,
       `CREATE TRIGGER update_post_visit_companion_acknowledgements_updated_at
         BEFORE UPDATE ON post_visit_companion_acknowledgements
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint52PostVisitIntraVisitRoutingSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_intravisit_alert_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        status VARCHAR(20) NOT NULL DEFAULT 'open'
+          CHECK (status IN ('open','confirmed','dismissed')),
+        alert_type VARCHAR(80) NOT NULL,
+        severity VARCHAR(20) NOT NULL
+          CHECK (severity IN ('moderate','high','critical')),
+        route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (route_target IN ('doctor','nurse','emergency')),
+        assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
+        assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        assigned_team VARCHAR(80),
+        policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
+        routing_rationale TEXT,
+        source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
+        transcript_offset_seconds INTEGER,
+        signal_text TEXT,
+        alert_message TEXT NOT NULL,
+        suggested_action TEXT,
+        confidence DOUBLE PRECISION,
+        trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        sla_due_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acknowledgment_note TEXT,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        resolution_note TEXT,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE IF EXISTS post_visit_intravisit_alert_events
+        ADD COLUMN IF NOT EXISTS route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (route_target IN ('doctor','nurse','emergency')),
+        ADD COLUMN IF NOT EXISTS assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
+        ADD COLUMN IF NOT EXISTS assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS assigned_team VARCHAR(80),
+        ADD COLUMN IF NOT EXISTS policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
+        ADD COLUMN IF NOT EXISTS routing_rationale TEXT,
+        ADD COLUMN IF NOT EXISTS source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
+        ADD COLUMN IF NOT EXISTS transcript_offset_seconds INTEGER,
+        ADD COLUMN IF NOT EXISTS signal_text TEXT,
+        ADD COLUMN IF NOT EXISTS trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS sla_due_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS acknowledgment_note TEXT,
+        ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS resolution_note TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_session ON post_visit_intravisit_alert_events(session_id, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_status ON post_visit_intravisit_alert_events(status, severity, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_patient ON post_visit_intravisit_alert_events(patient_id, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_route ON post_visit_intravisit_alert_events(route_target, assigned_role, status, sla_due_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_ack ON post_visit_intravisit_alert_events(status, acknowledged_at, detected_at DESC)`,
+      `DROP TRIGGER IF EXISTS update_post_visit_intravisit_alert_events_updated_at ON post_visit_intravisit_alert_events`,
+      `CREATE TRIGGER update_post_visit_intravisit_alert_events_updated_at
+        BEFORE UPDATE ON post_visit_intravisit_alert_events
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

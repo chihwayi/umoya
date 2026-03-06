@@ -27,6 +27,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import {
+  AcknowledgePostVisitIntraVisitAlertDto,
   AnalyzePostVisitIntraVisitAlertDto,
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
@@ -424,6 +425,27 @@ export class PostVisitController {
     @Request() req: RequestWithTenant,
   ) {
     return this.postVisitService.resolveIntraVisitAlert(
+      req.tenantDb,
+      id,
+      alertId,
+      body,
+      {
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Post('sessions/:id/intravisit/alerts/:alertId/acknowledge')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Acknowledge an intra-visit safety alert for SLA tracking' })
+  @ApiResponse({ status: 200, description: 'Intra-visit alert acknowledged' })
+  async acknowledgeIntraVisitAlert(
+    @Param('id') id: string,
+    @Param('alertId') alertId: string,
+    @Body() body: AcknowledgePostVisitIntraVisitAlertDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.acknowledgeIntraVisitAlert(
       req.tenantDb,
       id,
       alertId,

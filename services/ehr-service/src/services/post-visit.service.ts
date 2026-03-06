@@ -133,6 +133,8 @@ interface PostVisitDocumentCriticalFlag {
 
 type IntraVisitAlertSeverity = 'moderate' | 'high' | 'critical';
 type IntraVisitAlertStatus = 'open' | 'confirmed' | 'dismissed';
+type IntraVisitAlertRouteTarget = 'doctor' | 'nurse' | 'emergency';
+type IntraVisitAlertAssignedRole = 'doctor' | 'nurse' | 'rapid_response';
 
 interface IntraVisitAlertDraft {
   alertType: string;
@@ -142,6 +144,16 @@ interface IntraVisitAlertDraft {
   confidence: number;
   triggerTerms?: string[];
   metadata?: Record<string, any>;
+}
+
+interface IntraVisitRoutingDecision {
+  routeTarget: IntraVisitAlertRouteTarget;
+  assignedRole: IntraVisitAlertAssignedRole;
+  assignedUserId: string | null;
+  assignedTeam: string | null;
+  routingRationale: string;
+  policyVersion: 'c3.v1';
+  slaDueAt: Date | null;
 }
 
 type MedicationRiskSeverity = 'contraindicated' | 'major' | 'moderate' | 'minor';
@@ -586,6 +598,14 @@ export class PostVisitService {
         alert_type VARCHAR(80) NOT NULL,
         severity VARCHAR(20) NOT NULL
           CHECK (severity IN ('moderate','high','critical')),
+        route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (route_target IN ('doctor','nurse','emergency')),
+        assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
+          CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
+        assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        assigned_team VARCHAR(80),
+        policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
+        routing_rationale TEXT,
         source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
         transcript_offset_seconds INTEGER,
         signal_text TEXT,
@@ -595,6 +615,10 @@ export class PostVisitService {
         trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        sla_due_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        acknowledgment_note TEXT,
         resolved_at TIMESTAMP WITH TIME ZONE,
         resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
         resolution_note TEXT,
@@ -605,11 +629,23 @@ export class PostVisitService {
 
     await tenantDb.query(`
       ALTER TABLE IF EXISTS post_visit_intravisit_alert_events
+      ADD COLUMN IF NOT EXISTS route_target VARCHAR(20) NOT NULL DEFAULT 'doctor'
+        CHECK (route_target IN ('doctor','nurse','emergency')),
+      ADD COLUMN IF NOT EXISTS assigned_role VARCHAR(20) NOT NULL DEFAULT 'doctor'
+        CHECK (assigned_role IN ('doctor','nurse','rapid_response')),
+      ADD COLUMN IF NOT EXISTS assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS assigned_team VARCHAR(80),
+      ADD COLUMN IF NOT EXISTS policy_version VARCHAR(20) NOT NULL DEFAULT 'c3.v1',
+      ADD COLUMN IF NOT EXISTS routing_rationale TEXT,
       ADD COLUMN IF NOT EXISTS source VARCHAR(60) NOT NULL DEFAULT 'streamed_transcript',
       ADD COLUMN IF NOT EXISTS transcript_offset_seconds INTEGER,
       ADD COLUMN IF NOT EXISTS signal_text TEXT,
       ADD COLUMN IF NOT EXISTS trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS sla_due_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS acknowledgment_note TEXT,
       ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE,
       ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS resolution_note TEXT
@@ -667,6 +703,8 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_session ON post_visit_intravisit_alert_events(session_id, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_status ON post_visit_intravisit_alert_events(status, severity, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_patient ON post_visit_intravisit_alert_events(patient_id, detected_at DESC)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_route ON post_visit_intravisit_alert_events(route_target, assigned_role, status, sla_due_at)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_intravisit_alert_ack ON post_visit_intravisit_alert_events(status, acknowledged_at, detected_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`);
   }
@@ -731,6 +769,9 @@ export class PostVisitService {
   }
 
   private mapIntraVisitAlertEvent(row: any) {
+    const acknowledgedAt = row.acknowledged_at || null;
+    const slaDueAt = row.sla_due_at || null;
+    const isAcknowledged = acknowledgedAt !== null;
     return {
       id: row.id,
       sessionId: row.session_id,
@@ -738,6 +779,12 @@ export class PostVisitService {
       status: row.status,
       alertType: row.alert_type,
       severity: row.severity,
+      routeTarget: (row.route_target || 'doctor') as IntraVisitAlertRouteTarget,
+      assignedRole: (row.assigned_role || 'doctor') as IntraVisitAlertAssignedRole,
+      assignedUserId: row.assigned_user_id || null,
+      assignedTeam: row.assigned_team || null,
+      policyVersion: row.policy_version || 'c3.v1',
+      routingRationale: row.routing_rationale || null,
       source: row.source || 'streamed_transcript',
       transcriptOffsetSeconds:
         row.transcript_offset_seconds === null || row.transcript_offset_seconds === undefined
@@ -750,6 +797,11 @@ export class PostVisitService {
       triggerTerms: Array.isArray(row.trigger_terms) ? row.trigger_terms : [],
       metadata: row.metadata || {},
       detectedAt: row.detected_at,
+      slaDueAt,
+      isAcknowledged,
+      acknowledgedAt,
+      acknowledgedBy: row.acknowledged_by || null,
+      acknowledgmentNote: row.acknowledgment_note || null,
       resolvedAt: row.resolved_at || null,
       resolvedBy: row.resolved_by || null,
       resolutionNote: row.resolution_note || null,
@@ -1696,6 +1748,136 @@ export class PostVisitService {
     if (severity === 'critical') return 3;
     if (severity === 'high') return 2;
     return 1;
+  }
+
+  private getIntraVisitSlaMinutes(severity: IntraVisitAlertSeverity): number {
+    const defaults: Record<IntraVisitAlertSeverity, number> = {
+      critical: 5,
+      high: 20,
+      moderate: 60,
+    };
+    const envMap: Record<IntraVisitAlertSeverity, string | undefined> = {
+      critical: process.env.POSTVISIT_INTRAVISIT_SLA_CRITICAL_MINUTES,
+      high: process.env.POSTVISIT_INTRAVISIT_SLA_HIGH_MINUTES,
+      moderate: process.env.POSTVISIT_INTRAVISIT_SLA_MODERATE_MINUTES,
+    };
+    const raw = Number(envMap[severity]);
+    if (!Number.isFinite(raw)) return defaults[severity];
+    return Math.max(1, Math.min(24 * 60, Math.floor(raw)));
+  }
+
+  private async findLatestActiveClinician(
+    tenantDb: DataSource,
+    roles: Array<'doctor' | 'nurse' | 'nurse_accounts'>,
+    preferredUserId?: string | null,
+  ): Promise<{ id: string; role: IntraVisitAlertAssignedRole } | null> {
+    if (preferredUserId) {
+      const preferredRows = await tenantDb.query(
+        `
+          SELECT id, role
+          FROM users
+          WHERE id = $1
+            AND is_active = true
+          LIMIT 1
+        `,
+        [preferredUserId],
+      );
+      const preferred = preferredRows?.[0];
+      const preferredRole = String(preferred?.role || '').toLowerCase();
+      if (preferred?.id && roles.includes(preferredRole as 'doctor' | 'nurse' | 'nurse_accounts')) {
+        return {
+          id: preferred.id,
+          role: preferredRole === 'doctor' ? 'doctor' : 'nurse',
+        };
+      }
+    }
+
+    const rows = await tenantDb.query(
+      `
+        SELECT id, role
+        FROM users
+        WHERE role = ANY($1::text[])
+          AND is_active = true
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+      [roles],
+    );
+    const row = rows?.[0];
+    if (!row?.id) return null;
+    const rowRole = String(row.role || '').toLowerCase();
+    return {
+      id: row.id,
+      role: rowRole === 'doctor' ? 'doctor' : 'nurse',
+    };
+  }
+
+  private async resolveIntraVisitRoutingDecision(
+    tenantDb: DataSource,
+    sessionRow: any,
+    alertDraft: IntraVisitAlertDraft,
+  ): Promise<IntraVisitRoutingDecision> {
+    const emergencyAlertTypes = new Set<string>([
+      'cardiorespiratory_emergency_signal',
+      'critical_hypoxia_signal',
+      'hypertensive_crisis_signal',
+    ]);
+
+    const severity = alertDraft.severity;
+    const routeTarget: IntraVisitAlertRouteTarget =
+      emergencyAlertTypes.has(alertDraft.alertType)
+        ? 'emergency'
+        : severity === 'critical' || severity === 'high'
+          ? 'doctor'
+          : 'nurse';
+
+    const slaMinutes = this.getIntraVisitSlaMinutes(severity);
+    const slaDueAt = new Date(Date.now() + slaMinutes * 60 * 1000);
+
+    if (routeTarget === 'emergency') {
+      const emergencyAssignee = await this.findLatestActiveClinician(
+        tenantDb,
+        ['doctor', 'nurse', 'nurse_accounts'],
+        sessionRow?.doctor_id || null,
+      );
+      return {
+        routeTarget,
+        assignedRole: emergencyAssignee ? emergencyAssignee.role : 'rapid_response',
+        assignedUserId: emergencyAssignee?.id || null,
+        assignedTeam: 'Emergency Response',
+        routingRationale:
+          'Critical emergency-pattern signal detected; routed to rapid response path with immediate acknowledgement SLA.',
+        policyVersion: 'c3.v1',
+        slaDueAt,
+      };
+    }
+
+    if (routeTarget === 'doctor') {
+      const doctorAssignee = await this.findLatestActiveClinician(tenantDb, ['doctor'], sessionRow?.doctor_id || null);
+      return {
+        routeTarget,
+        assignedRole: 'doctor',
+        assignedUserId: doctorAssignee?.id || null,
+        assignedTeam: 'Doctor Primary',
+        routingRationale:
+          severity === 'critical'
+            ? 'Critical non-emergency signal routed to responsible doctor for immediate confirmation.'
+            : 'High-severity signal routed to responsible doctor for expedited review.',
+        policyVersion: 'c3.v1',
+        slaDueAt,
+      };
+    }
+
+    const nurseAssignee = await this.findLatestActiveClinician(tenantDb, ['nurse', 'nurse_accounts'], null);
+    return {
+      routeTarget: 'nurse',
+      assignedRole: 'nurse',
+      assignedUserId: nurseAssignee?.id || null,
+      assignedTeam: 'Nurse Triage',
+      routingRationale: 'Moderate-severity signal routed to nurse triage with acknowledgement SLA.',
+      policyVersion: 'c3.v1',
+      slaDueAt,
+    };
   }
 
   private dedupeIntraVisitAlertDrafts(items: IntraVisitAlertDraft[]): IntraVisitAlertDraft[] {
@@ -6150,6 +6332,8 @@ export class PostVisitService {
         summary: {
           total: 0,
           openCount: 0,
+          acknowledgedOpenCount: 0,
+          overdueUnacknowledgedCount: 0,
           criticalOpenCount: 0,
           highOpenCount: 0,
           moderateOpenCount: 0,
@@ -6180,6 +6364,8 @@ export class PostVisitService {
         continue;
       }
 
+      const routingDecision = await this.resolveIntraVisitRoutingDecision(tenantDb, sessionRow, draft);
+
       const rows = await tenantDb.query(
         `
           INSERT INTO post_visit_intravisit_alert_events (
@@ -6188,6 +6374,12 @@ export class PostVisitService {
             status,
             alert_type,
             severity,
+            route_target,
+            assigned_role,
+            assigned_user_id,
+            assigned_team,
+            policy_version,
+            routing_rationale,
             source,
             transcript_offset_seconds,
             signal_text,
@@ -6195,9 +6387,10 @@ export class PostVisitService {
             suggested_action,
             confidence,
             trigger_terms,
+            sla_due_at,
             metadata
           ) VALUES (
-            $1,$2,'open',$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb
+            $1,$2,'open',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::jsonb
           )
           RETURNING *
         `,
@@ -6206,6 +6399,12 @@ export class PostVisitService {
           sessionRow.patient_id,
           draft.alertType,
           draft.severity,
+          routingDecision.routeTarget,
+          routingDecision.assignedRole,
+          routingDecision.assignedUserId,
+          routingDecision.assignedTeam,
+          routingDecision.policyVersion,
+          routingDecision.routingRationale,
           source,
           transcriptOffsetSeconds,
           text,
@@ -6213,10 +6412,19 @@ export class PostVisitService {
           draft.suggestedAction,
           draft.confidence,
           JSON.stringify(Array.isArray(draft.triggerTerms) ? draft.triggerTerms : []),
+          routingDecision.slaDueAt ? routingDecision.slaDueAt.toISOString() : null,
           JSON.stringify({
             ...(draft.metadata || {}),
             source_pipeline: 'post_visit_intravisit_alert_engine_v1',
             actor_user_id: options.actorUserId || null,
+            routing_policy: {
+              version: routingDecision.policyVersion,
+              route_target: routingDecision.routeTarget,
+              assigned_role: routingDecision.assignedRole,
+              assigned_user_id: routingDecision.assignedUserId,
+              assigned_team: routingDecision.assignedTeam,
+              rationale: routingDecision.routingRationale,
+            },
           }),
         ],
       );
@@ -6228,6 +6436,8 @@ export class PostVisitService {
         SELECT
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
+          COUNT(*) FILTER (WHERE status = 'open' AND acknowledged_at IS NOT NULL)::int AS acknowledged_open_count,
+          COUNT(*) FILTER (WHERE status = 'open' AND acknowledged_at IS NULL AND sla_due_at IS NOT NULL AND sla_due_at < NOW())::int AS overdue_unacknowledged_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'critical')::int AS critical_open_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'high')::int AS high_open_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'moderate')::int AS moderate_open_count
@@ -6246,6 +6456,8 @@ export class PostVisitService {
       summary: {
         total: Number(summary.total || 0),
         openCount: Number(summary.open_count || 0),
+        acknowledgedOpenCount: Number(summary.acknowledged_open_count || 0),
+        overdueUnacknowledgedCount: Number(summary.overdue_unacknowledged_count || 0),
         criticalOpenCount: Number(summary.critical_open_count || 0),
         highOpenCount: Number(summary.high_open_count || 0),
         moderateOpenCount: Number(summary.moderate_open_count || 0),
@@ -6364,6 +6576,8 @@ export class PostVisitService {
         summary: {
           total: 0,
           openCount: 0,
+          acknowledgedOpenCount: 0,
+          overdueUnacknowledgedCount: 0,
           criticalOpenCount: 0,
           highOpenCount: 0,
           moderateOpenCount: 0,
@@ -6401,6 +6615,8 @@ export class PostVisitService {
         SELECT
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status = 'open')::int AS open_count,
+          COUNT(*) FILTER (WHERE status = 'open' AND acknowledged_at IS NOT NULL)::int AS acknowledged_open_count,
+          COUNT(*) FILTER (WHERE status = 'open' AND acknowledged_at IS NULL AND sla_due_at IS NOT NULL AND sla_due_at < NOW())::int AS overdue_unacknowledged_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'critical')::int AS critical_open_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'high')::int AS high_open_count,
           COUNT(*) FILTER (WHERE status = 'open' AND severity = 'moderate')::int AS moderate_open_count
@@ -6418,6 +6634,8 @@ export class PostVisitService {
       summary: {
         total: Number(summary.total || 0),
         openCount: Number(summary.open_count || 0),
+        acknowledgedOpenCount: Number(summary.acknowledged_open_count || 0),
+        overdueUnacknowledgedCount: Number(summary.overdue_unacknowledged_count || 0),
         criticalOpenCount: Number(summary.critical_open_count || 0),
         highOpenCount: Number(summary.high_open_count || 0),
         moderateOpenCount: Number(summary.moderate_open_count || 0),
@@ -6427,6 +6645,55 @@ export class PostVisitService {
         offset,
       },
     };
+  }
+
+  async acknowledgeIntraVisitAlert(
+    tenantDb: DataSource,
+    sessionId: string,
+    alertId: string,
+    payload: { note?: string } = {},
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!options.actorUserId) {
+      throw new BadRequestException('Authenticated user is required to acknowledge intra-visit alert');
+    }
+    await this.getSessionRow(tenantDb, sessionId);
+
+    const existingRows = await tenantDb.query(
+      `
+        SELECT *
+        FROM post_visit_intravisit_alert_events
+        WHERE id = $1
+          AND session_id = $2
+        LIMIT 1
+      `,
+      [alertId, sessionId],
+    );
+    if (!existingRows?.length) {
+      throw new NotFoundException('Intra-visit alert not found');
+    }
+
+    const existing = existingRows[0];
+    if (String(existing.status || '').toLowerCase() !== 'open') {
+      throw new BadRequestException('Only open intra-visit alerts can be acknowledged');
+    }
+
+    const updatedRows = await tenantDb.query(
+      `
+        UPDATE post_visit_intravisit_alert_events
+        SET acknowledged_at = COALESCE(acknowledged_at, NOW()),
+            acknowledged_by = COALESCE(acknowledged_by, $3),
+            acknowledgment_note = COALESCE($4, acknowledgment_note),
+            updated_at = NOW()
+        WHERE id = $1
+          AND session_id = $2
+        RETURNING *
+      `,
+      [alertId, sessionId, options.actorUserId, payload.note || null],
+    );
+
+    return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
 
   async resolveIntraVisitAlert(
@@ -6461,6 +6728,9 @@ export class PostVisitService {
       `
         UPDATE post_visit_intravisit_alert_events
         SET status = $3,
+            acknowledged_at = COALESCE(acknowledged_at, NOW()),
+            acknowledged_by = COALESCE(acknowledged_by, $4),
+            acknowledgment_note = COALESCE(acknowledgment_note, $5),
             resolved_at = NOW(),
             resolved_by = $4,
             resolution_note = COALESCE($5, resolution_note),

@@ -142,6 +142,12 @@ interface IntraVisitAlertItem {
   status: 'open' | 'confirmed' | 'dismissed';
   alertType: string;
   severity: 'moderate' | 'high' | 'critical';
+  routeTarget?: 'doctor' | 'nurse' | 'emergency';
+  assignedRole?: 'doctor' | 'nurse' | 'rapid_response';
+  assignedUserId?: string | null;
+  assignedTeam?: string | null;
+  policyVersion?: string | null;
+  routingRationale?: string | null;
   source?: string | null;
   transcriptOffsetSeconds?: number | null;
   signalText?: string | null;
@@ -150,6 +156,11 @@ interface IntraVisitAlertItem {
   confidence?: number | null;
   triggerTerms?: string[];
   detectedAt?: string;
+  slaDueAt?: string | null;
+  isAcknowledged?: boolean;
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: string | null;
+  acknowledgmentNote?: string | null;
   resolvedAt?: string | null;
   resolutionNote?: string | null;
 }
@@ -195,6 +206,28 @@ const formatSecondMark = (value: number) => {
   const minutes = Math.floor(whole / 60);
   const seconds = whole % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
+const formatSlaCountdown = (dueAt: string | null | undefined, nowEpochMs: number) => {
+  if (!dueAt) return null;
+  const dueEpochMs = new Date(dueAt).getTime();
+  if (!Number.isFinite(dueEpochMs)) return null;
+  const diffMs = dueEpochMs - nowEpochMs;
+  const absSeconds = Math.floor(Math.abs(diffMs) / 1000);
+  const hours = Math.floor(absSeconds / 3600);
+  const minutes = Math.floor((absSeconds % 3600) / 60);
+  const seconds = absSeconds % 60;
+  const clock = `${hours > 0 ? `${hours}h ` : ''}${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  if (diffMs >= 0) {
+    return {
+      label: `Due in ${clock}`,
+      overdue: false,
+    };
+  }
+  return {
+    label: `Overdue by ${clock}`,
+    overdue: true,
+  };
 };
 
 const PostVisitDoctorWorkspace: React.FC = () => {
@@ -251,16 +284,21 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [intraVisitSummary, setIntraVisitSummary] = useState<{
     total: number;
     openCount: number;
+    acknowledgedOpenCount: number;
+    overdueUnacknowledgedCount: number;
     criticalOpenCount: number;
     highOpenCount: number;
     moderateOpenCount: number;
   }>({
     total: 0,
     openCount: 0,
+    acknowledgedOpenCount: 0,
+    overdueUnacknowledgedCount: 0,
     criticalOpenCount: 0,
     highOpenCount: 0,
     moderateOpenCount: 0,
   });
+  const [intraVisitNowEpochMs, setIntraVisitNowEpochMs] = useState<number>(() => Date.now());
   const [liveTranscriptChunk, setLiveTranscriptChunk] = useState('');
   const [liveStreamTranscript, setLiveStreamTranscript] = useState('');
   const [streamingAnalysisEnabled, setStreamingAnalysisEnabled] = useState(true);
@@ -477,6 +515,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setIntraVisitSummary({
           total: Number(response.data?.summary?.total || 0),
           openCount: Number(response.data?.summary?.openCount || 0),
+          acknowledgedOpenCount: Number(response.data?.summary?.acknowledgedOpenCount || 0),
+          overdueUnacknowledgedCount: Number(response.data?.summary?.overdueUnacknowledgedCount || 0),
           criticalOpenCount: Number(response.data?.summary?.criticalOpenCount || 0),
           highOpenCount: Number(response.data?.summary?.highOpenCount || 0),
           moderateOpenCount: Number(response.data?.summary?.moderateOpenCount || 0),
@@ -486,6 +526,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setIntraVisitSummary({
           total: 0,
           openCount: 0,
+          acknowledgedOpenCount: 0,
+          overdueUnacknowledgedCount: 0,
           criticalOpenCount: 0,
           highOpenCount: 0,
           moderateOpenCount: 0,
@@ -500,6 +542,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setIntraVisitNowEpochMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!selectedSessionId) return;
@@ -612,6 +661,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           setIntraVisitSummary({
             total: Number(response.data.summary.total || 0),
             openCount: Number(response.data.summary.openCount || 0),
+            acknowledgedOpenCount: Number(response.data.summary.acknowledgedOpenCount || 0),
+            overdueUnacknowledgedCount: Number(response.data.summary.overdueUnacknowledgedCount || 0),
             criticalOpenCount: Number(response.data.summary.criticalOpenCount || 0),
             highOpenCount: Number(response.data.summary.highOpenCount || 0),
             moderateOpenCount: Number(response.data.summary.moderateOpenCount || 0),
@@ -1041,6 +1092,30 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         await loadIntraVisitAlerts(selectedSessionId);
       } catch {
         showError('Intra-visit alert update failed', 'Unable to update intra-visit alert status.');
+      } finally {
+        setWorkingActionKey(null);
+      }
+    },
+    [loadIntraVisitAlerts, selectedSessionId, showError, tenantSlug, token],
+  );
+
+  const handleAcknowledgeIntraVisitAlert = useCallback(
+    async (alertId: string) => {
+      if (!tenantSlug || !token || !selectedSessionId) return;
+      try {
+        setWorkingActionKey(`intravisit-ack:${alertId}`);
+        await ehrApi.acknowledgePostVisitIntraVisitAlert(
+          selectedSessionId,
+          alertId,
+          {
+            note: 'Acknowledged from doctor intra-visit alert bar.',
+          },
+          token,
+          tenantSlug,
+        );
+        await loadIntraVisitAlerts(selectedSessionId);
+      } catch {
+        showError('Intra-visit alert acknowledgement failed', 'Unable to acknowledge intra-visit alert.');
       } finally {
         setWorkingActionKey(null);
       }
@@ -1685,8 +1760,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-5">
+                  <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-7">
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Open: {intraVisitSummary.openCount}</div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                      Acknowledged: {intraVisitSummary.acknowledgedOpenCount}
+                    </div>
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                      SLA Overdue: {intraVisitSummary.overdueUnacknowledgedCount}
+                    </div>
                     <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
                       Critical: {intraVisitSummary.criticalOpenCount}
                     </div>
@@ -1724,6 +1805,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     )}
                     {intraVisitAlerts.map((item) => {
                       const isOpen = item.status === 'open';
+                      const acknowledged = item.isAcknowledged === true || Boolean(item.acknowledgedAt);
+                      const slaCountdown = formatSlaCountdown(item.slaDueAt, intraVisitNowEpochMs);
                       const confidenceLabel =
                         item.confidence === null || item.confidence === undefined
                           ? 'n/a'
@@ -1743,6 +1826,27 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                               <p className="text-[11px] text-slate-600">
                                 {item.severity.toUpperCase()} • {item.status} • confidence {confidenceLabel} • detected {formatDate(item.detectedAt)}
                               </p>
+                              <p className="mt-1 text-[11px] text-slate-600">
+                                Route: {(item.routeTarget || 'doctor').toUpperCase()} • Assigned: {item.assignedTeam || item.assignedRole || 'n/a'}
+                                {item.policyVersion ? ` • Policy ${item.policyVersion}` : ''}
+                              </p>
+                              {item.routingRationale && (
+                                <p className="mt-1 text-[11px] text-slate-600">Routing rationale: {item.routingRationale}</p>
+                              )}
+                              {slaCountdown && (
+                                <p
+                                  className={`mt-1 text-[11px] font-semibold ${
+                                    slaCountdown.overdue ? 'text-rose-700' : 'text-amber-700'
+                                  }`}
+                                >
+                                  {slaCountdown.label}
+                                </p>
+                              )}
+                              {acknowledged && (
+                                <p className="mt-1 text-[11px] font-semibold text-emerald-700">
+                                  Acknowledged {item.acknowledgedAt ? formatDate(item.acknowledgedAt) : ''}.
+                                </p>
+                              )}
                               {item.suggestedAction && (
                                 <p className="mt-1 text-[11px] text-slate-700">Action: {item.suggestedAction}</p>
                               )}
@@ -1755,6 +1859,16 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                             </div>
                             {isOpen && (
                               <div className="flex gap-1.5">
+                                {!acknowledged && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcknowledgeIntraVisitAlert(item.id)}
+                                    disabled={workingActionKey === `intravisit-ack:${item.id}`}
+                                    className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                                  >
+                                    Acknowledge
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleResolveIntraVisitAlert(item.id, 'confirmed')}

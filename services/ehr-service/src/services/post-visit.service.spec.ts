@@ -2131,15 +2131,25 @@ describe('PostVisitService', () => {
               status: 'open',
               alert_type: params[2],
               severity: params[3],
-              source: params[4],
-              transcript_offset_seconds: params[5],
-              signal_text: params[6],
-              alert_message: params[7],
-              suggested_action: params[8],
-              confidence: params[9],
-              trigger_terms: JSON.parse(String(params[10] || '[]')),
-              metadata: JSON.parse(String(params[11] || '{}')),
+              route_target: params[4],
+              assigned_role: params[5],
+              assigned_user_id: params[6],
+              assigned_team: params[7],
+              policy_version: params[8],
+              routing_rationale: params[9],
+              source: params[10],
+              transcript_offset_seconds: params[11],
+              signal_text: params[12],
+              alert_message: params[13],
+              suggested_action: params[14],
+              confidence: params[15],
+              trigger_terms: JSON.parse(String(params[16] || '[]')),
+              sla_due_at: params[17],
+              metadata: JSON.parse(String(params[18] || '{}')),
               detected_at: '2026-03-06T10:00:00.000Z',
+              acknowledged_at: null,
+              acknowledged_by: null,
+              acknowledgment_note: null,
               resolved_at: null,
               resolved_by: null,
               resolution_note: null,
@@ -2153,6 +2163,8 @@ describe('PostVisitService', () => {
             {
               total: 1,
               open_count: 1,
+              acknowledged_open_count: 0,
+              overdue_unacknowledged_count: 0,
               critical_open_count: 1,
               high_open_count: 0,
               moderate_open_count: 0,
@@ -2178,6 +2190,7 @@ describe('PostVisitService', () => {
     expect(result.alerts.length).toBeGreaterThan(0);
     expect(result.summary.openCount).toBe(1);
     expect(result.alerts[0].severity).toBe('critical');
+    expect(result.alerts[0].routeTarget).toBe('emergency');
   });
 
   it('transcribes a live audio chunk and feeds intra-visit alert analysis', async () => {
@@ -2305,5 +2318,76 @@ describe('PostVisitService', () => {
     expect(result.status).toBe('confirmed');
     expect(result.resolvedBy).toBe('doctor-1');
     expect(result.resolutionNote).toBe('Confirmed bedside risk.');
+  });
+
+  it('acknowledges an open intra-visit alert and persists SLA acknowledgement metadata', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', status: 'draft_ready', source_type: 'in_person' }];
+        }
+        if (sql.includes('FROM post_visit_intravisit_alert_events') && sql.includes('LIMIT 1')) {
+          return [
+            {
+              id: 'intravisit-2',
+              session_id: 'session-1',
+              status: 'open',
+              acknowledged_at: null,
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_intravisit_alert_events') && sql.includes('acknowledged_at = COALESCE')) {
+          return [
+            {
+              id: 'intravisit-2',
+              session_id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'open',
+              alert_type: 'severe_pain_signal',
+              severity: 'high',
+              route_target: 'doctor',
+              assigned_role: 'doctor',
+              assigned_user_id: 'doctor-1',
+              assigned_team: 'Doctor Primary',
+              policy_version: 'c3.v1',
+              routing_rationale: 'High-severity signal routed to responsible doctor for expedited review.',
+              source: 'streamed_transcript',
+              transcript_offset_seconds: 12,
+              signal_text: 'Pain score 9/10',
+              alert_message: 'Severe pain score captured during encounter.',
+              suggested_action: 'Run severe pain protocol with urgent reassessment and doctor intervention.',
+              confidence: 0.79,
+              trigger_terms: ['pain_score_9'],
+              metadata: {},
+              detected_at: '2026-03-06T10:00:00.000Z',
+              sla_due_at: '2026-03-06T10:20:00.000Z',
+              acknowledged_at: '2026-03-06T10:05:00.000Z',
+              acknowledged_by: 'doctor-1',
+              acknowledgment_note: 'Acknowledged from doctor intra-visit alert bar.',
+              resolved_at: null,
+              resolved_by: null,
+              resolution_note: null,
+              created_at: '2026-03-06T10:00:00.000Z',
+              updated_at: '2026-03-06T10:05:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.acknowledgeIntraVisitAlert(
+      tenantDb,
+      'session-1',
+      'intravisit-2',
+      { note: 'Acknowledged from doctor intra-visit alert bar.' },
+      { actorUserId: 'doctor-1' },
+    );
+
+    expect(result.status).toBe('open');
+    expect(result.isAcknowledged).toBe(true);
+    expect(result.acknowledgedBy).toBe('doctor-1');
   });
 });
