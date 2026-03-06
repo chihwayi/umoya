@@ -1413,6 +1413,10 @@ export class PostVisitService {
   }
 
   private isTrialMatcherEnabled(): boolean {
+    const runtimeOverride = process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    if (runtimeOverride !== undefined) {
+      return String(runtimeOverride).toLowerCase() === 'true';
+    }
     const configured = (config as any)?.features?.postVisitTrialMatcher;
     if (typeof configured === 'boolean') {
       return configured;
@@ -7166,7 +7170,26 @@ export class PostVisitService {
 
     let rows = await tenantDb.query(
       `
-        SELECT *
+        SELECT
+          id,
+          session_id,
+          patient_id,
+          trial_source,
+          trial_id,
+          trial_title,
+          trial_phase,
+          trial_status,
+          condition_tags,
+          source_url,
+          eligibility_score,
+          eligibility_rationale,
+          match_status,
+          review_note,
+          reviewed_by,
+          reviewed_at,
+          metadata,
+          created_at,
+          updated_at
         FROM post_visit_trial_matches
         WHERE session_id = $1
         ORDER BY eligibility_score DESC, created_at DESC
