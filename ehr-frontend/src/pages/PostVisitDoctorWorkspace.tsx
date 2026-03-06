@@ -73,6 +73,19 @@ interface DraftPayload {
     action: string;
     createdAt: string;
   }>;
+  ruleCitations?: Array<{
+    id: string;
+    recommendationId?: string | null;
+    ruleId?: string | null;
+    guidelineId?: string | null;
+    label?: string | null;
+    source?: string | null;
+    relevanceScore?: number | null;
+    citationYear?: number | null;
+    isSuperseded?: boolean;
+    supersededByGuidelineId?: string | null;
+    acknowledgedSuperseded?: boolean;
+  }>;
 }
 
 interface DiarizationSegment {
@@ -171,6 +184,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [pendingSpeakerRole, setPendingSpeakerRole] = useState<Record<string, 'doctor' | 'patient' | 'unknown'>>({});
+  const [supersededCitationAcknowledgements, setSupersededCitationAcknowledgements] = useState<Record<string, boolean>>({});
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -197,6 +211,19 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     const raw = recommendationArtifact?.content?.items;
     return Array.isArray(raw) ? raw : [];
   }, [recommendationArtifact]);
+
+  const supersededCitations = useMemo(() => {
+    const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
+    return rows.filter((row) => row?.isSuperseded === true);
+  }, [draftData]);
+
+  const unresolvedSupersededCitationCount = useMemo(
+    () =>
+      supersededCitations.filter(
+        (citation) => !(citation.acknowledgedSuperseded === true || supersededCitationAcknowledgements[citation.id] === true),
+      ).length,
+    [supersededCitationAcknowledgements, supersededCitations],
+  );
 
   const loadSessions = useCallback(async () => {
     if (!tenantSlug || !token) return;
@@ -273,6 +300,17 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDiarization(selectedSessionId);
     setSessionTranscribeFile(null);
   }, [loadDiarization, loadDraft, selectedSessionId]);
+
+  useEffect(() => {
+    const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
+    const next: Record<string, boolean> = {};
+    for (const row of rows) {
+      if (row?.isSuperseded === true && row?.acknowledgedSuperseded === true && row?.id) {
+        next[row.id] = true;
+      }
+    }
+    setSupersededCitationAcknowledgements(next);
+  }, [draftData]);
 
   const clearRecordingInterval = useCallback(() => {
     if (recordingIntervalRef.current !== null) {
@@ -645,11 +683,18 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
     try {
       setWorkingActionKey('publish');
+      const acknowledgedSupersededCitationIds = supersededCitations
+        .filter(
+          (citation) =>
+            citation.acknowledgedSuperseded === true || supersededCitationAcknowledgements[citation.id] === true,
+        )
+        .map((citation) => citation.id);
       await ehrApi.publishPostVisitSession(
         selectedSessionId,
         {
           note: 'Published from doctor workspace',
           publishMetadata: { source: 'doctor_workspace' },
+          acknowledgedSupersededCitationIds,
         },
         token,
         tenantSlug,
@@ -667,7 +712,18 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [
+    loadDiarization,
+    loadDraft,
+    loadSessions,
+    selectedSessionId,
+    showError,
+    showSuccess,
+    supersededCitationAcknowledgements,
+    supersededCitations,
+    tenantSlug,
+    token,
+  ]);
 
   const handleLoadFhir = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -910,11 +966,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       <button
                         type="button"
                         onClick={handlePublish}
-                        disabled={workingActionKey === 'publish'}
+                        disabled={workingActionKey === 'publish' || unresolvedSupersededCitationCount > 0}
                         className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                       >
                         <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
-                        Publish
+                        {unresolvedSupersededCitationCount > 0
+                          ? `Publish (ack ${unresolvedSupersededCitationCount})`
+                          : 'Publish'}
                       </button>
                     </div>
                   </div>
@@ -1201,6 +1259,52 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                   </div>
                 </section>
 
+                {supersededCitations.length > 0 && (
+                  <section className="rounded-2xl border border-amber-300 bg-amber-50/60 p-4 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-bold text-amber-900">Superseded Citation Acknowledgement</h3>
+                      <span className="text-xs font-semibold text-amber-800">
+                        Pending: {unresolvedSupersededCitationCount}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-xs text-amber-900">
+                      These citations are marked superseded. Doctor acknowledgement is required before publish.
+                    </p>
+                    <div className="space-y-2">
+                      {supersededCitations.map((citation) => {
+                        const acknowledged =
+                          citation.acknowledgedSuperseded === true ||
+                          supersededCitationAcknowledgements[citation.id] === true;
+                        return (
+                          <label
+                            key={citation.id}
+                            className="flex cursor-pointer items-start gap-2 rounded-lg border border-amber-200 bg-white/80 p-2"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={acknowledged}
+                              onChange={(event) =>
+                                setSupersededCitationAcknowledgements((prev) => ({
+                                  ...prev,
+                                  [citation.id]: event.target.checked,
+                                }))
+                              }
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <p className="text-xs font-semibold text-amber-900">{citation.label || citation.guidelineId || citation.id}</p>
+                              <p className="text-[11px] text-amber-800">
+                                Guideline {citation.guidelineId || 'n/a'}
+                                {citation.supersededByGuidelineId ? ` -> ${citation.supersededByGuidelineId}` : ''}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="mb-3 text-sm font-bold text-slate-900">Executable Recommendation Bundle</h3>
                   <div className="space-y-2">
@@ -1212,6 +1316,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       const executionStatus = String(item?.execution?.status || '').toLowerCase();
                       const alreadyExecuted = executionStatus === 'executed';
                       const title = String(item?.title || actionId || 'Recommendation');
+                      const itemCitations = Array.isArray(item?.citations) ? item.citations : [];
+                      const weakCitationCount = itemCitations.filter((citation: any) => {
+                        const score = Number(citation?.relevance_score ?? citation?.relevanceScore);
+                        return Number.isFinite(score) && score < 0.55;
+                      }).length;
+                      const supersededCitationCount = itemCitations.filter(
+                        (citation: any) => citation?.is_superseded === true || citation?.isSuperseded === true,
+                      ).length;
                       return (
                         <article key={actionId} className="rounded-xl border border-slate-200 bg-white p-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1221,6 +1333,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                               <p className="mt-1 text-[11px] text-slate-500">
                                 Urgency {String(item?.urgency || 'routine')} • Action {String(item?.action_type || 'follow_up')} • Citations {Array.isArray(item?.citations) ? item.citations.length : 0}
                               </p>
+                              {(weakCitationCount > 0 || supersededCitationCount > 0) && (
+                                <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                                  {weakCitationCount > 0 ? `${weakCitationCount} weak relevance` : ''}
+                                  {weakCitationCount > 0 && supersededCitationCount > 0 ? ' • ' : ''}
+                                  {supersededCitationCount > 0 ? `${supersededCitationCount} superseded` : ''}
+                                </p>
+                              )}
                             </div>
                             <button
                               type="button"

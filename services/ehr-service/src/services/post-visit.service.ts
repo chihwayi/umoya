@@ -69,6 +69,10 @@ interface RuleCitation {
   url?: string;
   excerpt?: string;
   confidence?: number;
+  relevanceScore?: number;
+  publicationYear?: number | null;
+  isSuperseded?: boolean;
+  supersededByGuidelineId?: string | null;
 }
 
 interface RecommendationRuleResult {
@@ -281,10 +285,28 @@ export class PostVisitService {
         citation_url TEXT,
         evidence_excerpt TEXT,
         confidence DOUBLE PRECISION,
+        relevance_score DOUBLE PRECISION,
+        citation_year INTEGER,
+        is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
+        superseded_by_guideline_id VARCHAR(120),
+        doctor_acknowledged_superseded BOOLEAN NOT NULL DEFAULT FALSE,
+        superseded_acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        superseded_acknowledged_at TIMESTAMP WITH TIME ZONE,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_rule_citations
+      ADD COLUMN IF NOT EXISTS relevance_score DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS citation_year INTEGER,
+      ADD COLUMN IF NOT EXISTS is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS superseded_by_guideline_id VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS doctor_acknowledged_superseded BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS superseded_acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS superseded_acknowledged_at TIMESTAMP WITH TIME ZONE
     `);
 
     await tenantDb.query(`
@@ -423,6 +445,10 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_artifact ON post_visit_review_actions(artifact_type, action)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_session ON post_visit_rule_citations(session_id, rule_id)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_guideline ON post_visit_rule_citations(guideline_id)`);
+    await tenantDb.query(`
+      CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_quality
+      ON post_visit_rule_citations(session_id, is_superseded, doctor_acknowledged_superseded, relevance_score DESC)
+    `);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_session ON post_visit_action_executions(session_id, recommendation_id)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_status ON post_visit_action_executions(status, executed_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_session ON post_visit_companion_threads(session_id, status)`);
@@ -531,6 +557,31 @@ export class PostVisitService {
     if (['doctor', 'dr', 'clinician', 'provider'].includes(normalized)) return 'doctor';
     if (['patient', 'pt', 'client'].includes(normalized)) return 'patient';
     return 'unknown';
+  }
+
+  private isCitationQualityV2Enabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2 || 'false').toLowerCase() === 'true';
+  }
+
+  private getCitationRelevanceThreshold(): number {
+    const raw = Number(process.env.POSTVISIT_CITATION_MIN_RELEVANCE || 0.55);
+    if (!Number.isFinite(raw)) return 0.55;
+    return Math.min(0.95, Math.max(0.2, raw));
+  }
+
+  private normalizeCitationRelevanceScore(value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  }
+
+  private extractGuidelineYear(guidelineId?: string | null): number | null {
+    const source = String(guidelineId || '');
+    const match = source.match(/(19|20)\d{2}/);
+    if (!match) return null;
+    const year = Number(match[0]);
+    if (!Number.isFinite(year)) return null;
+    return year;
   }
 
   private splitIntoPhrases(value?: string) {
@@ -1649,8 +1700,12 @@ export class PostVisitService {
             citation_url,
             evidence_excerpt,
             confidence,
+            relevance_score,
+            citation_year,
+            is_superseded,
+            superseded_by_guideline_id,
             metadata
-          ) VALUES ($1,'recommendation_bundle',$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+          ) VALUES ($1,'recommendation_bundle',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
         `,
         [
           sessionId,
@@ -1662,6 +1717,12 @@ export class PostVisitService {
           row.citation.url || null,
           row.citation.excerpt || null,
           typeof row.citation.confidence === 'number' ? row.citation.confidence : null,
+          this.normalizeCitationRelevanceScore(
+            row.citation.relevanceScore ?? row.citation.confidence ?? null,
+          ),
+          row.citation.publicationYear ?? this.extractGuidelineYear(row.citation.guidelineId),
+          row.citation.isSuperseded === true,
+          row.citation.supersededByGuidelineId || null,
           JSON.stringify(row.metadata || {}),
         ],
       );
@@ -2355,7 +2416,25 @@ export class PostVisitService {
       ),
       tenantDb.query(
         `
-          SELECT id, recommendation_id, rule_id, guideline_id, citation_label, citation_source, citation_url, evidence_excerpt, confidence, metadata, created_at
+          SELECT
+            id,
+            recommendation_id,
+            rule_id,
+            guideline_id,
+            citation_label,
+            citation_source,
+            citation_url,
+            evidence_excerpt,
+            confidence,
+            relevance_score,
+            citation_year,
+            is_superseded,
+            superseded_by_guideline_id,
+            doctor_acknowledged_superseded,
+            superseded_acknowledged_by,
+            superseded_acknowledged_at,
+            metadata,
+            created_at
           FROM post_visit_rule_citations
           WHERE session_id = $1
           ORDER BY created_at DESC
@@ -2445,6 +2524,14 @@ export class PostVisitService {
         url: row.citation_url,
         excerpt: row.evidence_excerpt,
         confidence: row.confidence,
+        relevanceScore:
+          row.relevance_score === null || row.relevance_score === undefined ? null : Number(row.relevance_score),
+        citationYear: row.citation_year === null || row.citation_year === undefined ? null : Number(row.citation_year),
+        isSuperseded: row.is_superseded === true,
+        supersededByGuidelineId: row.superseded_by_guideline_id || null,
+        acknowledgedSuperseded: row.doctor_acknowledged_superseded === true,
+        acknowledgedBy: row.superseded_acknowledged_by || null,
+        acknowledgedAt: row.superseded_acknowledged_at || null,
         metadata: row.metadata || {},
         createdAt: row.created_at,
       })),
@@ -3357,6 +3444,12 @@ export class PostVisitService {
         url: citation.url || null,
         excerpt: citation.excerpt || null,
         confidence: citation.confidence ?? rule.confidence,
+        relevance_score: this.normalizeCitationRelevanceScore(
+          citation.relevanceScore ?? citation.confidence ?? rule.confidence,
+        ),
+        citation_year: citation.publicationYear ?? this.extractGuidelineYear(citation.guidelineId),
+        is_superseded: citation.isSuperseded === true,
+        superseded_by_guideline_id: citation.supersededByGuidelineId || null,
       })),
     }));
 
@@ -3681,10 +3774,109 @@ export class PostVisitService {
     };
   }
 
+  private async excludeWeakCitationsFromRecommendationArtifact(
+    tenantDb: DataSource,
+    sessionId: string,
+    weakCitationRows: Array<{ rule_id: string; guideline_id: string; citation_label: string }>,
+    actorUserId?: string | null,
+  ) {
+    if (!weakCitationRows.length) {
+      return 0;
+    }
+
+    const weakKey = new Set<string>(
+      weakCitationRows.map((row) =>
+        `${String(row.rule_id || '').trim()}::${String(row.guideline_id || '').trim()}::${String(row.citation_label || '').trim()}`,
+      ),
+    );
+
+    const artifact = await this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle');
+    if (!artifact) {
+      return 0;
+    }
+
+    const originalItems = Array.isArray(artifact.content?.items) ? artifact.content.items : [];
+    let removedCount = 0;
+    const filteredItems = originalItems.map((item: any) => {
+      const ruleId = String(item?.rule_id || '').trim();
+      const citations = Array.isArray(item?.citations) ? item.citations : [];
+      const filteredCitations = citations.filter((citation: any) => {
+        const key = `${ruleId}::${String(citation?.guideline_id || '').trim()}::${String(citation?.label || '').trim()}`;
+        const remove = weakKey.has(key);
+        if (remove) removedCount += 1;
+        return !remove;
+      });
+      if (filteredCitations.length === citations.length) return item;
+      return {
+        ...item,
+        citations: filteredCitations,
+      };
+    });
+
+    if (removedCount <= 0) {
+      return 0;
+    }
+
+    const nextContent = {
+      ...(artifact.content || {}),
+      items: filteredItems,
+      citation_quality: {
+        ...(artifact.content?.citation_quality || {}),
+        weak_excluded_count: removedCount,
+        weak_excluded_at: new Date().toISOString(),
+      },
+    };
+
+    await tenantDb.query(
+      `
+        UPDATE post_visit_draft_artifacts
+        SET content = $3::jsonb,
+            citations = $4::jsonb,
+            updated_by = $5,
+            updated_at = NOW()
+        WHERE id = $1
+          AND session_id = $2
+      `,
+      [
+        artifact.id,
+        sessionId,
+        JSON.stringify(nextContent),
+        JSON.stringify(
+          filteredItems.flatMap((item: any) => (Array.isArray(item?.citations) ? item.citations : [])),
+        ),
+        actorUserId || null,
+      ],
+    );
+
+    await tenantDb.query(
+      `
+        UPDATE post_visit_rule_citations
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+            updated_at = NOW()
+        WHERE session_id = $1
+          AND (
+            relevance_score IS NOT NULL
+            AND relevance_score < $3
+          )
+      `,
+      [
+        sessionId,
+        JSON.stringify({
+          excluded_from_publish: true,
+          excluded_reason: 'low_relevance',
+          excluded_at: new Date().toISOString(),
+        }),
+        this.getCitationRelevanceThreshold(),
+      ],
+    );
+
+    return removedCount;
+  }
+
   async publishSession(
     tenantDb: DataSource,
     sessionId: string,
-    payload: { note?: string; publishMetadata?: Record<string, any> } = {},
+    payload: { note?: string; publishMetadata?: Record<string, any>; acknowledgedSupersededCitationIds?: string[] } = {},
     options: PublishSessionOptions = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
@@ -3720,6 +3912,98 @@ export class PostVisitService {
       throw new BadRequestException(
         `Publish blocked. Artifact(s) require doctor review: ${missingOrUnreviewed.join(', ')}`,
       );
+    }
+
+    let citationQualityMeta: Record<string, any> | null = null;
+    if (this.isCitationQualityV2Enabled()) {
+      const relevanceThreshold = this.getCitationRelevanceThreshold();
+      const citationRows = await tenantDb.query(
+        `
+          SELECT
+            id,
+            rule_id,
+            guideline_id,
+            citation_label,
+            relevance_score,
+            is_superseded,
+            doctor_acknowledged_superseded
+          FROM post_visit_rule_citations
+          WHERE session_id = $1
+        `,
+        [sessionId],
+      );
+
+      const weakRows = citationRows.filter((row: any) => {
+        const score = row?.relevance_score;
+        if (score === null || score === undefined) return false;
+        const numericScore = Number(score);
+        if (!Number.isFinite(numericScore)) return false;
+        return numericScore < relevanceThreshold;
+      });
+
+      if (weakRows.length > 0) {
+        await this.excludeWeakCitationsFromRecommendationArtifact(tenantDb, sessionId, weakRows, options.actorUserId);
+      }
+
+      const acknowledgedIds = Array.isArray(payload.acknowledgedSupersededCitationIds)
+        ? payload.acknowledgedSupersededCitationIds
+            .map((value) => String(value || '').trim())
+            .filter((value) => value.length > 0)
+        : [];
+
+      if (acknowledgedIds.length > 0) {
+        await tenantDb.query(
+          `
+            UPDATE post_visit_rule_citations
+            SET doctor_acknowledged_superseded = TRUE,
+                superseded_acknowledged_by = $3,
+                superseded_acknowledged_at = NOW(),
+                metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
+                updated_at = NOW()
+            WHERE session_id = $1
+              AND id = ANY($2::uuid[])
+          `,
+          [
+            sessionId,
+            acknowledgedIds,
+            options.actorUserId || null,
+            JSON.stringify({
+              superseded_acknowledged_by: options.actorUserId || null,
+              superseded_acknowledged_at: new Date().toISOString(),
+              source: options.source || 'post_visit_publish',
+            }),
+          ],
+        );
+      }
+
+      const acknowledgedSet = new Set<string>(acknowledgedIds);
+      const unresolvedSuperseded = citationRows.filter((row: any) => {
+        const isSuperseded = row?.is_superseded === true;
+        if (!isSuperseded) return false;
+        const alreadyAcknowledged = row?.doctor_acknowledged_superseded === true;
+        const acknowledgedInPayload = acknowledgedSet.has(String(row?.id || ''));
+        return !alreadyAcknowledged && !acknowledgedInPayload;
+      });
+
+      if (unresolvedSuperseded.length > 0) {
+        throw new BadRequestException(
+          `Publish blocked. Superseded citation acknowledgement required for: ${unresolvedSuperseded
+            .map((row: any) => String(row.id || '').trim())
+            .filter((value: string) => value.length > 0)
+            .join(', ')}`,
+        );
+      }
+
+      citationQualityMeta = {
+        relevanceThreshold,
+        weakExcludedCount: weakRows.length,
+        supersededCount: citationRows.filter((row: any) => row?.is_superseded === true).length,
+        supersededAcknowledgedCount: citationRows.filter(
+          (row: any) =>
+            row?.is_superseded === true &&
+            (row?.doctor_acknowledged_superseded === true || acknowledgedSet.has(String(row?.id || ''))),
+        ).length,
+      };
     }
 
     if (this.isDiarizationReviewEnabled()) {
@@ -3768,7 +4052,10 @@ export class PostVisitService {
           published_by: options.actorUserId,
           publish_source: options.source || 'post_visit_publish',
           publish_note: payload.note || null,
-          publish_metadata: payload.publishMetadata || {},
+          publish_metadata: {
+            ...(payload.publishMetadata || {}),
+            ...(citationQualityMeta ? { citation_quality: citationQualityMeta } : {}),
+          },
         }),
       ],
     );

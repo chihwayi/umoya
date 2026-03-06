@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, IsObject } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, IsObject } from 'class-validator';
 
 export class CreatePostVisitSessionDto {
   @ApiProperty({ description: 'Patient ID' })
@@ -111,6 +111,13 @@ export class PublishPostVisitSessionDto {
   @IsObject()
   @IsOptional()
   publishMetadata?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: 'Superseded citation IDs explicitly acknowledged by doctor before publish', type: [String] })
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  acknowledgedSupersededCitationIds?: string[];
 }
 
 export class CreatePostVisitCompanionMessageDto {

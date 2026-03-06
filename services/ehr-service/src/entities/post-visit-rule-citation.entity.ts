@@ -38,6 +38,27 @@ export class PostVisitRuleCitation {
   @Column({ type: 'double precision', nullable: true })
   confidence: number | null;
 
+  @Column({ name: 'relevance_score', type: 'double precision', nullable: true })
+  relevanceScore: number | null;
+
+  @Column({ name: 'citation_year', type: 'integer', nullable: true })
+  citationYear: number | null;
+
+  @Column({ name: 'is_superseded', type: 'boolean', default: false })
+  isSuperseded: boolean;
+
+  @Column({ name: 'superseded_by_guideline_id', type: 'varchar', length: 120, nullable: true })
+  supersededByGuidelineId: string | null;
+
+  @Column({ name: 'doctor_acknowledged_superseded', type: 'boolean', default: false })
+  doctorAcknowledgedSuperseded: boolean;
+
+  @Column({ name: 'superseded_acknowledged_by', type: 'uuid', nullable: true })
+  supersededAcknowledgedBy: string | null;
+
+  @Column({ name: 'superseded_acknowledged_at', type: 'timestamp with time zone', nullable: true })
+  supersededAcknowledgedAt: Date | null;
+
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   metadata: Record<string, any>;
 

@@ -804,6 +804,61 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('blocks publish when citation-quality v2 is enabled and superseded citations are not acknowledged', async () => {
+    process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2 = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                tenant_id: 'tenant-a',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+                source_type: 'in_person',
+                language: 'en',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type IN')) {
+            return [
+              { artifact_type: 'visit_summary', artifact_status: 'reviewed' },
+              { artifact_type: 'recommendation_bundle', artifact_status: 'reviewed' },
+            ];
+          }
+          if (sql.includes('FROM post_visit_rule_citations')) {
+            return [
+              {
+                id: 'c6f2e0f5-5a0f-4117-b8cb-8e6c6c6e565f',
+                rule_id: 'htn_followup_rule',
+                guideline_id: 'who-htn-2019',
+                citation_label: 'Old guidance',
+                relevance_score: 0.8,
+                is_superseded: true,
+                doctor_acknowledged_superseded: false,
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      await expect(
+        service.publishSession(
+          tenantDb,
+          'session-1',
+          { note: 'attempt publish without superseded acknowledgement' },
+          { actorUserId: 'doctor-1' },
+        ),
+      ).rejects.toThrow('Publish blocked. Superseded citation acknowledgement required for: c6f2e0f5-5a0f-4117-b8cb-8e6c6c6e565f');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_CITATION_QUALITY_V2;
+    }
+  });
+
   it('creates escalation event when patient companion message contains urgent symptoms', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     let companionInsertCount = 0;

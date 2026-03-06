@@ -399,14 +399,20 @@ describe('PostVisitController', () => {
 
     const result = await controller.publishSession(
       'session-1',
-      { note: 'Ready for patient companion release' },
+      {
+        note: 'Ready for patient companion release',
+        acknowledgedSupersededCitationIds: ['c6f2e0f5-5a0f-4117-b8cb-8e6c6c6e565f'],
+      },
       req,
     );
 
     expect(postVisitServiceMock.publishSession).toHaveBeenCalledWith(
       req.tenantDb,
       'session-1',
-      expect.objectContaining({ note: 'Ready for patient companion release' }),
+      expect.objectContaining({
+        note: 'Ready for patient companion release',
+        acknowledgedSupersededCitationIds: ['c6f2e0f5-5a0f-4117-b8cb-8e6c6c6e565f'],
+      }),
       expect.objectContaining({
         tenantId: 'tenant-a',
         actorUserId: 'doctor-1',
