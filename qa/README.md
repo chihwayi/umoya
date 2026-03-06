@@ -13,11 +13,15 @@ qa/
 ├── tests/
     ├── run-scenarios.ts                      ← script that enumerates scenarios & prerequisites
     ├── nurse-outcome-analytics-smoke.ts      ← smoke validator for nurse AI/CDSS outcomes endpoint
-    └── doctor-cross-module-sync-smoke.ts     ← smoke validator/executor for nurse→doctor bundle loop
+    ├── doctor-cross-module-sync-smoke.ts     ← smoke validator/executor for nurse→doctor bundle loop
+    ├── post-visit-session-smoke.ts           ← validates post-visit session + draft endpoints
+    ├── post-visit-doctor-signoff-and-execution-smoke.ts ← validates doctor signoff/publish/execution flow
+    └── post-visit-companion-escalation-smoke.ts ← validates patient companion escalation routing
 └── uat/
     ├── nurse-ai-cdss-uat-checklist.md             ← nurse AI/CDSS UAT execution checklist
     ├── doctor-cross-module-ai-cdss-uat-checklist.md ← doctor AI/CDSS UAT execution checklist
-    └── doctor-cross-module-automation-matrix.md   ← module/action evidence matrix
+    ├── doctor-cross-module-automation-matrix.md   ← module/action evidence matrix
+    └── post-visit-ai-companion-uat-checklist.md   ← post-visit companion + safety UAT checklist
 ```
 
 ### Prerequisites
@@ -67,6 +71,53 @@ What it validates:
 - Optional one-click action execution against module endpoints
 - Doctor outcomes analytics shape: `doctorQueue`, `accountsSync`, `recommendationExecution`, `cdssAdoption`
 - Evidence export for UAT traceability
+
+### Running post-visit session smoke check
+```
+npx ts-node qa/tests/post-visit-session-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --token "$EHR_QA_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --evidence "qa/tests/test-results/post-visit-session-latest.json"
+```
+
+What it validates:
+- Session retrieval via `GET /post-visit/sessions/:id`
+- Draft artifact availability via `GET /post-visit/sessions/:id/draft`
+
+### Running post-visit doctor signoff/execution smoke check
+```
+npx ts-node qa/tests/post-visit-doctor-signoff-and-execution-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --token "$EHR_QA_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --publish \
+  --execute \
+  --evidence "qa/tests/test-results/post-visit-doctor-signoff-latest.json"
+```
+
+What it validates:
+- Doctor signoff endpoint pathing and response shape
+- Optional recommendation execution from post-visit bundle
+
+### Running post-visit companion escalation smoke check
+```
+npx ts-node qa/tests/post-visit-companion-escalation-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --patientToken "$EHR_QA_PATIENT_TOKEN" \
+  --clinicianToken "$EHR_QA_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --resolve \
+  --evidence "qa/tests/test-results/post-visit-companion-escalation-latest.json"
+```
+
+What it validates:
+- Companion summary/messages availability from patient portal APIs
+- Escalation event creation and clinician queue visibility
+- Optional escalation resolution workflow
 
 ### Oncology doctor protocol automation checks
 Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analytics:

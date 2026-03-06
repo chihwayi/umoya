@@ -1282,6 +1282,44 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitEscalations: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      status?: 'open' | 'acknowledged' | 'resolved' | 'dismissed';
+      severity?: 'low' | 'moderate' | 'high' | 'critical';
+      routeTarget?: 'emergency' | 'doctor' | 'nurse';
+      sessionId?: string;
+      patientId?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/escalations', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  resolvePostVisitEscalation: async (
+    escalationId: string,
+    payload: { status?: 'resolved' | 'dismissed'; resolutionNote?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/post-visit/escalations/${escalationId}/resolve`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return { data: response.data };
+  },
+
   updateNurseCrossModuleWorkflow: async (
     payload: {
       itemId: string;
@@ -7298,6 +7336,66 @@ export const patientPortalApi = {
   patientLogin: async (email: string, password: string, tenantSlug: string) => {
     const response = await ehrAxios.post('/patient-portal/login', { email, password }, {
       headers: { 'X-Tenant-ID': tenantSlug },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitSessions: async (
+    token: string,
+    tenantSlug: string,
+    filters?: { limit?: number; offset?: number },
+  ) => {
+    const response = await ehrAxios.get('/patient-portal/post-visit/sessions', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitSummary: async (sessionId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/patient-portal/post-visit/sessions/${sessionId}/summary`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getPostVisitMessages: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    filters?: { limit?: number; offset?: number },
+  ) => {
+    const response = await ehrAxios.get(`/patient-portal/post-visit/sessions/${sessionId}/messages`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  sendPostVisitMessage: async (
+    sessionId: string,
+    payload: { message: string; language?: string; messageType?: 'question' | 'answer' | 'summary' | 'checklist' | 'alert' | 'system' },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/patient-portal/post-visit/sessions/${sessionId}/messages`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  acknowledgePostVisit: async (
+    sessionId: string,
+    payload: {
+      acknowledgementType: 'teach_back' | 'medication_adherence' | 'follow_up_commitment' | 'warning_sign_understanding';
+      acknowledged?: boolean;
+      details?: Record<string, any>;
+    },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(`/patient-portal/post-visit/sessions/${sessionId}/acknowledgements`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
   },

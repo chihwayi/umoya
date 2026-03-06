@@ -14,8 +14,10 @@ import { TelemedicineService } from '../services/telemedicine.service';
 import { HealthRecordsExportService } from '../services/health-records-export.service';
 import { PatientProService } from '../services/patient-pro.service';
 import { AssignQuestionnaireDto, SubmitQuestionnaireDto } from '../dto/patient-pro.dto';
+import { CreatePostVisitCompanionMessageDto, PostVisitCompanionAcknowledgementDto } from '../dto/post-visit.dto';
 import { HealthGoalsService, CreateGoalDto, UpdateGoalDto, LogProgressDto } from '../services/health-goals.service';
 import { CarePlanService } from '../services/care-plan.service';
+import { PostVisitService } from '../services/post-visit.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 // Tier 1 Services
@@ -46,6 +48,7 @@ export class PatientPortalController {
     private readonly patientProService: PatientProService,
     private readonly healthGoalsService: HealthGoalsService,
     private readonly carePlanService: CarePlanService,
+    private readonly postVisitService: PostVisitService,
     // Tier 1 Services
     private readonly patientConsentService: PatientConsentService,
     private readonly clinicalPathwayService: ClinicalPathwayService,
@@ -492,6 +495,103 @@ export class PatientPortalController {
       throw new Error('Patient ID not found in token');
     }
     return this.patientPortalService.getPatientDashboardSummary(patientId, req.tenantId);
+  }
+
+  // Post-Visit AI Companion
+  @Get('post-visit/sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List published post-visit sessions', description: 'List doctor-published post-visit sessions available for patient companion access' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit results' })
+  @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination' })
+  async listPostVisitSessions(
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.postVisitService.listPatientSessions(req.tenantDb, patientId, {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+  }
+
+  @Get('post-visit/sessions/:id/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get post-visit summary + checklist', description: 'Fetch approved patient-safe summary and actionable checklist for one post-visit session' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async getPostVisitSummary(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.postVisitService.getPatientSessionSummary(req.tenantDb, id, patientId);
+  }
+
+  @Get('post-visit/sessions/:id/messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get companion messages', description: 'List grounded patient companion conversation messages for a published post-visit session' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit results' })
+  @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination' })
+  async getPostVisitMessages(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.postVisitService.listCompanionMessages(req.tenantDb, id, patientId, {
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+  }
+
+  @Post('post-visit/sessions/:id/messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send companion message', description: 'Send patient message to post-visit companion and receive grounded response with safety escalation detection' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async sendPostVisitMessage(
+    @Param('id') id: string,
+    @Body() body: CreatePostVisitCompanionMessageDto,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.postVisitService.sendCompanionMessage(req.tenantDb, id, patientId, body, {
+      tenantId: req.tenantId,
+    });
+  }
+
+  @Post('post-visit/sessions/:id/acknowledgements')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record post-visit acknowledgement', description: 'Capture teach-back or adherence acknowledgement events from patient companion flow' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async acknowledgePostVisit(
+    @Param('id') id: string,
+    @Body() body: PostVisitCompanionAcknowledgementDto,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    return this.postVisitService.recordCompanionAcknowledgement(req.tenantDb, id, patientId, body);
   }
 
   // Messages
@@ -1996,4 +2096,3 @@ export class PatientPortalController {
     return visit;
   }
 }
-

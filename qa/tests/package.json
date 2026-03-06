@@ -14,6 +14,9 @@
     "test:s7": "playwright test scenario-s7-cdss-hooks",
     "smoke:nurse:outcomes": "ts-node nurse-outcome-analytics-smoke.ts --url http://localhost:3013/nurse-worklist/analytics/outcomes --token $EHR_QA_TOKEN --days 30",
     "smoke:doctor:cross-module": "ts-node doctor-cross-module-sync-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --modules hiv,oncology,cardiology,ophthalmology,telemedicine,ed,sepsis,blood_bank,lab,pharmacy --days 30 --evidence ./test-results/doctor-cross-module-sync-latest.json",
+    "smoke:post-visit:session": "ts-node post-visit-session-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --evidence ./test-results/post-visit-session-latest.json",
+    "smoke:post-visit:doctor": "ts-node post-visit-doctor-signoff-and-execution-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --publish --evidence ./test-results/post-visit-doctor-signoff-latest.json",
+    "smoke:post-visit:companion": "ts-node post-visit-companion-escalation-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --patientToken $EHR_QA_PATIENT_TOKEN --clinicianToken $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --resolve --evidence ./test-results/post-visit-companion-escalation-latest.json",
     "report": "playwright show-report"
   },
   "devDependencies": {

@@ -90,6 +90,7 @@ import { TranscriptionController } from './controllers/transcription.controller'
 import { WhoSmartGuidelinesController } from './controllers/who-smart-guidelines.controller';
 import { DiagnosticController } from './controllers/diagnostic.controller';
 import { NurseWorklistController } from './controllers/nurse-worklist.controller';
+import { PostVisitController } from './controllers/post-visit.controller';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -222,6 +223,7 @@ import { MinimumNecessaryInterceptor } from './interceptors/minimum-necessary.in
 import { MinimumNecessaryGuard } from './guards/minimum-necessary.guard';
 import { QualityMeasuresService } from './services/quality-measures.service';
 import { NurseWorklistService } from './services/nurse-worklist.service';
+import { PostVisitService } from './services/post-visit.service';
 
 // Strategies & Guards
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -331,6 +333,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     WhoSmartGuidelinesController,
     DiagnosticController,
     NurseWorklistController,
+    PostVisitController,
   ],
   providers: [
     AuthService,
@@ -463,6 +466,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     UploadSecurityService,
     WhoSmartGuidelinesService,
     NurseWorklistService,
+    PostVisitService,
     RolesGuard,
     JwtStrategy,
   ],

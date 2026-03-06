@@ -469,6 +469,34 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint47NurseCrossModuleWorkflowSchemaStatements(),
       },
       {
+        id: 'sprint48_post_visit_companion',
+        label: 'Sprint 48 - Post-Visit AI Companion Core',
+        version: '2026.03.05',
+        description: 'Post-visit session lifecycle persistence for transcription segments, extracted entities, and draft artifacts',
+        statements: () => this.getSprint48PostVisitCompanionSchemaStatements(),
+      },
+      {
+        id: 'sprint49_post_visit_review_citations',
+        label: 'Sprint 49 - Post-Visit Review and Citation Mapping',
+        version: '2026.03.05',
+        description: 'Adds doctor review action persistence and normalized guideline citation mapping per recommendation rule',
+        statements: () => this.getSprint49PostVisitReviewCitationSchemaStatements(),
+      },
+      {
+        id: 'sprint50_post_visit_execution_actions',
+        label: 'Sprint 50 - Post-Visit Executable Recommendation Actions',
+        version: '2026.03.05',
+        description: 'Adds idempotent execution persistence for post-visit recommendation one-click actions',
+        statements: () => this.getSprint50PostVisitExecutionActionSchemaStatements(),
+      },
+      {
+        id: 'sprint51_post_visit_patient_companion_escalations',
+        label: 'Sprint 51 - Post-Visit Patient Companion Messaging and Escalations',
+        version: '2026.03.05',
+        description: 'Adds patient companion chat persistence, teach-back acknowledgements, and escalation routing events',
+        statements: () => this.getSprint51PostVisitCompanionEscalationSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -766,6 +794,327 @@ export class DatabaseProvisioningService {
       `DROP TRIGGER IF EXISTS update_nurse_cross_module_workflow_state_updated_at ON nurse_cross_module_workflow_state`,
       `CREATE TRIGGER update_nurse_cross_module_workflow_state_updated_at
         BEFORE UPDATE ON nurse_cross_module_workflow_state
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint48PostVisitCompanionSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_sessions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id VARCHAR(100),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        doctor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+        consultation_id UUID REFERENCES telemedicine_consultations(id) ON DELETE SET NULL,
+        status VARCHAR(30) NOT NULL DEFAULT 'captured'
+          CHECK (status IN ('captured','processing','draft_ready','doctor_reviewed','published','closed')),
+        source_type VARCHAR(20) NOT NULL DEFAULT 'in_person'
+          CHECK (source_type IN ('in_person','telemedicine','hybrid')),
+        language VARCHAR(10) DEFAULT 'en',
+        started_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        published_at TIMESTAMP WITH TIME ZONE,
+        safety_level VARCHAR(20),
+        risk_flags JSONB NOT NULL DEFAULT '{}'::jsonb,
+        meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_transcript_segments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        segment_order INTEGER NOT NULL,
+        start_second DOUBLE PRECISION NOT NULL,
+        end_second DOUBLE PRECISION NOT NULL,
+        text TEXT NOT NULL,
+        confidence DOUBLE PRECISION,
+        language VARCHAR(10),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_extracted_entities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        entity_type VARCHAR(60) NOT NULL,
+        entity_value TEXT NOT NULL,
+        normalized_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+        confidence DOUBLE PRECISION,
+        source_start_second DOUBLE PRECISION,
+        source_end_second DOUBLE PRECISION,
+        source_origin VARCHAR(30) NOT NULL DEFAULT 'transcript',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_draft_artifacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        artifact_type VARCHAR(50) NOT NULL,
+        artifact_status VARCHAR(20) NOT NULL DEFAULT 'draft'
+          CHECK (artifact_status IN ('draft','reviewed','published')),
+        content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        citations JSONB NOT NULL DEFAULT '[]'::jsonb,
+        confidence DOUBLE PRECISION,
+        generated_by VARCHAR(80) NOT NULL DEFAULT 'post_visit_pipeline',
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, artifact_type)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_patient_id ON post_visit_sessions(patient_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_doctor_id ON post_visit_sessions(doctor_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_status ON post_visit_sessions(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_started_at ON post_visit_sessions(started_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_segments_session ON post_visit_transcript_segments(session_id, segment_order)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_extracted_entities_session ON post_visit_extracted_entities(session_id, entity_type)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_draft_artifacts_session ON post_visit_draft_artifacts(session_id, artifact_type)`,
+      `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+      `DROP TRIGGER IF EXISTS update_post_visit_sessions_updated_at ON post_visit_sessions`,
+      `CREATE TRIGGER update_post_visit_sessions_updated_at
+        BEFORE UPDATE ON post_visit_sessions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_transcript_segments_updated_at ON post_visit_transcript_segments`,
+      `CREATE TRIGGER update_post_visit_transcript_segments_updated_at
+        BEFORE UPDATE ON post_visit_transcript_segments
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_extracted_entities_updated_at ON post_visit_extracted_entities`,
+      `CREATE TRIGGER update_post_visit_extracted_entities_updated_at
+        BEFORE UPDATE ON post_visit_extracted_entities
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_draft_artifacts_updated_at ON post_visit_draft_artifacts`,
+      `CREATE TRIGGER update_post_visit_draft_artifacts_updated_at
+        BEFORE UPDATE ON post_visit_draft_artifacts
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint49PostVisitReviewCitationSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_review_actions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        artifact_id UUID REFERENCES post_visit_draft_artifacts(id) ON DELETE SET NULL,
+        artifact_type VARCHAR(50) NOT NULL,
+        action VARCHAR(20) NOT NULL CHECK (action IN ('accept','edit','reject')),
+        review_reason TEXT,
+        review_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        before_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        after_content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_review',
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_rule_citations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        artifact_type VARCHAR(50) NOT NULL DEFAULT 'recommendation_bundle',
+        recommendation_id VARCHAR(120),
+        rule_id VARCHAR(120) NOT NULL,
+        guideline_id VARCHAR(120) NOT NULL,
+        citation_label VARCHAR(255) NOT NULL,
+        citation_source VARCHAR(255) NOT NULL,
+        citation_url TEXT,
+        evidence_excerpt TEXT,
+        confidence DOUBLE PRECISION,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_session ON post_visit_review_actions(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_artifact ON post_visit_review_actions(artifact_type, action)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_session ON post_visit_rule_citations(session_id, rule_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_rule_citations_guideline ON post_visit_rule_citations(guideline_id)`,
+      `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+      `DROP TRIGGER IF EXISTS update_post_visit_review_actions_updated_at ON post_visit_review_actions`,
+      `CREATE TRIGGER update_post_visit_review_actions_updated_at
+        BEFORE UPDATE ON post_visit_review_actions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_rule_citations_updated_at ON post_visit_rule_citations`,
+      `CREATE TRIGGER update_post_visit_rule_citations_updated_at
+        BEFORE UPDATE ON post_visit_rule_citations
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint50PostVisitExecutionActionSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_action_executions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        recommendation_id VARCHAR(120) NOT NULL,
+        action_key VARCHAR(160) NOT NULL,
+        action_type VARCHAR(60) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'executed' CHECK (status IN ('executed','failed','skipped')),
+        execution_note TEXT,
+        result_resource_type VARCHAR(80),
+        result_resource_id VARCHAR(120),
+        result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        error_message TEXT,
+        executed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        source VARCHAR(80) NOT NULL DEFAULT 'post_visit_execute',
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, recommendation_id, action_key)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_session ON post_visit_action_executions(session_id, recommendation_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_action_executions_status ON post_visit_action_executions(status, executed_at DESC)`,
+      `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+      `DROP TRIGGER IF EXISTS update_post_visit_action_executions_updated_at ON post_visit_action_executions`,
+      `CREATE TRIGGER update_post_visit_action_executions_updated_at
+        BEFORE UPDATE ON post_visit_action_executions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+    ];
+  }
+
+  private getSprint51PostVisitCompanionEscalationSchemaStatements(): string[] {
+    return [
+      `CREATE EXTENSION IF NOT EXISTS pgcrypto`,
+      `CREATE TABLE IF NOT EXISTS post_visit_companion_threads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        status VARCHAR(20) NOT NULL DEFAULT 'active'
+          CHECK (status IN ('active','closed')),
+        message_count INTEGER NOT NULL DEFAULT 0,
+        last_message_at TIMESTAMP WITH TIME ZONE,
+        last_patient_message_at TIMESTAMP WITH TIME ZONE,
+        last_clinician_message_at TIMESTAMP WITH TIME ZONE,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, patient_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_companion_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        thread_id UUID NOT NULL REFERENCES post_visit_companion_threads(id) ON DELETE CASCADE,
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        sender_type VARCHAR(20) NOT NULL
+          CHECK (sender_type IN ('patient','clinician','system')),
+        sender_id UUID,
+        message_type VARCHAR(30) NOT NULL DEFAULT 'question'
+          CHECK (message_type IN ('question','answer','summary','checklist','alert','system')),
+        message_text TEXT NOT NULL,
+        grounded_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+        escalation_detected BOOLEAN NOT NULL DEFAULT FALSE,
+        escalation_event_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_escalation_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        thread_id UUID REFERENCES post_visit_companion_threads(id) ON DELETE SET NULL,
+        message_id UUID REFERENCES post_visit_companion_messages(id) ON DELETE SET NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'open'
+          CHECK (status IN ('open','acknowledged','resolved','dismissed')),
+        severity VARCHAR(20) NOT NULL
+          CHECK (severity IN ('low','moderate','high','critical')),
+        route_target VARCHAR(20) NOT NULL
+          CHECK (route_target IN ('emergency','doctor','nurse')),
+        trigger_type VARCHAR(50) NOT NULL DEFAULT 'symptom_keyword',
+        trigger_terms JSONB NOT NULL DEFAULT '[]'::jsonb,
+        signal_text TEXT,
+        detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        sla_due_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_at TIMESTAMP WITH TIME ZONE,
+        acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        resolution_note TEXT,
+        workflow_key VARCHAR(160),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE TABLE IF NOT EXISTS post_visit_companion_acknowledgements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES post_visit_sessions(id) ON DELETE CASCADE,
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        acknowledgement_type VARCHAR(60) NOT NULL
+          CHECK (acknowledgement_type IN ('teach_back','medication_adherence','follow_up_commitment','warning_sign_understanding')),
+        acknowledged BOOLEAN NOT NULL DEFAULT TRUE,
+        details JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_session ON post_visit_companion_threads(session_id, status)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_threads_patient ON post_visit_companion_threads(patient_id, last_message_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_session ON post_visit_companion_messages(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_thread ON post_visit_companion_messages(thread_id, created_at ASC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_patient ON post_visit_companion_messages(patient_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_messages_escalation ON post_visit_companion_messages(escalation_detected, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_session ON post_visit_escalation_events(session_id, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_status ON post_visit_escalation_events(status, severity, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient ON post_visit_escalation_events(patient_id, detected_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`,
+      `CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = NOW();
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';`,
+      `DROP TRIGGER IF EXISTS update_post_visit_companion_threads_updated_at ON post_visit_companion_threads`,
+      `CREATE TRIGGER update_post_visit_companion_threads_updated_at
+        BEFORE UPDATE ON post_visit_companion_threads
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_companion_messages_updated_at ON post_visit_companion_messages`,
+      `CREATE TRIGGER update_post_visit_companion_messages_updated_at
+        BEFORE UPDATE ON post_visit_companion_messages
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_escalation_events_updated_at ON post_visit_escalation_events`,
+      `CREATE TRIGGER update_post_visit_escalation_events_updated_at
+        BEFORE UPDATE ON post_visit_escalation_events
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column()`,
+      `DROP TRIGGER IF EXISTS update_post_visit_companion_acknowledgements_updated_at ON post_visit_companion_acknowledgements`,
+      `CREATE TRIGGER update_post_visit_companion_acknowledgements_updated_at
+        BEFORE UPDATE ON post_visit_companion_acknowledgements
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column()`,
     ];

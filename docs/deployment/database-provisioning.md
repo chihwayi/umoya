@@ -162,6 +162,65 @@ POST /tenants/provision-database/:tenantId/:bundleId
 - **Provisioning (new tenants)**:
   - Applied automatically through `DatabaseProvisioningService` bundle list.
 
+### Post-Visit AI Companion Core Bundle (Sprint 48)
+- **Bundle ID**: `sprint48_post_visit_companion`
+- **Script**: `scripts/provision-sprint48-post-visit.ts`
+- **Migration**: `database/migrations/035-post-visit-ai-companion-core.sql`
+- **Tables**:
+  - `post_visit_sessions`
+  - `post_visit_transcript_segments`
+  - `post_visit_extracted_entities`
+  - `post_visit_draft_artifacts`
+- **Provisioning (existing tenants)**:
+  ```bash
+  npx ts-node scripts/provision-sprint48-post-visit.ts
+  ```
+- **Provisioning (new tenants)**:
+  - Applied automatically through `DatabaseProvisioningService` bundle list.
+
+### Post-Visit Review and Rule Citation Bundle (Sprint 49)
+- **Bundle ID**: `sprint49_post_visit_review_citations`
+- **Script**: `scripts/provision-sprint49-post-visit-review-citations.ts`
+- **Migration**: `database/migrations/036-post-visit-ai-companion-review-citations.sql`
+- **Tables**:
+  - `post_visit_review_actions`
+  - `post_visit_rule_citations`
+- **Provisioning (existing tenants)**:
+  ```bash
+  npx ts-node scripts/provision-sprint49-post-visit-review-citations.ts
+  ```
+- **Provisioning (new tenants)**:
+  - Applied automatically through `DatabaseProvisioningService` bundle list.
+
+### Post-Visit Execution Actions Bundle (Sprint 50)
+- **Bundle ID**: `sprint50_post_visit_execution_actions`
+- **Script**: `scripts/provision-sprint50-post-visit-execution-actions.ts`
+- **Migration**: `database/migrations/037-post-visit-ai-companion-execution-actions.sql`
+- **Tables**:
+  - `post_visit_action_executions`
+- **Provisioning (existing tenants)**:
+  ```bash
+  npx ts-node scripts/provision-sprint50-post-visit-execution-actions.ts
+  ```
+- **Provisioning (new tenants)**:
+  - Applied automatically through `DatabaseProvisioningService` bundle list.
+
+### Post-Visit Patient Companion + Escalation Bundle (Sprint 51)
+- **Bundle ID**: `sprint51_post_visit_patient_companion_escalations`
+- **Script**: `scripts/provision-sprint51-post-visit-patient-companion-escalations.ts`
+- **Migration**: `database/migrations/038-post-visit-ai-companion-patient-messaging-escalations.sql`
+- **Tables**:
+  - `post_visit_companion_threads`
+  - `post_visit_companion_messages`
+  - `post_visit_escalation_events`
+  - `post_visit_companion_acknowledgements`
+- **Provisioning (existing tenants)**:
+  ```bash
+  npx ts-node scripts/provision-sprint51-post-visit-patient-companion-escalations.ts
+  ```
+- **Provisioning (new tenants)**:
+  - Applied automatically through `DatabaseProvisioningService` bundle list.
+
 ## Schema Versioning
 
 ### Version Tracking

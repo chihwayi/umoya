@@ -60,6 +60,7 @@ import DoctorAvailabilityManager from '../components/DoctorAvailabilityManager';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import VoiceConsultationPanel from '../components/VoiceConsultation/VoiceConsultationPanel';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
+import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 
 interface Appointment {
   id: string;
@@ -2383,6 +2384,17 @@ const DoctorDashboard: React.FC = () => {
                   onUpdateWorkflowStatus={handleDoctorUpdateWorkflowStatus}
                   onExecuteRecommendationAction={handleDoctorExecuteRecommendationAction}
                 />
+
+                {tenantSlug && localStorage.getItem('ehr_token') && (
+                  <div className="mt-5">
+                    <PostVisitEscalationQueue
+                      tenantSlug={tenantSlug}
+                      token={localStorage.getItem('ehr_token') || ''}
+                      defaultRouteTarget="doctor"
+                      compact
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Quick Actions */}

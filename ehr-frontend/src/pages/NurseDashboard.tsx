@@ -36,6 +36,7 @@ import SharedDocumentsList from '../components/SharedDocumentsList';
 import PatientCarePlansView from '../components/PatientCarePlansView';
 import LabResultsViewer from '../components/LabResultsViewer';
 import NurseCrossModuleEscalations, { NurseCrossModuleFeedItem } from '../components/NurseCrossModuleEscalations';
+import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
 import { GuidelineResult } from '../types/guidelines';
 
 interface Patient {
@@ -3231,19 +3232,29 @@ const NurseDashboard: React.FC = () => {
         )}
 
         {activeTab === 'cross-module' && (
-          <NurseCrossModuleEscalations
-            items={crossModuleItems}
-            summary={crossModuleSummary}
-            loading={crossModuleLoading}
-            acknowledgingTaskId={acknowledgingCrossModuleTaskId}
-            workflowActionItemId={updatingCrossModuleWorkflowItemId}
-            recommendationActionKey={executingRecommendationActionKey}
-            onRefresh={loadCrossModuleFeed}
-            onOpenWorkflow={handleOpenCrossModuleWorkflow}
-            onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
-            onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
-            onExecuteRecommendationAction={handleExecuteRecommendationAction}
-          />
+          <div className="space-y-6">
+            <NurseCrossModuleEscalations
+              items={crossModuleItems}
+              summary={crossModuleSummary}
+              loading={crossModuleLoading}
+              acknowledgingTaskId={acknowledgingCrossModuleTaskId}
+              workflowActionItemId={updatingCrossModuleWorkflowItemId}
+              recommendationActionKey={executingRecommendationActionKey}
+              onRefresh={loadCrossModuleFeed}
+              onOpenWorkflow={handleOpenCrossModuleWorkflow}
+              onAcknowledgeMaternityTask={handleAcknowledgeCrossModuleMaternityTask}
+              onUpdateWorkflowStatus={handleUpdateCrossModuleWorkflowStatus}
+              onExecuteRecommendationAction={handleExecuteRecommendationAction}
+            />
+            {tenantSlug && localStorage.getItem('ehr_token') && (
+              <PostVisitEscalationQueue
+                tenantSlug={tenantSlug}
+                token={localStorage.getItem('ehr_token') || ''}
+                defaultRouteTarget="nurse"
+                compact
+              />
+            )}
+          </div>
         )}
 
         {activeTab === 'copilot-metrics' && (

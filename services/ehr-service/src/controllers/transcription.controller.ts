@@ -20,6 +20,7 @@ import { TranscriptionService } from '../services/transcription.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { UploadSecurityService } from '../services/upload-security.service';
+import { PostVisitService } from '../services/post-visit.service';
 
 @ApiTags('Transcription')
 @ApiSecurity('tenant-key')
@@ -30,6 +31,7 @@ export class TranscriptionController {
   constructor(
     private transcriptionService: TranscriptionService,
     private readonly uploadSecurityService: UploadSecurityService,
+    private readonly postVisitService: PostVisitService,
   ) {}
 
   @Post('whisper')
@@ -61,6 +63,11 @@ export class TranscriptionController {
         prompt: {
           type: 'string',
           description: 'Optional prompt to guide the transcription',
+        },
+        postVisitSessionId: {
+          type: 'string',
+          format: 'uuid',
+          description: 'Optional post-visit session ID to persist transcript and extracted entities',
         },
       },
     },
@@ -119,7 +126,7 @@ export class TranscriptionController {
   }))
   async transcribeWithWhisper(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { language?: string; temperature?: string; prompt?: string },
+    @Body() body: { language?: string; temperature?: string; prompt?: string; postVisitSessionId?: string },
     @Request() req: RequestWithTenant,
   ) {
     if (!file) {
@@ -142,6 +149,21 @@ export class TranscriptionController {
       // Format the transcription
       const formattedText = this.transcriptionService.formatTranscription(result.text);
 
+      let persistedPostVisitSession: any = null;
+      if (body.postVisitSessionId) {
+        const user = req.user as any;
+        persistedPostVisitSession = await this.postVisitService.ingestTranscriptionResult(
+          req.tenantDb,
+          body.postVisitSessionId,
+          result,
+          {
+            tenantId: req.tenantId,
+            actorUserId: user?.id || user?.userId || user?.sub || null,
+            source: 'transcription_controller_whisper',
+          },
+        );
+      }
+
       return {
         transcription: {
           text: formattedText,
@@ -157,6 +179,7 @@ export class TranscriptionController {
         language: result.language,
         segments: result.segments,
         confidence: result.confidence,
+        postVisitSession: persistedPostVisitSession,
       };
     } catch (error: any) {
       throw new HttpException(

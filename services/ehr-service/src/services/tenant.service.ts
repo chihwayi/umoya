@@ -105,6 +105,17 @@ import { NurseHandoffWorkflowState } from '../entities/nurse-handoff-workflow-st
 import { NurseCrossModuleWorkflowState } from '../entities/nurse-cross-module-workflow-state.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { PaymentGatewayConfig } from '../entities/payment-gateway-config.entity';
+import { PostVisitSession } from '../entities/post-visit-session.entity';
+import { PostVisitTranscriptSegment } from '../entities/post-visit-transcript-segment.entity';
+import { PostVisitExtractedEntity } from '../entities/post-visit-extracted-entity.entity';
+import { PostVisitDraftArtifact } from '../entities/post-visit-draft-artifact.entity';
+import { PostVisitReviewAction } from '../entities/post-visit-review-action.entity';
+import { PostVisitRuleCitation } from '../entities/post-visit-rule-citation.entity';
+import { PostVisitActionExecution } from '../entities/post-visit-action-execution.entity';
+import { PostVisitCompanionThread } from '../entities/post-visit-companion-thread.entity';
+import { PostVisitCompanionMessage } from '../entities/post-visit-companion-message.entity';
+import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
+import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 @Injectable()
@@ -299,6 +310,17 @@ export class TenantService {
         NurseCrossModuleWorkflowState,
         SmsGatewayConfig,
         PaymentGatewayConfig,
+        PostVisitSession,
+        PostVisitTranscriptSegment,
+        PostVisitExtractedEntity,
+        PostVisitDraftArtifact,
+        PostVisitReviewAction,
+        PostVisitRuleCitation,
+        PostVisitActionExecution,
+        PostVisitCompanionThread,
+        PostVisitCompanionMessage,
+        PostVisitEscalationEvent,
+        PostVisitCompanionAcknowledgement,
       ],
       logging: false,
     });
