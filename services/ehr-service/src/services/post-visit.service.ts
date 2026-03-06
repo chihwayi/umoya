@@ -91,6 +91,16 @@ interface EscalationDetectionResult {
   slaMinutes: number;
 }
 
+interface PostVisitMobileEvent {
+  id: string;
+  eventType: string;
+  occurredAt: string | null;
+  actorType: 'system' | 'clinician' | 'patient';
+  actorId: string | null;
+  severity: 'low' | 'moderate' | 'high' | 'critical' | null;
+  payload: Record<string, any>;
+}
+
 @Injectable()
 export class PostVisitService {
   constructor(
@@ -1794,6 +1804,656 @@ export class PostVisitService {
     };
   }
 
+  async getSessionFhirProjection(
+    tenantDb: DataSource,
+    sessionId: string,
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    const [summaryArtifact, recommendationArtifact, actionExecutionRows, citationRows, patientRows, doctorRows, acknowledgementRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      tenantDb.query(
+        `
+          SELECT recommendation_id, action_type, status, result_resource_type, result_resource_id, result_payload, executed_by, executed_at
+          FROM post_visit_action_executions
+          WHERE session_id = $1
+          ORDER BY executed_at DESC
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT recommendation_id, rule_id, guideline_id, citation_label, citation_source, citation_url, confidence
+          FROM post_visit_rule_citations
+          WHERE session_id = $1
+          ORDER BY created_at ASC
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT id, first_name, last_name, patient_number
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [sessionRow.patient_id],
+      ),
+      sessionRow.doctor_id
+        ? tenantDb.query(
+            `
+              SELECT id, first_name, last_name
+              FROM users
+              WHERE id = $1
+              LIMIT 1
+            `,
+            [sessionRow.doctor_id],
+          )
+        : Promise.resolve([]),
+      tenantDb.query(
+        `
+          SELECT acknowledgement_type, acknowledged, details, created_at
+          FROM post_visit_companion_acknowledgements
+          WHERE session_id = $1
+          ORDER BY created_at ASC
+        `,
+        [sessionId],
+      ),
+    ]);
+
+    const patientRow = patientRows?.[0] || null;
+    const doctorRow = doctorRows?.[0] || null;
+    const recommendationItems = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+      : [];
+    const executionByRecommendation = new Map<string, any>(
+      actionExecutionRows.map((row: any) => [String(row.recommendation_id || ''), row]),
+    );
+    const citationsByRecommendation = new Map<string, Array<any>>();
+    for (const row of citationRows) {
+      const recommendationId = String(row.recommendation_id || '');
+      if (!citationsByRecommendation.has(recommendationId)) {
+        citationsByRecommendation.set(recommendationId, []);
+      }
+      citationsByRecommendation.get(recommendationId)?.push(row);
+    }
+
+    const bundleTimestamp = this.toIsoDate(new Date());
+    const encounterId = `post-visit-${sessionId}`;
+    const patientReference = `Patient/${sessionRow.patient_id}`;
+    const practitionerReference = sessionRow.doctor_id ? `Practitioner/${sessionRow.doctor_id}` : null;
+
+    const encounterResource = {
+      resourceType: 'Encounter',
+      id: encounterId,
+      status: sessionRow.status === 'published' || sessionRow.status === 'closed' ? 'finished' : 'in-progress',
+      class: {
+        system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
+        code: sessionRow.source_type === 'telemedicine' ? 'VR' : 'AMB',
+        display: sessionRow.source_type === 'telemedicine' ? 'virtual' : 'ambulatory',
+      },
+      subject: {
+        reference: patientReference,
+        display: this.buildPatientDisplay(patientRow),
+      },
+      participant: practitionerReference
+        ? [{ individual: { reference: practitionerReference, display: this.buildUserDisplay(doctorRow) } }]
+        : [],
+      period: {
+        start: this.toIsoDate(sessionRow.started_at || sessionRow.created_at),
+        end: this.toIsoDate(sessionRow.completed_at || sessionRow.updated_at),
+      },
+      meta: {
+        profile: ['https://medicore.health/fhir/StructureDefinition/post-visit-encounter'],
+        tag: [{ system: 'https://medicore.health/fhir/tags', code: 'post-visit' }],
+      },
+    };
+
+    const documentReferenceResource = {
+      resourceType: 'DocumentReference',
+      id: `post-visit-summary-${sessionId}`,
+      status: String(summaryArtifact?.artifact_status || '').toLowerCase() === 'published' ? 'current' : 'preliminary',
+      type: {
+        coding: [
+          {
+            system: 'http://loinc.org',
+            code: '11506-3',
+            display: 'Progress note',
+          },
+        ],
+      },
+      subject: { reference: patientReference },
+      context: {
+        encounter: [{ reference: `Encounter/${encounterId}` }],
+      },
+      date: this.toIsoDate(summaryArtifact?.updated_at || summaryArtifact?.created_at || sessionRow.updated_at),
+      author: practitionerReference ? [{ reference: practitionerReference, display: this.buildUserDisplay(doctorRow) }] : [],
+      description: summaryArtifact?.content?.plain_language_summary || 'Post-visit summary',
+      content: [
+        {
+          attachment: {
+            contentType: 'application/json',
+            title: 'Post-visit summary',
+            data: Buffer.from(JSON.stringify(summaryArtifact?.content || {}), 'utf8').toString('base64'),
+          },
+        },
+      ],
+    };
+
+    const taskResources = recommendationItems.map((item: any, index: number) => {
+      const recommendationId = String(item?.id || item?.recommendation_id || `rec-${index + 1}`);
+      const execution = executionByRecommendation.get(recommendationId);
+      const citations = citationsByRecommendation.get(recommendationId) || [];
+      return {
+        resourceType: 'Task',
+        id: `post-visit-task-${this.safeToken(recommendationId)}`,
+        status: execution?.status === 'executed' ? 'completed' : execution?.status === 'failed' ? 'failed' : 'requested',
+        intent: 'order',
+        for: {
+          reference: patientReference,
+        },
+        encounter: {
+          reference: `Encounter/${encounterId}`,
+        },
+        description: item?.title || item?.description || recommendationId,
+        authoredOn: this.toIsoDate(sessionRow.reviewed_at || sessionRow.updated_at),
+        executionPeriod: execution?.executed_at
+          ? {
+              start: this.toIsoDate(execution.executed_at),
+              end: this.toIsoDate(execution.executed_at),
+            }
+          : undefined,
+        input: [
+          {
+            type: { text: 'recommendation_id' },
+            valueString: recommendationId,
+          },
+          {
+            type: { text: 'action_type' },
+            valueString: String(item?.action_type || 'follow_up'),
+          },
+          {
+            type: { text: 'urgency' },
+            valueString: String(item?.urgency || 'routine'),
+          },
+          {
+            type: { text: 'citations' },
+            valueString: citations
+              .map((citation: any) => `${citation.citation_label} (${citation.guideline_id})`)
+              .join('; '),
+          },
+        ],
+      };
+    });
+
+    const serviceRequestResources = actionExecutionRows
+      .filter((row: any) => String(row.status || '').toLowerCase() === 'executed')
+      .map((row: any) => ({
+        resourceType: 'ServiceRequest',
+        id: `post-visit-servicerequest-${this.safeToken(row.recommendation_id || row.result_resource_id || row.executed_at)}`,
+        status: 'active',
+        intent: 'order',
+        subject: { reference: patientReference },
+        encounter: { reference: `Encounter/${encounterId}` },
+        authoredOn: this.toIsoDate(row.executed_at),
+        requester: practitionerReference ? { reference: practitionerReference, display: this.buildUserDisplay(doctorRow) } : undefined,
+        code: {
+          text: String(row.recommendation_id || row.action_type || 'post_visit_recommendation'),
+        },
+        note: [
+          {
+            text: `Executed via post-visit recommendation (${String(row.action_type || 'follow_up')})`,
+          },
+        ],
+      }));
+
+    const carePlanResource = {
+      resourceType: 'CarePlan',
+      id: `post-visit-careplan-${sessionId}`,
+      status: sessionRow.status === 'published' || sessionRow.status === 'closed' ? 'active' : 'draft',
+      intent: 'plan',
+      subject: { reference: patientReference },
+      encounter: { reference: `Encounter/${encounterId}` },
+      created: this.toIsoDate(sessionRow.updated_at),
+      title: 'Post-visit recommendation bundle',
+      description: summaryArtifact?.content?.plain_language_summary || 'Doctor-reviewed post-visit care plan',
+      activity: taskResources.map((task: any) => ({
+        reference: {
+          reference: `Task/${task.id}`,
+          display: task.description,
+        },
+      })),
+    };
+
+    const communicationResource = {
+      resourceType: 'Communication',
+      id: `post-visit-communication-${sessionId}`,
+      status: sessionRow.status === 'published' || sessionRow.status === 'closed' ? 'completed' : 'in-progress',
+      subject: { reference: patientReference },
+      encounter: { reference: `Encounter/${encounterId}` },
+      sent: this.toIsoDate(sessionRow.published_at || sessionRow.updated_at),
+      payload: [
+        {
+          contentString: summaryArtifact?.content?.plain_language_summary || 'Post-visit summary generated',
+        },
+      ],
+    };
+
+    const questionnaireResponseResource = {
+      resourceType: 'QuestionnaireResponse',
+      id: `post-visit-questionnaire-${sessionId}`,
+      status: acknowledgementRows.length > 0 ? 'completed' : 'in-progress',
+      subject: { reference: patientReference },
+      authored: this.toIsoDate(acknowledgementRows[acknowledgementRows.length - 1]?.created_at || sessionRow.updated_at),
+      item: acknowledgementRows.map((row: any) => ({
+        linkId: row.acknowledgement_type,
+        text: row.acknowledgement_type,
+        answer: [
+          {
+            valueBoolean: row.acknowledged !== false,
+          },
+          {
+            valueString: JSON.stringify(row.details || {}),
+          },
+        ],
+      })),
+    };
+
+    const provenanceTargetReferences = [
+      `Encounter/${encounterResource.id}`,
+      `CarePlan/${carePlanResource.id}`,
+      `DocumentReference/${documentReferenceResource.id}`,
+      `Communication/${communicationResource.id}`,
+      `QuestionnaireResponse/${questionnaireResponseResource.id}`,
+      ...taskResources.map((task: any) => `Task/${task.id}`),
+      ...serviceRequestResources.map((resource: any) => `ServiceRequest/${resource.id}`),
+    ];
+
+    const provenanceResource = {
+      resourceType: 'Provenance',
+      id: `post-visit-provenance-${sessionId}`,
+      recorded: bundleTimestamp,
+      target: provenanceTargetReferences.map((reference) => ({ reference })),
+      activity: {
+        coding: [
+          {
+            system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation',
+            code: 'CREATE',
+            display: 'create',
+          },
+        ],
+      },
+      agent: practitionerReference
+        ? [
+            {
+              type: { text: 'author' },
+              who: {
+                reference: practitionerReference,
+                display: this.buildUserDisplay(doctorRow),
+              },
+            },
+          ]
+        : [],
+      entity: [
+        {
+          role: 'source',
+          what: {
+            reference: `PostVisitSession/${sessionId}`,
+            display: 'Doctor-reviewed post-visit session',
+          },
+        },
+      ],
+    };
+
+    const resources = [
+      encounterResource,
+      carePlanResource,
+      communicationResource,
+      documentReferenceResource,
+      questionnaireResponseResource,
+      ...taskResources,
+      ...serviceRequestResources,
+      provenanceResource,
+    ];
+
+    return {
+      sessionId,
+      exportVersion: 'post-visit-fhir-r4.v1',
+      generatedAt: bundleTimestamp,
+      bundle: {
+        resourceType: 'Bundle',
+        type: 'collection',
+        id: `post-visit-fhir-${sessionId}`,
+        timestamp: bundleTimestamp,
+        entry: resources.map((resource) => ({
+          fullUrl: `urn:uuid:${resource.id}`,
+          resource,
+        })),
+      },
+      stats: {
+        resourceCount: resources.length,
+        recommendationTaskCount: taskResources.length,
+        executedServiceRequestCount: serviceRequestResources.length,
+        acknowledgementCount: acknowledgementRows.length,
+      },
+    };
+  }
+
+  async getSessionMobileContract(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { version?: string } = {},
+  ) {
+    const version = String(options.version || 'v1').trim().toLowerCase();
+    if (!['v1', '1'].includes(version)) {
+      throw new BadRequestException(`Unsupported post-visit mobile contract version "${options.version}"`);
+    }
+
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+
+    const [summaryArtifact, recommendationArtifact, actionExecutionRows, escalationSummaryRows] = await Promise.all([
+      this.getArtifactRow(tenantDb, sessionId, 'visit_summary'),
+      this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle'),
+      tenantDb.query(
+        `
+          SELECT recommendation_id, status, action_type, executed_at
+          FROM post_visit_action_executions
+          WHERE session_id = $1
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE status IN ('open','acknowledged'))::int AS active_count,
+            COUNT(*) FILTER (WHERE severity IN ('high','critical') AND status IN ('open','acknowledged'))::int AS high_priority_active_count
+          FROM post_visit_escalation_events
+          WHERE session_id = $1
+        `,
+        [sessionId],
+      ),
+    ]);
+
+    const recommendationItems = Array.isArray(recommendationArtifact?.content?.items)
+      ? recommendationArtifact.content.items
+      : [];
+    const executionByRecommendation = new Map<string, any>(
+      actionExecutionRows.map((row: any) => [String(row.recommendation_id || ''), row]),
+    );
+    const checklist = recommendationItems.map((item: any, index: number) => {
+      const recommendationId = String(item?.id || item?.recommendation_id || `rec-${index + 1}`);
+      const execution = executionByRecommendation.get(recommendationId);
+      const status = execution
+        ? String(execution.status || '').toLowerCase() === 'executed'
+          ? 'completed'
+          : String(execution.status || '').toLowerCase() === 'failed'
+            ? 'blocked'
+            : 'in_progress'
+        : 'pending';
+      return {
+        id: recommendationId,
+        title: item?.title || recommendationId,
+        description: item?.description || '',
+        urgency: String(item?.urgency || 'routine'),
+        actionType: String(item?.action_type || 'follow_up'),
+        status,
+        executedAt: this.toIsoDate(execution?.executed_at || null),
+      };
+    });
+
+    const completedChecklistCount = checklist.filter((item) => item.status === 'completed').length;
+    const escalationSummary = escalationSummaryRows?.[0] || { total: 0, active_count: 0, high_priority_active_count: 0 };
+
+    const cards = [
+      {
+        id: 'post_visit_summary',
+        type: 'summary',
+        status: String(summaryArtifact?.artifact_status || '').toLowerCase() === 'published' ? 'published' : 'draft',
+        title: 'Visit summary',
+        body: summaryArtifact?.content?.plain_language_summary || 'Summary pending doctor approval.',
+        metadata: {
+          keyPoints: Array.isArray(summaryArtifact?.content?.key_points) ? summaryArtifact.content.key_points : [],
+        },
+      },
+      {
+        id: 'post_visit_checklist',
+        type: 'checklist',
+        status: checklist.length === 0 ? 'empty' : completedChecklistCount === checklist.length ? 'completed' : 'in_progress',
+        title: 'Follow-up checklist',
+        body: `${completedChecklistCount}/${checklist.length} items complete`,
+        metadata: {
+          totalItems: checklist.length,
+          completedItems: completedChecklistCount,
+        },
+      },
+      {
+        id: 'post_visit_escalations',
+        type: 'escalation',
+        status: Number(escalationSummary.active_count || 0) > 0 ? 'attention' : 'clear',
+        title: 'Safety escalations',
+        body: `${Number(escalationSummary.active_count || 0)} active`,
+        metadata: {
+          total: Number(escalationSummary.total || 0),
+          active: Number(escalationSummary.active_count || 0),
+          highPriorityActive: Number(escalationSummary.high_priority_active_count || 0),
+        },
+      },
+    ];
+
+    return {
+      contractVersion: 'post-visit-mobile.v1',
+      generatedAt: this.toIsoDate(new Date()),
+      session: {
+        id: sessionRow.id,
+        status: sessionRow.status,
+        language: sessionRow.language || 'en',
+        sourceType: sessionRow.source_type || 'in_person',
+        publishedAt: this.toIsoDate(sessionRow.published_at),
+        reviewedAt: this.toIsoDate(sessionRow.reviewed_at),
+        updatedAt: this.toIsoDate(sessionRow.updated_at),
+      },
+      cards,
+      checklist,
+      actions: {
+        canPublish: ['doctor_reviewed'].includes(String(sessionRow.status || '').toLowerCase()),
+        canExecuteRecommendations: ['doctor_reviewed', 'published', 'closed'].includes(String(sessionRow.status || '').toLowerCase()),
+        canAccessCompanion: ['published', 'closed'].includes(String(sessionRow.status || '').toLowerCase()),
+      },
+      eventsContract: {
+        contractVersion: 'post-visit-mobile-events.v1',
+        endpoint: `/post-visit/sessions/${sessionId}/mobile-events?version=v1`,
+        supportedEventTypes: [
+          'post_visit.session.published',
+          'post_visit.review_action.recorded',
+          'post_visit.recommendation.executed',
+          'post_visit.recommendation.failed',
+          'post_visit.escalation.triggered',
+          'post_visit.escalation.resolved',
+          'post_visit.patient.acknowledged',
+        ],
+      },
+    };
+  }
+
+  async listSessionMobileEvents(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { version?: string; limit?: number; offset?: number } = {},
+  ) {
+    const version = String(options.version || 'v1').trim().toLowerCase();
+    if (!['v1', '1'].includes(version)) {
+      throw new BadRequestException(`Unsupported post-visit mobile events contract version "${options.version}"`);
+    }
+
+    await this.ensurePostVisitSchema(tenantDb);
+    const sessionRow = await this.getSessionRow(tenantDb, sessionId);
+    const limit = Math.min(Math.max(Number(options.limit || 50), 1), 200);
+    const offset = Math.max(Number(options.offset || 0), 0);
+
+    const [reviewRows, executionRows, escalationRows, acknowledgementRows] = await Promise.all([
+      tenantDb.query(
+        `
+          SELECT id, action, artifact_type, review_reason, reviewed_by, created_at
+          FROM post_visit_review_actions
+          WHERE session_id = $1
+          ORDER BY created_at DESC
+          LIMIT 400
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT id, recommendation_id, action_type, status, error_message, executed_by, executed_at
+          FROM post_visit_action_executions
+          WHERE session_id = $1
+          ORDER BY executed_at DESC
+          LIMIT 400
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT id, status, severity, route_target, trigger_type, trigger_terms, detected_at, resolved_at, resolved_by
+          FROM post_visit_escalation_events
+          WHERE session_id = $1
+          ORDER BY detected_at DESC
+          LIMIT 400
+        `,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `
+          SELECT id, acknowledgement_type, acknowledged, details, created_by, created_at
+          FROM post_visit_companion_acknowledgements
+          WHERE session_id = $1
+          ORDER BY created_at DESC
+          LIMIT 400
+        `,
+        [sessionId],
+      ),
+    ]);
+
+    const events: PostVisitMobileEvent[] = [];
+
+    if (sessionRow.published_at) {
+      events.push({
+        id: `publish:${sessionRow.id}`,
+        eventType: 'post_visit.session.published',
+        occurredAt: this.toIsoDate(sessionRow.published_at),
+        actorType: 'clinician',
+        actorId: sessionRow.reviewed_by || sessionRow.doctor_id || null,
+        severity: null,
+        payload: {
+          sessionStatus: sessionRow.status,
+        },
+      });
+    }
+
+    for (const row of reviewRows) {
+      events.push({
+        id: `review:${row.id}`,
+        eventType: 'post_visit.review_action.recorded',
+        occurredAt: this.toIsoDate(row.created_at),
+        actorType: 'clinician',
+        actorId: row.reviewed_by || null,
+        severity: null,
+        payload: {
+          action: row.action,
+          artifactType: row.artifact_type,
+          reason: row.review_reason || null,
+        },
+      });
+    }
+
+    for (const row of executionRows) {
+      const status = String(row.status || '').toLowerCase();
+      events.push({
+        id: `execution:${row.id}`,
+        eventType: status === 'failed' ? 'post_visit.recommendation.failed' : 'post_visit.recommendation.executed',
+        occurredAt: this.toIsoDate(row.executed_at),
+        actorType: 'clinician',
+        actorId: row.executed_by || null,
+        severity: status === 'failed' ? 'moderate' : null,
+        payload: {
+          recommendationId: row.recommendation_id,
+          actionType: row.action_type,
+          status,
+          errorMessage: row.error_message || null,
+        },
+      });
+    }
+
+    for (const row of escalationRows) {
+      events.push({
+        id: `escalation-open:${row.id}`,
+        eventType: 'post_visit.escalation.triggered',
+        occurredAt: this.toIsoDate(row.detected_at),
+        actorType: 'system',
+        actorId: null,
+        severity: row.severity || null,
+        payload: {
+          escalationId: row.id,
+          status: row.status,
+          routeTarget: row.route_target,
+          triggerType: row.trigger_type,
+          triggerTerms: row.trigger_terms || [],
+        },
+      });
+      if (row.resolved_at) {
+        events.push({
+          id: `escalation-resolve:${row.id}`,
+          eventType: 'post_visit.escalation.resolved',
+          occurredAt: this.toIsoDate(row.resolved_at),
+          actorType: 'clinician',
+          actorId: row.resolved_by || null,
+          severity: row.severity || null,
+          payload: {
+            escalationId: row.id,
+            routeTarget: row.route_target,
+          },
+        });
+      }
+    }
+
+    for (const row of acknowledgementRows) {
+      events.push({
+        id: `ack:${row.id}`,
+        eventType: 'post_visit.patient.acknowledged',
+        occurredAt: this.toIsoDate(row.created_at),
+        actorType: 'patient',
+        actorId: row.created_by || null,
+        severity: null,
+        payload: {
+          acknowledgementType: row.acknowledgement_type,
+          acknowledged: row.acknowledged !== false,
+          details: row.details || {},
+        },
+      });
+    }
+
+    events.sort((a, b) => {
+      const left = new Date(a.occurredAt || 0).getTime();
+      const right = new Date(b.occurredAt || 0).getTime();
+      return right - left;
+    });
+    const page = events.slice(offset, offset + limit);
+
+    return {
+      contractVersion: 'post-visit-mobile-events.v1',
+      sessionId,
+      events: page,
+      paging: {
+        limit,
+        offset,
+        total: events.length,
+      },
+    };
+  }
+
   async generateDraftArtifacts(
     tenantDb: DataSource,
     sessionId: string,
@@ -1963,6 +2623,37 @@ export class PostVisitService {
     );
 
     return this.getSessionDraft(tenantDb, sessionId);
+  }
+
+  private safeToken(value: any) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\-_.]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || 'value';
+  }
+
+  private toIsoDate(value: any) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
+  private buildPatientDisplay(patientRow: any) {
+    if (!patientRow) return null;
+    const fullName = `${String(patientRow.first_name || '').trim()} ${String(patientRow.last_name || '').trim()}`.trim();
+    if (fullName && patientRow.patient_number) {
+      return `${fullName} (${patientRow.patient_number})`;
+    }
+    return fullName || patientRow.patient_number || null;
+  }
+
+  private buildUserDisplay(userRow: any) {
+    if (!userRow) return null;
+    const fullName = `${String(userRow.first_name || '').trim()} ${String(userRow.last_name || '').trim()}`.trim();
+    return fullName || null;
   }
 
   async reviewDraftArtifact(

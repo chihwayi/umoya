@@ -9,6 +9,23 @@ Build a production-grade Post-Visit AI Companion that turns consultation audio i
 
 This plan extends current Medicore capabilities (voice transcription, CDSS, telemedicine, patient portal, cross-module queue), not a greenfield rewrite.
 
+## Execution Status Update (March 6, 2026)
+
+Sprint 5/6 implementation added:
+- Post-visit FHIR projection endpoint:
+  - `GET /post-visit/sessions/:id/fhir`
+- Versioned mobile contracts:
+  - `GET /post-visit/sessions/:id/mobile-contract?version=v1`
+  - `GET /post-visit/sessions/:id/mobile-events?version=v1`
+- Backend contract tests:
+  - `post-visit.controller.spec.ts` and `post-visit.service.spec.ts`
+- QA automation additions:
+  - `qa/tests/post-visit-fhir-mobile-contract-smoke.ts`
+  - `qa/tests/post-visit-end-to-end-journey-smoke.ts`
+- Sprint 6 release hardening artifacts:
+  - `docs/release/post-visit-ai-companion-release-checkpoint-2026-03-06.md`
+  - `docs/release/post-visit-ai-companion-cross-functional-signoff-2026-03-06.md`
+
 ## External Benchmark Snapshot (What We Verified)
 
 - `postvisit.ai` public app bundle exposes feature claims including:

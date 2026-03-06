@@ -80,6 +80,44 @@ export class PostVisitController {
     return this.postVisitService.getSessionDraft(req.tenantDb, id);
   }
 
+  @Get('sessions/:id/fhir')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get FHIR R4 projection bundle for a post-visit session' })
+  @ApiResponse({ status: 200, description: 'Post-visit FHIR projection generated' })
+  async getSessionFhirProjection(@Param('id') id: string, @Request() req: RequestWithTenant): Promise<any> {
+    return this.postVisitService.getSessionFhirProjection(req.tenantDb, id);
+  }
+
+  @Get('sessions/:id/mobile-contract')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get versioned mobile payload contract for post-visit session cards/checklist' })
+  @ApiResponse({ status: 200, description: 'Post-visit mobile contract generated' })
+  async getSessionMobileContract(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('version') version?: string,
+  ): Promise<any> {
+    return this.postVisitService.getSessionMobileContract(req.tenantDb, id, { version });
+  }
+
+  @Get('sessions/:id/mobile-events')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get versioned post-visit mobile event feed for push-sync consumers' })
+  @ApiResponse({ status: 200, description: 'Post-visit mobile event feed generated' })
+  async getSessionMobileEvents(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('version') version?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<any> {
+    return this.postVisitService.listSessionMobileEvents(req.tenantDb, id, {
+      version,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
   @Post('sessions/:id/draft/regenerate')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Regenerate structured post-visit draft artifacts from transcript + patient context' })

@@ -855,4 +855,277 @@ describe('PostVisitService', () => {
     expect(notificationsServiceMock.sendSms).toHaveBeenCalledTimes(2);
     expect(emailServiceMock.sendEmail).toHaveBeenCalledTimes(2);
   });
+
+  it('builds FHIR projection bundle from doctor-reviewed post-visit artifacts', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              doctor_id: 'doctor-1',
+              status: 'published',
+              source_type: 'in_person',
+              language: 'en',
+              started_at: '2026-03-06T10:00:00.000Z',
+              completed_at: '2026-03-06T10:20:00.000Z',
+              reviewed_at: '2026-03-06T10:21:00.000Z',
+              updated_at: '2026-03-06T10:25:00.000Z',
+              created_at: '2026-03-06T10:00:00.000Z',
+              published_at: '2026-03-06T10:30:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'visit_summary') {
+            return [
+              {
+                id: 'artifact-summary-1',
+                artifact_status: 'published',
+                content: {
+                  plain_language_summary: 'Blood pressure reviewed with follow-up plan.',
+                  key_points: ['Continue medication', 'Follow-up in one week'],
+                },
+                created_at: '2026-03-06T10:22:00.000Z',
+                updated_at: '2026-03-06T10:28:00.000Z',
+              },
+            ];
+          }
+          if (params[1] === 'recommendation_bundle') {
+            return [
+              {
+                id: 'artifact-rec-1',
+                artifact_status: 'published',
+                content: {
+                  items: [
+                    {
+                      id: 'repeat_bp_followup',
+                      title: 'Repeat blood pressure review',
+                      description: 'Schedule a one-week follow-up blood pressure review.',
+                      action_type: 'follow_up',
+                      urgency: 'urgent',
+                    },
+                  ],
+                },
+              },
+            ];
+          }
+        }
+        if (sql.includes('FROM post_visit_action_executions')) {
+          return [
+            {
+              recommendation_id: 'repeat_bp_followup',
+              action_type: 'follow_up',
+              status: 'executed',
+              result_resource_type: 'order',
+              result_resource_id: 'order-1',
+              result_payload: { id: 'order-1' },
+              executed_by: 'doctor-1',
+              executed_at: '2026-03-06T10:35:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_rule_citations')) {
+          return [
+            {
+              recommendation_id: 'repeat_bp_followup',
+              rule_id: 'hypertension.followup_interval',
+              guideline_id: 'who-htn-2025',
+              citation_label: 'WHO hypertension follow-up window',
+              citation_source: 'WHO',
+              citation_url: 'https://example.org/who-htn',
+              confidence: 0.93,
+            },
+          ];
+        }
+        if (sql.includes('FROM patients') && sql.includes('WHERE id = $1')) {
+          return [{ id: 'patient-1', first_name: 'Jane', last_name: 'Doe', patient_number: 'P-123' }];
+        }
+        if (sql.includes('FROM users') && sql.includes('WHERE id = $1')) {
+          return [{ id: 'doctor-1', first_name: 'Sam', last_name: 'Doctor' }];
+        }
+        if (sql.includes('FROM post_visit_companion_acknowledgements')) {
+          return [
+            {
+              acknowledgement_type: 'teach_back',
+              acknowledged: true,
+              details: { understood: true },
+              created_at: '2026-03-06T10:40:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getSessionFhirProjection(tenantDb, 'session-1');
+    expect(result.exportVersion).toBe('post-visit-fhir-r4.v1');
+    expect(result.bundle.resourceType).toBe('Bundle');
+    expect(result.stats.recommendationTaskCount).toBe(1);
+    expect(result.stats.executedServiceRequestCount).toBe(1);
+  });
+
+  it('builds versioned post-visit mobile contract payload', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'doctor_reviewed',
+              source_type: 'in_person',
+              language: 'en',
+              reviewed_at: '2026-03-06T11:00:00.000Z',
+              published_at: null,
+              updated_at: '2026-03-06T11:05:00.000Z',
+              created_at: '2026-03-06T10:00:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'visit_summary') {
+            return [
+              {
+                id: 'artifact-summary-1',
+                artifact_status: 'reviewed',
+                content: {
+                  plain_language_summary: 'Summary reviewed and ready.',
+                  key_points: ['Key point 1'],
+                },
+              },
+            ];
+          }
+          if (params[1] === 'recommendation_bundle') {
+            return [
+              {
+                id: 'artifact-rec-1',
+                content: {
+                  items: [
+                    {
+                      id: 'confirm_medication_plan',
+                      title: 'Confirm medication plan',
+                      description: 'Reinforce daily adherence.',
+                      action_type: 'medication',
+                      urgency: 'routine',
+                    },
+                  ],
+                },
+              },
+            ];
+          }
+        }
+        if (sql.includes('FROM post_visit_action_executions')) {
+          return [
+            {
+              recommendation_id: 'confirm_medication_plan',
+              status: 'executed',
+              action_type: 'medication',
+              executed_at: '2026-03-06T11:10:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_escalation_events')) {
+          return [{ total: 2, active_count: 1, high_priority_active_count: 1 }];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.getSessionMobileContract(tenantDb, 'session-1', { version: 'v1' });
+    expect(result.contractVersion).toBe('post-visit-mobile.v1');
+    expect(result.checklist).toHaveLength(1);
+    expect(result.cards.find((card: any) => card.id === 'post_visit_escalations')?.metadata?.active).toBe(1);
+  });
+
+  it('builds versioned mobile events feed with publish/execution/escalation events', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              doctor_id: 'doctor-1',
+              reviewed_by: 'doctor-1',
+              status: 'published',
+              source_type: 'in_person',
+              language: 'en',
+              published_at: '2026-03-06T12:00:00.000Z',
+              updated_at: '2026-03-06T12:05:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_review_actions')) {
+          return [
+            {
+              id: 'review-1',
+              action: 'accept',
+              artifact_type: 'visit_summary',
+              review_reason: 'Approved',
+              reviewed_by: 'doctor-1',
+              created_at: '2026-03-06T11:45:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_action_executions')) {
+          return [
+            {
+              id: 'exec-1',
+              recommendation_id: 'repeat_bp_followup',
+              action_type: 'follow_up',
+              status: 'executed',
+              error_message: null,
+              executed_by: 'doctor-1',
+              executed_at: '2026-03-06T12:10:00.000Z',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_escalation_events')) {
+          return [
+            {
+              id: 'esc-1',
+              status: 'resolved',
+              severity: 'high',
+              route_target: 'doctor',
+              trigger_type: 'symptom_keyword',
+              trigger_terms: ['chest pain'],
+              detected_at: '2026-03-06T12:20:00.000Z',
+              resolved_at: '2026-03-06T12:35:00.000Z',
+              resolved_by: 'doctor-1',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_companion_acknowledgements')) {
+          return [
+            {
+              id: 'ack-1',
+              acknowledgement_type: 'teach_back',
+              acknowledged: true,
+              details: { understood: true },
+              created_by: 'patient-1',
+              created_at: '2026-03-06T12:40:00.000Z',
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.listSessionMobileEvents(tenantDb, 'session-1', {
+      version: 'v1',
+      limit: 20,
+      offset: 0,
+    });
+
+    expect(result.contractVersion).toBe('post-visit-mobile-events.v1');
+    expect(result.events.some((event: any) => event.eventType === 'post_visit.session.published')).toBe(true);
+    expect(result.events.some((event: any) => event.eventType === 'post_visit.recommendation.executed')).toBe(true);
+    expect(result.events.some((event: any) => event.eventType === 'post_visit.escalation.resolved')).toBe(true);
+    expect(result.events.some((event: any) => event.eventType === 'post_visit.patient.acknowledged')).toBe(true);
+  });
 });

@@ -16,7 +16,9 @@ qa/
     ├── doctor-cross-module-sync-smoke.ts     ← smoke validator/executor for nurse→doctor bundle loop
     ├── post-visit-session-smoke.ts           ← validates post-visit session + draft endpoints
     ├── post-visit-doctor-signoff-and-execution-smoke.ts ← validates doctor signoff/publish/execution flow
-    └── post-visit-companion-escalation-smoke.ts ← validates patient companion escalation routing
+    ├── post-visit-companion-escalation-smoke.ts ← validates patient companion escalation routing
+    ├── post-visit-fhir-mobile-contract-smoke.ts ← validates post-visit FHIR + mobile v1 contracts
+    └── post-visit-end-to-end-journey-smoke.ts ← validates full doctor→patient→queue→resolve post-visit loop
 └── uat/
     ├── nurse-ai-cdss-uat-checklist.md             ← nurse AI/CDSS UAT execution checklist
     ├── doctor-cross-module-ai-cdss-uat-checklist.md ← doctor AI/CDSS UAT execution checklist
@@ -119,6 +121,43 @@ What it validates:
 - Escalation event creation and clinician queue visibility
 - Optional escalation resolution workflow
 
+### Running post-visit FHIR + mobile contract smoke check
+```
+npx ts-node qa/tests/post-visit-fhir-mobile-contract-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --token "$EHR_QA_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --version "v1" \
+  --evidence "qa/tests/test-results/post-visit-fhir-mobile-latest.json"
+```
+
+What it validates:
+- `GET /post-visit/sessions/:id/fhir` contract (`post-visit-fhir-r4.v1`)
+- `GET /post-visit/sessions/:id/mobile-contract?version=v1` payload contract
+- `GET /post-visit/sessions/:id/mobile-events?version=v1` event-feed contract
+
+### Running post-visit end-to-end journey smoke check
+```
+npx ts-node qa/tests/post-visit-end-to-end-journey-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --clinicianToken "$EHR_QA_TOKEN" \
+  --patientToken "$EHR_QA_PATIENT_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --publish \
+  --execute \
+  --resolve \
+  --evidence "qa/tests/test-results/post-visit-end-to-end-latest.json"
+```
+
+What it validates:
+- Doctor session/draft retrieval and optional publish
+- Recommendation execution from doctor post-visit bundle
+- Patient companion message with safety escalation trigger
+- Clinician queue visibility and optional escalation resolution
+- Sprint 5 contracts inside same flow (`/fhir`, `/mobile-contract`, `/mobile-events`)
+
 ### Oncology doctor protocol automation checks
 Key endpoints for oncology AI/CDSS protocol execution and doctor workflow analytics:
 - `GET /oncology/cases/:id/protocol-bundle` → returns executable oncology doctor protocol bundle
@@ -190,3 +229,5 @@ Frontend reuse points now wired:
 ### Release Signoff References
 - `docs/release/nurse-ai-cdss-release-checkpoint-2026-03-05.md`
 - `docs/release/nurse-ai-cdss-cross-functional-signoff-2026-03-05.md`
+- `docs/release/post-visit-ai-companion-release-checkpoint-2026-03-06.md`
+- `docs/release/post-visit-ai-companion-cross-functional-signoff-2026-03-06.md`

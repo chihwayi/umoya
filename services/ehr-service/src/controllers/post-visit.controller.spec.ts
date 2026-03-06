@@ -10,6 +10,9 @@ describe('PostVisitController', () => {
     createSession: jest.fn(),
     getSession: jest.fn(),
     getSessionDraft: jest.fn(),
+    getSessionFhirProjection: jest.fn(),
+    getSessionMobileContract: jest.fn(),
+    listSessionMobileEvents: jest.fn(),
     generateDraftArtifacts: jest.fn(),
     reviewDraftArtifact: jest.fn(),
     executeRecommendationAction: jest.fn(),
@@ -146,6 +149,72 @@ describe('PostVisitController', () => {
       sessionId: 'session-1',
       artifacts: [],
     });
+  });
+
+  it('returns FHIR projection bundle for post-visit session', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getSessionFhirProjection.mockResolvedValue({
+      sessionId: 'session-1',
+      exportVersion: 'post-visit-fhir-r4.v1',
+      bundle: { resourceType: 'Bundle', entry: [] },
+    });
+
+    const result = await controller.getSessionFhirProjection('session-1', req);
+    expect(postVisitServiceMock.getSessionFhirProjection).toHaveBeenCalledWith(req.tenantDb, 'session-1');
+    expect(result.exportVersion).toBe('post-visit-fhir-r4.v1');
+  });
+
+  it('returns versioned mobile contract payload', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getSessionMobileContract.mockResolvedValue({
+      contractVersion: 'post-visit-mobile.v1',
+      session: { id: 'session-1' },
+    });
+
+    const result = await controller.getSessionMobileContract('session-1', req, 'v1');
+    expect(postVisitServiceMock.getSessionMobileContract).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({ version: 'v1' }),
+    );
+    expect(result.contractVersion).toBe('post-visit-mobile.v1');
+  });
+
+  it('returns versioned mobile events feed', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.listSessionMobileEvents.mockResolvedValue({
+      contractVersion: 'post-visit-mobile-events.v1',
+      events: [{ id: 'publish:session-1', eventType: 'post_visit.session.published' }],
+      paging: { limit: 20, offset: 0, total: 1 },
+    });
+
+    const result = await controller.getSessionMobileEvents('session-1', req, 'v1', '20', '0');
+    expect(postVisitServiceMock.listSessionMobileEvents).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        version: 'v1',
+        limit: 20,
+        offset: 0,
+      }),
+    );
+    expect(result.contractVersion).toBe('post-visit-mobile-events.v1');
+    expect(result.events).toHaveLength(1);
   });
 
   it('persists doctor review actions for artifacts', async () => {

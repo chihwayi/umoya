@@ -47,6 +47,11 @@ npm run test:s7  # CDSS Hook Validation
 ```bash
 npm run smoke:nurse:outcomes
 npm run smoke:doctor:cross-module
+npm run smoke:post-visit:session
+npm run smoke:post-visit:doctor
+npm run smoke:post-visit:companion
+npm run smoke:post-visit:fhir-mobile
+npm run smoke:post-visit:e2e
 ```
 
 Override runtime params using env or direct `npx ts-node` flags.
@@ -103,6 +108,17 @@ npm run test:headed
 - Optionally executes bundle actions for HIV/oncology/cardiology/ED/sepsis/blood_bank
 - Validates `/nurse-worklist/analytics/doctor-outcomes` response contract
 - Writes evidence JSON under `qa/tests/test-results/`
+
+### API smoke: Post-visit FHIR/mobile contracts
+- Validates `/post-visit/sessions/:id/fhir` contract and resource bundle
+- Validates versioned mobile payload contract (`/mobile-contract?version=v1`)
+- Validates versioned mobile event contract (`/mobile-events?version=v1`)
+
+### API smoke: Post-visit end-to-end journey
+- Runs doctor session retrieval, optional publish, optional recommendation execute
+- Runs patient companion message to trigger escalation
+- Verifies clinician queue visibility and optional resolution
+- Re-validates FHIR/mobile contracts inside the same journey
 
 ## Test Reports
 

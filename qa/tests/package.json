@@ -17,6 +17,8 @@
     "smoke:post-visit:session": "ts-node post-visit-session-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --evidence ./test-results/post-visit-session-latest.json",
     "smoke:post-visit:doctor": "ts-node post-visit-doctor-signoff-and-execution-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --publish --evidence ./test-results/post-visit-doctor-signoff-latest.json",
     "smoke:post-visit:companion": "ts-node post-visit-companion-escalation-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --patientToken $EHR_QA_PATIENT_TOKEN --clinicianToken $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --resolve --evidence ./test-results/post-visit-companion-escalation-latest.json",
+    "smoke:post-visit:fhir-mobile": "ts-node post-visit-fhir-mobile-contract-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --token $EHR_QA_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --version v1 --evidence ./test-results/post-visit-fhir-mobile-latest.json",
+    "smoke:post-visit:e2e": "ts-node post-visit-end-to-end-journey-smoke.ts --baseUrl http://localhost:3013 --tenant $EHR_QA_TENANT --clinicianToken $EHR_QA_TOKEN --patientToken $EHR_QA_PATIENT_TOKEN --sessionId $POST_VISIT_QA_SESSION_ID --publish --execute --resolve --evidence ./test-results/post-visit-end-to-end-latest.json",
     "report": "playwright show-report"
   },
   "devDependencies": {

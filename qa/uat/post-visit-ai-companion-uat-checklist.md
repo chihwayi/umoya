@@ -1,10 +1,11 @@
 # Post-Visit AI Companion UAT Checklist
 
 ## Objective
-Validate sprint-4 post-visit companion behavior end-to-end:
+Validate sprint-4/5/6 post-visit companion behavior end-to-end:
 - doctor-approved summary/checklist publication,
 - patient companion messaging grounded on approved artifacts only,
-- urgent-message escalation detection, routing, and resolution.
+- urgent-message escalation detection, routing, and resolution,
+- FHIR/mobile interoperability contracts for mobile app consumers.
 
 ## Environment Prerequisites
 
@@ -34,6 +35,13 @@ Validate sprint-4 post-visit companion behavior end-to-end:
 - [ ] `GET /post-visit/escalations` shows the new escalation in clinician queue.
 - [ ] Channel delivery metadata is present (`metadata.channel_delivery`) and traceable.
 - [ ] `POST /post-visit/escalations/:id/resolve` updates escalation to `resolved` (or `dismissed` for false positives).
+
+### FHIR + Mobile Contracts (Sprint 5)
+- [ ] `GET /post-visit/sessions/:id/fhir` returns `exportVersion = post-visit-fhir-r4.v1`.
+- [ ] FHIR bundle includes expected resources (`Encounter`, `CarePlan`, `Task`, `DocumentReference`, `Provenance`).
+- [ ] `GET /post-visit/sessions/:id/mobile-contract?version=v1` returns `contractVersion = post-visit-mobile.v1`.
+- [ ] `GET /post-visit/sessions/:id/mobile-events?version=v1` returns `contractVersion = post-visit-mobile-events.v1`.
+- [ ] Unsupported mobile version requests return validation errors (contract gate).
 
 ### Dashboard Visibility
 - [ ] Doctor dashboard includes post-visit escalation queue panel and allows resolve/dismiss.
@@ -78,6 +86,31 @@ npx ts-node qa/tests/post-visit-companion-escalation-smoke.ts \
   --sessionId "$POST_VISIT_QA_SESSION_ID" \
   --resolve \
   --evidence "qa/tests/test-results/post-visit-companion-escalation-latest.json"
+```
+
+### 4) FHIR + mobile contract smoke
+```bash
+npx ts-node qa/tests/post-visit-fhir-mobile-contract-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --token "$EHR_QA_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --version "v1" \
+  --evidence "qa/tests/test-results/post-visit-fhir-mobile-latest.json"
+```
+
+### 5) Full doctor→patient→queue→resolve journey smoke
+```bash
+npx ts-node qa/tests/post-visit-end-to-end-journey-smoke.ts \
+  --baseUrl "http://localhost:3013" \
+  --tenant "$EHR_QA_TENANT" \
+  --clinicianToken "$EHR_QA_TOKEN" \
+  --patientToken "$EHR_QA_PATIENT_TOKEN" \
+  --sessionId "$POST_VISIT_QA_SESSION_ID" \
+  --publish \
+  --execute \
+  --resolve \
+  --evidence "qa/tests/test-results/post-visit-end-to-end-latest.json"
 ```
 
 ## Pass/Fail Criteria
