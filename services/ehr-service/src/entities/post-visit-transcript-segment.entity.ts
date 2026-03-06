@@ -27,6 +27,27 @@ export class PostVisitTranscriptSegment {
   @Column({ type: 'varchar', length: 10, nullable: true })
   language: string | null;
 
+  @Column({ name: 'speaker_label', type: 'varchar', length: 60, nullable: true })
+  speakerLabel: string | null;
+
+  @Column({ name: 'speaker_role', type: 'varchar', length: 20, default: 'unknown' })
+  speakerRole: 'doctor' | 'patient' | 'unknown';
+
+  @Column({ name: 'diarization_confidence', type: 'double precision', nullable: true })
+  diarizationConfidence: number | null;
+
+  @Column({ name: 'speaker_assignment_status', type: 'varchar', length: 20, default: 'unresolved' })
+  speakerAssignmentStatus: 'auto' | 'confirmed' | 'reassigned' | 'unresolved';
+
+  @Column({ name: 'needs_review', type: 'boolean', default: false })
+  needsReview: boolean;
+
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewedBy: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamp with time zone', nullable: true })
+  reviewedAt: Date | null;
+
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   metadata: Record<string, any>;
 

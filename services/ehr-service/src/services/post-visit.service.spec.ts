@@ -220,6 +220,129 @@ describe('PostVisitService', () => {
     );
   });
 
+  it('flags low-confidence/unknown diarization segments for review during ingestion', async () => {
+    process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW = 'true';
+    process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE = '0.7';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const generateDraftSpy = jest
+        .spyOn(service, 'generateDraftArtifacts')
+        .mockResolvedValue({ sessionId: 'session-1', artifacts: [] } as any);
+
+      const insertCalls: any[] = [];
+      const tenantDb = {
+        query: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [{ id: 'session-1', patient_id: 'patient-1', source_type: 'in_person', status: 'captured' }];
+          }
+          if (sql.includes('INSERT INTO post_visit_transcript_segments')) {
+            insertCalls.push(params);
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_draft_artifacts') && sql.includes("VALUES ($1,$2,$3")) {
+            return [{ id: 'artifact-soap-1' }];
+          }
+          if (sql.includes('UPDATE post_visit_sessions') && sql.includes('RETURNING *')) {
+            return [
+              {
+                id: 'session-1',
+                tenant_id: 'tenant-a',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                appointment_id: null,
+                consultation_id: null,
+                status: 'draft_ready',
+                source_type: 'in_person',
+                language: 'en',
+                started_at: null,
+                completed_at: '2026-03-05T08:02:00.000Z',
+                reviewed_at: null,
+                reviewed_by: null,
+                published_at: null,
+                safety_level: null,
+                risk_flags: {},
+                meta: {},
+                created_at: '2026-03-05T08:00:00.000Z',
+                updated_at: '2026-03-05T08:02:00.000Z',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      await service.ingestTranscriptionResult(
+        tenantDb,
+        'session-1',
+        {
+          text: 'Doctor: continue medication. Patient: not feeling better.',
+          language: 'en',
+          confidence: 0.9,
+          segments: [
+            { start: 0, end: 2, text: 'Doctor: continue medication.', speakerRole: 'doctor', confidence: 0.95 },
+            { start: 2, end: 5, text: 'Patient: not feeling better.', speakerRole: 'unknown', confidence: 0.41 },
+          ],
+        },
+        {
+          tenantId: 'tenant-a',
+          actorUserId: 'doctor-1',
+        },
+      );
+
+      expect(insertCalls).toHaveLength(2);
+      expect(insertCalls[0][8]).toBe('doctor');
+      expect(insertCalls[0][10]).toBe('auto');
+      expect(insertCalls[0][11]).toBe(false);
+      expect(insertCalls[1][8]).toBe('unknown');
+      expect(insertCalls[1][10]).toBe('unresolved');
+      expect(insertCalls[1][11]).toBe(true);
+      expect(generateDraftSpy).toHaveBeenCalled();
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW;
+      delete process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE;
+    }
+  });
+
+  it('reassigns diarization segment and clears review requirement when speaker becomes known', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', source_type: 'in_person', status: 'draft_ready' }];
+        }
+        if (sql.includes('UPDATE post_visit_transcript_segments')) {
+          return [
+            {
+              id: 'seg-1',
+              session_id: 'session-1',
+              speaker_role: params[2],
+              speaker_label: 'Speaker A',
+              speaker_assignment_status: 'reassigned',
+              needs_review: false,
+              reviewed_by: params[4],
+              reviewed_at: '2026-03-06T12:00:00.000Z',
+              diarization_confidence: 0.44,
+            },
+          ];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.reassignDiarizationSegment(
+      tenantDb,
+      'session-1',
+      'seg-1',
+      { speakerRole: 'doctor', speakerLabel: 'Speaker A', note: 'confirmed by doctor' },
+      { actorUserId: 'doctor-1' },
+    );
+
+    expect(result.speakerRole).toBe('doctor');
+    expect(result.speakerAssignmentStatus).toBe('reassigned');
+    expect(result.needsReview).toBe(false);
+    expect(result.reviewedBy).toBe('doctor-1');
+  });
+
   it('generates recommendation bundle with per-rule citations from patient context', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     patientServiceMock.getPatientContext.mockResolvedValue({
@@ -633,6 +756,52 @@ describe('PostVisitService', () => {
 
     expect(result.session.status).toBe('published');
     expect(result.companionThread.id).toBe('thread-1');
+  });
+
+  it('blocks publish when diarization review is enabled and unresolved segments remain', async () => {
+    process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                tenant_id: 'tenant-a',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+                source_type: 'in_person',
+                language: 'en',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type IN')) {
+            return [
+              { artifact_type: 'visit_summary', artifact_status: 'reviewed' },
+              { artifact_type: 'recommendation_bundle', artifact_status: 'reviewed' },
+            ];
+          }
+          if (sql.includes('COUNT(*)::int AS unresolved_count')) {
+            return [{ unresolved_count: 3 }];
+          }
+          return [];
+        }),
+      } as any;
+
+      await expect(
+        service.publishSession(
+          tenantDb,
+          'session-1',
+          { note: 'attempt publish' },
+          { actorUserId: 'doctor-1', source: 'test' },
+        ),
+      ).rejects.toThrow('Publish blocked. 3 transcript segment(s) require diarization review before signoff.');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW;
+    }
   });
 
   it('creates escalation event when patient companion message contains urgent symptoms', async () => {

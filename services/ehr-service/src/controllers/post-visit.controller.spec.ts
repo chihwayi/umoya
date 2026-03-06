@@ -11,11 +11,13 @@ describe('PostVisitController', () => {
     listSessions: jest.fn(),
     getSession: jest.fn(),
     getSessionDraft: jest.fn(),
+    getSessionDiarization: jest.fn(),
     getSessionFhirProjection: jest.fn(),
     getSessionMobileContract: jest.fn(),
     listSessionMobileEvents: jest.fn(),
     generateDraftArtifacts: jest.fn(),
     reviewDraftArtifact: jest.fn(),
+    reassignDiarizationSegment: jest.fn(),
     executeRecommendationAction: jest.fn(),
     transcribeSessionAudio: jest.fn(),
     publishSession: jest.fn(),
@@ -207,6 +209,62 @@ describe('PostVisitController', () => {
     const result = await controller.getSessionFhirProjection('session-1', req);
     expect(postVisitServiceMock.getSessionFhirProjection).toHaveBeenCalledWith(req.tenantDb, 'session-1');
     expect(result.exportVersion).toBe('post-visit-fhir-r4.v1');
+  });
+
+  it('returns diarization review segments with normalized filters', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getSessionDiarization.mockResolvedValue({
+      sessionId: 'session-1',
+      reviewEnabled: true,
+      summary: { totalSegments: 2, unresolvedSegments: 1 },
+      segments: [{ id: 'seg-1' }],
+    });
+
+    const result = await controller.getSessionDiarization('session-1', req, '120', 'yes');
+    expect(postVisitServiceMock.getSessionDiarization).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      expect.objectContaining({
+        limit: 120,
+        unresolvedOnly: true,
+      }),
+    );
+    expect(result.reviewEnabled).toBe(true);
+  });
+
+  it('reassigns diarization segment speaker attribution from clinician workspace', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.reassignDiarizationSegment.mockResolvedValue({
+      id: 'seg-1',
+      speakerRole: 'doctor',
+      needsReview: false,
+    });
+
+    const result = await controller.reassignDiarizationSegment(
+      'session-1',
+      'seg-1',
+      { speakerRole: 'doctor', note: 'confirmed' },
+      req,
+    );
+
+    expect(postVisitServiceMock.reassignDiarizationSegment).toHaveBeenCalledWith(
+      req.tenantDb,
+      'session-1',
+      'seg-1',
+      expect.objectContaining({ speakerRole: 'doctor' }),
+      expect.objectContaining({ actorUserId: 'doctor-1' }),
+    );
+    expect(result.needsReview).toBe(false);
   });
 
   it('returns versioned mobile contract payload', async () => {

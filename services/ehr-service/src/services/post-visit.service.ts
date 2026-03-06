@@ -186,10 +186,32 @@ export class PostVisitService {
         text TEXT NOT NULL,
         confidence DOUBLE PRECISION,
         language VARCHAR(10),
+        speaker_label VARCHAR(60),
+        speaker_role VARCHAR(20) NOT NULL DEFAULT 'unknown'
+          CHECK (speaker_role IN ('doctor','patient','unknown')),
+        diarization_confidence DOUBLE PRECISION,
+        speaker_assignment_status VARCHAR(20) NOT NULL DEFAULT 'unresolved'
+          CHECK (speaker_assignment_status IN ('auto','confirmed','reassigned','unresolved')),
+        needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
         metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
+    `);
+
+    await tenantDb.query(`
+      ALTER TABLE IF EXISTS post_visit_transcript_segments
+      ADD COLUMN IF NOT EXISTS speaker_label VARCHAR(60),
+      ADD COLUMN IF NOT EXISTS speaker_role VARCHAR(20) NOT NULL DEFAULT 'unknown'
+        CHECK (speaker_role IN ('doctor','patient','unknown')),
+      ADD COLUMN IF NOT EXISTS diarization_confidence DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS speaker_assignment_status VARCHAR(20) NOT NULL DEFAULT 'unresolved'
+        CHECK (speaker_assignment_status IN ('auto','confirmed','reassigned','unresolved')),
+      ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE
     `);
 
     await tenantDb.query(`
@@ -393,6 +415,8 @@ export class PostVisitService {
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_status ON post_visit_sessions(status)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_sessions_started_at ON post_visit_sessions(started_at DESC)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_segments_session ON post_visit_transcript_segments(session_id, segment_order)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_needs_review ON post_visit_transcript_segments(session_id, needs_review, segment_order)`);
+    await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_transcript_speaker_role ON post_visit_transcript_segments(session_id, speaker_role, segment_order)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_extracted_entities_session ON post_visit_extracted_entities(session_id, entity_type)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_draft_artifacts_session ON post_visit_draft_artifacts(session_id, artifact_type)`);
     await tenantDb.query(`CREATE INDEX IF NOT EXISTS idx_post_visit_review_actions_session ON post_visit_review_actions(session_id, created_at DESC)`);
@@ -483,6 +507,30 @@ export class PostVisitService {
     if (raw === 'shona') return 'sn';
     if (raw === 'ndebele') return 'nd';
     return raw;
+  }
+
+  private isDiarizationReviewEnabled(): boolean {
+    return String(process.env.FEATURE_POSTVISIT_DIARIZATION_REVIEW || 'false').toLowerCase() === 'true';
+  }
+
+  private getDiarizationConfidenceThreshold(): number {
+    const raw = Number(process.env.POSTVISIT_DIARIZATION_MIN_CONFIDENCE || 0.65);
+    if (!Number.isFinite(raw)) return 0.65;
+    return Math.min(0.95, Math.max(0.2, raw));
+  }
+
+  private normalizeDiarizationConfidence(value: any): number | null {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(1, Math.max(0, num));
+  }
+
+  private normalizeSegmentSpeakerRole(value: any): 'doctor' | 'patient' | 'unknown' {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'unknown';
+    if (['doctor', 'dr', 'clinician', 'provider'].includes(normalized)) return 'doctor';
+    if (['patient', 'pt', 'client'].includes(normalized)) return 'patient';
+    return 'unknown';
   }
 
   private splitIntoPhrases(value?: string) {
@@ -2273,7 +2321,21 @@ export class PostVisitService {
       ),
       tenantDb.query(
         `
-          SELECT segment_order, start_second, end_second, text, confidence, language
+          SELECT
+            id,
+            segment_order,
+            start_second,
+            end_second,
+            text,
+            confidence,
+            language,
+            speaker_label,
+            speaker_role,
+            diarization_confidence,
+            speaker_assignment_status,
+            needs_review,
+            reviewed_by,
+            reviewed_at
           FROM post_visit_transcript_segments
           WHERE session_id = $1
           ORDER BY segment_order ASC
@@ -2343,12 +2405,23 @@ export class PostVisitService {
       transcript: {
         segmentCount: segments.length,
         segments: segments.map((row: any) => ({
+          id: row.id,
           order: row.segment_order,
           start: Number(row.start_second),
           end: Number(row.end_second),
           text: row.text,
           confidence: row.confidence,
           language: row.language,
+          speakerLabel: row.speaker_label || null,
+          speakerRole: row.speaker_role || 'unknown',
+          diarizationConfidence:
+            row.diarization_confidence === null || row.diarization_confidence === undefined
+              ? null
+              : Number(row.diarization_confidence),
+          speakerAssignmentStatus: row.speaker_assignment_status || 'unresolved',
+          needsReview: row.needs_review === true,
+          reviewedBy: row.reviewed_by || null,
+          reviewedAt: row.reviewed_at || null,
         })),
       },
       reviewActions: reviewActions.map((row: any) => ({
@@ -2391,6 +2464,167 @@ export class PostVisitService {
         source: row.source,
         metadata: row.metadata || {},
       })),
+    };
+  }
+
+  async getSessionDiarization(
+    tenantDb: DataSource,
+    sessionId: string,
+    options: { limit?: number; unresolvedOnly?: boolean } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    const limit = Math.min(Math.max(Number(options.limit || 150), 1), 2000);
+    const unresolvedOnly = options.unresolvedOnly === true;
+
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          id,
+          segment_order,
+          start_second,
+          end_second,
+          text,
+          confidence,
+          language,
+          speaker_label,
+          speaker_role,
+          diarization_confidence,
+          speaker_assignment_status,
+          needs_review,
+          reviewed_by,
+          reviewed_at,
+          metadata,
+          created_at,
+          updated_at
+        FROM post_visit_transcript_segments
+        WHERE session_id = $1
+          ${unresolvedOnly ? 'AND needs_review = TRUE' : ''}
+        ORDER BY segment_order ASC
+        LIMIT $2
+      `,
+      [sessionId, limit],
+    );
+
+    const [summaryRow] = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total_segments,
+          COUNT(*) FILTER (WHERE needs_review = TRUE)::int AS unresolved_segments,
+          COUNT(*) FILTER (WHERE speaker_role = 'doctor')::int AS doctor_segments,
+          COUNT(*) FILTER (WHERE speaker_role = 'patient')::int AS patient_segments,
+          COUNT(*) FILTER (WHERE speaker_role = 'unknown')::int AS unknown_segments,
+          AVG(diarization_confidence)::float AS avg_confidence
+        FROM post_visit_transcript_segments
+        WHERE session_id = $1
+      `,
+      [sessionId],
+    );
+
+    return {
+      sessionId,
+      reviewEnabled: this.isDiarizationReviewEnabled(),
+      confidenceThreshold: this.getDiarizationConfidenceThreshold(),
+      summary: {
+        totalSegments: Number(summaryRow?.total_segments || 0),
+        unresolvedSegments: Number(summaryRow?.unresolved_segments || 0),
+        doctorSegments: Number(summaryRow?.doctor_segments || 0),
+        patientSegments: Number(summaryRow?.patient_segments || 0),
+        unknownSegments: Number(summaryRow?.unknown_segments || 0),
+        averageConfidence:
+          summaryRow?.avg_confidence === null || summaryRow?.avg_confidence === undefined
+            ? null
+            : Number(summaryRow.avg_confidence),
+      },
+      segments: rows.map((row: any) => ({
+        id: row.id,
+        order: row.segment_order,
+        start: Number(row.start_second),
+        end: Number(row.end_second),
+        text: row.text,
+        confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
+        language: row.language || null,
+        speakerLabel: row.speaker_label || null,
+        speakerRole: row.speaker_role || 'unknown',
+        diarizationConfidence:
+          row.diarization_confidence === null || row.diarization_confidence === undefined
+            ? null
+            : Number(row.diarization_confidence),
+        speakerAssignmentStatus: row.speaker_assignment_status || 'unresolved',
+        needsReview: row.needs_review === true,
+        reviewedBy: row.reviewed_by || null,
+        reviewedAt: row.reviewed_at || null,
+        metadata: row.metadata || {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    };
+  }
+
+  async reassignDiarizationSegment(
+    tenantDb: DataSource,
+    sessionId: string,
+    segmentId: string,
+    payload: { speakerRole: 'doctor' | 'patient' | 'unknown'; speakerLabel?: string; note?: string },
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    if (!options.actorUserId) {
+      throw new BadRequestException('Authenticated user is required to reassign diarization segment');
+    }
+    if (!['doctor', 'patient', 'unknown'].includes(String(payload.speakerRole || ''))) {
+      throw new BadRequestException('speakerRole must be doctor, patient, or unknown');
+    }
+
+    const [updated] = await tenantDb.query(
+      `
+        UPDATE post_visit_transcript_segments
+        SET speaker_role = $3,
+            speaker_label = $4,
+            speaker_assignment_status = CASE WHEN $3 = 'unknown' THEN 'unresolved' ELSE 'reassigned' END,
+            needs_review = CASE WHEN $3 = 'unknown' THEN TRUE ELSE FALSE END,
+            reviewed_by = $5,
+            reviewed_at = NOW(),
+            metadata = COALESCE(metadata, '{}'::jsonb) || $6::jsonb,
+            updated_at = NOW()
+        WHERE id = $1
+          AND session_id = $2
+        RETURNING *
+      `,
+      [
+        segmentId,
+        sessionId,
+        payload.speakerRole,
+        payload.speakerLabel ? payload.speakerLabel.slice(0, 60) : null,
+        options.actorUserId,
+        JSON.stringify({
+          diarization_reassign_note: payload.note || null,
+          diarization_reassigned_by: options.actorUserId,
+          diarization_reassigned_at: new Date().toISOString(),
+        }),
+      ],
+    );
+
+    if (!updated) {
+      throw new NotFoundException('Transcript segment not found for diarization reassignment');
+    }
+
+    return {
+      id: updated.id,
+      sessionId,
+      speakerRole: updated.speaker_role,
+      speakerLabel: updated.speaker_label || null,
+      speakerAssignmentStatus: updated.speaker_assignment_status || 'unresolved',
+      needsReview: updated.needs_review === true,
+      reviewedBy: updated.reviewed_by || null,
+      reviewedAt: updated.reviewed_at || null,
+      diarizationConfidence:
+        updated.diarization_confidence === null || updated.diarization_confidence === undefined
+          ? null
+          : Number(updated.diarization_confidence),
     };
   }
 
@@ -3488,6 +3722,24 @@ export class PostVisitService {
       );
     }
 
+    if (this.isDiarizationReviewEnabled()) {
+      const [reviewRow] = await tenantDb.query(
+        `
+          SELECT COUNT(*)::int AS unresolved_count
+          FROM post_visit_transcript_segments
+          WHERE session_id = $1
+            AND needs_review = TRUE
+        `,
+        [sessionId],
+      );
+      const unresolvedCount = Number(reviewRow?.unresolved_count || 0);
+      if (unresolvedCount > 0) {
+        throw new BadRequestException(
+          `Publish blocked. ${unresolvedCount} transcript segment(s) require diarization review before signoff.`,
+        );
+      }
+    }
+
     await tenantDb.query(
       `
         UPDATE post_visit_draft_artifacts
@@ -4455,17 +4707,37 @@ export class PostVisitService {
     const extractedEntities = this.extractEntitiesFromTranscription(result);
 
     await tenantDb.query(`DELETE FROM post_visit_transcript_segments WHERE session_id = $1`, [sessionId]);
+    const diarizationEnabled = this.isDiarizationReviewEnabled();
+    const diarizationThreshold = this.getDiarizationConfidenceThreshold();
     for (let i = 0; i < segments.length; i += 1) {
-      const segment = segments[i];
+      const segment = segments[i] as any;
       if (!segment || typeof segment.text !== 'string') continue;
       const start = Number(segment.start);
       const end = Number(segment.end);
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      const speakerRole = this.normalizeSegmentSpeakerRole(segment.speakerRole ?? segment.speaker);
+      const diarizationConfidence = this.normalizeDiarizationConfidence(segment.diarizationConfidence ?? segment.confidence ?? result.confidence);
+      const needsReview =
+        diarizationEnabled &&
+        (speakerRole === 'unknown' || diarizationConfidence === null || diarizationConfidence < diarizationThreshold);
+      const assignmentStatus = needsReview ? 'unresolved' : 'auto';
       await tenantDb.query(
         `
           INSERT INTO post_visit_transcript_segments (
-            session_id, segment_order, start_second, end_second, text, confidence, language, metadata
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+            session_id,
+            segment_order,
+            start_second,
+            end_second,
+            text,
+            confidence,
+            language,
+            speaker_label,
+            speaker_role,
+            diarization_confidence,
+            speaker_assignment_status,
+            needs_review,
+            metadata
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
         `,
         [
           sessionId,
@@ -4475,7 +4747,16 @@ export class PostVisitService {
           segment.text.trim(),
           typeof result.confidence === 'number' ? result.confidence : null,
           normalizedLanguage,
-          JSON.stringify({ source: options.source || 'transcription_pipeline' }),
+          typeof segment.speakerLabel === 'string' ? segment.speakerLabel.slice(0, 60) : null,
+          speakerRole,
+          diarizationConfidence,
+          assignmentStatus,
+          needsReview,
+          JSON.stringify({
+            source: options.source || 'transcription_pipeline',
+            diarization_enabled: diarizationEnabled,
+            diarization_threshold: diarizationThreshold,
+          }),
         ],
       );
     }
@@ -4544,6 +4825,7 @@ export class PostVisitService {
           last_ingested_at: new Date().toISOString(),
           transcript_segment_count: segments.length,
           extracted_entity_count: extractedEntities.length,
+          diarization_review_enabled: diarizationEnabled,
         }),
       ],
     );

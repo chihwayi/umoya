@@ -1370,6 +1370,42 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitSessionDiarization: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+    filters?: { limit?: number; unresolvedOnly?: boolean },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/diarization`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  reassignPostVisitDiarizationSegment: async (
+    sessionId: string,
+    segmentId: string,
+    payload: { speakerRole: 'doctor' | 'patient' | 'unknown'; speakerLabel?: string; note?: string },
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.post(
+      `/post-visit/sessions/${sessionId}/diarization/${segmentId}/reassign`,
+      payload,
+      {
+        headers: {
+          'X-Tenant-ID': tenantSlug,
+          'Authorization': `Bearer ${token}`,
+        },
+      },
+    );
+    return { data: response.data };
+  },
+
   regeneratePostVisitDraft: async (
     sessionId: string,
     payload: { reason?: string },

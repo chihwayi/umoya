@@ -30,6 +30,7 @@ import {
   ClassifyPostVisitEscalationDto,
   CreatePostVisitSessionDto,
   PublishPostVisitSessionDto,
+  ReassignPostVisitDiarizationSegmentDto,
   ResolvePostVisitEscalationDto,
   ExecutePostVisitRecommendationDto,
   RegeneratePostVisitDraftDto,
@@ -274,6 +275,43 @@ export class PostVisitController {
       {
         tenantId: req.tenantId,
         authorization: req.headers?.authorization as string | undefined,
+        actorUserId: this.resolveUserId(req),
+      },
+    );
+  }
+
+  @Get('sessions/:id/diarization')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Get diarization review segments and attribution confidence summary for a session' })
+  @ApiResponse({ status: 200, description: 'Session diarization fetched' })
+  async getSessionDiarization(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+    @Query('limit') limit?: string,
+    @Query('unresolvedOnly') unresolvedOnly?: string,
+  ) {
+    return this.postVisitService.getSessionDiarization(req.tenantDb, id, {
+      limit: limit ? Number(limit) : undefined,
+      unresolvedOnly: ['1', 'true', 'yes'].includes(String(unresolvedOnly || '').toLowerCase()),
+    });
+  }
+
+  @Post('sessions/:id/diarization/:segmentId/reassign')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Reassign transcript segment speaker attribution for diarization signoff' })
+  @ApiResponse({ status: 200, description: 'Diarization segment reassigned' })
+  async reassignDiarizationSegment(
+    @Param('id') id: string,
+    @Param('segmentId') segmentId: string,
+    @Body() body: ReassignPostVisitDiarizationSegmentDto,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.reassignDiarizationSegment(
+      req.tenantDb,
+      id,
+      segmentId,
+      body,
+      {
         actorUserId: this.resolveUserId(req),
       },
     );

@@ -30,6 +30,11 @@ export interface TranscriptionResult {
     start: number;
     end: number;
     text: string;
+    confidence?: number;
+    speaker?: string;
+    speakerRole?: 'doctor' | 'patient' | 'unknown';
+    speakerLabel?: string;
+    diarizationConfidence?: number;
   }>;
   confidence?: number;
   soap_note?: {
@@ -359,11 +364,29 @@ export class TranscriptionService {
     };
   }
 
-  private normalizeSegments(rawSegments: any): Array<{ start: number; end: number; text: string }> {
+  private normalizeSegments(rawSegments: any): Array<{
+    start: number;
+    end: number;
+    text: string;
+    confidence?: number;
+    speaker?: string;
+    speakerRole?: 'doctor' | 'patient' | 'unknown';
+    speakerLabel?: string;
+    diarizationConfidence?: number;
+  }> {
     if (!Array.isArray(rawSegments)) {
       return [];
     }
-    const segments: Array<{ start: number; end: number; text: string }> = [];
+    const segments: Array<{
+      start: number;
+      end: number;
+      text: string;
+      confidence?: number;
+      speaker?: string;
+      speakerRole?: 'doctor' | 'patient' | 'unknown';
+      speakerLabel?: string;
+      diarizationConfidence?: number;
+    }> = [];
     for (const seg of rawSegments) {
       const text = typeof seg?.text === 'string' ? seg.text.trim() : '';
       const start = Number(seg?.start);
@@ -371,7 +394,23 @@ export class TranscriptionService {
       if (!text || !Number.isFinite(start) || !Number.isFinite(end)) {
         continue;
       }
-      segments.push({ start, end, text });
+      const confidence = Number(seg?.confidence);
+      const speakerRaw = typeof seg?.speaker === 'string' ? seg.speaker.trim() : '';
+      const speakerLabelRaw = typeof seg?.speaker_label === 'string' ? seg.speaker_label.trim() : '';
+      const speakerRoleRaw = typeof seg?.speaker_role === 'string' ? seg.speaker_role.trim().toLowerCase() : '';
+      segments.push({
+        start,
+        end,
+        text,
+        confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : undefined,
+        speaker: speakerRaw || undefined,
+        speakerLabel: speakerLabelRaw || undefined,
+        speakerRole:
+          speakerRoleRaw === 'doctor' || speakerRoleRaw === 'patient' || speakerRoleRaw === 'unknown'
+            ? (speakerRoleRaw as 'doctor' | 'patient' | 'unknown')
+            : undefined,
+        diarizationConfidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : undefined,
+      });
     }
     return segments;
   }

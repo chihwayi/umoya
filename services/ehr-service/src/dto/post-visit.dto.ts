@@ -191,3 +191,22 @@ export class ClassifyPostVisitEscalationDto {
   @MaxLength(10)
   language?: string;
 }
+
+export class ReassignPostVisitDiarizationSegmentDto {
+  @ApiProperty({ description: 'Speaker role assignment', enum: ['doctor', 'patient', 'unknown'] })
+  @IsEnum(['doctor', 'patient', 'unknown'])
+  @IsNotEmpty()
+  speakerRole: 'doctor' | 'patient' | 'unknown';
+
+  @ApiPropertyOptional({ description: 'Optional speaker label (e.g. Speaker A)' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(60)
+  speakerLabel?: string;
+
+  @ApiPropertyOptional({ description: 'Optional reassignment note for audit trail' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(300)
+  note?: string;
+}

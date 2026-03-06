@@ -75,6 +75,32 @@ interface DraftPayload {
   }>;
 }
 
+interface DiarizationSegment {
+  id: string;
+  order: number;
+  start: number;
+  end: number;
+  text: string;
+  speakerRole: 'doctor' | 'patient' | 'unknown';
+  diarizationConfidence?: number | null;
+  needsReview: boolean;
+}
+
+interface DiarizationPayload {
+  sessionId: string;
+  reviewEnabled: boolean;
+  confidenceThreshold: number;
+  summary: {
+    totalSegments: number;
+    unresolvedSegments: number;
+    doctorSegments: number;
+    patientSegments: number;
+    unknownSegments: number;
+    averageConfidence?: number | null;
+  };
+  segments: DiarizationSegment[];
+}
+
 const STATUS_OPTIONS: Array<'all' | SessionStatus> = [
   'all',
   'captured',
@@ -99,6 +125,14 @@ const formatDuration = (durationMs: number) => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 };
 
+const formatSecondMark = (value: number) => {
+  if (!Number.isFinite(value) || value < 0) return '0:00';
+  const whole = Math.floor(value);
+  const minutes = Math.floor(whole / 60);
+  const seconds = whole % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
 const PostVisitDoctorWorkspace: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -116,6 +150,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftData, setDraftData] = useState<DraftPayload | null>(null);
+  const [diarizationLoading, setDiarizationLoading] = useState(false);
+  const [diarizationData, setDiarizationData] = useState<DiarizationPayload | null>(null);
   const [workingActionKey, setWorkingActionKey] = useState<string | null>(null);
   const [fhirPreview, setFhirPreview] = useState<Record<string, any> | null>(null);
   const [mobilePreview, setMobilePreview] = useState<Record<string, any> | null>(null);
@@ -134,6 +170,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+  const [pendingSpeakerRole, setPendingSpeakerRole] = useState<Record<string, 'doctor' | 'patient' | 'unknown'>>({});
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -176,6 +213,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       if (!rows.length) {
         setSelectedSessionId(null);
         setDraftData(null);
+        setDiarizationData(null);
         return;
       }
       const selectedExists = selectedSessionId && rows.some((session) => session.id === selectedSessionId);
@@ -206,6 +244,25 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [showError, tenantSlug, token],
   );
 
+  const loadDiarization = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) return;
+      try {
+        setDiarizationLoading(true);
+        const response = await ehrApi.getPostVisitSessionDiarization(sessionId, token, tenantSlug, {
+          limit: 250,
+          unresolvedOnly: false,
+        });
+        setDiarizationData((response.data || null) as DiarizationPayload | null);
+      } catch {
+        setDiarizationData(null);
+      } finally {
+        setDiarizationLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -213,8 +270,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   useEffect(() => {
     if (!selectedSessionId) return;
     loadDraft(selectedSessionId);
+    loadDiarization(selectedSessionId);
     setSessionTranscribeFile(null);
-  }, [loadDraft, selectedSessionId]);
+  }, [loadDiarization, loadDraft, selectedSessionId]);
 
   const clearRecordingInterval = useCallback(() => {
     if (recordingIntervalRef.current !== null) {
@@ -412,7 +470,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       setNewSessionAudioFile(null);
       await loadSessions();
       setSelectedSessionId(createdId);
-      await loadDraft(createdId);
+      await Promise.all([loadDraft(createdId), loadDiarization(createdId)]);
     } catch {
       showError('Create session failed', 'Unable to create post-visit session. Check patient ID and context.');
     } finally {
@@ -425,6 +483,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     newPatientId,
     newSessionAudioFile,
     newSourceType,
+    loadDiarization,
     loadDraft,
     showError,
     showSuccess,
@@ -446,13 +505,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         tenantSlug,
       );
       showSuccess('Draft refreshed', 'Recommendation bundle and summary were regenerated.');
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId)]);
+      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
     } catch {
       showError('Draft regeneration failed', 'Could not regenerate post-visit artifacts.');
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleTranscribeSelectedSession = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -477,7 +536,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       showSuccess('Session transcription completed', 'Transcript, entities, and draft artifacts were refreshed.');
       setSessionTranscribeFile(null);
       setRecordingDurationMs(0);
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId)]);
+      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
     } catch {
       showError('Session transcription failed', 'Unable to transcribe selected audio for this session.');
     } finally {
@@ -485,6 +544,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     }
   }, [
     loadDraft,
+    loadDiarization,
     loadSessions,
     selectedSessionId,
     sessionTranscribeFile,
@@ -517,14 +577,45 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           tenantSlug,
         );
         showSuccess('Artifact reviewed', `${artifactType.replace('_', ' ')} marked as doctor-reviewed.`);
-        await Promise.all([loadSessions(), loadDraft(selectedSessionId)]);
+        await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
       } catch {
         showError('Review failed', `Unable to review ${artifactType.replace('_', ' ')}.`);
       } finally {
         setWorkingActionKey(null);
       }
     },
-    [loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+  );
+
+  const handleReassignDiarization = useCallback(
+    async (segment: DiarizationSegment, speakerRole: 'doctor' | 'patient' | 'unknown') => {
+      if (!tenantSlug || !token || !selectedSessionId) return;
+      try {
+        setWorkingActionKey(`diarization:${segment.id}`);
+        await ehrApi.reassignPostVisitDiarizationSegment(
+          selectedSessionId,
+          segment.id,
+          {
+            speakerRole,
+            note: 'Reassigned from doctor diarization review panel.',
+          },
+          token,
+          tenantSlug,
+        );
+        showSuccess('Diarization updated', `Segment #${segment.order + 1} assigned to ${speakerRole}.`);
+        setPendingSpeakerRole((prev) => {
+          const next = { ...prev };
+          delete next[segment.id];
+          return next;
+        });
+        await Promise.all([loadDiarization(selectedSessionId), loadDraft(selectedSessionId)]);
+      } catch {
+        showError('Diarization update failed', 'Unable to update segment speaker attribution.');
+      } finally {
+        setWorkingActionKey(null);
+      }
+    },
+    [loadDiarization, loadDraft, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handleExecuteRecommendation = useCallback(
@@ -540,14 +631,14 @@ const PostVisitDoctorWorkspace: React.FC = () => {
           tenantSlug,
         );
         showSuccess('Recommendation executed', title);
-        await Promise.all([loadSessions(), loadDraft(selectedSessionId)]);
+        await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
       } catch {
         showError('Execution failed', `Unable to execute recommendation: ${title}`);
       } finally {
         setWorkingActionKey(null);
       }
     },
-    [loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
+    [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token],
   );
 
   const handlePublish = useCallback(async () => {
@@ -564,16 +655,19 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         tenantSlug,
       );
       showSuccess('Published', 'Post-visit companion summary is now available to patient portal.');
-      await Promise.all([loadSessions(), loadDraft(selectedSessionId)]);
-    } catch {
+      await Promise.all([loadSessions(), loadDraft(selectedSessionId), loadDiarization(selectedSessionId)]);
+    } catch (error: any) {
+      const details =
+        String(error?.response?.data?.message || '').trim() ||
+        'Review visit summary and recommendation bundle first, then publish again.';
       showError(
         'Publish blocked',
-        'Review visit summary and recommendation bundle first, then publish again.',
+        details,
       );
     } finally {
       setWorkingActionKey(null);
     }
-  }, [loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
+  }, [loadDiarization, loadDraft, loadSessions, selectedSessionId, showError, showSuccess, tenantSlug, token]);
 
   const handleLoadFhir = useCallback(async () => {
     if (!tenantSlug || !token || !selectedSessionId) return;
@@ -945,6 +1039,124 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       {workingActionKey === 'transcribe-session' ? 'Transcribing…' : 'Transcribe + Generate Draft'}
                     </button>
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Diarization Review</h3>
+                    {diarizationLoading && <span className="text-xs text-slate-500">Loading diarization…</span>}
+                  </div>
+
+                  {!diarizationLoading && !diarizationData && (
+                    <p className="text-xs text-slate-500">
+                      Diarization output is not available for this session yet. Run transcription to refresh segments.
+                    </p>
+                  )}
+
+                  {diarizationData && (
+                    <>
+                      <div className="mb-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-5">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          Segments: {diarizationData.summary.totalSegments}
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-amber-50 px-3 py-2 text-amber-700">
+                          Needs review: {diarizationData.summary.unresolvedSegments}
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-cyan-50 px-3 py-2">
+                          Doctor/Patient: {diarizationData.summary.doctorSegments}/{diarizationData.summary.patientSegments}
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          Unknown: {diarizationData.summary.unknownSegments}
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          Threshold: {(diarizationData.confidenceThreshold * 100).toFixed(0)}%
+                        </div>
+                      </div>
+
+                      {!diarizationData.reviewEnabled && (
+                        <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          Review gate is disabled by feature flag. Enable <code>FEATURE_POSTVISIT_DIARIZATION_REVIEW</code> to enforce signoff.
+                        </p>
+                      )}
+
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {diarizationData.segments.length === 0 && (
+                          <p className="text-xs text-slate-500">No transcript segments available.</p>
+                        )}
+                        {diarizationData.segments.map((segment) => {
+                          const selectedRole = pendingSpeakerRole[segment.id] || segment.speakerRole;
+                          const hasPendingChange = selectedRole !== segment.speakerRole;
+                          const confidence = segment.diarizationConfidence;
+                          const confidenceLabel =
+                            confidence === null || confidence === undefined
+                              ? 'n/a'
+                              : `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`;
+                          return (
+                            <article
+                              key={segment.id}
+                              className={`rounded-xl border px-3 py-2 ${
+                                segment.needsReview
+                                  ? 'border-amber-300 bg-amber-50/70'
+                                  : 'border-slate-200 bg-slate-50/60'
+                              }`}
+                            >
+                              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-semibold text-slate-700">#{segment.order + 1}</span>
+                                  <span className="text-[11px] text-slate-500">
+                                    {formatSecondMark(segment.start)} - {formatSecondMark(segment.end)}
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                      segment.speakerRole === 'doctor'
+                                        ? 'bg-cyan-100 text-cyan-700'
+                                        : segment.speakerRole === 'patient'
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : 'bg-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {segment.speakerRole}
+                                  </span>
+                                  {segment.needsReview && (
+                                    <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                                      review required
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-slate-500">confidence {confidenceLabel}</span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={selectedRole}
+                                    onChange={(event) =>
+                                      setPendingSpeakerRole((prev) => ({
+                                        ...prev,
+                                        [segment.id]: event.target.value as 'doctor' | 'patient' | 'unknown',
+                                      }))
+                                    }
+                                    className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                                  >
+                                    <option value="doctor">doctor</option>
+                                    <option value="patient">patient</option>
+                                    <option value="unknown">unknown</option>
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReassignDiarization(segment, selectedRole)}
+                                    disabled={!hasPendingChange || workingActionKey === `diarization:${segment.id}`}
+                                    className="rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                                  >
+                                    {workingActionKey === `diarization:${segment.id}` ? 'Saving…' : 'Apply'}
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-700">{segment.text}</p>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
