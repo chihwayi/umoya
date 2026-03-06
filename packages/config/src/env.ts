@@ -63,6 +63,9 @@ const envSchema = z.object({
   FEATURE_POSTVISIT_COMPANION_MEMORY: z.enum(['true', 'false']).default('true'),
   POSTVISIT_TRIAL_DECISION_SLA_HOURS: z.string().default('72'),
   POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE: z.enum(['doctor', 'nurse']).default('doctor'),
+  POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY: z.enum(['moderate', 'high', 'critical']).default('high'),
+  POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY: z.enum(['moderate', 'high', 'critical']).default('critical'),
+  POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS: z.string().default('3'),
   POSTVISIT_CLINICALTRIALS_API_URL: z.string().default('https://clinicaltrials.gov/api/v2/studies'),
   LOCAL_OCR_URL: z.string().optional(),
 
@@ -286,6 +289,9 @@ export const config = {
     postVisitCompanionMemory: env.FEATURE_POSTVISIT_COMPANION_MEMORY === 'true',
     postVisitTrialDecisionSlaHours: Number(env.POSTVISIT_TRIAL_DECISION_SLA_HOURS || '72'),
     postVisitTrialDecisionEscalationRoute: env.POSTVISIT_TRIAL_DECISION_ESCALATION_ROUTE,
+    postVisitTrialSlaEmailMinSeverity: env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY,
+    postVisitTrialSlaSmsMinSeverity: env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY,
+    postVisitTrialSlaNotifyMaxRecipients: Number(env.POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS || '3'),
   },
 
   notifications: {

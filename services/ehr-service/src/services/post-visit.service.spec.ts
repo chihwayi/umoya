@@ -1707,6 +1707,297 @@ describe('PostVisitService', () => {
     }
   });
 
+  it('applies trial SLA notification fanout policy by severity', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'true';
+    process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS = '24';
+    process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY = 'high';
+    process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY = 'critical';
+    try {
+      const notificationsServiceMock = {
+        sendSms: jest.fn(async () => undefined),
+      };
+      const emailServiceMock = {
+        sendEmail: jest.fn(async () => ({ success: true })),
+      };
+      const service = new PostVisitService(
+        transcriptionServiceMock as any,
+        patientServiceMock as any,
+        notificationsServiceMock as any,
+        emailServiceMock as any,
+      );
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('SELECT * FROM post_visit_sessions')) {
+            return [
+              {
+                id: 'session-1',
+                patient_id: 'patient-1',
+                doctor_id: 'doctor-1',
+                status: 'doctor_reviewed',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_matches') && sql.includes('WHERE session_id = $1') && sql.includes('eligibility_score')) {
+            return [
+              {
+                id: 'trial-match-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                trial_source: 'clinicaltrials_gov_v2',
+                trial_id: 'NCT90000001',
+                trial_title: 'Hypertension Outcomes Trial',
+                trial_phase: 'Phase 3',
+                trial_status: 'RECRUITING',
+                condition_tags: ['hypertension'],
+                source_url: 'https://clinicaltrials.gov/study/NCT90000001',
+                eligibility_score: 88,
+                eligibility_rationale: ['Matched condition'],
+                match_status: 'proposed',
+                created_at: '2026-01-01T00:00:00.000Z',
+                reviewed_at: null,
+                metadata: {},
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_matches tm')) {
+            return [
+              {
+                id: 'trial-match-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                trial_id: 'NCT90000001',
+                trial_title: 'Hypertension Outcomes Trial',
+                match_status: 'proposed',
+                eligibility_score: 88,
+                created_at: '2026-01-01T00:00:00.000Z',
+                reviewed_at: null,
+              },
+            ];
+          }
+          if (sql.includes('SELECT id') && sql.includes('post_visit_escalation_events') && sql.includes('trial_decision_sla_breach')) {
+            return [];
+          }
+          if (sql.includes('INSERT INTO post_visit_escalation_events')) {
+            return [
+              {
+                id: 'esc-sla-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                status: 'open',
+                severity: 'high',
+                route_target: 'doctor',
+                trigger_type: 'trial_decision_sla_breach',
+                metadata: {},
+                created_at: '2026-03-06T10:00:00.000Z',
+                updated_at: '2026-03-06T10:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('FROM patients') && sql.includes('WHERE id = $1')) {
+            return [
+              { id: 'patient-1', first_name: 'Jane', last_name: 'Doe', patient_number: 'P-100' },
+            ];
+          }
+          if (sql.includes('FROM post_visit_sessions s') && sql.includes('LEFT JOIN users u ON u.id = s.doctor_id')) {
+            return [
+              {
+                id: 'doctor-1',
+                first_name: 'Ava',
+                last_name: 'Nyathi',
+                role: 'doctor',
+                phone: '+263700000111',
+                email: 'ava@example.com',
+              },
+            ];
+          }
+          if (sql.includes('UPDATE post_visit_escalation_events') && sql.includes('notification_fanout')) {
+            return [];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.listSessionTrialMatches(tenantDb, 'session-1', { refresh: false, actorUserId: 'doctor-1' });
+      expect(result.matches).toHaveLength(1);
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledTimes(1);
+      expect(notificationsServiceMock.sendSms).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+      delete process.env.POSTVISIT_TRIAL_DECISION_SLA_HOURS;
+      delete process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY;
+      delete process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY;
+    }
+  });
+
+  it('returns per-clinician trial SLA accountability metrics', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('FROM post_visit_trial_matches tm')) {
+            return [];
+          }
+          if (sql.includes('SELECT id') && sql.includes('post_visit_escalation_events') && sql.includes('trial_decision_sla_breach')) {
+            return [];
+          }
+          if (sql.includes('GROUP BY s.doctor_id')) {
+            return [
+              {
+                clinician_id: 'doctor-1',
+                first_name: 'Ava',
+                last_name: 'Nyathi',
+                role: 'doctor',
+                email: 'ava@example.com',
+                total_assigned: 9,
+                open_count: 3,
+                breached_open_count: 1,
+                acknowledged_count: 6,
+                resolved_count: 6,
+                resolved_within_sla_count: 5,
+                avg_ack_minutes: 44.2,
+                avg_resolve_minutes: 138.7,
+                last_action_at: '2026-03-06T12:00:00.000Z',
+              },
+            ];
+          }
+          if (sql.includes('clinicians_with_assignments')) {
+            return [
+              {
+                total_escalations: 9,
+                open_escalations: 3,
+                breached_open_escalations: 1,
+                resolved_escalations: 6,
+                resolved_within_sla: 5,
+                clinicians_with_assignments: 1,
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.getTrialDecisionSlaAccountability(tenantDb, {
+        days: 14,
+        routeTarget: 'doctor',
+        limit: 10,
+      });
+      expect(result.summary.totalEscalations).toBe(9);
+      expect(result.summary.resolvedWithinSlaPercent).toBe(83);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].openCount).toBe(3);
+      expect(result.items[0].averageAcknowledgeMinutes).toBe(44.2);
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    }
+  });
+
+  it('exports trial-memory audit feed in CSV format', async () => {
+    process.env.FEATURE_POSTVISIT_TRIAL_MATCHER = 'true';
+    try {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn(async (sql: string) => {
+          if (sql.includes('FROM post_visit_trial_matches tm')) {
+            return [];
+          }
+          if (sql.includes('SELECT id') && sql.includes('post_visit_escalation_events') && sql.includes('trial_decision_sla_breach')) {
+            return [];
+          }
+          if (sql.includes('FROM post_visit_escalation_events e') && sql.includes('trial_decision_sla_breach')) {
+            return [
+              {
+                id: 'esc-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                status: 'open',
+                severity: 'high',
+                route_target: 'doctor',
+                detected_at: '2026-03-06T09:00:00.000Z',
+                acknowledged_at: null,
+                resolved_at: null,
+                classification_reason: 'SLA breach',
+                metadata: {
+                  trial_match_id: 'trial-match-1',
+                  trial_id: 'NCT100',
+                  trial_title: 'Cardio Trial',
+                  stale_hours: 96,
+                  sla_hours: 72,
+                },
+                session_doctor_id: 'doctor-1',
+                doctor_first_name: 'Ava',
+                doctor_last_name: 'Nyathi',
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_trial_match_audit_log a')) {
+            return [
+              {
+                id: 'audit-1',
+                session_id: 'session-1',
+                trial_match_id: 'trial-match-1',
+                patient_id: 'patient-1',
+                action: 'consider',
+                previous_status: 'proposed',
+                next_status: 'considered',
+                note: 'Reviewed in clinic',
+                acted_at: '2026-03-06T10:00:00.000Z',
+                trial_id: 'NCT100',
+                trial_title: 'Cardio Trial',
+                match_status: 'considered',
+                session_doctor_id: 'doctor-1',
+                doctor_first_name: 'Ava',
+                doctor_last_name: 'Nyathi',
+                metadata: {},
+              },
+            ];
+          }
+          if (sql.includes('FROM post_visit_companion_memory m')) {
+            return [
+              {
+                id: 'mem-1',
+                session_id: 'session-1',
+                patient_id: 'patient-1',
+                memory_type: 'preference',
+                memory_key: 'communication_preference',
+                memory_value: 'SMS reminders',
+                is_active: true,
+                promoted_at: '2026-03-06T11:00:00.000Z',
+                curation_note: 'Preferred by patient',
+                created_by: 'doctor-1',
+                promoted_by: 'doctor-1',
+                retired_by: null,
+                updated_at: '2026-03-06T11:05:00.000Z',
+                created_at: '2026-03-06T11:00:00.000Z',
+                metadata: {},
+                session_doctor_id: 'doctor-1',
+                doctor_first_name: 'Ava',
+                doctor_last_name: 'Nyathi',
+              },
+            ];
+          }
+          return [];
+        }),
+      } as any;
+
+      const result = await service.exportTrialMemoryAudit(tenantDb, {
+        days: 30,
+        format: 'csv',
+        routeTarget: 'doctor',
+        limit: 100,
+      });
+      expect(result.format).toBe('csv');
+      expect(result.summary.totalRecords).toBe(3);
+      const csv = (result as any).csv as string;
+      expect(csv).toContain('eventType,eventTimestamp');
+      expect(csv).toContain('trial_sla_escalation');
+      expect(csv).toContain('trial_match_review_action');
+      expect(csv).toContain('companion_memory_state');
+    } finally {
+      delete process.env.FEATURE_POSTVISIT_TRIAL_MATCHER;
+    }
+  });
+
   it('returns trial match audit drilldown rows', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     const tenantDb = {

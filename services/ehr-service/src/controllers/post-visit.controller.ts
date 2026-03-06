@@ -351,6 +351,60 @@ export class PostVisitController {
     });
   }
 
+  @Get('analytics/trial-sla-accountability')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get per-clinician trial decision SLA accountability metrics' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial SLA accountability analytics fetched' })
+  async getTrialDecisionSlaAccountability(
+    @Request() req: RequestWithTenant,
+    @Query('days') days?: string,
+    @Query('routeTarget') routeTarget?: string,
+    @Query('clinicianId') clinicianId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const normalizedRouteTarget = (
+      ['doctor', 'nurse', 'emergency'].includes(String(routeTarget || '').toLowerCase())
+        ? String(routeTarget || '').toLowerCase()
+        : undefined
+    ) as 'doctor' | 'nurse' | 'emergency' | undefined;
+
+    return this.postVisitService.getTrialDecisionSlaAccountability(req.tenantDb, {
+      days: days ? Number(days) : undefined,
+      routeTarget: normalizedRouteTarget,
+      clinicianId: clinicianId || undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('reports/trial-memory-audit')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Export trial + companion memory audit feed (JSON/CSV) for UAT/compliance' })
+  @ApiResponse({ status: 200, description: 'Post-visit trial/memory audit export generated' })
+  async exportTrialMemoryAudit(
+    @Request() req: RequestWithTenant,
+    @Query('days') days?: string,
+    @Query('format') format?: string,
+    @Query('routeTarget') routeTarget?: string,
+    @Query('clinicianId') clinicianId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const normalizedRouteTarget = (
+      ['doctor', 'nurse', 'emergency'].includes(String(routeTarget || '').toLowerCase())
+        ? String(routeTarget || '').toLowerCase()
+        : undefined
+    ) as 'doctor' | 'nurse' | 'emergency' | undefined;
+
+    return this.postVisitService.exportTrialMemoryAudit(req.tenantDb, {
+      days: days ? Number(days) : undefined,
+      format: format ? String(format).trim().toLowerCase() : undefined,
+      routeTarget: normalizedRouteTarget,
+      clinicianId: clinicianId || undefined,
+      sessionId: sessionId || undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Get('coordination/trial-decisions')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'List shared nurse/doctor trial decision SLA coordination queue' })

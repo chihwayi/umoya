@@ -1891,6 +1891,48 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitTrialSlaAccountability: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      days?: number;
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      clinicianId?: string;
+      limit?: number;
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/analytics/trial-sla-accountability', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
+  exportPostVisitTrialMemoryAudit: async (
+    token: string,
+    tenantSlug: string,
+    filters?: {
+      days?: number;
+      format?: 'json' | 'csv';
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      clinicianId?: string;
+      sessionId?: string;
+      limit?: number;
+    },
+  ) => {
+    const response = await ehrAxios.get('/post-visit/reports/trial-memory-audit', {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+      params: filters || {},
+    });
+    return { data: response.data };
+  },
+
   getPostVisitTrialDecisionCoordinationQueue: async (
     token: string,
     tenantSlug: string,

@@ -263,6 +263,38 @@ interface TrialMemoryAnalyticsPayload {
   };
 }
 
+interface TrialSlaAccountabilityPayload {
+  generatedAt?: string;
+  summary?: {
+    totalEscalations?: number;
+    openEscalations?: number;
+    breachedOpenEscalations?: number;
+    resolvedEscalations?: number;
+    resolvedWithinSla?: number;
+    resolvedWithinSlaPercent?: number;
+    cliniciansWithAssignments?: number;
+  };
+  items?: Array<{
+    clinician?: {
+      id?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      role?: string | null;
+      email?: string | null;
+    };
+    totalAssigned?: number;
+    openCount?: number;
+    breachedOpenCount?: number;
+    acknowledgedCount?: number;
+    resolvedCount?: number;
+    resolvedWithinSlaCount?: number;
+    resolvedWithinSlaPercent?: number;
+    averageAcknowledgeMinutes?: number | null;
+    averageResolveMinutes?: number | null;
+    lastActionAt?: string | null;
+  }>;
+}
+
 interface CompanionMemoryItem {
   id: string;
   memoryType: string;
@@ -502,6 +534,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [trialMatchesLoading, setTrialMatchesLoading] = useState(false);
   const [trialMemoryAnalytics, setTrialMemoryAnalytics] = useState<TrialMemoryAnalyticsPayload | null>(null);
   const [trialMemoryAnalyticsLoading, setTrialMemoryAnalyticsLoading] = useState(false);
+  const [trialSlaAccountability, setTrialSlaAccountability] = useState<TrialSlaAccountabilityPayload | null>(null);
+  const [trialSlaAccountabilityLoading, setTrialSlaAccountabilityLoading] = useState(false);
+  const [trialAuditExportLoading, setTrialAuditExportLoading] = useState(false);
   const [trialAuditByMatchId, setTrialAuditByMatchId] = useState<Record<string, TrialMatchAuditPayload>>({});
   const [expandedTrialAuditMatchId, setExpandedTrialAuditMatchId] = useState<string | null>(null);
   const [trialAuditLoadingMatchId, setTrialAuditLoadingMatchId] = useState<string | null>(null);
@@ -876,6 +911,29 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const loadTrialSlaAccountability = useCallback(
+    async (days = 30) => {
+      if (!tenantSlug || !token) {
+        setTrialSlaAccountability(null);
+        return;
+      }
+      try {
+        setTrialSlaAccountabilityLoading(true);
+        const response = await ehrApi.getPostVisitTrialSlaAccountability(token, tenantSlug, {
+          days,
+          routeTarget: 'doctor',
+          limit: 8,
+        });
+        setTrialSlaAccountability((response.data || null) as TrialSlaAccountabilityPayload | null);
+      } catch {
+        setTrialSlaAccountability(null);
+      } finally {
+        setTrialSlaAccountabilityLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
   const loadTrialMatchAudit = useCallback(
     async (sessionId: string, matchId: string, limit = 30) => {
       if (!tenantSlug || !token || !sessionId || !matchId) return null;
@@ -922,13 +980,47 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     [tenantSlug, token],
   );
 
+  const handleExportTrialAudit = useCallback(async () => {
+    if (!tenantSlug || !token) return;
+    try {
+      setTrialAuditExportLoading(true);
+      const response = await ehrApi.exportPostVisitTrialMemoryAudit(token, tenantSlug, {
+        days: 30,
+        format: 'csv',
+        routeTarget: 'doctor',
+        sessionId: selectedSessionId || undefined,
+        limit: 2000,
+      });
+      const csv = String(response.data?.csv || '').trim();
+      if (!csv) {
+        showError('Audit export', 'No trial/memory audit data available to export.');
+        return;
+      }
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `post-visit-trial-memory-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showSuccess('Audit export ready', 'Downloaded trial + memory compliance audit CSV.');
+    } catch {
+      showError('Audit export', 'Unable to export trial/memory audit CSV.');
+    } finally {
+      setTrialAuditExportLoading(false);
+    }
+  }, [selectedSessionId, showError, showSuccess, tenantSlug, token]);
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
 
   useEffect(() => {
     loadTrialMemoryAnalytics(30);
-  }, [loadTrialMemoryAnalytics]);
+    loadTrialSlaAccountability(30);
+  }, [loadTrialMemoryAnalytics, loadTrialSlaAccountability]);
 
   useEffect(() => {
     if (selectedSessionId) return;
@@ -958,6 +1050,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadAdminDocuments(selectedSessionId);
     loadTrialMatches(selectedSessionId);
     loadTrialMemoryAnalytics(30);
+    loadTrialSlaAccountability(30);
     loadCompanionMemory(selectedSessionId, true);
     setTrialAuditByMatchId({});
     setExpandedTrialAuditMatchId(null);
@@ -979,7 +1072,21 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     streamingChunkBufferRef.current = [];
     streamingChunkSequenceRef.current = 0;
     lastAutoAnalyzedSegmentRef.current = '';
-  }, [loadAdminDocuments, loadBillingIntelligence, loadCompanionMemory, loadDiarization, loadDocumentIntelligence, loadDraft, loadIntraVisitAlerts, loadPreVisitBrief, loadTrialMatches, loadTrialMemoryAnalytics, selectedSessionId, sessions]);
+  }, [
+    loadAdminDocuments,
+    loadBillingIntelligence,
+    loadCompanionMemory,
+    loadDiarization,
+    loadDocumentIntelligence,
+    loadDraft,
+    loadIntraVisitAlerts,
+    loadPreVisitBrief,
+    loadTrialMatches,
+    loadTrialMemoryAnalytics,
+    loadTrialSlaAccountability,
+    selectedSessionId,
+    sessions,
+  ]);
 
   useEffect(() => {
     const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
@@ -3326,17 +3433,34 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-bold text-slate-900">Trial + Memory Outcome Analytics</h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void loadTrialMemoryAnalytics(30);
-                      }}
-                      disabled={trialMemoryAnalyticsLoading}
-                      className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${trialMemoryAnalyticsLoading ? 'animate-spin' : ''}`} />
-                      Refresh analytics
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void Promise.all([loadTrialMemoryAnalytics(30), loadTrialSlaAccountability(30)]);
+                        }}
+                        disabled={trialMemoryAnalyticsLoading || trialSlaAccountabilityLoading}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        <RefreshCw
+                          className={`mr-1 inline h-3.5 w-3.5 ${
+                            trialMemoryAnalyticsLoading || trialSlaAccountabilityLoading ? 'animate-spin' : ''
+                          }`}
+                        />
+                        Refresh analytics
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleExportTrialAudit();
+                        }}
+                        disabled={trialAuditExportLoading}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        <FileJson className={`mr-1 inline h-3.5 w-3.5 ${trialAuditExportLoading ? 'animate-pulse' : ''}`} />
+                        {trialAuditExportLoading ? 'Exporting…' : 'Export audit CSV'}
+                      </button>
+                    </div>
                   </div>
                   {trialMemoryAnalytics ? (
                     <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
@@ -3357,6 +3481,38 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     <p className="text-xs text-slate-500">
                       Analytics unavailable. Refresh once trial matcher and companion memory produce data.
                     </p>
+                  )}
+                  {trialSlaAccountability?.summary && (
+                    <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        Clinicians tracked: {Number(trialSlaAccountability.summary.cliniciansWithAssignments || 0)}
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        Open escalations: {Number(trialSlaAccountability.summary.openEscalations || 0)}
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+                        Breached open: {Number(trialSlaAccountability.summary.breachedOpenEscalations || 0)}
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                        SLA compliance: {Number(trialSlaAccountability.summary.resolvedWithinSlaPercent || 0)}%
+                      </div>
+                    </div>
+                  )}
+                  {Array.isArray(trialSlaAccountability?.items) && trialSlaAccountability.items.length > 0 && (
+                    <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      {trialSlaAccountability.items.slice(0, 5).map((row, index) => {
+                        const clinicianName = [row.clinician?.firstName, row.clinician?.lastName]
+                          .filter(Boolean)
+                          .join(' ')
+                          .trim();
+                        return (
+                          <p key={`${row.clinician?.id || 'clinician'}-${index}`} className="text-[11px] text-slate-700">
+                            {(clinicianName || row.clinician?.id || 'Unassigned clinician')}: open {Number(row.openCount || 0)} • breached{' '}
+                            {Number(row.breachedOpenCount || 0)} • SLA {Number(row.resolvedWithinSlaPercent || 0)}%
+                          </p>
+                        );
+                      })}
+                    </div>
                   )}
                   {trialMemoryAnalytics?.generatedAt && (
                     <p className="mt-2 text-[11px] text-slate-500">

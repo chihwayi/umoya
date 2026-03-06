@@ -113,6 +113,8 @@ type PostVisitVoiceCommand =
 type PostVisitTrialMatchStatus = 'proposed' | 'considered' | 'deferred' | 'excluded' | 'enrolled';
 type PostVisitTrialReviewAction = 'consider' | 'defer' | 'exclude' | 'enroll';
 type PostVisitCompanionMemoryCurationAction = 'promote' | 'retire' | 'reactivate';
+type PostVisitEscalationSeverity = 'low' | 'moderate' | 'high' | 'critical';
+type TrialSlaNotificationSeverity = 'moderate' | 'high' | 'critical';
 
 interface PostVisitDocumentObservation {
   name: string;
@@ -1448,6 +1450,47 @@ export class PostVisitService {
       .toLowerCase();
     if (configured === 'nurse') return 'nurse';
     return 'doctor';
+  }
+
+  private getTrialSlaEmailMinSeverity(): TrialSlaNotificationSeverity {
+    const configuredValue = (config as any)?.features?.postVisitTrialSlaEmailMinSeverity;
+    const normalized = String(configuredValue || process.env.POSTVISIT_TRIAL_SLA_EMAIL_MIN_SEVERITY || 'high')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'moderate' || normalized === 'critical') return normalized;
+    return 'high';
+  }
+
+  private getTrialSlaSmsMinSeverity(): TrialSlaNotificationSeverity {
+    const configuredValue = (config as any)?.features?.postVisitTrialSlaSmsMinSeverity;
+    const normalized = String(configuredValue || process.env.POSTVISIT_TRIAL_SLA_SMS_MIN_SEVERITY || 'critical')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'moderate' || normalized === 'high') return normalized;
+    return 'critical';
+  }
+
+  private getTrialSlaMaxRecipients(): number {
+    const configuredValue = Number((config as any)?.features?.postVisitTrialSlaNotifyMaxRecipients);
+    const raw = Number.isFinite(configuredValue)
+      ? configuredValue
+      : Number(process.env.POSTVISIT_TRIAL_SLA_NOTIFY_MAX_RECIPIENTS || '3');
+    if (!Number.isFinite(raw)) return 3;
+    return Math.min(Math.max(Math.round(raw), 1), 20);
+  }
+
+  private severityRank(severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity): number {
+    if (severity === 'critical') return 4;
+    if (severity === 'high') return 3;
+    if (severity === 'moderate') return 2;
+    return 1;
+  }
+
+  private isSeverityAtLeast(
+    severity: PostVisitEscalationSeverity | TrialSlaNotificationSeverity,
+    threshold: TrialSlaNotificationSeverity,
+  ): boolean {
+    return this.severityRank(severity) >= this.severityRank(threshold);
   }
 
   private computeTrialDecisionAgeHours(createdAt: any, reviewedAt: any): number {
@@ -6637,6 +6680,181 @@ export class PostVisitService {
     return rows;
   }
 
+  private async resolveTrialSlaFanoutRecipients(
+    tenantDb: DataSource,
+    args: { sessionId: string; routeTarget: 'doctor' | 'nurse' },
+  ) {
+    const maxRecipients = this.getTrialSlaMaxRecipients();
+    if (args.routeTarget === 'doctor') {
+      const doctorRows = await tenantDb.query(
+        `
+          SELECT
+            u.id,
+            u.first_name,
+            u.last_name,
+            u.phone,
+            u.email,
+            u.role
+          FROM post_visit_sessions s
+          LEFT JOIN users u ON u.id = s.doctor_id
+          WHERE s.id = $1
+            AND u.id IS NOT NULL
+          LIMIT 1
+        `,
+        [args.sessionId],
+      );
+      if (doctorRows?.length) {
+        return doctorRows;
+      }
+
+      return tenantDb.query(
+        `
+          SELECT id, first_name, last_name, phone, email, role
+          FROM users
+          WHERE role IN ('doctor', 'physician')
+            AND is_active = true
+          ORDER BY updated_at DESC NULLS LAST, created_at DESC
+          LIMIT $1
+        `,
+        [1],
+      );
+    }
+
+    const nurseRows = await tenantDb.query(
+      `
+        SELECT id, first_name, last_name, phone, email, role
+        FROM users
+        WHERE role IN ('nurse', 'nurse_accounts')
+          AND is_active = true
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT $1
+      `,
+      [maxRecipients],
+    );
+    if (nurseRows?.length) return nurseRows;
+
+    return tenantDb.query(
+      `
+        SELECT id, first_name, last_name, phone, email, role
+        FROM users
+        WHERE role IN ('doctor', 'physician')
+          AND is_active = true
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+    );
+  }
+
+  private async sendTrialDecisionSlaFanout(
+    tenantDb: DataSource,
+    args: {
+      escalationId: string;
+      sessionId: string;
+      patientId: string;
+      routeTarget: 'doctor' | 'nurse';
+      severity: TrialSlaNotificationSeverity;
+      trialTitle: string | null;
+      trialId: string | null;
+      staleHours: number;
+      slaHours: number;
+    },
+  ) {
+    const emailMinSeverity = this.getTrialSlaEmailMinSeverity();
+    const smsMinSeverity = this.getTrialSlaSmsMinSeverity();
+    const shouldSendEmail = this.isSeverityAtLeast(args.severity, emailMinSeverity);
+    const shouldSendSms = this.isSeverityAtLeast(args.severity, smsMinSeverity);
+
+    const channels = {
+      inAppQueue: true,
+      inAppRecipientCount: 0,
+      emailSentCount: 0,
+      smsSentCount: 0,
+      emailPolicyMinSeverity: emailMinSeverity,
+      smsPolicyMinSeverity: smsMinSeverity,
+      recipients: [] as Array<{ id: string; role: string | null; label: string }>,
+      errors: [] as string[],
+    };
+
+    const [patientRows, recipientRows] = await Promise.all([
+      tenantDb.query(
+        `
+          SELECT id, first_name, last_name, patient_number
+          FROM patients
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [args.patientId],
+      ),
+      this.resolveTrialSlaFanoutRecipients(tenantDb, {
+        sessionId: args.sessionId,
+        routeTarget: args.routeTarget,
+      }),
+    ]);
+
+    const patientRow = patientRows?.[0] || null;
+    const patientLabel = [patientRow?.first_name, patientRow?.last_name].filter(Boolean).join(' ').trim() || 'Patient';
+    const trialLabel = String(args.trialTitle || args.trialId || 'trial candidate').trim();
+    const staleHoursRounded = Math.round(Number(args.staleHours || 0) * 10) / 10;
+
+    const notificationSubject = `Trial decision SLA breach (${args.severity.toUpperCase()})`;
+    const notificationText =
+      `Post-visit trial decision SLA breached for ${patientLabel}: ${trialLabel}. ` +
+      `Age ${staleHoursRounded}h (SLA ${args.slaHours}h).` +
+      ` Escalation ID: ${args.escalationId}.`;
+
+    const seenRecipientIds = new Set<string>();
+    const uniqueRecipients = (Array.isArray(recipientRows) ? recipientRows : []).filter((row: any) => {
+      const key = String(row?.id || '').trim();
+      if (!key) return false;
+      if (seenRecipientIds.has(key)) return false;
+      seenRecipientIds.add(key);
+      return true;
+    });
+
+    channels.inAppRecipientCount = uniqueRecipients.length;
+    channels.recipients = uniqueRecipients.map((row: any) => ({
+      id: String(row.id),
+      role: row.role || null,
+      label: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || String(row.id),
+    }));
+
+    if (this.emailService && shouldSendEmail) {
+      for (const recipient of uniqueRecipients) {
+        if (!recipient?.email) continue;
+        try {
+          await this.emailService.sendEmail({
+            to: recipient.email,
+            subject: notificationSubject,
+            text: notificationText,
+          });
+          channels.emailSentCount += 1;
+        } catch (error: any) {
+          channels.errors.push(`email:${String(error?.message || error)}`);
+        }
+      }
+    }
+
+    if (this.notificationsService && shouldSendSms) {
+      for (const recipient of uniqueRecipients) {
+        if (!recipient?.phone) continue;
+        try {
+          await this.notificationsService.sendSms(
+            {
+              phone: recipient.phone,
+              message: notificationText.slice(0, 300),
+            },
+            tenantDb,
+          );
+          channels.smsSentCount += 1;
+        } catch (error: any) {
+          channels.errors.push(`sms:${String(error?.message || error)}`);
+        }
+      }
+    }
+
+    return channels;
+  }
+
   private async ensureTrialDecisionSlaEscalations(
     tenantDb: DataSource,
     filters: {
@@ -6707,7 +6925,7 @@ export class PostVisitService {
       const staleHours = this.computeTrialDecisionAgeHours(row.created_at, row.reviewed_at);
       const severity: 'moderate' | 'high' = staleHours >= slaHours * 2 ? 'high' : 'moderate';
 
-      await tenantDb.query(
+      const insertedRows = await tenantDb.query(
         `
           INSERT INTO post_visit_escalation_events (
             session_id,
@@ -6730,6 +6948,7 @@ export class PostVisitService {
           ) VALUES (
             $1,$2,'open',$3,$4,'trial_decision_sla_breach',$5::jsonb,$6,$7,'current','rule_engine',$8,'trial_sla_v1',NOW(),NOW() + INTERVAL '2 hours','post_visit_trial_decision_sla',$9::jsonb
           )
+          RETURNING *
         `,
         [
           row.session_id,
@@ -6754,6 +6973,39 @@ export class PostVisitService {
         ],
       );
       insertedEscalations += 1;
+
+      const insertedEscalation = insertedRows?.[0] || null;
+      if (insertedEscalation?.id) {
+        try {
+          const fanout = await this.sendTrialDecisionSlaFanout(tenantDb, {
+            escalationId: insertedEscalation.id,
+            sessionId: row.session_id,
+            patientId: row.patient_id,
+            routeTarget,
+            severity,
+            trialTitle: row.trial_title || null,
+            trialId: row.trial_id || null,
+            staleHours,
+            slaHours,
+          });
+          await tenantDb.query(
+            `
+              UPDATE post_visit_escalation_events
+              SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+                  updated_at = NOW()
+              WHERE id = $1
+            `,
+            [
+              insertedEscalation.id,
+              JSON.stringify({
+                notification_fanout: fanout,
+              }),
+            ],
+          );
+        } catch {
+          // Notification fanout is best-effort and must not block SLA escalation persistence.
+        }
+      }
     }
 
     return {
@@ -10069,6 +10321,447 @@ export class PostVisitService {
         breachedEscalations: Number(escalation.breached_count || 0),
         totalEscalations: Number(escalation.total || 0),
       },
+    };
+  }
+
+  async getTrialDecisionSlaAccountability(
+    tenantDb: DataSource,
+    options: {
+      days?: number;
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      clinicianId?: string;
+      limit?: number;
+    } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.ensureTrialDecisionSlaEscalations(tenantDb, { limit: 300 });
+
+    const days = Math.min(Math.max(Number(options.days || 30), 1), 365);
+    const limit = Math.min(Math.max(Number(options.limit || 25), 1), 200);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const conditions: string[] = [
+      `e.trigger_type = 'trial_decision_sla_breach'`,
+      `e.detected_at >= $1`,
+      `s.doctor_id IS NOT NULL`,
+    ];
+    const params: any[] = [since.toISOString()];
+    let index = 2;
+    if (options.routeTarget) {
+      conditions.push(`e.route_target = $${index++}`);
+      params.push(options.routeTarget);
+    }
+    if (options.clinicianId) {
+      conditions.push(`s.doctor_id = $${index++}`);
+      params.push(options.clinicianId);
+    }
+    const whereSql = `WHERE ${conditions.join(' AND ')}`;
+
+    const rows = await tenantDb.query(
+      `
+        SELECT
+          s.doctor_id AS clinician_id,
+          u.first_name,
+          u.last_name,
+          u.role,
+          u.email,
+          COUNT(*)::int AS total_assigned,
+          COUNT(*) FILTER (WHERE e.status IN ('open','acknowledged'))::int AS open_count,
+          COUNT(*) FILTER (
+            WHERE e.status IN ('open','acknowledged')
+              AND e.sla_due_at IS NOT NULL
+              AND e.sla_due_at < NOW()
+          )::int AS breached_open_count,
+          COUNT(*) FILTER (WHERE e.acknowledged_at IS NOT NULL)::int AS acknowledged_count,
+          COUNT(*) FILTER (WHERE e.status IN ('resolved','dismissed'))::int AS resolved_count,
+          COUNT(*) FILTER (
+            WHERE e.status IN ('resolved','dismissed')
+              AND e.sla_due_at IS NOT NULL
+              AND e.resolved_at IS NOT NULL
+              AND e.resolved_at <= e.sla_due_at
+          )::int AS resolved_within_sla_count,
+          AVG(EXTRACT(EPOCH FROM (e.acknowledged_at - e.detected_at)) / 60.0)
+            FILTER (WHERE e.acknowledged_at IS NOT NULL) AS avg_ack_minutes,
+          AVG(EXTRACT(EPOCH FROM (e.resolved_at - e.detected_at)) / 60.0)
+            FILTER (WHERE e.resolved_at IS NOT NULL) AS avg_resolve_minutes,
+          MAX(COALESCE(e.resolved_at, e.acknowledged_at, e.detected_at)) AS last_action_at
+        FROM post_visit_escalation_events e
+        LEFT JOIN post_visit_sessions s ON s.id = e.session_id
+        LEFT JOIN users u ON u.id = s.doctor_id
+        ${whereSql}
+        GROUP BY s.doctor_id, u.first_name, u.last_name, u.role, u.email
+        ORDER BY breached_open_count DESC, open_count DESC, total_assigned DESC, last_action_at DESC
+        LIMIT $${index}
+      `,
+      [...params, limit],
+    );
+
+    const summaryRows = await tenantDb.query(
+      `
+        SELECT
+          COUNT(*)::int AS total_escalations,
+          COUNT(*) FILTER (WHERE e.status IN ('open','acknowledged'))::int AS open_escalations,
+          COUNT(*) FILTER (
+            WHERE e.status IN ('open','acknowledged')
+              AND e.sla_due_at IS NOT NULL
+              AND e.sla_due_at < NOW()
+          )::int AS breached_open_escalations,
+          COUNT(*) FILTER (WHERE e.status IN ('resolved','dismissed'))::int AS resolved_escalations,
+          COUNT(*) FILTER (
+            WHERE e.status IN ('resolved','dismissed')
+              AND e.sla_due_at IS NOT NULL
+              AND e.resolved_at IS NOT NULL
+              AND e.resolved_at <= e.sla_due_at
+          )::int AS resolved_within_sla,
+          COUNT(DISTINCT s.doctor_id)::int AS clinicians_with_assignments
+        FROM post_visit_escalation_events e
+        LEFT JOIN post_visit_sessions s ON s.id = e.session_id
+        ${whereSql}
+      `,
+      params,
+    );
+
+    const summaryRow = summaryRows?.[0] || {};
+    const resolvedTotal = Number(summaryRow.resolved_escalations || 0);
+    const resolvedWithinSla = Number(summaryRow.resolved_within_sla || 0);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      window: {
+        days,
+        since: since.toISOString(),
+      },
+      summary: {
+        totalEscalations: Number(summaryRow.total_escalations || 0),
+        openEscalations: Number(summaryRow.open_escalations || 0),
+        breachedOpenEscalations: Number(summaryRow.breached_open_escalations || 0),
+        resolvedEscalations: resolvedTotal,
+        resolvedWithinSla,
+        resolvedWithinSlaPercent: resolvedTotal > 0 ? Math.round((resolvedWithinSla / resolvedTotal) * 100) : 0,
+        cliniciansWithAssignments: Number(summaryRow.clinicians_with_assignments || 0),
+      },
+      items: rows.map((row: any) => {
+        const resolvedCount = Number(row.resolved_count || 0);
+        const resolvedWithinSlaCount = Number(row.resolved_within_sla_count || 0);
+        return {
+          clinician: {
+            id: row.clinician_id,
+            firstName: row.first_name || null,
+            lastName: row.last_name || null,
+            role: row.role || null,
+            email: row.email || null,
+          },
+          totalAssigned: Number(row.total_assigned || 0),
+          openCount: Number(row.open_count || 0),
+          breachedOpenCount: Number(row.breached_open_count || 0),
+          acknowledgedCount: Number(row.acknowledged_count || 0),
+          resolvedCount,
+          resolvedWithinSlaCount,
+          resolvedWithinSlaPercent: resolvedCount > 0 ? Math.round((resolvedWithinSlaCount / resolvedCount) * 100) : 0,
+          averageAcknowledgeMinutes:
+            row.avg_ack_minutes === null || row.avg_ack_minutes === undefined
+              ? null
+              : Math.round(Number(row.avg_ack_minutes) * 10) / 10,
+          averageResolveMinutes:
+            row.avg_resolve_minutes === null || row.avg_resolve_minutes === undefined
+              ? null
+              : Math.round(Number(row.avg_resolve_minutes) * 10) / 10,
+          lastActionAt: row.last_action_at || null,
+        };
+      }),
+    };
+  }
+
+  private normalizeTrialAuditExportFormat(format?: string | null): 'json' | 'csv' {
+    const normalized = String(format || 'json').trim().toLowerCase();
+    if (normalized === 'csv') return 'csv';
+    return 'json';
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    const serialized =
+      typeof value === 'string'
+        ? value
+        : typeof value === 'number' || typeof value === 'boolean'
+          ? String(value)
+          : JSON.stringify(value);
+    if (serialized.includes(',') || serialized.includes('"') || serialized.includes('\n')) {
+      return `"${serialized.replace(/"/g, '""')}"`;
+    }
+    return serialized;
+  }
+
+  private buildCsv(columns: string[], rows: Array<Record<string, unknown>>): string {
+    const header = columns.join(',');
+    const body = rows.map((row) => columns.map((column) => this.escapeCsvCell(row[column])).join(',')).join('\n');
+    return body ? `${header}\n${body}` : `${header}\n`;
+  }
+
+  async exportTrialMemoryAudit(
+    tenantDb: DataSource,
+    options: {
+      days?: number;
+      format?: 'json' | 'csv' | string;
+      routeTarget?: 'doctor' | 'nurse' | 'emergency';
+      clinicianId?: string;
+      sessionId?: string;
+      limit?: number;
+    } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.ensureTrialDecisionSlaEscalations(tenantDb, { limit: 300 });
+
+    const format = this.normalizeTrialAuditExportFormat(options.format);
+    const days = Math.min(Math.max(Number(options.days || 30), 1), 365);
+    const limit = Math.min(Math.max(Number(options.limit || 2000), 1), 10000);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const sharedConditions: string[] = [`detected_at >= $1`];
+    const sharedParams: any[] = [since.toISOString()];
+    let sharedIndex = 2;
+    if (options.routeTarget) {
+      sharedConditions.push(`route_target = $${sharedIndex++}`);
+      sharedParams.push(options.routeTarget);
+    }
+    if (options.sessionId) {
+      sharedConditions.push(`session_id = $${sharedIndex++}`);
+      sharedParams.push(options.sessionId);
+    }
+
+    const escalationRows = await tenantDb.query(
+      `
+        SELECT
+          e.*,
+          s.doctor_id AS session_doctor_id,
+          u.first_name AS doctor_first_name,
+          u.last_name AS doctor_last_name
+        FROM post_visit_escalation_events e
+        LEFT JOIN post_visit_sessions s ON s.id = e.session_id
+        LEFT JOIN users u ON u.id = s.doctor_id
+        WHERE e.trigger_type = 'trial_decision_sla_breach'
+          AND ${sharedConditions.join(' AND ').replace(/detected_at/g, 'e.detected_at').replace(/route_target/g, 'e.route_target').replace(/session_id/g, 'e.session_id')}
+          ${options.clinicianId ? `AND s.doctor_id = $${sharedIndex++}` : ''}
+        ORDER BY e.detected_at DESC
+        LIMIT $${sharedIndex}
+      `,
+      [...sharedParams, ...(options.clinicianId ? [options.clinicianId] : []), limit],
+    );
+
+    const trialAuditRows = await tenantDb.query(
+      `
+        SELECT
+          a.*,
+          tm.trial_id,
+          tm.trial_title,
+          tm.match_status,
+          s.doctor_id AS session_doctor_id,
+          u.first_name AS doctor_first_name,
+          u.last_name AS doctor_last_name
+        FROM post_visit_trial_match_audit_log a
+        LEFT JOIN post_visit_trial_matches tm ON tm.id = a.trial_match_id
+        LEFT JOIN post_visit_sessions s ON s.id = a.session_id
+        LEFT JOIN users u ON u.id = s.doctor_id
+        WHERE a.acted_at >= $1
+          ${options.sessionId ? 'AND a.session_id = $2' : ''}
+          ${options.clinicianId ? `AND s.doctor_id = $${options.sessionId ? 3 : 2}` : ''}
+        ORDER BY a.acted_at DESC
+        LIMIT $${options.sessionId ? (options.clinicianId ? 4 : 3) : options.clinicianId ? 3 : 2}
+      `,
+      [
+        since.toISOString(),
+        ...(options.sessionId ? [options.sessionId] : []),
+        ...(options.clinicianId ? [options.clinicianId] : []),
+        limit,
+      ],
+    );
+
+    const memoryRows = await tenantDb.query(
+      `
+        SELECT
+          m.*,
+          s.doctor_id AS session_doctor_id,
+          u.first_name AS doctor_first_name,
+          u.last_name AS doctor_last_name
+        FROM post_visit_companion_memory m
+        LEFT JOIN post_visit_sessions s ON s.id = m.session_id
+        LEFT JOIN users u ON u.id = s.doctor_id
+        WHERE COALESCE(m.updated_at, m.created_at) >= $1
+          ${options.sessionId ? 'AND m.session_id = $2' : ''}
+          ${options.clinicianId ? `AND s.doctor_id = $${options.sessionId ? 3 : 2}` : ''}
+        ORDER BY COALESCE(m.updated_at, m.created_at) DESC
+        LIMIT $${options.sessionId ? (options.clinicianId ? 4 : 3) : options.clinicianId ? 3 : 2}
+      `,
+      [
+        since.toISOString(),
+        ...(options.sessionId ? [options.sessionId] : []),
+        ...(options.clinicianId ? [options.clinicianId] : []),
+        limit,
+      ],
+    );
+
+    const escalationRecords = escalationRows.map((row: any) => {
+      const metadata = row.metadata || {};
+      const clinicianName = [row.doctor_first_name, row.doctor_last_name].filter(Boolean).join(' ').trim() || null;
+      return {
+        eventType: 'trial_sla_escalation',
+        eventTimestamp: row.detected_at,
+        sessionId: row.session_id,
+        patientId: row.patient_id,
+        clinicianId: row.session_doctor_id || null,
+        clinicianName,
+        routeTarget: row.route_target || null,
+        severity: row.severity || null,
+        status: row.status || null,
+        action: 'sla_breach_opened',
+        previousStatus: null,
+        nextStatus: row.status || null,
+        trialMatchId: metadata?.trial_match_id || null,
+        trialId: metadata?.trial_id || null,
+        trialTitle: metadata?.trial_title || null,
+        memoryId: null,
+        memoryType: null,
+        memoryKey: null,
+        memoryValue: null,
+        staleHours: metadata?.stale_hours ?? null,
+        slaHours: metadata?.sla_hours ?? null,
+        acknowledgedAt: row.acknowledged_at || null,
+        resolvedAt: row.resolved_at || null,
+        note: row.classification_reason || row.resolution_note || null,
+        metadata,
+      };
+    });
+
+    const trialDecisionRecords = trialAuditRows.map((row: any) => {
+      const clinicianName = [row.doctor_first_name, row.doctor_last_name].filter(Boolean).join(' ').trim() || null;
+      return {
+        eventType: 'trial_match_review_action',
+        eventTimestamp: row.acted_at || row.created_at,
+        sessionId: row.session_id,
+        patientId: row.patient_id,
+        clinicianId: row.session_doctor_id || row.acted_by || null,
+        clinicianName,
+        routeTarget: null,
+        severity: null,
+        status: row.next_status || null,
+        action: row.action || null,
+        previousStatus: row.previous_status || null,
+        nextStatus: row.next_status || null,
+        trialMatchId: row.trial_match_id || null,
+        trialId: row.trial_id || null,
+        trialTitle: row.trial_title || null,
+        memoryId: null,
+        memoryType: null,
+        memoryKey: null,
+        memoryValue: null,
+        staleHours: null,
+        slaHours: this.getTrialDecisionSlaHours(),
+        acknowledgedAt: null,
+        resolvedAt: null,
+        note: row.note || null,
+        metadata: row.metadata || {},
+      };
+    });
+
+    const memoryRecords = memoryRows.map((row: any) => {
+      const clinicianName = [row.doctor_first_name, row.doctor_last_name].filter(Boolean).join(' ').trim() || null;
+      const isRetired = row.is_active === false;
+      const action = isRetired ? 'retired' : row.promoted_at ? 'promoted' : 'recorded';
+      return {
+        eventType: 'companion_memory_state',
+        eventTimestamp: row.updated_at || row.created_at,
+        sessionId: row.session_id,
+        patientId: row.patient_id,
+        clinicianId: row.session_doctor_id || row.retired_by || row.promoted_by || row.created_by || null,
+        clinicianName,
+        routeTarget: null,
+        severity: null,
+        status: isRetired ? 'retired' : 'active',
+        action,
+        previousStatus: null,
+        nextStatus: isRetired ? 'retired' : 'active',
+        trialMatchId: null,
+        trialId: null,
+        trialTitle: null,
+        memoryId: row.id,
+        memoryType: row.memory_type || null,
+        memoryKey: row.memory_key || null,
+        memoryValue: row.memory_value || null,
+        staleHours: null,
+        slaHours: null,
+        acknowledgedAt: null,
+        resolvedAt: null,
+        note: row.curation_note || null,
+        metadata: row.metadata || {},
+      };
+    });
+
+    const records = [...escalationRecords, ...trialDecisionRecords, ...memoryRecords].sort(
+      (left, right) => new Date(right.eventTimestamp || 0).getTime() - new Date(left.eventTimestamp || 0).getTime(),
+    );
+
+    const responseBase = {
+      generatedAt: new Date().toISOString(),
+      window: {
+        days,
+        since: since.toISOString(),
+      },
+      filters: {
+        routeTarget: options.routeTarget || null,
+        clinicianId: options.clinicianId || null,
+        sessionId: options.sessionId || null,
+        limit,
+      },
+      summary: {
+        totalRecords: records.length,
+        trialSlaEscalations: escalationRecords.length,
+        trialReviewActions: trialDecisionRecords.length,
+        companionMemoryEvents: memoryRecords.length,
+      },
+    };
+
+    if (format === 'csv') {
+      const columns = [
+        'eventType',
+        'eventTimestamp',
+        'sessionId',
+        'patientId',
+        'clinicianId',
+        'clinicianName',
+        'routeTarget',
+        'severity',
+        'status',
+        'action',
+        'previousStatus',
+        'nextStatus',
+        'trialMatchId',
+        'trialId',
+        'trialTitle',
+        'memoryId',
+        'memoryType',
+        'memoryKey',
+        'memoryValue',
+        'staleHours',
+        'slaHours',
+        'acknowledgedAt',
+        'resolvedAt',
+        'note',
+        'metadata',
+      ];
+      const csvRows = records.map((row) => ({
+        ...row,
+        metadata: JSON.stringify(row.metadata || {}),
+      }));
+      return {
+        ...responseBase,
+        format: 'csv',
+        csv: this.buildCsv(columns, csvRows),
+      };
+    }
+
+    return {
+      ...responseBase,
+      format: 'json',
+      records,
     };
   }
 

@@ -25,6 +25,8 @@ describe('PostVisitController', () => {
     listSessionCompanionMemory: jest.fn(),
     curateCompanionMemory: jest.fn(),
     getTrialMemoryAnalytics: jest.fn(),
+    getTrialDecisionSlaAccountability: jest.fn(),
+    exportTrialMemoryAudit: jest.fn(),
     listTrialDecisionCoordinationQueue: jest.fn(),
     executeVoiceReviewCommand: jest.fn(),
     reassignDiarizationSegment: jest.fn(),
@@ -728,6 +730,68 @@ describe('PostVisitController', () => {
       }),
     );
     expect(result.trialFunnel.total).toBe(10);
+  });
+
+  it('returns per-clinician trial SLA accountability analytics', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getTrialDecisionSlaAccountability.mockResolvedValue({
+      summary: { totalEscalations: 8 },
+      items: [{ clinician: { id: 'doctor-1' }, openCount: 2 }],
+    });
+
+    const result = await controller.getTrialDecisionSlaAccountability(req, '14', 'doctor', 'doctor-1', '12');
+    expect(postVisitServiceMock.getTrialDecisionSlaAccountability).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        days: 14,
+        routeTarget: 'doctor',
+        clinicianId: 'doctor-1',
+        limit: 12,
+      }),
+    );
+    expect(result.summary.totalEscalations).toBe(8);
+  });
+
+  it('exports trial/memory audit feed in csv format', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.exportTrialMemoryAudit.mockResolvedValue({
+      format: 'csv',
+      csv: 'eventType,eventTimestamp\ntrial_sla_escalation,2026-03-06T10:00:00.000Z',
+      summary: { totalRecords: 1 },
+    });
+
+    const result = await controller.exportTrialMemoryAudit(
+      req,
+      '30',
+      'csv',
+      'nurse',
+      'doctor-1',
+      'session-1',
+      '50',
+    );
+    expect(postVisitServiceMock.exportTrialMemoryAudit).toHaveBeenCalledWith(
+      req.tenantDb,
+      expect.objectContaining({
+        days: 30,
+        format: 'csv',
+        routeTarget: 'nurse',
+        clinicianId: 'doctor-1',
+        sessionId: 'session-1',
+        limit: 50,
+      }),
+    );
+    expect(result.format).toBe('csv');
+    expect(result.summary.totalRecords).toBe(1);
   });
 
   it('lists trial decision coordination queue', async () => {
