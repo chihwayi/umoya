@@ -3017,6 +3017,8 @@ describe('PostVisitService', () => {
     const hipaaAuditServiceMock = {
       registerModelEntry: jest.fn(async () => undefined),
       logPromptAudit: jest.fn(async () => undefined),
+      logPhiAccess: jest.fn(async () => undefined),
+      logPhiModification: jest.fn(async () => undefined),
     };
     const groundedLlmServiceMock = {
       polishDoctorContent: jest.fn(async () => ({
@@ -3120,6 +3122,8 @@ describe('PostVisitService', () => {
     const hipaaAuditServiceMock = {
       registerModelEntry: jest.fn(async () => undefined),
       logPromptAudit: jest.fn(async () => undefined),
+      logPhiAccess: jest.fn(async () => undefined),
+      logPhiModification: jest.fn(async () => undefined),
     };
     const groundedLlmServiceMock = {
       polishDoctorContent: jest.fn(),

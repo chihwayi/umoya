@@ -4493,6 +4493,7 @@ export class PostVisitService {
       .filter(Boolean)
       .join(' ');
 
+    // Two-pass: (1) plain-language/literacy rewrite, (2) patient preferred-language localisation
     const simplifiedSummary = this.simplifyClinicalLanguage(plainLanguageSummaryRaw);
     const preferredLanguage = this.normalizeLanguage(
       args.session?.language || args.patientContext?.patient?.preferredLanguage || 'en',
@@ -8864,6 +8865,32 @@ export class PostVisitService {
       artifactStatus: 'draft',
     });
 
+    // HIPAA: audit PHI write when visit summary (incl. teach-back/literacy) is persisted; no PHI in log payload
+    if (this.hipaaAuditService && sessionRow.patient_id) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId || 'system',
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_visit_summary',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          sessionId,
+          {
+            hasTeachBackQuestions: Array.isArray(summaryContent.teach_back_questions) && summaryContent.teach_back_questions.length > 0,
+            language: summaryContent.language || null,
+            literacyScored: typeof summaryContent.literacy_score === 'number',
+          },
+        )
+        .catch(() => {});
+    }
+
     const recommendationArtifact = await this.upsertDraftArtifact(tenantDb, {
       sessionId,
       artifactType: 'recommendation_bundle',
@@ -9666,12 +9693,18 @@ export class PostVisitService {
       },
     );
 
+    const content = visitSummaryArtifact.content || {};
     return {
       session: this.mapSession(sessionRow),
       summary: {
-        plainLanguageSummary: visitSummaryArtifact.content?.plain_language_summary || '',
-        keyPoints: Array.isArray(visitSummaryArtifact.content?.key_points)
-          ? visitSummaryArtifact.content.key_points
+        plainLanguageSummary: content.plain_language_summary || '',
+        keyPoints: Array.isArray(content.key_points) ? content.key_points : [],
+        language: content.language || 'en',
+        literacyScore: typeof content.literacy_score === 'number' ? content.literacy_score : null,
+        literacyLevel: content.literacy_level || null,
+        teachBackQuestions: Array.isArray(content.teach_back_questions) ? content.teach_back_questions : [],
+        companionTopicChecklist: Array.isArray(content.companion_topic_checklist)
+          ? content.companion_topic_checklist
           : [],
         generatedAt: visitSummaryArtifact.updated_at || visitSummaryArtifact.created_at || null,
       },
