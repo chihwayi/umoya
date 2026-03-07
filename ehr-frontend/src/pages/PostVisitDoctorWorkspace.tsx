@@ -2088,12 +2088,23 @@ const PostVisitDoctorWorkspace: React.FC = () => {
             citation.acknowledgedSuperseded === true || supersededCitationAcknowledgements[citation.id] === true,
         )
         .map((citation) => citation.id);
+      const medItem = recommendationItems.find(
+        (item: any) => String(item?.id ?? item?.recommendation_id ?? '') === 'medication_safety_intelligence_v2',
+      );
+      const ctx = medItem?.context ?? {};
+      const hasHighRiskMedicationAlert =
+        ctx.highRisk === true ||
+        (Number(ctx.medicationIntelligence?.highRiskCount ?? ctx.highRiskCount ?? 0) > 0) ||
+        ['contraindicated', 'major'].includes(
+          String(ctx.medicationIntelligence?.highestSeverity ?? ctx.highestSeverity ?? '').toLowerCase(),
+        );
       await ehrApi.publishPostVisitSession(
         selectedSessionId,
         {
           note: 'Published from doctor workspace',
           publishMetadata: { source: 'doctor_workspace' },
           acknowledgedSupersededCitationIds,
+          ...(hasHighRiskMedicationAlert ? { acknowledgedMedicationHighRisk: true } : {}),
         },
         token,
         tenantSlug,
@@ -2129,6 +2140,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadCompanionMemory,
     loadTrialMatches,
     loadTrialMemoryAnalytics,
+    recommendationItems,
     selectedSessionId,
     showError,
     showSuccess,

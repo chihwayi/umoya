@@ -207,6 +207,14 @@ export class PublishPostVisitSessionDto {
   @IsUUID('4', { each: true })
   @IsOptional()
   acknowledgedSupersededCitationIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      'When Medication Intelligence V2 reports high-risk alerts, must be true to publish (HIPAA-aligned signoff).',
+  })
+  @IsBoolean()
+  @IsOptional()
+  acknowledgedMedicationHighRisk?: boolean;
 }
 
 export class CreatePostVisitCompanionMessageDto {

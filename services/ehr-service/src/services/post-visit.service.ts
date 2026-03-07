@@ -31,7 +31,7 @@ import {
   PostVisitEscalationClassifierOutput,
   PostVisitGroundedLlmService,
 } from './post-visit-grounded-llm.service';
-import { HipaaAuditService } from './hipaa-audit.service';
+import { HipaaAuditService, HipaaAuditAction } from './hipaa-audit.service';
 import { FileStorageService } from './file-storage.service';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
@@ -1907,6 +1907,9 @@ export class PostVisitService {
       { token: 'zolpidem', normalizedName: 'zolpidem', rxCui: '39993' },
       { token: 'nitrofurantoin', normalizedName: 'nitrofurantoin', rxCui: '7454' },
       { token: 'enoxaparin', normalizedName: 'enoxaparin', rxCui: '67108' },
+      { token: 'omeprazole', normalizedName: 'omeprazole', rxCui: '7646' },
+      { token: 'amlodipine', normalizedName: 'amlodipine', rxCui: '17767' },
+      { token: 'atorvastatin', normalizedName: 'atorvastatin', rxCui: '83367' },
     ];
 
     const dictionaryHit = dictionary.find((entry) => normalizedInput.includes(entry.token));
@@ -8734,6 +8737,33 @@ export class PostVisitService {
     const specialtySoapValidation = this.evaluateSpecialtySoapTemplate(soapSpecialty, soapNote, patientContext);
 
     let rules = this.buildRecommendationRules(patientContext, extractedEntityRows);
+
+    // HIPAA: audit PHI read when medication intelligence V2 runs (medications, age, eGFR — no PHI in log payload)
+    const medicationRule = rules.find((r) => r.recommendationId === 'medication_safety_intelligence_v2');
+    if (
+      this.hipaaAuditService &&
+      medicationRule?.context?.medicationIntelligence &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId || 'system',
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_VIEW,
+          'post_visit_medication_intelligence',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          sessionId,
+          { fields: ['medications', 'age', 'egfr'], recordCount: 1 },
+          { sessionId, source: options.source },
+        )
+        .catch(() => {});
+    }
+
     if (this.isSpecialtySoapEnabled() && !specialtySoapValidation.isComplete) {
       const missingLabels = specialtySoapValidation.checks
         .filter((check) => !check.passed)
@@ -9298,7 +9328,13 @@ export class PostVisitService {
   async publishSession(
     tenantDb: DataSource,
     sessionId: string,
-    payload: { note?: string; publishMetadata?: Record<string, any>; acknowledgedSupersededCitationIds?: string[] } = {},
+    payload: {
+      note?: string;
+      publishMetadata?: Record<string, any>;
+      acknowledgedSupersededCitationIds?: string[];
+      /** When Medication Intelligence V2 is on and high-risk alerts exist, must be true to publish. */
+      acknowledgedMedicationHighRisk?: boolean;
+    } = {},
     options: PublishSessionOptions = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
@@ -9444,6 +9480,25 @@ export class PostVisitService {
       if (unresolvedCount > 0) {
         throw new BadRequestException(
           `Publish blocked. ${unresolvedCount} transcript segment(s) require diarization review before signoff.`,
+        );
+      }
+    }
+
+    // HIPAA-aligned: high-risk medication alerts must be acknowledged before signoff when Medication Intelligence V2 is on
+    if (this.isMedicationIntelligenceV2Enabled()) {
+      const recBundleArtifact = await this.getArtifactRow(tenantDb, sessionId, 'recommendation_bundle');
+      const items = recBundleArtifact?.content?.items ?? recBundleArtifact?.content?.recommendations ?? [];
+      const medicationItem = Array.isArray(items)
+        ? items.find((item: any) => String(item?.id || item?.recommendation_id) === 'medication_safety_intelligence_v2')
+        : null;
+      const ctx = medicationItem?.context ?? {};
+      const highRisk =
+        ctx.highRisk === true ||
+        (Number(ctx.medicationIntelligence?.highRiskCount ?? ctx.highRiskCount ?? 0) > 0) ||
+        ['contraindicated', 'major'].includes(String(ctx.medicationIntelligence?.highestSeverity ?? ctx.highestSeverity ?? '').toLowerCase());
+      if (highRisk && payload.acknowledgedMedicationHighRisk !== true) {
+        throw new BadRequestException(
+          'Publish blocked. High-risk medication safety alert must be acknowledged before signoff. Review Recommendation Bundle and set acknowledgedMedicationHighRisk to confirm.',
         );
       }
     }

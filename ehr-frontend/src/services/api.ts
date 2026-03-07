@@ -1841,7 +1841,12 @@ export const ehrApi = {
 
   publishPostVisitSession: async (
     sessionId: string,
-    payload: { note?: string; publishMetadata?: Record<string, any>; acknowledgedSupersededCitationIds?: string[] },
+    payload: {
+      note?: string;
+      publishMetadata?: Record<string, any>;
+      acknowledgedSupersededCitationIds?: string[];
+      acknowledgedMedicationHighRisk?: boolean;
+    },
     token: string,
     tenantSlug: string,
   ) => {
