@@ -33,6 +33,11 @@ import {
 } from './post-visit-grounded-llm.service';
 import { HipaaAuditService, HipaaAuditAction } from './hipaa-audit.service';
 import { FileStorageService } from './file-storage.service';
+import {
+  getValidationSummary,
+  type PostVisitSoapSpecialty,
+  type SpecialtySoapValidationSummary,
+} from './soap-template-registry';
 import { PostVisitSession } from '../entities/post-visit-session.entity';
 import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
 
@@ -215,24 +220,6 @@ interface MedicationIntelligenceAssessment {
   highRiskCount: number;
   egfr: number | null;
   riskNarrative: string;
-}
-
-type PostVisitSoapSpecialty = 'general_practice' | 'mental_health' | 'cardiology' | 'paediatrics';
-
-interface SpecialtySoapCheckResult {
-  id: string;
-  label: string;
-  passed: boolean;
-  guidance: string;
-}
-
-interface SpecialtySoapValidationSummary {
-  specialty: PostVisitSoapSpecialty;
-  templateVersion: 'v1';
-  isComplete: boolean;
-  completenessScore: number;
-  checks: SpecialtySoapCheckResult[];
-  missingCheckIds: string[];
 }
 
 type PostVisitBillingCodeType = 'cpt' | 'icd10';
@@ -3853,115 +3840,20 @@ export class PostVisitService {
     soapNote: any,
     patientContext: any,
   ): SpecialtySoapValidationSummary {
-    const subjective = String(soapNote?.subjective || '').trim();
-    const objective = String(soapNote?.objective || '').trim();
-    const assessment = String(soapNote?.assessment || '').trim();
-    const plan = String(soapNote?.plan || '').trim();
-
-    const modules = patientContext?.modules || {};
-    const age = Number(patientContext?.patient?.age || 0);
-    const hasWeight =
-      this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
-      this.parseNumericValue(patientContext?.latestVitals?.weight) !== null;
-
-    const checksBySpecialty: Record<PostVisitSoapSpecialty, SpecialtySoapCheckResult[]> = {
-      general_practice: [
-        {
-          id: 'gp_subjective_present',
-          label: 'Subjective history documented',
-          passed: subjective.length > 0,
-          guidance: 'Capture chief complaint and patient-reported symptoms in subjective.',
-        },
-        {
-          id: 'gp_assessment_present',
-          label: 'Assessment documented',
-          passed: assessment.length > 0,
-          guidance: 'Document clinical impression/diagnosis in assessment.',
-        },
-        {
-          id: 'gp_plan_present',
-          label: 'Plan documented',
-          passed: plan.length > 0,
-          guidance: 'Document clear follow-up or treatment plan.',
-        },
-      ],
-      cardiology: [
-        {
-          id: 'cardio_subjective_symptoms',
-          label: 'Cardiac symptom narrative present',
-          passed: /(chest|palpitation|dyspnea|shortness of breath|syncope|edema|angina)/i.test(subjective),
-          guidance: 'Document key cardiac symptoms (e.g., chest pain, dyspnea, palpitations).',
-        },
-        {
-          id: 'cardio_objective_vitals',
-          label: 'Objective cardiovascular findings present',
-          passed:
-            /(bp|blood pressure|heart rate|ecg|ekg|rhythm|murmur|troponin|spo2)/i.test(objective) ||
-            !!modules?.cardiology?.latestEncounter,
-          guidance: 'Include objective cardiovascular findings/vitals or ECG context.',
-        },
-        {
-          id: 'cardio_plan_followup',
-          label: 'Cardiology follow-up/management plan present',
-          passed: /(follow|echo|ecg|stress|angi|cardio|review)/i.test(plan),
-          guidance: 'Include cardiology-specific plan/follow-up actions.',
-        },
-      ],
-      paediatrics: [
-        {
-          id: 'peds_age_context',
-          label: 'Paediatric age context confirmed',
-          passed: age > 0 && age < 15,
-          guidance: 'Ensure paediatric template is used only for paediatric patients.',
-        },
-        {
-          id: 'peds_weight_documented',
-          label: 'Weight documented for dosing context',
-          passed: hasWeight || /(weight|kg)/i.test(objective),
-          guidance: 'Capture child weight for safe dosing and growth context.',
-        },
-        {
-          id: 'peds_guardian_plan',
-          label: 'Caregiver/follow-up instructions present',
-          passed: /(caregiver|guardian|parent|return|follow)/i.test(plan),
-          guidance: 'Document caregiver education and return/follow-up instructions.',
-        },
-      ],
-      mental_health: [
-        {
-          id: 'mh_subjective_mse',
-          label: 'Mood/affect symptom narrative present',
-          passed: /(mood|anxiety|sleep|stress|depress|psych|panic|hallucinat)/i.test(subjective),
-          guidance: 'Capture symptom narrative relevant to mental health visit.',
-        },
-        {
-          id: 'mh_assessment_risk',
-          label: 'Risk/safety assessment documented',
-          passed: /(risk|suicid|self-harm|homicid|safety)/i.test(assessment),
-          guidance: 'Include risk/safety assessment in mental-health assessment.',
-        },
-        {
-          id: 'mh_plan_support',
-          label: 'Plan includes support/therapy/follow-up',
-          passed: /(therapy|counsel|follow|support|referral|safety plan)/i.test(plan),
-          guidance: 'Include treatment/support or referral plan.',
-        },
-      ],
+    const soapNoteFields = {
+      subjective: String(soapNote?.subjective || '').trim(),
+      objective: String(soapNote?.objective || '').trim(),
+      assessment: String(soapNote?.assessment || '').trim(),
+      plan: String(soapNote?.plan || '').trim(),
     };
-
-    const checks = checksBySpecialty[specialty];
-    const missingCheckIds = checks.filter((check) => !check.passed).map((check) => check.id);
-    const passedCount = checks.filter((check) => check.passed).length;
-    const completenessScore = checks.length ? Number((passedCount / checks.length).toFixed(2)) : 0;
-
-    return {
-      specialty,
-      templateVersion: 'v1',
-      isComplete: missingCheckIds.length === 0,
-      completenessScore,
-      checks,
-      missingCheckIds,
+    const context = {
+      modules: patientContext?.modules || {},
+      age: Number(patientContext?.patient?.age || 0),
+      hasWeight:
+        this.parseNumericValue(patientContext?.latestVitals?.weightKg) !== null ||
+        this.parseNumericValue(patientContext?.latestVitals?.weight) !== null,
     };
+    return getValidationSummary(specialty, soapNoteFields, context);
   }
 
   private evaluateBillingDocumentationSufficiency(args: {
@@ -9373,6 +9265,31 @@ export class PostVisitService {
     }
 
     const specialtySoapValidation = await this.enforceSpecialtySoapPublishGate(tenantDb, sessionRow);
+
+    // HIPAA: audit PHI read when specialty SOAP validation runs (SOAP note + patient context; no PHI in log payload)
+    if (
+      specialtySoapValidation &&
+      this.hipaaAuditService &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId || 'system',
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_VIEW,
+          'post_visit_specialty_soap_validation',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          sessionId,
+          { fields: ['soap_note', 'patient_context'], recordCount: 1 },
+          { sessionId, specialty: specialtySoapValidation.specialty },
+        )
+        .catch(() => {});
+    }
 
     let citationQualityMeta: Record<string, any> | null = null;
     if (this.isCitationQualityV2Enabled()) {
