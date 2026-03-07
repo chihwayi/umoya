@@ -11963,6 +11963,60 @@ export class PostVisitService {
     };
   }
 
+  async getSessionLabTrends(tenantDb: DataSource, sessionId: string) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+    const rows = await tenantDb.query(
+      `
+        SELECT document_type, structured_payload, created_at
+        FROM post_visit_document_intelligence
+        WHERE session_id = $1 AND document_type = 'lab_report' AND extraction_status = 'processed'
+        ORDER BY created_at ASC
+        LIMIT 100
+      `,
+      [sessionId],
+    );
+    const trendMap = new Map<string, Array<{ value: number; unit: string; createdAt: string }>>();
+    for (const row of rows as any[]) {
+      const createdAt = row.created_at ? new Date(row.created_at).toISOString() : new Date(0).toISOString();
+      const structured = row.structured_payload || {};
+      const observations = Array.isArray(structured.observations) ? structured.observations : [];
+      for (const obs of observations) {
+        const numericValue = Number(obs?.value);
+        if (!Number.isFinite(numericValue)) continue;
+        const name = String(obs?.name || '').trim();
+        if (!name) continue;
+        const unit = String(obs?.unit || '').trim();
+        const key = `${name}__${unit}`;
+        if (!trendMap.has(key)) trendMap.set(key, []);
+        trendMap.get(key)!.push({ value: numericValue, unit, createdAt });
+      }
+    }
+    const trends = Array.from(trendMap.entries())
+      .map(([key, points]) => {
+        const [name, unit] = key.split('__');
+        const sortedPoints = [...points]
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          .slice(-8);
+        const values = sortedPoints.map((p) => p.value);
+        const max = Math.max(...values);
+        const min = Math.min(...values);
+        return {
+          key,
+          name,
+          unit,
+          points: sortedPoints,
+          latest: sortedPoints[sortedPoints.length - 1]?.value ?? null,
+          previous: sortedPoints.length > 1 ? sortedPoints[sortedPoints.length - 2]?.value ?? null : null,
+          min,
+          max,
+        };
+      })
+      .sort((a, b) => b.points.length - a.points.length)
+      .slice(0, 6);
+    return { sessionId, trends };
+  }
+
   async ingestTranscriptionResult(
     tenantDb: DataSource,
     sessionId: string,

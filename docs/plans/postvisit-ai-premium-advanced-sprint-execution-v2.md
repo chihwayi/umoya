@@ -334,6 +334,9 @@ Mandatory CI checks for each sprint:
 ## 9) Immediate Next Action
 
 Current execution status:
-1. Sprint A1 completed (audit chain-of-custody + prompt/model audit + disclosure report endpoint).
-2. Sprint A2 started (confidence/temporality escalation classifier, routing gate, and queue visibility).
-3. Next in sequence: Sprint A3 diarization quality + correction UX.
+1. **Sprint A1** completed (audit chain-of-custody + prompt/model audit + disclosure report endpoint).
+2. **Sprint A2** started (confidence/temporality escalation classifier, routing gate, and queue visibility).
+3. **Sprint A3** completed (diarization segments with confidence/threshold, Diarization Review in doctor workspace, publish blocked when `needs_review` unresolved; `GET/POST` diarization endpoints; `FEATURE_POSTVISIT_DIARIZATION_REVIEW`).
+4. **Sprint A4** completed (citation relevance/superseded flags, publish blocking for unacknowledged superseded citations, weak relevance exclusion; doctor acknowledgement in workspace).
+5. **Sprint B1** completed (Document Intelligence: local OCR pipeline, structured extraction, FHIR Observation/MedicationRequest/DiagnosticReport mapping, critical lab escalation routing, duplicate detection ≥90%, LabTrendChart in doctor workspace and patient companion summary; `GET` patient-portal `lab-trends`).
+6. **Next in sequence:** Phase B — **Sprint B2** (Medication Intelligence V2: RxNorm, interaction severity, Beers Criteria, renal dosing, personalized risk narrative).

@@ -535,6 +535,26 @@ export class PatientPortalController {
     return this.postVisitService.getPatientSessionSummary(req.tenantDb, id, patientId);
   }
 
+  @Get('post-visit/sessions/:id/lab-trends')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get lab observation trends for session', description: 'Returns aggregated lab trends from document intelligence for published session (patient own)' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async getPostVisitLabTrends(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const session = await this.postVisitService.getSessionForPatient(id, patientId, req.tenantDb);
+    if (!session || session.status !== 'published') {
+      throw new NotFoundException('Session not found or not published');
+    }
+    return this.postVisitService.getSessionLabTrends(req.tenantDb, id);
+  }
+
   @Get('post-visit/sessions/:id/recording-url')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

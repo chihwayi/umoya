@@ -8065,6 +8065,17 @@ export const patientPortalApi = {
     return { data: response.data };
   },
 
+  getPostVisitLabTrends: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ sessionId: string; trends: Array<{ key: string; name: string; unit: string; points: Array<{ value: number; unit: string; createdAt: string }>; latest: number | null; previous: number | null; min: number; max: number }> }> => {
+    const response = await ehrAxios.get(`/patient-portal/post-visit/sessions/${sessionId}/lab-trends`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
   getPostVisitRecordingUrl: async (
     sessionId: string,
     token: string,

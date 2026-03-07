@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { patientPortalApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
+import { LabTrendChart, LabTrendItem } from '../components/LabTrendChart';
 
 type PostVisitSessionItem = {
   id: string;
@@ -74,6 +75,7 @@ const PostVisitCompanionPortal: React.FC = () => {
     routeTarget: string;
     signalText?: string | null;
   } | null>(null);
+  const [labTrends, setLabTrends] = useState<LabTrendItem[]>([]);
 
   const messageListRef = useRef<HTMLDivElement | null>(null);
 
@@ -170,18 +172,21 @@ const PostVisitCompanionPortal: React.FC = () => {
     }
     try {
       setChatLoading(true);
-      const [summaryResponse, messagesResponse] = await Promise.all([
+      const [summaryResponse, messagesResponse, labTrendsResponse] = await Promise.all([
         patientPortalApi.getPostVisitSummary(selectedSessionId, token, tenantSlug),
         patientPortalApi.getPostVisitMessages(selectedSessionId, token, tenantSlug, { limit: 150, offset: 0 }),
+        patientPortalApi.getPostVisitLabTrends(selectedSessionId, token, tenantSlug).catch(() => ({ trends: [] })),
       ]);
 
       setSummaryPayload(summaryResponse.data || null);
       setMessages(Array.isArray(messagesResponse.data?.messages) ? messagesResponse.data.messages : []);
       setLastEscalation(null);
+      setLabTrends(Array.isArray(labTrendsResponse?.trends) ? labTrendsResponse.trends : []);
     } catch {
       showError('Post-visit companion', 'Unable to load summary or companion messages.');
       setSummaryPayload(null);
       setMessages([]);
+      setLabTrends([]);
     } finally {
       setChatLoading(false);
     }
@@ -509,6 +514,10 @@ const PostVisitCompanionPortal: React.FC = () => {
                       <p className="text-xs text-rose-700 mt-1">Signal: {lastEscalation.signalText}</p>
                     )}
                   </div>
+                )}
+
+                {labTrends.length > 0 && (
+                  <LabTrendChart trends={labTrends} title="Lab trend (from your visit documents)" />
                 )}
 
                 {summaryPayload?.summary && (
