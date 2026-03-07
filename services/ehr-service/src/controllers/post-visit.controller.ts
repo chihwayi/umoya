@@ -133,12 +133,43 @@ export class PostVisitController {
     return this.postVisitService.getSession(req.tenantDb, id);
   }
 
+  @Get('sessions/:id/recording-url')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get signed URL for session recording playback' })
+  @ApiResponse({ status: 200, description: 'Signed URL or null if no recording' })
+  async getSessionRecordingUrl(
+    @Param('id') id: string,
+    @Request() req: RequestWithTenant,
+  ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> {
+    return this.postVisitService.getSessionRecordingUrl(id, req.tenantDb);
+  }
+
   @Get('sessions/:id/draft')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Get current draft artifacts, transcript, and extracted entities for a session' })
   @ApiResponse({ status: 200, description: 'Post-visit draft fetched' })
   async getSessionDraft(@Param('id') id: string, @Request() req: RequestWithTenant): Promise<any> {
     return this.postVisitService.getSessionDraft(req.tenantDb, id);
+  }
+
+  @Get('sessions/:id/draft/annotated')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get draft with entity-annotated text spans for inline clinical entity linking' })
+  @ApiResponse({ status: 200, description: 'Annotated draft with spans' })
+  async getAnnotatedDraft(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.postVisitService.getAnnotatedDraft(id, req.tenantDb);
+  }
+
+  @Post('sessions/:id/ask-section')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Ask AI about a specific section of the visit summary' })
+  @ApiResponse({ status: 200, description: 'Section-scoped answer' })
+  async askAboutSection(
+    @Param('id') id: string,
+    @Body() body: { question: string; sectionType: string; artifactType?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.askAboutSection(id, body, req.tenantDb);
   }
 
   @Get('sessions/:id/fhir')

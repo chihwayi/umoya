@@ -72,6 +72,27 @@ export class PostVisitSession {
   @Column({ name: 'meta', type: 'jsonb', default: () => "'{}'::jsonb" })
   meta: Record<string, any>;
 
+  @Column({ name: 'recording_storage_key', type: 'varchar', length: 500, nullable: true })
+  recordingStorageKey: string | null;
+
+  @Column({ name: 'recording_bucket', type: 'varchar', length: 120, nullable: true, default: 'post-visit-recordings' })
+  recordingBucket: string | null;
+
+  @Column({ name: 'recording_mime_type', type: 'varchar', length: 60, nullable: true })
+  recordingMimeType: string | null;
+
+  @Column({ name: 'recording_size_bytes', type: 'bigint', nullable: true })
+  recordingSizeBytes: number | null;
+
+  @Column({ name: 'recording_duration_ms', type: 'int', nullable: true })
+  recordingDurationMs: number | null;
+
+  @Column({ name: 'recording_sha256', type: 'varchar', length: 64, nullable: true })
+  recordingSha256: string | null;
+
+  @Column({ name: 'recording_uploaded_at', type: 'timestamp with time zone', nullable: true })
+  recordingUploadedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
   createdAt: Date;
 

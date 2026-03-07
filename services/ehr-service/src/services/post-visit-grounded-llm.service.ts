@@ -52,6 +52,8 @@ export interface PostVisitPatientAnswerInput {
   checklist: string[];
   memoryFacts?: string[];
   citations: GroundingCitation[];
+  sectionType?: string;
+  sectionContent?: string;
 }
 
 export interface PostVisitPatientAnswerOutput {
@@ -227,29 +229,39 @@ export class PostVisitGroundedLlmService {
           },
           {
             role: 'user',
-            content: JSON.stringify({
-              task: 'patient_grounded_answer',
-              constraints: {
-                max_answer_chars: 1200,
-                cite_using_allowed_ids_only: true,
-                use_plain_language: true,
-                include_emergency_warning_when_urgent_signal: true,
-              },
-              session_id: input.sessionId,
-              language: input.language || 'en',
-              question,
-              approved_summary: input.summary,
-              approved_checklist: input.checklist,
-              companion_memory_facts: Array.isArray(input.memoryFacts) ? input.memoryFacts.slice(0, 8) : [],
-              allowed_citations: input.citations,
-              output_schema: {
-                abstain: 'boolean',
-                abstain_reason: 'string|null',
-                answer: 'string',
-                citations_used: 'string[]',
-                urgent_signal: 'boolean',
-              },
-            }),
+            content: (() => {
+              const payload: Record<string, any> = {
+                task: 'patient_grounded_answer',
+                constraints: {
+                  max_answer_chars: 1200,
+                  cite_using_allowed_ids_only: true,
+                  use_plain_language: true,
+                  include_emergency_warning_when_urgent_signal: true,
+                },
+                session_id: input.sessionId,
+                language: input.language || 'en',
+                question,
+                approved_summary: input.summary,
+                approved_checklist: input.checklist,
+                companion_memory_facts: Array.isArray(input.memoryFacts) ? input.memoryFacts.slice(0, 8) : [],
+                allowed_citations: input.citations,
+                output_schema: {
+                  abstain: 'boolean',
+                  abstain_reason: 'string|null',
+                  answer: 'string',
+                  citations_used: 'string[]',
+                  urgent_signal: 'boolean',
+                },
+              };
+              if (input.sectionType && input.sectionContent) {
+                payload.section_scope = {
+                  section_type: input.sectionType,
+                  section_content: input.sectionContent,
+                  instruction: `Focus your answer on the "${input.sectionType}" section of the visit summary. The content of this section is provided in "section_content". Answer the question specifically in the context of this section. If the question is not related to this section, say so and provide context from the full summary instead.`,
+                };
+              }
+              return JSON.stringify(payload);
+            })(),
           },
         ],
         0.1,

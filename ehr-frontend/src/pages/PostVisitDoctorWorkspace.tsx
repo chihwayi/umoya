@@ -19,6 +19,8 @@ import {
 import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import PostVisitEscalationQueue from '../components/PostVisitEscalationQueue';
+import { AnnotatedText, AnnotatedSpan } from '../components/AnnotatedText';
+import { SectionAskButton } from '../components/SectionAskButton';
 
 type SessionStatus = 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewed' | 'published' | 'closed';
 
@@ -528,6 +530,16 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   const [billingIntelligenceLoadedSessionId, setBillingIntelligenceLoadedSessionId] = useState<string | null>(null);
   const [preVisitBrief, setPreVisitBrief] = useState<PreVisitBriefPayload | null>(null);
   const [preVisitBriefLoading, setPreVisitBriefLoading] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordingMime, setRecordingMime] = useState<string>('audio/webm');
+  const [annotatedDraft, setAnnotatedDraft] = useState<{
+    sessionId: string;
+    entities: unknown[];
+    artifacts: Array<{
+      artifactType: string;
+      content: Record<string, { raw: string; spans: AnnotatedSpan[] } | unknown>;
+    }>;
+  } | null>(null);
   const [adminDocuments, setAdminDocuments] = useState<AdminDocumentItem[]>([]);
   const [adminDocumentsLoading, setAdminDocumentsLoading] = useState(false);
   const [trialMatches, setTrialMatches] = useState<TrialMatchesPayload | null>(null);
@@ -697,6 +709,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setSelectedSessionId(null);
         setDraftData(null);
         setDiarizationData(null);
+        setRecordingUrl(null);
+        setAnnotatedDraft(null);
         setDocumentIntelligence([]);
         setDocumentIntelligenceLoadedSessionId(null);
         setBillingIntelligence(null);
@@ -848,6 +862,39 @@ const PostVisitDoctorWorkspace: React.FC = () => {
         setPreVisitBrief(null);
       } finally {
         setPreVisitBriefLoading(false);
+      }
+    },
+    [tenantSlug, token],
+  );
+
+  const loadRecordingUrl = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) {
+        setRecordingUrl(null);
+        return;
+      }
+      try {
+        const rec = await ehrApi.getPostVisitRecordingUrl(sessionId, token, tenantSlug);
+        setRecordingUrl(rec?.url ?? null);
+        setRecordingMime(rec?.mimeType ?? 'audio/webm');
+      } catch {
+        setRecordingUrl(null);
+      }
+    },
+    [tenantSlug, token],
+  );
+
+  const loadAnnotatedDraft = useCallback(
+    async (sessionId: string) => {
+      if (!tenantSlug || !token || !sessionId) {
+        setAnnotatedDraft(null);
+        return;
+      }
+      try {
+        const ad = await ehrApi.getPostVisitAnnotatedDraft(sessionId, token, tenantSlug);
+        setAnnotatedDraft(ad);
+      } catch {
+        setAnnotatedDraft(null);
       }
     },
     [tenantSlug, token],
@@ -1044,6 +1091,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     if (!selectedSessionId) return;
     loadDraft(selectedSessionId);
     loadDiarization(selectedSessionId);
+    loadRecordingUrl(selectedSessionId);
+    loadAnnotatedDraft(selectedSessionId);
     loadDocumentIntelligence(selectedSessionId);
     loadIntraVisitAlerts(selectedSessionId);
     loadBillingIntelligence(selectedSessionId);
@@ -1081,6 +1130,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
     loadDraft,
     loadIntraVisitAlerts,
     loadPreVisitBrief,
+    loadRecordingUrl,
+    loadAnnotatedDraft,
     loadTrialMatches,
     loadTrialMemoryAnalytics,
     loadTrialSlaAccountability,
@@ -2848,6 +2899,17 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                 </section>
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="mb-3 text-sm font-bold text-slate-900">Visit Recording</h3>
+                  {recordingUrl ? (
+                    <audio controls preload="metadata" className="w-full max-w-md" src={recordingUrl} type={recordingMime}>
+                      Your browser does not support the audio element.
+                    </audio>
+                  ) : (
+                    <p className="text-xs text-slate-500">No recording available for this session.</p>
+                  )}
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-bold text-slate-900">Diarization Review</h3>
                     {diarizationLoading && <span className="text-xs text-slate-500">Loading diarization…</span>}
@@ -2972,10 +3034,31 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Visit Summary</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Visit Summary</p>
+                        {selectedSessionId && token && tenantSlug && (
+                          <SectionAskButton
+                            sessionId={selectedSessionId}
+                            sectionType="quick_summary"
+                            sectionLabel="Quick Summary"
+                            token={token}
+                            tenantSlug={tenantSlug}
+                          />
+                        )}
+                      </div>
                       <p className="mt-1 text-xs text-slate-600">Status: {visitSummaryArtifact?.status || 'missing'}</p>
                       <p className="mt-2 text-sm text-slate-800">
-                        {String(visitSummaryArtifact?.content?.plain_language_summary || '').trim() || 'No generated summary yet.'}
+                        {annotatedDraft?.artifacts?.find((a: { artifactType: string }) => a.artifactType === 'visit_summary')
+                          ?.content?.plain_language_summary?.spans ? (
+                          <AnnotatedText
+                            spans={
+                              annotatedDraft.artifacts.find((a: { artifactType: string }) => a.artifactType === 'visit_summary')!.content
+                                .plain_language_summary!.spans as AnnotatedSpan[]
+                            }
+                          />
+                        ) : (
+                          String(visitSummaryArtifact?.content?.plain_language_summary || '').trim() || 'No generated summary yet.'
+                        )}
                       </p>
                       {Array.isArray(visitSummaryArtifact?.content?.teach_back_questions) &&
                         visitSummaryArtifact?.content?.teach_back_questions.length > 0 && (
@@ -3000,7 +3083,18 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     </article>
 
                     <article className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Recommendation Bundle</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Recommendation Bundle</p>
+                        {selectedSessionId && token && tenantSlug && (
+                          <SectionAskButton
+                            sessionId={selectedSessionId}
+                            sectionType="recommendations"
+                            sectionLabel="Recommendations"
+                            token={token}
+                            tenantSlug={tenantSlug}
+                          />
+                        )}
+                      </div>
                       <p className="mt-1 text-xs text-slate-600">Status: {recommendationArtifact?.status || 'missing'}</p>
                       <p className="mt-2 text-sm text-slate-800">
                         {recommendationItems.length} recommendations ready for execution and patient checklist publication.

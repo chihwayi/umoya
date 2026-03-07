@@ -32,6 +32,9 @@ import {
   PostVisitGroundedLlmService,
 } from './post-visit-grounded-llm.service';
 import { HipaaAuditService } from './hipaa-audit.service';
+import { FileStorageService } from './file-storage.service';
+import { PostVisitSession } from '../entities/post-visit-session.entity';
+import { annotateTextWithEntities, AnnotatedSpan } from '../utils/entity-annotation';
 
 type PostVisitSessionStatus =
   | 'captured'
@@ -324,6 +327,7 @@ export class PostVisitService {
     private readonly patientNotificationsService?: PatientNotificationsService,
     private readonly groundedLlmService?: PostVisitGroundedLlmService,
     private readonly hipaaAuditService?: HipaaAuditService,
+    private readonly fileStorageService?: FileStorageService,
   ) {}
 
   private async ensurePostVisitSchema(tenantDb: DataSource) {
@@ -5254,98 +5258,259 @@ export class PostVisitService {
           confidence: row.confidence,
           language: row.language,
           speakerLabel: row.speaker_label || null,
-          speakerRole: row.speaker_role || 'unknown',
-          diarizationConfidence:
-            row.diarization_confidence === null || row.diarization_confidence === undefined
-              ? null
-              : Number(row.diarization_confidence),
-          speakerAssignmentStatus: row.speaker_assignment_status || 'unresolved',
-          needsReview: row.needs_review === true,
-          reviewedBy: row.reviewed_by || null,
-          reviewedAt: row.reviewed_at || null,
+          speakerRole: row.speaker_role || null,
+          diarizationConfidence: row.diarization_confidence,
+          speakerAssignmentStatus: row.speaker_assignment_status,
+          needsReview: row.needs_review,
+          reviewedBy: row.reviewed_by,
+          reviewedAt: row.reviewed_at,
         })),
       },
-      reviewActions: reviewActions.map((row: any) => ({
+      reviewActions: (reviewActions as any[]).map((row: any) => ({
         id: row.id,
         artifactId: row.artifact_id,
         artifactType: row.artifact_type,
         action: row.action,
-        reason: row.review_reason,
-        metadata: row.review_metadata || {},
+        reviewReason: row.review_reason,
+        reviewMetadata: row.review_metadata || {},
         reviewedBy: row.reviewed_by,
         source: row.source,
         createdAt: row.created_at,
       })),
-      ruleCitations: ruleCitations.map((row: any) => ({
-        id: row.id,
-        recommendationId: row.recommendation_id,
-        ruleId: row.rule_id,
-        guidelineId: row.guideline_id,
-        label: row.citation_label,
-        source: row.citation_source,
-        url: row.citation_url,
-        excerpt: row.evidence_excerpt,
-        confidence: row.confidence,
-        relevanceScore:
-          row.relevance_score === null || row.relevance_score === undefined ? null : Number(row.relevance_score),
-        citationYear: row.citation_year === null || row.citation_year === undefined ? null : Number(row.citation_year),
-        isSuperseded: row.is_superseded === true,
-        supersededByGuidelineId: row.superseded_by_guideline_id || null,
-        acknowledgedSuperseded: row.doctor_acknowledged_superseded === true,
-        acknowledgedBy: row.superseded_acknowledged_by || null,
-        acknowledgedAt: row.superseded_acknowledged_at || null,
-        metadata: row.metadata || {},
-        createdAt: row.created_at,
-      })),
-      actionExecutions: actionExecutions.map((row: any) => ({
-        id: row.id,
-        recommendationId: row.recommendation_id,
-        actionKey: row.action_key,
-        actionType: row.action_type,
-        status: row.status,
-        note: row.execution_note,
-        resultResourceType: row.result_resource_type,
-        resultResourceId: row.result_resource_id,
-        resultPayload: row.result_payload || {},
-        errorMessage: row.error_message,
-        executedBy: row.executed_by,
-        executedAt: row.executed_at,
-        source: row.source,
-        metadata: row.metadata || {},
-      })),
-      documentIntelligence: documentIntelligenceRows.map((row: any) => ({
-        id: row.id,
-        documentType: row.document_type,
-        documentName: row.document_name,
-        mimeType: row.mime_type || null,
-        fileSize: row.file_size === null || row.file_size === undefined ? null : Number(row.file_size),
-        extractionStatus: row.extraction_status,
-        duplicateOfDocumentId: row.duplicate_of_document_id || null,
-        duplicateSimilarity:
-          row.duplicate_similarity === null || row.duplicate_similarity === undefined
-            ? null
-            : Number(row.duplicate_similarity),
-        ocrEngine: row.ocr_engine || null,
-        ocrConfidence:
-          row.ocr_confidence === null || row.ocr_confidence === undefined
-            ? null
-            : Number(row.ocr_confidence),
-        extractedText: row.extracted_text || null,
-        structured: row.structured_payload || {},
-        fhirResources: row.fhir_resources || [],
-        criticalFlags: row.critical_flags || [],
-        criticalDetected: row.critical_detected === true,
-        criticalRouted: row.critical_routed === true,
-        escalationEventId: row.escalation_event_id || null,
-        metadata: row.metadata || {},
-        createdAt: row.created_at,
-      })),
+      ruleCitations: (ruleCitations as any[]).map((row: any) => this.mapRuleCitationRow(row)),
+      actionExecutions: (actionExecutions as any[]).map((row: any) => this.mapActionExecutionRow(row)),
+      documentIntelligence: (documentIntelligenceRows as any[]).map((row: any) => this.mapDocumentIntelligenceRow(row)),
       billingIntelligence: {
-        featureEnabled: this.isBillingIntelligenceEnabled(),
+        featureEnabled: true,
         documentation: billingDocumentation,
         suggestions: billingSuggestions,
         summary: billingSummary,
       },
+    };
+  }
+
+  async getAnnotatedDraft(sessionId: string, tenantDb: DataSource) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    const [artifactRows, entityRows] = await Promise.all([
+      tenantDb.query(
+        `SELECT id, artifact_type, artifact_status, content, citations, confidence
+         FROM post_visit_draft_artifacts WHERE session_id = $1 ORDER BY created_at DESC`,
+        [sessionId],
+      ),
+      tenantDb.query(
+        `SELECT id, entity_type, entity_value, normalized_value, confidence
+         FROM post_visit_extracted_entities WHERE session_id = $1 ORDER BY created_at DESC LIMIT 200`,
+        [sessionId],
+      ),
+    ]);
+
+    const entityList = (entityRows as any[]).map((e: any) => ({
+      id: e.id,
+      entityType: e.entity_type,
+      entityValue: e.entity_value,
+      normalizedValue: e.normalized_value || {},
+      confidence: e.confidence,
+    }));
+
+    const annotated = (artifactRows as any[]).map((row: any) => {
+      const content = row.content || {};
+      const annotatedContent: Record<string, { raw: string; spans: AnnotatedSpan[] } | any> = {};
+
+      for (const [key, value] of Object.entries(content)) {
+        if (typeof value === 'string' && value.length > 10) {
+          annotatedContent[key] = {
+            raw: value,
+            spans: annotateTextWithEntities(value, entityList),
+          };
+        } else if (Array.isArray(value)) {
+          annotatedContent[key] = value.map((item: any) => {
+            if (typeof item === 'string') {
+              return { raw: item, spans: annotateTextWithEntities(item, entityList) };
+            }
+            if (typeof item === 'object' && item !== null && typeof item.text === 'string') {
+              return { ...item, spans: annotateTextWithEntities(item.text, entityList) };
+            }
+            return item;
+          });
+        } else {
+          annotatedContent[key] = value;
+        }
+      }
+
+      return {
+        id: row.id,
+        artifactType: row.artifact_type,
+        artifactStatus: row.artifact_status,
+        content: annotatedContent,
+        citations: row.citations || [],
+        confidence: row.confidence,
+      };
+    });
+
+    return {
+      sessionId,
+      entities: entityList,
+      artifacts: annotated,
+    };
+  }
+
+  async askAboutSection(
+    sessionId: string,
+    body: { question: string; sectionType: string; artifactType?: string },
+    tenantDb: DataSource,
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    await this.getSessionRow(tenantDb, sessionId);
+
+    const targetType = body.artifactType || 'visit_summary';
+    const artifactRows = await tenantDb.query(
+      `SELECT id, artifact_type, content, citations FROM post_visit_draft_artifacts
+       WHERE session_id = $1 AND artifact_type = $2 LIMIT 1`,
+      [sessionId, targetType],
+    );
+    const artifact = artifactRows[0] as any;
+    if (!artifact) {
+      return { answer: 'No summary artifact found for this session.', abstained: true };
+    }
+
+    const content = artifact.content || {};
+    const sectionContent = this.extractSectionContent(content, body.sectionType);
+
+    const fullSummary =
+      typeof content.plain_language_summary === 'string'
+        ? content.plain_language_summary
+        : JSON.stringify(content);
+
+    const recRows = await tenantDb.query(
+      `SELECT content FROM post_visit_draft_artifacts
+       WHERE session_id = $1 AND artifact_type = 'recommendation_bundle' LIMIT 1`,
+      [sessionId],
+    );
+    const checklist: string[] = [];
+    const recContent = (recRows[0] as any)?.content;
+    if (recContent?.items && Array.isArray(recContent.items)) {
+      for (const item of recContent.items) {
+        checklist.push(typeof item === 'string' ? item : item.text || JSON.stringify(item));
+      }
+    }
+
+    const citations = (artifact.citations || []).map((c: any, i: number) => ({
+      id: c.id || `cit-${i}`,
+      label: c.label || c.source || `Citation ${i + 1}`,
+      source: c.source || 'visit',
+      excerpt: c.excerpt || '',
+    }));
+
+    if (!this.groundedLlmService) {
+      return { answer: 'Grounded LLM is not configured.', abstained: true };
+    }
+    const result = await this.groundedLlmService.answerPatientQuestion({
+      sessionId,
+      question: body.question,
+      summary: fullSummary,
+      checklist,
+      citations,
+      sectionType: body.sectionType,
+      sectionContent,
+    });
+    return result || { answer: 'Unable to answer at this time.', abstained: true };
+  }
+
+  private extractSectionContent(content: Record<string, any>, sectionType: string): string {
+    const keyMap: Record<string, string[]> = {
+      chief_complaint: ['chief_complaint', 'chiefComplaint'],
+      hpi: ['history_of_present_illness', 'hpi', 'historyOfPresentIllness'],
+      reported_symptoms: ['reported_symptoms', 'reportedSymptoms', 'symptoms'],
+      physical_exam: ['physical_examination', 'physicalExamination', 'objective', 'physical_exam'],
+      assessment: ['assessment'],
+      plan: ['plan', 'treatment_plan', 'treatmentPlan'],
+      recommendations: ['recommendations', 'items'],
+      subjective: ['subjective'],
+      objective: ['objective'],
+      quick_summary: ['plain_language_summary', 'quick_summary', 'summary'],
+      key_points: ['key_points', 'keyPoints'],
+    };
+    const keys = keyMap[sectionType] || [sectionType];
+    for (const key of keys) {
+      if (content[key]) {
+        const val = content[key];
+        if (typeof val === 'string') return val;
+        if (Array.isArray(val)) {
+          return val
+            .map((v: any) => (typeof v === 'string' ? v : v.text || JSON.stringify(v)))
+            .join('\n');
+        }
+        return JSON.stringify(val);
+      }
+    }
+    return '';
+  }
+
+  private mapRuleCitationRow(row: any) {
+    return {
+      id: row.id,
+      recommendationId: row.recommendation_id,
+      ruleId: row.rule_id,
+      guidelineId: row.guideline_id,
+      label: row.citation_label,
+      source: row.citation_source,
+      url: row.citation_url,
+      excerpt: row.evidence_excerpt,
+      confidence: row.confidence,
+      relevanceScore: row.relevance_score,
+      citationYear: row.citation_year,
+      isSuperseded: row.is_superseded,
+      supersededByGuidelineId: row.superseded_by_guideline_id,
+      acknowledgedSuperseded: row.doctor_acknowledged_superseded,
+      supersededAcknowledgedBy: row.superseded_acknowledged_by,
+      supersededAcknowledgedAt: row.superseded_acknowledged_at,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
+    };
+  }
+
+  private mapActionExecutionRow(row: any) {
+    return {
+      id: row.id,
+      recommendationId: row.recommendation_id,
+      actionKey: row.action_key,
+      actionType: row.action_type,
+      status: row.status,
+      executionNote: row.execution_note,
+      resultResourceType: row.result_resource_type,
+      resultResourceId: row.result_resource_id,
+      resultPayload: row.result_payload,
+      errorMessage: row.error_message,
+      executedBy: row.executed_by,
+      executedAt: row.executed_at,
+      source: row.source,
+      metadata: row.metadata || {},
+    };
+  }
+
+  private mapDocumentIntelligenceRow(row: any) {
+    return {
+      id: row.id,
+      documentType: row.document_type,
+      documentName: row.document_name,
+      mimeType: row.mime_type,
+      fileSize: row.file_size,
+      duplicateOfDocumentId: row.duplicate_of_document_id,
+      duplicateSimilarity: row.duplicate_similarity,
+      extractionStatus: row.extraction_status,
+      ocrEngine: row.ocr_engine,
+      ocrConfidence: row.ocr_confidence,
+      extractedText: row.extracted_text,
+      structuredPayload: row.structured_payload,
+      fhirResources: row.fhir_resources,
+      criticalFlags: row.critical_flags,
+      criticalDetected: row.critical_detected,
+      criticalRouted: row.critical_routed,
+      escalationEventId: row.escalation_event_id,
+      metadata: row.metadata || {},
+      createdAt: row.created_at,
     };
   }
 
@@ -11984,10 +12149,85 @@ export class PostVisitService {
       source: 'post_visit_session_transcribe',
     });
 
+    const tenantId = requestContext.tenantId || '';
+    if (this.fileStorageService && audioFile?.buffer && Buffer.isBuffer(audioFile.buffer)) {
+      try {
+        const storageKey = `tenant/${tenantId}/post-visit/${sessionId}/recording${this.getExtension(audioFile.mimetype)}`;
+        const bucket = 'post-visit-recordings';
+        const uploadResult = await this.fileStorageService.uploadBuffer(
+          bucket,
+          storageKey,
+          audioFile.buffer,
+          audioFile.mimetype || 'audio/webm',
+        );
+        let durationMs: number | null = null;
+        if (result.segments && Array.isArray(result.segments) && result.segments.length > 0) {
+          const last = result.segments[result.segments.length - 1] as { end?: number; duration?: number };
+          const endSec = typeof last?.end === 'number' ? last.end : last?.duration;
+          if (typeof endSec === 'number') durationMs = Math.round(endSec * 1000);
+        }
+        const sessionRepo = tenantDb.getRepository(PostVisitSession);
+        await sessionRepo.update(sessionId, {
+          recordingStorageKey: uploadResult.key,
+          recordingBucket: uploadResult.bucket,
+          recordingMimeType: audioFile.mimetype || 'audio/webm',
+          recordingSizeBytes: uploadResult.size,
+          recordingSha256: uploadResult.sha256,
+          recordingDurationMs: Number.isFinite(durationMs) ? Math.round(durationMs) : null,
+          recordingUploadedAt: new Date(),
+        });
+      } catch {
+        // non-fatal: transcription already persisted
+      }
+    }
+
     return {
       ...persisted,
       soapNote: result.soap_note || null,
       audioUrl: result.audio_url || null,
     };
+  }
+
+  private getExtension(mime: string): string {
+    const map: Record<string, string> = {
+      'audio/webm': '.webm',
+      'audio/ogg': '.ogg',
+      'audio/wav': '.wav',
+      'audio/mp3': '.mp3',
+      'audio/mpeg': '.mp3',
+      'audio/mp4': '.m4a',
+      'audio/x-m4a': '.m4a',
+    };
+    return map[mime] || '.audio';
+  }
+
+  async getSessionRecordingUrl(
+    sessionId: string,
+    tenantDb: DataSource,
+  ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> {
+    const repo = tenantDb.getRepository(PostVisitSession);
+    const session = await repo.findOne({ where: { id: sessionId } });
+    if (!session?.recordingStorageKey || !this.fileStorageService) {
+      return { url: null };
+    }
+    const url = await this.fileStorageService.getSignedDownloadUrl(
+      session.recordingBucket || 'post-visit-recordings',
+      session.recordingStorageKey,
+      900,
+    );
+    return {
+      url,
+      mimeType: session.recordingMimeType || 'audio/webm',
+      durationMs: session.recordingDurationMs ?? null,
+    };
+  }
+
+  async getSessionForPatient(
+    sessionId: string,
+    patientId: string,
+    tenantDb: DataSource,
+  ): Promise<PostVisitSession | null> {
+    const repo = tenantDb.getRepository(PostVisitSession);
+    return repo.findOne({ where: { id: sessionId, patientId } });
   }
 }

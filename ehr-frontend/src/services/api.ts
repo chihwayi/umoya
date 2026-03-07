@@ -1337,6 +1337,50 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPostVisitRecordingUrl: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/recording-url`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
+
+  getPostVisitAnnotatedDraft: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ sessionId: string; entities: unknown[]; artifacts: Array<{ artifactType: string; content: Record<string, { raw: string; spans: unknown[] } | unknown> }> }> => {
+    const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/draft/annotated`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  },
+
+  askPostVisitSection: async (
+    sessionId: string,
+    body: { question: string; sectionType: string; artifactType?: string },
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ answer: string; abstained?: boolean }> => {
+    const response = await ehrAxios.post(`/post-visit/sessions/${sessionId}/ask-section`, body, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  },
+
   transcribePostVisitSession: async (
     sessionId: string,
     payload: {
@@ -8019,6 +8063,43 @@ export const patientPortalApi = {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return { data: response.data };
+  },
+
+  getPostVisitRecordingUrl: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> => {
+    const response = await ehrAxios.get(`/patient-portal/post-visit/sessions/${sessionId}/recording-url`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  getPostVisitAnnotatedSummary: async (
+    sessionId: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ sessionId: string; entities: unknown[]; artifacts: Array<{ artifactType: string; content: Record<string, { raw: string; spans: unknown[] } | unknown> }> }> => {
+    const response = await ehrAxios.get(`/patient-portal/post-visit/sessions/${sessionId}/summary/annotated`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+
+  askPostVisitSection: async (
+    sessionId: string,
+    question: string,
+    sectionType: string,
+    token: string,
+    tenantSlug: string,
+  ): Promise<{ answer: string; abstained?: boolean }> => {
+    const response = await ehrAxios.post(
+      `/patient-portal/post-visit/sessions/${sessionId}/ask-section`,
+      { question, sectionType },
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+    );
+    return response.data;
   },
 
   getPostVisitMessages: async (

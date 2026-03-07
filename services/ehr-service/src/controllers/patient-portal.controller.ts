@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DataSource } from 'typeorm';
@@ -533,6 +533,67 @@ export class PatientPortalController {
       throw new Error('Patient ID not found in token');
     }
     return this.postVisitService.getPatientSessionSummary(req.tenantDb, id, patientId);
+  }
+
+  @Get('post-visit/sessions/:id/recording-url')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get signed URL for session recording (patient)', description: 'Returns signed URL for playback when session is published; for mobile app use' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async getPatientRecordingUrl(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+  ): Promise<{ url: string; mimeType: string; durationMs: number | null } | { url: null }> {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const session = await this.postVisitService.getSessionForPatient(id, patientId, req.tenantDb);
+    if (!session || session.status !== 'published') {
+      return { url: null };
+    }
+    return this.postVisitService.getSessionRecordingUrl(id, req.tenantDb);
+  }
+
+  @Get('post-visit/sessions/:id/summary/annotated')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get annotated summary (patient)', description: 'Entity-annotated draft for published session; for mobile app use' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async getPatientAnnotatedSummary(
+    @Param('id') id: string,
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const session = await this.postVisitService.getSessionForPatient(id, patientId, req.tenantDb);
+    if (!session || session.status !== 'published') {
+      throw new NotFoundException('Session not found or not published');
+    }
+    return this.postVisitService.getAnnotatedDraft(id, req.tenantDb);
+  }
+
+  @Post('post-visit/sessions/:id/ask-section')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Ask about section (patient)', description: 'Section-scoped Q&A for published session; for mobile app use' })
+  @ApiParam({ name: 'id', description: 'Post-visit session ID' })
+  async patientAskAboutSection(
+    @Param('id') id: string,
+    @Body() body: { question: string; sectionType: string },
+    @Req() req: RequestWithTenant & { user: any },
+  ) {
+    const patientId = req.user?.sub || req.user?.id;
+    if (!patientId) {
+      throw new Error('Patient ID not found in token');
+    }
+    const session = await this.postVisitService.getSessionForPatient(id, patientId, req.tenantDb);
+    if (!session || session.status !== 'published') {
+      throw new NotFoundException('Session not found or not published');
+    }
+    return this.postVisitService.askAboutSection(id, { question: body.question, sectionType: body.sectionType }, req.tenantDb);
   }
 
   @Get('post-visit/sessions/:id/messages')

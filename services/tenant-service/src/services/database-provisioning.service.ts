@@ -539,6 +539,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint57PostVisitDocumentIntelligenceAndNotificationsSchemaStatements(),
       },
       {
+        id: 'sprint58_post_visit_audio_storage',
+        label: 'Post-Visit Audio Storage',
+        version: '2026.03.07',
+        description: 'Adds recording storage columns to post_visit_sessions',
+        statements: () => this.getSprint58PostVisitAudioStorageSchemaStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1643,6 +1650,19 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_patient_notifications_patient_read ON patient_notifications(patient_id, read)`,
       `CREATE INDEX IF NOT EXISTS idx_patient_notifications_type ON patient_notifications(notification_type)`,
       `CREATE INDEX IF NOT EXISTS idx_patient_notifications_sent_at ON patient_notifications(sent_at DESC)`,
+    ];
+  }
+
+  private getSprint58PostVisitAudioStorageSchemaStatements(): string[] {
+    return [
+      `ALTER TABLE IF EXISTS post_visit_sessions
+       ADD COLUMN IF NOT EXISTS recording_storage_key   VARCHAR(500),
+       ADD COLUMN IF NOT EXISTS recording_bucket         VARCHAR(120)  DEFAULT 'post-visit-recordings',
+       ADD COLUMN IF NOT EXISTS recording_mime_type       VARCHAR(60),
+       ADD COLUMN IF NOT EXISTS recording_size_bytes      BIGINT,
+       ADD COLUMN IF NOT EXISTS recording_duration_ms     INTEGER,
+       ADD COLUMN IF NOT EXISTS recording_sha256          VARCHAR(64),
+       ADD COLUMN IF NOT EXISTS recording_uploaded_at     TIMESTAMP WITH TIME ZONE`,
     ];
   }
 
