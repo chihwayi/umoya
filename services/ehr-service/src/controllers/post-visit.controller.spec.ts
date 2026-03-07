@@ -11,6 +11,9 @@ describe('PostVisitController', () => {
     listSessions: jest.fn(),
     getSession: jest.fn(),
     getSessionDraft: jest.fn(),
+    getSessionRecordingUrl: jest.fn(),
+    getAnnotatedDraft: jest.fn(),
+    askAboutSection: jest.fn(),
     getSessionDiarization: jest.fn(),
     getSessionFhirProjection: jest.fn(),
     getSessionMobileContract: jest.fn(),
@@ -292,6 +295,101 @@ describe('PostVisitController', () => {
     const result = await controller.getSessionFhirProjection('session-1', req);
     expect(postVisitServiceMock.getSessionFhirProjection).toHaveBeenCalledWith(req.tenantDb, 'session-1');
     expect(result.exportVersion).toBe('post-visit-fhir-r4.v1');
+  });
+
+  it('returns signed recording URL when recording exists', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getSessionRecordingUrl.mockResolvedValue({
+      url: 'https://storage.example/signed-url',
+      mimeType: 'audio/webm',
+      durationMs: 120000,
+    });
+
+    const result = await controller.getSessionRecordingUrl('session-1', req);
+    expect(postVisitServiceMock.getSessionRecordingUrl).toHaveBeenCalledWith('session-1', req.tenantDb);
+    expect(result).toEqual({
+      url: 'https://storage.example/signed-url',
+      mimeType: 'audio/webm',
+      durationMs: 120000,
+    });
+  });
+
+  it('returns url null when no recording for session', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getSessionRecordingUrl.mockResolvedValue({ url: null });
+
+    const result = await controller.getSessionRecordingUrl('session-1', req);
+    expect(postVisitServiceMock.getSessionRecordingUrl).toHaveBeenCalledWith('session-1', req.tenantDb);
+    expect(result).toEqual({ url: null });
+  });
+
+  it('returns annotated draft with entity spans', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.getAnnotatedDraft.mockResolvedValue({
+      sessionId: 'session-1',
+      entities: [{ id: 'e1', entityType: 'symptom', entityValue: 'chest pain' }],
+      artifacts: [
+        {
+          artifactType: 'visit_summary',
+          content: {
+            plain_language_summary: {
+              raw: 'Patient presents with chest pain.',
+              spans: [
+                { text: 'Patient presents with ', isEntity: false, startIndex: 0, endIndex: 22 },
+                { text: 'chest pain', isEntity: true, entityType: 'symptom', startIndex: 22, endIndex: 32 },
+              ],
+            },
+          },
+        },
+      ],
+    });
+
+    const result = await controller.getAnnotatedDraft('session-1', req);
+    expect(postVisitServiceMock.getAnnotatedDraft).toHaveBeenCalledWith('session-1', req.tenantDb);
+    expect(result.sessionId).toBe('session-1');
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0].content.plain_language_summary.spans).toHaveLength(2);
+  });
+
+  it('askAboutSection returns section-scoped answer', async () => {
+    const req = {
+      tenantId: 'tenant-a',
+      tenantDb: { query: jest.fn() },
+      user: { id: 'doctor-1' },
+    } as any;
+
+    postVisitServiceMock.askAboutSection.mockResolvedValue({
+      answer: 'The assessment indicates stable angina.',
+      abstained: false,
+    });
+
+    const result = await controller.askAboutSection(
+      'session-1',
+      { question: 'What does the assessment say?', sectionType: 'assessment' },
+      req,
+    );
+    expect(postVisitServiceMock.askAboutSection).toHaveBeenCalledWith(
+      'session-1',
+      { question: 'What does the assessment say?', sectionType: 'assessment' },
+      req.tenantDb,
+    );
+    expect(result.answer).toBe('The assessment indicates stable angina.');
+    expect(result.abstained).toBe(false);
   });
 
   it('returns diarization review segments with normalized filters', async () => {

@@ -3535,4 +3535,97 @@ describe('PostVisitService', () => {
     expect(result.isAcknowledged).toBe(true);
     expect(result.acknowledgedBy).toBe('doctor-1');
   });
+
+  it('askAboutSection extracts section content and calls grounded LLM with section scope', async () => {
+    const groundedLlmServiceMock = {
+      answerPatientQuestion: jest.fn(async () => ({
+        answer: 'The assessment indicates stable angina.',
+        citationsUsed: [],
+        model: 'gpt-4o-mini',
+        abstained: false,
+        urgentSignal: false,
+      })),
+    };
+    const service = new PostVisitService(
+      transcriptionServiceMock as any,
+      patientServiceMock as any,
+      undefined,
+      undefined,
+      undefined,
+      groundedLlmServiceMock as any,
+    );
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions') && sql.includes('id = $1')) {
+          return [{ id: 'session-1', patient_id: 'patient-1', status: 'draft_ready' }];
+        }
+        if (sql.includes('post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'visit_summary') {
+            return [
+              {
+                id: 'art-1',
+                artifact_type: 'visit_summary',
+                content: {
+                  plain_language_summary: 'Patient seen for chest pain.',
+                  assessment: 'Stable angina. Continue current medications.',
+                  plan: 'Follow up in 2 weeks.',
+                },
+                citations: [],
+              },
+            ];
+          }
+          if (params[1] === 'recommendation_bundle') {
+            return [{ id: 'rec-1', content: { items: [] }, citations: [] }];
+          }
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.askAboutSection(
+      'session-1',
+      { question: 'What does the assessment say?', sectionType: 'assessment' },
+      tenantDb,
+    );
+
+    expect(result.answer).toBe('The assessment indicates stable angina.');
+    expect(result.abstained).toBe(false);
+    expect(groundedLlmServiceMock.answerPatientQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'session-1',
+        question: 'What does the assessment say?',
+        sectionType: 'assessment',
+        sectionContent: 'Stable angina. Continue current medications.',
+      }),
+    );
+  });
+
+  it('askAboutSection returns abstained when no artifact found', async () => {
+    const service = new PostVisitService(
+      transcriptionServiceMock as any,
+      patientServiceMock as any,
+    );
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions') && sql.includes('id = $1')) {
+          return [{ id: 'session-1' }];
+        }
+        if (sql.includes('post_visit_draft_artifacts')) {
+          return [];
+        }
+        return [];
+      }),
+    } as any;
+
+    const result = await service.askAboutSection(
+      'session-1',
+      { question: 'What is the plan?', sectionType: 'plan' },
+      tenantDb,
+    );
+
+    expect(result.answer).toContain('No summary artifact found');
+    expect(result.abstained).toBe(true);
+  });
 });
