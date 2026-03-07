@@ -953,7 +953,9 @@ export class PostVisitController {
     @Param('id') id: string,
     @Request() req: RequestWithTenant,
   ): Promise<any> {
-    return this.postVisitService.getSessionBillingIntelligence(req.tenantDb, id);
+    return this.postVisitService.getSessionBillingIntelligence(req.tenantDb, id, {
+      actorUserId: this.resolveUserId(req),
+    });
   }
 
   @Post('sessions/:id/billing-suggestions/:suggestionId/review')

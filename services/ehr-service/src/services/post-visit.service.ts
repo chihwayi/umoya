@@ -5298,6 +5298,7 @@ export class PostVisitService {
   async getSessionBillingIntelligence(
     tenantDb: DataSource,
     sessionId: string,
+    options: { actorUserId?: string | null } = {},
   ) {
     await this.ensurePostVisitSchema(tenantDb);
     const sessionRow = await this.getSessionRow(tenantDb, sessionId);
@@ -5319,11 +5320,39 @@ export class PostVisitService {
     );
 
     const suggestions = Array.isArray(rows) ? rows.map((row: any) => this.mapBillingSuggestion(row)) : [];
+    const documentation = this.buildBillingDocumentationSummaryFromSuggestionRows(rows);
+
+    if (
+      this.isBillingIntelligenceEnabled() &&
+      suggestions.length > 0 &&
+      this.hipaaAuditService &&
+      options.actorUserId &&
+      sessionRow.patient_id
+    ) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.BILLING_VIEW,
+          'post_visit_billing_intelligence',
+          sessionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          sessionId,
+          { fields: ['suggestions', 'documentation'], recordCount: suggestions.length },
+          { sessionId },
+        )
+        .catch(() => {});
+    }
+
     return {
       featureEnabled: this.isBillingIntelligenceEnabled(),
       sessionId,
       patientId: sessionRow.patient_id,
-      documentation: this.buildBillingDocumentationSummaryFromSuggestionRows(rows),
+      documentation,
       suggestions,
       summary: {
         total: suggestions.length,
@@ -5459,6 +5488,27 @@ export class PostVisitService {
         }),
       ],
     );
+
+    if (this.hipaaAuditService && sessionRow.patient_id) {
+      await this.hipaaAuditService
+        .logPhiModification(
+          tenantDb,
+          options.actorUserId!,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_UPDATE,
+          'post_visit_billing_suggestion',
+          suggestionId,
+          sessionRow.patient_id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          sessionId,
+          { action: action === 'approve' ? 'approved' : 'rejected', sessionId },
+        )
+        .catch(() => {});
+    }
 
     return {
       featureEnabled: this.isBillingIntelligenceEnabled(),
