@@ -23,6 +23,7 @@ import { AnnotatedText, AnnotatedSpan } from '../components/AnnotatedText';
 import { SectionAskButton } from '../components/SectionAskButton';
 import { LabTrendChart } from '../components/LabTrendChart';
 import { IntraVisitAlertBar } from '../components/IntraVisitAlertBar';
+import { PatientStoryPanel } from '../components/PatientStoryPanel';
 
 type SessionStatus = 'captured' | 'processing' | 'draft_ready' | 'doctor_reviewed' | 'published' | 'closed';
 
@@ -2633,6 +2634,13 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                     workingActionKey={workingActionKey}
                   />
                 </section>
+
+                <PatientStoryPanel
+                  patientId={selectedSession?.patient?.id ?? null}
+                  token={token}
+                  tenantSlug={tenantSlug}
+                  showVersionDiff={true}
+                />
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

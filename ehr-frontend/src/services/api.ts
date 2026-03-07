@@ -1869,6 +1869,53 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getPatientStoryLatest: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/post-visit/patients/${patientId}/story`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getPatientStoryVersions: async (
+    patientId: string,
+    token: string,
+    tenantSlug: string,
+    params?: { limit?: number },
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/patients/${patientId}/story/versions`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: params || {},
+    });
+    return { data: response.data };
+  },
+
+  getPatientStoryVersion: async (
+    patientId: string,
+    version: number,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(
+      `/post-visit/patients/${patientId}/story/versions/${version}`,
+      { headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` } },
+    );
+    return { data: response.data };
+  },
+
+  getPatientStoryDiff: async (
+    patientId: string,
+    fromVersion: number,
+    toVersion: number,
+    token: string,
+    tenantSlug: string,
+  ) => {
+    const response = await ehrAxios.get(`/post-visit/patients/${patientId}/story/diff`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { from: fromVersion, to: toVersion },
+    });
+    return { data: response.data };
+  },
+
   getPostVisitMobileContract: async (sessionId: string, token: string, tenantSlug: string, version = 'v1') => {
     const response = await ehrAxios.get(`/post-visit/sessions/${sessionId}/mobile-contract`, {
       headers: {

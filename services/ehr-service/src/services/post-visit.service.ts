@@ -725,6 +725,22 @@ export class PostVisitService {
     `);
 
     await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS post_visit_patient_story (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        session_id UUID REFERENCES post_visit_sessions(id) ON DELETE SET NULL,
+        content JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        UNIQUE(patient_id, version)
+      )
+    `);
+    await tenantDb.query(`
+      CREATE INDEX IF NOT EXISTS idx_post_visit_patient_story_patient_version
+      ON post_visit_patient_story(patient_id, version DESC)
+    `);
+
+    await tenantDb.query(`
       ALTER TABLE IF EXISTS post_visit_billing_suggestions
       ADD COLUMN IF NOT EXISTS suggestion_key VARCHAR(120),
       ADD COLUMN IF NOT EXISTS code_type VARCHAR(20),
@@ -1378,6 +1394,70 @@ export class PostVisitService {
       return configured;
     }
     return String(process.env.FEATURE_POSTVISIT_BILLING_INTELLIGENCE || 'false').toLowerCase() === 'true';
+  }
+
+  private isPatientStoryEnabled(): boolean {
+    const configured = (config as any)?.features?.postVisitPatientStory;
+    if (typeof configured === 'boolean') {
+      return configured;
+    }
+    return String(process.env.FEATURE_POSTVISIT_PATIENT_STORY || 'false').toLowerCase() === 'true';
+  }
+
+  /**
+   * Regenerate versioned patient story snapshot from published post-visit sessions (background job post-signoff).
+   * No PHI in logs; content is stored in tenant DB only.
+   */
+  private async regeneratePatientStoryForPatient(
+    tenantDb: DataSource,
+    patientId: string,
+    triggerSessionId?: string,
+  ): Promise<void> {
+    const [versionRows] = await tenantDb.query(
+      `SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM post_visit_patient_story WHERE patient_id = $1`,
+      [patientId],
+    );
+    const nextVersion = Number(versionRows?.next_version ?? 1);
+
+    const sessionRows = await tenantDb.query(
+      `
+        SELECT s.id, s.published_at, s.updated_at
+        FROM post_visit_sessions s
+        WHERE s.patient_id = $1
+          AND LOWER(s.status) = 'published'
+        ORDER BY COALESCE(s.published_at, s.updated_at) DESC
+        LIMIT 100
+      `,
+      [patientId],
+    );
+
+    const timeline: Array<{ sessionId: string; publishedAt: string; summaryExcerpt: string; keyPoints: string[] }> = [];
+    for (const row of sessionRows || []) {
+      const artifact = await this.getArtifactRow(tenantDb, row.id, 'visit_summary');
+      const content = artifact?.content || {};
+      const summaryExcerpt = String(content.plain_language_summary || '').trim().slice(0, 500);
+      const keyPoints = Array.isArray(content.key_points) ? content.key_points.slice(0, 5) : [];
+      timeline.push({
+        sessionId: row.id,
+        publishedAt: row.published_at ? new Date(row.published_at).toISOString() : '',
+        summaryExcerpt,
+        keyPoints,
+      });
+    }
+
+    const content = {
+      timeline,
+      generatedAt: new Date().toISOString(),
+      triggerSessionId: triggerSessionId || null,
+    };
+
+    await tenantDb.query(
+      `
+        INSERT INTO post_visit_patient_story (patient_id, version, session_id, content)
+        VALUES ($1, $2, $3, $4::jsonb)
+      `,
+      [patientId, nextVersion, triggerSessionId || null, JSON.stringify(content)],
+    );
   }
 
   private isPreVisitBriefEnabled(): boolean {
@@ -9361,6 +9441,14 @@ export class PostVisitService {
       await this.touchCompanionThreadAfterMessage(tenantDb, thread.id, 'system');
     }
 
+    if (this.isPatientStoryEnabled() && resolvedPublishedSession?.patient_id) {
+      this.regeneratePatientStoryForPatient(
+        tenantDb,
+        resolvedPublishedSession.patient_id,
+        sessionId,
+      ).catch(() => {});
+    }
+
     return {
       session: this.mapSession(resolvedPublishedSession),
       companionThread: {
@@ -9437,6 +9525,159 @@ export class PostVisitService {
         limit,
         offset,
       },
+    };
+  }
+
+  async getPatientStoryLatest(
+    tenantDb: DataSource,
+    patientId: string,
+    options: { actorUserId?: string | null } = {},
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPatientStoryEnabled()) {
+      return { featureEnabled: false, story: null, version: null };
+    }
+    const rows = await tenantDb.query(
+      `
+        SELECT id, patient_id, version, session_id, content, created_at
+        FROM post_visit_patient_story
+        WHERE patient_id = $1
+        ORDER BY version DESC
+        LIMIT 1
+      `,
+      [patientId],
+    );
+    const row = rows?.[0];
+    if (!row) {
+      return { featureEnabled: true, story: null, version: null };
+    }
+    if (this.hipaaAuditService && options.actorUserId && patientId) {
+      await this.hipaaAuditService
+        .logPhiAccess(
+          tenantDb,
+          options.actorUserId,
+          '',
+          undefined,
+          HipaaAuditAction.MEDICAL_RECORD_VIEW,
+          'post_visit_patient_story',
+          row.id,
+          patientId,
+          undefined,
+          undefined,
+          undefined,
+          { fields: ['timeline', 'content'], recordCount: 1 },
+          { action: 'get_latest' },
+        )
+        .catch(() => {});
+    }
+    return {
+      featureEnabled: true,
+      story: {
+        id: row.id,
+        patientId: row.patient_id,
+        version: row.version,
+        sessionId: row.session_id,
+        content: row.content || {},
+        createdAt: row.created_at,
+      },
+      version: row.version,
+    };
+  }
+
+  async getPatientStoryVersions(tenantDb: DataSource, patientId: string, limit = 20) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPatientStoryEnabled()) {
+      return { featureEnabled: false, versions: [] };
+    }
+    const rows = await tenantDb.query(
+      `
+        SELECT id, version, session_id, created_at
+        FROM post_visit_patient_story
+        WHERE patient_id = $1
+        ORDER BY version DESC
+        LIMIT $2
+      `,
+      [patientId, Math.min(Math.max(Number(limit), 1), 100)],
+    );
+    return {
+      featureEnabled: true,
+      versions: (rows || []).map((r: any) => ({
+        id: r.id,
+        version: r.version,
+        sessionId: r.session_id,
+        createdAt: r.created_at,
+      })),
+    };
+  }
+
+  async getPatientStoryVersion(tenantDb: DataSource, patientId: string, version: number) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPatientStoryEnabled()) {
+      return { featureEnabled: false, story: null };
+    }
+    const [row] = await tenantDb.query(
+      `
+        SELECT id, patient_id, version, session_id, content, created_at
+        FROM post_visit_patient_story
+        WHERE patient_id = $1 AND version = $2
+        LIMIT 1
+      `,
+      [patientId, version],
+    );
+    if (!row) {
+      return { featureEnabled: true, story: null };
+    }
+    return {
+      featureEnabled: true,
+      story: {
+        id: row.id,
+        patientId: row.patient_id,
+        version: row.version,
+        sessionId: row.session_id,
+        content: row.content || {},
+        createdAt: row.created_at,
+      },
+    };
+  }
+
+  async getPatientStoryDiff(
+    tenantDb: DataSource,
+    patientId: string,
+    fromVersion: number,
+    toVersion: number,
+  ) {
+    await this.ensurePostVisitSchema(tenantDb);
+    if (!this.isPatientStoryEnabled()) {
+      return { featureEnabled: false, from: null, to: null, diff: null };
+    }
+    const [fromRow, toRow] = await Promise.all([
+      tenantDb.query(
+        `SELECT version, content, created_at FROM post_visit_patient_story WHERE patient_id = $1 AND version = $2 LIMIT 1`,
+        [patientId, fromVersion],
+      ),
+      tenantDb.query(
+        `SELECT version, content, created_at FROM post_visit_patient_story WHERE patient_id = $1 AND version = $2 LIMIT 1`,
+        [patientId, toVersion],
+      ),
+    ]);
+    const from = fromRow?.[0];
+    const to = toRow?.[0];
+    if (!from || !to) {
+      return { featureEnabled: true, from: from ? { version: from.version, content: from.content, createdAt: from.created_at } : null, to: to ? { version: to.version, content: to.content, createdAt: to.created_at } : null, diff: null };
+    }
+    const fromTimeline = Array.isArray(from.content?.timeline) ? from.content.timeline : [];
+    const toTimeline = Array.isArray(to.content?.timeline) ? to.content.timeline : [];
+    const diff = {
+      timelineAdded: toTimeline.filter((t: any) => !fromTimeline.some((f: any) => f.sessionId === t.sessionId)),
+      timelineRemoved: fromTimeline.filter((f: any) => !toTimeline.some((t: any) => t.sessionId === f.sessionId)),
+      fromVersion: from.version,
+      toVersion: to.version,
+    };
+    return {
+      featureEnabled: true,
+      from: { version: from.version, content: from.content, createdAt: from.created_at },
+      to: { version: to.version, content: to.content, createdAt: to.created_at },
+      diff,
     };
   }
 

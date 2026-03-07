@@ -125,6 +125,69 @@ export class PostVisitController {
     });
   }
 
+  @Get('patients/:patientId/story')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get latest patient story snapshot (encounter prep)' })
+  @ApiResponse({ status: 200, description: 'Latest versioned patient story' })
+  async getPatientStoryLatest(
+    @Param('patientId') patientId: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.getPatientStoryLatest(req.tenantDb, patientId, {
+      actorUserId: this.resolveUserId(req),
+    });
+  }
+
+  @Get('patients/:patientId/story/versions')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'List patient story versions for diff' })
+  @ApiResponse({ status: 200, description: 'List of story versions' })
+  async getPatientStoryVersions(
+    @Param('patientId') patientId: string,
+    @Request() req: RequestWithTenant,
+    @Query('limit') limit?: string,
+  ) {
+    return this.postVisitService.getPatientStoryVersions(
+      req.tenantDb,
+      patientId,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
+  @Get('patients/:patientId/story/versions/:version')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get patient story by version' })
+  @ApiResponse({ status: 200, description: 'Story snapshot at version' })
+  async getPatientStoryVersion(
+    @Param('patientId') patientId: string,
+    @Param('version') version: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.getPatientStoryVersion(
+      req.tenantDb,
+      patientId,
+      Number(version) || 0,
+    );
+  }
+
+  @Get('patients/:patientId/story/diff')
+  @Roles('doctor', 'nurse', 'admin')
+  @ApiOperation({ summary: 'Get diff between two patient story versions' })
+  @ApiResponse({ status: 200, description: 'Version-to-version diff' })
+  async getPatientStoryDiff(
+    @Param('patientId') patientId: string,
+    @Query('from') fromVersion: string,
+    @Query('to') toVersion: string,
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.postVisitService.getPatientStoryDiff(
+      req.tenantDb,
+      patientId,
+      Number(fromVersion) || 0,
+      Number(toVersion) || 0,
+    );
+  }
+
   @Get('sessions/:id')
   @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Get a post-visit session by ID' })

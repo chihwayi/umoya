@@ -48,6 +48,10 @@ describe('PostVisitController', () => {
     classifyEscalation: jest.fn(),
     listEscalations: jest.fn(),
     resolveEscalation: jest.fn(),
+    getPatientStoryLatest: jest.fn(),
+    getPatientStoryVersions: jest.fn(),
+    getPatientStoryVersion: jest.fn(),
+    getPatientStoryDiff: jest.fn(),
   };
 
   const uploadSecurityServiceMock = {
