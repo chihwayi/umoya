@@ -1156,7 +1156,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
 
   useEffect(() => {
     if (!tenantSlug || !token || !selectedSessionId || !intraVisitFeatureEnabled) return;
-    const segments = Array.isArray(diarizationData?.segments) ? diarizationData?.segments : [];
+    const segments = diarizationData?.segments ?? [];
     const latestSegment = segments[segments.length - 1];
     if (!latestSegment?.id || !latestSegment?.text) return;
     const segmentText = String(latestSegment.text || '').trim();
