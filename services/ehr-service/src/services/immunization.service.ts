@@ -26,6 +26,7 @@ export class ImmunizationService {
       expirationDate?: Date;
       administrationDate: Date;
       doseNumber?: number;
+      doseQuantity?: number;
       route?: string;
       site?: string;
       orderedBy?: string;
