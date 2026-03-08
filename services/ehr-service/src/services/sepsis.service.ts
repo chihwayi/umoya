@@ -1,5 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+
+const ALLOWED_BUNDLE_ELEMENTS = [
+  'lactate_measured',
+  'blood_cultures_drawn',
+  'broad_spectrum_antibiotics_given',
+  'fluid_bolus_given',
+  'vasopressors_initiated',
+] as const;
 
 @Injectable()
 export class SepsisService {
@@ -61,8 +69,12 @@ export class SepsisService {
     value: any,
     tenantDb: DataSource,
   ): Promise<any> {
+    if (!ALLOWED_BUNDLE_ELEMENTS.includes(element as any)) {
+      throw new BadRequestException(`Invalid bundle element: ${element}`);
+    }
+    const timeColumn = element.replace('_given', '_time').replace('_measured', '_time');
     const result = await tenantDb.query(
-      `UPDATE sepsis_bundles SET ${element} = $1, ${element.replace('_given', '_time').replace('_measured', '_time')} = NOW() WHERE id = $2 RETURNING *`,
+      `UPDATE sepsis_bundles SET ${element} = $1, ${timeColumn} = NOW() WHERE id = $2 RETURNING *`,
       [value, bundleId]
     );
     return result[0];
