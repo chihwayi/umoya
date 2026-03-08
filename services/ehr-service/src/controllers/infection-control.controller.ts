@@ -25,7 +25,7 @@ export class InfectionControlController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.infectionControlService.reportInfection(infectionData, req.user.id, tenantDb);
+    return this.infectionControlService.reportInfection(infectionData, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   @Get('infections')
@@ -66,7 +66,7 @@ export class InfectionControlController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.infectionControlService.orderIsolation(isolationData, req.user.id, tenantDb);
+    return this.infectionControlService.orderIsolation(isolationData, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   @Get('isolation/active')
@@ -88,7 +88,7 @@ export class InfectionControlController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.infectionControlService.discontinueIsolation(id, data.reason, req.user.id, tenantDb);
+    return this.infectionControlService.discontinueIsolation(id, data.reason, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   // ==================== ANTIMICROBIAL STEWARDSHIP ====================
@@ -127,7 +127,7 @@ export class InfectionControlController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.infectionControlService.reviewAntibiotic(id, reviewData, req.user.id, tenantDb);
+    return this.infectionControlService.reviewAntibiotic(id, reviewData, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 }
 

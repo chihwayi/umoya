@@ -94,7 +94,7 @@ export class BloodBankController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bloodBankService.orderTransfusion(transfusionData, req.user.id, tenantDb);
+    return this.bloodBankService.orderTransfusion(transfusionData, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   @Post('transfusions/:id/start')
@@ -106,7 +106,7 @@ export class BloodBankController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bloodBankService.startTransfusion(id, req.user.id, data.preVitals, tenantDb);
+    return this.bloodBankService.startTransfusion(id, req.user?.userId ?? (req.user as any)?.id, data.preVitals, tenantDb);
   }
 
   @Post('transfusions/:id/vitals')

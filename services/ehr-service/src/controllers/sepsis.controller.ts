@@ -18,13 +18,13 @@ export class SepsisController {
   @Post('screenings')
   async screenForSepsis(@Body() data: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.sepsisService.screenForSepsis(data, req.user.id, tenantDb);
+    return this.sepsisService.screenForSepsis(data, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   @Post('bundles')
   async initiateSepsisBundle(@Body() data: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.sepsisService.initiateSepsisBundle(data, req.user.id, tenantDb);
+    return this.sepsisService.initiateSepsisBundle(data, req.user?.userId ?? (req.user as any)?.id, tenantDb);
   }
 
   @Put('bundles/:id/element')
