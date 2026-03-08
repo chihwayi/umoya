@@ -24,6 +24,8 @@ const MARDashboard: React.FC = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [marRecords, setMarRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [selectedMarForScan, setSelectedMarForScan] = useState<any>(null);
 
   useEffect(() => {
     loadAdmittedPatients();
@@ -104,6 +106,7 @@ const MARDashboard: React.FC = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-cyan-700 text-white shadow-lg">
@@ -223,7 +226,14 @@ const MARDashboard: React.FC = () => {
                   </div>
                 </div>
                 {mar.administrationStatus === 'pending' && (
-                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2"
+                    onClick={() => {
+                      setSelectedMarForScan(mar);
+                      setScannerOpen(true);
+                    }}
+                  >
                     <Scan className="w-4 h-4" />
                     Scan & Give
                   </button>
@@ -235,6 +245,24 @@ const MARDashboard: React.FC = () => {
       )}
       </div>
     </div>
+    {scannerOpen && selectedMarForScan && selectedPatient && tenantSlug && (
+      <MedicationScannerModal
+        prescription={selectedMarForScan}
+        patient={selectedPatient}
+        tenantSlug={tenantSlug}
+        token={token}
+        onSuccess={() => {
+          setScannerOpen(false);
+          setSelectedMarForScan(null);
+          loadMARs();
+        }}
+        onClose={() => {
+          setScannerOpen(false);
+          setSelectedMarForScan(null);
+        }}
+      />
+    )}
+  </>
   );
 };
 
