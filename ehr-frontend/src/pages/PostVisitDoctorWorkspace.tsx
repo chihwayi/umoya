@@ -878,8 +878,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
       }
       try {
         const rec = await ehrApi.getPostVisitRecordingUrl(sessionId, token, tenantSlug);
-        setRecordingUrl(rec?.url ?? null);
-        setRecordingMime(rec?.mimeType ?? 'audio/webm');
+        const url = rec?.url ?? null;
+        setRecordingUrl(url);
+        setRecordingMime(url != null && rec && 'mimeType' in rec ? rec.mimeType : 'audio/webm');
       } catch {
         setRecordingUrl(null);
       }
@@ -2802,7 +2803,8 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <h3 className="mb-3 text-sm font-bold text-slate-900">Visit Recording</h3>
                   {recordingUrl ? (
-                    <audio controls preload="metadata" className="w-full max-w-md" src={recordingUrl} type={recordingMime}>
+                    <audio controls preload="metadata" className="w-full max-w-md">
+                      <source src={recordingUrl} type={recordingMime} />
                       Your browser does not support the audio element.
                     </audio>
                   ) : (
@@ -2949,17 +2951,16 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       </div>
                       <p className="mt-1 text-xs text-slate-600">Status: {visitSummaryArtifact?.status || 'missing'}</p>
                       <p className="mt-2 text-sm text-slate-800">
-                        {annotatedDraft?.artifacts?.find((a: { artifactType: string }) => a.artifactType === 'visit_summary')
-                          ?.content?.plain_language_summary?.spans ? (
-                          <AnnotatedText
-                            spans={
-                              annotatedDraft.artifacts.find((a: { artifactType: string }) => a.artifactType === 'visit_summary')!.content
-                                .plain_language_summary!.spans as AnnotatedSpan[]
-                            }
-                          />
-                        ) : (
-                          String(visitSummaryArtifact?.content?.plain_language_summary || '').trim() || 'No generated summary yet.'
-                        )}
+                        {((): React.ReactNode => {
+                          const summaryContent = annotatedDraft?.artifacts?.find((a: { artifactType: string }) => a.artifactType === 'visit_summary')
+                            ?.content?.plain_language_summary as { spans?: AnnotatedSpan[] } | undefined;
+                          const spans = summaryContent?.spans;
+                          return spans && spans.length > 0 ? (
+                            <AnnotatedText spans={spans} />
+                          ) : (
+                            String(visitSummaryArtifact?.content?.plain_language_summary || '').trim() || 'No generated summary yet.'
+                          );
+                        })()}
                       </p>
                       {Array.isArray(visitSummaryArtifact?.content?.teach_back_questions) &&
                         visitSummaryArtifact?.content?.teach_back_questions.length > 0 && (

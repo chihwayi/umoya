@@ -2998,11 +2998,11 @@ const NurseDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {Array.isArray(postVisitTrialSlaAccountability?.items) && postVisitTrialSlaAccountability.items.length > 0 && (
+              {Array.isArray(postVisitTrialSlaAccountability?.items) && (postVisitTrialSlaAccountability?.items?.length ?? 0) > 0 && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold text-slate-600 mb-2">Top Trial SLA Accountability</p>
                   <div className="space-y-1">
-                    {postVisitTrialSlaAccountability.items.slice(0, 4).map((item, index) => {
+                    {(postVisitTrialSlaAccountability?.items ?? []).slice(0, 4).map((item, index) => {
                       const clinicianName = [item.clinician?.firstName, item.clinician?.lastName].filter(Boolean).join(' ').trim();
                       return (
                         <p key={`${item.clinician?.id || 'clinician'}-${index}`} className="text-xs text-slate-700">
