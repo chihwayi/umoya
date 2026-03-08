@@ -2735,9 +2735,9 @@ const PostVisitDoctorWorkspace: React.FC = () => {
                       </p>
                     )}
                     {effectiveDocumentIntelligence.map((item) => {
-                      const observations = Array.isArray(item.structured?.observations) ? item.structured?.observations : [];
-                      const medications = Array.isArray(item.structured?.medications) ? item.structured?.medications : [];
-                      const findings = Array.isArray(item.structured?.findings) ? item.structured?.findings : [];
+                      const observations = item.structured?.observations ?? [];
+                      const medications = item.structured?.medications ?? [];
+                      const findings = item.structured?.findings ?? [];
                       return (
                         <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
