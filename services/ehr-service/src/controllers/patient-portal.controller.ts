@@ -1950,13 +1950,11 @@ export class PatientPortalController {
     );
     
     if (!patients || patients.length === 0) {
-      // Return empty forecast if patient not found
-      return [];
+      return { forecast: [] };
     }
     
     const patient = patients[0];
     
-    // Get all immunization schedules and check what's been done
     const forecast = await tenantDb.query(`
       SELECT 
         s.id,
@@ -1979,7 +1977,7 @@ export class PatientPortalController {
       ORDER BY s.recommended_age_months ASC, s.dose_number ASC
     `, [patientId, patient.date_of_birth]);
     
-    return forecast;
+    return { forecast };
   }
 
   @Get('immunizations/export')
