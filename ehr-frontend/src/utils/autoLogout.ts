@@ -1,4 +1,8 @@
-// Auto-logout utility for handling token expiration
+// Auto-logout utility for handling token expiration and inactivity timeout
+
+const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const WARNING_BEFORE_LOGOUT_MS = 60 * 1000; // show warning 60 seconds before logout
+
 export interface AutoLogoutOptions {
   showNotification?: (title: string, message: string, type?: 'warning' | 'error' | 'info' | 'success') => void;
   onLogout?: () => void;
@@ -7,10 +11,81 @@ export interface AutoLogoutOptions {
 let notificationCallback: ((title: string, message: string, type?: 'warning' | 'error' | 'info' | 'success') => void) | null = null;
 let logoutCallback: (() => void) | null = null;
 
-// Initialize auto-logout with notification callback
+let inactivityTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let warningTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function getSessionTimeoutMs(): number {
+  const env = process.env.REACT_APP_SESSION_TIMEOUT_MS;
+  if (env != null && env !== '') {
+    const n = parseInt(env, 10);
+    if (!Number.isNaN(n) && n > 0) return n;
+  }
+  return DEFAULT_SESSION_TIMEOUT_MS;
+}
+
+function clearInactivityTimers() {
+  if (inactivityTimeoutId != null) {
+    clearTimeout(inactivityTimeoutId);
+    inactivityTimeoutId = null;
+  }
+  if (warningTimeoutId != null) {
+    clearTimeout(warningTimeoutId);
+    warningTimeoutId = null;
+  }
+}
+
+function scheduleWarningAndLogout() {
+  const timeoutMs = getSessionTimeoutMs();
+  const warningAt = timeoutMs - WARNING_BEFORE_LOGOUT_MS;
+  if (warningAt <= 0) {
+    inactivityTimeoutId = setTimeout(() => handleAutoLogout(), timeoutMs);
+    return;
+  }
+  inactivityTimeoutId = setTimeout(() => {
+    inactivityTimeoutId = null;
+    if (notificationCallback) {
+      notificationCallback(
+        'Session expiring',
+        'You will be logged out in 1 minute due to inactivity.',
+        'warning'
+      );
+    }
+    warningTimeoutId = setTimeout(() => {
+      warningTimeoutId = null;
+      handleAutoLogout();
+    }, WARNING_BEFORE_LOGOUT_MS);
+  }, warningAt);
+}
+
+function onActivity() {
+  if (!localStorage.getItem('ehr_token') || !isOnProtectedRoute()) return;
+  clearInactivityTimers();
+  scheduleWarningAndLogout();
+}
+
+let removeActivityListeners: (() => void) | null = null;
+
+// Initialize auto-logout with notification callback and start inactivity timer
 export const initializeAutoLogout = (options: AutoLogoutOptions) => {
   notificationCallback = options.showNotification || null;
   logoutCallback = options.onLogout || null;
+
+  // Cleanup only (e.g. on unmount)
+  if (removeActivityListeners) {
+    removeActivityListeners();
+    removeActivityListeners = null;
+  }
+  clearInactivityTimers();
+
+  if (options.showNotification == null && options.onLogout == null) return;
+
+  const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+  events.forEach((ev) => document.addEventListener(ev, onActivity));
+  removeActivityListeners = () => {
+    events.forEach((ev) => document.removeEventListener(ev, onActivity));
+    removeActivityListeners = null;
+  };
+  scheduleWarningAndLogout();
 };
 
 // Handle automatic logout when token expires
