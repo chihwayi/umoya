@@ -71,5 +71,18 @@ export class EDController {
     const targetDate = date ? new Date(date) : new Date();
     return await this.edService.getEDMetrics(targetDate, tenantDb);
   }
+
+  @Post('visits/:id/disposition')
+  @ApiOperation({ summary: 'Complete ED visit disposition' })
+  @HttpCode(HttpStatus.OK)
+  async completeDisposition(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const userId = req.user?.userId ?? (req.user as any)?.id;
+    return await this.edService.completeDisposition(tenantDb, id, body, userId);
+  }
 }
 
