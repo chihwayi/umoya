@@ -1144,7 +1144,7 @@ const PostVisitDoctorWorkspace: React.FC = () => {
   ]);
 
   useEffect(() => {
-    const rows = Array.isArray(draftData?.ruleCitations) ? draftData.ruleCitations : [];
+    const rows = Array.isArray(draftData?.ruleCitations) ? (draftData?.ruleCitations ?? []) : [];
     const next: Record<string, boolean> = {};
     for (const row of rows) {
       if (row?.isSuperseded === true && row?.acknowledgedSuperseded === true && row?.id) {
