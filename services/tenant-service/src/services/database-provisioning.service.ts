@@ -553,6 +553,13 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprintE1ImmunizationAlignmentStatements(),
       },
       {
+        id: 'sprint_e3_2fa',
+        label: 'Sprint E3 Two-Factor Authentication',
+        version: '2026.03.08',
+        description: 'Adds users two_factor_secret and two_factor_enabled columns',
+        statements: () => this.getSprintE3_2FAStatements(),
+      },
+      {
         id: 'maternity_care_tasks',
         label: 'Maternity Care Task Workflow',
         version: '2026.03.04',
@@ -1779,6 +1786,13 @@ export class DatabaseProvisioningService {
       `INSERT INTO immunization_schedules (schedule_name, vaccine_code, vaccine_name, age_group, dose_number, recommended_age_months, minimum_interval_days, is_required, schedule_type, effective_date)
        SELECT 'BCG', '19', 'BCG (Tuberculosis)', 'infant', 1, 0, NULL, true, 'routine', CURRENT_DATE
        WHERE NOT EXISTS (SELECT 1 FROM immunization_schedules WHERE vaccine_code = '19' AND schedule_type = 'routine')`,
+    ];
+  }
+
+  private getSprintE3_2FAStatements(): string[] {
+    return [
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_secret VARCHAR(64)`,
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT false`,
     ];
   }
 

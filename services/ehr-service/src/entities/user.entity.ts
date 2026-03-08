@@ -53,6 +53,12 @@ export class User {
   @Column({ name: 'password_changed_at', nullable: true })
   passwordChangedAt: Date;
 
+  @Column({ name: 'two_factor_secret', length: 64, nullable: true })
+  twoFactorSecret: string;
+
+  @Column({ name: 'two_factor_enabled', default: false })
+  twoFactorEnabled: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

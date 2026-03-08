@@ -68,4 +68,39 @@ export class AuthController {
     
     return { message: 'Password changed successfully' };
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/setup')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate TOTP secret and QR code URL for 2FA setup' })
+  async setup2FA(@Request() req: RequestWithTenant) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    return this.authService.setup2FA(userId, req.tenantDb);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/verify')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify TOTP code and enable 2FA' })
+  async verify2FA(@Request() req: RequestWithTenant, @Body() body: { code: string }) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    await this.authService.verify2FA(userId, body.code, req.tenantDb);
+    return { message: '2FA enabled successfully' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable 2FA (requires current TOTP code)' })
+  async disable2FA(@Request() req: RequestWithTenant, @Body() body: { code: string }) {
+    const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
+    await this.authService.disable2FA(userId, body.code, req.tenantDb);
+    return { message: '2FA disabled successfully' };
+  }
+
+  @Post('2fa/complete-login')
+  @ApiOperation({ summary: 'Complete login with TOTP code after requiresTwoFactor' })
+  async complete2FALogin(@Request() req: RequestWithTenant, @Body() body: { tempToken: string; code: string }) {
+    return this.authService.complete2FALogin(body.tempToken, body.code, req.tenantDb);
+  }
 }
