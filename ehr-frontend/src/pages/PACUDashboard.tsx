@@ -14,6 +14,9 @@ const PACUDashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [pacuPatients, setPacuPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aldreteModalOpen, setAldreteModalOpen] = useState(false);
+  const [selectedPacuPatient, setSelectedPacuPatient] = useState<any>(null);
+  const [dischargingId, setDischargingId] = useState<string | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('ehr_user');
@@ -60,6 +63,22 @@ const PACUDashboard: React.FC = () => {
     return `${diffMinutes} min`;
   };
 
+  const handleDischarge = async (patient: any) => {
+    if (!window.confirm(`Discharge ${patient.patient?.firstName ?? ''} ${patient.patient?.lastName ?? ''} from PACU?`)) return;
+    const pacuId = patient.id;
+    try {
+      setDischargingId(pacuId);
+      await ehrAxios.post(`/anesthesia/pacu/${pacuId}/discharge`, {}, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
+      await loadPACUPatients();
+    } catch (err: any) {
+      showError('Error', err.response?.data?.message || 'Failed to discharge from PACU');
+    } finally {
+      setDischargingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -72,6 +91,7 @@ const PACUDashboard: React.FC = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-violet-700 text-white shadow-lg">
@@ -188,14 +208,27 @@ const PACUDashboard: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="grid grid-cols-3 gap-2 mt-4">
-                  <button className="px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-sm font-semibold transition">
+                  <button
+                    type="button"
+                    className="px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-sm font-semibold transition"
+                    onClick={() => {
+                      setSelectedPacuPatient(patient);
+                      setAldreteModalOpen(true);
+                    }}
+                  >
                     Vitals
                   </button>
-                  <button className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-semibold transition">
+                  <button type="button" className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-sm font-semibold transition">
                     Pain Meds
                   </button>
                   {patient.dischargeCriteriaMet ? (
-                    <button className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition">
+                    <button
+                      type="button"
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
+                      onClick={() => handleDischarge(patient)}
+                      disabled={dischargingId === patient.id}
+                    >
+                      {dischargingId === patient.id ? <Loader2 className="w-4 h-4 animate-spin inline" /> : null}
                       Discharge
                     </button>
                   ) : (
@@ -211,6 +244,24 @@ const PACUDashboard: React.FC = () => {
         )}
       </div>
     </div>
+    {aldreteModalOpen && selectedPacuPatient && tenantSlug && (
+      <AldreteScoreModal
+        pacuRecordId={selectedPacuPatient.id}
+        currentScore={selectedPacuPatient.aldreteScoreDischarge ?? selectedPacuPatient.aldreteScoreAdmission ?? 0}
+        tenantSlug={tenantSlug}
+        token={token}
+        onSuccess={() => {
+          setAldreteModalOpen(false);
+          setSelectedPacuPatient(null);
+          loadPACUPatients();
+        }}
+        onClose={() => {
+          setAldreteModalOpen(false);
+          setSelectedPacuPatient(null);
+        }}
+      />
+    )}
+  </>
   );
 };
 
